@@ -14773,7 +14773,7 @@ en-GB:
     cc_prefs: 
       buttons: 
         configure: "Configure communication preferences"
-      comm_preferences_instructions: "Now that you're registered with Canvas, you might want to configure what notifications you'll receive as your courses progress. Canvas is flexible enough to let you choose how and for what events you'd like to be notified. When things happen in your courses you can choose to be emailed or texted to your cell immediately, daily or weekly."
+      comm_preferences_instructions: "Now that you're registered with YCIW, you might want to configure what notifications you'll receive as your courses progress. YCIW is flexible enough to let you choose how and for what events you'd like to be notified. When things happen in your courses you can choose to be emailed or texted to your cell immediately, daily or weekly."
       titles: 
         configure_com_prefs: "Configure communication preferences"
     confirms: 
@@ -14995,7 +14995,7 @@ en-GB:
                   those courses are available, you will see information about them here
                   and in the top navigation. In the meantime, feel free to sign up for
                   more courses or set up your profile.
-      welcome_to_happiness: "Welcome to Canvas!"
+      welcome_to_happiness: "Welcome to Young Composers & Improvisors Workshop!"
   validate: 
     is_required: "This field is required"
   video_b9f27375: Video
