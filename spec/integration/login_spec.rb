@@ -38,7 +38,7 @@ describe 'login' do
 
     def stubby(stub_response)
       @cas_client = CASClient::Client.new(
-        cas_base_url: @account.account_authorization_configs.first.auth_base,
+        cas_base_url: @account.authentication_providers.first.auth_base,
         encode_extra_attributes_as: :raw
       )
       @cas_client.instance_variable_set(:@stub_response, stub_response)
@@ -251,7 +251,7 @@ describe 'login' do
       account.auth_discovery_url = discovery_url
       account.save!
 
-      get account_account_authorization_configs_url(account)
+      get account_authentication_providers_url(account)
       redirect_until(discovery_url)
     end
   end

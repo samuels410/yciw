@@ -37,7 +37,13 @@ define([
 
 
   $(document).ready(function () {
-    QuizLogAuditingEventDumper(true);
+    if(ENV.QUIZ_SUBMISSION_EVENTS_URL) {
+      QuizLogAuditingEventDumper(true);
+    }
+
+    $('#preview_quiz_button').click(function(e){
+      $('#js-sequential-warning-dialogue div a').attr('href',$('#preview_quiz_button').attr('href'));
+    });
 
     function ensureStudentsLoaded(callback) {
       if ($('#quiz_details').length) {

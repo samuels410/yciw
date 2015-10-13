@@ -245,6 +245,38 @@ describe Enrollment do
       expect(e.messages_sent).to be_include("Enrollment Registration")
     end
 
+    it "should not send out invitations to an observer if the student doesn't receive an invitation (e.g. sis import)" do
+      Notification.create!(:name => "Enrollment Registration", :category => "Registration")
+
+      course_with_teacher(:active_all => true)
+      student = user_with_pseudonym
+      observer = user_with_pseudonym
+      observer.observed_users << student
+
+      @course.enroll_student(student, :no_notify => true)
+      expect(student.messages).to be_empty
+      expect(observer.messages).to be_empty
+
+      course_with_teacher(:active_all => true)
+      @course.enroll_student(student)
+      student.reload
+      observer.reload
+      expect(student.messages).to_not be_empty
+      expect(observer.messages).to_not be_empty
+    end
+
+    it "should not send out invitations to an observer if the course is not published" do
+      Notification.create!(:name => "Enrollment Registration", :category => "Registration")
+
+      course_with_teacher
+      student = user_with_pseudonym
+      observer = user_with_pseudonym
+      observer.observed_users << student
+
+      @course.enroll_student(student)
+      expect(observer.messages).to be_empty
+    end
+
     it "should not send out invitations if the course is not yet published" do
       Notification.create!(:name => "Enrollment Registration")
       course_with_teacher
@@ -300,6 +332,7 @@ describe Enrollment do
       expect(@enrollment.grants_right?(@new_user, :read_grades)).to be_falsey
       @course.enroll_teacher(@new_user)
       @enrollment.reload
+      AdheresToPolicy::Cache.clear
       expect(@enrollment.grants_right?(@user, :read_grades)).to be_truthy
     end
 
@@ -1670,6 +1703,25 @@ describe Enrollment do
 
       se.accept
       expect(pe.reload).to be_deleted
+    end
+
+    context "sharding" do
+      specs_require_sharding
+
+      it "allows enrolling a user that is observed from another shard" do
+        se = @shard1.activate do
+          account = Account.create!
+          User.any_instance.expects(:can_be_enrolled_in_course?).returns(true)
+          course_with_student(account: account, active_all: true, user: @student)
+        end
+        pe = @parent.observer_enrollments.shard(@shard1).first
+
+        expect(pe).not_to be_nil
+        expect(pe.course_id).to eql se.course_id
+        expect(pe.course_section_id).to eql se.course_section_id
+        expect(pe.workflow_state).to eql se.workflow_state
+        expect(pe.associated_user_id).to eql se.user_id
+      end
     end
   end
 

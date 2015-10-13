@@ -146,7 +146,7 @@ class Wiki < ActiveRecord::Base
     can :read and can :create_page and can :update_page and can :update_page_content
 
     given {|user, session| self.context.grants_right?(user, session, :manage_wiki)}
-    can :manage and can :read and can :update and can :create_page and can :delete_page and can :delete_unpublished_page and can :update_page and can :update_page_content
+    can :manage and can :read and can :update and can :create_page and can :delete_page and can :delete_unpublished_page and can :update_page and can :update_page_content and can :view_unpublished_items
 
     given {|user, session| self.context.grants_right?(user, session, :manage_wiki) && !self.context.is_a?(Group)}
     # Pages created by a user without this permission will be automatically published
@@ -179,10 +179,12 @@ class Wiki < ActiveRecord::Base
       opts[:url] = opts[:title].to_s.to_url if opts.include?(:title)
     end
 
-    page = WikiPage.new(opts)
-    page.wiki = self
-    page.initialize_wiki_page(user)
-    page
+    self.shard.activate do
+      page = WikiPage.new(opts)
+      page.wiki = self
+      page.initialize_wiki_page(user)
+      page
+    end
   end
 
   def find_page(param)

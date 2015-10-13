@@ -19,13 +19,18 @@
 require_relative '../spec_helper'
 
 describe GradingPeriod do
-  subject { grading_period }
-  let(:grading_period) { grading_period_group.grading_periods.build(params) }
+  subject(:grading_period) { grading_period_group.grading_periods.build(params) }
   let(:grading_period_group) { account.grading_period_groups.create!(account: account) }
   let(:account) { Account.create! }
+  let(:course) { Course.create! }
+  let(:now) { Time.zone.now }
 
   let(:params) do
-    { title: 'A Grading Period', start_date: Time.zone.now, end_date: 1.day.from_now }
+    {
+      title: 'A Grading Period',
+      start_date: now,
+      end_date: 1.day.from_now(now)
+    }
   end
 
   it { is_expected.to be_valid }
@@ -103,21 +108,70 @@ describe GradingPeriod do
       grading_period.expects(:id).returns(1)
       GradingPeriod.expects(:for).with(account).returns([grading_period])
 
-      expect(GradingPeriod.context_find(context: account, id: id)).to eq grading_period
+      expect(GradingPeriod.context_find(account, id)).to eq grading_period
     end
   end
 
   describe "#assignments" do
-    it "filters assignments for grading period" do
-      course_with_teacher active_all: true
-      gp1, gp2 = grading_periods count: 2
-      a1, a2 = [gp1, gp2].map { |gp|
-        @course.assignments.create! due_at: gp.start_date + 1
-      }
-      # no due date goes in final grading period
-      a3 = @course.assignments.create!
-      expect(gp1.assignments(@course.assignments)).to eq [a1]
-      expect(gp2.assignments(@course.assignments)).to eq [a2, a3]
+    let!(:first_assignment)  { course.assignments.create!(due_at: first_grading_period.start_date + 1.second) }
+    let!(:second_assignment) { course.assignments.create!(due_at: second_grading_period.start_date + 1.seconds) }
+    let!(:third_assignment)  { course.assignments.create!(due_at: nil) }
+
+    let(:first_grading_period) do
+        grading_period_group.grading_periods.create!(
+          title:      '1st period',
+          start_date: 2.months.from_now(now),
+          end_date:   3.months.from_now(now)
+        )
+    end
+    let(:second_grading_period) do
+      grading_period_group.grading_periods.create!(
+        title:      '2nd period',
+        start_date: 3.months.from_now(now),
+        end_date:   4.months.from_now(now)
+      )
+    end
+    let(:grading_period_group) { course.grading_period_groups.create! }
+
+    it "filters the first grading period" do
+      assignments = first_grading_period.assignments(course.assignments)
+      expect(assignments).to eq [first_assignment]
+    end
+
+    it "filters assignments without a due_at into the last grading period" do
+      assignments = second_grading_period.assignments(course.assignments)
+      expect(assignments).to eq [second_assignment, third_assignment]
+    end
+
+    describe "when due at the same time as the edge of a period" do
+      let!(:fourth_assignment)  { course.assignments.create!(due_at: third_grading_period.end_date + 0.005.seconds) }
+      let!(:fifth_assignment) { course.assignments.create!(due_at: fourth_grading_period.start_date - 0.005.seconds) }
+
+      let(:third_grading_period) do
+        grading_period_group.grading_periods.create!(
+          title:      '3rd period',
+          start_date: 5.months.from_now(now),
+          end_date:   6.months.from_now(now)
+        )
+      end
+
+      let(:fourth_grading_period) do
+        grading_period_group.grading_periods.create!(
+          title:      '4th period',
+          start_date: 7.months.from_now(now),
+          end_date:   8.months.from_now(now)
+        )
+      end
+
+      it "includes assignments if they are on the end date" do
+        assignments = third_grading_period.assignments(course.assignments)
+        expect(assignments).to include fourth_assignment
+      end
+
+      it "does NOT include assignments if they are on the start date" do
+        assignments = fourth_grading_period.assignments(course.assignments)
+        expect(assignments).to_not include fifth_assignment
+      end
     end
   end
 
@@ -143,12 +197,63 @@ describe GradingPeriod do
     end
   end
 
+  context 'given an existing grading_period' do
+    let(:course) { Course.create! }
+    let(:grading_period_group) { course.grading_period_groups.create! }
+    let(:existing_grading_period) do
+      grading_period_group.grading_periods.create!(
+        title: 'a title',
+        start_date: now,
+        end_date: 2.days.from_now(now)
+      )
+    end
+
+    describe '#overlapping?' do
+      context 'given a new grading period with a start_date and an end_date' \
+        'that overlaps with the existing grading_period' do
+        subject { grading_period_group.grading_periods.build(start_date: start_date, end_date: end_date) }
+        let(:start_date) { existing_grading_period.start_date }
+        let(:end_date)   { existing_grading_period.end_date }
+        it { is_expected.to be_overlapping }
+      end
+
+      context 'given a new grading period with a start_date that begins at the end_date existing grading_period' do
+        subject { grading_period_group.grading_periods.build(start_date: start_date, end_date: end_date)}
+        let(:start_date) { existing_grading_period.end_date }
+        let(:end_date)   { existing_grading_period.end_date + 1.month }
+        it { is_expected.to_not be_overlapping }
+      end
+    end
+
+    it "after a grading period is persisted it continues to not overlap" do
+      expect(existing_grading_period).to_not be_overlapping
+    end
+  end
+
   context "Soft deletion" do
-    let(:account) { Account.create }
-    let(:group) { account.grading_period_groups.create }
-    let(:creation_arguments) { { start_date: 1.week.ago, end_date: 2.weeks.from_now } }
-    subject { group.grading_periods }
+    subject { grading_period_group.grading_periods }
+    let(:creation_arguments) { [period_one, period_two] }
+    let(:period_one) { { title: 'an title', start_date: 1.week.ago(now), end_date: 2.weeks.from_now(now) } }
+    let(:period_two) { { title: 'an title', start_date: 2.weeks.from_now(now), end_date: 5.weeks.from_now(now) } }
     include_examples "soft deletion"
   end
-end
 
+  describe ".in_date_range?" do
+    subject(:period) do
+      grading_period_group.grading_periods.create start_date: 1.week.ago,
+                                                  end_date:   2.weeks.from_now
+    end
+
+    it "returns true for a date in the period" do
+      expect(period.in_date_range? 1.day.from_now).to be true
+    end
+
+    it "returns false for a date before the period" do
+      expect(period.in_date_range? 8.days.ago).to be false
+    end
+
+    it "returns false for a date after the period" do
+      expect(period.in_date_range? 15.days.from_now).to be false
+    end
+  end
+end

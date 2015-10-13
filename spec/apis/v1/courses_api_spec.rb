@@ -56,6 +56,10 @@ describe Api::V1::Course do
       expect(@test_api.course_json(@course1, @me, {}, [], [teacher_enrollment]).has_key?("needs_grading_count")).to be_falsey
     end
 
+    it 'should only include is_favorite if requested' do
+      expect(@test_api.course_json(@course1, @me, {}, ['favorites'], [teacher_enrollment]).key?('is_favorite')).to be_truthy
+    end
+
     it 'should honor needs_grading_count for teachers' do
       expect(@test_api.course_json(@course1, @me, {}, ['needs_grading_count'], [teacher_enrollment]).has_key?("needs_grading_count")).to be_truthy
     end
@@ -83,10 +87,9 @@ describe Api::V1::Course do
       mod.publish
       mod.save!
 
-      class CourseProgress
-        def course_context_modules_item_redirect_url(opts = {})
-          "course_context_modules_item_redirect_url(:course_id => #{opts[:course_id]}, :id => #{opts[:id]}, :host => HostUrl.context_host(Course.find(#{opts[:course_id]}))"
-        end
+      stubbed_url = "redirect_url"
+      CourseProgress.any_instance.stubs(:course_context_modules_item_redirect_url).returns(stubbed_url).with do |opts|
+        opts[:course_id] == @course2.id && opts[:id] == tag.id
       end
 
       json = @test_api.course_json(@course2, @me, {}, ['course_progress'], [])
@@ -94,7 +97,7 @@ describe Api::V1::Course do
       expect(json['course_progress']).to eq({
         'requirement_count' => 1,
         'requirement_completed_count' => 0,
-        'next_requirement_url' => "course_context_modules_item_redirect_url(:course_id => #{@course2.id}, :id => #{tag.id}, :host => HostUrl.context_host(Course.find(#{@course2.id}))",
+        'next_requirement_url' => stubbed_url,
         'completed_at' => nil
       })
     end
@@ -318,6 +321,7 @@ describe CoursesController, type: :request do
           'account_id' => @account.id,
           'root_account_id' => @account.id,
           'enrollment_term_id' => term.id,
+          'grading_standard_id' => nil,
           'integration_id' => nil,
           'start_at' => '2011-01-01T07:00:00Z',
           'end_at' => '2011-05-01T07:00:00Z',
@@ -378,6 +382,7 @@ describe CoursesController, type: :request do
           'account_id' => @account.id,
           'root_account_id' => @account.id,
           'enrollment_term_id' => term.id,
+          'grading_standard_id' => nil,
           'integration_id' => nil,
           'start_at' => '2011-01-01T07:00:00Z',
           'end_at' => '2011-05-01T07:00:00Z',
@@ -2121,6 +2126,7 @@ describe CoursesController, type: :request do
         'account_id' => @course1.account_id,
         'course_code' => @course1.course_code,
         'enrollments' => [{'type' => 'teacher', 'role' => 'TeacherEnrollment', 'role_id' => teacher_role.id, 'enrollment_state' => 'active'}],
+        'grading_standard_id' => nil,
         'sis_course_id' => @course1.sis_course_id,
         'integration_id' => nil,
         'calendar' => { 'ics' => "http://www.example.com/feeds/calendars/course_#{@course1.uuid}.ics" },
@@ -2134,7 +2140,8 @@ describe CoursesController, type: :request do
         'workflow_state' => @course1.workflow_state,
         'storage_quota_mb' => @course1.storage_quota_mb,
         'apply_assignment_group_weights' => false,
-        'enrollment_term_id' => @course.enrollment_term_id
+        'enrollment_term_id' => @course.enrollment_term_id,
+        'restrict_enrollments_to_course_dates' => false
       })
     end
 
@@ -2196,6 +2203,14 @@ describe CoursesController, type: :request do
       expect(json.has_key?("permissions")).to be_truthy
       expect(json["permissions"].has_key?("create_announcement")).to be_truthy
       expect(json["permissions"]["create_announcement"]).to be_truthy # The setup makes this user a teacher of the course too
+    end
+
+    it 'should include grading_standard_id' do
+      standard = grading_standard_for @course1
+      @course1.update_attribute(:grading_standard_id, standard.id)
+      json = api_call(:get, "/api/v1/courses/#{@course1.id}.json", { :controller => 'courses', :action => 'show',
+                                                                     :id => @course1.to_param, :format => 'json' })
+      expect(json['grading_standard_id']).to eq(standard.id)
     end
 
     context "when scoped to account" do

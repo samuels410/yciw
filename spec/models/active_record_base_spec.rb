@@ -106,6 +106,16 @@ describe ActiveRecord::Base do
       expect(cs.sort).to eq [@c1.id, @c2.id].sort
     end
 
+    it "should multi-column pluck" do
+      skip "Rails 4 specific" if CANVAS_RAILS3
+      scope = Course.where(id: [@c1, @c2])
+      cs = []
+      scope.find_in_batches_with_temp_table(batch_size: 1, pluck: [:id, :name]) do |batch|
+        cs.concat(batch)
+      end
+      expect(cs.sort).to eq [[@c1.id, @c1.name], [@c2.id, @c2.name]].sort
+    end
+
     it "should pluck with join" do
       scope = Enrollment.joins(:course).where(courses: { id: [@c1, @c2] })
       es = []
@@ -115,11 +125,11 @@ describe ActiveRecord::Base do
       expect(es.sort).to eq [@e1.id, @e2.id, @e3.id, @e4.id, @e5.id, @e6.id].sort
     end
 
-    it "should honor includes when using a cursor" do
+    it "should honor preload when using a cursor" do
       skip "needs PostgreSQL" unless Account.connection.adapter_name == 'PostgreSQL'
       Account.default.courses.create!
       Account.transaction do
-        Account.where(:id => Account.default).includes(:courses).find_each do |a|
+        Account.where(:id => Account.default).preload(:courses).find_each do |a|
           expect(a.courses.loaded?).to be_truthy
         end
       end
@@ -129,8 +139,7 @@ describe ActiveRecord::Base do
       skip "needs PostgreSQL" unless Account.connection.adapter_name == 'PostgreSQL'
       Account.transaction do
         Account.expects(:find_in_batches_with_cursor).never
-        Account.where(:id => Account.default).includes(:courses).find_each(start: 0) do |a|
-          expect(a.courses.loaded?).to be_truthy
+        Account.where(:id => Account.default).find_each(start: 0) do
         end
       end
     end
@@ -194,8 +203,8 @@ describe ActiveRecord::Base do
   it "should have a valid GROUP BY clause when group_by is used correctly" do
     conn = ActiveRecord::Base.connection
     expect {
-      User.find_by_sql "SELECT id, name FROM users GROUP BY #{conn.group_by('id', 'name')}"
-      User.find_by_sql "SELECT id, name FROM (SELECT id, name FROM users) u GROUP BY #{conn.group_by('id', 'name')}"
+      User.find_by_sql "SELECT id, name FROM #{User.quoted_table_name} GROUP BY #{conn.group_by('id', 'name')}"
+      User.find_by_sql "SELECT id, name FROM (SELECT id, name FROM #{User.quoted_table_name}) u GROUP BY #{conn.group_by('id', 'name')}"
     }.not_to raise_error
   end
 
@@ -236,7 +245,7 @@ describe ActiveRecord::Base do
           tries += 1
           Submission.create!(:user => @user, :assignment => @assignment)
         end
-      }.to raise_error # we don't catch the error the last time 
+      }.to raise_error # we don't catch the error the last time
       expect(tries).to eql 3
       expect(Submission.count).to eql 1
     end
@@ -319,7 +328,7 @@ describe ActiveRecord::Base do
       # it already has :submission
       ConversationMessage.add_polymorph_methods :asset, [:other_polymorphy_thing]
     end
-    
+
     before :once do
       @conversation = Conversation.create
       @user = user_model
@@ -348,12 +357,12 @@ describe ActiveRecord::Base do
         m = @conversation.conversation_messages.build
         s = @user.submissions.create!(:assignment => @assignment)
         m.submission = s
-        
+
         expect(m.asset_type).to eql 'Submission'
         expect(m.asset_id).to eql s.id
         expect(m.asset).to eql s
         expect(m.submission).to eql s
-        
+
         m.submission = nil
 
         expect(m.asset_type).to be_nil
@@ -505,6 +514,26 @@ describe ActiveRecord::Base do
       expect(@p1_2.reload.unique_id).to eq 'pa2'
       expect(@p2.reload.unique_id).to eq 'pb'
     end
+
+    # in rails 4, the where conditions use bind values for association scopes
+    it "should do an update all with a join on associations" do
+      @u1.pseudonyms.joins(:user).active.where(:users => {:name => 'b'}).update_all(:unique_id => 'pa3')
+      expect(@p1.reload.unique_id).to_not eq 'pa3'
+      @u1.pseudonyms.joins(:user).active.where(:users => {:name => 'a'}).update_all(:unique_id => 'pa3')
+      expect(@p1.reload.unique_id).to eq 'pa3'
+      expect(@p1_2.reload.unique_id).to eq 'pa2'
+    end
+
+    it "should do a delete all with a join on associations" do
+      @u1.pseudonyms.joins(:user).active.where(:users => {:name => 'b'}).delete_all
+      expect(@u1.reload).not_to be_deleted
+      expect(@p1.reload.unique_id).to eq 'pa'
+      expect(@p1_2.reload.unique_id).to eq 'pa2'
+      @u1.pseudonyms.joins(:user).active.where(:users => {:name => 'a'}).delete_all
+      expect { @p1.reload }.to raise_error(ActiveRecord::RecordNotFound)
+      expect(@u1.reload).not_to be_deleted
+      expect(@p1_2.reload.unique_id).to eq 'pa2'
+    end
   end
 
   describe "delete_all with_limit" do
@@ -590,10 +619,23 @@ describe ActiveRecord::Base do
   end
 
   describe "callbacks" do
+    before do
+      class MockAccount < Account
+        include RSpec::Matchers
+        before_save do
+          expect(Account.scoped.to_sql).not_to match /callbacks something/
+          expect(MockAccount.scoped.to_sql).not_to match /callbacks something/
+          true
+        end
+      end
+    end
+
+    after do
+      Object.send(:remove_const, :MockAccount)
+    end
+
     it "should use default scope" do
-      Account.send(:include, RSpec::Matchers)
-      Account.before_save { expect(Account.scoped.to_sql).not_to match /callbacks something/; true }
-      Account.where(name: 'callbacks something').create!
+      MockAccount.where(name: 'callbacks something').create!
     end
   end
 end

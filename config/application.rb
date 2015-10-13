@@ -2,7 +2,20 @@
 require File.expand_path('../boot', __FILE__)
 
 unless CANVAS_RAILS3
-  require "rails/all"
+
+  # Yes, it doesn't seem DRY to list these both in the if and else
+  # but this used to be "require 'rails/all'" which included sprockets.
+  # I needed to explicitly opt-out of sprockets but since I'm not sure
+  # about the other frameworks, I left this so it would be exactly the same
+  # as "require 'rails/all'" but without sprockets--even though it is a little
+  # different then the rails 3 else block. If the difference is not intended,
+  # they can be pulled out of the if/else
+  require "active_record/railtie"
+  require "action_controller/railtie"
+  require "action_mailer/railtie"
+  # require "sprockets/railtie" # Do not enable the Rails Asset Pipeline
+  require "rails/test_unit/railtie"
+
   Bundler.require(*Rails.groups)
 else
   require "active_record/railtie"
@@ -30,6 +43,9 @@ module CanvasRails
     config.action_dispatch.rescue_responses['AuthenticationMethods::LoggedOutError'] = 401
     if CANVAS_RAILS3
       config.action_dispatch.rescue_responses['ActionController::ParameterMissing'] = 400
+    else
+      config.action_dispatch.default_headers['X-UA-Compatible'] = "IE=Edge,chrome=1"
+      config.action_dispatch.default_headers.delete('X-Frame-Options')
     end
 
     config.app_generators do |c|
@@ -52,8 +68,11 @@ module CanvasRails
     log_config = { 'logger' => 'rails', 'log_level' => 'debug' }.merge(log_config || {})
     opts = {}
     require 'canvas_logger'
-    log_level = (CANVAS_RAILS3 ? ActiveSupport::BufferedLogger : ActiveSupport::Logger).const_get(log_config['log_level'].to_s.upcase)
+
+    config.log_level = log_config['log_level']
+    log_level = (CANVAS_RAILS3 ? ActiveSupport::BufferedLogger : ActiveSupport::Logger).const_get(config.log_level.to_s.upcase)
     opts[:skip_thread_context] = true if log_config['log_context'] == false
+
     case log_config["logger"]
       when "syslog"
         require 'syslog_wrapper'
@@ -79,6 +98,8 @@ module CanvasRails
 
     # Activate observers that should always be running
     config.active_record.observers = [:cacher, :stream_item_cache, :live_events_observer ]
+
+    config.active_record.whitelist_attributes = false
 
     config.autoload_paths += %W(#{Rails.root}/app/middleware
                             #{Rails.root}/app/observers
@@ -107,37 +128,41 @@ module CanvasRails
       ActiveSupport::JSON::Encoding.escape_html_entities_in_json = true
     end
 
-    if CANVAS_RAILS3
-      # This patch is perfectly placed to go in as soon as the PostgreSQLAdapter
-      # is required for the first time, but before it's actually used.
-      #
-      # This patch won't be required in Rails >= 4.0.0, which supports params such as
-      # connect_timeout.
-      ActiveRecord::Base::ConnectionSpecification.class_eval do
-        def initialize_with_postgresql_patches(config, adapter_method)
-          initialize_without_postgresql_patches(config, adapter_method)
-          if adapter_method == "postgresql_connection" && !defined?(@@postgresql_patches_applied)
-            ActiveRecord::Base.class_eval do
-              def self.postgresql_connection(config) # :nodoc:
-                config = config.symbolize_keys
-                config[:user] ||= config.delete(:username) if config.key?(:username)
-
-                if config.key?(:database)
-                  config[:dbname] = config[:database]
-                else
-                  raise ArgumentError, "No database specified. Missing argument: database."
-                end
-                conn_params = config.slice(:host, :port, :dbname, :user, :password, :connect_timeout)
-
-                # The postgres drivers don't allow the creation of an unconnected PGconn object,
-                # so just pass a nil connection object for the time being.
-                ActiveRecord::ConnectionAdapters::PostgreSQLAdapter.new(nil, logger, [conn_params], config)
-              end
-            end
-            @@postgresql_patches_applied = true
-          end
+    module PostgreSQLPreparedStatementsDefault
+      def initialize(connection, logger, connection_parameters, config)
+        unless config.key?(:prepared_statements)
+          config = config.dup
+          config[:prepared_statements] = false
         end
-        alias_method_chain :initialize, :postgresql_patches unless private_instance_methods.include?(:initialize_without_postgresql_patches)
+        super(connection, logger, connection_parameters, config)
+      end
+    end
+
+    Autoextend.hook(:"ActiveRecord::ConnectionAdapters::PostgreSQLAdapter",
+                    PostgreSQLPreparedStatementsDefault,
+                    method: :prepend)
+
+    if CANVAS_RAILS3
+      module PostgreSQLConnectTimeoutParam
+        def postgresql_connection(config) # :nodoc:
+          config = config.symbolize_keys
+          config[:user] ||= config.delete(:username) if config.key?(:username)
+
+          if config.key?(:database)
+            config[:dbname] = config[:database]
+          else
+            raise ArgumentError, "No database specified. Missing argument: database."
+          end
+          conn_params = config.slice(:host, :port, :dbname, :user, :password, :connect_timeout)
+
+          # The postgres drivers don't allow the creation of an unconnected PGconn object,
+          # so just pass a nil connection object for the time being.
+          ActiveRecord::ConnectionAdapters::PostgreSQLAdapter.new(nil, logger, [conn_params], config)
+        end
+      end
+
+      Autoextend.hook(:"ActiveRecord::ConnectionAdapters::PostgreSQLAdapter") do
+        ActiveRecord::Base.singleton_class.prepend(PostgreSQLConnectTimeoutParam)
       end
     end
 
@@ -167,6 +192,7 @@ module CanvasRails
       tag:ruby.yaml.org,2002:object:URI::HTTP
       tag:ruby.yaml.org,2002:object:URI::HTTPS
       tag:ruby.yaml.org,2002:object:OpenObject
+      tag:yaml.org,2002:map:WeakParameters
     ])
     YAML.whitelist.add('tag:ruby.yaml.org,2002:object:Class') { |classname| Canvas::Migration.valid_converter_classes.include?(classname) }
 
@@ -216,5 +242,14 @@ module CanvasRails
     end
 
     config.exceptions_app = ExceptionsApp.new
+
+    config.before_initialize do
+      config.action_controller.asset_host = Canvas::Cdn.method(:asset_host_for)
+    end
+
+    if config.action_dispatch.rack_cache != false
+      config.action_dispatch.rack_cache[:ignore_headers] =
+        %w[Set-Cookie X-Request-Context-Id X-Canvas-User-Id X-Canvas-Meta]
+    end
   end
 end

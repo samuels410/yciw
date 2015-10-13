@@ -183,13 +183,20 @@ class FilesController < ApplicationController
             else
               @current_attachments = @current_folder.visible_file_attachments.by_position_then_display_name
             end
-            @current_attachments = @current_attachments.includes(:thumbnail, :media_object)
-            render :json => @current_attachments.map{ |a| a.as_json(methods: [:readable_size, :currently_locked, :thumbnail_url], permissions: {user: @current_user, session: session}) }
+            @current_attachments = @current_attachments.preload(:thumbnail, :media_object)
+            render :json => @current_attachments.map do |a|
+              a.as_json({
+                methods: [ :readable_size, :currently_locked, :thumbnail_url ],
+                permissions: {
+                  user: @current_user, session: session
+                }
+              })
+            end
           else
             file_structure = {
               :contexts => [@context.as_json(permissions: {user: @current_user})],
               :collaborations => [],
-              :folders => @context.active_folders_with_sub_folders.
+              :folders => @context.active_folders.preload(:active_sub_folders).
                 order("COALESCE(parent_folder_id, 0), COALESCE(position, 0), COALESCE(name, ''), created_at").map{ |f|
                 f.as_json(permissions: {user: @current_user}, methods: [:mime_class, :currently_locked])
               },
@@ -199,7 +206,7 @@ class FilesController < ApplicationController
 
             if @current_user
               file_structure[:collaborations] = @current_user.collaborations.for_context(@context).active.
-                includes(:user, :users).order("created_at DESC").map{ |c|
+                preload(:user, :users).order("created_at DESC").map{ |c|
                 c.as_json(permissions: {user: @current_user}, methods: [:collaborator_ids])
               }
             end
@@ -230,6 +237,11 @@ class FilesController < ApplicationController
   #   "user":: the user who uploaded the file or last edited its content
   #   "usage_rights":: copyright and license information for the file (see UsageRights)
   #
+  # @argument only[] [Array]
+  #   Array of information to restrict to. Overrides include[]
+  #
+  #   "names":: only returns file name information
+  #
   # @argument sort [String, "name"|"size"|"created_at"|"updated_at"|"content_type"|"user"]
   #   Sort results by this field. Defaults to 'name'. Note that `sort=user` implies `include[]=user`.
   #
@@ -244,38 +256,17 @@ class FilesController < ApplicationController
   # @returns [File]
   def api_index
     get_context
-    if @context
-      folder = Folder.root_folders(@context).first
-      raise ActiveRecord::RecordNotFound unless folder
-      context_index = true
-    else
-      verify_api_id
-      folder = Folder.find(params[:id])
-    end
+    verify_api_id unless @context.present?
+    @folder = Folder.from_context_or_id(@context, params[:id])
 
-    if authorized_action(folder, @current_user, :read_contents)
-      @context = folder.context unless context_index
-      can_manage_files = @context.grants_right?(@current_user, session, :manage_files)
+    if authorized_action(@folder, @current_user, :read_contents)
       params[:sort] ||= params[:sort_by] # :sort_by was undocumented; :sort is more consistent with other APIs such as wikis
       params[:include] = Array(params[:include])
       params[:include] << 'user' if params[:sort] == 'user'
 
-      if context_index
-        if can_manage_files
-          scope = @context.attachments.not_deleted
-        else
-          scope = @context.attachments.visible.not_hidden.not_locked.where(
-              :folder_id => Folder.all_visible_folder_ids(@context))
-        end
-      else
-        if can_manage_files
-          scope = folder.active_file_attachments
-        else
-          scope = folder.visible_file_attachments.not_hidden.not_locked
-        end
-      end
-      scope = scope.includes(:user) if params[:include].include? 'user' && params[:sort] != 'user'
-      scope = scope.includes(:usage_rights) if params[:include].include? 'usage_rights'
+      scope = Attachments::ScopedToUser.new(@context || @folder, @current_user).scope
+      scope = scope.preload(:user) if params[:include].include?('user') && params[:sort] != 'user'
+      scope = scope.preload(:usage_rights) if params[:include].include?('usage_rights')
       scope = Attachment.search_by_attribute(scope, :display_name, params[:search_term])
 
       order_clause = case params[:sort]
@@ -290,7 +281,7 @@ class FilesController < ApplicationController
         when 'content_type'
           "attachments.content_type"
         when 'user'
-          scope = scope.joins("LEFT OUTER JOIN users ON attachments.user_id=users.id")
+          scope = scope.joins("LEFT OUTER JOIN #{User.quoted_table_name} ON attachments.user_id=users.id")
           "users.sortable_name IS NULL, #{User.sortable_name_order_by_clause('users')}"
         else
           Attachment.display_name_order_by_clause('attachments')
@@ -302,9 +293,14 @@ class FilesController < ApplicationController
         scope = scope.by_content_types(Array(params[:content_types]))
       end
 
-      url = context_index ? context_files_url : api_v1_list_files_url(folder)
+      url = @context ? context_files_url : api_v1_list_files_url(@folder)
       @files = Api.paginate(scope, self, url)
-      render :json => attachments_json(@files, @current_user, {}, :can_manage_files => can_manage_files, :include => params[:include], :omit_verifier_in_app => !value_to_boolean(params[:use_verifiers]))
+      render json: attachments_json(@files, @current_user, {}, {
+        can_view_hidden_files: can_view_hidden_files?(@context || @folder, @current_user, session),
+        include: params[:include],
+        only: params[:only],
+        omit_verifier_in_app: !value_to_boolean(params[:use_verifiers])
+      })
     end
   end
 
@@ -337,7 +333,11 @@ class FilesController < ApplicationController
         elsif context.is_a?(Group)
           context.context
         end
-        file_menu_tools = (tool_context ? external_tools_display_hashes(:file_menu, tool_context, [:accept_media_types]) : [])
+
+        has_external_tools = !context.is_a?(Group) && tool_context
+
+        file_menu_tools = (has_external_tools ? external_tools_display_hashes(:file_menu, tool_context, [:accept_media_types]) : [])
+
         {
           asset_string: context.asset_string,
           name: context == @current_user ? t('my_files', 'My Files') : context.name,
@@ -352,9 +352,10 @@ class FilesController < ApplicationController
       @page_title = t('files_page_title', 'Files')
       @body_classes << 'full-width padless-content'
       js_bundle :react_files
-      jammit_css :react_files
+      css_bundle :react_files
       js_env({
-        :FILES_CONTEXTS => files_contexts
+        :FILES_CONTEXTS => files_contexts,
+        :NEW_FOLDER_TREE => @context.feature_enabled?(:use_new_tree)
       })
 
       render :text => "".html_safe, :layout => true
@@ -517,6 +518,9 @@ class FilesController < ApplicationController
         if @files_domain
           @headers = false
           @show_left_side = false
+        end
+        if attachment.content_type && attachment.content_type.match(/\Avideo\/|audio\//)
+          attachment.context_module_action(@current_user, :read)
         end
         format.html { render :show }
       end
@@ -931,7 +935,7 @@ class FilesController < ApplicationController
         params[:attachment].delete(:uploaded_data) if @context.is_a?(User)
 
         if params[:attachment][:uploaded_data].present?
-          @attachment.user = @current_user 
+          @attachment.user = @current_user
           @attachment.modified_at = Time.now.utc
         end
 
@@ -1088,7 +1092,6 @@ class FilesController < ApplicationController
   end
 
   private
-
   def render_attachment_json(attachment, deleted_attachments, folder = attachment.folder)
     json = {
       :attachment => attachment.as_json(
@@ -1105,5 +1108,4 @@ class FilesController < ApplicationController
 
     render :json => json, :as_text => true
   end
-
 end

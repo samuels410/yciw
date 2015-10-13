@@ -1,7 +1,7 @@
 require File.expand_path(File.dirname(__FILE__) + '/../common')
 
 describe "site admin jobs ui" do
-  include_examples "in-process server selenium tests"
+  include_context "in-process server selenium tests"
 
   module FlavorTags
     ALL = 'All'
@@ -163,7 +163,7 @@ describe "site admin jobs ui" do
         expect(@all_jobs.count { |j| (j.reload rescue nil).try(:locked_by) == 'on hold' }).to eq 0
       end
 
-      it "should confirm that all current rows were selected and put on hold", :priority => "2" do
+      it "should confirm that all current rows were selected and put on hold", priority: "2" do
         filter_jobs(FlavorTags::CURRENT)
         put_on_hold
       end

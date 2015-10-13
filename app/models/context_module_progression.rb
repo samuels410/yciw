@@ -29,6 +29,7 @@ class ContextModuleProgression < ActiveRecord::Base
   after_save :touch_user
 
   serialize :requirements_met, Array
+  serialize :incomplete_requirements, Array
 
   def completion_requirements
     context_module.try(:completion_requirements) || []
@@ -56,6 +57,8 @@ class ContextModuleProgression < ActiveRecord::Base
   def uncomplete_requirement(id)
     requirement = requirements_met.find {|r| r[:id] == id}
     requirements_met.delete(requirement)
+    self.remove_incomplete_requirement(id)
+
     mark_as_outdated
   end
 
@@ -77,7 +80,7 @@ class ContextModuleProgression < ActiveRecord::Base
       @orig_keys = sorted_action_keys
 
       self.view_requirements = []
-      self.actions_done.reject!{ |r| %w(min_score max_score).include?(r[:type]) }
+      self.actions_done.reject!{ |r| r[:type] == 'min_score' }
     end
 
     def sorted_action_keys
@@ -120,11 +123,11 @@ class ContextModuleProgression < ActiveRecord::Base
   def evaluate_requirements_met
     result = evaluate_uncompleted_requirements
 
-    count_needed = self.context_module.requirement_count
+    count_needed = self.context_module.requirement_count.to_i
     # if no requirement_count is specified, assume all are needed
-    if (count_needed && result.met_requirement_count >= count_needed) || result.all_met?
+    if (count_needed && count_needed > 0 && result.met_requirement_count >= count_needed) || result.all_met?
       self.workflow_state = 'completed'
-    elsif result.met_requirement_count >= 1
+    elsif result.met_requirement_count >= 1 || self.incomplete_requirements.count >= 1 # submitting to a min_score requirement should move it to started
       self.workflow_state = 'started'
     else
       self.workflow_state = 'unlocked'
@@ -139,6 +142,7 @@ class ContextModuleProgression < ActiveRecord::Base
   def evaluate_uncompleted_requirements
     tags_hash = nil
     calc = CompletedRequirementCalculator.new(self.requirements_met || [])
+    self.incomplete_requirements = [] # start from a clean slate
     completion_requirements.each do |req|
       # for an observer/student user we don't want to filter based on the normal observer logic,
       # instead return vis for student enrollment only -> hence ignore_observer_logic below
@@ -154,16 +158,30 @@ class ContextModuleProgression < ActiveRecord::Base
         next
       end
 
+      subs = get_submissions(tag) if tag.scoreable?
+      if subs && subs.any?{|sub| sub.respond_to?(:excused?) && sub.excused?}
+        calc.check_action!(req, true)
+        next
+      end
+
       if req[:type] == 'must_view'
         calc.add_view_requirement(req)
       elsif %w(must_contribute must_mark_done).include? req[:type]
         # must_contribute is handled by ContextModule#update_for
         calc.check_action!(req, false)
       elsif req[:type] == 'must_submit'
-        sub = get_submission_or_quiz_submission(tag)
-        calc.check_action!(req, sub && %w(submitted graded complete pending_review).include?(sub.workflow_state))
-      elsif req[:type] == 'min_score' || req[:type] == 'max_score'
-        calc.check_action!(req, evaluate_score_requirement_met(req, tag) && tag.scoreable?)
+        req_met = !!(subs && subs.any?{ |sub|
+          if sub.graded? && sub.attempt.nil?
+            # is a manual grade - doesn't count for submission
+            false
+          elsif %w(submitted graded complete pending_review).include?(sub.workflow_state)
+            true
+          end
+        })
+
+        calc.check_action!(req, req_met)
+      elsif req[:type] == 'min_score'
+        calc.check_action!(req, evaluate_score_requirement_met(req, subs))
       end
     end
     calc.check_view_requirements
@@ -171,23 +189,23 @@ class ContextModuleProgression < ActiveRecord::Base
   end
   private :evaluate_uncompleted_requirements
 
-  def get_submission_or_quiz_submission(tag)
+  def get_submissions(tag)
+    subs = []
     if tag.content_type_quiz?
-      sub = Quizzes::QuizSubmission.where(quiz_id: tag.content_id, user_id: user).first
-      sub ||= Submission.where(assignment_id: tag.content.assignment_id, user_id: user).first
-      sub
+      subs = Quizzes::QuizSubmission.where(quiz_id: tag.content_id, user_id: user).to_a +
+        Submission.where(assignment_id: tag.content.assignment_id, user_id: user).to_a
     elsif tag.content_type_discussion?
       if tag.content
-        Submission.where(assignment_id: tag.content.assignment_id, user_id: user).first
+        subs = Submission.where(assignment_id: tag.content.assignment_id, user_id: user).to_a
       end
     else
-      Submission.where(assignment_id: tag.content_id, user_id: user).first
+      subs = Submission.where(assignment_id: tag.content_id, user_id: user).to_a
     end
+    subs
   end
-  private :get_submission_or_quiz_submission
+  private :get_submissions
 
-  def get_submission_score(tag)
-    submission = get_submission_or_quiz_submission(tag)
+  def get_submission_score(submission)
     if submission.is_a?(Quizzes::QuizSubmission)
       submission.try(:kept_score)
     else
@@ -196,12 +214,37 @@ class ContextModuleProgression < ActiveRecord::Base
   end
   private :get_submission_score
 
-  def evaluate_score_requirement_met(requirement, tag)
-    score = get_submission_score(tag)
-    if requirement[:type] == "max_score"
-      score.present? && score <= requirement[:max_score].to_f
-    else
-      score.present? && score >= requirement[:min_score].to_f
+  def remove_incomplete_requirement(requirement_id)
+    self.incomplete_requirements.delete_if{|r| r[:id] == id}
+  end
+
+  # hold onto the status of the incomplete min_score requirement
+  def update_incomplete_requirement!(requirement, score)
+    return unless requirement[:type] == "min_score"
+    incomplete_req = self.incomplete_requirements.detect{|r| r[:id] == requirement[:id]}
+    unless incomplete_req
+      incomplete_req = requirement.dup
+      self.incomplete_requirements << incomplete_req
+    end
+    if incomplete_req[:score].nil?
+      incomplete_req[:score] = score
+    elsif score
+      incomplete_req[:score] = score if score > incomplete_req[:score] # keep highest score so far
+    end
+  end
+
+  def evaluate_score_requirement_met(requirement, subs)
+    return unless requirement[:type] == "min_score"
+    remove_incomplete_requirement(requirement[:id]) # start from a fresh slate so we don't hold onto a max score that doesn't exist anymore
+    subs && subs.any? do |sub|
+      score = get_submission_score(sub)
+      requirement_met = (score.present? && score >= requirement[:min_score].to_f)
+      if requirement_met
+        remove_incomplete_requirement(requirement[:id])
+      else
+        self.update_incomplete_requirement!(requirement, score) # hold onto the score if requirement not met
+      end
+      requirement_met
     end
   end
   private :evaluate_score_requirement_met
@@ -212,15 +255,38 @@ class ContextModuleProgression < ActiveRecord::Base
 
     requirement_met = true
     requirement_met = points && points >= requirement[:min_score].to_f if requirement[:type] == 'min_score'
-    requirement_met = points && points <= requirement[:max_score].to_f if requirement[:type] == 'max_score'
+    requirement_met = false if requirement[:type] == 'must_submit' # calculate later; requires the submission
+
     if !requirement_met
       self.requirements_met.delete(requirement)
       self.mark_as_outdated
+      true
     elsif !self.requirements_met.include?(requirement)
       self.requirements_met.push(requirement)
       self.mark_as_outdated
+      true
+    else
+      false
     end
-    requirement
+  end
+
+  def update_requirement_met!(*args)
+    retry_count = 0
+    begin
+      if self.update_requirement_met(*args)
+        self.save!
+        self.send_later_if_production(:evaluate!)
+      end
+    rescue ActiveRecord::StaleObjectError
+      # retry up to five times, otherwise return current (stale) data
+      self.reload
+      retry_count += 1
+      if retry_count < 5
+        retry
+      else
+        raise
+      end
+    end
   end
 
   def mark_as_outdated
@@ -228,9 +294,14 @@ class ContextModuleProgression < ActiveRecord::Base
   end
 
   def mark_as_outdated!
-    self.mark_as_outdated
-    Shackles.activate(:master) do
-      self.save
+    if self.new_record?
+      mark_as_outdated
+      Shackles.activate(:master) do
+        self.save!
+      end
+    else
+      self.class.where(:id => self).update_all(:current => false)
+      self.touch_user
     end
   end
 
@@ -357,9 +428,11 @@ class ContextModuleProgression < ActiveRecord::Base
     end
 
     # invalidate all, then re-evaluate each
-    progressions.each(&:mark_as_outdated!)
-    progressions.each do |progression|
-      progression.send_later_if_production(:evaluate!, self)
+    Shackles.activate(:master) do
+      progressions.each(&:mark_as_outdated!)
+      progressions.each do |progression|
+        progression.send_later_if_production(:evaluate!, self)
+      end
     end
   end
   private :trigger_reevaluation_of_dependent_progressions

@@ -5,24 +5,19 @@ define [
   'react-router'
   '../mixins/BackboneMixin'
   'compiled/react/shared/utils/withReactElement'
-  './FriendlyDatetime'
-  './ItemCog'
-  './FilesystemObjectThumbnail'
+  'jsx/files/FriendlyDatetime'
+  'jsx/files/ItemCog'
+  'jsx/files/FilesystemObjectThumbnail'
   'compiled/util/friendlyBytes'
   'compiled/models/Folder'
   'compiled/fn/preventDefault'
-  './PublishCloud'
-  './UsageRightsIndicator'
+  'jsx/shared/PublishCloud'
+  'jsx/files/UsageRightsIndicator'
   '../modules/FocusStore'
   'compiled/jquery.rails_flash_notifications'
-], (_, I18n, React, ReactRouter, BackboneMixin, withReactElement, FriendlyDatetimeComponent, ItemCogComponent, FilesystemObjectThumbnailComponent, friendlyBytes, Folder, preventDefault, PublishCloudComponent, UsageRightsIndicatorComponent, FocusStore) ->
+], (_, I18n, React, ReactRouter, BackboneMixin, withReactElement, FriendlyDatetime, ItemCog, FilesystemObjectThumbnail, friendlyBytes, Folder, preventDefault, PublishCloud, UsageRightsIndicator, FocusStore) ->
 
-  FriendlyDatetime = React.createFactory FriendlyDatetimeComponent
-  ItemCog = React.createFactory ItemCogComponent
-  PublishCloud = React.createFactory PublishCloudComponent
-  UsageRightsIndicator = React.createFactory  UsageRightsIndicatorComponent
   Link = React.createFactory ReactRouter.Link
-  FilesystemObjectThumbnail = React.createFactory FilesystemObjectThumbnailComponent
   classSet = React.addons.classSet
 
   FolderChild = React.createClass
@@ -199,7 +194,7 @@ define [
           FriendlyDatetime datetime: @props.model.get('created_at')
 
         div className:'ef-date-modified-col', role: 'gridcell',
-          FriendlyDatetime datetime: @props.model.get('updated_at')
+          FriendlyDatetime datetime: @props.model.get('modified_at')
 
         div className:'ef-modified-by-col ellipsis', role: 'gridcell',
           a href: @props.model.get('user')?.html_url, className: 'ef-plain-link',
@@ -234,4 +229,5 @@ define [
               usageRightsRequiredForContext: @props.usageRightsRequiredForContext
               externalToolsForContext: @props.externalToolsForContext
               modalOptions: @props.modalOptions
+              clearSelectedItems: @props.clearSelectedItems
             })

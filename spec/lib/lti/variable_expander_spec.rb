@@ -17,7 +17,6 @@
 #
 
 require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
-
 module Lti
   describe VariableExpander do
     let(:root_account) { Account.new }
@@ -39,12 +38,18 @@ module Lti
     end
     let(:controller) do
       request_mock = mock('request')
+      request_mock.stubs(:url).returns('https://localhost')
       request_mock.stubs(:host).returns('/my/url')
       request_mock.stubs(:scheme).returns('https')
       m = mock('controller')
+      m.stubs(:css_url_for).with(:common).returns('/path/to/common.scss')
       m.stubs(:request).returns(request_mock)
       m.stubs(:logged_in_user).returns(user)
       m.stubs(:named_context_url).returns('url')
+      view_context_mock = mock('view_context')
+      view_context_mock.stubs(:stylesheet_path)
+                       .returns(URI.parse(request_mock.url).merge(m.css_url_for(:common)).to_s)
+      m.stubs(:view_context).returns(view_context_mock)
       m
     end
 
@@ -125,6 +130,12 @@ module Lti
         expect(exp_hash[:test]).to eq 'localhost'
       end
 
+      it 'has substitution for $Canvas.css.common' do
+        exp_hash = {test: '$Canvas.css.common'}
+        subject.expand_variables!(exp_hash)
+        expect(exp_hash[:test]).to eq 'https://localhost/path/to/common.scss'
+      end
+
       it 'has substitution for $Canvas.api.baseUrl' do
         exp_hash = {test: '$Canvas.api.baseUrl'}
         HostUrl.stubs(:context_host).returns('localhost')
@@ -179,6 +190,19 @@ module Lti
         exp_hash = {test: '$Canvas.root_account.sisSourceId'}
         subject.expand_variables!(exp_hash)
         expect(exp_hash[:test]).to eq 'cd45'
+      end
+
+      it 'has substitution for $Canvas.root_account.global_id' do
+        root_account.stubs(:global_id).returns(10054321)
+        exp_hash = {test: '$Canvas.root_account.global_id'}
+        subject.expand_variables!(exp_hash)
+        expect(exp_hash[:test]).to eq 10054321
+      end
+
+      it 'has substitution for $Canvas.shard.id' do
+        exp_hash = {test: '$Canvas.shard.id'}
+        subject.expand_variables!(exp_hash)
+        expect(exp_hash[:test]).to eq Shard.current.id
       end
 
       context 'context is a course' do
@@ -355,6 +379,27 @@ module Lti
           exp_hash = {test: '$Canvas.assignment.dueAt'}
           subject.expand_variables!(exp_hash)
           expect(exp_hash[:test]).to eq right_now.to_s
+        end
+
+        it 'has substitution for $Canvas.assignment.unlockAt.iso8601' do
+          assignment.stubs(:unlock_at).returns(right_now)
+          exp_hash = {test: '$Canvas.assignment.unlockAt.iso8601'}
+          subject.expand_variables!(exp_hash)
+          expect(exp_hash[:test]).to eq right_now.utc.iso8601.to_s
+        end
+
+        it 'has substitution for $Canvas.assignment.lockAt.iso8601' do
+          assignment.stubs(:lock_at).returns(right_now)
+          exp_hash = {test: '$Canvas.assignment.lockAt.iso8601'}
+          subject.expand_variables!(exp_hash)
+          expect(exp_hash[:test]).to eq right_now.utc.iso8601.to_s
+        end
+
+        it 'has substitution for $Canvas.assignment.dueAt.iso8601' do
+          assignment.stubs(:due_at).returns(right_now)
+          exp_hash = {test: '$Canvas.assignment.dueAt.iso8601'}
+          subject.expand_variables!(exp_hash)
+          expect(exp_hash[:test]).to eq right_now.utc.iso8601.to_s
         end
 
       end

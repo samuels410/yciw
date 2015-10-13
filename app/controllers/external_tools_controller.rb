@@ -28,19 +28,6 @@ class ExternalToolsController < ApplicationController
 
   REDIS_PREFIX = 'external_tool:sessionless_launch:'
 
-  TOOL_DISPLAY_TEMPLATES = {
-    'borderless' => {template: 'lti/unframed_launch', layout: 'borderless_lti'}.freeze,
-    'full_width' => {template: 'lti/full_width_launch'}.freeze,
-    'in_context' => {template: 'lti/framed_launch'}.freeze,
-    'default' =>    {template: 'lti/framed_launch'}.freeze,
-  }.freeze
-
-  def self.display_template(display_type)
-    display_type = 'default' unless TOOL_DISPLAY_TEMPLATES.key?(display_type)
-    template = TOOL_DISPLAY_TEMPLATES[display_type]
-    template.dup
-  end
-
   # @API List external tools
   # Returns the paginated list of external tools for the current context.
   # See the get request docs for a single tool for a list of properties on an external tool.
@@ -134,8 +121,8 @@ class ExternalToolsController < ApplicationController
     @lti_launch.link_text =  @tool.name
     @lti_launch.analytics_id =  @tool.tool_id
 
-    display_type = params['borderless'] ? 'borderless' : params['display']
-    render self.class.display_template(display_type)
+    display_type = 'borderless' if params['borderless']
+    render Lti::AppUtil.display_template(display_type, display_override: params[:display])
   end
 
   # @API Get a sessionless launch url for an external tool.
@@ -230,7 +217,7 @@ class ExternalToolsController < ApplicationController
     }
 
     if assignment
-      launch_settings['tool_settings'] = adapter.generate_post_payload_for_assignment(assignment, lti_grade_passback_api_url(@tool), blti_legacy_grade_passback_api_url(@tool))
+      launch_settings['tool_settings'] = adapter.generate_post_payload_for_assignment(assignment, lti_grade_passback_api_url(@tool), blti_legacy_grade_passback_api_url(@tool), lti_turnitin_outcomes_placement_url(@tool.id))
     else
       launch_settings['tool_settings'] = adapter.generate_post_payload
     end
@@ -268,7 +255,7 @@ class ExternalToolsController < ApplicationController
     @lti_launch.link_text =  launch_settings['tool_name']
     @lti_launch.analytics_id =  launch_settings['analytics_id']
 
-    render self.class.display_template('borderless')
+    render Lti::AppUtil.display_template('borderless')
   end
 
   # @API Get a single external tool
@@ -334,7 +321,7 @@ class ExternalToolsController < ApplicationController
         @show_embedded_chat = false if @tool.tool_id == 'chat'
 
         @lti_launch = lti_launch(@tool, placement)
-        render self.class.display_template(@tool.display_type(placement))
+        render Lti::AppUtil.display_template(@tool.display_type(placement), display_override: params[:display])
       end
       add_crumb(@context.name, named_context_url(@context, :context_url))
     end
@@ -385,7 +372,7 @@ class ExternalToolsController < ApplicationController
     tool = find_tool(params[:external_tool_id], selection_type)
     if tool
       @lti_launch = lti_launch(@tool, selection_type)
-      render self.class.display_template('borderless')
+      render Lti::AppUtil.display_template('borderless')
     end
   end
 
@@ -403,9 +390,9 @@ class ExternalToolsController < ApplicationController
   end
   protected :find_tool
 
-  def lti_launch(tool, selection_type)
+  def lti_launch(tool, selection_type = nil)
     @return_url ||= url_for(@context)
-    message_type = tool.extension_setting(selection_type, 'message_type')
+    message_type = tool.extension_setting(selection_type, 'message_type') if selection_type
     case message_type
       when 'ContentItemSelectionResponse', 'ContentItemSelection'
         #ContentItemSelectionResponse is deprecated, use ContentItemSelection instead
@@ -418,8 +405,8 @@ class ExternalToolsController < ApplicationController
   end
   protected :lti_launch
 
-  def basic_lti_launch_request(tool, selection_type)
-    lti_launch = @tool.settings['post_only'] ? Lti::Launch.new(post_only: true) : Lti::Launch.new
+  def basic_lti_launch_request(tool, selection_type = nil)
+    lti_launch = tool.settings['post_only'] ? Lti::Launch.new(post_only: true) : Lti::Launch.new
 
     opts = {
         resource_type: selection_type,
@@ -431,7 +418,7 @@ class ExternalToolsController < ApplicationController
     lti_launch.params = assignment ? adapter.generate_post_payload_for_homework_submission(assignment) : adapter.generate_post_payload
 
     lti_launch.resource_url = adapter.launch_url
-    lti_launch.link_text = tool.label_for(selection_type.to_sym)
+    lti_launch.link_text = selection_type ? tool.label_for(selection_type.to_sym, I18n.locale) : tool.default_label
     lti_launch.analytics_id = tool.tool_id
     lti_launch
   end
@@ -485,15 +472,14 @@ class ExternalToolsController < ApplicationController
     case placement
     when 'migration_selection'
       accept_media_types = 'application/vnd.ims.imsccv1p1,application/vnd.ims.imsccv1p2,application/vnd.ims.imsccv1p3,application/zip,application/xml'
-      return_url = course_content_migrations_url(@context)
       accept_presentation_document_targets = 'download'
       extra_params[:accept_copy_advice] = true
       extra_params[:ext_content_file_extensions] = 'zip,imscc,mbz,xml'
     when 'editor_button'
-      accept_media_types = 'image/*,text/html,application/vnd.ims.lti.v1.launch+json,*/*'
+      accept_media_types = 'image/*,text/html,application/vnd.ims.lti.v1.ltilink,*/*'
       accept_presentation_document_targets = 'embed,frame,iframe,window'
     when 'resource_selection', 'link_selection', 'assignment_selection'
-      accept_media_types = 'application/vnd.ims.lti.v1.launch+json'
+      accept_media_types = 'application/vnd.ims.lti.v1.ltilink'
       accept_presentation_document_targets = 'frame,window'
     when 'homework_submission'
       assignment = @context.assignments.active.find(params[:assignment_id])
@@ -515,6 +501,8 @@ class ExternalToolsController < ApplicationController
         content_item_return_url: return_url,
         #optional params
         accept_multiple: false,
+        accept_unsigned: true,
+        auto_create: false,
         context_title: @context.name,
     }).merge(extra_params).merge(variable_expander(tool:tool).expand_variables!(tool.set_custom_fields(placement)))
 
@@ -522,7 +510,7 @@ class ExternalToolsController < ApplicationController
     lti_launch.resource_url = tool.extension_setting(placement, :url)
     lti_launch.params = LtiOutbound::ToolLaunch.generate_params(params, lti_launch.resource_url, tool.consumer_key, tool.shared_secret,
                                                                 disable_lti_post_only: @context.root_account.feature_enabled?(:disable_lti_post_only))
-    lti_launch.link_text = tool.label_for(placement.to_sym)
+    lti_launch.link_text = tool.label_for(placement.to_sym, I18n.locale)
     lti_launch.analytics_id = tool.tool_id
 
     lti_launch
@@ -765,12 +753,31 @@ class ExternalToolsController < ApplicationController
     end
   end
 
+  def jwt_token
+    require 'jwt'
+
+    tool = ContextExternalTool.find(params['tool_id']) if params['tool_id']
+
+    if params['tool_launch_url'] && tool.nil?
+      tool = ContextExternalTool.find_external_tool(params['tool_launch_url'], @context)
+    end
+
+    raise ActiveRecord::RecordNotFound if tool.nil?
+
+    launch = lti_launch(tool)
+    params = launch.params.reject {|p| p.starts_with?('oauth_')}
+    params[:consumer_key] = tool.consumer_key
+    params[:iat] = Time.zone.now.to_i
+
+    render json: {jwt_token: JWT.encode(params, tool.shared_secret)}
+  end
+
   private
 
   def set_tool_attributes(tool, params)
     attrs = ContextExternalTool::EXTENSION_TYPES
     attrs += [:name, :description, :url, :icon_url, :domain, :privacy_level, :consumer_key, :shared_secret,
-              :custom_fields, :custom_fields_string, :text, :config_type, :config_url, :config_xml, :not_selectable]
+              :custom_fields, :custom_fields_string, :text, :config_type, :config_url, :config_xml, :not_selectable, :app_center_id]
     attrs.each do |prop|
       tool.send("#{prop}=", params[prop]) if params.has_key?(prop)
     end

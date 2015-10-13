@@ -579,11 +579,10 @@ class RoleOverride < ActiveRecord::Base
       },
       :manage_alerts => {
         :label => lambda { t('permissions.manage_announcements', "Manage global announcements") },
-        :account_only => true,
+        :account_only => :root,
         :true_for => %w(AccountAdmin),
         :available_to => %w(AccountAdmin AccountMembership),
       },
-
       :read_messages => {
         :label => lambda { t('permissions.read_messages', "View notifications sent to users") },
         :account_only => :site_admin,
@@ -604,7 +603,7 @@ class RoleOverride < ActiveRecord::Base
       },
       :manage_developer_keys => {
         :label => lambda { t('permissions.manage_developer_keys', "Manage developer keys") },
-        :account_only => :site_admin,
+        :account_only => :root,
         :true_for => %w(AccountAdmin),
         :available_to => %w(AccountAdmin AccountMembership),
       },
@@ -738,6 +737,12 @@ class RoleOverride < ActiveRecord::Base
         :true_for => %w(AccountAdmin),
         :available_to => %w(AccountAdmin AccountMembership),
         :account_allows => lambda {|a| a.settings[:catalog_enabled]}
+      },
+      :moderate_grades => {
+        :label => -> { t('Moderate Grades') },
+        :true_for => %w(AccountAdmin TeacherEnrollment),
+        :available_to => %w(AccountAdmin AccountMembership TeacherEnrollment TaEnrollment),
+        :account_allows => lambda {|a| a.feature_allowed?(:moderated_grading)}
       }
     })
 
@@ -853,7 +858,7 @@ class RoleOverride < ActiveRecord::Base
         accounts = context.account_chain
         overrides = RoleOverride.where(:context_id => accounts, :context_type => 'Account', :role_id => role)
 
-        unless accounts.include?(Account.site_admin)
+        if role_context == Account.site_admin && !accounts.include?(Account.site_admin)
           accounts << Account.site_admin
           overrides += Account.site_admin.role_overrides.where(:role_id => role)
         end

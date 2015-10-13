@@ -222,7 +222,6 @@ module ApplicationHelper
   def use_optimized_js?
     if ENV['USE_OPTIMIZED_JS'] == 'true'
       # allows overriding by adding ?debug_assets=1 or ?debug_js=1 to the url
-      # (debug_assets is also used by jammit => you'll get unpackaged css AND js)
       !(params[:debug_assets] || params[:debug_js])
     else
       # allows overriding by adding ?optimized_js=1 to the url
@@ -247,41 +246,57 @@ module ApplicationHelper
   # Returns a <script> tag for each registered js_bundle
   def include_js_bundles
     paths = js_bundles.inject([]) do |ary, (bundle, plugin)|
-      base_url = js_base_url
+      base_url = "#{js_base_url}"
       base_url += "/plugins/#{plugin}" if plugin
       ary.concat(Canvas::RequireJs.extensions_for(bundle, 'plugins/')) unless use_optimized_js?
       ary << "#{base_url}/compiled/bundles/#{bundle}.js"
     end
-    javascript_include_tag *paths
+    javascript_include_tag(*paths)
   end
 
   def include_css_bundles
-    unless jammit_css_bundles.empty?
-      bundles = jammit_css_bundles.map do |(bundle,plugin)|
-        bundle = variant_name_for(bundle)
-        plugin ? "plugins_#{plugin}_#{bundle}" : bundle
+    unless css_bundles.empty?
+      bundles = css_bundles.map do |(bundle,plugin)|
+        css_url_for(bundle, plugin)
       end
       bundles << {:media => 'all'}
-      include_stylesheets(*bundles)
+      stylesheet_link_tag(*bundles)
     end
   end
 
-  def variant_name_for(bundle_name)
-    if k12?
-      variant = '_k12'
-    elsif use_new_styles?
-      variant = '_new_styles'
+  def css_variant
+    if use_new_styles?
+      variant = 'new_styles'
     else
-      variant = '_legacy'
+      variant = 'legacy'
     end
-
     use_high_contrast = @current_user && @current_user.prefers_high_contrast?
-    variant += use_high_contrast ? '_high_contrast' : '_normal_contrast'
-    "#{bundle_name}#{variant}"
+    variant + (use_high_contrast ? '_high_contrast' : '_normal_contrast')
+  end
+
+  def css_url_for(bundle_name, plugin=false)
+    bundle_path = "#{plugin ? "plugins/#{plugin}" : 'bundles'}/#{bundle_name}"
+    cache = BrandableCSS.cache_for(bundle_path, css_variant)
+    base_dir = cache[:includesNoVariables] ? 'no_variables' : File.join(active_brand_config.try(:md5).to_s, css_variant)
+    File.join('/dist', 'brandable_css', base_dir, "#{bundle_path}-#{cache[:combinedChecksum]}.css")
+  end
+
+  def brand_variable(variable_name)
+    BrandableCSS.brand_variable_value(variable_name, active_brand_config)
+  end
+
+  def favicon
+    possibly_customized_favicon = brand_variable('ic-brand-favicon')
+    default_favicon = BrandableCSS.brand_variable_value('ic-brand-favicon')
+    if possibly_customized_favicon == default_favicon
+      return "favicon-green.ico" if Rails.env.development?
+      return "favicon-yellow.ico" if Rails.env.test?
+    end
+    possibly_customized_favicon
   end
 
   def include_common_stylesheets
-    include_stylesheets variant_name_for(:vendor), variant_name_for(:common), media: "all"
+    stylesheet_link_tag css_url_for(:common), media: "all"
   end
 
   def sortable_tabs
@@ -337,7 +352,7 @@ module ApplicationHelper
     # account_chain_ids is in the order we need to search for tools
     # unfortunately, the db will return an arbitrary one first.
     # so, we pull all the tools (probably will only have one anyway) and look through them here
-    tools = ContextExternalTool.active.where(:context_type => 'Account', :context_id => @context.account_chain, :tool_id => tool_id).all
+    tools = ContextExternalTool.active.where(:context_type => 'Account', :context_id => @context.account_chain, :tool_id => tool_id).to_a
     @context.account_chain.each do |account|
       tool = tools.find {|t| t.context_id == account.id}
       return tool if tool
@@ -440,7 +455,7 @@ module ApplicationHelper
           having_setting('editor_button').polymorphic_where(context: contexts)
       tools.sort_by(&:id).map do |tool|
         {
-          :name => tool.label_for(:editor_button, nil),
+          :name => tool.label_for(:editor_button, I18n.locale),
           :id => tool.id,
           :url => tool.editor_button(:url),
           :icon_url => tool.editor_button(:icon_url),
@@ -540,9 +555,10 @@ module ApplicationHelper
     super
   end
 
-  def map_courses_for_menu(courses)
+  def map_courses_for_menu(courses, opts={})
     mapped = courses.map do |course|
-      presenter = CourseForMenuPresenter.new(course, available_section_tabs(course))
+      tabs = opts[:include_section_tabs] && available_section_tabs(course)
+      presenter = CourseForMenuPresenter.new(course, tabs)
       presenter.to_h
     end
 
@@ -595,25 +611,44 @@ module ApplicationHelper
     end
   end
 
-  def help_link
-    url = ((@domain_root_account && @domain_root_account.settings[:support_url]) || (Account.default && Account.default.settings[:support_url]))
-    show_feedback_link = Setting.get("show_feedback_link", "false") == "true"
+  def show_feedback_link?
+    Setting.get("show_feedback_link", "false") == "true"
+  end
+
+  def support_url
+    (@domain_root_account && @domain_root_account.settings[:support_url]) ||
+      (Account.default && Account.default.settings[:support_url])
+  end
+
+  def help_link_url
+    support_url || '#'
+  end
+
+  def show_help_link?
+    show_feedback_link? || support_url
+  end
+
+  def help_link_classes(additional_classes = [])
     css_classes = []
-    css_classes << "support_url" if url
-    css_classes << "help_dialog_trigger" if show_feedback_link
-    css_classes << 'ic-app-header__menu-list-link' if use_new_styles?
-    if url || show_feedback_link
-      link_content = if use_new_styles?
-                        '<div class="menu-item-icon-container" role="presentation">' +
-                        render(:partial => "shared/svg/svg_icon_help.svg") +
-                        '</div><div class="menu-item__text">' + t('Help') + '</div>'
-                     else
-                        t('Help')
-                     end
-      link_to link_content.html_safe, url || '#',
-        :class => css_classes.join(" "),
-        'data-track-category' => "help system",
-        'data-track-label' => 'help button'
+    css_classes << "support_url" if support_url
+    css_classes << "help_dialog_trigger" if show_feedback_link?
+    css_classes.concat(additional_classes) if additional_classes
+    css_classes.join(" ")
+  end
+
+  def help_link_data
+    {
+      :'track-category' => 'help system',
+      :'track-label' => 'help button'
+    }
+  end
+
+  def help_link
+    if show_help_link?
+      link_content = t('Help')
+      link_to link_content.html_safe, help_link_url,
+        :class => help_link_classes,
+        :data => help_link_data
     end
   end
 
@@ -654,45 +689,57 @@ module ApplicationHelper
 
   def include_account_js(options = {})
     return if params[:global_includes] == '0'
-    includes = get_global_includes.map do |global_include|
-      global_include[:js] if global_include[:js].present?
+    if use_new_styles?
+      includes = brand_config_includes.slice(:js_overrides).values
+    else
+      includes = get_global_includes.map do |global_include|
+        global_include[:js] if global_include[:js].present?
+      end
     end
     includes.compact!
     if includes.length > 0
       if options[:raw]
         includes.unshift("/optimized/vendor/jquery-1.7.2.js")
-        javascript_include_tag(includes)
+        javascript_include_tag(*includes)
       else
         str = <<-ENDSCRIPT
-          (function() {
-            var inject = function(src) {
+          require(['jquery'], function () {
+            #{includes.to_json}.forEach(function (src) {
               var s = document.createElement('script');
               s.src = src;
-              s.type = 'text/javascript';
               document.body.appendChild(s);
-            };
-            var srcs = #{includes.to_json};
-            require(['jquery'], function() {
-              for (var i = 0, l = srcs.length; i < l; i++) {
-                inject(srcs[i]);
-              }
             });
-          })();
+          });
         ENDSCRIPT
         javascript_tag(str)
       end
     end
   end
 
+  # allows forcing account CSS off universally for a specific situation,
+  # without requiring the global_includes=0 param
+  def disable_account_css
+    @disable_account_css = true
+  end
+
+  def disable_account_css?
+    @disable_account_css || params[:global_includes] == '0'
+  end
+
   def include_account_css
-    return if params[:global_includes] == '0' || @domain_root_account.try(:feature_enabled?, :use_new_styles)
-    includes = get_global_includes.inject([]) do |css_includes, global_include|
-      css_includes << global_include[:css] if global_include[:css].present?
-      css_includes
+    return if disable_account_css?
+    if use_new_styles?
+      includes = []
+      includes << brand_config_includes[:css] if brand_config_includes[:css].present?
+    else
+      includes = get_global_includes.inject([]) do |css_includes, global_include|
+        css_includes << global_include[:css] if global_include[:css].present?
+        css_includes
+      end
     end
     if includes.length > 0
       includes << { :media => 'all' }
-      stylesheet_link_tag *includes
+      stylesheet_link_tag(*includes)
     end
   end
 
@@ -731,17 +778,28 @@ module ApplicationHelper
   # used for generating a
   # prompt for use with date pickers
   # so it doesn't need to be declared all over the place
-  def datepicker_screenreader_prompt
+  def datepicker_screenreader_prompt(format_input="datetime")
     prompt_text = I18n.t("#helpers.accessible_date_prompt", "Format Like")
-    format = accessible_date_format
+    format = accessible_date_format(format_input)
     "#{prompt_text} #{format}"
   end
 
+  ACCEPTABLE_FORMAT_TYPES = ['date', 'time', 'datetime'].freeze
   # useful for presenting a consistent
   # date format to screenreader users across the app
   # when telling them how to fill in a datetime field
-  def accessible_date_format
-    I18n.t("#helpers.accessible_date_format", "YYYY-MM-DD hh:mm")
+  def accessible_date_format(format='datetime')
+    if !ACCEPTABLE_FORMAT_TYPES.include?(format)
+      raise ArgumentError, "format must be one of #{ACCEPTABLE_FORMAT_TYPES.join(",")}"
+    end
+
+    if format == 'date'
+      I18n.t("#helpers.accessible_date_only_format", "YYYY-MM-DD")
+    elsif format == 'time'
+      I18n.t("#helpers.accessible_time_only_format", "hh:mm")
+    else
+      I18n.t("#helpers.accessible_date_format", "YYYY-MM-DD hh:mm")
+    end
   end
 
   # render a link with a tooltip containing a summary of due dates
@@ -822,9 +880,21 @@ module ApplicationHelper
     end
   end
 
-  # Returns true if the parameter matches with the active url
+  # Returns true if the given value is in the current path.
   def active_path?(to_test)
-    request.fullpath.include? to_test
+    # Make sure to not include account external tools
+    if account_external_tool_path?(request.fullpath)
+      false
+    else
+      request.fullpath.include?(to_test)
+    end
+  end
+
+  # Returns true if the active path is an account external tool (like Commons)
+  def account_external_tool_path?(to_test)
+    ext_tools_regex = /^\/accounts\/[^\/]*\/(external_tools)/
+    first_match_location = ext_tools_regex =~ to_test
+    !first_match_location.nil?
   end
 
   def link_to_parent_signup(auth_type)

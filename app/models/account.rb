@@ -24,7 +24,7 @@ class Account < ActiveRecord::Base
     :turnitin_host, :turnitin_comments, :turnitin_pledge,
     :default_time_zone, :parent_account, :settings, :default_storage_quota,
     :default_storage_quota_mb, :storage_quota, :ip_filters, :default_locale,
-    :default_user_storage_quota_mb, :default_group_storage_quota_mb, :integration_id
+    :default_user_storage_quota_mb, :default_group_storage_quota_mb, :integration_id, :brand_config_md5
 
   EXPORTABLE_ATTRIBUTES = [:id, :name, :created_at, :updated_at, :workflow_state, :deleted_at,
     :default_time_zone, :external_status, :storage_quota,
@@ -43,6 +43,7 @@ class Account < ActiveRecord::Base
   INSTANCE_GUID_SUFFIX = 'canvas-lms'
 
   include Workflow
+  include BrandConfigHelpers
   belongs_to :parent_account, :class_name => 'Account'
   belongs_to :root_account, :class_name => 'Account'
   authenticates_many :pseudonym_sessions
@@ -63,7 +64,7 @@ class Account < ActiveRecord::Base
   has_many :abstract_courses, :class_name => 'AbstractCourse', :foreign_key => 'account_id'
   has_many :root_abstract_courses, :class_name => 'AbstractCourse', :foreign_key => 'root_account_id'
   has_many :users, :through => :account_users
-  has_many :pseudonyms, :include => :user
+  has_many :pseudonyms, preload: :user
   has_many :role_overrides, :as => :context
   has_many :course_account_associations
   has_many :child_courses, :through => :course_account_associations, :source => :course, :conditions => ['course_account_associations.depth = 0']
@@ -71,13 +72,16 @@ class Account < ActiveRecord::Base
   has_many :active_assignments, :as => :context, :class_name => 'Assignment', :conditions => ['assignments.workflow_state != ?', 'deleted']
   has_many :folders, :as => :context, :dependent => :destroy, :order => 'folders.name'
   has_many :active_folders, :class_name => 'Folder', :as => :context, :conditions => ['folders.workflow_state != ?', 'deleted'], :order => 'folders.name'
-  has_many :active_folders_with_sub_folders, :class_name => 'Folder', :as => :context, :include => [:active_sub_folders], :conditions => ['folders.workflow_state != ?', 'deleted'], :order => 'folders.name'
-  has_many :active_folders_detailed, :class_name => 'Folder', :as => :context, :include => [:active_sub_folders, :active_file_attachments], :conditions => ['folders.workflow_state != ?', 'deleted'], :order => 'folders.name'
-  has_many :account_authorization_configs, order: "position", extend: AccountAuthorizationConfig::FindWithType
+  has_many :developer_keys
+  has_many :authentication_providers,
+           order: "position",
+           extend: AccountAuthorizationConfig::FindWithType,
+           class_name: "AccountAuthorizationConfig"
+
   has_many :account_reports
   has_many :grading_standards, :as => :context, :conditions => ['workflow_state != ?', 'deleted']
   has_many :assessment_questions, :through => :assessment_question_banks
-  has_many :assessment_question_banks, :as => :context, :include => [:assessment_questions, :assessment_question_bank_users]
+  has_many :assessment_question_banks, as: :context, preload: [:assessment_questions, :assessment_question_bank_users]
   has_many :roles
   has_many :all_roles, :class_name => 'Role', :foreign_key => 'root_account_id'
   has_many :progresses, :as => :context
@@ -104,19 +108,21 @@ class Account < ActiveRecord::Base
   has_many :context_external_tools, :as => :context, :dependent => :destroy, :order => 'name'
   has_many :error_reports
   has_many :announcements, :class_name => 'AccountNotification'
-  has_many :alerts, :as => :context, :include => :criteria
+  has_many :alerts, as: :context, preload: :criteria
   has_many :user_account_associations
   has_many :report_snapshots
   has_many :external_integration_keys, :as => :context, :dependent => :destroy
+  belongs_to :brand_config, foreign_key: "brand_config_md5"
 
   before_validation :verify_unique_sis_source_id
   before_save :ensure_defaults
   after_save :update_account_associations_if_changed
 
-  before_save :setup_quota_cache_invalidation
-  after_save :invalidate_quota_caches_if_changed
+  before_save :setup_cache_invalidation
+  after_save :invalidate_caches_if_changed
 
   after_create :default_enrollment_term
+  after_create :enable_canvas_authentication
 
   serialize :settings, Hash
   include TimeZoneHelper
@@ -155,6 +161,7 @@ class Account < ActiveRecord::Base
   # these settings either are or could be easily added to
   # the account settings page
   add_setting :sis_app_token, :root_only => true
+  add_setting :sis_app_url, :root_only => true
   add_setting :global_includes, :root_only => true, :boolean => true, :default => false
   add_setting :global_javascript, :condition => :allow_global_includes
   add_setting :global_stylesheet, :condition => :allow_global_includes
@@ -165,6 +172,7 @@ class Account < ActiveRecord::Base
   add_setting :login_handle_name, root_only: true
   add_setting :change_password_url, root_only: true
   add_setting :unknown_user_url, root_only: true
+  add_setting :fft_registration_url, root_only: true
 
   add_setting :restrict_student_future_view, :boolean => true, :default => false, :inheritable => true
   add_setting :restrict_student_past_view, :boolean => true, :default => false, :inheritable => true
@@ -186,13 +194,13 @@ class Account < ActiveRecord::Base
   add_setting :enable_profiles, :boolean => true, :root_only => true, :default => false
   add_setting :enable_manage_groups2, :boolean => true, :root_only => true, :default => true
   add_setting :mfa_settings, :root_only => true
-  add_setting :canvas_authentication, :boolean => true, :root_only => true
   add_setting :admins_can_change_passwords, :boolean => true, :root_only => true, :default => false
   add_setting :admins_can_view_notifications, :boolean => true, :root_only => true, :default => false
   add_setting :outgoing_email_default_name
   add_setting :external_notification_warning, :boolean => true, :default => false
   # Terms of Use and Privacy Policy settings for the root account
   add_setting :terms_changed_at, :root_only => true
+  add_setting :account_terms_required, :root_only => true, :boolean => true, :default => true
   # When a user is invited to a course, do we let them see a preview of the
   # course even without registering?  This is part of the free-for-teacher
   # account perks, since anyone can invite anyone to join any course, and it'd
@@ -213,13 +221,8 @@ class Account < ActiveRecord::Base
   add_setting :include_students_in_global_survey, boolean: true, root_only: true, default: false
   add_setting :trusted_referers, root_only: true
 
-  BRANDING_SETTINGS = [:header_image, :favicon, :apple_touch_icon,
-                       :msapplication_tile_color, :msapplication_tile_square,
-                       :msapplication_tile_wide].freeze
-
-  BRANDING_SETTINGS.each { |setting| add_setting(setting, root_only: true) }
-
   def settings=(hash)
+    @invalidate_settings_cache = true
     if hash.is_a?(Hash)
       hash.each do |key, val|
         if account_settings_options && account_settings_options[key.to_sym]
@@ -277,11 +280,19 @@ class Account < ActiveRecord::Base
   end
 
   def non_canvas_auth_configured?
-    account_authorization_configs.exists?
+    authentication_providers.active.where("auth_type<>'canvas'").exists?
   end
 
   def canvas_authentication?
-    settings[:canvas_authentication] != false || !non_canvas_auth_configured?
+    authentication_providers.active.where(auth_type: 'canvas').exists? || !authentication_providers.active.exists?
+  end
+
+  def enable_canvas_authentication
+    return unless root_account?
+    # for migrations creating a new db
+    return unless AccountAuthorizationConfig.columns_hash.key?('workflow_state')
+    return if authentication_providers.active.where(auth_type: 'canvas').exists?
+    authentication_providers.create!(auth_type: 'canvas')
   end
 
   def open_registration?
@@ -303,7 +314,7 @@ class Account < ActiveRecord::Base
   end
 
   def terms_required?
-    Setting.get('terms_required', 'true') == 'true'
+    Setting.get('terms_required', 'true') == 'true' && root_account.account_terms_required?
   end
 
   def require_acceptance_of_terms?(user)
@@ -440,7 +451,7 @@ class Account < ActiveRecord::Base
       all_courses
     else
       shard.activate do
-        Course.where("EXISTS (SELECT 1 FROM course_account_associations WHERE course_id=courses.id AND account_id=?)", self)
+        Course.where("EXISTS (?)", CourseAccountAssociation.where(account_id: self).where("course_id=courses.id"))
       end
     end
   end
@@ -455,7 +466,7 @@ class Account < ActiveRecord::Base
     associated_courses = associated_courses.with_enrollments if opts[:hide_enrollmentless_courses]
     associated_courses = associated_courses.for_term(opts[:term]) if opts[:term].present?
     associated_courses = yield associated_courses if block_given?
-    associated_courses.limit(opts[:limit]).active_first.select(columns).all
+    associated_courses.limit(opts[:limit]).active_first.select(columns).to_a
   end
 
   def fast_all_courses(opts={})
@@ -499,49 +510,73 @@ class Account < ActiveRecord::Base
   end
 
   def self.account_lookup_cache_key(id)
-    ['_account_lookup2', id].cache_key
+    ['_account_lookup4', id].cache_key
   end
 
   def self.invalidate_cache(id)
-    Rails.cache.delete(account_lookup_cache_key(id)) if id
+    Shard.birth.activate do
+      Rails.cache.delete(account_lookup_cache_key(id)) if id
+    end
   rescue
     nil
   end
 
-  def setup_quota_cache_invalidation
-    @quota_invalidations = []
+  def setup_cache_invalidation
+    @invalidations = []
     unless self.new_record?
-      @quota_invalidations += ['default_storage_quota', 'current_quota'] if self.try_rescue(:default_storage_quota_changed?)
-      @quota_invalidations << 'default_group_storage_quota' if self.try_rescue(:default_group_storage_quota_changed?)
+      @invalidations += ['default_storage_quota', 'current_quota'] if self.try_rescue(:default_storage_quota_changed?)
+      @invalidations << 'default_group_storage_quota' if self.try_rescue(:default_group_storage_quota_changed?)
     end
   end
 
-  def invalidate_quota_caches_if_changed
-    Account.send_later_if_production(:invalidate_quota_caches, self.id, @quota_invalidations) if @quota_invalidations.present?
-  end
-
-  def self.invalidate_quota_caches(account_id, keys)
-    account_ids = Account.sub_account_ids_recursive(account_id) + [account_id]
-    keys.each do |quota_key|
-      account_ids.each do |id|
-        Rails.cache.delete([quota_key, id].cache_key)
+  def invalidate_caches_if_changed
+    @invalidations ||= []
+    @invalidations += Account.inheritable_settings if @invalidate_settings_cache
+    if @invalidations.present?
+      shard.activate do
+        @invalidations.each do |key|
+          Rails.cache.delete([key, self.global_id].cache_key)
+        end
+        Account.send_later_if_production(:invalidate_inherited_caches, self, @invalidations)
       end
     end
   end
 
+  def self.invalidate_inherited_caches(parent_account, keys)
+    parent_account.shard.activate do
+      account_ids = Account.sub_account_ids_recursive(parent_account.id)
+      account_ids.each do |id|
+        global_id = Shard.global_id_for(id)
+        keys.each do |key|
+          Rails.cache.delete([key, global_id].cache_key)
+        end
+      end
+    end
+  end
+
+  def self.default_storage_quota
+    Setting.get('account_default_quota', 500.megabytes.to_s).to_i
+  end
+
   def quota
-    Rails.cache.fetch(['current_quota', self.id].cache_key) do
-      read_attribute(:storage_quota) ||
-        (self.parent_account.default_storage_quota rescue nil) ||
-        Setting.get('account_default_quota', 500.megabytes.to_s).to_i
+    return storage_quota if read_attribute(:storage_quote)
+    return self.class.default_storage_quota if root_account?
+
+    shard.activate do
+      Rails.cache.fetch(['current_quota', self.global_id].cache_key) do
+        self.parent_account.default_storage_quota
+      end
     end
   end
 
   def default_storage_quota
-    Rails.cache.fetch(['default_storage_quota', self.id].cache_key) do
-      read_attribute(:default_storage_quota) ||
-        (self.parent_account.default_storage_quota rescue nil) ||
-        Setting.get('account_default_quota', 500.megabytes.to_s).to_i
+    return super if read_attribute(:default_storage_quota)
+    return self.class.default_storage_quota if root_account?
+
+    shard.activate do
+      @default_storage_quota ||= Rails.cache.fetch(['default_storage_quota', self.global_id].cache_key) do
+        parent_account.default_storage_quota
+      end
     end
   end
 
@@ -584,10 +619,13 @@ class Account < ActiveRecord::Base
   end
 
   def default_group_storage_quota
-    Rails.cache.fetch(['default_group_storage_quota', self.id].cache_key) do
-      read_attribute(:default_group_storage_quota) ||
-        (self.parent_account.default_group_storage_quota rescue nil) ||
-        Group.default_storage_quota
+    return super if read_attribute(:default_group_storage_quota)
+    return Group.default_storage_quota if root_account?
+
+    shard.activate do
+      Rails.cache.fetch(['default_group_storage_quota', self.global_id].cache_key) do
+        self.parent_account.default_group_storage_quota
+      end
     end
   end
 
@@ -625,9 +663,9 @@ class Account < ActiveRecord::Base
       chain = Shard.shard_for(starting_account_id).activate do
         Account.find_by_sql(<<-SQL)
               WITH RECURSIVE t AS (
-                SELECT * FROM accounts WHERE id=#{Shard.local_id_for(starting_account_id).first}
+                SELECT * FROM #{Account.quoted_table_name} WHERE id=#{Shard.local_id_for(starting_account_id).first}
                 UNION
-                SELECT accounts.* FROM accounts INNER JOIN t ON accounts.id=t.parent_account_id
+                SELECT accounts.* FROM #{Account.quoted_table_name} INNER JOIN t ON accounts.id=t.parent_account_id
               )
               SELECT * FROM t
         SQL
@@ -669,10 +707,10 @@ class Account < ActiveRecord::Base
     if ActiveRecord::Base.configurations[Rails.env]['adapter'] == 'postgresql'
       Account.find_by_sql([<<-SQL, self.id, limit.to_i, offset.to_i])
           WITH RECURSIVE t AS (
-            SELECT * FROM accounts
+            SELECT * FROM #{Account.quoted_table_name}
             WHERE parent_account_id = ? AND workflow_state <>'deleted'
             UNION
-            SELECT accounts.* FROM accounts
+            SELECT accounts.* FROM #{Account.quoted_table_name}
             INNER JOIN t ON accounts.parent_account_id = t.id
             WHERE accounts.workflow_state <>'deleted'
           )
@@ -693,10 +731,10 @@ class Account < ActiveRecord::Base
     if connection.adapter_name == 'PostgreSQL'
       sql = "
           WITH RECURSIVE t AS (
-            SELECT id, parent_account_id FROM accounts
+            SELECT id, parent_account_id FROM #{Account.quoted_table_name}
             WHERE parent_account_id = #{parent_account_id} AND workflow_state <> 'deleted'
             UNION
-            SELECT accounts.id, accounts.parent_account_id FROM accounts
+            SELECT accounts.id, accounts.parent_account_id FROM #{Account.quoted_table_name}
             INNER JOIN t ON accounts.parent_account_id = t.id
             WHERE accounts.workflow_state <> 'deleted'
           )
@@ -847,7 +885,7 @@ class Account < ActiveRecord::Base
         if account_chain_ids == [Account.site_admin.id]
           Account.site_admin.account_users_for(user)
         else
-          AccountUser.where(:account_id => account_chain_ids, :user_id => user).all
+          AccountUser.where(:account_id => account_chain_ids, :user_id => user).to_a
         end
       end
     end
@@ -860,7 +898,7 @@ class Account < ActiveRecord::Base
     raise "must be a root account" unless self.root_account?
     Shard.partition_by_shard([self, Account.site_admin].uniq) do |accounts|
       next unless user.associated_shards.include?(Shard.current)
-      AccountUser.includes(:account).joins(:account).where("user_id=? AND (root_account_id IN (?) OR account_id IN (?))", user, accounts, accounts)
+      AccountUser.eager_load(:account).where("user_id=? AND (root_account_id IN (?) OR account_id IN (?))", user, accounts, accounts)
     end
   end
 
@@ -875,7 +913,7 @@ class Account < ActiveRecord::Base
       ((details[:available_to] | details[:true_for]) & enrollment_types).each do |role_name|
         given { |user|
           user && RoleOverride.permission_for(self, permission, Role.get_built_in_role(role_name))[:enabled] &&
-          self.course_account_associations.joins('INNER JOIN enrollments ON course_account_associations.course_id=enrollments.course_id').
+          self.course_account_associations.joins("INNER JOIN #{Enrollment.quoted_table_name} ON course_account_associations.course_id=enrollments.course_id").
             where("enrollments.type=? AND enrollments.workflow_state IN ('active', 'completed') AND user_id=?", role_name, user).first &&
           (!details[:if] || send(details[:if])) }
         can permission
@@ -888,7 +926,7 @@ class Account < ActiveRecord::Base
     given { |user|
       result = false
 
-      if !site_admin? && user
+      if !root_account.site_admin? && user
         scope = root_account.enrollments.active.where(user_id: user)
         result = root_account.teachers_can_create_courses? &&
             scope.where(:type => ['TeacherEnrollment', 'DesignerEnrollment']).exists?
@@ -955,15 +993,11 @@ class Account < ActiveRecord::Base
   end
 
   def delegated_authentication?
-    account_authorization_configs.first.is_a?(AccountAuthorizationConfig::Delegated)
+    authentication_providers.active.first.is_a?(AccountAuthorizationConfig::Delegated)
   end
 
   def forgot_password_external_url
     self.change_password_url
-  end
-
-  def multi_auth?
-    self.account_authorization_configs.count > 1
   end
 
   def auth_discovery_url=(url)
@@ -1004,7 +1038,7 @@ class Account < ActiveRecord::Base
     begin
       value, uri = CanvasHttp.validate_url(self.settings[:auth_discovery_url])
       self.auth_discovery_url = value
-    rescue URI::InvalidURIError, ArgumentError
+    rescue URI::Error, ArgumentError
       errors.add(:discovery_url, t('errors.invalid_discovery_url', "The discovery URL is not valid" ))
     end
   end
@@ -1053,13 +1087,14 @@ class Account < ActiveRecord::Base
   end
 
   def self.find_cached(id)
-    account = Rails.cache.fetch(account_lookup_cache_key(id)) do
-      account = Account.where(id: id).first
-      account.precache if account
-      account || :nil
+    birth_id = Shard.relative_id_for(id, Shard.current, Shard.birth)
+    Shard.birth.activate do
+      Rails.cache.fetch(account_lookup_cache_key(birth_id)) do
+        account = Account.where(id: birth_id).first
+        account.precache if account
+        account
+      end
     end
-    account = nil if account == :nil
-    account
   end
 
   def self.get_special_account(special_account_type, default_account_name, force_create = false)
@@ -1233,7 +1268,7 @@ class Account < ActiveRecord::Base
     tools.sort_by(&:id).map do |tool|
      {
         :id => tool.asset_string,
-        :label => tool.label_for(:account_navigation, opts[:language]),
+        :label => tool.label_for(:account_navigation, opts[:language] || I18n.locale),
         :css_class => tool.asset_string,
         :visibility => tool.account_navigation(:visibility),
         :href => :account_external_tool_path,
@@ -1245,15 +1280,15 @@ class Account < ActiveRecord::Base
 
   def tabs_available(user=nil, opts={})
     manage_settings = user && self.grants_right?(user, :manage_account_settings)
-    if site_admin?
+    if root_account.site_admin?
       tabs = []
       tabs << { :id => TAB_USERS, :label => t('#account.tab_users', "Users"), :css_class => 'users', :href => :account_users_path } if user && self.grants_right?(user, :read_roster)
       tabs << { :id => TAB_PERMISSIONS, :label => t('#account.tab_permissions', "Permissions"), :css_class => 'permissions', :href => :account_permissions_path } if user && self.grants_right?(user, :manage_role_overrides)
       tabs << { :id => TAB_SUB_ACCOUNTS, :label => t('#account.tab_sub_accounts', "Sub-Accounts"), :css_class => 'sub_accounts', :href => :account_sub_accounts_path } if manage_settings
-      tabs << { :id => TAB_AUTHENTICATION, :label => t('#account.tab_authentication', "Authentication"), :css_class => 'authentication', :href => :account_account_authorization_configs_path } if manage_settings
-      tabs << { :id => TAB_PLUGINS, :label => t("#account.tab_plugins", "Plugins"), :css_class => "plugins", :href => :plugins_path, :no_args => true } if self.grants_right?(user, :manage_site_settings)
-      tabs << { :id => TAB_JOBS, :label => t("#account.tab_jobs", "Jobs"), :css_class => "jobs", :href => :jobs_path, :no_args => true } if self.grants_right?(user, :view_jobs)
-      tabs << { :id => TAB_DEVELOPER_KEYS, :label => t("#account.tab_developer_keys", "Developer Keys"), :css_class => "developer_keys", :href => :developer_keys_path, :no_args => true } if self.grants_right?(user, :manage_developer_keys)
+      tabs << { :id => TAB_AUTHENTICATION, :label => t('#account.tab_authentication', "Authentication"), :css_class => 'authentication', :href => :account_authentication_providers_path } if root_account? && manage_settings
+      tabs << { :id => TAB_PLUGINS, :label => t("#account.tab_plugins", "Plugins"), :css_class => "plugins", :href => :plugins_path, :no_args => true } if root_account? && self.grants_right?(user, :manage_site_settings)
+      tabs << { :id => TAB_JOBS, :label => t("#account.tab_jobs", "Jobs"), :css_class => "jobs", :href => :jobs_path, :no_args => true } if root_account? && self.grants_right?(user, :view_jobs)
+      tabs << { :id => TAB_DEVELOPER_KEYS, :label => t("#account.tab_developer_keys", "Developer Keys"), :css_class => "developer_keys", :href => :developer_keys_path, :no_args => true } if root_account? && self.grants_right?(user, :manage_developer_keys)
     else
       tabs = []
       tabs << { :id => TAB_COURSES, :label => t('#account.tab_courses', "Courses"), :css_class => 'courses', :href => :account_path } if user && self.grants_right?(user, :read_course_list)
@@ -1269,8 +1304,9 @@ class Account < ActiveRecord::Base
       tabs << { :id => TAB_SUB_ACCOUNTS, :label => t('#account.tab_sub_accounts', "Sub-Accounts"), :css_class => 'sub_accounts', :href => :account_sub_accounts_path } if manage_settings
       tabs << { :id => TAB_FACULTY_JOURNAL, :label => t('#account.tab_faculty_journal', "Faculty Journal"), :css_class => 'faculty_journal', :href => :account_user_notes_path} if self.enable_user_notes && user && self.grants_right?(user, :manage_user_notes)
       tabs << { :id => TAB_TERMS, :label => t('#account.tab_terms', "Terms"), :css_class => 'terms', :href => :account_terms_path } if self.root_account? && manage_settings
-      tabs << { :id => TAB_AUTHENTICATION, :label => t('#account.tab_authentication', "Authentication"), :css_class => 'authentication', :href => :account_account_authorization_configs_path } if self.root_account? && manage_settings
+      tabs << { :id => TAB_AUTHENTICATION, :label => t('#account.tab_authentication', "Authentication"), :css_class => 'authentication', :href => :account_authentication_providers_path } if self.root_account? && manage_settings
       tabs << { :id => TAB_SIS_IMPORT, :label => t('#account.tab_sis_import', "SIS Import"), :css_class => 'sis_import', :href => :account_sis_import_path } if self.root_account? && self.allow_sis_import && user && self.grants_right?(user, :manage_sis)
+      tabs << { :id => TAB_DEVELOPER_KEYS, :label => t("#account.tab_developer_keys", "Developer Keys"), :css_class => "developer_keys", :href => :account_developer_keys_path, account_id: root_account.id } if root_account? && root_account.grants_right?(user, :manage_developer_keys)
     end
     tabs += external_tool_tabs(opts)
     tabs += Lti::MessageHandler.lti_apps_tabs(self, [Lti::ResourcePlacement::ACCOUNT_NAVIGATION], opts)
@@ -1281,7 +1317,7 @@ class Account < ActiveRecord::Base
   end
 
   def can_see_admin_tools_tab?(user)
-    return false if !user || site_admin?
+    return false if !user || root_account.site_admin?
     admin_tool_permissions = RoleOverride.manageable_permissions(self).find_all{|p| p[1][:admin_tool]}
     admin_tool_permissions.any? do |p|
       self.grants_right?(user, p.first)
@@ -1462,7 +1498,7 @@ class Account < ActiveRecord::Base
   def format_referer(referer_url)
     begin
       referer = URI(referer_url || '')
-    rescue URI::InvalidURIError
+    rescue URI::Error
       return
     end
     return unless referer.host
@@ -1486,7 +1522,7 @@ class Account < ActiveRecord::Base
   end
 
   def parent_registration?
-    self.account_authorization_configs.exists?(parent_registration: true)
+    authentication_providers.where(parent_registration: true).exists?
   end
 
   def parent_auth_type
@@ -1495,6 +1531,6 @@ class Account < ActiveRecord::Base
   end
 
   def parent_registration_aac
-    account_authorization_configs.where(parent_registration: true).first
+    authentication_providers.where(parent_registration: true).first
   end
 end

@@ -26,13 +26,13 @@ class AddRoleIdColumns < ActiveRecord::Migration
 
       # de-duplicate roles in same account chain into their parents
       delete_duplicate_roles_sql = "
-        UPDATE roles SET workflow_state = 'deleted' WHERE roles.workflow_state = 'active' AND EXISTS (
-          SELECT id FROM roles AS other_role WHERE roles.id <> other_role.id AND roles.name = other_role.name AND
+        UPDATE #{Role.quoted_table_name} SET workflow_state = 'deleted' WHERE roles.workflow_state = 'active' AND EXISTS (
+          SELECT id FROM #{Role.quoted_table_name} AS other_role WHERE roles.id <> other_role.id AND roles.name = other_role.name AND
           roles.root_account_id = other_role.root_account_id AND other_role.workflow_state = 'active' AND other_role.account_id IN (
             WITH RECURSIVE t AS (
-              SELECT * FROM accounts WHERE id=roles.account_id
+              SELECT * FROM #{Account.quoted_table_name} WHERE id=roles.account_id
               UNION
-              SELECT accounts.* FROM accounts INNER JOIN t ON accounts.id=t.parent_account_id
+              SELECT accounts.* FROM #{Account.quoted_table_name} INNER JOIN t ON accounts.id=t.parent_account_id
             )
             SELECT id FROM t
           ) LIMIT 1
@@ -200,7 +200,7 @@ class AddRoleIdColumns < ActiveRecord::Migration
 
     while AccountNotificationRole.where("role_id IS NULL AND role_type <> 'NilEnrollment'").limit(1000).delete_all > 0; end
 
-    roleless_enrollments = Enrollment.connection.select_rows("SELECT DISTINCT ON (type, role_name) type, role_name FROM enrollments
+    roleless_enrollments = Enrollment.connection.select_rows("SELECT DISTINCT ON (type, role_name) type, role_name FROM #{Enrollment.quoted_table_name}
       WHERE role_id IS NULL AND role_name IS NOT NULL")
     roleless_enrollments.each do |type, role_name|
       role = Role.new(:name => role_name)

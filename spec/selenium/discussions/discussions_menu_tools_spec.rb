@@ -1,7 +1,7 @@
 require File.expand_path(File.dirname(__FILE__) + '/../helpers/discussions_common')
 
 describe "discussions" do
-  include_examples "in-process server selenium tests"
+  include_context "in-process server selenium tests"
 
   let(:course) { course_model.tap{|course| course.offer!} }
   let(:teacher) { teacher_in_course(course: course, name: 'teacher', active_all: true).user }
@@ -18,7 +18,7 @@ describe "discussions" do
       @tool.save!
     end
 
-    it "should show tool launch links in the gear for items on the index" do
+    it "should show tool launch links in the gear for items on the index", priority: "1", test_id: 298757 do
       get "/courses/#{@course.id}/discussion_topics"
 
       gear = fj("##{@topic.id}_discussion_content .al-trigger")
@@ -29,7 +29,7 @@ describe "discussions" do
       expect(link['href']).to eq course_external_tool_url(@course, @tool) + "?launch_type=discussion_topic_menu&discussion_topics[]=#{@topic.id}"
     end
 
-    it "should show tool launch links in the gear for items on the show page" do
+    it "should show tool launch links in the gear for items on the show page", priority: "1", test_id: 298758 do
       get "/courses/#{@course.id}/discussion_topics/#{@topic.id}"
 
       gear = f("#discussion-managebar .al-trigger")

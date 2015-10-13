@@ -277,6 +277,8 @@ class DiscussionTopicsController < ApplicationController
               @context.active_discussion_topics.only_discussion_topics
             end
 
+    scope = DiscussionTopic::ScopedToUser.new(@context, @current_user, scope).scope
+
     scope = if params[:order_by] == 'recent_activity'
               scope.by_last_reply_at
             elsif params[:only_announcements]
@@ -300,10 +302,6 @@ class DiscussionTopicsController < ApplicationController
       elsif states.include?('unpinned')
         scope = scope.where("discussion_topics.pinned IS NOT TRUE")
       end
-    end
-
-    if @context.feature_enabled?(:differentiated_assignments)
-      scope = scope_for_differentiated_assignments(scope)
     end
 
     @topics = Api.paginate(scope, self, topic_pagination_url)
@@ -340,37 +338,19 @@ class DiscussionTopicsController < ApplicationController
         }
         append_sis_data(hash)
 
-        js_env(hash.merge(
-          POST_GRADES: Assignment.show_sis_grade_export_option?(@context)
-        ))
+        js_env(hash.merge(POST_GRADES: Assignment.sis_grade_export_enabled?(@context)))
         if user_can_edit_course_settings?
           js_env(SETTINGS_URL: named_context_url(@context, :api_v1_context_settings_url))
         end
       end
       format.json do
-        student_ids = user_can_moderate ? @context.all_real_students.pluck(:id) : nil
         render json: discussion_topics_api_json(@topics, @context, @current_user, session,
-                                                :student_ids => student_ids, :can_moderate => user_can_moderate)
+          :user_can_moderate => user_can_moderate,
+          :plain_messages => value_to_boolean(params[:plain_messages]),
+          :exclude_assignment_description => value_to_boolean(params[:exclude_assignment_descriptions]))
       end
     end
   end
-
-  def scope_for_differentiated_assignments(scope)
-    return scope if @context.is_a?(Account)
-    return DifferentiableAssignment.scope_filter(scope, @current_user, @context) if @context.is_a?(Course)
-    return scope if @context.context.is_a?(Account)
-
-    # group context owned by a course
-    course = @context.context
-    course_scope = course.discussion_topics.active
-    course_level_topic_ids = DifferentiableAssignment.scope_filter(course_scope, @current_user, course).pluck(:id)
-    if course_level_topic_ids.any?
-      scope.where("root_topic_id IN (?) OR root_topic_id IS NULL OR id IN (?)", course_level_topic_ids, course_level_topic_ids)
-    else
-      scope.where(root_topic_id: nil)
-    end
-  end
-  private :scope_for_differentiated_assignments
 
   def is_child_topic?
     root_topic_id = params[:root_discussion_topic_id]
@@ -432,7 +412,7 @@ class DiscussionTopicsController < ApplicationController
                      map { |category| { id: category.id, name: category.name } },
                  CONTEXT_ID: @context.id,
                  CONTEXT_ACTION_SOURCE: :discussion_topic,
-                 POST_GRADES: Assignment.show_sis_grade_export_option?(@context),
+                 POST_GRADES: Assignment.sis_grade_export_enabled?(@context),
                  DIFFERENTIATED_ASSIGNMENTS_ENABLED: @context.feature_enabled?(:differentiated_assignments)}
       if @context.is_a?(Course)
         js_hash['SECTION_LIST'] = sections.map { |section|
@@ -474,7 +454,7 @@ class DiscussionTopicsController < ApplicationController
     if authorized_action(@topic, @current_user, :read)
       if @current_user && @topic.for_assignment? && !@topic.assignment.visible_to_user?(@current_user)
         respond_to do |format|
-          flash[:error] = t 'notices.discussion_not_availible', "You do not have access to the requested discussion."
+          flash[:error] = t "You do not have access to the requested discussion."
           format.html { redirect_to named_context_url(@context, :context_discussion_topics_url) }
         end
         return
@@ -632,6 +612,9 @@ class DiscussionTopicsController < ApplicationController
   #   announcement's section rather than the discussions section. This requires
   #   announcment-posting permissions.
   #
+  # @argument pinned [Boolean]
+  #   If true, this topic will be listed in the "Pinned Discussion" section
+  #
   # @argument position_after [String]
   #   By default, discussions are sorted chronologically by creation date, you
   #   can pass the id of another topic to have this one show up after the other
@@ -640,6 +623,15 @@ class DiscussionTopicsController < ApplicationController
   # @argument group_category_id [Integer]
   #   If present, the topic will become a group discussion assigned
   #   to the group.
+  #
+  # @argument allow_rating [Boolean]
+  #   If true, users will be allowed to rate entries.
+  #
+  # @argument only_graders_can_rate [Boolean]
+  #   If true, only graders will be allowed to rate entries.
+  #
+  # @argument sort_by_rating [Boolean]
+  #   If true, entries will be sorted by rating.
   #
   # @example_request
   #     curl https://<canvas>/api/v1/courses/<course_id>/discussion_topics \
@@ -705,6 +697,9 @@ class DiscussionTopicsController < ApplicationController
   #   If true, this topic is an announcement. It will appear in the
   #   announcement's section rather than the discussions section. This requires
   #   announcment-posting permissions.
+  #
+  # @argument pinned [Boolean]
+  #   If true, this topic will be listed in the "Pinned Discussion" section
   #
   # @argument position_after [String]
   #   By default, discussions are sorted chronologically by creation date, you
@@ -1031,7 +1026,10 @@ class DiscussionTopicsController < ApplicationController
              @assignment.grants_right?(@current_user, session, :update)
         params[:assignment][:group_category_id] = nil unless @topic.group_category_id || @assignment.has_submitted_submissions?
         params[:assignment][:published] = @topic.published?
-        update_api_assignment(@assignment, params[:assignment].merge(@topic.attributes.slice('title')), @current_user)
+        params[:assignment][:name] = @topic.title
+
+        assignment_params = params[:assignment].except('anonymous_peer_reviews')
+        update_api_assignment(@assignment, assignment_params, @current_user)
         @assignment.submission_types = 'discussion_topic'
         @assignment.saved_by = :discussion_topic
         @topic.assignment = @assignment

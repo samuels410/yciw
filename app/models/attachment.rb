@@ -17,6 +17,7 @@
 #
 
 require 'atom'
+require 'crocodoc'
 
 # See the uploads controller and views for examples on how to use this model.
 class Attachment < ActiveRecord::Base
@@ -26,13 +27,15 @@ class Attachment < ActiveRecord::Base
   end
   attr_accessible :context, :folder, :filename, :display_name, :user, :locked, :position, :lock_at, :unlock_at, :uploaded_data, :hidden
   EXPORTABLE_ATTRIBUTES = [
-    :id, :context_id, :context_type, :size, :folder_id, :content_type, :filename, :uuid, :display_name, :created_at, :updated_at,
-    :workflow_state, :user_id, :local_filename, :locked, :file_state, :deleted_at,
-    :position, :lock_at, :unlock_at, :last_lock_at, :last_unlock_at, :could_be_locked, :root_attachment_id, :cloned_item_id,
+    :id, :context_id, :context_type, :size, :folder_id, :content_type,
+    :filename, :uuid, :display_name, :created_at, :updated_at,
+    :workflow_state, :user_id, :locked, :file_state, :deleted_at,
+    :position, :lock_at, :unlock_at, :last_lock_at, :last_unlock_at,
+    :could_be_locked, :root_attachment_id, :cloned_item_id,
     :namespace, :media_entry_id, :encoding, :need_notify, :upload_error_message
-  ]
+  ].freeze
 
-  EXPORTABLE_ASSOCIATIONS = [:context, :folder, :user, :media_object, :submission]
+  EXPORTABLE_ASSOCIATIONS = [:context, :folder, :user, :media_object, :submission].freeze
 
   include PolymorphicTypeOverride
   override_polymorphic_types context_type: {'QuizStatistics' => 'Quizzes::QuizStatistics',
@@ -330,17 +333,21 @@ class Attachment < ActiveRecord::Base
     end
   end
 
+  TURNITINABLE_MIME_TYPES = %w[
+    application/msword
+    application/vnd.openxmlformats-officedocument.wordprocessingml.document
+    application/pdf
+    text/plain
+    text/html
+    application/rtf
+    text/richtext
+    application/vnd.wordperfect
+    application/vnd.ms-powerpoint
+    application/vnd.openxmlformats-officedocument.presentationml.presentation
+  ].to_set.freeze
+
   def turnitinable?
-    self.content_type && [
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/pdf',
-      'text/plain',
-      'text/html',
-      'application/rtf',
-      'text/richtext',
-      'application/vnd.wordperfect'
-    ].include?(self.content_type)
+    TURNITINABLE_MIME_TYPES.include?(content_type)
   end
 
   def flag_as_recently_created
@@ -625,8 +632,11 @@ class Attachment < ActiveRecord::Base
           new_name = opts[:name] || self.display_name
           self.display_name = Attachment.make_unique_filename(new_name, existing_names)
 
-          if Attachment.where("id = ? AND NOT EXISTS (SELECT 1 FROM attachments WHERE id <> ? AND display_name = ? AND folder_id = ? AND file_state <> ?)",
-                              self.id, self.id, self.display_name, self.folder_id, 'deleted').limit(1).update_all(:display_name => self.display_name) > 0
+          if Attachment.where("id = ? AND NOT EXISTS (?)", self,
+                              Attachment.where("id <> ? AND display_name = ? AND folder_id = ? AND file_state <> ?",
+                                self, display_name, folder_id, 'deleted')).
+              limit(1).
+              update_all(display_name: display_name) > 0
             valid_name = true
           end
         end
@@ -988,7 +998,7 @@ class Attachment < ActiveRecord::Base
 
     given { |user, session|
       self.context.grants_right?(user, session, :read) &&
-      (self.context.grants_right?(user, session, :manage_files) || !self.locked_for?(user))
+      (self.context.grants_right?(user, session, :read_as_admin) || !self.locked_for?(user))
     }
     can :download
 
@@ -1028,7 +1038,7 @@ class Attachment < ActiveRecord::Base
   def locked_for?(user, opts={})
     return false if @skip_submission_attachment_lock_checks
     return false if opts[:check_policies] && self.grants_right?(user, :update)
-    return {:asset_string => self.asset_string, :manually_locked => true} if self.locked || (self.folder && self.folder.locked?)
+    return {:asset_string => self.asset_string, :manually_locked => true} if self.locked || Folder.is_locked?(self.folder_id)
     Rails.cache.fetch(locked_cache_key(user), :expires_in => 1.minute) do
       locked = false
       if (self.unlock_at && Time.now < self.unlock_at)
@@ -1049,6 +1059,11 @@ class Attachment < ActiveRecord::Base
   end
 
   def published?; !locked?; end
+
+  def publish!
+    self.locked = false
+    save!
+  end
 
   def just_hide
     self.file_state == 'hidden'
@@ -1135,7 +1150,7 @@ class Attachment < ActiveRecord::Base
     self.file_state = 'deleted' #destroy
     self.deleted_at = Time.now.utc
     ContentTag.delete_for(self)
-    MediaObject.update_all({:attachment_id => nil, :updated_at => Time.now.utc}, {:attachment_id => self.id})
+    MediaObject.where(:attachment_id => self.id).update_all(:attachment_id => nil, :updated_at => Time.now.utc)
     save!
     # if the attachment being deleted belongs to a user and the uuid (hash of file) matches the avatar_image_url
     # then clear the avatar_image_url value.
@@ -1192,7 +1207,10 @@ class Attachment < ActiveRecord::Base
     # ... or crocodoc (this will go away soon)
     return if Attachment.skip_3rd_party_submits?
 
-    if opts[:wants_annotation] && crocodocable?
+    submit_to_crocodoc_instead = opts[:wants_annotation] &&
+                                 crocodocable? &&
+                                 !Canvadocs.annotations_supported?
+    if submit_to_crocodoc_instead
       # get crocodoc off the canvadocs strand
       # (maybe :wants_annotation was a dumb idea)
       send_later_enqueue_args :submit_to_crocodoc, {
@@ -1202,12 +1220,12 @@ class Attachment < ActiveRecord::Base
       }, attempt
     elsif canvadocable?
       doc = canvadoc || create_canvadoc
-      doc.upload
+      doc.upload annotatable: opts[:wants_annotation]
       update_attribute(:workflow_state, 'processing')
     end
   rescue => e
     update_attribute(:workflow_state, 'errored')
-    Canvas::Errors.capture(e, type: :canvadocs, attachment_id: id)
+    Canvas::Errors.capture(e, type: :canvadocs, attachment_id: id, annotatable: opts[:wants_annotation])
 
     if attempt <= Setting.get('max_canvadocs_attempts', '5').to_i
       send_later_enqueue_args :submit_to_canvadocs, {
@@ -1404,7 +1422,7 @@ class Attachment < ActiveRecord::Base
         self.upload_error_message = t :upload_error_invalid_response_code, "Invalid response code, expected 200 got %{code}", :code => e.code
       when CanvasHttp::RelativeUriError
         self.upload_error_message = t :upload_error_relative_uri, "No host provided for the URL: %{url}", :url => url
-      when URI::InvalidURIError, ArgumentError
+      when URI::Error, ArgumentError
         # assigning all ArgumentError to InvalidUri may be incorrect
         self.upload_error_message = t :upload_error_invalid_url, "Could not parse the URL: %{url}", :url => url
       when Timeout::Error
@@ -1435,20 +1453,21 @@ class Attachment < ActiveRecord::Base
     "/api/v1/canvadoc_session?#{preview_params(user, "canvadoc")}"
   end
 
-  def crocodoc_url(user)
+  def crocodoc_url(user, crocodoc_ids = nil)
     return unless crocodoc_available?
-    "/api/v1/crocodoc_session?#{preview_params(user, "crocodoc")}"
+    "/api/v1/crocodoc_session?#{preview_params(user, "crocodoc", crocodoc_ids)}"
   end
 
   def previewable_media?
     self.content_type && self.content_type.match(/\A(video|audio)/)
   end
 
-  def preview_params(user, type)
+  def preview_params(user, type, crocodoc_ids = nil)
     blob = {
       user_id: user.try(:global_id),
       attachment_id: id,
       type: type,
+      crocodoc_ids: crocodoc_ids
     }.to_json
     hmac = Canvas::Security.hmac_sha1(blob)
     "blob=#{URI.encode blob}&hmac=#{URI.encode hmac}"

@@ -21,11 +21,13 @@ define([
   'i18n!editor',
   'jquery',
   'str/htmlEscape',
+  'tinymce_plugins/instructure_external_tools/TinyMCEContentItem',
   'jquery.dropdownList',
   'jquery.instructure_misc_helpers',
   'jqueryui/dialog',
   'jquery.instructure_misc_plugins',
-], function(tinymce, I18n, $, htmlEscape) {
+  'underscore'
+], function(tinymce, I18n, $, htmlEscape, TinyMCEContentItem) {
 
   var TRANSLATIONS = {
     embed_from_external_tool: I18n.t('embed_from_external_tool', '"Embed content from External Tool"'),
@@ -167,43 +169,14 @@ define([
         }
         $(window).unbind("externalContentReady");
         $(window).bind("externalContentReady", function (event, data) {
-          var editor = $dialog.data('editor') || ed;
-          var item = data.contentItems[0];
-          var placementAdvice = item.placementAdvice;
-          var presentationDocTarget = placementAdvice.presentationDocumentTarget;
-          var url = item.mediaType === 'application/vnd.ims.lti.v1.launch+json' ? item.canvasURL : item.url
-          if (presentationDocTarget === 'iframe') {
-            var html = $("<div/>").append($("<iframe/>", {
-              src: url,
-              title: item.title,
-              allowfullscreen: 'true',
-              webkitallowfullscreen: 'true',
-              mozallowfullscreen: 'true'
-            }).css({
-              width: placementAdvice.displayWidth,
-              height: placementAdvice.displayHeight
-            })).html();
-            $("#" + editor.id).editorBox('insert_code', html);
-          } else if (presentationDocTarget === 'embed') {
-            if (item.mediaType && item.mediaType.indexOf('image') == 0) {
-              var html = $("<div/>").append($("<img/>", {
-                src: url,
-                alt: item.text
-              }).css({
-                width: placementAdvice.displayWidth,
-                height: placementAdvice.displayHeight
-              })).html();
-              $("#" + editor.id).editorBox('insert_code', html);
-            } else {
-              $("#" + editor.id).editorBox('insert_code', item.text);
-            }
-          } else { //create a link to the content
-            $("#" + editor.id).editorBox('create_link', {
-              url: url,
-              title: item.title,
-              text: item.text,
-              target: placementAdvice.presentationDocumentTarget == 'window' ? '_blank' : null
-            });
+          var editor = $dialog.data('editor') || ed,
+              contentItems = data.contentItems,
+              itemLength = contentItems.length,
+              codePayload;
+
+          for(var i = 0; i < itemLength; i++){
+            codePayload = TinyMCEContentItem.fromJSON(contentItems[i]).codePayload;
+            $("#" + editor.id).editorBox('insert_code', codePayload);
           }
           $dialog.find('iframe').attr('src', 'about:blank');
           $dialog.dialog('close')
@@ -240,13 +213,21 @@ define([
         }
       }
       if(clumpedButtons.length) {
+        var handleClick = function(){
+          var items = ExternalTools.clumpedButtonMapping(clumpedButtons, buttonSelected);
+          ExternalTools.attachClumpedDropdown($("#" + this._id), items, ed);
+        }
+
         ed.addButton('instructure_external_button_clump', {
           title: TRANSLATIONS.more_external_tools,
           image: '/images/downtick.png',
-          onclick: function(){
-            var items = ExternalTools.clumpedButtonMapping(clumpedButtons, buttonSelected);
-            ExternalTools.attachClumpedDropdown($("#" + this._id), items, ed);
-          }
+          onkeyup: function(event){
+            if (event.keyCode === 32 || event.keyCode === 13) {
+              event.stopPropagation()
+              handleClick.call(this)
+            }
+          },
+          onclick: handleClick
         })
       }
     },

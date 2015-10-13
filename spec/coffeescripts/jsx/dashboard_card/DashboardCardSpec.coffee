@@ -24,11 +24,10 @@ define [
         courseCode: '101',
         id: 1
       }
-      sinon.stub(CourseActivitySummaryStore, 'getStateForCourse', -> {})
+      @stub(CourseActivitySummaryStore, 'getStateForCourse', -> {})
 
     teardown: ->
       localStorage.clear()
-      CourseActivitySummaryStore.getStateForCourse.restore()
       React.unmountComponentAtNode(@component.getDOMNode().parentNode)
 
   test 'render', ->
@@ -36,7 +35,7 @@ define [
     $html = $(@component.getDOMNode())
     ok $html.attr('class').match(/DashboardCard/)
 
-    renderSpy = sinon.spy(@component, 'render')
+    renderSpy = @spy(@component, 'render')
     ok !renderSpy.called, 'precondition'
     CourseActivitySummaryStore.setState({
       streams: {
@@ -46,24 +45,12 @@ define [
       }
     })
     ok renderSpy.called, 'should re-render on state update'
-    @component.render.restore()
-
-  test 'backgroundColor', ->
-    ok _.isUndefined(localStorage['canvas.dashboard.color.1']),
-      'precondition'
-    @component = TestUtils.renderIntoDocument(DashboardCard(@props))
-    ok !_.isUndefined(localStorage['canvas.dashboard.color.1']),
-      'should store color in localStorage'
 
   test 'hasActivity', ->
     @component = TestUtils.renderIntoDocument(DashboardCard(@props))
-    ok !@component.hasActivity('icon-discussion', @component.props.id),
+    ok !@component.hasActivity('icon-discussion', []),
       'should not blow up without a stream'
-
-    @component.state = {
-      stream: @stream
-    }
-    ok @component.hasActivity('icon-discussion', @component.props.id),
+    ok @component.hasActivity('icon-discussion', @stream),
       'should be active if stream item corresponding to icon has unread count'
-    ok !@component.hasActivity('icon-announcement', @component.props.id),
+    ok !@component.hasActivity('icon-announcement', @stream),
       'should not be active if stream item corresponding to icon has no unread count'

@@ -1,9 +1,8 @@
-<% content_for :page_title do %>
-  <%= join_title t(:page_title, "Web Conferences"), @context.name %>
-<% end %>
-
-<% js_bundle(:conferences)  %>
-<% jammit_css(:conferences) %>
+<%
+  content_for :page_title, join_title(t(:page_title, "Web Conferences"), @context.name)
+  js_bundle :conferences
+  css_bundle :conferences
+%>
 
 <h1 class="screenreader-only"><%= t(:conference_header, 'Conferences')%></h1>
 
@@ -34,7 +33,10 @@
   <div class="item-group-condensed">
     <div class="ig-header">
       <h2 class="ig-header-title">
-        <a class="element_toggler"
+        <a
+          class="element_toggler accessible-toggler"
+           href="#"
+           aria-label= "<%= t('New Conferences') %>"
            aria-controls="new-conference-list"
            aria-expanded="true">
           <i class="icon-mini-arrow-down auto_rotate"></i>
@@ -48,7 +50,10 @@
   <div class="item-group-condensed">
     <div class="ig-header">
       <h2 class="ig-header-title">
-        <a class="element_toggler"
+        <a
+            class="element_toggler accessible-toggler"
+            href="#"
+            aria-label= "<%= t('Concluded Conferences') %>"
             aria-controls="concluded-conference-list"
             aria-expanded="true">
           <i class="icon-mini-arrow-down auto_rotate"></i>

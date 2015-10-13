@@ -22,31 +22,21 @@ body {
   @if $use_new_styles == false { min-width: $min_main_width; }
   @if $use_high_contrast { background: white; }
   @else {
-    @if $is-k12 { background: white; }
-    @else if $use_new_styles {
+    @if $use_new_styles {
       background: $ic-color-light;
       font-weight: 300;
     }
     @else { background-color: $ic-body-background-color; }
   }
   &.no-headers, &.embedded {
-    #header, #topbar, #left-side, #breadcrumbs {
-      display: none !important;
+    #header, #topbar, #left-side, #breadcrumbs { display: none !important; }
+    @if $use_new_styles {
+      .ic-app-nav-toggle-and-crumbs { display: none; }
     }
-    @if $is-k12 {
-      .canvas-header {
-        display: none !important;
-      }
-    }
-    #footer {
-      display: none;
-    }
+    #footer { display: none; }
     #wrapper {
       margin: 0;
-      @if $use_new_styles == false {
-        min-width: 400px;
-      }
-
+      @if $use_new_styles == false { min-width: 400px; }
     }
     #main {
       margin: 0;
@@ -126,13 +116,8 @@ body {
   }
 }
 
-#wrapper {
-  @if $use_new_styles {
-    // leave for now
-  }
-  @else {
-    @include pie-clearfix;
-  }
+@if $use_new_styles == false {
+  #wrapper { @include pie-clearfix; }
 }
 
 #main {
@@ -151,18 +136,21 @@ body {
 
 #content {
   @if $use_new_styles { padding: $ic-sp*2; }
-  @else { padding: 1em; }
-  overflow: hidden;
+  @else {
+    padding: 1em;
+    overflow: hidden;
+  }
 }
 
 // **********************************************************************************
 // all of the following are classes that should be applied to 'body' when appropriate
 
 @if $use_new_styles == false {
-  .padless-content #content, #content.padless {
-    padding: 0;
-  }
+  .padless-content #content,
+  #content.padless { padding: 0; }
 }
+
+#content.horizontal-padding { padding: 0 $ic-sp*2; }
 
 .with-left-side {
   #left-side { display: block; }

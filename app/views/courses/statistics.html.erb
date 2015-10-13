@@ -1,6 +1,6 @@
 <%
   @active_tab = 'settings'
-  jammit_css :statistics
+  css_bundle :statistics
   add_crumb t('#crumbs.stats', "Statistics")
  %>
 
@@ -145,5 +145,6 @@
       </tr>
     </table>
   </div>
+</div>
 </div>
 <% js_bundle :course_statistics %>

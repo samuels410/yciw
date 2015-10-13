@@ -17,7 +17,7 @@
 #
 
 # # enforce the version of bundler itself, to avoid any surprises
-req_bundler_version_floor, req_bundler_version_ceiling = '1.7.10', '1.10.3'
+req_bundler_version_floor, req_bundler_version_ceiling = '1.7.10', '1.10.6'
 bundler_requirements = [">=#{req_bundler_version_floor}",
                         "<=#{req_bundler_version_ceiling}"]
 gem 'bundler', bundler_requirements
@@ -43,11 +43,10 @@ end
 # NOTE: this has to use 1.8.7 hash syntax to not raise a parser exception on 1.8.7
 if RUBY_VERSION >= "2.1" && RUBY_VERSION < "2.2"
   ruby RUBY_VERSION, :engine => 'ruby', :engine_version => RUBY_VERSION
-elsif RUBY_VERSION >= "2.2"
-  warn "Ruby newer than 2.1 is very UNSUPPORTED"
+elsif RUBY_VERSION >= "2.2" && RUBY_VERSION < "2.3"
   ruby RUBY_VERSION, :engine => 'ruby', :engine_version => RUBY_VERSION
 else
-  ruby '1.9.3', :engine => 'ruby', :engine_version => '1.9.3'
+  ruby '2.1.6', :engine => 'ruby', :engine_version => '2.1.6'
 end
 
 # force a different lockfile for rails 4

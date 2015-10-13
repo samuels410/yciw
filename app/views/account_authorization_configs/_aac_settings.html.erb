@@ -1,13 +1,13 @@
-<div class="content-box"
+<div class="content-box auth-form-container--new"
      id="<%= "#{aac.auth_type}_form" if aac.new_record? %>"
      <%= hidden(true) if aac.new_record? %>>
   <div class="grid-row">
     <div class="col-xs-12 col-md-8 off-md-2">
-      <% url = aac.new_record? ? account_account_authorization_configs_url(account) :
-              account_account_authorization_config_url(account, aac) %>
+      <% url = aac.new_record? ? account_authentication_providers_url(account) :
+              account_authentication_provider_url(account, aac) %>
 
       <%= form_for(aac,
-                   as: :account_authorization_config,
+                   as: :authentication_provider,
                    url: url,
                    html: {
                            id: "#{aac.new_record? ? 'new' : 'edit'}_#{aac.class.sti_name}#{aac.id unless aac.new_record?}",
@@ -16,7 +16,7 @@
       <%= f.hidden_field :auth_type, value: aac.auth_type %>
       <%= f.hidden_field :id %>
         <h3><%= aac.class.display_name %></h3>
-        <% if aac.account.multi_auth? && !aac.new_record? %>
+        <% if !aac.new_record? %>
           <p><%= mt "You can log in directly with this provider by going to %{url}",
                     url: url_for(presenter.login_url_options(aac)) %></p>
         <% end %>
@@ -34,22 +34,24 @@
           </div>
         <% end %>
 
-        <div class="ic-Form-actions">
-          <% unless aac.new_record? %>
-              <%= link_to(account_account_authorization_config_url(account, aac),
-                method: "delete",
-                rel: 'nofollow',
-                id: "delete-aac-#{aac.id}",
-                data: {
-                  confirm: t('Are you sure?'),
-                  disable_with: t('deleting...')
-                },
-                class: 'Button Button--danger') do %>
-                <%= t("Delete") %>
-              <% end %>
-          <% end %>
-          <%= f.button t('Save'), class: "Button Button--primary" %>
-        </div>
+        <% unless presenter.last_canvas_provider?(aac) %>
+          <div class="ic-Form-actions">
+            <% unless aac.new_record? %>
+                <%= link_to(account_authentication_provider_url(account, aac),
+                  method: "delete",
+                  rel: 'nofollow',
+                  id: "delete-aac-#{aac.id}",
+                  data: {
+                    confirm: t('Are you sure?'),
+                    disable_with: t('deleting...')
+                  },
+                  class: 'Button Button--danger') do %>
+                  <%= t("Delete") %>
+                <% end %>
+            <% end %>
+            <%= f.button t('Save'), class: "Button Button--primary" %>
+          </div>
+        <% end %>
       <% end %>
     </div>
   </div>

@@ -16,6 +16,21 @@ I18n.enforce_available_locales = true
 
 I18nliner.infer_interpolation_values = false
 
+unless CANVAS_RAILS3
+  module I18nliner
+    module RehashArrays
+      def infer_pluralization_hash(default, *args)
+        if default.is_a?(Array) && default.all?{|a| a.is_a?(Array) && a.size == 2 && a.first.is_a?(Symbol)}
+          # this was a pluralization hash but rails 4 made it an array in the view helpers
+          return Hash[default]
+        end
+        super
+      end
+    end
+    CallHelpers.extend(RehashArrays)
+  end
+end
+
 if ENV['LOLCALIZE']
   require 'i18n_tasks'
   I18n.send :extend, I18nTasks::Lolcalize
@@ -25,7 +40,7 @@ module I18nUtilities
   def before_label(text_or_key, default_value = nil, *args)
     if default_value
       text_or_key = "labels.#{text_or_key}" unless text_or_key.to_s =~ /\A#/
-      text_or_key = I18n.t(text_or_key, default_value, *args)
+      text_or_key = respond_to?(:t) ? t(text_or_key, default_value, *args) : I18n.t(text_or_key, default_value, *args)
     end
     I18n.t("#before_label_wrapper", "%{text}:", :text => text_or_key)
   end
@@ -66,7 +81,9 @@ ActionView::Helpers::FormHelper.module_eval do
   alias_method_chain :label, :symbol_translation
 end
 
-ActionView::Helpers::InstanceTag.send(:include, I18nUtilities)
+if CANVAS_RAILS3
+  ActionView::Helpers::InstanceTag.send(:include, I18nUtilities)
+end
 ActionView::Helpers::FormTagHelper.send(:include, I18nUtilities)
 ActionView::Helpers::FormTagHelper.class_eval do
   def label_tag_with_symbol_translation(method, text = nil, options = {})

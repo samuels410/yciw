@@ -75,6 +75,8 @@ class Feature
   #     enable_at: Date.new(2014, 1, 1),  # estimated release date shown in UI
   #     beta: false,          # 'beta' tag shown in UI
   #     development: false,   # whether the feature is restricted to development / test / beta instances
+  #                           # setting `development: true` prevents the flag from being registered on production,
+  #                           # which means `context.feature_enabled?` calls for the feature will always return false.
   #     release_notes_url: 'http://example.com/',
   #
   #     # optional: you can supply a Proc to attach warning messages to and/or forbid certain transitions
@@ -118,16 +120,13 @@ END
     },
     'use_new_styles' =>
     {
-      display_name: -> { I18n.t('features.new_styles', 'Use New Styles') },
-      description: -> { I18n.t('new_styles_description', <<-END) },
-We are working on a UI facelift to Canvas. Turn this on to opt-in to seeing the
-updated, simplified look and feel of the Canvas interface. This is a very "Work in progress"
-feature and should not be turned on in production for actual users yet.
+      display_name: -> { I18n.t('New UI') },
+      description: -> { I18n.t(<<END) },
+This enables an updated navigation, new dashboard and a simpler, more modern look and feel.
 END
       applies_to: 'RootAccount',
-      state: 'hidden',
+      state: 'allowed',
       root_opt_in: true,
-      development: true,
       beta: true
     },
     'html5_first_videos' =>
@@ -203,6 +202,15 @@ END
       root_opt_in: true,
       beta: true
     },
+    'recurring_calendar_events' =>
+    {
+      display_name: -> { I18n.t('Recurring Calendar Events') },
+      description: -> { I18n.t("Allows the scheduling of recurring calendar events") },
+      applies_to: 'Course',
+      state: 'hidden',
+      root_opt_in: true,
+      beta: true
+    },
     'student_groups_next' =>
     {
       display_name: -> { I18n.t('features.student_groups', 'New Student Groups Page') },
@@ -224,16 +232,6 @@ END
 
       applies_to: 'Course',
       state: 'on'
-    },
-    'modules_next' =>
-    {
-      display_name: -> { I18n.t('features.ember_modules', 'Ember Modules') },
-      description: -> { I18n.t('ember_modules_description', <<END) },
-Modules rewritten in Ember. Uses the native drag and drop API to allow dragging from external locations.
-END
-      applies_to: 'Course',
-      state: 'hidden',
-      root_opt_in: true
     },
     'allow_opt_out_of_inbox' =>
     {
@@ -278,7 +276,7 @@ END
     },
     'course_catalog' =>
     {
-      display_name: -> { I18n.t('features.course_catalog', "Course Catalog") },
+      display_name: -> { I18n.t("Public Course Index") },
       description:  -> { I18n.t('display_course_catalog', <<-END) },
 Show a searchable list of courses in this root account with the "Include this course in the public course index" flag enabled.
 END
@@ -332,12 +330,63 @@ END
       },
     'bulk_sis_grade_export' =>
       {
-      display_name: -> { I18n.t('Allow Bulk Grade Export to SIS') },
-      description:  -> { I18n.t('Allows teachers to mark grade data to be exported in bulk to SIS integrations.') },
+          display_name: -> { I18n.t('Allow Bulk Grade Export to SIS') },
+          description:  -> { I18n.t('Allows teachers to mark grade data to be exported in bulk to SIS integrations.') },
+          applies_to: 'RootAccount',
+          state: 'hidden',
+          root_opt_in: true,
+          beta: true
+      },
+    'nc_or' =>
+        {
+            display_name: -> { I18n.t('Enable "OR" Condition for Modules') },
+            description:  -> { I18n.t('If enabled, modules will have the option to be marked as complete when only one of the requirements is met.') },
+            applies_to: 'Course',
+            state: 'hidden_in_prod',
+            development: false,
+            root_opt_in: true
+        },
+    'use_new_tree' =>
+    {
+      display_name: -> { I18n.t('Use new folder tree in Files')},
+      description: -> {I18n.t('Replaces the current folder tree with a new accessible and more feature rich folder tree.')},
+      applies_to: 'Course',
+      state: 'hidden',
+      development: true,
+      root_opt_in: true
+    },
+    'moderated_grading' => {
+      display_name: -> { I18n.t('Moderated Grading') },
+      description: -> { I18n.t('Moderated Grading allows multiple graders to grade selected assignments independently, with a moderator providing the final grade.') },
+      applies_to: 'Course',
+      state: 'hidden',
+      development: true,
+      root_opt_in: true
+    },
+      'gradebook_performance' => {
+      display_name: -> { I18n.t('Gradebook Performance') },
+      description: -> { I18n.t('Performance enhancements for the Gradebook') },
+      applies_to: 'Course',
+      state: 'hidden',
+      development: true,
+      root_opt_in: true
+    },
+    'anonymous_grading' =>
+    {
+      display_name: -> { I18n.t('Anonymous Grading') },
+      description: -> { I18n.t("Anonymous grading forces student names to be hidden in SpeedGrader™") },
+      applies_to: 'Course',
+      state: 'hidden',
+      development: true,
+      root_opt_in: true,
+    },
+    'international_sms' => {
+      display_name: -> { I18n.t('International SMS') },
+      description: -> { I18n.t('Allows users with international phone numbers to receive text messages from Canvas.') },
       applies_to: 'RootAccount',
       state: 'hidden',
       root_opt_in: true,
-      beta: true
+      development: true
     }
   )
 

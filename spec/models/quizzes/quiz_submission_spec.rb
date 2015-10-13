@@ -627,7 +627,7 @@ describe Quizzes::QuizSubmission do
         'context_type' => 'Course',
         'submission_version_number' => '1',
         "question_score_#{@questions[0].id}" => '1',
-        "question_score_#{@questions[1].id}" => "--"
+        "question_score_#{@questions[1].id}" => ""
       })
       expect(@quiz_submission.submission.workflow_state).to eql 'pending_review'
     end
@@ -640,6 +640,30 @@ describe Quizzes::QuizSubmission do
         'submission_version_number' => '1',
         "question_score_#{@questions[0].id}" => '1',
         "question_score_#{@questions[1].id}" => "0"
+      })
+      expect(@quiz_submission.submission.workflow_state).to eql 'graded'
+    end
+    
+    it "should mark a submission complete if all essay questions have been graded, even if a text_only_question is present" do
+      quiz_with_graded_submission([{:question_data => {:name => 'question 1', :points_possible => 1, 'question_type' => 'essay_question'}},
+                                   {:question_data => {:name => 'question 2', :points_possible => 1, 'question_type' => 'text_only_question'}}]) do
+        {
+          "text_after_answers"            => "",
+          "question_#{@questions[0].id}"  => "<p>Lorem ipsum answer 1.</p>",
+          "context_id"                    => "#{@course.id}",
+          "context_type"                  => "Course",
+          "user_id"                       => "#{@user.id}",
+          "quiz_id"                       => "#{@quiz.id}",
+          "course_id"                     => "#{@course.id}",
+          "question_text"                 => "Lorem ipsum question",
+        }
+      end
+      @quiz_submission.update_scores({
+        'context_id' => @course.id,
+        'override_scores' => true,
+        'context_type' => 'Course',
+        'submission_version_number' => '1',
+        "question_score_#{@questions[0].id}" => '1',
       })
       expect(@quiz_submission.submission.workflow_state).to eql 'graded'
     end
@@ -674,88 +698,6 @@ describe Quizzes::QuizSubmission do
     end
   end
 
-  describe "learning outcomes" do
-    it "should create learning outcome results when aligned to assessment questions" do
-      course_with_student(:active_all => true)
-      @quiz = @course.quizzes.create!(:title => "new quiz", :shuffle_answers => true)
-      @q1 = @quiz.quiz_questions.create!(:question_data => {:name => 'question 1', :points_possible => 1, 'question_type' => 'multiple_choice_question', 'answers' => [{'answer_text' => '1', 'answer_weight' => '100'}, {'answer_text' => '2'}, {'answer_text' => '3'}, {'answer_text' => '4'}]})
-      @q2 = @quiz.quiz_questions.create!(:question_data => {:name => 'question 2', :points_possible => 1, 'question_type' => 'multiple_choice_question', 'answers' => [{'answer_text' => '1', 'answer_weight' => '100'}, {'answer_text' => '2'}, {'answer_text' => '3'}, {'answer_text' => '4'}]})
-      @outcome = @course.created_learning_outcomes.create!(:short_description => 'new outcome')
-      @bank = @q1.assessment_question.assessment_question_bank
-      @outcome.align(@bank, @bank.context, :mastery_score => 0.7)
-      expect(@bank.learning_outcome_alignments.length).to eql(1)
-      expect(@q2.assessment_question.assessment_question_bank).to eql(@bank)
-      answer_1 = @q1.question_data[:answers].detect{|a| a[:weight] == 100 }[:id]
-      answer_2 = @q2.question_data[:answers].detect{|a| a[:weight] == 100 }[:id]
-      @quiz.generate_quiz_data(:persist => true)
-      @sub = @quiz.generate_submission(@user)
-      @sub.submission_data = {}
-      question_1 = @q1.data[:id]
-      question_2 = @q2.data[:id]
-      @sub.submission_data["question_#{question_1}"] = answer_1
-      @sub.submission_data["question_#{question_2}"] = answer_2 + 1
-      Quizzes::SubmissionGrader.new(@sub).grade_submission
-      expect(@sub.score).to eql(1.0)
-      @outcome.reload
-      @results = @outcome.learning_outcome_results.where(user_id: @user).to_a
-      expect(@results.length).to eql(2)
-      @results = @results.sort_by(&:associated_asset_id)
-      expect(@results.first.associated_asset).to eql(@q1.assessment_question)
-      expect(@results.first.mastery).to eql(true)
-      expect(@results.last.associated_asset).to eql(@q2.assessment_question)
-      expect(@results.last.mastery).to eql(false)
-    end
-
-    it "should update learning outcome results when aligned to assessment questions" do
-      course_with_student(:active_all => true)
-      @quiz = @course.quizzes.create!(:title => "new quiz", :shuffle_answers => true)
-      @q1 = @quiz.quiz_questions.create!(:question_data => {:name => 'question 1', :points_possible => 1, 'question_type' => 'multiple_choice_question', 'answers' => [{'answer_text' => '1', 'answer_weight' => '100'}, {'answer_text' => '2'}, {'answer_text' => '3'}, {'answer_text' => '4'}]})
-      @q2 = @quiz.quiz_questions.create!(:question_data => {:name => 'question 2', :points_possible => 1, 'question_type' => 'multiple_choice_question', 'answers' => [{'answer_text' => '1', 'answer_weight' => '100'}, {'answer_text' => '2'}, {'answer_text' => '3'}, {'answer_text' => '4'}]})
-      @outcome = @course.created_learning_outcomes.create!(:short_description => 'new outcome')
-      @bank = @q1.assessment_question.assessment_question_bank
-      @outcome.align(@bank, @bank.context, :mastery_score => 0.7)
-      expect(@bank.learning_outcome_alignments.length).to eql(1)
-      expect(@q2.assessment_question.assessment_question_bank).to eql(@bank)
-      answer_1 = @q1.question_data[:answers].detect{|a| a[:weight] == 100 }[:id]
-      answer_2 = @q2.question_data[:answers].detect{|a| a[:weight] == 100 }[:id]
-      @quiz.generate_quiz_data(:persist => true)
-      @sub = @quiz.generate_submission(@user)
-      @sub.submission_data = {}
-      question_1 = @q1.data[:id]
-      question_2 = @q2.data[:id]
-      @sub.submission_data["question_#{question_1}"] = answer_1
-      @sub.submission_data["question_#{question_2}"] = answer_2 + 1
-      Quizzes::SubmissionGrader.new(@sub).grade_submission
-      expect(@sub.score).to eql(1.0)
-      @outcome.reload
-      @results = @outcome.learning_outcome_results.where(user_id: @user).to_a
-      expect(@results.length).to eql(2)
-      @results = @results.sort_by(&:associated_asset_id)
-      expect(@results.first.associated_asset).to eql(@q1.assessment_question)
-      expect(@results.first.mastery).to eql(true)
-      expect(@results.last.associated_asset).to eql(@q2.assessment_question)
-      expect(@results.last.mastery).to eql(false)
-      @sub = @quiz.generate_submission(@user)
-      expect(@sub.attempt).to eql(2)
-      @sub.submission_data = {}
-      question_1 = @q1.data[:id]
-      question_2 = @q2.data[:id]
-      @sub.submission_data["question_#{question_1}"] = answer_1 + 1
-      @sub.submission_data["question_#{question_2}"] = answer_2
-      Quizzes::SubmissionGrader.new(@sub).grade_submission
-      expect(@sub.score).to eql(1.0)
-      @outcome.reload
-      @results = @outcome.learning_outcome_results.where(user_id: @user).to_a
-      expect(@results.length).to eql(2)
-      @results = @results.sort_by(&:associated_asset_id)
-      expect(@results.first.associated_asset).to eql(@q1.assessment_question)
-      expect(@results.first.mastery).to eql(false)
-      expect(@results.first.original_mastery).to eql(true)
-      expect(@results.last.associated_asset).to eql(@q2.assessment_question)
-      expect(@results.last.mastery).to eql(true)
-      expect(@results.last.original_mastery).to eql(false)
-    end
-  end
 
 
   describe "#score_to_keep" do
@@ -1158,6 +1100,22 @@ describe Quizzes::QuizSubmission do
     end
   end
 
+  describe "set_final_score" do
+    it "marks a quiz_submission as complete" do
+      quiz_with_graded_submission([
+        {:question_data => {
+          :name => 'question 1',
+          :points_possible => 1,
+          'question_type' => 'essay_question'
+          }
+        }
+      ])
+      @quiz_submission.set_final_score(2)
+      @quiz_submission.reload
+      expect(@quiz_submission.workflow_state).to eq("complete")
+    end
+  end
+
   describe "#needs_grading?" do
     before :once do
       student_in_course
@@ -1369,6 +1327,38 @@ describe Quizzes::QuizSubmission do
       expect(@submission.reload.messages_sent.keys).not_to include 'Submission Needs Grading'
     end
   end
+
+  describe 'submission creation event' do
+    before(:once) do
+      student_in_course(course: @course)
+    end
+
+    it 'should create quiz submission event on new quiz submission' do
+      quiz_submission = @quiz.generate_submission(@student)
+      event = quiz_submission.events.last
+      expect(event.event_type).to eq('submission_created')
+    end
+
+    it 'should not create quiz submission event on preview quiz submission' do
+      quiz_submission = @quiz.generate_submission(@student, true)
+      event = quiz_submission.events.last
+      expect(event).to be_nil
+    end
+
+    it 'should be able to record quiz submission creation event' do
+      quiz_submission = @quiz.quiz_submissions.create!
+      quiz_submission.attempt  = 1
+      quiz_submission.quiz_version = 1
+      quiz_submission.quiz_data = {}
+      quiz_submission.record_creation_event
+      event = quiz_submission.events.last
+      expect(event.event_type).to eq('submission_created')
+      expect(event.event_data["quiz_version"]).to eq quiz_submission.quiz_version
+      expect(event.event_data["quiz_data"]).to eq quiz_submission.quiz_data
+      expect(event.attempt).to eq quiz_submission.attempt
+    end
+  end
+
   end
 
   describe "#time_spent" do
@@ -1544,6 +1534,48 @@ describe Quizzes::QuizSubmission do
       ])
 
       expect(@quiz_submission.points_possible_at_submission_time).to eq 0.65
+    end
+  end
+
+  describe "Tardiness" do
+    let(:course)      { Course.create! }
+    let(:now)         { Time.zone.now }
+    let(:quiz)        { course.quizzes.create! due_at: 3.days.ago(now) }
+    let(:submission)  { quiz.quiz_submissions.create! }
+
+    describe "#late?" do
+      it "is not late when on turned in before the due date" do
+        submission.finished_at = 4.days.ago(now)
+        submission.save
+
+        expect(submission.late?).to eq false
+      end
+
+      it "is not late when on turned in exactly at the due date" do
+        submission.finished_at = 3.days.ago(now)
+        submission.save
+
+        expect(submission.late?).to eq false
+      end
+
+      it "is not late when unfinished" do
+        expect(submission.late?).to eq false
+      end
+
+      it "is not late when the quiz has no due date" do
+        quiz_two                    = course.quizzes.create!
+        submission_two              = quiz_two.quiz_submissions.create!
+        submission_two.finished_at  = 3.days.ago(now)
+        submission_two.save
+        expect(submission_two.late?).to eq false
+      end
+
+      it "is late when on turned in after the due date" do
+        submission.finished_at = 2.days.ago(now)
+        submission.save
+
+        expect(submission.late?).to eq true
+      end
     end
   end
 end

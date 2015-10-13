@@ -50,6 +50,7 @@ define [
       json.url = "#{ENV.COURSE_ROOT_URL}/users/#{@model.get('id')}"
       json.isObserver = @model.hasEnrollmentType('ObserverEnrollment')
       json.isPending = @model.pending(@model.currentRole)
+      json.canRemoveUsers = ENV.permissions.manage_admin_users or (ENV.permissions.manage_students and _.any @model.get('enrollments'), (e) -> e.can_be_removed)
       json.canEditSections = not _.isEmpty @model.sectionEditableEnrollments()
       json.canLinkStudents = json.isObserver && !ENV.course.concluded
       json.canViewLoginIdColumn = ENV.permissions.manage_admin_users or ENV.permissions.manage_students
@@ -68,7 +69,7 @@ define [
         json.sections = _.map json.enrollments, (en) -> ENV.CONTEXTS['sections'][en.course_section_id]
 
         users = {}
-        if observerEnrollments.length == 1 && !observerEnrollments[0].observed_user
+        if observerEnrollments.length >= 1 && _.all(observerEnrollments, (enrollment) -> !enrollment.observed_user)
           users[''] = {name: I18n.t('nobody', 'nobody')}
         else
           for en in observerEnrollments

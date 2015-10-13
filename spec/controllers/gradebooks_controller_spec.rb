@@ -331,11 +331,12 @@ describe GradebooksController do
         end
         it "should get all the expected datas even with multibytes characters", :focus => true do
           @course.assignments.create(:title => "Déjà vu")
-          raw_csv = @course.gradebook_to_csv({
-            :user => @teacher,
-            :include_priors => false,
-            :include_sis_id => true
-          })
+          exporter = GradebookExporter.new(
+            @course,
+            @teacher,
+            { include_priors: false, include_sis_id: true }
+          )
+          raw_csv = exporter.to_csv
           expect(raw_csv).to include("Déjà vu")
         end
       end
@@ -464,6 +465,107 @@ describe GradebooksController do
                          :assignment_id => @assignment.id,
                          :user_id => s2.user_id }
       expect(flash[:error]).to eql 'Submission was unsuccessful: Submission Failed'
+    end
+
+    context "moderated grading" do
+      before :once do
+        @course.root_account.allow_feature!(:moderated_grading)
+        @course.enable_feature!(:moderated_grading)
+        @assignment = @course.assignments.create!(:title => "some assignment", :moderated_grading => true)
+        @student = @course.enroll_student(User.create!(:name => "some user"), :enrollment_state => :active).user
+      end
+
+      before :each do
+        user_session(@teacher)
+      end
+
+      it "creates a provisional grade" do
+        submission = @assignment.submit_homework(@student, :body => "hello")
+        post 'update_submission',
+          :format => :json,
+          :course_id => @course.id,
+          :submission => { :score => 100,
+                           :comment => "provisional!",
+                           :assignment_id => @assignment.id,
+                           :user_id => @student.id,
+                           :provisional => true }
+
+        # confirm "real" grades/comments were not written
+        submission.reload
+        expect(submission.workflow_state).to eq 'submitted'
+        expect(submission.score).to be_nil
+        expect(submission.grade).to be_nil
+        expect(submission.submission_comments.first).to be_nil
+
+        # confirm "provisional" grades/comments were written
+        pg = submission.provisional_grade(@teacher)
+        expect(pg.score).to eq 100
+        expect(pg.submission_comments.first.comment).to eq 'provisional!'
+
+        # confirm the response JSON shows provisional information
+        json = JSON.parse response.body
+        expect(json[0]['submission']['score']).to eq 100
+        expect(json[0]['submission']['grade_matches_current_submission']).to eq true
+        expect(json[0]['submission']['submission_comments'].first['submission_comment']['comment']).to eq 'provisional!'
+      end
+
+      it "doesn't create a provisional grade when the student has one already (and isn't in the moderation set)" do
+        submission = @assignment.submit_homework(@student, :body => "hello")
+        other_teacher = teacher_in_course(:course => @course, :active_all => true).user
+        pg = submission.find_or_create_provisional_grade!(scorer: other_teacher)
+
+        post 'update_submission', :format => :json, :course_id => @course.id,
+          :submission => { :score => 100, :comment => "provisional!", :assignment_id => @assignment.id,
+            :user_id => @student.id, :provisional => true }
+        expect(response).to_not be_success
+        expect(response.body).to include("Student already has the maximum number of provisional grades")
+     end
+
+      it "should create a provisional grade even if the student has one but is in the moderation set" do
+        submission = @assignment.submit_homework(@student, :body => "hello")
+        other_teacher = teacher_in_course(:course => @course, :active_all => true).user
+        pg = submission.find_or_create_provisional_grade!(scorer: other_teacher)
+
+        @assignment.moderated_grading_selections.create!(:student => @student)
+
+        post 'update_submission', :format => :json, :course_id => @course.id,
+          :submission => { :score => 100, :comment => "provisional!", :assignment_id => @assignment.id,
+            :user_id => @student.id, :provisional => true }
+        expect(response).to be_success
+      end
+
+      it "creates a final provisional grade" do
+        submission = @assignment.submit_homework(@student, :body => "hello")
+        post 'update_submission',
+          :format => :json,
+          :course_id => @course.id,
+          :submission => { :score => 100,
+            :comment => "provisional!",
+            :assignment_id => @assignment.id,
+            :user_id => @student.id,
+            :provisional => true,
+            :final => true
+          }
+
+        # confirm "real" grades/comments were not written
+        submission.reload
+        expect(submission.workflow_state).to eq 'submitted'
+        expect(submission.score).to be_nil
+        expect(submission.grade).to be_nil
+        expect(submission.submission_comments.first).to be_nil
+
+        # confirm "provisional" grades/comments were written
+        pg = submission.provisional_grade(@teacher, final: true)
+        expect(pg.score).to eq 100
+        expect(pg.final).to eq true
+        expect(pg.submission_comments.first.comment).to eq 'provisional!'
+
+        # confirm the response JSON shows provisional information
+        json = JSON.parse response.body
+        expect(json[0]['submission']['score']).to eq 100
+        expect(json[0]['submission']['grade_matches_current_submission']).to eq true
+        expect(json[0]['submission']['submission_comments'].first['submission_comment']['comment']).to eq 'provisional!'
+      end
     end
   end
 

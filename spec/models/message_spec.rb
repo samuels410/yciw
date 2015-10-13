@@ -43,14 +43,14 @@ describe Message do
 
     it 'should sanitize html' do
       Message.any_instance.expects(:load_html_template).returns <<-ZOMGXSS
-        <b>Your content</b>: <%= "<script>alert('haha')</script>" %>
+        <b>Your content</b>: <%= "<script>alert()</script>" %>
       ZOMGXSS
       user         = user(:active_all => true)
       account_user = AccountUser.create!(:account => account_model, :user => user)
       message      = generate_message(:account_user_notification, :email, account_user)
 
       expect(message.html_body).not_to include "<script>"
-      expect(message.html_body).to include "<b>Your content</b>: &lt;script&gt;alert(&#x27;haha&#x27;)&lt;/script&gt;"
+      expect(message.html_body).to include "<b>Your content</b>: &lt;script&gt;alert()&lt;/script&gt;"
     end
   end
 
@@ -197,7 +197,7 @@ describe Message do
         ne = mock()
         ne.expects(:push_json).returns(false)
         ne.expects(:destroy)
-        @user.expects(:notification_endpoints).returns(mock(all: [ne]))
+        @user.expects(:notification_endpoints).returns([ne])
 
         message_model(:dispatch_at => Time.now, :workflow_state => 'staged', :to => 'somebody', :updated_at => Time.now.utc - 11.minutes, :path_type => 'push', :user => @user)
         @message.deliver
@@ -207,9 +207,106 @@ describe Message do
         ne = mock()
         ne.expects(:push_json).twice.returns(true)
         ne.expects(:destroy).never
-        @user.expects(:notification_endpoints).returns(mock(all: [ne, ne]))
+        @user.expects(:notification_endpoints).returns([ne, ne])
 
         message_model(:dispatch_at => Time.now, :workflow_state => 'staged', :to => 'somebody', :updated_at => Time.now.utc - 11.minutes, :path_type => 'push', :user => @user)
+        @message.deliver
+      end
+    end
+
+    context 'SMS' do
+      before :once do
+        user_model
+        @user.account.enable_feature!(:international_sms)
+      end
+
+      before do
+        Canvas::Twilio.stubs(:enabled?).returns(true)
+      end
+
+      it "uses Twilio for E.164 paths" do
+        message_model(
+          dispatch_at: Time.now,
+          workflow_state: 'staged',
+          to: '+18015550100',
+          updated_at: Time.now.utc - 11.minutes,
+          path_type: 'sms',
+          user: @user
+        )
+        Canvas::Twilio.expects(:deliver).with('+18015550100', @message.body)
+        @message.expects(:deliver_via_email).never
+        @message.deliver
+      end
+
+      it "sends as email for email-ish paths" do
+        message_model(
+          dispatch_at: Time.now,
+          workflow_state: 'staged',
+          to: 'foo@example.com',
+          updated_at: Time.now.utc - 11.minutes,
+          path_type: 'sms',
+          user: @user
+        )
+        @message.expects(:deliver_via_email)
+        Canvas::Twilio.expects(:deliver).never
+        @message.deliver
+      end
+
+      it "sends as email for paths that don't look like either email addresses or E.164 numbers" do
+        message_model(
+          dispatch_at: Time.now,
+          workflow_state: 'staged',
+          to: 'bogus',
+          updated_at: Time.now.utc - 11.minutes,
+          path_type: 'sms',
+          user: @user
+        )
+        @message.expects(:deliver_via_email)
+        Canvas::Twilio.expects(:deliver).never
+        @message.deliver
+      end
+
+      it 'completes dispatch when successful' do
+        message_model(
+          dispatch_at: Time.now,
+          workflow_state: 'staged',
+          to: '+18015550100',
+          updated_at: Time.now.utc - 11.minutes,
+          path_type: 'sms',
+          user: @user
+        )
+        Canvas::Twilio.expects(:deliver)
+        @message.deliver
+        @message.reload
+        expect(@message.workflow_state).to eq('sent')
+      end
+
+      it 'cancels when Twilio raises an exception' do
+        message_model(
+          dispatch_at: Time.now,
+          workflow_state: 'staged',
+          to: '+18015550100',
+          updated_at: Time.now.utc - 11.minutes,
+          path_type: 'sms',
+          user: @user
+        )
+        Canvas::Twilio.expects(:deliver).raises('some error')
+        @message.deliver
+        @message.reload
+        expect(@message.workflow_state).to eq('cancelled')
+      end
+
+      it "doesn't send when the :international_sms feature flag is disabled" do
+        @user.account.disable_feature!(:international_sms)
+        message_model(
+          dispatch_at: Time.now,
+          workflow_state: 'staged',
+          to: '+18015550100',
+          updated_at: Time.now.utc - 11.minutes,
+          path_type: 'sms',
+          user: @user
+        )
+        Canvas::Twilio.expects(:deliver).never
         @message.deliver
       end
     end
@@ -458,4 +555,10 @@ describe Message do
     end
   end
 
+  it 'allows urls > 255 characters' do
+    url = "a" * 256
+    msg = Message.new
+    msg.url = url
+    msg.save!
+  end
 end

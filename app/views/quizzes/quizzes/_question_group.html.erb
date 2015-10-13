@@ -4,8 +4,11 @@
    if group && hash_get(group, :assessment_question_bank_id)
      question_bank = @banks_hash[hash_get(group, :assessment_question_bank_id)]
    end
+  if group
+    roles_stuff = %Q|role="region" aria-label="#{t('Question Group')}"|
+  end
 %>
-<div class="quiz_sortable group_top <%= 'question_bank_top' if question_bank %>" style="<%= "display: none;" unless group %>" id="group_top_<%= hash_get(group, :id, 'template') %>">
+<div <%= roles_stuff ? roles_stuff : nil %> class="quiz_sortable group_top <%= 'question_bank_top' if question_bank %>" style="<%= "display: none;" unless group %>" id="group_top_<%= hash_get(group, :id, 'template') %>">
   <%= form_for :quiz_group, :url => context_url(@context, :context_quiz_quiz_groups_url, @quiz.id), :html => {:class => "quiz_group_form"} do |f| %>
     <% if can_do(@quiz, @current_user, :update) %>
     <%= render partial: "quizzes/quizzes/move_handle" %>
@@ -71,7 +74,7 @@
   </div>
 <% end %>
 <% hash_get(group, :questions, []).each do |question| %>
-  <%= render :partial => "display_question", :object => question, :locals => {:in_group => true, :editing => true, :asset_string => "quiz_question_#{question['id']}"} %>
+  <%= render :partial => "display_question", :object => question, :locals => {:in_group => true, :editing => true, :asset_string => "quiz_question_#{question['id']}", :group_id => group["id"]} %>
 <% end %>
 <div class="group_bottom" style="<%= "display: none;" unless group %>" id="<%= "group_bottom_template" unless group %>">
   &nbsp;

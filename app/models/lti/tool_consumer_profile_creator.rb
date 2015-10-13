@@ -1,3 +1,5 @@
+require 'ims/lti'
+
 module Lti
   class ToolConsumerProfileCreator
 
@@ -21,6 +23,7 @@ module Lti
           Person.sourcedId
           Membership.role
           ToolConsumerProfile.url
+          OAuth.splitSecret
         ).freeze
 
     SERVICES = [

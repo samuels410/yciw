@@ -6,7 +6,7 @@ class AccountAuthorizationConfigsPresenter
   end
 
   def configs
-    @configs ||= account.account_authorization_configs.to_a
+    @configs ||= account.authentication_providers.active.to_a
   end
 
   def new_auth_types
@@ -16,11 +16,6 @@ class AccountAuthorizationConfigsPresenter
       next if klass.singleton? && configs.any? { |aac| aac.is_a?(klass) }
       klass
     end.compact
-  end
-
-  def needs_discovery_url?
-    configs.count >= 2 &&
-      configs.any?{|c| !c.is_a?(AccountAuthorizationConfig::LDAP) }
   end
 
   def needs_unknown_user_url?
@@ -63,7 +58,10 @@ class AccountAuthorizationConfigsPresenter
 
   def sso_options
     new_auth_types.map do |auth_type|
-      [auth_type.display_name, auth_type.sti_name]
+      {
+        name: auth_type.display_name,
+        value: auth_type.sti_name
+      }
     end
   end
 
@@ -103,10 +101,6 @@ class AccountAuthorizationConfigsPresenter
     AccountAuthorizationConfig::SAML.enabled?
   end
 
-  def canvas_auth_only?
-    !account.non_canvas_auth_configured?
-  end
-
   def login_placeholder
     AccountAuthorizationConfig.default_delegated_login_handle_name
   end
@@ -116,11 +110,17 @@ class AccountAuthorizationConfigsPresenter
   end
 
   def new_config(auth_type)
-    account.account_authorization_configs.new(auth_type)
+    account.authentication_providers.new(auth_type)
   end
 
   def parent_reg_selected
     account.parent_registration?
+  end
+
+  def last_canvas_provider?(aac)
+    !aac.new_record? &&
+      aac.is_a?(AccountAuthorizationConfig::Canvas) &&
+      !account.authentication_providers.active.where("id<>?", aac).exists?
   end
 
   private

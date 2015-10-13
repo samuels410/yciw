@@ -19,6 +19,14 @@
 require 'turnitin/response'
 
 module Turnitin
+  def self.state_from_similarity_score(similarity_score)
+    return 'none' if similarity_score == 0
+    return 'acceptable' if similarity_score < 25
+    return 'warning' if similarity_score < 50
+    return 'problem' if similarity_score < 75
+    'failure'
+  end
+
   class Client
     attr_accessor :endpoint, :account_id, :shared_secret, :host, :testing
 
@@ -88,7 +96,7 @@ module Turnitin
     end
 
     def createCourse(course)
-      sendRequest(:create_course, 2, :utp => '2', :course => course, :user => course, :utp => '2')
+      sendRequest(:create_course, 2, :course => course, :user => course, :utp => '2')
     end
 
     def enrollStudent(course, student)
@@ -318,7 +326,7 @@ module Turnitin
         params[:ctl] = course.name
       end
       if assignment
-        params[:assign] = assignment.title
+        params[:assign] = "#{assignment.title} - #{assignment.id}"
         params[:assignid] = id(assignment)
       end
       params[:diagnostic] = "1" if @testing

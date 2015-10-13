@@ -148,7 +148,7 @@ describe "API Authentication", type: :request do
           # we have the code, we can close the browser session
           post "/login/oauth2/token", :client_id => @client_id, :client_secret => @client_secret, :code => code
           expect(response).to be_success
-          expect(response.header['content-type']).to eq 'application/json; charset=utf-8'
+          expect(response.header[content_type_key]).to eq 'application/json; charset=utf-8'
           json = JSON.parse(response.body)
           token = json['access_token']
           expect(json['user']).to eq({ 'id' => @user.id, 'name' => 'test1@example.com' })
@@ -200,7 +200,7 @@ describe "API Authentication", type: :request do
 
       it "should execute for saml login" do
         skip("requires SAML extension") unless AccountAuthorizationConfig::SAML.enabled?
-        account = account_with_saml(:account => Account.default)
+        account_with_saml(account: Account.default)
         flow do
           Onelogin::Saml::Response.any_instance.stubs(:settings=)
           Onelogin::Saml::Response.any_instance.stubs(:logger=)
@@ -209,6 +209,8 @@ describe "API Authentication", type: :request do
           Onelogin::Saml::Response.any_instance.stubs(:name_id).returns('test1@example.com')
           Onelogin::Saml::Response.any_instance.stubs(:name_qualifier).returns(nil)
           Onelogin::Saml::Response.any_instance.stubs(:session_index).returns(nil)
+          Onelogin::Saml::Response.any_instance.stubs(:issuer).returns("saml_entity")
+          Onelogin::Saml::Response.any_instance.stubs(:trusted_roots).returns([])
 
           post 'saml_consume', :SAMLResponse => "foo"
         end
@@ -218,9 +220,9 @@ describe "API Authentication", type: :request do
         flow do
           account = account_with_cas(:account => Account.default)
           # it should *not* redirect to the alternate log_in_url on the config, when doing oauth
-          account.account_authorization_configs.first.update_attribute(:log_in_url, "https://www.example.com/bogus")
+          account.authentication_providers.first.update_attribute(:log_in_url, "https://www.example.com/bogus")
 
-          cas = CASClient::Client.new(:cas_base_url => account.account_authorization_configs.first.auth_base)
+          cas = CASClient::Client.new(:cas_base_url => account.authentication_providers.first.auth_base)
           cas.instance_variable_set(:@stub_user, @user)
           def cas.validate_service_ticket(st)
             response = CASClient::ValidationResponse.new("yes\n#{@stub_user.pseudonyms.first.unique_id}\n")
@@ -344,7 +346,7 @@ describe "API Authentication", type: :request do
             # we have the code, we can close the browser session
             post "/login/oauth2/token", :client_id => @key.id, :client_secret => @client_secret, :code => code
             expect(response).to be_success
-            expect(response.header['content-type']).to eq 'application/json; charset=utf-8'
+            expect(response.header[content_type_key]).to eq 'application/json; charset=utf-8'
             json = JSON.parse(response.body)
             @token = json['access_token']
             expect(json['user']).to eq({ 'id' => @user.id, 'name' => 'test1@example.com' })
@@ -409,7 +411,7 @@ describe "API Authentication", type: :request do
               # exchange the code for the token
               post "/login/oauth2/token", {:code => code}, {'HTTP_AUTHORIZATION' => ActionController::HttpAuthentication::Basic.encode_credentials(@client_id, @client_secret)}
               expect(response).to be_success
-              expect(response.header['content-type']).to eq 'application/json; charset=utf-8'
+              expect(response.header[content_type_key]).to eq 'application/json; charset=utf-8'
               json = JSON.parse(response.body)
               token = json['access_token']
               reset!
@@ -431,6 +433,28 @@ describe "API Authentication", type: :request do
 
         it "should enable the web app flow if token already exists" do
           login_and_confirm(true)
+        end
+
+        it "Shouldn't allow an account level dev key to auth with other account's user" do
+          enable_forgery_protection do
+            enable_cache do
+
+              user_with_pseudonym(:active_user => true, :username => 'test1@example.com', :password => 'test123')
+              course_with_teacher(:user => @user)
+
+              # create the dev key on a different account
+              account2 = Account.create!
+              developer_key = DeveloperKey.create!(account: account2, redirect_uri: "http://www.example.com/my_uri")
+
+              get "/login/oauth2/auth", :response_type => 'code', :client_id => developer_key.id, :redirect_uri => "http://www.example.com/my_uri"
+              assert_status(401)
+
+              @user.access_tokens.create!(developer_key: developer_key)
+
+              get "/login/oauth2/auth", :response_type => 'code', :client_id => developer_key.id, :redirect_uri => "http://www.example.com/my_uri"
+              assert_status(401)
+            end
+          end
         end
       end
 
@@ -457,7 +481,7 @@ describe "API Authentication", type: :request do
               # exchange the code for the token
               post "/login/oauth2/token", {:code => code}, {'HTTP_AUTHORIZATION' => ActionController::HttpAuthentication::Basic.encode_credentials(@client_id, @client_secret)}
               expect(response).to be_success
-              expect(response.header['content-type']).to eq 'application/json; charset=utf-8'
+              expect(response.header[content_type_key]).to eq 'application/json; charset=utf-8'
               JSON.parse(response.body)
             end
           end
@@ -481,7 +505,6 @@ describe "API Authentication", type: :request do
           expect(json['access_token']).to be_nil
         end
       end
-
     end
   end
 
@@ -535,6 +558,13 @@ describe "API Authentication", type: :request do
       expect(response['WWW-Authenticate']).to eq %{Bearer realm="canvas-lms"}
     end
 
+    it "should error if the developer key is inactive" do
+      @token.developer_key.deactivate!
+      get "/api/v1/courses", nil, { 'HTTP_AUTHORIZATION' => "Bearer #{@token.full_token}" }
+      assert_status(401)
+      expect(response['WWW-Authenticate']).to eq %{Bearer realm="canvas-lms"}
+    end
+
     it "should require an active pseudonym for the access token user" do
       @user.pseudonym.destroy
       get "/api/v1/courses", nil, { 'HTTP_AUTHORIZATION' => "Bearer #{@token.full_token}" }
@@ -563,6 +593,63 @@ describe "API Authentication", type: :request do
       assert_status(401)
     end
 
+    context "account access" do
+      before :once do
+        @account = Account.create!
+
+        @sub_account1 = @account.sub_accounts.create!
+        @sub_account2 = @account.sub_accounts.create!
+
+        @not_sub_account = Account.create!
+        @key = DeveloperKey.create!(:redirect_uri => "http://example.com/a/b", account: @account)
+      end
+
+      it "Should allow a token previously linked to a dev key same account to work" do
+        enable_forgery_protection do
+          enable_cache do
+            user_with_pseudonym(:active_user => true, :username => 'test1@example.com', :password => 'test123', account: @account)
+            course_with_teacher(:user => @user, account: @account)
+            developer_key = DeveloperKey.create!(account: @account, redirect_uri: "http://www.example.com/my_uri")
+            @token = @user.access_tokens.create!(:developer_key => developer_key)
+
+            LoadAccount.stubs(:default_domain_root_account).returns(@account)
+            check_used {  get "/api/v1/courses", nil, { 'HTTP_AUTHORIZATION' => "Bearer #{@token.full_token}" } }
+            expect(JSON.parse(response.body).size).to eq 1
+          end
+        end
+      end
+
+      it "Should allow a token previously linked to a dev key allowed sub account to work" do
+        enable_forgery_protection do
+          enable_cache do
+            user_with_pseudonym(:active_user => true, :username => 'test1@example.com', :password => 'test123', account: @sub_account1)
+            course_with_teacher(:user => @user, account: @sub_account1)
+            developer_key = DeveloperKey.create!(account: @account, redirect_uri: "http://www.example.com/my_uri")
+            @token = @user.access_tokens.create!(:developer_key => developer_key)
+
+            LoadAccount.stubs(:default_domain_root_account).returns(@account)
+            check_used {  get "/api/v1/courses", nil, { 'HTTP_AUTHORIZATION' => "Bearer #{@token.full_token}" } }
+            expect(JSON.parse(response.body).size).to eq 1
+          end
+        end
+      end
+
+      it "Shouldn't allow a token previously linked to a dev key on foreign account to work" do
+        enable_forgery_protection do
+          enable_cache do
+            user_with_pseudonym(:active_user => true, :username => 'test1@example.com', :password => 'test123', account: @account)
+            course_with_teacher(:user => @user, account: @account)
+            developer_key = DeveloperKey.create!(account: @not_sub_account, redirect_uri: "http://www.example.com/my_uri")
+            @token = @user.access_tokens.create!(:developer_key => developer_key)
+
+            LoadAccount.stubs(:default_domain_root_account).returns(@account)
+            get "/api/v1/courses", nil, { 'HTTP_AUTHORIZATION' => "Bearer #{@token.full_token}" }
+            assert_status(401)
+          end
+        end
+      end
+    end
+
     context "sharding" do
       specs_require_sharding
 
@@ -578,6 +665,26 @@ describe "API Authentication", type: :request do
 
         check_used { get "/api/v1/courses", nil, { 'HTTP_AUTHORIZATION' => "Bearer #{@token.full_token}" } }
         expect(JSON.parse(response.body).size).to eq 1
+      end
+
+      it "shouldn't work for an access token from the default shard with the developer key on the different shard" do
+        @account = Account.create!
+        user_with_pseudonym(:active_user => true, :username => 'test1@example.com', :password => 'test123', :account => @account)
+        course_with_teacher(:user => @user, :account => @account)
+
+        @shard1.activate do
+
+          # create the dev key on a different account
+          account2 = Account.create!
+          developer_key = DeveloperKey.create!(account: account2, redirect_uri: "http://www.example.com/my_uri")
+          @token = @user.access_tokens.create!(:developer_key => developer_key)
+          expect(@token.developer_key.shard).to be @shard1
+
+        end
+
+        LoadAccount.stubs(:default_domain_root_account).returns(@account)
+        get "/api/v1/courses", nil, { 'HTTP_AUTHORIZATION' => "Bearer #{@token.full_token}" }
+        assert_status(401)
       end
     end
   end

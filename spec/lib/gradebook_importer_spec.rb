@@ -234,7 +234,20 @@ describe GradebookImporter do
     course_model
     @assignment1 = @course.assignments.create!(:name => 'Assignment 1', :points_possible => 10)
     importer_with_rows(
-        "Student,ID,Section,Assignment 1"
+      "Student,ID,Section,Assignment 1"
+    )
+    expect(@gi.assignments).to eq []
+    expect(@gi.missing_assignments).to eq []
+  end
+
+  it "doesn't include readonly assignments" do
+    course_model
+    @assignment1 = @course.assignments.create!(:name => 'Assignment 1', :points_possible => 10)
+    @assignment1 = @course.assignments.create!(:name => 'Assignment 2', :points_possible => 10)
+    importer_with_rows(
+      'Student,ID,Section,Assignment 1,Readonly,Assignment 2',
+      '    Points Possible,,,,(read only),'
+
     )
     expect(@gi.assignments).to eq []
     expect(@gi.missing_assignments).to eq []
@@ -316,21 +329,34 @@ describe GradebookImporter do
       new_gradebook_importer
     end
 
-    it "should have a simplified json output" do
-      hash = @gi.as_json
-      expect(hash.keys.sort).to eql([:assignments, :missing_objects, :original_submissions, :students, :unchanged_assignments])
-      students = hash[:students]
-      expect(students).to be_is_a(Array)
-      student = students.first
-      expect(student.keys.sort).to eql([:id, :last_name_first, :name, :previous_id, :submissions])
-      submissions = student[:submissions]
-      expect(submissions).to be_is_a(Array)
-      submission = submissions.first
-      expect(submission.keys.sort).to eql(["assignment_id", "grade", "original_grade"])
-      assignments = hash[:assignments]
-      expect(assignments).to be_is_a(Array)
-      assignment = assignments.first
-      expect(assignment.keys.sort).to eql([:grading_type, :id, :points_possible, :previous_id, :title])
+    let(:hash)        { @gi.as_json }
+    let(:student)     { hash[:students].first }
+    let(:submission)  { student[:submissions].first }
+    let(:assignment)  { hash[:assignments].first }
+
+    describe "simplified json output" do
+      it "has only the specified keys" do
+        keys = [:assignments,:assignments_outside_current_periods,
+                :missing_objects, :original_submissions, :students,
+                :unchanged_assignments]
+        expect(hash.keys.sort).to eql(keys)
+      end
+
+      it "a student only has specified keys" do
+        keys = [:id, :last_name_first, :name, :previous_id, :submissions]
+        expect(student.keys.sort).to eql(keys)
+      end
+
+      it "a submission only has specified keys" do
+        keys = ["assignment_id", "grade", "original_grade"]
+        expect(submission.keys.sort).to eql(keys)
+      end
+
+      it "an assignment only has specified keys" do
+        keys = [:due_at, :grading_type, :id, :points_possible, :previous_id,
+                :title]
+        expect(assignment.keys.sort).to eql(keys)
+      end
     end
   end
 
@@ -380,6 +406,163 @@ describe GradebookImporter do
       json = @gi.as_json
       expect(json[:students][0][:submissions].first["grade"]).to eq "1"
       expect(json[:students][0][:submissions].last["grade"]).to eq "3"
+    end
+  end
+
+  context "multiple grading periods" do
+    let(:group)     { course.grading_period_groups.create }
+    let!(:old_period) do
+      old_period_params = { title: "Course Period 2: old period",
+                            start_date: 2.months.ago,
+                            end_date: 1.month.ago }
+      group.grading_periods.create old_period_params
+    end
+
+    let!(:current_period) do
+      current_period_params = { title: "Course Period 1: current period",
+                                start_date: 1.month.ago,
+                                end_date: 1.month.from_now }
+      group.grading_periods.create current_period_params
+    end
+
+    let(:account)   { Account.default }
+    let(:course)    { Course.create account: account }
+    let(:student)   { User.create }
+    let(:progress)  { Progress.create tag: "test", context: student }
+
+    let(:importer_json) do
+      lambda do |hashes|
+        hashes.each { |hash| course.assignments.create hash }
+
+        contents = <<CSV
+Student,ID,Section,#{course.assignments.map(&:name).join(',')}
+,#{student.id},#{',9' * course.assignments.length}
+CSV
+
+        importer = GradebookImporter.new(course, contents, student, progress)
+        importer.parse!
+        importer.as_json
+      end
+    end
+
+    describe "assignments_outside_current_periods" do
+      describe "when multiple grading periods is on" do
+        before do
+          course.root_account.enable_feature! :multiple_grading_periods
+        end
+
+        describe "when all assignments have current due_ats" do
+          it "empty when assignments are in a current grading period" do
+            assignment_hashes = [ { name:            'Assignment 1',
+                                    points_possible: 10,
+                                    due_at:          Time.zone.now } ]
+            json = importer_json.call(assignment_hashes)
+            expect(json[:assignments_outside_current_periods]).to be_empty
+          end
+
+          it "empty when all assignments have no due_ats" do
+            assignment_hashes = [ { points_possible: 10,
+                                    name:            'Assignment 2' } ]
+            json = importer_json.call(assignment_hashes)
+            expect(json[:assignments_outside_current_periods]).to be_empty
+          end
+        end
+
+        describe "when all assignments are in past grading periods" do
+          it "indicates assignments not in a current grading period" do
+            assignment_hashes = [ { points_possible: 10,
+                                    name:            'Assignment 3',
+                                    due_at:          6.weeks.ago } ]
+            json = importer_json.call(assignment_hashes)
+            past_assignment = json[:assignments_outside_current_periods].first
+            expect(past_assignment[:title]).to eq 'Assignment 3'
+          end
+        end
+
+        describe "when some assignments are in past grading periods" do
+          it "indicates assignments not in a current grading period" do
+            assignment_hashes = [ { points_possible: 10,
+                                    name:            'Assignment 4',
+                                    due_at:          6.weeks.ago},
+                                  { points_possible: 10,
+                                    name:            'Assignment 5',
+                                    due_at:          1.day.from_now } ]
+            json = importer_json.call(assignment_hashes)
+            past_assignment = json[:assignments_outside_current_periods].first
+            expect(past_assignment[:title]).to eq 'Assignment 4'
+          end
+        end
+      end
+
+      it "should be empty when multiple grading periods is off" do
+        assignment_hashes = [ { points_possible: 10,
+                                name:            'Assignment 6',
+                                due_at:          6.weeks.ago } ]
+        json = importer_json.call(assignment_hashes)
+        course.root_account.disable_feature! :multiple_grading_periods
+        expect(json[:assignments_outside_current_periods]).to be_empty
+      end
+    end
+  end
+
+  describe "#translate_pass_fail" do
+    let(:account) { Account.default }
+    let(:course) { Course.create account: account }
+    let(:student) do
+      student = User.create
+      student.gradebook_importer_submissions = [{ "grade" => "",
+                                                  "original_grade" => ""}]
+      student
+    end
+    let(:assignment) do
+      course.assignments.create!(:name => 'Assignment 1',
+                                 :grading_type => "pass_fail",
+                                 :points_possible => 6)
+    end
+    let(:assignments) { [assignment] }
+    let(:students) { [student] }
+    let(:progress) { Progress.create tag: "test", context: student }
+    let(:importer) { GradebookImporter.new(course, "", student, progress) }
+    let(:submission) { student.gradebook_importer_submissions.first }
+
+    it "translates positive score in submission['grade'] to complete" do
+      submission['grade'] = "3"
+      importer.translate_pass_fail(assignments, students)
+
+      expect(submission['grade']).to eq "complete"
+    end
+
+    it "translates positive grade in submission['original_grade'] to complete" do
+      submission['original_grade'] = "3"
+      importer.translate_pass_fail(assignments, students)
+
+      expect(submission['original_grade']).to eq "complete"
+    end
+
+    it "translates 0 grade in submission['grade'] to incomplete" do
+      submission['grade'] = "0"
+      importer.translate_pass_fail(assignments, students)
+
+      expect(submission['grade']).to eq "incomplete"
+    end
+
+    it "translates 0 grade in submission['original_grade'] to incomplete" do
+      submission['original_grade'] = "0"
+      importer.translate_pass_fail(assignments, students)
+
+      expect(submission['original_grade']).to eq "incomplete"
+    end
+
+    it "doesn't change empty string grade in submission['grade']" do
+      importer.translate_pass_fail(assignments, students)
+
+      expect(submission['grade']).to eq ""
+    end
+
+    it "doesn't change empty string grade in submission['original_grade']" do
+      importer.translate_pass_fail(assignments, students)
+
+      expect(submission['grade']).to eq ""
     end
   end
 end

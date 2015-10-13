@@ -50,7 +50,7 @@ class DiscussionTopic < ActiveRecord::Base
   has_many :discussion_entries, :order => :created_at, :dependent => :destroy
   has_many :rated_discussion_entries, :class_name => 'DiscussionEntry', :order =>
     ['COALESCE(parent_id, 0)', 'COALESCE(rating_sum, 0) DESC', :created_at]
-  has_many :root_discussion_entries, :class_name => 'DiscussionEntry', :include => [:user], :conditions => ['discussion_entries.parent_id IS NULL AND discussion_entries.workflow_state != ?', 'deleted']
+  has_many :root_discussion_entries, class_name: 'DiscussionEntry', preload: :user, conditions: ['discussion_entries.parent_id IS NULL AND discussion_entries.workflow_state != ?', 'deleted']
   has_one :external_feed_entry, :as => :asset
   belongs_to :external_feed
   belongs_to :context, :polymorphic => true
@@ -153,6 +153,8 @@ class DiscussionTopic < ActiveRecord::Base
   end
 
   def schedule_delayed_transitions
+    return if self.saved_by == :migration
+
     self.send_at(self.delayed_post_at, :update_based_on_date) if @should_schedule_delayed_post
     self.send_at(self.lock_at, :update_based_on_date) if @should_schedule_lock_at
     # need to clear these in case we do a save whilst saving (e.g.
@@ -332,7 +334,7 @@ class DiscussionTopic < ActiveRecord::Base
 
   def update_participants_read_state(current_user, new_state, update_fields)
     entry_ids = discussion_entries.pluck(:id)
-    existing_entry_participants = DiscussionEntryParticipant.existing_participants(current_user, entry_ids).all
+    existing_entry_participants = DiscussionEntryParticipant.existing_participants(current_user, entry_ids).to_a
     update_or_create_participant(current_user: current_user,
       new_state: new_state,
       new_count: new_state == 'unread' ? self.default_unread_count : 0)
@@ -633,20 +635,44 @@ class DiscussionTopic < ActiveRecord::Base
   end
 
   def can_unpublish?(opts={})
-    if self.assignment
-      !self.assignment.has_student_submissions?
-    else
-      student_ids = opts[:student_ids] || self.context.all_real_students.pluck(:id)
-      if self.for_group_discussion?
-        !(self.child_topics.any? { |child| child.discussion_entries.active.where(:user_id => student_ids).exists? })
+    return @can_unpublish unless @can_unpublish.nil?
+
+    @can_unpublish = begin
+      if self.assignment
+        !self.assignment.has_student_submissions?
       else
-        !self.discussion_entries.active.where(:user_id => student_ids).exists?
+        student_ids = opts[:student_ids] || self.context.all_real_student_enrollments.select(:user_id)
+        if self.for_group_discussion?
+          !DiscussionEntry.active.where(user_id: student_ids, discussion_topic_id: child_topics).exists?
+        else
+          !self.discussion_entries.active.where(:user_id => student_ids).exists?
+        end
+      end
+    end
+  end
+  attr_writer :can_unpublish
+
+  def self.preload_can_unpublish(context, topics, assmnt_ids_with_subs=nil)
+    return unless topics.any?
+    assmnt_ids_with_subs ||= Assignment.assignment_ids_with_submissions(topics.map(&:assignment_id).compact)
+
+    student_ids = context.all_real_student_enrollments.select(:user_id)
+    topic_ids_with_entries = DiscussionEntry.active.where(discussion_topic_id: topics).
+      where(:user_id => student_ids).uniq.pluck(:discussion_topic_id)
+    topic_ids_with_entries += DiscussionTopic.where("root_topic_id IS NOT NULL").
+      where(:id => topic_ids_with_entries).uniq.pluck(:root_topic_id)
+
+    topics.each do |topic|
+      if topic.assignment_id
+        topic.can_unpublish = !(assmnt_ids_with_subs.include?(topic.assignment_id))
+      else
+        topic.can_unpublish = !(topic_ids_with_entries.include?(topic.id))
       end
     end
   end
 
-  def can_group?
-    can_unpublish?
+  def can_group?(opts = {})
+    can_unpublish?(opts)
   end
 
   def should_send_to_stream
@@ -702,6 +728,7 @@ class DiscussionTopic < ActiveRecord::Base
   end
 
   def reply_from(opts)
+    raise IncomingMail::Errors::ReplyToDeletedDiscussion if self.deleted?
     raise IncomingMail::Errors::UnknownAddress if self.context.root_account.deleted?
     user = opts[:user]
     if opts[:html]
@@ -1001,27 +1028,29 @@ class DiscussionTopic < ActiveRecord::Base
   #
   # Returns a boolean.
   def visible_for?(user = nil)
-    # user is the topic's author
-    return true if user == self.user
+    RequestCache.cache('discussion_visible_for', self, user) do
+      # user is the topic's author
+      return true if user == self.user
 
-    # user is an admin in the context (teacher/ta/designer) OR
-    # user is an account admin with appropriate permission
-    return true if context.grants_any_right?(user, :manage, :read_course_content)
+      # user is an admin in the context (teacher/ta/designer) OR
+      # user is an account admin with appropriate permission
+      return true if context.grants_any_right?(user, :manage, :read_course_content)
 
-    # assignment exists and isnt assigned to user (differentiated assignments)
-    if for_assignment? && !self.assignment.visible_to_user?(user)
-      return false
-    end
+      # assignment exists and isnt assigned to user (differentiated assignments)
+      if for_assignment? && !self.assignment.visible_to_user?(user)
+        return false
+      end
 
-    # topic is not published
-    if !published?
-      false
-    elsif is_announcement && unlock_at = available_from_for(user)
-    # unlock date exists and has passed
-      unlock_at < Time.now.utc
-    # everything else
-    else
-      true
+      # topic is not published
+      if !published?
+        false
+      elsif is_announcement && unlock_at = available_from_for(user)
+      # unlock date exists and has passed
+        unlock_at < Time.now.utc
+      # everything else
+      else
+        true
+      end
     end
   end
 

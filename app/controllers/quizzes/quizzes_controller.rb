@@ -60,7 +60,7 @@ class Quizzes::QuizzesController < ApplicationController
 
     can_manage = @context.grants_right?(@current_user, session, :manage_assignments)
 
-    scope = @context.quizzes.active.includes([ :assignment ])
+    scope = @context.quizzes.active.preload(:assignment)
 
     # students only get to see published quizzes, and they will fetch the
     # overrides later using the API:
@@ -83,6 +83,9 @@ class Quizzes::QuizzesController < ApplicationController
       quizzes.map(&:id), # invalidate on add/delete of quizzes
       quizzes.map(&:updated_at).sort.last # invalidate on modifications
     ].cache_key) do
+      if can_manage
+        Quizzes::Quiz.preload_can_unpublish(quizzes)
+      end
       quizzes.each_with_object({}) do |quiz, quiz_user_permissions|
         quiz_user_permissions[quiz.id] = {
           can_update: can_manage,
@@ -146,7 +149,7 @@ class Quizzes::QuizzesController < ApplicationController
           flash[:notice] = t 'notices.submission_doesnt_count', "This quiz will no longer count towards your grade."
         else
           respond_to do |format|
-            flash[:error] = t 'notices.quiz_not_availible', "You do not have access to the requested quiz."
+            flash[:error] = t "You do not have access to the requested quiz."
             format.html { redirect_to named_context_url(@context, :context_quizzes_url) }
           end
           return
@@ -194,8 +197,10 @@ class Quizzes::QuizzesController < ApplicationController
         upload_url = api_v1_quiz_submission_files_path(:course_id => @context.id, :quiz_id => @quiz.id)
         js_env :UPLOAD_URL => upload_url
         js_env :SUBMISSION_VERSIONS_URL => course_quiz_submission_versions_url(@context, @quiz) unless @quiz.muted?
-        events_url = api_v1_course_quiz_submission_events_url(@context, @quiz, @submission)
-        js_env QUIZ_SUBMISSION_EVENTS_URL: events_url unless @js_env[:QUIZ_SUBMISSION_EVENTS_URL]
+        if !@submission.preview? && !@js_env[:QUIZ_SUBMISSION_EVENTS_URL]
+          events_url = api_v1_course_quiz_submission_events_url(@context, @quiz, @submission)
+          js_env QUIZ_SUBMISSION_EVENTS_URL: events_url
+        end
       end
 
       setup_attachments
@@ -213,8 +218,9 @@ class Quizzes::QuizzesController < ApplicationController
       js_env(hash)
 
       @quiz_menu_tools = external_tools_display_hashes(:quiz_menu)
-      if params[:take] && (@can_take = can_take_quiz?)
-
+      @can_take = can_take_quiz?
+      if params[:take] && @can_take
+        return false if @quiz.require_lockdown_browser? && !check_lockdown_browser(:highest, named_context_url(@context, 'context_quiz_take_url', @quiz.id))
         # allow starting the quiz via a GET request, but only when using a lockdown browser
         if request.post? || (@quiz.require_lockdown_browser? && !quiz_submission_active?)
           start_quiz!
@@ -318,7 +324,7 @@ class Quizzes::QuizzesController < ApplicationController
         params[:quiz][:assignment_id] = nil unless @assignment
         params[:quiz][:title] = @assignment.title if @assignment
       end
-      if params[:assignment].present? && Assignment.show_sis_grade_export_option?(@context) && @quiz.assignment
+      if params[:assignment].present? && Assignment.sis_grade_export_enabled?(@context) && @quiz.assignment
         @quiz.assignment.post_to_sis = params[:assignment][:post_to_sis]
         @quiz.assignment.save
       end
@@ -374,7 +380,7 @@ class Quizzes::QuizzesController < ApplicationController
             old_assignment = @quiz.assignment.clone
             old_assignment.id = @quiz.assignment.id
 
-            if params[:assignment] && Assignment.show_sis_grade_export_option?(@context)
+            if params[:assignment] && Assignment.sis_grade_export_enabled?(@context)
               @quiz.assignment.post_to_sis = params[:assignment][:post_to_sis]
               @quiz.assignment.save
             end
@@ -539,7 +545,7 @@ class Quizzes::QuizzesController < ApplicationController
       end
       students = student_scope.order_by_sortable_name.to_a.uniq
 
-      @submissions_from_users = @quiz.quiz_submissions.for_user_ids(students.map(&:id)).not_settings_only.all
+      @submissions_from_users = @quiz.quiz_submissions.for_user_ids(students.map(&:id)).not_settings_only.to_a
 
       @submissions_from_users = Hash[@submissions_from_users.map { |s| [s.user_id,s] }]
 
@@ -837,8 +843,12 @@ class Quizzes::QuizzesController < ApplicationController
       redirect_to course_quiz_url(@context, @quiz) and return
     end
 
-    events_url = api_v1_course_quiz_submission_events_url(@context, @quiz, @submission)
-    js_env QUIZ_SUBMISSION_EVENTS_URL: events_url unless @js_env[:QUIZ_SUBMISSION_EVENTS_URL]
+    if !@submission.preview? && !@js_env[:QUIZ_SUBMISSION_EVENTS_URL]
+      events_url = api_v1_course_quiz_submission_events_url(@context, @quiz, @submission)
+      js_env QUIZ_SUBMISSION_EVENTS_URL: events_url
+    end
+
+    js_env IS_PREVIEW: true if @submission.preview?
 
     @quiz_presenter = Quizzes::TakeQuizPresenter.new(@quiz, @submission, params)
     render :take_quiz
@@ -849,32 +859,22 @@ class Quizzes::QuizzesController < ApplicationController
   end
 
   def can_take_quiz?
-    return false if @locked
-    return false unless authorized_action(@quiz, @current_user, :submit)
-    return false if @quiz.require_lockdown_browser? && !check_lockdown_browser(:highest, named_context_url(@context, 'context_quiz_take_url', @quiz.id))
+    return true if  params[:preview] && can_do(@quiz, @current_user, :update)
+    return false if params[:take] && !authorized_action(@quiz, @current_user, :submit)
+    return false if @submission && @submission.completed? && @submission.attempts_left == 0
+    can_take = Quizzes::QuizEligibility.new(course: @context,
+                                            quiz: @quiz,
+                                            user: @current_user,
+                                            session: session,
+                                            remote_ip: request.remote_ip,
+                                            access_code: params[:access_code])
 
-    quiz_access_code_key = @quiz.access_code_key_for_user(@current_user)
-
-    if @quiz.access_code.present? && params[:access_code] == @quiz.access_code
-      session[quiz_access_code_key] = true
-    end
-    if @quiz.access_code.present? && !session[quiz_access_code_key]
-      render :access_code
-      false
-    elsif @quiz.ip_filter && !@quiz.valid_ip?(request.remote_ip)
-      render :invalid_ip
-      false
-    elsif @section.present? && @section.restrict_enrollments_to_section_dates && @section.end_at < Time.now
-      false
-    elsif @context.restrict_enrollments_to_course_dates && @context.soft_concluded?
-      false
-    elsif @current_user.present? &&
-          @context.present? &&
-          @context.enrollments.where(user_id: @current_user.id).all? {|e| e.inactive? } &&
-          !@context.grants_right?(@current_user, :read_as_admin)
-      false
+    if params[:take]
+      reason = can_take.declined_reason_renders
+      render reason if reason
+      can_take.eligible?
     else
-      true
+      can_take.potentially_eligible?
     end
   end
 

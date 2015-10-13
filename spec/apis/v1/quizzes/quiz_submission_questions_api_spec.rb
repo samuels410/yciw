@@ -326,6 +326,24 @@ describe Quizzes::QuizSubmissionQuestionsController, :type => :request do
         @quiz_submission = @quiz.generate_submission(@student)
       end
 
+      it "shouldn't give any answers information" do
+        mc = create_question 'multiple_choice'
+        formula = create_question 'numerical'
+
+        json = api_answer({
+          quiz_questions: [{
+            id: mc.id,
+            answer: 1658
+          }, {
+            id: formula.id,
+            answer: 40.0
+            }]
+        })
+
+        expect(json['quiz_submission_questions'][0]["answers"].map(&:keys).uniq.include? "weight").to be_falsey
+        expect(json['quiz_submission_questions'][1]["answers"]).to equal(nil)
+      end
+
       context 'answering questions' do
         it 'should answer a MultipleChoice question' do
           question = create_question 'multiple_choice'

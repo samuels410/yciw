@@ -3,7 +3,7 @@ require File.expand_path(File.dirname(__FILE__) + '/helpers/assignments_common')
 require File.expand_path(File.dirname(__FILE__) + '/helpers/google_drive_common')
 
 describe "assignments" do
-  include_examples "in-process server selenium tests"
+  include_context "in-process server selenium tests"
 
   context "as a student" do
 
@@ -106,6 +106,28 @@ describe "assignments" do
       expect(f("#assignment_group_upcoming #assignment_#{due_date_assignment.id}")).to be_displayed
     end
 
+    it "should show assignment data if locked by due date or lock date" do
+      assignment = @course.assignments.create!(:name => 'locked assignment',
+                                               :due_at => 5.days.ago,
+                                               :lock_at => 3.days.ago)
+      driver.current_url
+      get "/courses/#{@course.id}/assignments/#{assignment.id}"
+      wait_for_ajaximations
+      expect(f('.submit_assignment_link')).to be_nil
+      expect(f(".student-assignment-overview")).to be_displayed
+    end
+
+
+    it "should still not show assignment data if locked by unlock date" do
+      assignment = @course.assignments.create!(:name => 'not unlocked assignment',
+                                               :due_at => 5.days.from_now,
+                                               :unlock_at => 3.days.from_now)
+      driver.current_url
+      get "/courses/#{@course.id}/assignments/#{assignment.id}"
+      wait_for_ajaximations
+      expect(f(".student-assignment-overview")).to be_nil
+    end
+
     context "overridden lock_at" do
       before :each do
         setup_sections_and_overrides_all_future
@@ -188,7 +210,7 @@ describe "assignments" do
         set_up_google_docs()
       end
 
-      it "should have a google doc tab if google docs is enabled", :priority => "1", :test_id => 161884 do
+      it "should have a google doc tab if google docs is enabled", priority: "1", test_id: 161884 do
         @assignment.update_attributes(:submission_types => 'online_upload')
         get "/courses/#{@course.id}/assignments/#{@assignment.id}"
         f('.submit_assignment_link').click
@@ -219,13 +241,13 @@ describe "assignments" do
           wait_for_animations
         end
 
-        it "should select a file from google drive", :priority => "1", :test_id => 161886 do
+        it "should select a file from google drive", priority: "1", test_id: 161886 do
           # find file in list
           # the file we are looking for is created as the second file in the list
           expect(ff(".filename")[1]).to include_text("test.mydoc")
         end
 
-        it "should select a file in a folder from google drive", :priority => "1", :test_id => 161885 do
+        it "should select a file in a folder from google drive", priority: "1", test_id: 161885 do
           # open folder
           f(".folder").click
           wait_for_animations
@@ -235,7 +257,7 @@ describe "assignments" do
         end
       end
 
-      it "forces users to authenticate", :priority => "1", :test_id => 161892 do
+      it "forces users to authenticate", priority: "1", test_id: 161892 do
         # stub out google drive
         google_service_connection = mock()
         google_service_connection.stubs(:service_type).returns('google_drive')

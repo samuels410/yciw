@@ -26,7 +26,7 @@ def traverse_nested_outcomes(outcome)
   end
 end
 
-def goto_state_outcomes
+def goto_state_outcomes(outcome_url = "/accounts/#{Account.default.id}/outcomes")
   get outcome_url
   wait_for_ajaximations
   f('.find_outcome').click
@@ -75,6 +75,13 @@ def valid_outcome_data
           {:points => 0, :description => "Lame"}
       ]
   }
+end
+
+def state_outcome
+    state_outcome = ['NGA Center/CCSSO', 'Common Core State Standards',
+                     'College- and Career-Readiness Standards and K-12 Mathematics', 'First Grade',
+                      '1.DD - zééééééééééééééééééééééééééééééééééééééééééééééééé', 'Something else']
+    state_outcome
 end
 
 def course_bulk_outcome_groups_course(num_of_groups, num_of_outcomes)
@@ -262,56 +269,59 @@ def should_validate_calculation_method_dropdown
   expect(drop_down).to match_array(expected_array)
 end
 
-def should_validate_decaying_average
+def should_validate_decaying_average_below_range
   get outcome_url
   f('.add_outcome_link').click
   below_range = 0
-  above_range = 100
   replace_content(f('.outcomes-content input[name=title]'), 'Decaying Average')
-  # select option
   click_option('#calculation_method', "Decaying Average")
   # enter invalid number below range
   replace_content(f('input[name=calculation_int]'), below_range)
-  # submit
   f('.submit_button').click
   wait_for_ajaximations
-  # expect
   expect(f('.error_box')).to be_present
   expect(fj('.error_text div').text).to include("'#{below_range}' is not a valid value")
+end
 
+def should_validate_decaying_average_above_range
+  get outcome_url
+  f('.add_outcome_link').click
+  above_range = 100
+  replace_content(f('.outcomes-content input[name=title]'), 'Decaying Average')
+  click_option('#calculation_method', "Decaying Average")
   # enter second invalid number above range
   replace_content(f('input[name=calculation_int]'), above_range)
-  # submit
+  wait_for_ajaximations
   f('.submit_button').click
   wait_for_ajaximations
-  # expect
   expect(f('.error_box')).to be_present
   expect(fj('.error_text div').text).to include("'#{above_range}' is not a valid value")
 end
 
-def should_validate_n_mastery
+def should_validate_n_mastery_below_range
   get outcome_url
   f('.add_outcome_link').click
   below_range = 1
-  above_range = 6
   replace_content(f('.outcomes-content input[name=title]'), 'n Number of Times')
-  # select option
   click_option('#calculation_method', "n Number of Times")
   # enter invalid number below range
   replace_content(f('input[name=calculation_int]'), below_range)
-  # submit
   f('.submit_button').click
   wait_for_ajaximations
-  # expect
   expect(f('.error_box')).to be_present
   expect(fj('.error_text div').text).to include("'#{below_range}' is not a valid value")
+end
 
-  # enter second invalid number above range
+def should_validate_n_mastery_above_range
+  get outcome_url
+  f('.add_outcome_link').click
+  above_range = 6
+  replace_content(f('.outcomes-content input[name=title]'), 'n Number of Times')
+  click_option('#calculation_method', "n Number of Times")
+  # enter invalid number above range
   replace_content(f('input[name=calculation_int]'), above_range)
-  # submit
   f('.submit_button').click
   wait_for_ajaximations
-  # expect
   expect(f('.error_box')).to be_present
   expect(fj('.error_text div').text).to include("'#{above_range}' is not a valid value")
 end
@@ -366,7 +376,7 @@ def should_create_an_outcome_group_root_level
   expect(LearningOutcomeGroup.where(title: group_title).first).to be_present
 end
 
-def should_create_a_learning_outcome_with_a_new_rating_nested
+def should_create_an_outcome_group_nested
   get outcome_url
 
   ## when

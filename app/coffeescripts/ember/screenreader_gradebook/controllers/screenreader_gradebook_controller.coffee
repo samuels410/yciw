@@ -156,9 +156,15 @@ define [
     ).property()
 
     showDownloadSubmissionsButton: (->
-      @get('selectedAssignment.has_submitted_submissions') and
-      _.intersection(@get('selectedAssignment.submission_types'), ['online_upload','online_text_entry','online_url', 'online_quiz']) != [] and
-      !@get('selectedAssignment.hide_download_submissions_button')
+      hasSubmittedSubmissions     = @get('selectedAssignment.has_submitted_submissions')
+      whitelist                   = ['online_upload','online_text_entry',
+                                      'online_url', 'online_quiz']
+      submissionTypes             = @get('selectedAssignment.submission_types')
+      submissionTypesOnWhitelist  = _.intersection(submissionTypes, whitelist)
+      hasWhitelistedSubmissions   = submissionTypesOnWhitelist.length == submissionTypes.length
+      showButton                  = !@get('selectedAssignment.hide_download_submissions_button')
+
+      hasSubmittedSubmissions and hasWhitelistedSubmissions and showButton
     ).property('selectedAssignment')
 
     hideStudentNames: false
@@ -686,6 +692,7 @@ define [
           user_id: student.id
           assignment_id: assignment.id
           hidden: !@differentiatedAssignmentVisibleToStudent(assignment, student.id)
+          grade_matches_current_submission: true
         }
     ).property('selectedStudent', 'selectedAssignment')
 
@@ -801,6 +808,7 @@ define [
     ).property('hideStudentNames')
 
     fetchCorrectEnrollments: (->
+      return if (@get('enrollments.isLoading'))
       if @get('showConcludedEnrollments')
         url = ENV.GRADEBOOK_OPTIONS.students_url_with_concluded_enrollments
       else

@@ -17,6 +17,7 @@
 #
 
 require File.expand_path(File.dirname(__FILE__) + '/../sharding_spec_helper.rb')
+require 'rotp'
 
 describe User do
 
@@ -331,7 +332,7 @@ describe User do
     p1.save!
     user.pseudonyms.create! :unique_id => "id2", :account => account2
     user.remove_from_root_account account1
-    expect(user.associated_root_accounts).to eql [account2]
+    expect(user.associated_root_accounts.to_a).to eql [account2]
   end
 
   describe "update_account_associations" do
@@ -409,19 +410,19 @@ describe User do
         @shard1.activate do
           @account = Account.create!
           au = @account.account_users.create!(user: @user)
-          expect(@user.user_account_associations.with_each_shard.map(&:account).sort_by(&:id)).to eq(
+          expect(@user.user_account_associations.shard(@user).map(&:account).sort_by(&:id)).to eq(
               [Account.site_admin, @account].sort_by(&:id)
           )
           expect(@account.user_account_associations.map(&:user)).to eq [@user]
 
           au.destroy
 
-          expect(@user.user_account_associations.with_each_shard.map(&:account)).to eq [Account.site_admin]
+          expect(@user.user_account_associations.shard(@user).map(&:account)).to eq [Account.site_admin]
           expect(@account.reload.user_account_associations.map(&:user)).to eq []
 
           @account.account_users.create!(user: @user)
 
-          expect(@user.user_account_associations.with_each_shard.map(&:account).sort_by(&:id)).to eq(
+          expect(@user.user_account_associations.shard(@user).map(&:account).sort_by(&:id)).to eq(
               [Account.site_admin, @account].sort_by(&:id)
           )
           expect(@account.reload.user_account_associations.map(&:user)).to eq [@user]
@@ -433,7 +434,7 @@ describe User do
         @shard2.activate do
           @user.update_account_associations
 
-          expect(@user.user_account_associations.with_each_shard.map(&:account).sort_by(&:id)).to eq(
+          expect(@user.user_account_associations.shard(@user).map(&:account).sort_by(&:id)).to eq(
               [Account.site_admin, @account].sort_by(&:id)
           )
           expect(@account.reload.user_account_associations.map(&:user)).to eq [@user]
@@ -1458,7 +1459,8 @@ describe User do
       user2 = User.create!
       @account1.pseudonyms.create!(:user => user2, :unique_id => 'preferred@example.com', :password => 'abcdef', :password_confirmation => 'abcdef')
       @user.pseudonyms.detect { |p| p.account == Account.site_admin }.update_attribute(:password_auto_generated, true)
-      Account.default.account_authorization_configs.create!(:auth_type => 'cas')
+      Account.default.authentication_providers.create!(:auth_type => 'cas')
+      Account.default.authentication_providers.first.move_to_bottom
       new_pseudonym = @user.find_or_initialize_pseudonym_for_account(@account1, @account3)
       expect(new_pseudonym).not_to be_nil
       expect(new_pseudonym).to be_new_record
@@ -1477,7 +1479,8 @@ describe User do
       expect(@user.find_or_initialize_pseudonym_for_account(@account1)).to be_nil
 
       # delegated auth
-      @account3.account_authorization_configs.create!(:auth_type => 'cas')
+      @account3.authentication_providers.create!(:auth_type => 'cas')
+      @account3.authentication_providers.first.move_to_bottom
       expect(@account3).to be_delegated_authentication
       @user.pseudonyms.create!(:account => @account3, :unique_id => 'jacob@instructure.com', :password => 'abcdef', :password_confirmation => 'abcdef')
       expect(@user.find_or_initialize_pseudonym_for_account(@account1)).to be_nil
@@ -1553,85 +1556,14 @@ describe User do
   end
 
   describe "sis_pseudonym_for" do
-    let_once(:course1) { course :active_all => true, :account => Account.default }
-    let_once(:course2) { course :active_all => true, :account => account2 }
-    let_once(:account1) { account_model }
-    let_once(:account2) { account_model }
-    let_once(:u) { User.create! }
-
-    it "should return active pseudonyms only" do
-      u.pseudonyms.create!(:account => Account.default, :unique_id => "user2@example.com", :password => "asdfasdf", :password_confirmation => "asdfasdf") {|x| x.workflow_state = 'deleted'; x.sis_user_id = "user2" }
-      expect(u.sis_pseudonym_for(course1)).to be_nil
-      @p = u.pseudonyms.create!(:account => Account.default, :unique_id => "user1@example.com", :password => "asdfasdf", :password_confirmation => "asdfasdf") {|x| x.workflow_state = 'active'; x.sis_user_id = "user1" }
-      expect(u.sis_pseudonym_for(course1)).to eq @p
-    end
-
-    it "should return pseudonyms in the right account" do
-      other_account = account_model
-      u.pseudonyms.create!(:account => other_account, :unique_id => "user1@example.com", :password => "asdfasdf", :password_confirmation => "asdfasdf") {|x| x.workflow_state = 'active'; x.sis_user_id = "user1" }
-      expect(u.sis_pseudonym_for(course1)).to be_nil
-      @p = u.pseudonyms.create!(:account => Account.default, :unique_id => "user2@example.com", :password => "asdfasdf", :password_confirmation => "asdfasdf") {|x| x.workflow_state = 'active'; x.sis_user_id = "user2" }
-      expect(u.sis_pseudonym_for(course1)).to eq @p
-    end
-
-    it "should return pseudonyms with a sis id only" do
-      u.pseudonyms.create!(:account => Account.default, :unique_id => "user1@example.com", :password => "asdfasdf", :password_confirmation => "asdfasdf") {|x| x.workflow_state = 'active' }
-      expect(u.sis_pseudonym_for(course1)).to be_nil
-      @p = u.pseudonyms.create!(:account => Account.default, :unique_id => "user2@example.com", :password => "asdfasdf", :password_confirmation => "asdfasdf") {|x| x.workflow_state = 'active'; x.sis_user_id = "user2" }
-      expect(u.sis_pseudonym_for(course1)).to eq @p
-    end
-
     it "should find the right root account for a course" do
-      p = account2.pseudonyms.create!(:user => u, :unique_id => 'user') { |p| p.sis_user_id = 'abc'}
-      expect(u.sis_pseudonym_for(course2)).to eq p
-    end
-
-    it "should find the right root account for a group" do
-      @group = group :group_context => course2
-      p = account2.pseudonyms.create!(:user => u, :unique_id => 'user') { |p| p.sis_user_id = 'abc'}
-      expect(u.sis_pseudonym_for(@group)).to eq p
-    end
-
-    it "should find the right root account for a non-root-account" do
-      @root_account = account1
-      @account = @root_account.sub_accounts.create!
-      p = @root_account.pseudonyms.create!(:user => u, :unique_id => 'user') { |p| p.sis_user_id = 'abc'}
-      expect(u.sis_pseudonym_for(@account)).to eq p
-    end
-
-    it "should find the right root account for a root account" do
-      p = account1.pseudonyms.create!(:user => u, :unique_id => 'user') { |p| p.sis_user_id = 'abc'}
-      expect(u.sis_pseudonym_for(account1)).to eq p
-    end
-
-    it "should bail if it can't find a root account" do
-      context = Course.new # some context that doesn't have an account
-      expect(lambda {u.sis_pseudonym_for(context)}).to raise_error("could not resolve root account")
-    end
-
-    it "should include a pseudonym from a trusted account" do
-      p = account2.pseudonyms.create!(user: u, unique_id: 'user') { |p| p.sis_user_id = 'abc' }
-      account1.stubs(:trust_exists?).returns(true)
-      account1.stubs(:trusted_account_ids).returns([account2.id])
-      expect(u.sis_pseudonym_for(account1)).to be_nil
-      expect(u.sis_pseudonym_for(account1, true)).to eq p
-    end
-
-    context "sharding" do
-      specs_require_sharding
-
-      it "should find a pseudonym on a different shard" do
-        @shard1.activate do
-          @user = User.create!
-        end
-        @pseudonym = Account.default.pseudonyms.create!(:user => @user, :unique_id => 'user') { |p| p.sis_user_id = 'abc' }
-        @shard2.activate do
-          expect(@user.sis_pseudonym_for(Account.default)).to eq @pseudonym
-        end
-        @shard1.activate do
-          expect(@user.sis_pseudonym_for(Account.default)).to eq @pseudonym
-        end
+      account = account_model
+      user = User.create!
+      account_course = course(active_all: true, account: account)
+      pseudonym = account.pseudonyms.create!(user: user, unique_id: 'user') do |p|
+        p.sis_user_id = 'abc'
       end
+      expect(user.sis_pseudonym_for(account_course, false, true)).to eq(pseudonym)
     end
   end
 
@@ -1694,7 +1626,7 @@ describe User do
         expect do
           events = @user.upcoming_events(:end_at => 1.week.from_now)
         end.to_not raise_error
-        
+
         expect(events.first).to eq assignment2
         expect(events.second).to eq assignment
       end
@@ -1709,6 +1641,41 @@ describe User do
         expect(events.first).to eq assignment2
       end
 
+      context "after db section context_code filtering" do
+        before do
+          course_with_teacher(:active_all => true)
+          @student = user(:active_user => true)
+          @sections = []
+          @events = []
+          3.times { @sections << @course.course_sections.create! }
+          start_at = 1.day.from_now
+          # create three sections and three child events that will be retrieved in the same order
+          data = {}
+          @sections.each_with_index do |section, i|
+            data[i] = {:start_at => start_at, :end_at => start_at + 1.day, :context_code => section.asset_string}
+            start_at += 1.day
+          end
+          event = @course.calendar_events.build(:title => 'event', :child_event_data => data)
+          event.updating_user = @teacher
+          event.save!
+          @events = event.child_events.sort_by(&:context_code)
+        end
+
+        it "should be able to filter section events after fetching" do
+          # trigger the after db filtering
+          Setting.stubs(:get).with('filter_events_by_section_code_threshold', anything).returns(0)
+          @course.enroll_student(@student, :section => @sections[1], :enrollment_state => 'active', :allow_multiple_enrollments => true)
+          expect(@student.upcoming_events(:limit => 1)).to eq [@events[1]]
+        end
+
+        it "should use the old behavior as a fallback" do
+          Setting.stubs(:get).with('filter_events_by_section_code_threshold', anything).returns(0)
+          # the optimized call will retrieve the first two events, and then filter them out
+          # since it didn't retrieve enough events it will use the old code as a fallback
+          @course.enroll_student(@student, :section => @sections[2], :enrollment_state => 'active', :allow_multiple_enrollments => true)
+          expect(@student.upcoming_events(:limit => 1)).to eq [@events[2]]
+        end
+      end
     end
   end
 
@@ -1754,7 +1721,7 @@ describe User do
     end
   end
 
-  describe "assignments_visibile_in_course" do
+  describe "assignments_visible_in_course" do
     before do
       @teacher_enrollment = course_with_teacher(:active_course => true)
       @course_section = @course.course_sections.create
@@ -1775,9 +1742,9 @@ describe User do
       context "differentiated_assignments on" do
         before {@course.enable_feature!(:differentiated_assignments)}
         it "should return assignments only when a student has overrides" do
-          expect(@student1.assignments_visibile_in_course(@course).include?(@assignment)).to be_truthy
-          expect(@student2.assignments_visibile_in_course(@course).include?(@assignment)).to be_falsey
-          expect(@student1.assignments_visibile_in_course(@course).include?(@unpublished_assignment)).to be_falsey
+          expect(@student1.assignments_visible_in_course(@course).include?(@assignment)).to be_truthy
+          expect(@student2.assignments_visible_in_course(@course).include?(@assignment)).to be_falsey
+          expect(@student1.assignments_visible_in_course(@course).include?(@unpublished_assignment)).to be_falsey
         end
       end
 
@@ -1786,15 +1753,15 @@ describe User do
           @course.disable_feature!(:differentiated_assignments)
         }
         it "should return all assignments" do
-          expect(@student1.assignments_visibile_in_course(@course).include?(@assignment)).to be_truthy
+          expect(@student1.assignments_visible_in_course(@course).include?(@assignment)).to be_truthy
         end
       end
     end
 
     context "as teacher" do
       it "should return all assignments" do
-        expect(@teacher_enrollment.user.assignments_visibile_in_course(@course).include?(@assignment)).to be_truthy
-        expect(@teacher_enrollment.user.assignments_visibile_in_course(@course).include?(@unpublished_assignment)).to be_truthy
+        expect(@teacher_enrollment.user.assignments_visible_in_course(@course).include?(@assignment)).to be_truthy
+        expect(@teacher_enrollment.user.assignments_visible_in_course(@course).include?(@unpublished_assignment)).to be_truthy
       end
     end
 
@@ -1808,18 +1775,18 @@ describe User do
         context "observer watching student with visibility" do
           before{ @observer_enrollment.update_attribute(:associated_user_id, @student1.id) }
           it "should be true" do
-            expect(@observer.assignments_visibile_in_course(@course).include?(@assignment)).to be_truthy
+            expect(@observer.assignments_visible_in_course(@course).include?(@assignment)).to be_truthy
           end
         end
         context "observer watching student without visibility" do
           before{ @observer_enrollment.update_attribute(:associated_user_id, @student2.id) }
           it "should be false" do
-            expect(@observer.assignments_visibile_in_course(@course).include?(@assignment)).to be_falsey
+            expect(@observer.assignments_visible_in_course(@course).include?(@assignment)).to be_falsey
           end
         end
         context "observer watching a only section" do
           it "should be true" do
-            expect(@observer.assignments_visibile_in_course(@course).include?(@assignment)).to be_truthy
+            expect(@observer.assignments_visible_in_course(@course).include?(@assignment)).to be_truthy
           end
         end
       end
@@ -1828,18 +1795,18 @@ describe User do
         context "observer watching student with visibility" do
           before{ @observer_enrollment.update_attribute(:associated_user_id, @student1.id) }
           it "should be true" do
-            expect(@observer.assignments_visibile_in_course(@course).include?(@assignment)).to be_truthy
+            expect(@observer.assignments_visible_in_course(@course).include?(@assignment)).to be_truthy
           end
         end
         context "observer watching student without visibility" do
           before{ @observer_enrollment.update_attribute(:associated_user_id, @student2.id) }
           it "should be true" do
-            expect(@observer.assignments_visibile_in_course(@course).include?(@assignment)).to be_truthy
+            expect(@observer.assignments_visible_in_course(@course).include?(@assignment)).to be_truthy
           end
         end
         context "observer watching a only section" do
           it "should be true" do
-            expect(@observer.assignments_visibile_in_course(@course).include?(@assignment)).to be_truthy
+            expect(@observer.assignments_visible_in_course(@course).include?(@assignment)).to be_truthy
           end
         end
       end
@@ -2069,15 +2036,15 @@ describe User do
     end
 
     it "should sort lexicographically" do
-      expect(User.order_by_sortable_name.where(id: ids).all.map(&:sortable_name)).to eq ["John, John", "Johnson, John"]
+      expect(User.order_by_sortable_name.where(id: ids).map(&:sortable_name)).to eq ["John, John", "Johnson, John"]
     end
 
     it "should sort support direction toggle" do
-      expect(User.order_by_sortable_name(:direction => :descending).where(id: ids).all.map(&:sortable_name)).to eq ["Johnson, John", "John, John"]
+      expect(User.order_by_sortable_name(:direction => :descending).where(id: ids).map(&:sortable_name)).to eq ["Johnson, John", "John, John"]
     end
 
     it "should sort support direction toggle with a prior select" do
-      expect(User.select([:id, :sortable_name]).order_by_sortable_name(:direction => :descending).where(id: ids).all.map(&:sortable_name)).to eq ["Johnson, John", "John, John"]
+      expect(User.select([:id, :sortable_name]).order_by_sortable_name(:direction => :descending).where(id: ids).map(&:sortable_name)).to eq ["Johnson, John", "John, John"]
     end
 
     it "should sort by the current locale with pg_collkey if possible" do

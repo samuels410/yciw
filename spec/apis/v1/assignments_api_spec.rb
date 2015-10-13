@@ -937,7 +937,7 @@ describe AssignmentsApiController, type: :request do
       expect(@adhoc_override.set).to eq [@student]
       expect(@adhoc_override.due_at_overridden).to be_truthy
       expect(@adhoc_override.due_at.to_i).to eq @adhoc_due_at.to_i
-      expect(@adhoc_override.title).to eq @student.name
+      expect(@adhoc_override.title).to eq "1 student"
 
       @section_override = @assignment.assignment_overrides.where(set_type: 'CourseSection').first
       expect(@section_override).not_to be_nil
@@ -1077,13 +1077,13 @@ describe AssignmentsApiController, type: :request do
         json = api_call_to_create_adhoc_override(student_ids: [@student.id])
 
         @assignment = Assignment.find json['id']
-        adhoc_override = @assignment.assignment_overrides.where(set_type: 'ADHOC').first
+        adhoc_override = @assignment.assignment_overrides.active.where(set_type: 'ADHOC').first
 
         expect(@assignment.assignment_overrides.count).to eq 1
 
         api_call_to_update_adhoc_override(student_ids: [@student.id, @first_student.id])
 
-        ao = @assignment.assignment_overrides.where(set_type: 'ADHOC').first
+        ao = @assignment.assignment_overrides.active.where(set_type: 'ADHOC').first
         expect(ao.set).to  match_array([@student, @first_student])
       end
 
@@ -1113,12 +1113,12 @@ describe AssignmentsApiController, type: :request do
 
         expect(@assignment.assignment_overrides.count).to eq 1
 
-        adhoc_override = @assignment.assignment_overrides.where(set_type: 'ADHOC').first
+        adhoc_override = @assignment.assignment_overrides.active.where(set_type: 'ADHOC').first
         expect(adhoc_override.set).to eq [@student]
 
         api_call_to_update_adhoc_override(student_ids: [@first_student.id])
 
-        ao = @assignment.assignment_overrides.where(set_type: 'ADHOC').first
+        ao = @assignment.assignment_overrides.active.where(set_type: 'ADHOC').first
         expect(ao.set).to eq [@first_student]
       end
     end
@@ -2023,7 +2023,6 @@ describe AssignmentsApiController, type: :request do
           'require_initial_post' => nil,
           'discussion_subentry_count' => 0,
           'assignment_id' => @assignment.id,
-          'published' => true,
           'delayed_post_at' => nil,
           'lock_at' => nil,
           'user_name' => @topic.user_name,
@@ -2127,6 +2126,7 @@ describe AssignmentsApiController, type: :request do
       end
 
       it "returns has_overrides correctly" do
+        @user = @teacher
         @assignment = @course.assignments.create!(:title => "Test Assignment",:description => "foo")
         json = api_get_assignment_in_course(@assignment, @course)
         expect(json['has_overrides']).to eq false
@@ -2135,6 +2135,10 @@ describe AssignmentsApiController, type: :request do
         create_override_for_assignment
         json = api_get_assignment_in_course(@assignment, @course)
         expect(json['has_overrides']).to eq true
+
+        @user = @student # don't show has_overrides to students
+        json = api_get_assignment_in_course(@assignment, @course)
+        expect(json['has_overrides']).to be_nil
       end
 
       it "returns all_dates when requested" do
@@ -2486,6 +2490,7 @@ describe AssignmentsApiController, type: :request do
   context "update_from_params" do
     before :once do
       course_with_teacher(:active_all => true)
+      student_in_course(active_all: true)
       @assignment = @course.assignments.create!(:title => "some assignment")
     end
 
@@ -2504,6 +2509,17 @@ describe AssignmentsApiController, type: :request do
         :role_changes => {:manage_sis => true})
       update_from_params(@assignment, params, @admin)
       expect(@assignment.integration_data).to eq({"key" => "value"})
+    end
+
+    it "unmuting publishes hidden comments" do
+      @assignment.mute!
+      @assignment.grade_student @student, comment: "blah blah blah"
+      sub = @assignment.submission_for_student(@student)
+      comment = sub.submission_comments.first
+      expect(comment.hidden?).to eql true
+
+      update_from_params(@assignment, {"muted" => "false"}, @teacher)
+      expect(comment.reload.hidden?).to eql false
     end
   end
 end

@@ -21,9 +21,9 @@ require 'iconv'
 class ErrorReport < ActiveRecord::Base
   belongs_to :user
   belongs_to :account
-  serialize :http_env
+  serialize_utf8_safe :http_env
   # misc key/value pairs with more details on the error
-  serialize :data, Hash
+  serialize_utf8_safe :data, Hash
 
   before_save :guess_email
 
@@ -112,9 +112,10 @@ class ErrorReport < ActiveRecord::Base
 
   def self.log_exception_from_canvas_errors(exception, data)
     tags = data.fetch(:tags, {})
+    extras = data.fetch(:extra, {})
     account_id = tags[:account_id]
     domain_root_account = account_id ? Account.where(id: account_id).first : nil
-    error_report_info = tags.merge(data[:extra])
+    error_report_info = tags.merge(extras)
     type = tags.fetch(:type, :default)
 
     if domain_root_account

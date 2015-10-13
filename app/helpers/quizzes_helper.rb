@@ -122,8 +122,10 @@ module QuizzesHelper
     end
   end
 
-  def render_correct_answer_protection(quiz)
-    return I18n.t('Answers will be shown after your last attempt') if quiz.show_correct_answers_last_attempt
+  def render_correct_answer_protection(quiz, submission)
+    if quiz.show_correct_answers_last_attempt && !submission.last_attempt_completed?
+      return I18n.t('Answers will be shown after your last attempt')
+    end
     show_at = quiz.show_correct_answers_at
     hide_at = quiz.hide_correct_answers_at
     now = Time.now
@@ -394,8 +396,10 @@ module QuizzesHelper
   end
 
   def comment_get(hash, field)
-    if html = hash_get(hash, "#{field}_html".to_sym)
-      raw(html)
+    html = hash_get(hash, "#{field}_html".to_sym)
+
+    if html
+      sanitize(html)
     else
       hash_get(hash, field)
     end
@@ -503,7 +507,11 @@ module QuizzesHelper
     opts['class'] = class_array.compact.join(" ")
     opts['aria-controls'] = 'js-sequential-warning-dialogue' if @quiz.cant_go_back?
     opts['data-method'] = 'post' unless @quiz.cant_go_back?
-    link_to(link_body, take_quiz_url, opts)
+    link_to(link_body, (opts["preview"] == 1)? preview_quiz_url : take_quiz_url, opts)
+  end
+
+  def preview_quiz_url
+    course_quiz_take_path(@context, @quiz, preview: 1)
   end
 
   def take_quiz_url
@@ -519,6 +527,10 @@ module QuizzesHelper
     end
   end
 
+  def link_to_preview_quiz(opts={})
+    link_to_take_quiz(preview_poll_message, opts)
+  end
+
   def link_to_take_poll(opts={})
     link_to_take_quiz(take_poll_message, opts)
   end
@@ -529,6 +541,10 @@ module QuizzesHelper
 
   def link_to_resume_poll(opts = {})
     link_to_take_quiz(resume_poll_message, opts)
+  end
+
+  def preview_poll_message
+    I18n.t("Preview")
   end
 
   def take_poll_message(quiz=@quiz)
@@ -657,7 +673,7 @@ module QuizzesHelper
     return user_answer[:points] unless user_answer[:correct] == 'undefined'
 
     if ["assignment", "practice_quiz"].include?(@quiz.quiz_type)
-      "--"
+      ""
     else
       question[:points_possible] || 0
     end

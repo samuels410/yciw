@@ -18,6 +18,14 @@ define([
   var ACTIVE_ROUTE_REGEX = /^\/(courses|groups|accounts|grades|calendar|conversations|profile)/;
   var ACTIVE_CLASS = 'ic-app-header__menu-list-item--active';
 
+  var UNREAD_COUNT_POLL_INTERVAL = 30000 // 30 seconds
+
+  var TYPE_URL_MAP = {
+    courses: '/api/v1/users/self/favorites/courses?include=term',
+    groups: '/api/v1/users/self/groups',
+    accounts: '/api/v1/accounts'
+  };
+
   var Navigation = React.createClass({
     displayName: 'Navigation',
 
@@ -29,8 +37,11 @@ define([
         unread_count: 0,
         isTrayOpen: false,
         type: null,
+        coursesLoading: false,
         coursesAreLoaded: false,
+        accountsLoading: false,
         accountsAreLoaded: false,
+        groupsLoading: false,
         groupsAreLoaded: false
       };
     },
@@ -47,17 +58,9 @@ define([
       /// Hover Events
       //////////////////////////////////
 
-      _.forEach({
-        courses: '/api/v1/users/self/favorites/courses',
-        groups: '/api/v1/users/self/groups',
-        accounts: '/api/v1/accounts'
-      }, (url, type) => {
+      _.forEach(TYPE_URL_MAP, (url, type) => {
         $(`#global_nav_${type}_link`).one('mouseover', () => {
-          $.get(url, (data) => {
-            var newState = {};
-            newState[type] = data;
-            this.setState(newState);
-          });
+          this.getResource(url, type);
         });
       });
 
@@ -73,27 +76,39 @@ define([
       /// Other Events
       //////////////////////////////////
       if (window.ENV.current_user_id) {
-        // Put this in a function so we can call it on an interval to do some
-        // polling.
-        var updateCount = () => {
-          $.ajax({
-            url: '/api/v1/conversations/unread_count',
-            type: 'GET',
-            success: (data) => {
-              var parsedInt = parseInt(data.unread_count, 10);
-              var $countContainer = $('#global_nav_conversations_link').find('.menu-item__badge');
-              $countContainer.text(parsedInt);
-              $countContainer.toggle(parsedInt > 0);
-            },
-            error: (data) => {
-              // Failure case, should never get here.
-              console.log(data);
-            }
-          });
-        };
-        setInterval(updateCount, 30000); // 30 seconds
-        updateCount();
+        this.pollUnreadCount();
       }
+    },
+
+    /**
+     * Given a URL and a type value, it gets the data and updates state.
+     */
+    getResource (url, type) {
+      var loadingState = {};
+      loadingState[`${type}Loading`] = true;
+      this.setState(loadingState);
+
+      $.getJSON(url, (data) => {
+        var newState = {};
+        newState[type] = data;
+        newState[`${type}Loading`] = false;
+        newState[`${type}AreLoaded`] = true;
+        this.setState(newState);
+      });
+    },
+
+    pollUnreadCount () {
+      $.ajax('/api/v1/conversations/unread_count')
+        .then((data) => this.updateUnreadCount(data.unread_count))
+        .then(null, console.log.bind(console, 'something went wrong updating unread count'))
+        .always(() => setTimeout(this.pollUnreadCount, UNREAD_COUNT_POLL_INTERVAL));
+    },
+
+    updateUnreadCount (count) {
+      count = parseInt(count, 10);
+      this.$unreadCount || (this.$unreadCount = $('#global_nav_conversations_link').find('.menu-item__badge'))
+      this.$unreadCount.text(count);
+      this.$unreadCount.toggle(count > 0);
     },
 
     componentWillUpdate (newProps, newState) {
@@ -107,10 +122,18 @@ define([
       var path = window.location.pathname;
       var matchData = path.match(EXTERNAL_TOOLS_REGEX) || path.match(ACTIVE_ROUTE_REGEX);
       var activeItem = matchData && matchData[1];
-      this.setState({activeItem});
+      if (!activeItem) {
+        this.setState({activeItem: 'dashboard'})
+      } else {
+        this.setState({activeItem});
+      }
     },
 
     handleMenuClick (type) {
+      // Make sure data is loaded up
+      if (!this.state[`${type}AreLoaded`] && !this.state[`${type}Loading`]) {
+        this.getResource(TYPE_URL_MAP[type], type);
+      }
       if (this.state.isTrayOpen && (this.state.activeItem === type)) {
         this.closeTray();
       } else if (this.state.isTrayOpen && (this.state.activeItem !== type)) {
@@ -144,11 +167,11 @@ define([
     renderTrayContent () {
       switch (this.state.type) {
         case 'courses':
-          return <CoursesTray courses={this.state.courses} closeTray={this.closeTray} />;
+          return <CoursesTray courses={this.state.courses} hasLoaded={this.state.coursesAreLoaded} closeTray={this.closeTray} />;
         case 'groups':
-          return <GroupsTray groups={this.state.groups} closeTray={this.closeTray} />;
+          return <GroupsTray groups={this.state.groups} hasLoaded={this.state.groupsAreLoaded} closeTray={this.closeTray} />;
         case 'accounts':
-          return <AccountsTray accounts={this.state.accounts} closeTray={this.closeTray} />;
+          return <AccountsTray accounts={this.state.accounts} hasLoaded={this.state.accountsAreLoaded} closeTray={this.closeTray} />;
         case 'profile':
           return <ProfileTray closeTray={this.closeTray} />;
         default:

@@ -36,12 +36,24 @@ module UserContent
       child.add_next_sibling(form)
     end
 
-    html.css('img.equation_image').each do |node|
-      mathml = Nokogiri::HTML::DocumentFragment.parse('<span class="hidden-readable">' + Ritex::Parser.new.parse(node.delete('alt').value) + '</span>') rescue next
-      node.add_next_sibling(mathml)
+    find_equation_images(html) do |node|
+      mathml = latex_to_mathml(node['alt'])
+      next if mathml.blank?
+
+      # replace alt attribute with mathml
+      node.delete('alt')
+      mathml_span = Nokogiri::HTML::DocumentFragment.parse("<span class=\"hidden-readable\">#{mathml}</span>")
+      node.add_next_sibling(mathml_span)
     end
 
     html.to_s.html_safe
+  end
+
+  def self.latex_to_mathml(latex)
+    Ritex::Parser.new.parse(latex)
+  rescue Racc::ParseError, Ritex::LexError, Ritex::Error
+    # invalid LaTeX; leave alt alone, skip mathml
+    return ""
   end
 
   class Node < Struct.new(:width, :height, :node_string, :node_hmac)
@@ -73,6 +85,12 @@ module UserContent
       uc = Node.new(width, height, snippet, hmac)
 
       yield obj, uc
+    end
+  end
+
+  def self.find_equation_images(html)
+    html.css('img.equation_image').each do |node|
+      yield node
     end
   end
 

@@ -165,11 +165,11 @@ class ContentMigrationsController < ApplicationController
       js_env :EXTERNAL_TOOLS => external_tools_json(external_tools, @context, @current_user, session)
       js_env :UPLOAD_LIMIT => @context.storage_quota
       js_env :SELECT_OPTIONS => options
-      js_env :QUESTION_BANKS => @context.assessment_question_banks.except(:includes).select([:title, :id]).active
+      js_env :QUESTION_BANKS => @context.assessment_question_banks.except(:preload).select([:title, :id]).active
       js_env :COURSE_ID => @context.id
       js_env :CONTENT_MIGRATIONS => content_migration_json_hash
-      js_env(:OLD_START_DATE => unlocalized_datetime_string(@context.start_at, :verbose))
-      js_env(:OLD_END_DATE => unlocalized_datetime_string(@context.conclude_at, :verbose))
+      js_env(:OLD_START_DATE => datetime_string(@context.start_at, :verbose))
+      js_env(:OLD_END_DATE => datetime_string(@context.conclude_at, :verbose))
       js_env(:SHOW_SELECT => @current_user.manageable_courses.count <= 100)
     end
   end

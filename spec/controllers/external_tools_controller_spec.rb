@@ -46,6 +46,61 @@ describe ExternalToolsController do
     student_in_course(:active_all => true)
   end
 
+  describe "GET 'jwt_token'" do
+
+    before :once do
+      require 'jwt'
+
+      @iat = Time.zone.now
+      Time.zone.stubs(:now).returns(@iat)
+      @tool = new_valid_tool(@course)
+      @tool.course_navigation = { message_type: 'ContentItemSelectionResponse' }
+      @tool.save!
+      @course.name = 'Course Name'
+      @course.save!
+    end
+
+    it "returns the correct JWT token when given using the tool_id param" do
+      user_session(@teacher)
+      response = get :jwt_token, {course_id: @course.id, tool_id: @tool.id}
+      decoded_token = JWT.decode(JSON.parse(response.body[9..-1])['jwt_token'], nil, false)[0]
+
+      expect(decoded_token['custom_canvas_user_id']).to eq @teacher.id.to_s
+      expect(decoded_token['custom_canvas_course_id']).to eq @course.id.to_s
+      expect(decoded_token['consumer_key']). to eq @tool.consumer_key
+      expect(decoded_token['iat']). to eq @iat.to_i
+    end
+
+    it "returns the correct JWT token when given using the tool_launch_url param" do
+      user_session(@teacher)
+      response = get :jwt_token, {course_id: @course.id, tool_launch_url: @tool.url}
+      decoded_token = JWT.decode(JSON.parse(response.body[9..-1])['jwt_token'], nil, false)[0]
+
+      expect(decoded_token['custom_canvas_user_id']).to eq @teacher.id.to_s
+      expect(decoded_token['custom_canvas_course_id']).to eq @course.id.to_s
+      expect(decoded_token['consumer_key']). to eq @tool.consumer_key
+      expect(decoded_token['iat']). to eq @iat.to_i
+    end
+
+    it "sets status code to 404 if the requested tool id does not exist" do
+      user_session(@teacher)
+      response = get :jwt_token, {course_id: @course.id, tool_id: 999999}
+      expect(response.status).to eq 404
+    end
+
+    it "sets status code to 404 if no query params are provided" do
+      user_session(@teacher)
+      response = get :jwt_token, {course_id: @course.id}
+      expect(response.status).to eq 404
+    end
+
+    it "sets status code to 404 if the requested tool_launch_url does not exist" do
+      user_session(@teacher)
+      response = get :jwt_token, {course_id: @course.id, tool_launch_url:'http://www.nothere.com/doesnt_exist'}
+      expect(response.status).to eq 404
+    end
+  end
+
   describe "GET 'show'" do
     context 'ContentItemSelectionResponse' do
       before :once do
@@ -275,7 +330,7 @@ describe ExternalToolsController do
 
         lti_launch = assigns[:lti_launch]
         expect(lti_launch.params['lti_message_type']).to eq 'ContentItemSelectionRequest'
-        expect(lti_launch.params['content_item_return_url']).to eq "http://test.host/courses/#{@course.id}/content_migrations"
+        expect(lti_launch.params['content_item_return_url']).to eq "http://test.host/courses/#{@course.id}/external_content/success/external_tool_dialog"
         expect(lti_launch.params['accept_multiple']).to eq 'false'
       end
 
@@ -298,7 +353,7 @@ describe ExternalToolsController do
         lti_launch = assigns[:lti_launch]
         expect(lti_launch.params['accept_copy_advice']).to eq nil
         expect(lti_launch.params['accept_presentation_document_targets']).to eq 'frame,window'
-        expect(lti_launch.params['accept_media_types']).to eq 'application/vnd.ims.lti.v1.launch+json'
+        expect(lti_launch.params['accept_media_types']).to eq 'application/vnd.ims.lti.v1.ltilink'
       end
 
       it "sets proper return data for homework_submission" do
@@ -334,7 +389,7 @@ describe ExternalToolsController do
         lti_launch = assigns[:lti_launch]
         expect(lti_launch.params['accept_copy_advice']).to eq nil
         expect(lti_launch.params['accept_presentation_document_targets']).to eq 'embed,frame,iframe,window'
-        expect(lti_launch.params['accept_media_types']).to eq 'image/*,text/html,application/vnd.ims.lti.v1.launch+json,*/*'
+        expect(lti_launch.params['accept_media_types']).to eq 'image/*,text/html,application/vnd.ims.lti.v1.ltilink,*/*'
       end
 
       it "does not copy query params to POST if disable_lti_post_only feature flag is set" do

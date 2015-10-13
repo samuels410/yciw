@@ -1,34 +1,35 @@
-<% 
+<%
+  recent_feedback ||= nil
   show_context ||= false
   comment = nil
   grade = nil
   score = nil
 
-  cache(['recent_feedback_render', recent_feedback || 'blank_feedback', Time.zone.utc_offset].cache_key) do 
+  cache(['recent_feedback_render', recent_feedback || 'blank_feedback', Time.zone.utc_offset].cache_key) do
     context = recent_feedback.context
     assignment = recent_feedback.assignment
     url = context_url(context, :context_assignment_submission_url, :assignment_id => recent_feedback.assignment_id, :id=>@current_user.id)
     grade = readable_grade(recent_feedback)
     score = recent_feedback.score
     comment = recent_feedback.last_teacher_comment
-    comment_text = comment.comment if comment
-    icon_explanation, icon_class = icon_data(:context => context, 
-                                             :current_user => @current_user, 
-                                             :recent_event => assignment, 
-                                             :submission => recent_feedback, 
+    comment_text = HtmlTextHelper.strip_and_truncate(comment.comment, :max_length => 120) if comment
+    icon_explanation, icon_class = icon_data(:context => context,
+                                             :current_user => @current_user,
+                                             :recent_event => assignment,
+                                             :submission => recent_feedback,
                                              :student_only => true)
   %>
 <li style="<%= hidden if is_hidden %>" class="event">
   <a
     data-track-category="dashboard"
     data-track-label="recent feedback"
-    class="<%= icon_class %> tooltip" href="<%= url %>"
+    class="<%= icon_class %> recent_feedback_icon tooltip" href="<%= url %>"
   >
     <span class="tooltip_wrap">
       <span class='tooltip-carat'></span>
       <span class="tooltip_text">
         <% if recent_feedback.workflow_state != 'unsubmitted' %>
-          <span style="display: block;"><%= before_label(icon_explanation.try(:capitalize)) %> 
+          <span style="display: block;"><%= before_label(icon_explanation.try(:capitalize)) %>
             <% if recent_feedback.workflow_state == 'graded' %>
               <span style="font-size: 0.8em;"><%= datetime_string(recent_feedback.graded_at) %></span>
             <% else %>
@@ -63,9 +64,9 @@
         <% kaltura_thumbnail_url = CanvasKaltura::ClientV3.new.thumbnail_url(comment.media_comment_id, :width => 50, :height => 35, :bgcolor => "F3F4F5") %>
         <img src="<%= kaltura_thumbnail_url %>" style="float: right; padding-left: 3px;" alt=""/>
       <% end %>
-      <b class="ellipsis"><%= recent_feedback.assignment.title %></b>
+      <b class="recent_feedback_title"><%= recent_feedback.assignment.title %></b>
       <% if comment_text or grade %>
-        <em class="ellipsis" style="color: #808080; border: 0;">
+        <em class="recent_feedback_comment">
           <% if grade %>
             <strong><%= grade %></strong>
             <%= " - " if comment_text && (!comment || !comment.media_comment?) %>

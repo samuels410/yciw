@@ -75,6 +75,7 @@ describe EnrollmentsApiController, type: :request do
           'sis_course_id'                      => @course.sis_source_id,
           'course_integration_id'              => @course.integration_id,
           'sis_section_id'                     => @section.sis_source_id,
+          'sis_source_id'                      => new_enrollment.sis_source_id,
           'section_integration_id'             => @section.integration_id,
           'start_at'                           => nil,
           'end_at'                             => nil
@@ -515,6 +516,7 @@ describe EnrollmentsApiController, type: :request do
           'sis_course_id'                      => @course.sis_source_id,
           'course_integration_id'              => @course.integration_id,
           'sis_section_id'                     => @section.sis_source_id,
+          'sis_source_id'                      => new_enrollment.sis_source_id,
           'section_integration_id'             => @section.integration_id,
           'start_at'                           => nil,
           'end_at'                             => nil
@@ -644,6 +646,27 @@ describe EnrollmentsApiController, type: :request do
       @section = @course.course_sections.create!
     end
 
+    it "should deterministically order enrollments for pagination" do
+      enrollment_num = 10
+      enrollment_num.times do
+        u = user_with_pseudonym(name: "John Smith", sortable_name: "Smith, John")
+        @course.enroll_user(u, 'StudentEnrollment', :enrollment_state => 'active')
+      end
+
+      found_enrollment_ids = []
+      enrollment_num.times do |i|
+        page_num = i + 1
+        json = api_call(:get, "/api/v1/courses/#{@course.id}/enrollments?page=#{page_num}&per_page=1",
+          :controller=>"enrollments_api", :action=>"index", :format=>"json", :course_id=>"#{@course.id}",
+          :per_page => 1, :page => page_num)
+
+        id = json[0]["id"]
+        id_already_found = found_enrollment_ids.include?(id)
+        expect(id_already_found).to be_falsey
+        found_enrollment_ids << id
+      end
+    end
+
     context "grading periods" do
       let(:grading_period_group) { @course.grading_period_groups.create! }
       let(:now) { Time.zone.now }
@@ -727,6 +750,7 @@ describe EnrollmentsApiController, type: :request do
             'sis_import_id'                      => @enrollment.sis_batch_id,
             'sis_course_id'                      => nil,
             'sis_section_id'                     => nil,
+            'sis_source_id'                      => @enrollment.sis_source_id,
             'course_integration_id'              => nil,
             'section_integration_id'             => nil,
             'limit_privileges_to_course_section' => @enrollment.limit_privileges_to_course_section,
@@ -760,7 +784,7 @@ describe EnrollmentsApiController, type: :request do
         e.sis_batch_id = sis_batch.id
         e.save!
         json = api_call(:get, @user_path, @user_params)
-        enrollments = @student.enrollments.current.includes(:user).order("users.sortable_name ASC")
+        enrollments = @student.enrollments.current.eager_load(:user).order("users.sortable_name ASC")
         expect(json).to eq enrollments.map { |e|
           {
             'root_account_id' => e.root_account_id,
@@ -793,6 +817,7 @@ describe EnrollmentsApiController, type: :request do
               'final_grade' => nil,
               'current_grade' => nil,
             },
+            'sis_source_id' => e.sis_source_id,
             'associated_user_id' => nil,
             'updated_at' => e.updated_at.xmlschema,
             'created_at'  => e.created_at.xmlschema,
@@ -810,7 +835,7 @@ describe EnrollmentsApiController, type: :request do
         recent_activity.record!(Time.zone.now - 5.minutes)
         recent_activity.record!(Time.zone.now)
         json = api_call(:get, @user_path, @user_params)
-        enrollments = @student.enrollments.current.includes(:user).order("users.sortable_name ASC")
+        enrollments = @student.enrollments.current.eager_load(:user).order("users.sortable_name ASC")
         expect(json).to eq enrollments.map { |e|
           {
             'root_account_id' => e.root_account_id,
@@ -843,6 +868,7 @@ describe EnrollmentsApiController, type: :request do
               'final_grade' => nil,
               'current_grade' => nil,
             },
+            'sis_source_id' => e.sis_source_id,
             'associated_user_id' => nil,
             'updated_at'         => e.updated_at.xmlschema,
             'created_at'         => e.created_at.xmlschema,
@@ -992,7 +1018,7 @@ describe EnrollmentsApiController, type: :request do
         @user = current_user
         json = api_call(:get, @path, @params)
         enrollments = %w{observer student ta teacher}.inject([]) do |res, type|
-          res + @course.send("#{type}_enrollments").includes(:user).order(User.sortable_name_order_by_clause("users"))
+          res + @course.send("#{type}_enrollments").eager_load(:user).order(User.sortable_name_order_by_clause("users"))
         end
         expect(json).to eq enrollments.map { |e|
           h = {
@@ -1078,7 +1104,7 @@ describe EnrollmentsApiController, type: :request do
 
       it "should list its own enrollments" do
         json = api_call(:get, @user_path, @user_params)
-        enrollments = @user.enrollments.current.includes(:user).order("users.sortable_name ASC")
+        enrollments = @user.enrollments.current.eager_load(:user).order("users.sortable_name ASC")
         expect(json).to eq enrollments.map { |e|
           {
             'root_account_id' => e.root_account_id,
@@ -1178,7 +1204,7 @@ describe EnrollmentsApiController, type: :request do
       it "should include users' sis and login ids" do
         json = api_call(:get, @path, @params)
         enrollments = %w{observer student ta teacher}.inject([]) do |res, type|
-          res + @course.send("#{type}_enrollments").includes(:user)
+          res + @course.send("#{type}_enrollments").preload(:user)
         end
         expect(json).to eq(enrollments.map do |e|
           user_json = {
@@ -1291,7 +1317,7 @@ describe EnrollmentsApiController, type: :request do
       it "should properly paginate" do
         json = api_call(:get, "#{@path}?page=1&per_page=1", @params.merge(:page => 1.to_param, :per_page => 1.to_param))
         enrollments = %w{observer student ta teacher}.inject([]) { |res, type|
-          res = res + @course.send("#{type}_enrollments").includes(:user)
+          res = res + @course.send("#{type}_enrollments").preload(:user)
         }.map do |e|
           h = {
             'root_account_id' => e.root_account_id,

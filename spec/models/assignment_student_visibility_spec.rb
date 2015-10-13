@@ -54,6 +54,7 @@ describe "differentiated_assignments" do
     ao.workflow_state = "active"
     ao.set_type = "ADHOC"
     ao.save!
+    assignment.reload
     override_student = ao.assignment_override_students.build
     override_student.user = @user
     override_student.save!
@@ -84,6 +85,7 @@ describe "differentiated_assignments" do
     ao.workflow_state = "active"
     block.call(ao)
     ao.save!
+    assignment.reload
   end
 
   def give_section_due_date(assignment, section)
@@ -94,14 +96,14 @@ describe "differentiated_assignments" do
   end
 
   def ensure_user_does_not_see_assignment
-    visibile_assignment_ids = AssignmentStudentVisibility.where(user_id: @user.id, course_id: @course.id).pluck(:assignment_id)
-    expect(visibile_assignment_ids.map(&:to_i).include?(@assignment.id)).to be_falsey
+    visible_assignment_ids = AssignmentStudentVisibility.where(user_id: @user.id, course_id: @course.id).pluck(:assignment_id)
+    expect(visible_assignment_ids.map(&:to_i).include?(@assignment.id)).to be_falsey
     expect(AssignmentStudentVisibility.visible_assignment_ids_in_course_by_user(user_id: [@user.id], course_id: [@course.id])[@user.id]).not_to include(@assignment.id)
   end
 
   def ensure_user_sees_assignment
-    visibile_assignment_ids = AssignmentStudentVisibility.where(user_id: @user.id, course_id: @course.id).pluck(:assignment_id)
-    expect(visibile_assignment_ids.map(&:to_i).include?(@assignment.id)).to be_truthy
+    visible_assignment_ids = AssignmentStudentVisibility.where(user_id: @user.id, course_id: @course.id).pluck(:assignment_id)
+    expect(visible_assignment_ids.map(&:to_i).include?(@assignment.id)).to be_truthy
     expect(AssignmentStudentVisibility.visible_assignment_ids_in_course_by_user(user_id: [@user.id], course_id: [@course.id])[@user.id]).to include(@assignment.id)
   end
 
@@ -144,7 +146,7 @@ describe "differentiated_assignments" do
       course_with_differentiated_assignments_enabled
       add_multiple_sections
     end
-    context "assignment only visibile to overrides" do
+    context "assignment only visible to overrides" do
 
       context "ADHOC overrides" do
         before { assignment_with_true_only_visible_to_overrides }
@@ -169,7 +171,7 @@ describe "differentiated_assignments" do
 
         it "should not return a visibility if ADHOC override is deleted" do
           student_in_course_with_adhoc_override(@assignment)
-          @assignment.assignment_overrides.all.each(&:destroy)
+          @assignment.assignment_overrides.each(&:destroy)
           ensure_user_does_not_see_assignment
         end
       end
@@ -226,14 +228,14 @@ describe "differentiated_assignments" do
           end
           it "should update when the override is deleted" do
             ensure_user_sees_assignment
-            @assignment.assignment_overrides.all.each(&:destroy!)
+            @assignment.assignment_overrides.each(&:destroy!)
             ensure_user_does_not_see_assignment
           end
           it "should not return duplicate visibilities with multiple visible sections" do
             enroller_user_in_section(@section_bar, {user: @user})
             give_section_due_date(@assignment, @section_bar)
-            visibile_assignment_ids = AssignmentStudentVisibility.where(user_id: @user.id, course_id: @course.id)
-            expect(visibile_assignment_ids.count).to eq 1
+            visible_assignment_ids = AssignmentStudentVisibility.where(user_id: @user.id, course_id: @course.id)
+            expect(visible_assignment_ids.count).to eq 1
           end
         end
         context "user in section with no override" do

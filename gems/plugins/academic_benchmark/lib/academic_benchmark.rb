@@ -4,30 +4,31 @@ require 'cgi'
 require 'academic_benchmark/api'
 require 'academic_benchmark/engine'
 require 'academic_benchmark/standard'
+require 'academic_benchmark/cli_tools'
 
 module AcademicBenchmark
   def self.config
-    Canvas::Plugin.find('academic_benchmark_importer').settings || {}
+    empty_settings = {}.freeze
+    p = Canvas::Plugin.find('academic_benchmark_importer')
+    return empty_settings unless p
+    p.settings || empty_settings
   end
 
-  class APIError < StandardError;end
+  class APIError < StandardError; end
 
   def self.import(guid_or_guids)
-    if !AcademicBenchmark.config[:api_key]
-      puts "Not importing academic benchmark data because no API key is set"
-      return []
+    if !AcademicBenchmark.config[:api_key] || AcademicBenchmark.config[:api_key].empty?
+      raise Canvas::Migration::Error.new("Not importing academic benchmark data because no API key is set")
     end
 
     # need a user with global outcome management rights
     user_id = Setting.get("academic_benchmark_migration_user_id", nil)
-    if !user_id
-      puts "Not importing academic benchmark data because no user id set"
-      return []
+    if !user_id || user_id.empty?
+      raise Canvas::Migration::Error.new("Not importing academic benchmark data because no user id set")
     end
 
     unless (permissionful_user = User.where(id: user_id).first)
-      puts "Not importing academic benchmark data because no user found"
-      return []
+      raise Canvas::Migration::Error.new("Not importing academic benchmark data because no user found")
     end
 
     Array(guid_or_guids).map do |guid|
@@ -36,7 +37,7 @@ module AcademicBenchmark
   end
 
   def self.queue_migration_for_guid(guid, user)
-    if !Account.site_admin.grants_right?(user, :manage_global_outcomes)
+    unless Account.site_admin.grants_right?(user, :manage_global_outcomes)
       raise Canvas::Migration::Error.new(I18n.t('academic_benchmark.no_permissions', "User isn't allowed to edit global outcomes"))
     end
 
@@ -55,8 +56,8 @@ module AcademicBenchmark
   end
 
   def self.set_common_core_setting!
-    if guid = self.config[:common_core_guid]
-      if group = LearningOutcomeGroup.where(migration_id: guid).first
+    if (guid = self.config[:common_core_guid])
+      if (group = LearningOutcomeGroup.where(migration_id: guid).first)
         Setting.set(common_core_setting_key, group.id)
       end
     end

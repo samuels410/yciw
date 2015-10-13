@@ -27,7 +27,8 @@ $ dinghy up --memory=4096 --cpus=4 --provider=vmware_fusion --proxy
 Type `docker ps` in your terminal to make sure your Docker environment
 is happy.
 
-Dinghy currently requires OS X Yosemite.
+Dinghy currently requires OS X Yosemite. Make sure you're using the most recent
+Dinghy release, or else you'll probably have a bad time.
 
 #### Docker-Compose
 
@@ -92,21 +93,11 @@ $ docker-compose run --rm web bundle exec rspec spec
 
 ### Selenium
 
-When selenium tests run, you can open a vnc window to the container
-running firefox with:
+The container used to run the selenium browser is commented out of the
+docker-compose file by default. To run selenium, just uncomment those lines,
+rerun `docker-compose build`, and when you run your tests you can watch
+the browser:
 
 ```
 $ open vnc://secret:secret@selenium.docker/
 ```
-
-
-## Caveats
-
-Filesystem notification events don't get propagated to your docker
-images, so spring doesn't know to reload classes and guard doesn't work
-well. (It tries to poll, but there are so many files to poll for
-changes, it can take awhile). Until we can figure out how to remedy,
-you'll be stopping/starting for awhile to restart services.
-
-See https://github.com/codekitchen/dinghy/issues/9 to track progress on
-getting inotify events into the docker containers with Dinghy.

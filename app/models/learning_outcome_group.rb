@@ -90,14 +90,16 @@ class LearningOutcomeGroup < ActiveRecord::Base
 
     # update outcome groups
     unless outcome_group_ids.empty?
-      sql = "UPDATE learning_outcome_groups SET learning_outcome_group_id=#{self.id} WHERE id IN (#{outcome_group_ids.join(",")}) AND context_type='#{self.context_type}' AND context_id='#{self.context_id}'"
-      ContentTag.connection.execute(sql)
+      LearningOutcomeGroup.
+          where(id: outcome_group_ids, context_type: context_type, context_id: context_id).
+          update_all(learning_outcome_group_id: self)
     end
 
     # update outcome links
     unless outcome_link_ids.empty?
-      sql = "UPDATE content_tags SET associated_asset_id=#{self.id} WHERE id IN (#{outcome_link_ids.join(",")}) AND context_type='#{self.context_type}' AND context_id='#{self.context_id}'"
-      ContentTag.connection.execute(sql)
+      ContentTag.
+          where(id: outcome_link_ids, context_type: context_type, context_id: context_id).
+          update_all(associated_asset_id: self)
     end
 
     orders
@@ -214,7 +216,7 @@ class LearningOutcomeGroup < ActiveRecord::Base
     transaction do
       # delete the children of the group, both links and subgroups, then delete
       # the group itself
-      self.child_outcome_links.active.includes(:content).each do |outcome_link|
+      self.child_outcome_links.active.preload(:content).each do |outcome_link|
         outcome_link.skip_touch = true if @skip_tag_touch
         outcome_link.destroy
       end

@@ -312,6 +312,13 @@ define [
     equal @$field.data('time-minute'), '56'
     equal @$field.data('time-ampm'), 'pm'
 
+  test 'sets time-* to fudged, 24-hour values', ->
+    tz.changeLocale(portuguese, 'pt_PT')
+    @field.updateData()
+    equal @$field.data('time-hour'), '21'
+    equal @$field.data('time-minute'), '56'
+    equal @$field.data('time-ampm'), null
+
   test 'only sets time-* if for full datetime field', ->
     @$field.removeData('time-hour')
     @field.showDate = false
@@ -556,18 +563,27 @@ define [
     equal @$field.val(), ''
 
   test 'treats value as unfudged', ->
-    @field.setFormattedDatetime(moonwalk, 'MMM d, yyyy h:mmtt')
+    @field.setFormattedDatetime(moonwalk, 'date.formats.full')
     equal +@field.datetime, +moonwalk
     equal +@field.fudged, +$.fudgeDateForProfileTimezone(moonwalk)
     equal @field.blank, false
     equal @field.invalid, false
-    equal @$field.val(), 'Jul 20, 1969 9:56PM'
+    equal @$field.val(), 'Jul 20, 1969 9:56pm'
 
   test 'formats value into val() according to format parameter', ->
-    @field.setFormattedDatetime(moonwalk, 'MMM d, yyyy')
+    @field.setFormattedDatetime(moonwalk, 'date.formats.medium')
     equal @$field.val(), 'Jul 20, 1969'
-    @field.setFormattedDatetime(moonwalk, 'h:mmtt')
-    equal @$field.val(), '9:56PM'
+    @field.setFormattedDatetime(moonwalk, 'time.formats.tiny')
+    equal @$field.val(), '9:56pm'
+
+  test 'localizes value', ->
+    tz.changeLocale(portuguese, 'pt_PT')
+    I18nStubber.pushFrame()
+    I18nStubber.setLocale 'pt_PT'
+    I18nStubber.stub 'pt_PT', 'date.formats.full': "%-d %b %Y %-k:%M"
+    @field.setFormattedDatetime(moonwalk, 'date.formats.full')
+    equal @$field.val(), '20 Jul 1969 21:56'
+    I18nStubber.popFrame()
 
   module 'setDate/setTime/setDatetime',
     setup: ->
@@ -585,8 +601,8 @@ define [
 
   test 'setTime formats into val() with just time', ->
     @field.setTime(moonwalk)
-    equal @$field.val(), '9:56PM'
+    equal @$field.val(), '9:56pm'
 
   test 'setDatetime formats into val() with full date and time', ->
     @field.setDatetime(moonwalk)
-    equal @$field.val(), 'Jul 20, 1969 9:56PM'
+    equal @$field.val(), 'Jul 20, 1969 9:56pm'

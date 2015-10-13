@@ -2,13 +2,14 @@ FROM ruby:2.1
 
 ENV DEBIAN_FRONTEND noninteractive
 
-RUN curl -sL https://deb.nodesource.com/setup | bash -
+RUN curl -sL https://deb.nodesource.com/setup_0.12 | bash -
 RUN  apt-get update -qq \
   && apt-get install -qqy \
        locales \
        nodejs \
        postgresql-client \
        libxmlsec1-dev \
+  && npm install -g gulp \
   && rm -rf /var/lib/apt/lists/*
 
 # Ensure UTF-8 locale

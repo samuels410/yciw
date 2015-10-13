@@ -23,7 +23,7 @@ describe ApplicationController do
   before :each do
     controller.stubs(:request).returns(stub(:host_with_port => "www.example.com",
                                             :host => "www.example.com",
-                                            :headers => {}))
+                                            :headers => {}, :format => stub(:html? => true)))
   end
 
   describe "#twitter_connection" do
@@ -144,7 +144,7 @@ describe ApplicationController do
 
       Rails.cache.expects(:fetch).with(['google_drive_tokens', mock_real_current_user].cache_key).returns(["real_current_user_token", "real_current_user_secret"])
 
-      GoogleDocs::DriveConnection.expects(:new).with("real_current_user_token", "real_current_user_secret")
+      GoogleDocs::DriveConnection.expects(:new).with("real_current_user_token", "real_current_user_secret", 30)
 
       controller.send(:google_drive_connection)
     end
@@ -158,7 +158,7 @@ describe ApplicationController do
 
       Rails.cache.expects(:fetch).with(['google_drive_tokens', mock_current_user].cache_key).returns(["current_user_token", "current_user_secret"])
 
-      GoogleDocs::DriveConnection.expects(:new).with("current_user_token", "current_user_secret")
+      GoogleDocs::DriveConnection.expects(:new).with("current_user_token", "current_user_secret", 30)
       controller.send(:google_drive_connection)
     end
 
@@ -173,7 +173,7 @@ describe ApplicationController do
       mock_current_user.expects(:user_services).returns(mock_user_services)
       mock_user_services.expects(:where).with(service: "google_drive").returns(stub(first: mock(token: "user_service_token", secret: "user_service_secret")))
 
-      GoogleDocs::DriveConnection.expects(:new).with("user_service_token", "user_service_secret")
+      GoogleDocs::DriveConnection.expects(:new).with("user_service_token", "user_service_secret", 30)
       controller.send(:google_drive_connection)
     end
 
@@ -183,7 +183,7 @@ describe ApplicationController do
       session[:oauth_gdrive_refresh_token] = "session_token"
       session[:oauth_gdrive_access_token] = "sesion_secret"
 
-      GoogleDocs::DriveConnection.expects(:new).with("session_token", "sesion_secret")
+      GoogleDocs::DriveConnection.expects(:new).with("session_token", "sesion_secret", 30)
 
       controller.send(:google_drive_connection)
     end
@@ -273,7 +273,7 @@ describe ApplicationController do
 
     it "sets the contextual timezone from the context" do
       Time.zone = "Mountain Time (US & Canada)"
-      controller.instance_variable_set(:@context, stub(time_zone: Time.zone, asset_string: ""))
+      controller.instance_variable_set(:@context, stub(time_zone: Time.zone, asset_string: "", class_name: nil))
       controller.js_env({})
       expect(controller.js_env[:CONTEXT_TIMEZONE]).to eq 'America/Denver'
     end
@@ -451,6 +451,7 @@ describe ApplicationController do
 
       req.stubs(:host).returns('www.example.com')
       req.stubs(:headers).returns({})
+      req.stubs(:format).returns(stub(:html? => true))
       controller.stubs(:request).returns(req)
       controller.send(:assign_localizer)
       I18n.set_locale_with_localizer # this is what t() triggers
@@ -530,6 +531,40 @@ describe ApplicationController do
       controller.stubs(:redirect_to)
       controller.send(:content_tag_redirect, Account.default, tag, nil)
     end
+
+    context 'ContextExternalTool' do
+
+      let(:course){ course_model }
+
+      let(:tool) do
+        tool = course.context_external_tools.new(
+          name: "bob",
+          consumer_key: "bob",
+          shared_secret: "bob",
+          tool_id: 'some_tool',
+          privacy_level: 'public'
+        )
+        tool.url = "http://www.example.com/basic_lti"
+        tool.resource_selection = {
+          :url => "http://#{HostUrl.default_host}/selection_test",
+          :selection_width => 400,
+          :selection_height => 400}
+        tool.save!
+        tool
+      end
+
+      let(:content_tag) { ContentTag.create(content: tool, url: tool.url)}
+
+      it 'returns the full path for the redirect url' do
+        controller.expects(:named_context_url).with(course, :context_url, {:include_host => true})
+        controller.expects(:named_context_url).with(course, :context_external_content_success_url, 'external_tool_redirect', {:include_host => true}).returns('wrong_url')
+        controller.stubs(:render)
+        controller.stubs(js_env:[])
+        controller.instance_variable_set(:"@context", course)
+        controller.send(:content_tag_redirect, course, content_tag, nil)
+      end
+    end
+
   end
 
   describe 'external_tools_display_hashes' do
@@ -594,7 +629,7 @@ describe WikiPagesController do
       get 'index', :course_id => @course.id
 
       expect(controller.js_env).to include(:WIKI_RIGHTS)
-      expect(controller.js_env[:WIKI_RIGHTS]).to eq Hash[@course.wiki.check_policy(@teacher).map { |right| [right, true] }]
+      expect(controller.js_env[:WIKI_RIGHTS].symbolize_keys).to eq Hash[@course.wiki.check_policy(@teacher).map { |right| [right, true] }]
     end
   end
 end

@@ -10,6 +10,8 @@ define [
   GradingCellComponent = Ember.Component.extend
 
     value: null
+    excused: null
+    shouldSaveExcused: false
 
     isPoints: Ember.computed.equal('assignment.grading_type', 'points')
     isPercent: Ember.computed.equal('assignment.grading_type', 'percent')
@@ -31,10 +33,16 @@ define [
           label: I18n.t "grade_incomplete", "Incomplete"
           value: "incomplete"
         }
+        {
+          label: I18n.t "Excused"
+          value: 'EX'
+        }
     ]
 
     outOfText: (->
-      if @get('isGpaScale')
+      if @submission && @submission.excused
+        I18n.t "Excused"
+      else if @get('isGpaScale')
         ""
       else if @get('isLetterGrade') or @get('isPassFail')
         I18n.t "out_of_with_score", "(%{score} out of %{points})",
@@ -64,8 +72,31 @@ define [
       {type, data} = options
       $.ajaxJSON url, type, data
 
+    excusedToggled: (->
+      @updateSubmissionExcused() if @shouldSaveExcused
+    ).observes('excused')
+
+    updateSubmissionExcused: () ->
+      url   = @get('saveURL')
+      value = @$('#submission-excused')?[0].checked
+
+      save = @ajax url,
+        type: "PUT"
+        data: {'submission[excuse]': value}
+      save.then @boundUpdateSuccess, @onUpdateError
+
+    setExcusedWithoutTriggeringSave: (isExcused) ->
+      @shouldSaveExcused = false
+      @set 'excused', isExcused
+      @shouldSaveExcused = true
+
     submissionDidChange: (->
-      newVal = if @submission?.grade? then @submission.grade else '-'
+      newVal = if @submission?.excused
+                 'EX'
+               else
+                 @submission?.grade || '-'
+
+      @setExcusedWithoutTriggeringSave(@submission?.excused)
       @set 'value', newVal
     ).observes('submission').on('init')
 
@@ -75,24 +106,40 @@ define [
     onUpdateError: ->
       $.flashError(GRADEBOOK_TRANSLATIONS.submission_update_error)
 
-    focusOut: ->
-      return unless submission = @get('submission')
+    focusOut:(event) ->
+      isGradeInput = event.target.id == 'student_and_assignment_grade'
+      submission   = @get('submission')
+
+      return unless submission && isGradeInput
+
       url = @get('saveURL')
       value = @$('input, select').val()
-      if @get('isPassFail') and value == "-"
+      @setExcusedWithoutTriggeringSave(value?.toUpperCase() == 'EX')
+      if @get('isPassFail') and value == '-'
         value = ''
       return if value == submission.grade
+      data = if value?.toUpperCase() == 'EX'
+               { "submission[excuse]": true }
+             else
+               { "submission[posted_grade]": value }
       save = @ajax url,
         type: "PUT"
-        data: { "submission[posted_grade]": value }
+        data: data
       save.then @boundUpdateSuccess, @onUpdateError
 
     bindSave: (->
       @boundUpdateSuccess = _.bind(@onUpdateSuccess, this)
     ).on('init')
 
-    click: ->
-      @$('input, select').select()
+    click: (event) ->
+      target = event.target
+      hasCheckboxClass = target.classList[0] == 'checkbox'
+      isCheckBox = target.type == 'checkbox'
+
+      if hasCheckboxClass || isCheckBox
+        @$('#submission-excused').focus()
+      else
+        @$('input, select').select()
 
     focus: ->
       @$('input, select').select()

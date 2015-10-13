@@ -38,7 +38,16 @@ describe UsersController do
      tool.resource_selection = {
          :url => "http://#{HostUrl.default_host}/selection_test",
          :selection_width => 400,
-         :selection_height => 400}
+         :selection_height => 400
+     }
+     user_navigation = {
+         :text => 'example',
+         :labels => {
+             'en' => 'English Label',
+             'sp' => 'Spanish Label'
+         }
+     }
+     tool.settings[:user_navigation] = user_navigation
      tool.save!
      tool
    end
@@ -68,6 +77,15 @@ describe UsersController do
 
      get :external_tool, {id:tool.id, user_id:u.id}
      expect(assigns[:lti_launch].resource_url).to eq 'http://www.example.com/basic_lti?first=john&last=smith'
+   end
+
+   it "uses localized labels" do
+     u = user(:active_all => true)
+     account.account_users.create!(user: u)
+     user_session(@user)
+
+     get :external_tool, {id:tool.id, user_id:u.id}
+     expect(tool.label_for(:user_navigation, :en)).to eq 'English Label'
    end
  end
 
@@ -450,10 +468,37 @@ describe UsersController do
         expect(p.user.communication_channels.first).to be_unconfirmed
         expect(p.user.communication_channels.first.path).to eq 'jacob@instructure.com'
         expect(p.user.associated_accounts).to eq [Account.default]
+        expect(p.user.preferences[:accepted_terms]).to be_truthy
+      end
+
+      it "should mark user as having accepted the terms of use if specified" do
+        post 'create', :pseudonym => { :unique_id => 'jacob@instructure.com' }, :user => { :name => 'Jacob Fugal', :terms_of_use => '1' }
+        json = JSON.parse(response.body)
+        accepted_terms = json["user"]["user"]["preferences"]["accepted_terms"]
+        expect(response).to be_success
+        expect(accepted_terms).to be_present
+        expect(Time.parse(accepted_terms)).to be_within(1.minute).of(Time.now.utc)
+      end
+
+      it "should create a registered user if the skip_registration flag is passed in" do
+        post('create', {
+          :pseudonym => { :unique_id => 'jacob@instructure.com'},
+          :user => { :name => 'Jacob Fugal', :terms_of_use => '1', :skip_registration => '1' }
+        })
+        expect(response).to be_success
+
+        p = Pseudonym.where(unique_id: 'jacob@instructure.com').first
+        expect(p).to be_active
+        expect(p.user).to be_registered
+        expect(p.user.name).to eq 'Jacob Fugal'
+        expect(p.user.communication_channels.length).to eq 1
+        expect(p.user.communication_channels.first).to be_unconfirmed
+        expect(p.user.communication_channels.first.path).to eq 'jacob@instructure.com'
+        expect(p.user.associated_accounts).to eq [Account.default]
       end
 
       it "should complain about conflicting unique_ids" do
-        u = User.create! { |u| u.workflow_state = 'registered' }
+        u = User.create! { |user| user.workflow_state = 'registered' }
         p = u.pseudonyms.create!(:unique_id => 'jacob@instructure.com')
         post 'create', :pseudonym => { :unique_id => 'jacob@instructure.com' }, :user => { :name => 'Jacob Fugal', :terms_of_use => '1' }
         assert_status(400)
@@ -507,8 +552,17 @@ describe UsersController do
         expect(json["errors"]["user"]["terms_of_use"]).to be_present
       end
 
-      it "should not validate acceptance of the terms if not required" do
+      it "should not validate acceptance of the terms if not required by system" do
         Setting.set('terms_required', 'false')
+        post 'create', :pseudonym => { :unique_id => 'jacob@instructure.com' }, :user => { :name => 'Jacob Fugal' }
+        expect(response).to be_success
+      end
+
+      it "should not validate acceptance of the terms if not required by account" do
+        default_account = Account.default
+        default_account.settings[:account_terms_required] = false
+        default_account.save!
+
         post 'create', :pseudonym => { :unique_id => 'jacob@instructure.com' }, :user => { :name => 'Jacob Fugal' }
         expect(response).to be_success
       end
@@ -658,6 +712,16 @@ describe UsersController do
           expect(u.pseudonym).not_to be_password_auto_generated
         end
 
+        it "should not throw a 500 error without user params'" do
+          post 'create', :pseudonym => { :unique_id => 'jacob@instructure.com' }, account_id: account.id
+          expect(response).to be_success
+        end
+
+        it "should not throw a 500 error without pseudonym params'" do
+          post 'create', :user => { :name => 'Jacob Fugal' }, account_id: account.id
+          assert_status(400)
+          expect(response).not_to be_success
+        end
       end
 
       it "should not allow an admin to set the sis id when creating a user if they don't have privileges to manage sis" do
@@ -1117,7 +1181,7 @@ describe UsersController do
 
       get 'teacher_activity', user_id: @teacher.id, course_id: @course.id
 
-      expect(assigns[:courses][@course][0]['last_interaction']).not_to be_nil
+      expect(assigns[:courses][@course][0][:last_interaction]).not_to be_nil
     end
   end
 

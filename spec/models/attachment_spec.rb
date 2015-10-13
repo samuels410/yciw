@@ -69,12 +69,42 @@ describe Attachment do
     Crocodoc::API.any_instance.stubs(:upload).returns 'uuid' => '1234567890'
   end
 
+  def configure_canvadocs(opts = {})
+    ps = PluginSetting.where(name: "canvadocs").first_or_create
+    ps.update_attribute :settings, {
+      "api_key" => "blahblahblahblahblah",
+      "base_url" => "http://example.com",
+      "annotations_supported" => true
+    }.merge(opts)
+  end
+
   context "crocodoc" do
+    include HmacHelper
+    let_once(:user) { user_model }
+    let_once(:course) { course_model }
+    let_once(:student) do
+      course.enroll_student(user_model).accept
+      @user
+    end
     before { configure_crocodoc }
 
     it "crocodocable?" do
       crocodocable_attachment_model
       expect(@attachment).to be_crocodocable
+    end
+
+    it "should include a whitelist of crocodoc_ids in the url blob" do
+      crocodocable_attachment_model
+      crocodoc_ids = [user.crocodoc_id!, student.crocodoc_id!]
+      @attachment.submit_to_crocodoc
+
+      url = Rack::Utils.parse_nested_query(@attachment.crocodoc_url(user, crocodoc_ids).sub(/^.*\?{1}/, ""))
+      blob = extract_blob(url["hmac"], url["blob"],
+                          "user_id" => user.id,
+                          "type" => "crocodoc")
+
+      expect(blob["crocodoc_ids"]).to be_present
+      expect(blob["crocodoc_ids"]).to eq(crocodoc_ids & blob["crocodoc_ids"])
     end
 
     it "should submit to crocodoc" do
@@ -127,9 +157,7 @@ describe Attachment do
 
   context "canvadocs" do
     before :once do
-      PluginSetting.create! :name => 'canvadocs',
-        :settings => {"api_key" => "blahblahblahblahblah",
-                      "base_url" => "http://example.com"}
+      configure_canvadocs
     end
 
     before :each do
@@ -162,8 +190,16 @@ describe Attachment do
         }
       end
 
-      it "prefers crocodoc when annotation is requested" do
+      it "sends annotatable documents to canvadocs if supported" do
         configure_crocodoc
+        a = crocodocable_attachment_model
+        a.submit_to_canvadocs 1, wants_annotation: true
+        expect(a.canvadoc).not_to be_nil
+      end
+
+      it "prefers crocodoc when annotation is requested and canvadocs can't annotate" do
+        configure_crocodoc
+        configure_canvadocs "annotations_supported" => false
         Setting.set('canvadoc_mime_types',
                     (Canvadoc.mime_types << "application/blah").to_json)
 
@@ -589,31 +625,47 @@ describe Attachment do
       a = attachment
       expect(a.grants_right?(nil, :read)).to eql(false)
       expect(a.grants_right?(nil, :download)).to eql(false)
-      expect(a.grants_right?(nil, {'file_access_user_id' => student.id, 'file_access_expiration' => 1.hour.from_now.to_i}, :read)).to eql(true)
-      expect(a.grants_right?(nil, {'file_access_user_id' => student.id, 'file_access_expiration' => 1.hour.from_now.to_i}, :download)).to eql(true)
+      mock_session = {
+        'file_access_user_id' => student.id,
+        'file_access_expiration' => 1.hour.from_now.to_i,
+        'permissions_key' => SecureRandom.uuid
+      }.with_indifferent_access
+      expect(a.grants_right?(nil, mock_session, :read)).to eql(true)
+      expect(a.grants_right?(nil, mock_session, :download)).to eql(true)
     end
 
     it "should correctly deny user access based on 'file_access_user_id'" do
       a = attachment_model(context: user)
       other_user = user_model
-      expect(a.grants_right?(nil, {'file_access_user_id' => other_user.id, 'file_access_expiration' => 1.hour.from_now.to_i}, :read)).to eql(false)
-      expect(a.grants_right?(nil, {'file_access_user_id' => other_user.id, 'file_access_expiration' => 1.hour.from_now.to_i}, :download)).to eql(false)
+      mock_session = {
+        'file_access_user_id' => other_user.id,
+        'file_access_expiration' => 1.hour.from_now.to_i,
+        'permissions_key' => SecureRandom.uuid
+      }.with_indifferent_access
+      expect(a.grants_right?(nil, mock_session, :read)).to eql(false)
+      expect(a.grants_right?(nil, mock_session, :download)).to eql(false)
     end
 
     it "should allow user access to anyone if the course is public to auth users (with 'file_access_user_id' and 'file_access_expiration' in the session)" do
-      a = attachment_model(context: course)
+      mock_session = {
+        'file_access_user_id' => user.id,
+        'file_access_expiration' => 1.hour.from_now.to_i,
+        'permissions_key' => SecureRandom.uuid
+      }.with_indifferent_access
 
-      expect(a.grants_right?(nil, {'file_access_user_id' => user.id, 'file_access_expiration' => 1.hour.from_now.to_i}, :read)).to eql(false)
-      expect(a.grants_right?(nil, {'file_access_user_id' => user.id, 'file_access_expiration' => 1.hour.from_now.to_i}, :download)).to eql(false)
+      a = attachment_model(context: course)
+      expect(a.grants_right?(nil, mock_session, :read)).to eql(false)
+      expect(a.grants_right?(nil, mock_session, :download)).to eql(false)
 
       course.is_public_to_auth_users = true
       course.save!
       a.reload
+      AdheresToPolicy::Cache.clear
 
       expect(a.grants_right?(nil, :read)).to eql(false)
       expect(a.grants_right?(nil, :download)).to eql(false)
-      expect(a.grants_right?(nil, {'file_access_user_id' => user.id, 'file_access_expiration' => 1.hour.from_now.to_i}, :read)).to eql(true)
-      expect(a.grants_right?(nil, {'file_access_user_id' => user.id, 'file_access_expiration' => 1.hour.from_now.to_i}, :download)).to eql(true)
+      expect(a.grants_right?(nil, mock_session, :read)).to eql(true)
+      expect(a.grants_right?(nil, mock_session, :download)).to eql(true)
     end
 
     it "should not allow user access based on incorrect 'file_access_user_id' in the session" do

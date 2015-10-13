@@ -18,6 +18,7 @@
 
 class OutcomesImportApiController < ApplicationController
   include Api::V1::Outcome
+  include Api::V1::ContentMigration
 
   before_filter :require_user, :can_manage_global_outcomes, :has_api_config
 
@@ -48,6 +49,20 @@ class OutcomesImportApiController < ApplicationController
     end
   end
 
+  def migration_status
+    return render json: { error: "must specify a migration id" } unless params[:migration_id]
+
+    begin
+      cm = ContentMigration.find(params[:migration_id])
+      cm_issues = cm.migration_issues
+      cmj = content_migration_json(cm, @current_user, session)
+      cmj[:migration_issues] = migration_issues_json(cm_issues, cm, @current_user, session)
+      render json: cmj
+    rescue ActiveRecord::RecordNotFound => e
+      render json: { error: "no content migration matching id #{params[:migration_id]}" }
+    end
+  end
+
   protected
 
   def can_manage_global_outcomes
@@ -59,10 +74,10 @@ class OutcomesImportApiController < ApplicationController
     if !AcademicBenchmark.config
       render json: { error: "#{err} (needs api_key and api_url)" }
       return false
-    elsif !AcademicBenchmark.config["api_key"]
+    elsif !AcademicBenchmark.config["api_key"] || AcademicBenchmark.config["api_key"].empty?
       render json: { error: "#{err} (needs api_key)" }
       return false
-    elsif !AcademicBenchmark.config["api_url"]
+    elsif !AcademicBenchmark.config["api_url"] || AcademicBenchmark.config["api_url"].empty?
       render json: { error: "#{err} (needs api_url)" }
       return false
     end

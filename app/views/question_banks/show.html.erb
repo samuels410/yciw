@@ -1,6 +1,6 @@
 <%
   js_bundle :quizzes_bundle, :question_bank
-  jammit_css :quizzes, :learning_outcomes, :tinymce
+  css_bundle :quizzes, :learning_outcomes, :tinymce
   content_for :page_title, @bank.title
 %>
 <% content_for :right_side do %>
@@ -41,7 +41,7 @@
 <% end %>
 
 <div class="quiz-header">
-  <%= form_for @bank, :url => context_url(@context, :context_question_bank_url), :html => {:id => "edit_bank_form", :method => :put} do |f| %>
+  <%= form_for @bank, :url => context_url(@context, :context_question_bank_url, @bank), :html => {:id => "edit_bank_form", :method => :put} do |f| %>
     <div class="displaying">
       <h1><%= @bank.title %></h1>
     </div>

@@ -43,6 +43,7 @@ class Pseudonym < ActiveRecord::Base
   validates_length_of :unique_id, :maximum => MAX_UNIQUE_ID_LENGTH
   validates_length_of :sis_user_id, :maximum => maximum_string_length, :allow_blank => true
   validates_presence_of :account_id
+  validate :must_be_root_account
   # allows us to validate the user and pseudonym together, before saving either
   validates_each :user_id do |record, attr, value|
     record.errors.add(attr, "blank?") unless value || record.user
@@ -94,11 +95,13 @@ class Pseudonym < ActiveRecord::Base
 
     p.dispatch :pseudonym_registration
     p.to { self.communication_channel || self.user.communication_channel }
-    p.whenever { |record|
-      @send_registration_notification
-    }
+    p.whenever { @send_registration_notification }
+
+    p.dispatch :pseudonym_registration_done
+    p.to { self.communication_channel || self.user.communication_channel }
+    p.whenever { @send_registration_done_notification }
   end
-  
+
   def update_account_associations_if_account_changed
     return unless self.user && !User.skip_updating_account_associations?
     if self.id_was.nil?
@@ -113,12 +116,24 @@ class Pseudonym < ActiveRecord::Base
     account.root_account_id || account.id
   end
 
+  def must_be_root_account
+    if account_id_changed?
+      self.errors.add(:account_id, "must belong to a root_account") unless self.account_id == self.root_account_id
+    end
+  end
+
   def send_registration_notification!
     @send_registration_notification = true
     self.save!
     @send_registration_notification = false
   end
-  
+
+  def send_registration_done_notification!
+    @send_registration_done_notification = true
+    self.save!
+    @send_registration_done_notification = false
+  end
+
   def send_confirmation!
     @send_confirmation = true
     self.save!
@@ -415,7 +430,7 @@ class Pseudonym < ActiveRecord::Base
   end
 
   def ldap_bind_result(password_plaintext)
-    self.account.account_authorization_configs.where(auth_type: 'ldap').each do |config|
+    account.authentication_providers.active.where(auth_type: 'ldap').each do |config|
       res = config.ldap_bind_result(self.unique_id, password_plaintext)
       return res if res
     end
@@ -474,7 +489,7 @@ class Pseudonym < ActiveRecord::Base
       active.
         by_unique_id(credentials[:unique_id]).
         where(:account_id => account_ids).
-        includes(:user).
+        preload(:user).
         select { |p|
           valid = p.valid_arbitrary_credentials?(credentials[:password])
           too_many_attempts = true if p.audit_login(remote_ip, valid) == :too_many_attempts

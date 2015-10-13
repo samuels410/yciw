@@ -40,7 +40,9 @@ describe "Groups API", type: :request do
       'role' => group.group_category.role,
       'group_category_id' => group.group_category_id,
       'storage_quota_mb' => group.storage_quota_mb,
-      'leader' => group.leader
+      'leader' => group.leader,
+      'has_submission' => group.submission?,
+      'concluded' => group.context.concluded?
     }
     if opts[:include_users]
       json['users'] = users_json(group.users, opts)
@@ -204,6 +206,15 @@ describe "Groups API", type: :request do
     expect(json).to eq group_json(@community)
   end
 
+  it "should allow a member to retrieve a favorite group" do
+    @user = @member
+    json = api_call(:get, "#{@community_path}.json?include[]=favorites",
+                    @category_path_options.merge(:group_id => @community.to_param, :action => "show",
+                                                 :include => [ "favorites" ]))
+    expect(json.key?("is_favorite")).to be_truthy
+  end
+
+
   it "should include the group category" do
     @user = @member
     json = api_call(:get, "#{@community_path}.json?include[]=group_category", @category_path_options.merge(:group_id => @community.to_param, :action => "show", :include => [ "group_category" ]))
@@ -256,7 +267,7 @@ describe "Groups API", type: :request do
   end
 
   it "should allow a teacher to create a group in a course" do
-    course_with_teacher
+    course_with_teacher(active_enrollment: true)
     @user = @teacher
     project_groups = @course.group_categories.build
     project_groups.name = "Course Project Groups"
@@ -673,7 +684,7 @@ describe "Groups API", type: :request do
       expect {
         @json = api_call(:post, "#{@community_path}/invite", @category_path_options.merge(:group_id => @community.to_param, :action => "invite"), invitees)
       }.to change(User, :count).by(2)
-      @memberships = @community.reload.group_memberships.where(:workflow_state => "invited").order(:id).all
+      @memberships = @community.reload.group_memberships.where(:workflow_state => "invited").order(:id).to_a
       expect(@memberships.count).to eq 2
       expect(@json.sort_by{ |a| a['id'] }).to eq @memberships.map{ |gm| membership_json(gm) }
     end

@@ -167,7 +167,6 @@ define([
               },
               // Error callback
               function(resp, ec) {
-                var current_user_id = $("#identity .user_id").text() || "none";
                 quizSubmission.currentlyBackingUp = false;
 
                 // has the user logged out?
@@ -177,6 +176,7 @@ define([
                 }
                 else {
                   // Connectivity lost?
+                  var current_user_id = window.ENV.current_user_id || "none";
                   $.ajaxJSON(
                       location.protocol + '//' + location.host + "/simple_response.json?user_id=" + current_user_id + "&rnd=" + Math.round(Math.random() * 9999999),
                       'GET', {},
@@ -225,7 +225,7 @@ define([
           }
         }
 
-        if(quizSubmission.isTimeUp(currentTimeLeft)) {
+        if(quizSubmission.isTimeUp(currentTimeLeft) && !ENV.IS_PREVIEW) {
           quizSubmission.showTimeUpDialog(now);
         } else if(currentTimeToDueDate != null && currentTimeLeft > currentTimeToDueDate) {
           quizSubmission.showDueDateWarnings(currentTimeToDueDate);
@@ -756,10 +756,10 @@ define([
         $timer.text($timeRunningTimeRemaining.text());
       }
     });
-    if(location.href.indexOf("preview=1") == -1){
+    if(ENV.QUIZ_SUBMISSION_EVENTS_URL) {
       QuizLogAuditing.start();
+      QuizLogAuditingEventDumper(false);
     }
-    QuizLogAuditingEventDumper(false);
   });
 
   $('.essay_question .answers').before((new KeyboardShortcuts()).render().el);

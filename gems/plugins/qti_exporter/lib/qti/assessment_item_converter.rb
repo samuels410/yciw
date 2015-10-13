@@ -39,7 +39,6 @@ class AssessmentItemConverter
     @question = {:answers=>[],
                  :correct_comments=>"",
                  :incorrect_comments=>"",
-                 :points_possible=>AssessmentItemConverter::DEFAULT_POINTS_POSSIBLE,
                  :question_text=>""}
   end
 
@@ -90,6 +89,7 @@ class AssessmentItemConverter
       unless ['fill_in_multiple_blanks_question', 'canvas_matching', 'matching_question',
               'multiple_dropdowns_question', 'respondus_matching'].include?(type)
         selectors << 'itemBody > choiceInteraction > prompt'
+        selectors << 'itemBody > extendedTextInteraction > prompt'
       end
 
       text_nodes = @doc.css(selectors.join(','))
@@ -129,6 +129,7 @@ class AssessmentItemConverter
       @log.error "#{e}: #{e.backtrace}"
     end
 
+    @question[:points_possible] ||= AssessmentItemConverter::DEFAULT_POINTS_POSSIBLE
     @question
   end
 
@@ -237,9 +238,9 @@ class AssessmentItemConverter
 
     text = clear_html(node.text.gsub(/\s+/, " ")).strip
     html_node = node.at_css('div.html') || (node.name.downcase == 'div' && node['class'] =~ /\bhtml\b/) || @flavor == Qti::Flavors::ANGEL
-    is_html = false
+    is_html = (html_node && @flavor == Qti::Flavors::CANVAS) ? true : false
     # heuristic for detecting html: the sanitized html node is more than just a container for a single text node
-    sanitized = sanitize_html!(html_node ? Nokogiri::HTML::DocumentFragment.parse(node.text) : node, true) { |s| is_html = !(s.children.size == 1 && s.children.first.is_a?(Nokogiri::XML::Text)) }
+    sanitized = sanitize_html!(html_node ? Nokogiri::HTML::DocumentFragment.parse(node.text) : node, true) { |s| is_html ||= !(s.children.size == 1 && s.children.first.is_a?(Nokogiri::XML::Text)) }
     if is_html && sanitized.present?
       html = sanitized
     end

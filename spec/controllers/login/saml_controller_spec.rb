@@ -43,7 +43,8 @@ describe Login::SamlController do
            name_id: unique_id,
            name_qualifier: nil,
            session_index: nil,
-           process: nil
+           process: nil,
+           issuer: "saml_entity"
           )
     )
 
@@ -65,6 +66,33 @@ describe Login::SamlController do
     expect(Pseudonym.find(session['pseudonym_credentials_id'])).to eq user2.pseudonyms.first
   end
 
+  it "does not enforce a valid entity id" do
+    unique_id = 'foo@example.com'
+
+    account1 = account_with_saml
+    user1 = user_with_pseudonym({:active_all => true, :username => unique_id})
+    @pseudonym.account = account1
+    @pseudonym.save!
+
+    Onelogin::Saml::Response.stubs(:new).returns(
+        stub('response',
+             is_valid?: true,
+             success_status?: true,
+             name_id: unique_id,
+             name_qualifier: nil,
+             session_index: nil,
+             process: nil,
+             issuer: "such a lie"
+        )
+    )
+
+    controller.request.env['canvas.domain_root_account'] = account1
+    post :create, :SAMLResponse => "foo"
+    expect(response).to redirect_to(dashboard_url(:login_success => 1))
+    expect(session[:saml_unique_id]).to eq unique_id
+    expect(Pseudonym.find(session['pseudonym_credentials_id'])).to eq user1.pseudonyms.first
+  end
+
   it "should redirect when a user is authenticated but is not found in canvas" do
     unique_id = 'foo@example.com'
 
@@ -77,7 +105,8 @@ describe Login::SamlController do
            name_id: unique_id,
            name_qualifier: nil,
            session_index: nil,
-           process: nil
+           process: nil,
+           issuer: "saml_entity"
           )
     )
 
@@ -114,9 +143,9 @@ describe Login::SamlController do
       @account = Account.create!
       @unique_id = 'foo@example.com'
       @user1 = user_with_pseudonym(:active_all => true, :username => @unique_id, :account => @account)
-      @account.account_authorization_configs.create!(:auth_type => 'saml', :identifier_format => 'uid')
+      @account.authentication_providers.create!(:auth_type => 'saml', :identifier_format => 'uid')
 
-      @aac2 = @account.account_authorization_configs.build(auth_type: 'saml')
+      @aac2 = @account.authentication_providers.build(auth_type: 'saml')
       @aac2.idp_entity_id = "https://example.com/idp1"
       @aac2.log_out_url = "https://example.com/idp1/slo"
       @aac2.save!
@@ -128,7 +157,7 @@ describe Login::SamlController do
           :name_id => @unique_id,
           :name_qualifier => nil,
           :session_index => nil,
-          :process => nil
+          :process => nil,
       }
     end
 
@@ -156,7 +185,7 @@ describe Login::SamlController do
       @account = account_with_saml(:saml_log_in_url => "https://example.com/idp1/sli")
       @unique_id = 'foo@example.com'
       @user1 = user_with_pseudonym(:active_all => true, :username => @unique_id, :account => @account)
-      @aac1 = @account.account_authorization_configs.first
+      @aac1 = @account.authentication_providers.first
       @aac1.idp_entity_id = "https://example.com/idp1"
       @aac1.log_out_url = "https://example.com/idp1/slo"
       @aac1.save!
@@ -310,7 +339,7 @@ describe Login::SamlController do
       @pseudonym.account = @account
       @pseudonym.save!
 
-      @aac = @account.account_authorization_configs.first
+      @aac = @account.authentication_providers.first
     end
 
     it "should use the eduPersonPrincipalName attribute with the domain stripped" do
@@ -325,6 +354,7 @@ describe Login::SamlController do
              name_qualifier: nil,
              session_index: nil,
              process: nil,
+             issuer: "saml_entity",
              saml_attributes: {
                  'eduPersonPrincipalName' => "#{@unique_id}@example.edu"
              }
@@ -348,7 +378,8 @@ describe Login::SamlController do
              name_id: @unique_id,
              name_qualifier: nil,
              session_index: nil,
-             process: nil
+             process: nil,
+             issuer: "saml_entity"
             )
       )
 
@@ -363,7 +394,7 @@ describe Login::SamlController do
     unique_id = 'foo'
 
     account = account_with_saml
-    @aac = @account.account_authorization_configs.first
+    @aac = @account.authentication_providers.first
     @aac.login_attribute = 'eduPersonPrincipalName_stripped'
     @aac.save
 
@@ -379,6 +410,7 @@ describe Login::SamlController do
            name_qualifier: nil,
            session_index: nil,
            process: nil,
+           issuer: "saml_entity",
            saml_attributes: {
              'eduPersonPrincipalName' => "#{unique_id}@example.edu"
            }
@@ -406,7 +438,8 @@ describe Login::SamlController do
            name_id: unique_id,
            name_qualifier: nil,
            session_index: nil,
-           process: nil
+           process: nil,
+           issuer: "saml_entity"
           )
     )
 
@@ -421,7 +454,8 @@ describe Login::SamlController do
 
     account_with_saml
 
-    @aac = @account.account_authorization_configs.first
+    @aac = @account.authentication_providers.first
+    @aac.idp_entity_id = 'http://phpsite/simplesaml/saml2/idp/metadata.php'
     @aac.login_attribute = 'eduPersonPrincipalName'
     @aac.certificate_fingerprint = 'AF:E7:1C:28:EF:74:0B:C8:74:25:BE:13:A2:26:3D:37:97:1D:A1:F9'
     @aac.save

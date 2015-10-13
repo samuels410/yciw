@@ -35,6 +35,7 @@ class Oauth2ProviderController < ApplicationController
 
     return render(:status => 400, :json => { :message => "invalid client_id" }) unless provider.has_valid_key?
     return render(:status => 400, :json => { :message => "invalid redirect_uri" }) unless provider.has_valid_redirect?
+    return render(:status => 401, :json => { :message => "client not authorized for this account" }) unless provider.key.authorized_for_account?(@domain_root_account)
     session[:oauth2] = provider.session_hash
     session[:oauth2][:state] = params[:state] if params.key?(:state)
 
@@ -46,11 +47,16 @@ class Oauth2ProviderController < ApplicationController
   end
 
   def confirm
-    @provider = Canvas::Oauth::Provider.new(session[:oauth2][:client_id], session[:oauth2][:redirect_uri], session[:oauth2][:scopes], session[:oauth2][:purpose])
+    if session[:oauth2]
+      @provider = Canvas::Oauth::Provider.new(session[:oauth2][:client_id], session[:oauth2][:redirect_uri], session[:oauth2][:scopes], session[:oauth2][:purpose])
 
-    if mobile_device?
-      js_env :GOOGLE_ANALYTICS_KEY => Setting.get('google_analytics_key', nil)
-      render :layout => 'mobile_auth', :action => 'confirm_mobile'
+      if mobile_device?
+        js_env :GOOGLE_ANALYTICS_KEY => Setting.get('google_analytics_key', nil)
+        render :layout => 'mobile_auth', :action => 'confirm_mobile'
+      end
+    else
+      flash[:error] = t("Must submit new OAuth2 request")
+      redirect_to login_url
     end
   end
 

@@ -275,12 +275,32 @@ describe CommunicationChannel do
       expect(cc1.has_merge_candidates?).to be_truthy
     end
 
+    it "does not return users for push channels" do
+      user2 = User.create!
+      cc2 = user2.communication_channels.create!(:path => 'push', :path_type => CommunicationChannel::TYPE_PUSH)
+      cc2.confirm!
+      Account.default.pseudonyms.create!(:user => user2, :unique_id => 'user2')
+      user3 = User.create!
+      cc3 = user3.communication_channels.create!(:path => 'push', :path_type => CommunicationChannel::TYPE_PUSH)
+      cc3.confirm!
+      Account.default.pseudonyms.create!(:user => user3, :unique_id => 'user3')
+
+      expect(cc1.has_merge_candidates?).to be_falsey
+    end
+
     describe ".bounce_for_path" do
       it "flags paths with too many bounces" do
         @cc1 = communication_channel_model(path: 'not_as_bouncy@example.edu')
         @cc2 = communication_channel_model(path: 'bouncy@example.edu')
 
-        %w{bouncy@example.edu Bouncy@example.edu bOuNcY@Example.edu bouncy@example.edu not_as_bouncy@example.edu bouncy@example.edu}.each{|path| CommunicationChannel.bounce_for_path(path)}
+        %w{bouncy@example.edu Bouncy@example.edu bOuNcY@Example.edu bouncy@example.edu not_as_bouncy@example.edu bouncy@example.edu}.each do |path|
+          CommunicationChannel.bounce_for_path(
+            path: path,
+            timestamp: nil,
+            details: nil,
+            suppression_bounce: false
+          )
+        end
 
         @cc1.reload
         expect(@cc1.bounce_count).to eq 1
@@ -289,6 +309,71 @@ describe CommunicationChannel do
         @cc2.reload
         expect(@cc2.bounce_count).to eq 5
         expect(@cc2.bouncing?).to be_truthy
+      end
+
+      it "stores the date of the last hard bounce" do
+        cc = communication_channel_model(
+          path: 'foo@bar.edu',
+          last_bounce_at: '2015-01-01T01:01:01.000Z',
+          last_suppression_bounce_at: '2015-03-03T03:03:03.000Z'
+        )
+        CommunicationChannel.bounce_for_path(
+          path: 'foo@bar.edu',
+          timestamp: '2015-02-02T02:02:02.000Z',
+          details: nil,
+          suppression_bounce: false
+        )
+
+        cc.reload
+        expect(cc.last_bounce_at).to eq('2015-02-02T02:02:02.000Z')
+        expect(cc.last_suppression_bounce_at).to eq('2015-03-03T03:03:03.000Z')
+      end
+
+      it "stores the date of the last suppression bounce" do
+        cc = communication_channel_model(
+          path: 'foo@bar.edu',
+          last_bounce_at: '2015-01-01T01:01:01.000Z',
+          last_suppression_bounce_at: '2015-03-03T03:03:03.000Z'
+        )
+        CommunicationChannel.bounce_for_path(
+          path: 'foo@bar.edu',
+          timestamp: '2015-02-02T02:02:02.000Z',
+          details: nil,
+          suppression_bounce: true
+        )
+
+        cc.reload
+        expect(cc.last_bounce_at).to eq('2015-01-01T01:01:01.000Z')
+        expect(cc.last_suppression_bounce_at).to eq('2015-02-02T02:02:02.000Z')
+      end
+
+      it "stores the details of the last hard bounce" do
+        cc = communication_channel_model(path: 'foo@bar.edu')
+        CommunicationChannel.bounce_for_path(
+          path: 'foo@bar.edu',
+          timestamp: nil,
+          details: {'some' => 'details', 'foo' => 'bar'},
+          suppression_bounce: false
+        )
+
+        cc.reload
+        expect(cc.last_bounce_details).to eq('some' => 'details', 'foo' => 'bar')
+      end
+
+      it "does not store the details of the last suppression bounce" do
+        cc = communication_channel_model(
+          path: 'foo@bar.edu',
+          last_bounce_details: {'existing' => 'details'}
+        )
+        CommunicationChannel.bounce_for_path(
+          path: 'foo@bar.edu',
+          timestamp: nil,
+          details: {'some' => 'details', 'foo' => 'bar'},
+          suppression_bounce: true
+        )
+
+        cc.reload
+        expect(cc.last_bounce_details).to eq('existing' => 'details')
       end
     end
 
@@ -341,7 +426,14 @@ describe CommunicationChannel do
             @cc3 = communication_channel_model(path: 'BOUNCY@example.edu')
           end
 
-          %w{bouncy@example.edu Bouncy@example.edu bOuNcY@Example.edu bouncy@example.edu not_as_bouncy@example.edu bouncy@example.edu}.each{|path| CommunicationChannel.bounce_for_path(path)}
+          %w{bouncy@example.edu Bouncy@example.edu bOuNcY@Example.edu bouncy@example.edu not_as_bouncy@example.edu bouncy@example.edu}.each do |path|
+            CommunicationChannel.bounce_for_path(
+              path: path,
+              timestamp: nil,
+              details: nil,
+              suppression_bounce: false
+            )
+          end
 
           @cc1.reload
           expect(@cc1.bounce_count).to eq 1

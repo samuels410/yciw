@@ -73,6 +73,7 @@ class Enrollment < ActiveRecord::Base
   after_save :update_linked_enrollments
   after_save :update_cached_due_dates
   after_save :touch_graders_if_needed
+  after_save :reset_notifications_cache
 
   attr_accessor :already_enrolled
   attr_accessible :user, :course, :workflow_state, :course_section, :limit_privileges_to_course_section, :already_enrolled, :start_at, :end_at
@@ -133,46 +134,22 @@ class Enrollment < ActiveRecord::Base
   def adjust_needs_grading_count(mode = :increment)
     amount = mode == :increment ? 1 : -1
 
-    other_enrollments_conditions = sanitize_sql([
-      "#{Enrollment.active_student_conditions} AND (user_id = :user_id AND course_id = :course_id AND id <> :id",
-      {user_id: user_id, course_id: course_id, id: id}
-    ])
-
-    if ['MySQL', 'Mysql2'].include?(connection.adapter_name)
-      # IN (...) subselects perform poorly in mysql, plus we want to avoid
-      #locking rows in other tables
-      unless Enrollment.where(other_enrollments_conditions).pluck(:id).first
-        connection.execute sanitize_sql([<<-SQL, {amount: amount, now: Time.now.utc, user_id: user_id, course_id: course_id}])
-          UPDATE assignments, submissions SET needs_grading_count = needs_grading_count + :amount, assignments.updated_at = :now
-          WHERE context_id = :course_id
-            AND context_type = 'Course'
-            AND assignments.id = submissions.assignment_id
-            AND submissions.user_id = :user_id
-            AND (#{Submission.needs_grading_conditions});
-         SQL
-      end
-    else
-      connection.execute sanitize_sql([<<-SQL, {amount: amount, now: Time.now.utc, user_id: user_id, course_id: course_id}])
-        UPDATE assignments SET needs_grading_count = needs_grading_count + :amount, updated_at = :now
-        WHERE context_id = :course_id
-        AND context_type = 'Course'
-        AND EXISTS (
-          SELECT 1
-          FROM submissions
-          WHERE user_id = :user_id
-          AND assignment_id = assignments.id
-          AND (#{Submission.needs_grading_conditions})
-          LIMIT 1
-        )
-        AND NOT EXISTS (SELECT 1 FROM enrollments WHERE #{other_enrollments_conditions}))
-      SQL
-    end
+    Assignment.
+      where(context_id: course_id, context_type: 'Course').
+      where("EXISTS (?) AND NOT EXISTS (?)",
+        Submission.where(user_id: user_id).
+          where("assignment_id=assignments.id").
+          where(Submission.needs_grading_conditions),
+        Enrollment.where(Enrollment.active_student_conditions).
+          where(user_id: user_id, course_id: course_id).
+          where("id<>?", self)).
+      update_all(["needs_grading_count=needs_grading_count+?, updated_at=?", amount, Time.now.utc])
   end
 
   after_create :update_needs_grading_count, if: :active_student?
   after_update :update_needs_grading_count, if: :active_student_changed?
   def update_needs_grading_count
-    connection.after_transaction_commit do
+    self.class.connection.after_transaction_commit do
       adjust_needs_grading_count(active_student? ? :increment : :decrement)
     end
   end
@@ -247,7 +224,7 @@ class Enrollment < ActiveRecord::Base
         where(:type => 'StudentEnrollment', :workflow_state => 'active', :courses => { :workflow_state => ['available', 'claimed'] }) }
 
   scope :all_student, -> {
-    includes(:course).
+    eager_load(:course).
         where("(enrollments.type = 'StudentEnrollment'
               AND enrollments.workflow_state IN ('invited', 'active', 'completed')
               AND courses.workflow_state IN ('available', 'completed')) OR
@@ -264,14 +241,17 @@ class Enrollment < ActiveRecord::Base
 
 
   def self.readable_types
-    {
-      'TeacherEnrollment' => t('#enrollment.roles.teacher', "Teacher"),
-      'TaEnrollment' => t('#enrollment.roles.ta', "TA"),
-      'DesignerEnrollment' => t('#enrollment.roles.designer', "Designer"),
-      'StudentEnrollment' => t('#enrollment.roles.student', "Student"),
-      'StudentViewEnrollment' => t('#enrollment.roles.student', "Student"),
-      'ObserverEnrollment' => t('#enrollment.roles.observer', "Observer")
-    }
+    # with enough use, even translations can add up
+    RequestCache.cache('enrollment_readable_types') do
+      {
+        'TeacherEnrollment' => t('#enrollment.roles.teacher', "Teacher"),
+        'TaEnrollment' => t('#enrollment.roles.ta', "TA"),
+        'DesignerEnrollment' => t('#enrollment.roles.designer', "Designer"),
+        'StudentEnrollment' => t('#enrollment.roles.student', "Student"),
+        'StudentViewEnrollment' => t('#enrollment.roles.student', "Student"),
+        'ObserverEnrollment' => t('#enrollment.roles.observer', "Observer")
+      }
+    end
   end
 
   def self.readable_type(type)
@@ -336,7 +316,7 @@ class Enrollment < ActiveRecord::Base
 
   def other_section_enrollment_count
     # The number of other active sessions that the user is enrolled in.
-    self.course.student_enrollments.active.for_user(self.user).where("id != ?", self.id).count 
+    self.course.student_enrollments.active.for_user(self.user).where("id != ?", self.id).count
   end
 
   def audit_groups_for_deleted_enrollments
@@ -351,15 +331,15 @@ class Enrollment < ActiveRecord::Base
     section = CourseSection.find(self.course_section_id_was)
 
     # ok, consider groups the user is in from the abandoned section's course
-    self.user.groups.includes(:group_category).where(
+    self.user.groups.preload(:group_category).where(
       :context_type => 'Course', :context_id => section.course_id).each do |group|
 
-      # check group deletion criteria if either enrollment is not a deletion 
+      # check group deletion criteria if either enrollment is not a deletion
       # or it may be a deletion/unenrollment from a section but not from the course as a whole (still enrolled in another section)
-      if self.workflow_state != 'deleted' || other_section_enrollment_count > 0    
+      if self.workflow_state != 'deleted' || other_section_enrollment_count > 0
         # don't bother unless the group's category has section restrictions
         next unless group.group_category && group.group_category.restricted_self_signup?
-        
+
         # skip if the user is the only user in the group. there's no one to have
         # a conflicting section.
         next if group.users.count == 1
@@ -383,7 +363,7 @@ class Enrollment < ActiveRecord::Base
   protected :audit_groups_for_deleted_enrollments
 
   def observers
-    student? ? user.observers : []
+    student? ? user.observers.active : []
   end
 
   def create_linked_enrollments
@@ -407,14 +387,16 @@ class Enrollment < ActiveRecord::Base
     return false unless observer.can_be_enrolled_in_course?(course)
     enrollment ||= observer.observer_enrollments.build
     enrollment.associated_user_id = user_id
-    enrollment.update_from(self)
+    enrollment.shard = shard if enrollment.new_record?
+    enrollment.update_from(self, !!@skip_broadcasts)
   end
 
   def linked_enrollment_for(observer)
     observer.observer_enrollments.where(
       :associated_user_id => user_id,
       :course_id => course_id,
-      :course_section_id => course_section_id_was || course_section_id).first
+      :course_section_id => course_section_id_was || course_section_id).
+        shard(Shard.shard_for(course_id)).first
   end
 
   def active_linked_enrollment_for(observer)
@@ -431,7 +413,7 @@ class Enrollment < ActiveRecord::Base
     end
   end
 
-  def update_from(other)
+  def update_from(other, skip_broadcasts=false)
     self.course_id = other.course_id
     self.workflow_state = other.workflow_state
     self.start_at = other.start_at
@@ -439,7 +421,11 @@ class Enrollment < ActiveRecord::Base
     self.course_section_id = other.course_section_id
     self.root_account_id = other.root_account_id
     self.user.touch if workflow_state_changed?
-    save!
+    if skip_broadcasts
+      save_without_broadcasting!
+    else
+      save!
+    end
   end
 
   def clear_email_caches
@@ -603,6 +589,12 @@ class Enrollment < ActiveRecord::Base
     touch_user
   end
 
+  def reset_notifications_cache
+    if self.workflow_state_changed?
+      StreamItemCache.invalidate_recent_stream_items(self.user_id, "Course", self.course_id)
+    end
+  end
+
   workflow do
     state :invited do
       event :reject, :transitions_to => :rejected do self.user.touch; end
@@ -636,6 +628,12 @@ class Enrollment < ActiveRecord::Base
   end
 
   def state_based_on_date
+    RequestCache.cache('enrollment_state_based_on_date', self) do
+      calculated_state_based_on_date
+    end
+  end
+
+  def calculated_state_based_on_date
     if state == :completed || ([:invited, :active].include?(state) && self.course.completed?)
       if self.restrict_past_view?
         return :inactive
@@ -673,11 +671,15 @@ class Enrollment < ActiveRecord::Base
   end
 
   def restrict_past_view?
-    self.view_restrictable? && self.course.restrict_student_past_view?
+    self.view_restrictable? && RequestCache.cache('restrict_student_past_view', self.global_course_id) do
+      self.course.restrict_student_past_view?
+    end
   end
 
   def restrict_future_view?
-    self.view_restrictable? && self.course.restrict_student_future_view?
+    self.view_restrictable? && RequestCache.cache('restrict_student_future_view', self.global_course_id) do
+      self.course.restrict_student_future_view?
+    end
   end
 
   def active?
@@ -886,7 +888,7 @@ class Enrollment < ActiveRecord::Base
 
   def self.recompute_final_score_if_stale(course, user=nil)
     Rails.cache.fetch(['recompute_final_scores', course.id, user].cache_key, :expires_in => Setting.get('recompute_grades_window', 600).to_i.seconds) do
-      recompute_final_score user ? user.id : course.student_enrollments.except(:includes).select(:user_id).uniq.map(&:user_id), course.id
+      recompute_final_score user ? user.id : course.student_enrollments.except(:preload).select(:user_id).uniq.map(&:user_id), course.id
       yield if block_given?
       true
     end
@@ -959,7 +961,8 @@ class Enrollment < ActiveRecord::Base
     given { |user| self.user == user }
     can :read and can :read_grades
 
-    given { |user, session| self.course.students_visible_to(user, true).map(&:id).include?(self.user_id) && self.course.grants_any_right?(user, session, :manage_grades, :view_all_grades) }
+    given { |user, session| self.course.students_visible_to(user, true).where(:id => self.user_id).exists? &&
+      self.course.grants_any_right?(user, session, :manage_grades, :view_all_grades) }
     can :read and can :read_grades
 
     given { |user| course.observer_enrollments.where(user_id: user, associated_user_id: self.user_id).exists? }

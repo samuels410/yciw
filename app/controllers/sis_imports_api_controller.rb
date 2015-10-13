@@ -31,8 +31,8 @@
 #           "type": "string"
 #         },
 #         "supplied_batches": {
-#           "description": "Which file were included in the SIS import",
-#           "example": "[\"term\", \"course\", \"section\", \"user\", \"enrollment\"]",
+#           "description": "Which files were included in the SIS import",
+#           "example": ["term", "course", "section", "user", "enrollment"],
 #           "type": "array",
 #           "items": { "type": "string" }
 #         },
@@ -202,8 +202,8 @@ class SisImportsApiController < ApplicationController
   before_filter :check_account
 
   def check_account
-    raise "SIS imports can only be executed on root accounts" unless @account.root_account?
-    raise "SIS imports can only be executed on enabled accounts" unless @account.allow_sis_import
+    return render json: {errors: ["SIS imports can only be executed on root accounts"]}, status: :bad_request unless @account.root_account?
+    return render json: {errors: ["SIS imports are not enabled for this account"]}, status: :forbidden unless @account.allow_sis_import
   end
 
   # @API Get SIS import list
@@ -224,7 +224,7 @@ class SisImportsApiController < ApplicationController
       if created_since = CanvasTime.try_parse(params[:created_since])
         scope = scope.where("created_at > ?", created_since)
       end
-      @batches = Api.paginate(scope, self, url_for({action: :index, controller: :sis_imports_api}))
+      @batches = Api.paginate(scope, self, api_v1_account_sis_imports_url)
       render :json => ({ sis_imports: @batches})
     end
   end

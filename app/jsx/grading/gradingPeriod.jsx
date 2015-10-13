@@ -1,13 +1,13 @@
 /** @jsx React.DOM */
 
 define([
+  'timezone',
   'react',
   'jquery',
   'i18n!external_tools',
   'underscore',
   'jquery.instructure_date_and_time'
-],
-function(React, $, I18n, _) {
+], function(tz, React, $, I18n, _) {
 
   var types = React.PropTypes;
   var GradingPeriod = React.createClass({
@@ -59,7 +59,17 @@ function(React, $, I18n, _) {
 
     handleDateChange: function(event) {
       var dateNode = this.refs[event.target.name].getDOMNode();
-      var updatedDate = $(dateNode).data('invalid') ? new Date('invalid date') : $(dateNode).data('unfudged-date');
+      var isValidDate = ! ( $(dateNode).data('invalid') ||
+                            $(dateNode).data('blank') );
+      var updatedDate = isValidDate ?
+        $(dateNode).data('unfudged-date') :
+        new Date('invalid date');
+
+      if (tz.isMidnight(updatedDate, { timezone: ENV.CONTEXT_TIMEZONE }) &&
+        dateNode.id.match(/period_end_date/)) {
+        updatedDate = tz.changeToTheSecondBeforeMidnight(updatedDate);
+      }
+
       var updatedState = {};
       updatedState[event.target.name] = updatedDate;
       this.setState(updatedState, function() {
@@ -69,7 +79,7 @@ function(React, $, I18n, _) {
     },
 
     formatDateForDisplay: function(date) {
-      return $.datetimeString(date, { format: 'medium', localized: false, timezone: ENV.CONTEXT_TIMEZONE });
+      return $.datetimeString(date, { format: 'medium', timezone: ENV.CONTEXT_TIMEZONE });
     },
 
     replaceInputWithDate: function(dateRef) {

@@ -2,7 +2,7 @@
 require File.expand_path(File.dirname(__FILE__) + '/common')
 
 describe "profile" do
-  include_examples "in-process server selenium tests"
+  include_context "in-process server selenium tests"
 
   def click_edit
     f('.edit_settings_link').click
@@ -92,7 +92,7 @@ describe "profile" do
       f('#communication_channels a[href="#register_email_address"]').click
       form = f("#register_email_address")
       test_email = 'nobody+1234@example.com'
-      form.find_element(:id, 'communication_channel_address').send_keys(test_email)
+      form.find_element(:id, 'communication_channel_email').send_keys(test_email)
       submit_form(form)
 
       confirmation_dialog = f("#confirm_email_channel")
@@ -254,6 +254,15 @@ describe "profile" do
   describe "profile pictures local tests" do
     before do
       local_storage!
+    end
+
+    it "should save admin profile pics setting", priority: "1", test_id: 68933 do
+      site_admin_logged_in
+      get "/accounts/#{Account.default.id}/settings"
+      f('#account_services_avatars').click
+      f('.btn.btn-primary[type="submit"]').click
+      wait_for_ajaximations
+      expect(is_checked('#account_services_avatars')).to be_truthy
     end
 
     it "should successfully upload profile pictures" do

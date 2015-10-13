@@ -35,3 +35,46 @@
     z-index: 1;
   }
 }
+
+// Quick and easy way for times where you want the icon to be
+// (usually) larger than the default 16px
+// Add this mixin under a parent class, and any icons that are
+// children of your class will show at the size specified in the
+// $new-icon-size parameter
+@mixin overwrite-default-icon-size($new-icon-size) {
+  i[class*=icon-], i[class^=icon-] {
+    width: auto; height: auto;
+    line-height: 1;
+    &:before {
+      font-size: $new-icon-size;
+      top: 0;
+    }
+  }
+}
+
+// Some layouts in Canvas (Speedgrader and Conversations)
+// are absolutely positioned full-screen, which can cause problems when
+// they are contained by the New UI flexbox-based layout.
+// This mixin removes the un-neeeded flex in the layout containers.
+@mixin remove-nui-flex-layout {
+  @if $use_new_styles {
+    .ic-app-main-layout-vertical { display: block; }
+    .ic-app-main-layout-horizontal {
+      transition: none;
+      transform: none;
+      flex: none;
+      display: block;
+      position: static;
+      min-height: 100vh;
+      body.course-menu-expanded & { transform: none; }
+      @include breakpoint(wide) { display: block; }
+    }
+    .ic-app-main-content {
+      flex: none;
+      display: block;
+    }
+    .ic-app-main-content__primary {
+      flex: none;
+    }
+  }
+}

@@ -638,7 +638,7 @@ ul.group_list {
 }
 
 $wizard-icon-size: 120px;
-$wizard-bg-color: $ic-brand-secondary;
+$wizard-bg-color: $ic-color-dark;
 $wizard-highlight-color: $ic-brand-primary;
 
 @keyframes icon-slide-down {
@@ -1122,7 +1122,7 @@ $wizard-highlight-color: $ic-brand-primary;
         font-size: 1em;
         font-weight: bold;
         // :color #444
-     
+
       }
       .sub_title {
         margin-left: 30px;
@@ -1999,12 +1999,12 @@ form.user_content_post_form {
   display: none;
 }
 
-#change_gradebook_version_link_holder, #change_calendar_version_link_holder {
+#change_calendar_version_link_holder {
   float: right !important;
   background: none !important;
 }
 
-#change_gradebook_version_link_holder a, #change_calendar_version_link_holder a, .dashboard-toggle a {
+#change_calendar_version_link_holder a, .dashboard-toggle a {
   margin-right: 10px;
   padding: 1px 10px;
   border-radius: 3px;
@@ -2038,41 +2038,21 @@ form.user_content_post_form {
 
 .with-fixed-bottom #wrapper-container {
   padding-bottom: 60px;
+  @if $use_new_styles { box-sizing: border-box; }
 }
 
 #fixed_bottom {
   bottom: 0;
-  i {
-    vertical-align: middle;
-    margin-right: 10px;
-  }
-  b {
-    line-height: 28px;
-    vertical-align: middle;
-  }
-  #masquerade_bar {
-    padding: 15px;
-    .buttons {
-      float: right;
-      .btn {
-        margin-left: 10px;
-      }
-      .btn-primary {
-        color: white;
-      }
+  // The styles below are no longer needed for the masquerading or student view;
+  // however, we need to keep them for other fixed warnings
+  >*:not(.ic-fixed-bottom-alert) {
+    i {
+      vertical-align: middle;
+      margin-right: 10px;
     }
-    .button-explanation {
-      float: right;
-      font-size: 10px;
-      text-align: right;
-    }
-    .masquerading_avatar {
-      float: left;
-      .avatar {
-        margin: (-9px) 10px 0 0;
-        width: 44px;
-        height: 44px;
-      }
+    b {
+      line-height: 28px;
+      vertical-align: middle;
     }
   }
   .fixed_warning {

@@ -33,8 +33,10 @@ class Message < ActiveRecord::Base
   include TextHelper
   include HtmlTextHelper
   include Workflow
+  include Messages::PeerReviewsHelper
 
   extend TextHelper
+
 
   # Associations
   belongs_to :asset_context, :polymorphic => true
@@ -64,6 +66,7 @@ class Message < ActiveRecord::Base
   validates_length_of :transmission_errors, :maximum => maximum_text_length, :allow_nil => true, :allow_blank => true
   validates_length_of :to, :maximum => maximum_text_length, :allow_nil => true, :allow_blank => true
   validates_length_of :from, :maximum => maximum_text_length, :allow_nil => true, :allow_blank => true
+  validates_length_of :url, :maximum => maximum_text_length, :allow_nil => true, :allow_blank => true
 
   # Stream policy
   on_create_send_to_streams do
@@ -259,7 +262,7 @@ class Message < ActiveRecord::Base
       context = context.account if context.respond_to?(:account)
       context = context.root_account if context.respond_to?(:root_account)
       if context
-        p = user.sis_pseudonym_for(context)
+        p = SisPseudonym.for(user, context)
         p ||= user.find_pseudonym_for_account(context, true)
         context = p.account if p
       else
@@ -326,6 +329,7 @@ class Message < ActiveRecord::Base
   class UnescapedBuffer < String # acts like safe buffer except for the actually being safe part
     alias :append= :<<
     alias :safe_concat :concat
+    alias :safe_append= :concat
   end
 
   # Public: Store content in a message_content_... instance variable.
@@ -741,12 +745,36 @@ class Message < ActiveRecord::Base
     end
   end
 
-  # Internal: Send the message through SMS. Right now this just calls
-  # deliver_via_email because we're using email SMS gateways.
+  # Internal: Send the message through SMS. This currently sends it via Twilio if the recipient is a E.164 phone
+  # number, or via email otherwise.
   #
   # Returns nothing.
   def deliver_via_sms
-    deliver_via_email
+    if to =~ /^\+[0-9]+$/
+      begin
+        unless user.account.feature_enabled?(:international_sms)
+          raise "International SMS is currently disabled for this user's account"
+        end
+
+        Canvas::Twilio.deliver(to, body) if Canvas::Twilio.enabled?
+      rescue StandardError => e
+        logger.error "Exception: #{e.class}: #{e.message}\n\t#{e.backtrace.join("\n\t")}"
+        Canvas::Errors.capture(
+          e,
+          message: 'SMS delivery failed',
+          to: to,
+          object: inspect.to_s,
+          tags: {
+            type: :sms_message
+          }
+        )
+        cancel
+      else
+        complete_dispatch
+      end
+    else
+      deliver_via_email
+    end
   end
 
   # Internal: Deliver the message using AWS SNS.
@@ -754,7 +782,7 @@ class Message < ActiveRecord::Base
   # Returns nothing.
   def deliver_via_push
     begin
-      self.user.notification_endpoints.all.each do |notification_endpoint|
+      self.user.notification_endpoints.each do |notification_endpoint|
         notification_endpoint.destroy unless notification_endpoint.push_json(sns_json)
       end
       complete_dispatch

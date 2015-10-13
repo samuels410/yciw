@@ -20,9 +20,19 @@ require File.expand_path(File.dirname(__FILE__) + '/../sharding_spec_helper.rb')
 
 describe Account do
 
+  describe ".find_cached" do
+    specs_require_sharding
+
+    it "works relative to a different shard" do
+      @shard1.activate do
+        a = Account.create!
+        expect(Account.find_cached(a.id)).to eq a
+      end
+    end
+  end
+
   it "should provide a list of courses" do
-    @account = Account.new
-    expect{@account.courses}.not_to raise_error
+    expect{ Account.new.courses }.not_to raise_error
   end
 
   context "equella_settings" do
@@ -428,7 +438,7 @@ describe Account do
     end
 
     limited_access = [ :read, :manage, :update, :delete, :read_outcomes ]
-    account_enabled_access = [ :view_notifications, :manage_catalog ]
+    account_enabled_access = [ :view_notifications, :manage_catalog, :moderate_grades ]
     full_access = RoleOverride.permissions.keys + limited_access - account_enabled_access + [:create_courses]
     siteadmin_access = [:app_profiling]
     full_root_access = full_access - RoleOverride.permissions.select { |k, v| v[:account_only] == :site_admin }.map(&:first)
@@ -474,6 +484,7 @@ describe Account do
       v[:account] = Account.find(account)
     end
     RoleOverride.clear_cached_contexts
+    AdheresToPolicy::Cache.clear
     hash.each do |k, v|
       account = v[:account]
       expect(account.check_policy(hash[:site_admin][:admin])).to match_array full_access + (k == :site_admin ? [:read_global_outcomes] : [])
@@ -512,6 +523,16 @@ describe Account do
 
     user
     expect(a.grants_right?(@user, :create_courses)).to be_truthy
+  end
+
+  it "does not allow create_courses even to admins on site admin and children" do
+    a = Account.site_admin
+    a.settings = { :no_enrollments_can_create_courses => true }
+    manual = a.manually_created_courses_account
+    user
+
+    expect(a.grants_right?(@user, :create_courses)).to eq false
+    expect(manual.grants_right?(@user, :create_courses)).to eq false
   end
 
   it "should correctly return sub-accounts as options" do
@@ -584,15 +605,18 @@ describe Account do
     account = Account.default
     expect(account.login_handle_name_with_inference).to eq "Email"
 
-    config = account.account_authorization_configs.create!(auth_type: 'cas')
+    config = account.authentication_providers.create!(auth_type: 'cas')
+    account.authentication_providers.first.move_to_bottom
     expect(account.login_handle_name_with_inference).to eq "Login"
 
     config.destroy
-    config = account.account_authorization_configs.create!(auth_type: 'saml')
+    config = account.authentication_providers.create!(auth_type: 'saml')
+    account.authentication_providers.active.first.move_to_bottom
     expect(account.reload.login_handle_name_with_inference).to eq "Login"
 
     config.destroy
-    account.account_authorization_configs.create!(auth_type: 'ldap')
+    account.authentication_providers.create!(auth_type: 'ldap')
+    account.authentication_providers.active.first.move_to_bottom
     expect(account.reload.login_handle_name_with_inference).to eq "Email"
     account.login_handle_name = "LDAP Login"
     account.save!
@@ -648,6 +672,16 @@ describe Account do
       expect(tabs.map{|t| t[:id] }).to be_include(Account::TAB_DEVELOPER_KEYS)
 
       tabs = Account.site_admin.tabs_available(nil)
+      expect(tabs.map{|t| t[:id] }).not_to be_include(Account::TAB_DEVELOPER_KEYS)
+    end
+
+    it "should include 'Developer Keys' for the admin users of an account" do
+      account = Account.create!
+      account_admin_user(:account => account)
+      tabs = account.tabs_available(@admin)
+      expect(tabs.map{|t| t[:id] }).to be_include(Account::TAB_DEVELOPER_KEYS)
+
+      tabs = account.tabs_available(nil)
       expect(tabs.map{|t| t[:id] }).not_to be_include(Account::TAB_DEVELOPER_KEYS)
     end
 
@@ -724,6 +758,27 @@ describe Account do
       admin = account_admin_user(:account => @account)
       tabs = @account.tabs_available(admin)
       expect(tabs.map{|t| t[:id] }).to be_include(tool.asset_string)
+    end
+
+    it "should use localized labels" do
+      tool = @account.context_external_tools.new(:name => "bob", :consumer_key => "test", :shared_secret => "secret",
+                                                 :url => "http://example.com")
+
+      account_navigation = {
+          :text => 'this should not be the title',
+          :url => 'http://www.example.com',
+          :labels => {
+              'en' => 'English Label',
+              'sp' => 'Spanish Label'
+          }
+      }
+
+      tool.settings[:account_navigation] = account_navigation
+      tool.save!
+
+      tabs = @account.external_tool_tabs({})
+
+      expect(tabs.first[:label]).to eq "English Label"
     end
 
     it 'includes message handlers' do
@@ -827,6 +882,7 @@ describe Account do
       expect(Account.default.grants_right?(@user, :read_sis)).to be_falsey
       @course = Account.default.courses.create!
       @course.enroll_teacher(@user).accept!
+      AdheresToPolicy::Cache.clear
       expect(Account.default.grants_right?(@user, :read_sis)).to be_truthy
     end
 
@@ -869,40 +925,55 @@ describe Account do
     end
   end
 
+  describe "authentication_providers.active" do
+    let(:account){ Account.default }
+    let!(:aac){ account.authentication_providers.create!(auth_type: 'facebook') }
+
+    it "pulls active AACS" do
+      expect(account.authentication_providers.active).to include(aac)
+    end
+
+    it "ignores deleted AACs" do
+      aac.destroy
+      expect(account.authentication_providers.active).to_not include(aac)
+    end
+  end
+
   describe "delegated_authentication?" do
     let(:account){ Account.default }
 
     before do
-      expect(account.delegated_authentication?).to be_falsey
+      account.authentication_providers.scoped.delete_all
+      expect(account.delegated_authentication?).to eq false
     end
 
     it "is false for LDAP" do
-      account.account_authorization_configs.create!(auth_type: 'ldap')
-      expect(account.delegated_authentication?).to be_falsey
+      account.authentication_providers.create!(auth_type: 'ldap')
+      expect(account.delegated_authentication?).to eq false
     end
 
     it "is true for CAS" do
-      account.account_authorization_configs.create!(auth_type: 'cas')
-      expect(account.delegated_authentication?).to be_truthy
+      account.authentication_providers.create!(auth_type: 'cas')
+      expect(account.delegated_authentication?).to eq true
     end
   end
 
-  describe "canvas_authentication?" do
-    before do
-      Account.default.account_authorization_configs.destroy_all
-      Account.default.settings[:canvas_authentication] = false
-      Account.default.save!
-      expect(Account.default.canvas_authentication?).to be_truthy
-      Account.default.account_authorization_configs.create!(auth_type: 'ldap')
+  describe "#non_canvas_auth_configured?" do
+    let(:account) { Account.default }
+
+    it "is false for no aacs" do
+      expect(account.non_canvas_auth_configured?).to be_falsey
     end
 
-    it "should be true if there's not an AAC" do
-      expect(Account.default.canvas_authentication?).to be_falsey
+    it "is true for having aacs" do
+      Account.default.authentication_providers.create!(auth_type: 'ldap')
+      expect(account.non_canvas_auth_configured?).to be_truthy
     end
 
-    it "is true after AACs are destroyed" do
-      Account.default.account_authorization_configs.destroy_all
-      expect(Account.default.reload.canvas_authentication?).to be_truthy
+    it "is false after aacs deleted" do
+      Account.default.authentication_providers.create!(auth_type: 'ldap')
+      account.authentication_providers.destroy_all
+      expect(account.non_canvas_auth_configured?).to be_falsey
     end
   end
 
@@ -1211,7 +1282,7 @@ describe Account do
     it "should only clear the quota cache if something changes" do
       account = account_model
 
-      Account.expects(:invalidate_quota_caches).once
+      Account.expects(:invalidate_inherited_caches).once
 
       account.default_storage_quota = 10.megabytes
       account.save! # clear here
@@ -1226,18 +1297,22 @@ describe Account do
     it "should inherit from a parent account's default_storage_quota" do
       enable_cache do
         account = account_model
-        subaccount = account.sub_accounts.create!
 
         account.default_storage_quota = 10.megabytes
         account.save!
 
+        subaccount = account.sub_accounts.create!
         expect(subaccount.default_storage_quota).to eq 10.megabytes
 
-        # should reload
-        account.default_group_storage_quota = 20.megabytes
+        account.default_storage_quota = 20.megabytes
         account.save!
 
-        expect(subaccount.default_storage_quota).to eq 10.megabytes
+        # should clear caches
+        account = Account.find(account.id)
+        expect(account.default_storage_quota).to eq 20.megabytes
+
+        subaccount = Account.find(subaccount)
+        expect(subaccount.default_storage_quota).to eq 20.megabytes
       end
     end
   end
@@ -1285,6 +1360,51 @@ describe Account do
       @account.settings = settings
       @account.save!
       expect(@account.restrict_student_future_view).to eq({:locked => false, :value => true})
+    end
+
+    context "caching" do
+      specs_require_sharding
+      it "should clear cached values correctly" do
+        enable_cache do
+          [@account, @sub1, @sub2].each(&:restrict_student_future_view) # preload the cached values
+
+          @sub1.settings = @sub1.settings.merge(:restrict_student_future_view => {:locked => true, :value => true})
+          @sub1.save!
+
+          # hard reload
+          @account = Account.find(@account.id)
+          @sub1 = Account.find(@sub1.id)
+          @sub2 = Account.find(@sub2.id)
+
+          expect(@account.restrict_student_future_view).to eq({:locked => false, :value => false})
+          expect(@sub1.restrict_student_future_view).to eq({:locked => true, :value => true})
+          expect(@sub2.restrict_student_future_view).to eq({:locked => true, :value => true, :inherited => true})
+        end
+      end
+    end
+  end
+
+  context "require terms of use" do
+    describe "#terms_required?" do
+      it "returns true by default" do
+        expect(account_model.terms_required?).to eq true
+      end
+
+      it "returns false if Setting is false" do
+        Setting.set(:terms_required, "false")
+        expect(account_model.terms_required?).to eq false
+      end
+
+      it "returns false if account setting is false" do
+        account = account_model(settings: {account_terms_required: false})
+        expect(account.terms_required?).to eq false
+      end
+
+      it "consults root account setting" do
+        parent_account = account_model(settings: {account_terms_required: false})
+        child_account = Account.create!(parent_account: parent_account)
+        expect(child_account.terms_required?).to eq false
+      end
     end
   end
 end

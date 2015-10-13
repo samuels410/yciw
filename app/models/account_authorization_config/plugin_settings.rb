@@ -23,7 +23,15 @@ module AccountAuthorizationConfig::PluginSettings
     end
 
     def globally_configured?
-      Canvas::Plugin.find(plugin).enabled?
+      ::Canvas::Plugin.find(plugin).enabled?
+    end
+
+    def recognized_params
+      if globally_configured?
+        super
+      else
+        @plugin_settings + super
+      end
     end
 
     def plugin_settings(*settings)
@@ -35,45 +43,31 @@ module AccountAuthorizationConfig::PluginSettings
           settings_hash[setting] = setting
         end
       end
-      @plugin_settings = settings_hash.keys + @recognized_params
+      @plugin_settings = settings_hash.keys
 
-      # force attribute methods to be created so that we can alias them
-      # also rescue nil, cause the db may not exist yet
-      self.new rescue nil
-
+      # use an anonymous module so we can prepend and always call super,
+      # regardless of if the method is actually defined on this class,
+      # or a parent
+      mod = Module.new
       settings_hash.each do |(accessor, setting)|
-        super_method = 'super'
-        # it's defined directly on the class; we have to alias things around
-        unless superclass.public_instance_methods.include?(accessor)
-          super_method = "#{accessor}_without_plugin_settings"
-          alias_method super_method, accessor
-        end
-
-          class_eval <<-RUBY, __FILE__, __LINE__ + 1
+        mod.module_eval <<-RUBY, __FILE__, __LINE__ + 1
           def #{accessor}
-            self.class.globally_configured? ? settings_from_plugin[#{setting.inspect}] : #{super_method}
+            self.class.globally_configured? ? settings_from_plugin[#{setting.inspect}] : super
           end
         RUBY
       end
+
+      prepend mod
     end
   end
 
   def self.included(klass)
     klass.instance_variable_set(:@recognized_params, klass.recognized_params)
-    klass.extend(ClassMethods)
-
-    def klass.recognized_params
-      if globally_configured?
-        @recognized_params
-      else
-        @plugin_settings
-      end
-    end
-
+    klass.singleton_class.prepend(ClassMethods)
     klass.cattr_accessor(:plugin)
   end
 
   def settings_from_plugin
-    Canvas::Plugin.find(self.class.plugin).settings
+    ::Canvas::Plugin.find(self.class.plugin).settings
   end
 end

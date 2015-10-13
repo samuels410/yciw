@@ -7,7 +7,7 @@ $ic-left-side-width: $ic-sp*15;
 
 .ic-app-container {
   box-sizing: border-box;
-  min-height: 100vh;  
+  min-height: 100vh;
 }
 
 .ic-app-main-layout-vertical {
@@ -23,14 +23,19 @@ $ic-left-side-width: $ic-sp*15;
   flex: 1 0 auto;
   position: relative;
   body.course-menu-expanded & { transform: translate3d($ic-left-side-width,0,0); }
+  // Theme Editor watermark gets attached to this element as a background image
+  body:not(.no-headers) & { background: $ic-brand-watermark left bottom no-repeat; }
   @include breakpoint(wide) {
     display: flex;
     position: static;
-    body.course-menu-expanded & { 
+    body.course-menu-expanded & {
       transform: none;
       transition: none;
     }
   }
+  // HACK workaround for IE10 and IE11 flexbox bug
+  // https://connect.microsoft.com/IE/feedback/details/802625/min-height-and-flexbox-flex-direction-column-dont-work-together-in-ie-10-11-preview
+  @media screen and (-ms-high-contrast: active), (-ms-high-contrast: none) { min-height: 93.5vh; }
 }
 
 .ic-app-main-and-right-side {
@@ -46,9 +51,9 @@ $ic-left-side-width: $ic-sp*15;
   position: absolute;
   top: 0; right: 100%;
   width: $ic-left-side-width;
-  padding: (($ic-sp*2) - 4) $ic-sp $ic-sp $ic-sp*2;
+  padding: $ic-sp*2 $ic-sp $ic-sp $ic-sp*2;
   opacity: 0;
-  body.course-menu-expanded & { 
+  body.course-menu-expanded & {
     opacity: 1;
     transform: translate3d(0,0,0);
   }
@@ -60,6 +65,7 @@ $ic-left-side-width: $ic-sp*15;
     transition: none;
     transform: none;
   }
+  @include breakpoint(short) { padding-top: $ic-sp; }
 }
 
 .ic-app-main-content {
@@ -75,20 +81,21 @@ $ic-left-side-width: $ic-sp*15;
 
 .ic-app-main-content__secondary {
   box-sizing: border-box;
-  padding: $ic-sp*2; 
+  padding: $ic-sp*2;
   @include breakpoint(desktop) {
     flex: 0 0 $ic-sp*22;
     padding-left: $ic-sp;
   }
-  @include breakpoint(wide) { 
+  @include breakpoint(wide) {
     flex: 0 0 $ic-sp*24;
     padding-left: $ic-sp*2;
   }
 }
 
 .ic-app-footer {
+  box-sizing: border-box;
   padding: $ic-sp 0;
-  margin: $ic-sp*2 $ic-sp*2 0;
+  margin: 0 $ic-sp*2;
   border-top: 1px solid $ic-border-light;
   @include breakpoint(desktop) {
     display: flex;
@@ -103,12 +110,12 @@ $ic-left-side-width: $ic-sp*15;
 .ic-app-footer__links {
   flex: 1;
   display: flex;
-  a { 
+  a {
     color: $ic-font-color--subdued;
     margin-right: $ic-sp;
     font-size: 12px;
   }
-  @include breakpoint(desktop) { 
+  @include breakpoint(desktop) {
     justify-content: flex-end;
     a { margin-right: 0; margin-left: $ic-sp; }
   }
@@ -129,14 +136,7 @@ $ic-left-side-width: $ic-sp*15;
   padding: 0;
   width: $ic-sp*3; height: ($ic-sp*3) - ($ic-sp/2);
   @include breakpoint(wide) { display: none; }
-  i[class*=icon-], i[class^=icon-] {
-    width: auto; height: auto;
-    line-height: 1;
-    &:before {
-      font-size: 22px;
-      top: 0;
-    }
-  }
+  @include overwrite-default-icon-size(22px);
 }
 
 .ic-app-crumbs {

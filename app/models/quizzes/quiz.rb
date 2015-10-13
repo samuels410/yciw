@@ -96,11 +96,11 @@ class Quizzes::Quiz < ActiveRecord::Base
   after_save :touch_context
   after_save :regrade_if_published
 
-  serialize :quiz_data
+  serialize_utf8_safe :quiz_data
 
   simply_versioned
 
-  has_many :context_module_tags, :as => :content, :class_name => 'ContentTag', :conditions => "content_tags.tag_type='context_module' AND content_tags.workflow_state<>'deleted'", :include => {:context_module => [:content_tags]}
+  has_many :context_module_tags, :as => :content, :class_name => 'ContentTag', :conditions => "content_tags.tag_type='context_module' AND content_tags.workflow_state<>'deleted'"
 
   # This callback is listed here in order for the :link_assignment_overrides
   # method to be called after the simply_versioned callbacks. We want the
@@ -352,8 +352,9 @@ class Quizzes::Quiz < ActiveRecord::Base
 
     return false unless self.show_correct_answers
 
-    if user.present? && self.show_correct_answers_last_attempt && quiz_submission = user.quiz_submissions.where(quiz_id: self.id).first
-      return quiz_submission.attempts_left == 0 && quiz_submission.complete?
+    quiz_submission = user.present? && user.quiz_submissions.where(quiz_id: self.id).first
+    if self.show_correct_answers_last_attempt && quiz_submission
+      return quiz_submission.attempts_left == 0 && quiz_submission.completed?
     end
 
     # If we're showing the results only one time, and are letting students
@@ -385,7 +386,7 @@ class Quizzes::Quiz < ActiveRecord::Base
   def update_assignment
     send_later_if_production(:set_unpublished_question_count) if self.id
     if !self.assignment_id && @old_assignment_id
-      self.context_module_tags.each { |tag| tag.confirm_valid_module_requirements }
+      self.context_module_tags.preload(:context_module => :content_tags).each { |tag| tag.confirm_valid_module_requirements }
     end
     if !self.graded? && (@old_assignment_id || self.last_assignment_id)
       ::Assignment.where(:id => [@old_assignment_id, self.last_assignment_id].compact, :submission_types => 'online_quiz').update_all(:workflow_state => 'deleted', :updated_at => Time.now.utc)
@@ -486,7 +487,7 @@ class Quizzes::Quiz < ActiveRecord::Base
     if self.quiz_questions.loaded?
       active_quiz_questions.select { |q| !q.quiz_group_id }
     else
-      active_quiz_questions.where(quiz_group_id: nil).all
+      active_quiz_questions.where(quiz_group_id: nil).to_a
     end
   end
 
@@ -614,25 +615,25 @@ class Quizzes::Quiz < ActiveRecord::Base
     # Admins can take the full quiz whenever they want
     return end_at if user.is_a?(::User) && self.grants_right?(user, :grade)
 
+    can_take = Quizzes::QuizEligibility.new(course: self.context, quiz: self, user: submission.user)
+    
+    fallback_end_at = if can_take.section_dates_currently_apply?
+      can_take.course_section.end_at
+    elsif course.restrict_enrollments_to_course_dates
+      course.end_at || course.enrollment_term.end_at
+    else
+      course.enrollment_term.end_at
+    end
+    
     # set to lock date
     if lock_at && !submission.manually_unlocked
       if !end_at || lock_at < end_at
         end_at = lock_at
       end
-
-    # set to course end
-    elsif course.end_at && course.restrict_enrollments_to_course_dates
-      if !end_at || course.end_at < end_at
-        end_at = course.end_at
-      end
-
-    # set to enrollment term end
-    elsif course.enrollment_term.end_at
-      if !end_at || course.enrollment_term.end_at < end_at
-        end_at = course.enrollment_term.end_at
-      end
+    elsif !end_at || (fallback_end_at && fallback_end_at < end_at)
+      end_at = fallback_end_at
     end
-
+    
     end_at
   end
 
@@ -674,7 +675,7 @@ class Quizzes::Quiz < ActiveRecord::Base
       end
 
     end
-
+    submission.record_creation_event unless preview
     submission
   end
 
@@ -1020,13 +1021,21 @@ class Quizzes::Quiz < ActiveRecord::Base
         context.grants_right?(user, session, :participate_as_student) &&
         visible_to_user?(user)
     end
-    can :read and can :submit
+    can :read
+
+    given do |user, session|
+      available? &&
+        context.grants_right?(user, session, :participate_as_student) &&
+        visible_to_user?(user) &&
+        !excused_for_student?(user)
+    end
+    can :submit
 
     given { |user| context.grants_right?(user, :view_quiz_answer_audits) }
     can :view_answer_audits
   end
 
-  scope :include_assignment, -> { includes(:assignment) }
+  scope :include_assignment, -> { preload(:assignment) }
   scope :before, lambda { |date| where("quizzes.created_at<?", date) }
   scope :active, -> { where("quizzes.workflow_state<>'deleted'") }
   scope :not_for_assignment, -> { where(:assignment_id => nil) }
@@ -1130,8 +1139,22 @@ class Quizzes::Quiz < ActiveRecord::Base
 
   def can_unpublish?
     return true if new_record?
-    !has_student_submissions? &&
-      (assignment.blank? || assignment.can_unpublish?)
+    return @can_unpublish unless @can_unpublish.nil?
+    @can_unpublish = !has_student_submissions? && (assignment.blank? || assignment.can_unpublish?)
+  end
+  attr_writer :can_unpublish
+
+  def self.preload_can_unpublish(quizzes, assmnt_ids_with_subs=nil)
+    return unless quizzes.any?
+    assmnt_ids_with_subs ||= Assignment.assignment_ids_with_submissions(quizzes.map(&:assignment_id).compact)
+
+    quiz_ids_with_subs = Quizzes::QuizSubmission.where(:quiz_id => quizzes.map(&:id)).
+      not_settings_only.where("user_id IS NOT NULL").uniq.pluck(:quiz_id)
+
+    quizzes.each do |quiz|
+      quiz.can_unpublish = !(quiz_ids_with_subs.include?(quiz.id)) &&
+        (quiz.assignment_id.nil? || !assmnt_ids_with_subs.include?(quiz.assignment_id))
+    end
   end
 
   alias_method :unpublishable?, :can_unpublish?
@@ -1187,7 +1210,8 @@ class Quizzes::Quiz < ActiveRecord::Base
   def current_regrade
     Quizzes::QuizRegrade.where(quiz_id: id, quiz_version: version_number).
       where("quiz_question_regrades.regrade_option != 'disabled'").
-      includes(:quiz_question_regrades => :quiz_question).first
+      eager_load(:quiz_question_regrades).
+      preload(quiz_question_regrades: :quiz_question).first
   end
 
   def current_quiz_question_regrades
@@ -1197,7 +1221,7 @@ class Quizzes::Quiz < ActiveRecord::Base
   def questions_regraded_since(created_at)
     question_regrades = Set.new
     quiz_regrades.where("quiz_regrades.created_at > ? AND quiz_question_regrades.regrade_option != 'disabled'", created_at)
-                 .includes(:quiz_question_regrades).each do |regrade|
+                 .eager_load(:quiz_question_regrades).each do |regrade|
       ids = regrade.quiz_question_regrades.map { |qqr| qqr.quiz_question_id }
       question_regrades.merge(ids)
     end
@@ -1206,6 +1230,12 @@ class Quizzes::Quiz < ActiveRecord::Base
 
   def available?
     published?
+  end
+
+  def excused_for_student?(student)
+    if assignment
+      assignment.submission_for_student(student).excused?
+    end
   end
 
   delegate :feature_enabled?, to: :context

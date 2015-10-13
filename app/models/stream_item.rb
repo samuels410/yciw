@@ -20,7 +20,7 @@ require 'open_object'
 require 'set'
 
 class StreamItem < ActiveRecord::Base
-  serialize :data
+  serialize_utf8_safe :data
 
   has_many :stream_item_instances
   has_many :users, :through => :stream_item_instances
@@ -36,6 +36,18 @@ class StreamItem < ActiveRecord::Base
   attr_accessible :context, :asset
   after_destroy :destroy_stream_item_instances
   attr_accessor :unread, :participant, :invalidate_immediately
+
+  before_save :ensure_notification_category
+
+  def ensure_notification_category
+    if self.asset_type == 'Message'
+      self.notification_category ||= get_notification_category
+    end
+  end
+
+  def get_notification_category
+    self.read_attribute(:data)['notification_category'] || self.data.notification_category
+  end
 
   def self.reconstitute_ar_object(type, data)
     return nil unless data
@@ -65,7 +77,14 @@ class StreamItem < ActiveRecord::Base
     end
 
     res.instance_variable_set(:@attributes, data)
+    res.instance_variable_set(:@attributes_cache, {})
     res.instance_variable_set(:@new_record, false) if data['id']
+
+    # the after_find from NotificationPreloader won't get triggered
+    if res.respond_to?(:preload_notification) && res.read_attribute(:notification_id)
+      res.preload_notification
+    end
+
     res
   end
 
@@ -330,12 +349,12 @@ class StreamItem < ActiveRecord::Base
     count = 0
 
     scope = where("updated_at<?", before_date).
-        includes(:context).
+        preload(:context).
         limit(1000)
-    scope = scope.includes(:stream_item_instances) if touch_users
+    scope = scope.preload(:stream_item_instances) if touch_users
 
     while true
-      batch = scope.reload.all
+      batch = scope.reload.to_a
       batch.each do |item|
         count += 1
         if touch_users
@@ -403,7 +422,7 @@ class StreamItem < ActiveRecord::Base
 
   public
   def destroy_stream_item_instances
-    self.stream_item_instances.with_each_shard do |scope|
+    self.stream_item_instances.shard(self).activate do |scope|
       user_ids = scope.pluck(:user_id)
       if !self.invalidate_immediately && user_ids.count > 100
         StreamItemCache.send_later_if_production_enqueue_args(:invalidate_all_recent_stream_items,

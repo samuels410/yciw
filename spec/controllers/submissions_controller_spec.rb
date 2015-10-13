@@ -200,14 +200,14 @@ describe SubmissionsController do
         post 'create', :course_id => @course.id, :assignment_id => @assignment.id, :submission => {:submission_type => 'online_text_entry', :body => 'blah', :comment => "some comment"}
         subs = @assignment.submissions
         expect(subs.size).to eq 2
-        expect(subs.all.sum{ |s| s.submission_comments.size }).to eql 1
+        expect(subs.to_a.sum{ |s| s.submission_comments.size }).to eql 1
       end
 
       it "should send a comment to the entire group if requested" do
         post 'create', :course_id => @course.id, :assignment_id => @assignment.id, :submission => {:submission_type => 'online_text_entry', :body => 'blah', :comment => "some comment", :group_comment => '1'}
         subs = @assignment.submissions
         expect(subs.size).to eq 2
-        expect(subs.all.sum{ |s| s.submission_comments.size }).to eql 2
+        expect(subs.to_a.sum{ |s| s.submission_comments.size }).to eql 2
       end
     end
 
@@ -241,7 +241,7 @@ describe SubmissionsController do
       end
     end
   end
-  
+
   describe "PUT update" do
     it "should require authorization" do
       course_with_student(:active_all => true)
@@ -250,7 +250,7 @@ describe SubmissionsController do
       put 'update', :course_id => @course.id, :assignment_id => @assignment.id, :id => @user.id, :submission => {:comment => "some comment"}
       assert_unauthorized
     end
-    
+
     it "should require the right student" do
       course_with_student_logged_in(:active_all => true)
       @user2 = User.create!(:name => "some user")
@@ -260,7 +260,7 @@ describe SubmissionsController do
       put 'update', :course_id => @course.id, :assignment_id => @assignment.id, :id => @user2.id, :submission => {:comment => "some comment"}
       assert_unauthorized
     end
-    
+
     it "should allow updating homework to add comments" do
       course_with_student_logged_in(:active_all => true)
       @assignment = @course.assignments.create!(:title => "some assignment", :submission_types => "online_url,online_upload")
@@ -319,7 +319,7 @@ describe SubmissionsController do
         expect(s.submission_comments.first.author).to eq @u1
       end
     end
-    
+
     it "should allow attaching files to the comment" do
       course_with_student_logged_in(:active_all => true)
       @assignment = @course.assignments.create!(:title => "some assignment", :submission_types => "online_url,online_upload")
@@ -364,6 +364,47 @@ describe SubmissionsController do
         }
       }
       expect(@submission.reload.student_entered_score).to eq 2.0
+    end
+
+    context "moderated grading" do
+      before :once do
+        course_with_student(:active_all => true)
+        @course.root_account.allow_feature!(:moderated_grading)
+        @course.enable_feature!(:moderated_grading)
+        @assignment = @course.assignments.create!(:title => "some assignment",
+          :submission_types => "online_url,online_upload", :moderated_grading => true)
+        @submission = @assignment.submit_homework(@user)
+      end
+
+      before :each do
+        user_session @teacher
+      end
+
+      it "should create a provisional comment" do
+        put 'update', :format => :json, :course_id => @course.id, :assignment_id => @assignment.id, :id => @user.id,
+            :submission => {:comment => "provisional!", :provisional => true}
+
+        @submission.reload
+        expect(@submission.submission_comments.first).to be_nil
+        expect(@submission.provisional_grade(@teacher).submission_comments.first.comment).to eq 'provisional!'
+
+        json = JSON.parse response.body
+        expect(json[0]['submission']['submission_comments'].first['submission_comment']['comment']).to eq 'provisional!'
+      end
+
+      it "should create a final provisional comment" do
+        put 'update', :format => :json, :course_id => @course.id, :assignment_id => @assignment.id, :id => @user.id,
+          :submission => {:comment => "provisional!", :provisional => true, :final => true}
+
+        @submission.reload
+        expect(@submission.submission_comments.first).to be_nil
+        pg = @submission.provisional_grade(@teacher, final: true)
+        expect(pg.submission_comments.first.comment).to eq 'provisional!'
+        expect(pg.final).to be_truthy
+
+        json = JSON.parse response.body
+        expect(json[0]['submission']['submission_comments'].first['submission_comment']['comment']).to eq 'provisional!'
+      end
     end
   end
 

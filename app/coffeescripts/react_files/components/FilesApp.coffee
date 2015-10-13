@@ -1,27 +1,22 @@
 define [
   'react'
   'react-router'
-  'react-modal'
   'i18n!react_files'
-  'compiled/react/shared/utils/withReactElement'
   'compiled/str/splitAssetString'
   './Toolbar'
-  './Breadcrumbs'
-  './FolderTree'
-  './FilesUsage'
+  'jsx/files/Breadcrumbs'
+  'jsx/files/FolderTree'
+  'jsx/files/FilesUsage'
   '../mixins/MultiselectableMixin'
   '../mixins/dndMixin'
   '../modules/filesEnv'
-], (React, ReactRouter, ReactModal, I18n, withReactElement, splitAssetString, ToolbarComponent, BreadcrumbsComponent, FolderTreeComponent, FilesUsageComponent, MultiselectableMixin, dndMixin, filesEnv) ->
+], (React, ReactRouter, I18n, splitAssetString, ToolbarComponent, Breadcrumbs, FolderTree, FilesUsage, MultiselectableMixin, dndMixin, filesEnv) ->
 
   Toolbar = React.createFactory ToolbarComponent
-  Breadcrumbs = React.createFactory BreadcrumbsComponent
-  FolderTree = React.createFactory FolderTreeComponent
-  FilesUsage = React.createFactory FilesUsageComponent
   RouteHandler = React.createFactory ReactRouter.RouteHandler
 
 
-  FilesApp = React.createClass
+  FilesApp =
     displayName: 'FilesApp'
 
     mixins: [ ReactRouter.State ]
@@ -95,128 +90,3 @@ define [
         @toggleItemSelected item, null, =>
           params = {splat: @state.currentFolder?.urlPath()}
           @transitionTo(@getPreviewRoute(), params, @getPreviewQuery())
-
-    render: withReactElement ->
-      if @state.currentFolder # when showing a folder
-        contextType = @state.currentFolder.get('context_type').toLowerCase() + 's'
-        contextId = @state.currentFolder.get('context_id')
-      else # when showing search results
-        contextType = filesEnv.contextType
-        contextId = filesEnv.contextId
-
-      userCanManageFilesForContext = filesEnv.userHasPermission({contextType: contextType, contextId: contextId}, 'manage_files')
-      usageRightsRequiredForContext = filesEnv.contextsDictionary["#{contextType}_#{contextId}"]?.usage_rights_required
-      externalToolsForContext = filesEnv.contextFor({contextType: contextType, contextId: contextId})?.file_menu_tools || []
-
-      div null,
-        # For whatever reason, VO in Safari didn't like just the h1 tag.
-        # Sometimes it worked, others it didn't, this makes it work always
-        header {},
-          h1 {className: 'screenreader-only'},
-            I18n.t('files_heading', "Files")
-        if ENV.use_new_styles
-          div {className: 'ic-app-nav-toggle-and-crumbs ic-app-nav-toggle-and-crumbs--files'},
-            button {
-              className:'Button Button--link Button--small ic-app-course-nav-toggle',
-              type:'button',
-              id:'courseMenuToggle',
-              title:I18n.t("Show and hide courses menu"),
-              'aria-hidden':'true'
-            },
-              i {
-                className:'icon-hamburger'
-              }
-            div {className:'ic-app-crumbs'},
-              Breadcrumbs({
-                rootTillCurrentFolder: @state.rootTillCurrentFolder
-                showingSearchResults: @state.showingSearchResults
-              })
-        else
-          Breadcrumbs({
-            rootTillCurrentFolder: @state.rootTillCurrentFolder
-            showingSearchResults: @state.showingSearchResults
-          })
-        Toolbar({
-          currentFolder: @state.currentFolder
-          query: @getQuery()
-          selectedItems: @state.selectedItems
-          clearSelectedItems: @clearSelectedItems
-          contextType: contextType
-          contextId: contextId
-          userCanManageFilesForContext: userCanManageFilesForContext
-          usageRightsRequiredForContext: usageRightsRequiredForContext
-          getPreviewQuery: @getPreviewQuery
-          getPreviewRoute: @getPreviewRoute
-          modalOptions:
-            openModal: @openModal
-            closeModal: @closeModal
-        })
-
-        div className: 'ef-main',
-          aside {
-            className: 'visible-desktop ef-folder-content'
-            role: 'region'
-            'aria-label' : I18n.t('folder_browsing_tree', 'Folder Browsing Tree')
-          },
-            FolderTree({
-              rootTillCurrentFolder: @state.rootTillCurrentFolder
-              rootFoldersToShow: filesEnv.rootFolders
-              dndOptions:
-                onItemDragEnterOrOver: @onItemDragEnterOrOver
-                onItemDragLeaveOrEnd: @onItemDragLeaveOrEnd
-                onItemDrop: @onItemDrop
-            })
-          div {
-            className:'ef-directory'
-            role: 'region'
-            'aria-label' : I18n.t('file_list', 'File List')
-          },
-            RouteHandler
-              key: @state.key
-              pathname: @state.pathname
-              query: @getQuery()
-              onResolvePath: @onResolvePath
-              currentFolder: @state.currentFolder
-              contextType: contextType
-              contextId: contextId
-              selectedItems: @state.selectedItems
-              toggleItemSelected: @toggleItemSelected
-              toggleAllSelected: @toggleAllSelected
-              areAllItemsSelected: @areAllItemsSelected
-              userCanManageFilesForContext: userCanManageFilesForContext
-              usageRightsRequiredForContext: usageRightsRequiredForContext
-              externalToolsForContext: externalToolsForContext
-              previewItem: @previewItem
-              modalOptions:
-                openModal: @openModal
-                closeModal: @closeModal
-              dndOptions:
-                onItemDragStart: @onItemDragStart
-                onItemDragEnterOrOver: @onItemDragEnterOrOver
-                onItemDragLeaveOrEnd: @onItemDragLeaveOrEnd
-                onItemDrop: @onItemDrop
-
-        div className: 'ef-footer grid-row',
-          if userCanManageFilesForContext
-            FilesUsage({
-              className: 'col-xs-4'
-              contextType: contextType
-              contextId: contextId
-            })
-          unless filesEnv.showingAllContexts
-            div className: 'col-xs',
-              div {},
-                a className: 'pull-right', href: '/files',
-                  I18n.t('all_my_files', 'All My Files')
-        # This is a placeholder modal instance where we can render arbitrary
-        # data into it to show.
-        if @state.showingModal
-          React.createFactory(ReactModal)({
-            isOpen: @state.showingModal,
-            onRequestClose: @closeModal,
-            closeTimeoutMS: 10,
-            className: 'ReactModal__Content--canvas',
-            overlayClassName: 'ReactModal__Overlay--canvas'
-          },
-            @state.modalContents
-          )

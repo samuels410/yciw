@@ -3,7 +3,7 @@
   content_for :right_side, render(:partial => "assignment_sidebar")
 %>
 
-<% if @locked && !@locked[:due_at] %>
+<% if @locked && (@locked[:context_module] || @locked[:unlock_at]) %>
   <% js_bundle :module_sequence_footer %>
 
   <h1><%= @assignment.title %></h1>
@@ -12,7 +12,7 @@
 <% else %>
 
 <%
-  jammit_css :assignments
+  css_bundle :assignments
   js_bundle :assignment_show
 %>
 
@@ -24,7 +24,7 @@
           <%= @assignment.title %>
         </h1>
       </div>
-      <div class='edit-content'>
+      <div class='assignment-buttons'>
         <button
           id="assignment_publish_button"
           data-id='<%= @assignment.id %>'
@@ -33,6 +33,17 @@
         <% if can_do(@assignment, @current_user, :update) %>
           <a href="<%= edit_polymorphic_path([@context, @assignment]) %>" class='btn edit_assignment_link'>
             <i class='icon-edit'></i> <%= t('links.edit', 'Edit') %>
+          </a>
+        <% end %>
+        <%= assignment_submission_button(@assignment, @current_user, @current_user_submission) %>
+        <% if @assignment.moderated_grading? && @context.feature_enabled?(:moderated_grading) && can_do(@context, @current_user, :moderate_grades) %>
+          <a
+            href='<%= course_assignment_moderate_url(@context, @assignment) %>'
+            id="moderated_grading_button"
+            class='Button'
+            style='<%= "display:none" unless @assignment.published? %>'
+          >
+            <%= t('Moderate') %>
           </a>
         <% end %>
 
@@ -46,7 +57,7 @@
           <% @assignment_menu_tools.each do |tool_hash| %>
             <li role="presentation">
               <a class="menu_tool_link" href="<%= tool_hash[:base_url] %>&assignments[]=<%= @assignment.id %>" tabindex="-1" role="menuitem">
-                <% if tool_hash[:icon_url] %><img class="icon" src="<%= tool_hash[:icon_url] %>" /><% end %>
+                <% if tool_hash[:icon_url] %><img class="icon" alt="" src="<%= tool_hash[:icon_url] %>" /><% end %>
                 <%= tool_hash[:title] %>
               </a>
             </li>
@@ -66,8 +77,10 @@
       <div class="edit-content">
         <%= render "shared/mark_as_done" %>
       </div>
+      <div class='assignment-buttons'>
+        <%= assignment_submission_button(@assignment, @current_user, @current_user_submission) %>
+      </div>
     </div>
-
     <ul class='student-assignment-overview'>
       <li>
         <span class='title'><%= t :due_at, 'Due' %></span>
@@ -124,20 +137,20 @@
     <form class="form-horizontal bootstrap-form display-only" style="margin-top:18px;">
       <fieldset>
         <div class="control-group">
-          <label class="control-label"><%= t(:points, 'Points') %></label>
+          <div class="control-label"><%= t(:points, 'Points') %></div>
           <div class="controls">
             <span class="value points_possible"><%= @assignment.points_possible || t(:no_points, 'None') %></span>
           </div>
         </div>
         <div class="control-group">
-          <label class="control-label"><%= t :submitting, 'Submitting' %></label>
+          <div class="control-label"><%= t :submitting, 'Submitting' %></div>
           <div class="controls">
             <span class="value"><%= @assignment.readable_submission_types || t(:no_submission, 'Nothing') %></span>
           </div>
         </div>
         <% if @assignment.submission_types =~ /online_upload/ && !@assignment.allowed_extensions.blank? -%>
           <div class="control-group">
-            <label class="control-label"><%= t :submission_types, 'File Types' %></label>
+            <div class="control-label"><%= t :submission_types, 'File Types' %></div>
             <div class="controls">
               <span class="value"><%= @assignment.allowed_extensions.to_sentence %></span>
             </div>
@@ -145,7 +158,7 @@
         <% end -%>
         <% if @assignment.turnitin_enabled %>
           <div class="control-group">
-            <label class="control-label"><%= t :turnitin, 'Turnitin' %></label>
+            <div class="control-label"><%= t :turnitin, 'Turnitin' %></div>
             <div class="controls">
               <span class="value"><%= t :turnitin_enabled, 'Turnitin has been enabled for this assignment.' %></span>
             </div>
@@ -196,7 +209,7 @@
 <% end %>
 
 <% js_bundle :edit_rubric %>
-<% jammit_css :learning_outcomes %>
+<% css_bundle :learning_outcomes %>
 
 <% if can_do(@assignment, @current_user, :update) %>
   <%# HACK! this is here because edit_rubric.js expects there to be a #add_rubric_url on the page and sets it's <form action="..."> to it %>

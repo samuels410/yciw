@@ -144,7 +144,7 @@ class CommunicationChannelsController < ApplicationController
 
     return render_unauthorized_action unless has_api_permissions?
 
-    params[:build_pseudonym] = 0 if api_request?
+    params[:build_pseudonym] = false if api_request?
 
     skip_confirmation = value_to_boolean(params[:skip_confirmation]) &&
         (Account.site_admin.grants_right?(@current_user, :manage_students) || @domain_root_account.grants_right?(@current_user, :manage_students))
@@ -191,7 +191,7 @@ class CommunicationChannelsController < ApplicationController
     @cc.user = @user
     @cc.re_activate! if @cc.retired?
     @cc.workflow_state = skip_confirmation ? 'active' : 'unconfirmed'
-    @cc.build_pseudonym_on_confirm = params[:build_pseudonym].to_i > 0
+    @cc.build_pseudonym_on_confirm = value_to_boolean(params[:build_pseudonym])
 
     # Save channel and return response
     if @cc.save
@@ -206,9 +206,11 @@ class CommunicationChannelsController < ApplicationController
 
   def confirm
     @nonce = params[:nonce]
-    cc = CommunicationChannel.unretired.find_by_confirmation_code(@nonce)
+    cc = CommunicationChannel.unretired.where('path_type != ?', CommunicationChannel::TYPE_PUSH).find_by_confirmation_code(@nonce)
     @headers = false
-    if cc
+    if cc && cc.path_type == 'email' && !EmailAddressValidator.valid?(cc.path)
+      failed = true
+    elsif cc
       @communication_channel = cc
       @user = cc.user
       @enrollment = @user.enrollments.where(uuid: params[:enrollment], workflow_state: 'invited').first if params[:enrollment].present?
@@ -312,9 +314,13 @@ class CommunicationChannelsController < ApplicationController
         return unless @merge_opportunities.empty?
         failed = true
       elsif cc.active?
-        # !user.registered? && cc.active? ?!?
-        # This state really isn't supported; just error out
-        failed = true
+        pseudonym = @root_account.pseudonyms.active.where(:user_id => @user).exists?
+        if @user.pre_registered? && pseudonym
+          @user.register
+          return redirect_with_success_flash
+        else
+          failed = true
+        end
       else
         # Open registration and admin-created users are pre-registered, and have already claimed a CC, but haven't
         # set up a password yet
@@ -384,18 +390,16 @@ class CommunicationChannelsController < ApplicationController
     else
       failed = true
     end
+
     if failed
       respond_to do |format|
         format.html { render :confirm_failed, status: :bad_request }
         format.json { render :json => {}, :status => :bad_request }
       end
     else
-      flash[:notice] = t 'notices.registration_confirmed', "Registration confirmed!"
-      @current_user ||= @user # since dashboard_url may need it
-      respond_to do |format|
-        format.html { @enrollment ? redirect_to(course_url(@course)) : redirect_back_or_default(dashboard_url) }
-        format.json { render :json => {:url => @enrollment ? course_url(@course) : dashboard_url} }
-      end
+      # make sure additions take the above use of
+      # redirect_with_success_flash into account
+      redirect_with_success_flash
     end
   end
 
@@ -410,6 +414,15 @@ class CommunicationChannelsController < ApplicationController
       @cc.send_confirmation!(@domain_root_account)
     end
     render :json => {:re_sent => true}
+  end
+
+  def redirect_with_success_flash
+    flash[:notice] = t 'notices.registration_confirmed', "Registration confirmed!"
+    @current_user ||= @user # since dashboard_url may need it
+    respond_to do |format|
+      format.html { @enrollment ? redirect_to(course_url(@course)) : redirect_back_or_default(dashboard_url) }
+      format.json { render :json => {:url => @enrollment ? course_url(@course) : dashboard_url} }
+    end
   end
 
   # @API Delete a communication channel

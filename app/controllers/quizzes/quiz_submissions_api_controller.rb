@@ -171,17 +171,26 @@ class Quizzes::QuizSubmissionsApiController < ApplicationController
         self,
         api_v1_course_quiz_submissions_url(@context, @quiz)
     elsif @quiz.grants_right?(@current_user, session, :submit)
-      # students have access only to their own
-      @quiz.quiz_submissions.where(:user_id => @current_user).flat_map(&:submitted_attempts)
+      # students have access only to their own submissions, both in progress, or completed`
+      submission = @quiz.quiz_submissions.where(:user_id => @current_user).first
+      if submission
+        if submission.workflow_state == "untaken"
+          [submission]
+        else
+          submission.submitted_attempts
+        end
+      else
+        []
+      end
     end
 
-    if !quiz_submissions
-      render_unauthorized_action
-    else
+    if quiz_submissions
       # trigger delayed grading job for all submission id's which needs grading
       quiz_submissions_ids = quiz_submissions.map(&:id).uniq
       Quizzes::OutstandingQuizSubmissionManager.new(@quiz).send_later_if_production(:grade_by_ids, quiz_submissions_ids)
       serialize_and_render quiz_submissions
+    else
+      render_unauthorized_action
     end
   end
 

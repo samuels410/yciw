@@ -30,15 +30,15 @@ module Api
         content.modified_html
       end
 
-      def self.rewrite_outgoing(html, url_helper)
+      def self.rewrite_outgoing(html, account, url_helper, include_mobile: false)
         return html if html.blank?
-        self.new(html).rewritten_html(url_helper)
+        self.new(html, account, include_mobile: include_mobile).rewritten_html(url_helper)
       end
 
       attr_reader :html
 
-      def initialize(html_string)
-        @html = html_string
+      def initialize(html_string, account = nil, include_mobile: false)
+        @account, @html, @include_mobile = account, html_string, include_mobile
       end
 
       def might_need_modification?
@@ -79,22 +79,39 @@ module Api
           apply_user_content_attributes(node, uc)
         end
 
+        UserContent.find_equation_images(parsed_html) do |node|
+          apply_mathml(node)
+        end
+
         UrlAttributes.each do |tag, attributes|
           parsed_html.css(tag).each do |element|
             url_helper.rewrite_api_urls(element, attributes)
           end
         end
+
+        if @include_mobile
+          if (bc = @account.brand_config) && bc.mobile_css_overrides.present?
+            css = parsed_html.document.create_element("link",
+                                                      rel: 'stylesheet',
+                                                      href: bc.mobile_css_overrides)
+            parsed_html.prepend_child(css)
+          end
+          if (bc = @account.brand_config) && bc.mobile_js_overrides.present?
+            js = parsed_html.document.create_element("script",
+                                                     source: bc.mobile_js_overrides)
+            parsed_html.prepend_child(js)
+          end
+        end
         parsed_html.to_s
       end
 
-
       private
 
-      APPLICABLE_ATTRS = %w{href src}
+      APPLICABLE_ATTRS = %w{href src}.freeze
 
       def scrub_links!(node)
         APPLICABLE_ATTRS.each do |attr|
-          if link = node[attr]
+          if (link = node[attr])
             node[attr] = corrected_link(link)
           end
         end
@@ -114,6 +131,19 @@ module Api
         node['data-uc_height'] = user_content.height
         node['data-uc_snippet'] = user_content.node_string
         node['data-uc_sig'] = user_content.node_hmac
+      end
+
+      def apply_mathml(node)
+        self.class.apply_mathml(node)
+      end
+
+      def self.apply_mathml(node)
+        mathml = UserContent.latex_to_mathml(node['alt'])
+        return if mathml.blank?
+
+        # replace alt attribute with mathml
+        node.delete('alt')
+        node['data-mathml'] = mathml
       end
     end
   end

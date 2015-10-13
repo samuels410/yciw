@@ -52,8 +52,7 @@ define([
   'jqueryui/tabs' /* /\.tabs/ */,
   'compiled/behaviors/trackEvent',
   'compiled/badge_counts',
-  'vendor/jquery.placeholder',
-  'compiled/smartbanner'
+  'vendor/jquery.placeholder'
 ], function(KeyboardNavDialog, INST, I18n, $, _, tz, userSettings, htmlEscape, wikiSidebar) {
 
   $.trackEvent('Route', location.pathname.replace(/\/$/, '').replace(/\d+/g, '--') || '/');
@@ -893,6 +892,7 @@ define([
     setTimeout(function() {
       $("#content a:external,#content a.explicit_external_link").each(function(){
         $(this)
+          .not(".open_in_a_new_tab")
           .not(":has(img)")
           .not(".not_external")
           .addClass('external')

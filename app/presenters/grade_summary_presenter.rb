@@ -35,6 +35,10 @@ class GradeSummaryPresenter
     user_has_elevated_permissions? && !@id_param
   end
 
+  def user_an_observer_of_student?
+    observed_students.key? student
+  end
+
   def student_is_user?
     student == @current_user
   end
@@ -107,7 +111,7 @@ class GradeSummaryPresenter
   end
 
   def groups
-    @groups ||= @context.assignment_groups.active.all
+    @groups ||= @context.assignment_groups.active.to_a
   end
 
   def assignments(gp_id = nil)
@@ -130,7 +134,7 @@ class GradeSummaryPresenter
   def submissions
     @submissions ||= begin
       ss = @context.submissions
-      .includes(:visible_submission_comments,
+      .preload(:visible_submission_comments,
                 {:rubric_assessments => [:rubric, :rubric_association]},
                 :content_participations)
       .where("assignments.workflow_state != 'deleted'")
@@ -200,7 +204,7 @@ class GradeSummaryPresenter
 
   def courses_with_grades
     @courses_with_grades ||= begin
-      if student_is_user?
+      if student_is_user? || user_an_observer_of_student?
         student.courses_with_grades
       else
         nil

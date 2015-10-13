@@ -98,7 +98,7 @@ module ActiveRecord
           User.create(name: 'dr who')
           User.create(name: 'dr who')
 
-          expect { User.joins("INNER JOIN users u ON users.sortable_name = u.sortable_name").
+          expect { User.joins("INNER JOIN #{User.quoted_table_name} u ON users.sortable_name = u.sortable_name").
             where("u.sortable_name <> users.sortable_name").delete_all }.to_not raise_error
         end
       end
@@ -167,17 +167,18 @@ module ActiveRecord
     describe "union" do
       shared_examples_for "query creation" do
         it "should include conditions after the union inside of the subquery" do
-          query = base.active.where(id:99).union(User.where(id:1)).to_sql
-          sql_before_union, sql_after_union = query.split("UNION ALL")
+          wheres = base.active.where(id:99).union(User.where(id:1)).where_values
+          expect(wheres.count).to eq 1
+          sql_before_union, sql_after_union = wheres.first.split("UNION ALL")
           expect(sql_before_union.include?("99")).to be_falsey
           expect(sql_after_union.include?("99")).to be_truthy
         end
 
         it "should include conditions prior to the union outside of the subquery" do
-          query = base.active.union(User.where(id:1)).where(id:99).to_sql
-          sql_before_union, sql_after_union = query.split("UNION ALL")
-          expect(sql_before_union.include?("99")).to be_truthy
-          expect(sql_after_union.include?("99")).to be_falsey
+          wheres = base.active.union(User.where(id:1)).where(id:99).where_values
+          expect(wheres.count).to eq 2
+          union_where = wheres.detect{|w| w.is_a?(String) && w.include?("UNION ALL")}
+          expect(union_where.include?("99")).to be_falsey
         end
       end
 

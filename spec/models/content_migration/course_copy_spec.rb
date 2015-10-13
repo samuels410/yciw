@@ -145,11 +145,13 @@ describe ContentMigration do
       root_folder = Folder.root_folders(@copy_from).first
       folder1 = root_folder.sub_folders.create!(:context => @copy_from, :name => "mol&eacute; ? i'm silly")
       att1 = Attachment.create!(:filename => "first.txt", :uploaded_data => StringIO.new('ohai'), :folder => folder1, :context => @copy_from)
+      img = Attachment.create!(:filename => "img.png", :uploaded_data => stub_png_data, :folder => folder1, :context => @copy_from)
       folder2 = root_folder.sub_folders.create!(:context => @copy_from, :name => "olé")
       att2 = Attachment.create!(:filename => "first.txt", :uploaded_data => StringIO.new('ohai'), :folder => folder2, :context => @copy_from)
 
       body = "<a class='instructure_file_link' href='/courses/#{@copy_from.id}/files/#{att1.id}/download'>link</a>"
       body += "<a class='instructure_file_link' href='/courses/#{@copy_from.id}/files/#{att2.id}/download'>link</a>"
+      body += "<img src='/courses/#{@copy_from.id}/files/#{img.id}/preview'>"
       dt = @copy_from.discussion_topics.create!(:message => body, :title => "discussion title")
       page = @copy_from.wiki.wiki_pages.create!(:title => "some page", :body => body)
 
@@ -157,14 +159,17 @@ describe ContentMigration do
 
       att_to1 = @copy_to.attachments.where(migration_id: mig_id(att1)).first
       att_to2 = @copy_to.attachments.where(migration_id: mig_id(att2)).first
+      img_to = @copy_to.attachments.where(migration_id: mig_id(img)).first
 
       page_to = @copy_to.wiki.wiki_pages.where(migration_id: mig_id(page)).first
-      expect(page_to.body.include?("/courses/#{@copy_to.id}/files/#{att_to1.id}/download")).to be_truthy
-      expect(page_to.body.include?("/courses/#{@copy_to.id}/files/#{att_to2.id}/download")).to be_truthy
+      expect(page_to.body).to include "/courses/#{@copy_to.id}/files/#{att_to1.id}/download"
+      expect(page_to.body).to include "/courses/#{@copy_to.id}/files/#{att_to2.id}/download"
+      expect(page_to.body).to include "/courses/#{@copy_to.id}/files/#{img_to.id}/preview"
 
       dt_to = @copy_to.discussion_topics.where(migration_id: mig_id(dt)).first
-      expect(dt_to.message.include?("/courses/#{@copy_to.id}/files/#{att_to1.id}/download")).to be_truthy
-      expect(dt_to.message.include?("/courses/#{@copy_to.id}/files/#{att_to2.id}/download")).to be_truthy
+      expect(dt_to.message).to include "/courses/#{@copy_to.id}/files/#{att_to1.id}/download"
+      expect(dt_to.message).to include "/courses/#{@copy_to.id}/files/#{att_to2.id}/download"
+      expect(dt_to.message).to include "/courses/#{@copy_to.id}/files/#{img_to.id}/preview"
     end
 
     it "should selectively copy items" do
@@ -344,6 +349,7 @@ describe ContentMigration do
       @copy_from.is_public = true
       @copy_from.public_syllabus = true
       @copy_from.lock_all_announcements = true
+      @copy_from.allow_student_discussion_editing = false
       @copy_from.save!
 
       run_course_copy
@@ -359,9 +365,7 @@ describe ContentMigration do
       expect(@copy_to.grading_standard).to eq gs_2
       expect(@copy_to.name).to eq "tocourse"
       expect(@copy_to.course_code).to eq "tocourse"
-      expect(@copy_to.is_public).to eq true
-      expect(@copy_to.public_syllabus).to eq true
-      expect(@copy_to.lock_all_announcements).to eq true
+      # other attributes changed from defaults are compared in clonable_attributes below
       atts = Course.clonable_attributes
       atts -= Canvas::Migration::MigratorHelper::COURSE_NO_COPY_ATTS
       atts.each do |att|
@@ -461,6 +465,25 @@ describe ContentMigration do
       expect(cal2_2.start_at.to_i).to eq cal2.start_at.to_i
       expect(cal2_2.end_at.to_i).to eq cal2.end_at.to_i
       expect(cal2_2.description).to eq ''
+    end
+
+    it "should not leave link placeholders on catastrophic failure" do
+      att = Attachment.create!(:filename => 'test.txt', :display_name => "testing.txt",
+        :uploaded_data => StringIO.new('file'), :folder => Folder.root_folders(@copy_from).first, :context => @copy_from)
+      topic = @copy_from.discussion_topics.create!(:title => "some topic", :message => "<img src='/courses/#{@copy_from.id}/files/#{att.id}/preview'>")
+
+      Importers::WikiPageImporter.stubs(:process_migration).raises(ArgumentError)
+
+      expect{
+        run_course_copy
+      }.to raise_error(ArgumentError)
+
+      new_att = @copy_to.attachments.where(migration_id: CC::CCHelper.create_key(att)).first
+      expect(new_att).not_to be_nil
+
+      new_topic = @copy_to.discussion_topics.where(migration_id: CC::CCHelper.create_key(topic)).first
+      expect(new_topic).not_to be_nil
+      expect(new_topic.message).to match(Regexp.new("/courses/#{@copy_to.id}/files/#{new_att.id}/preview"))
     end
   end
 end

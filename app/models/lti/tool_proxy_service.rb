@@ -15,8 +15,12 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
+require 'ims/lti'
+
 module Lti
   class ToolProxyService
+
+    attr_reader :tc_half_secret
 
     class InvalidToolProxyError < RuntimeError
 
@@ -50,11 +54,21 @@ module Lti
 
     private
 
+    def create_secret(tp)
+      security_contract = tp.security_contract
+      if (tp_half_secret = tp.enabled_capabilities.include?('OAuth.splitSecret') && security_contract.tp_half_shared_secret)
+        @tc_half_secret = SecureRandom.hex(64)
+        tc_half_secret + tp_half_secret
+      else
+        security_contract.shared_secret
+      end
+    end
+
     def create_tool_proxy(tp, context, product_family)
       tool_proxy = ToolProxy.new
       tool_proxy.product_family = product_family
       tool_proxy.guid = tp.tool_proxy_guid
-      tool_proxy.shared_secret = tp.security_contract.shared_secret
+      tool_proxy.shared_secret = create_secret(tp)
       tool_proxy.product_version = tp.tool_profile.product_instance.product_info.product_version
       tool_proxy.lti_version = tp.tool_profile.lti_version
       tool_proxy.name = tp.tool_profile.product_instance.product_info.default_name
@@ -94,6 +108,8 @@ module Lti
       message_handler.parameters = create_json(mh.parameter.as_json)
       message_handler.resource_handler = resource
       message_handler.save!
+      create_placements(mh, message_handler)
+      message_handler.save!
       message_handler
     end
 
@@ -121,35 +137,35 @@ module Lti
       resource_handlers = tp.tool_profile.resource_handlers
       if tp.tool_profile.messages.present?
         product_name = tp.tool_profile.product_instance.product_info.product_name
-        rh = IMS::LTI::Models::ResourceHandler.new.from_json(
+        r = IMS::LTI::Models::ResourceHandler.new.from_json(
           {
             resource_type: {code: 'instructure.com:default'},
             resource_name: product_name
           }.to_json
         )
-        rh.message = tp.tool_profile.messages
-        resource_handlers << rh
+        r.message = tp.tool_profile.messages
+        resource_handlers << r
       end
 
       resource_handlers.each do |rh|
         resource_handler = create_resource_handler(rh, tool_proxy)
-        create_placements(rh, resource_handler)
         rh.messages.each do |mh|
           create_message_handler(mh, tp.tool_profile.base_message_url, resource_handler)
         end
-
       end
     end
 
-    def create_placements(rh, resource_handler)
-      if rh.ext_placements
-        rh.ext_placements.each do |p|
-          if placement = ResourcePlacement::PLACEMENT_LOOKUP[p]
-            resource_handler.placements.create(placement: placement)
+    def create_placements(mh, message_handler)
+      unless (mh.enabled_capabilities & ResourcePlacement::PLACEMENT_LOOKUP.keys).blank?
+        mh.enabled_capability.each do |p|
+          if ResourcePlacement::PLACEMENT_LOOKUP[p]
+            message_handler.placements.create(placement: ResourcePlacement::PLACEMENT_LOOKUP[p])
           end
         end
       else
-        ResourcePlacement::DEFAULT_PLACEMENTS.each { |p| resource_handler.placements.create(placement: p) }
+        ResourcePlacement::DEFAULT_PLACEMENTS.each do |p|
+          message_handler.placements.create(placement: p)
+        end
       end
     end
 
@@ -203,7 +219,9 @@ module Lti
 
     def validate_security_contract(tp)
       invalid_fields = []
-      invalid_fields << :shared_secret if tp.security_contract.shared_secret.blank?
+      has_split_secret = tp.enabled_capabilities.include?('OAuth.splitSecret') && tp.security_contract.tp_half_shared_secret.present?
+      invalid_fields << :shared_secret if tp.security_contract.shared_secret.blank? && !has_split_secret
+
       ['SecurityContract', invalid_security_contract: invalid_fields] unless invalid_fields.empty?
     end
 

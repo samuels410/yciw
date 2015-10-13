@@ -1,3 +1,4 @@
+# coding: utf-8
 #
 # Copyright (C) 2011 Instructure, Inc.
 #
@@ -103,6 +104,62 @@ describe Assignment do
     end
   end
 
+  describe '#grade_to_score' do
+    before(:once) { setup_assignment_without_submission }
+
+    let(:set_type_and_save) do
+      lambda do |type|
+        @assignment.grading_type = type
+        @assignment.save
+      end
+    end
+
+    # The test cases for grading_type of points, percent,
+    # letter_grade, and gpa_scale are covered by the tests of
+    # interpret_grade as that is doing the work.  The cases tested
+    # here are all contained solely within grade_to_score
+
+    it 'returns nil for a nil grade' do
+      expect(@assignment.grade_to_score(nil)).to be_nil
+    end
+
+    it 'returns nil for a not_graded assignment' do
+      set_type_and_save.call('not_graded')
+      expect(@assignment.grade_to_score("3")).to be_nil
+    end
+
+    it 'returns an exception for an unknown grading type' do
+      set_type_and_save.call("totally_fake_grading")
+      expect{@assignment.grade_to_score("3")}.to raise_error
+    end
+
+    context 'with a pass/fail assignment' do
+      before(:once) do
+        @assignment.grading_type = 'pass_fail'
+        @assignment.points_possible = 6.0
+        @assignment.save
+      end
+
+      let(:points_possible) { @assignment.points_possible }
+
+      it "returns points possible for maximum points" do
+        expect(@assignment.grade_to_score(points_possible.to_s)).to eql(points_possible)
+      end
+
+      it "returns nil for partial points" do
+        expect(@assignment.grade_to_score("3")).to be_nil
+      end
+
+      it "returns 0.0 for 0 points" do
+        expect(@assignment.grade_to_score("0")).to eql(0.0)
+      end
+
+      it "returns nil for an empty string" do
+        expect(@assignment.grade_to_score("")).to be_nil
+      end
+    end
+  end
+
   describe '#grade_student' do
     before(:once) { setup_assignment_without_submission }
 
@@ -151,6 +208,31 @@ describe Assignment do
     context 'with a student that does not belong' do
       it 'raises an error' do
         expect { @assignment.grade_student(User.new) }.to raise_error(Assignment::GradeError, 'Student must be enrolled in the course as a student to be graded')
+      end
+    end
+
+    context 'with an invalid initial grade' do
+      before :once do
+        @result = @assignment.grade_student(@user, :grade => "{")
+        @assignment.reload
+      end
+
+      it 'does not change the workflow_state to graded' do
+        expect(@result.first.grade).to be_nil
+        expect(@result.first.workflow_state).not_to eq 'graded'
+      end
+    end
+
+    context 'with an excused assignment' do
+      before :once do
+        @result = @assignment.grade_student(@user, :excuse => true)
+        @assignment.reload
+      end
+
+      it 'excuses the assignment and marks it as graded' do
+        expect(@result.first.grade).to be_nil
+        expect(@result.first.workflow_state).to eql 'graded'
+        expect(@result.first.excused?).to eql true
       end
     end
   end
@@ -314,30 +396,30 @@ describe Assignment do
       setup_assignment_without_submission
     end
 
-    it "should preserve pass/fail with zero points possible" do
-      @assignment.grading_type = 'pass_fail'
-      @assignment.points_possible = 0.0
-      @assignment.save
-      s = @assignment.grade_student(@user, :grade => 'pass')
-      expect(s).to be_is_a(Array)
-      @assignment.reload
-      expect(@assignment.submissions.size).to eql(1)
-      @submission = @assignment.submissions.first
-      expect(@submission.state).to eql(:graded)
-      expect(@submission).to eql(s[0])
-      expect(@submission.score).to eql(0.0)
-      expect(@submission.grade).to eql('complete')
-      expect(@submission.user_id).to eql(@user.id)
+    context "pass fail assignments" do
+      before :once do
+        @assignment.grading_type = 'pass_fail'
+        @assignment.points_possible = 0.0
+        @assignment.save
+      end
 
-      @assignment.grade_student(@user, :grade => 'fail')
-      @assignment.reload
-      expect(@assignment.submissions.size).to eql(1)
-      @submission = @assignment.submissions.first
-      expect(@submission.state).to eql(:graded)
-      expect(@submission).to eql(s[0])
-      expect(@submission.score).to eql(0.0)
-      expect(@submission.grade).to eql('incomplete')
-      expect(@submission.user_id).to eql(@user.id)
+      let(:submission) { @assignment.submissions.first }
+
+      it "preserves pass with zero points possible" do
+        @assignment.grade_student(@user, :grade => 'pass')
+        expect(submission.grade).to eql('complete')
+      end
+
+      it "preserves fail with zero points possible" do
+        @assignment.grade_student(@user, :grade => 'fail')
+        expect(submission.grade).to eql('incomplete')
+      end
+
+      it "should properly compute pass/fail for nil" do
+        @assignment.points_possible = 10
+        grade = @assignment.score_to_grade(nil)
+        expect(grade).to eql("incomplete")
+      end
     end
 
     it "should preserve letter grades with zero points possible" do
@@ -368,13 +450,6 @@ describe Assignment do
       @assignment.points_possible = 10
       grade = @assignment.score_to_grade(8.6999)
       expect(grade).to eql("B")
-    end
-
-    it "should properly compute pass/fail for nil" do
-      @assignment.grading_type = 'pass_fail'
-      @assignment.points_possible = 10
-      grade = @assignment.score_to_grade(nil)
-      expect(grade).to eql("incomplete")
     end
 
     it "should preserve letter grades grades with nil points possible" do
@@ -423,6 +498,33 @@ describe Assignment do
       expect(@submission.score).to eql(0.0)
       expect(@submission.grade).to eql('3.0')
       expect(@submission.user_id).to eql(@user.id)
+    end
+
+    describe "#grading_standard_or_default" do
+      before do
+        @gs1 = @course.grading_standards.create! standard_data: {
+          a: {name: "OK", value: 100},
+          b: {name: "Bad", value: 80},
+        }
+        @gs2 = @course.grading_standards.create! standard_data: {
+          a: {name: "🚀", value: 100},
+          b: {name: "🚽", value: 80},
+        }
+      end
+
+      it "returns the assignment-specific grading standard if there is one" do
+        @assignment.update_attribute :grading_standard, @gs1
+        expect(@assignment.grading_standard_or_default).to eql @gs1
+      end
+
+      it "uses the course default if there is one" do
+        @course.update_attribute :default_grading_standard, @gs2
+        expect(@assignment.grading_standard_or_default).to eql @gs2
+      end
+
+      it "uses the canvas default" do
+        expect(@assignment.grading_standard_or_default.title).to eql "Default Grading Standard"
+      end
     end
 
     it "should preserve gpa scale grades with zero points possible" do
@@ -2015,7 +2117,7 @@ describe Assignment do
       expect(res.find{|s| s.user == @u1}.submission_comments).not_to be_empty
       expect(res.find{|s| s.user == @u2}.submission_comments).not_to be_empty
       # all the comments should have the same group_comment_id, for deletion
-      comments = SubmissionComment.for_assignment_id(@a.id).all
+      comments = SubmissionComment.for_assignment_id(@a.id).to_a
       expect(comments.size).to eq 2
       group_comment_id = comments[0].group_comment_id
       expect(group_comment_id).to be_present
@@ -2464,21 +2566,21 @@ describe Assignment do
 
     it "should include assignments with no locks" do
       @quiz.save!
-      list = Assignment.not_locked.all
+      list = Assignment.not_locked.to_a
       expect(list.size).to eql 1
       expect(list.first.title).to eql 'Test Assignment'
     end
     it "should include assignments with unlock_at in the past" do
       @quiz.unlock_at = 1.day.ago
       @quiz.save!
-      list = Assignment.not_locked.all
+      list = Assignment.not_locked.to_a
       expect(list.size).to eql 1
       expect(list.first.title).to eql 'Test Assignment'
     end
     it "should include assignments where lock_at is future" do
       @quiz.lock_at = 1.day.from_now
       @quiz.save!
-      list = Assignment.not_locked.all
+      list = Assignment.not_locked.to_a
       expect(list.size).to eql 1
       expect(list.first.title).to eql 'Test Assignment'
     end
@@ -2486,7 +2588,7 @@ describe Assignment do
       @quiz.unlock_at = 1.day.ago
       @quiz.lock_at = 1.day.from_now
       @quiz.save!
-      list = Assignment.not_locked.all
+      list = Assignment.not_locked.to_a
       expect(list.size).to eql 1
       expect(list.first.title).to eql 'Test Assignment'
     end
@@ -2556,6 +2658,14 @@ describe Assignment do
       @comment = @submission.add_comment(:comment => 'comment')
       json = @assignment.speed_grader_json(@user)
       expect(json[:submissions].first[:submission_comments].first[:created_at].to_i).to eql @comment.created_at.to_i
+    end
+
+    it "should exclude provisional comments" do
+      setup_assignment_with_homework
+      @submission = @assignment.submissions.first
+      @comment = @submission.add_comment(:comment => 'comment', :provisional => true)
+      json = @assignment.speed_grader_json(@user)
+      expect(json[:submissions].first[:submission_comments]).to be_empty
     end
 
     context "students and active course sections" do
@@ -2705,7 +2815,7 @@ describe Assignment do
 
       it "prefers people who aren't excused" do
         g1, _ = @groups
-        g1rep, *others = g1.users.all.shuffle
+        g1rep, *others = g1.users.to_a.shuffle
         others.each { |u|
           @assignment.grade_student(u, excuse: true)
         }
@@ -2779,11 +2889,113 @@ describe Assignment do
           json = @assignment.speed_grader_json(@teacher)
           expect(json[:submissions].first['submission_history'].size).to eq 1
 
-          Version.update_all("versionable_type = 'QuizSubmission'", "versionable_type = 'Quizzes::QuizSubmission'")
+          Version.where("versionable_type = 'QuizSubmission'").update_all("versionable_type = 'Quizzes::QuizSubmission'")
           json = @assignment.reload.speed_grader_json(@teacher)
           expect(json[:submissions].first['submission_history'].size).to eq 1
         end
       end
+    end
+
+    describe "with moderated grading" do
+      before(:once) do
+        Account.default.allow_feature!(:moderated_grading)
+        course_with_ta :course => @course, :active_all => true
+        assignment_model(:course => @course, :submission_types => 'online_text_entry')
+        rubric_model
+        @association = @rubric.associate_with(@assignment, @course, :purpose => 'grading', :use_for_grading => true)
+
+        @submission = @assignment.submit_homework(@student, :submission_type => 'online_text_entry', :body => 'ahem')
+        @assignment.grade_student(@student, :comment => 'real comment', :score => 1)
+
+        @assignment.moderated_grading_selections.create!(:student => @student)
+
+        @submission.add_comment(:author => @teacher, :comment => 'provisional comment', :provisional => true)
+        teacher_pg = @submission.provisional_grade(@teacher)
+        teacher_pg.update_attribute(:score, 2)
+        @association.assess(
+          :user => @student, :assessor => @teacher, :artifact => teacher_pg,
+          :assessment => {
+            :assessment_type => 'grading',
+            :criterion_crit1 => {
+              :points => 2,
+              :comments => 'a comment',
+            }
+          })
+
+        @submission.add_comment(:author => @ta, :comment => 'other provisional comment', :provisional => true)
+        ta_pg = @submission.provisional_grade(@ta)
+        ta_pg.update_attribute(:score, 3)
+        @association.assess(
+          :user => @student, :assessor => @ta, :artifact => ta_pg,
+          :assessment => {
+            :assessment_type => 'grading',
+            :criterion_crit1 => {
+              :points => 3,
+              :comments => 'a comment',
+            }
+          })
+
+        @other_student = user(:active_all => true)
+        student_in_course(:course => @course, :user => @other_student, :active_all => true)
+      end
+
+      describe "for provisional grader" do
+        before(:once) do
+          @json = @assignment.speed_grader_json(@ta, :grading_role => :provisional_grader)
+        end
+
+        it "should include only the grader's provisional grades" do
+          expect(@json['submissions'][0]['score']).to eq 3
+          expect(@json['submissions'][0]['provisional_grades']).to be_nil
+        end
+
+        it "should include only the grader's provisional comments" do
+          expect(@json['submissions'][0]['submission_comments'].map { |comment| comment['comment'] }).to eq ['other provisional comment']
+        end
+
+        it "should only include the grader's provisional rubric assessments" do
+          ras = @json['context']['students'][0]['rubric_assessments']
+          expect(ras.count).to eq 1
+          expect(ras[0]['assessor_id']).to eq @ta.id
+        end
+
+        it "should determine whether the student needs a provisional grade" do
+          expect(@json['context']['students'][0]['needs_provisional_grade']).to be_falsey
+          expect(@json['context']['students'][1]['needs_provisional_grade']).to be_truthy # other student
+        end
+      end
+
+      describe "for moderator" do
+        before(:once) do
+          @json = @assignment.speed_grader_json(@teacher, :grading_role => :moderator)
+        end
+
+        it "should include the moderator's provisional grades and comments" do
+          expect(@json['submissions'][0]['score']).to eq 2
+          expect(@json['submissions'][0]['submission_comments'].map { |comment| comment['comment'] }).to eq ['provisional comment']
+        end
+
+        it "should include the moderator's provisional rubric assessments" do
+          ras = @json['context']['students'][0]['rubric_assessments']
+          expect(ras.count).to eq 1
+          expect(ras[0]['assessor_id']).to eq @teacher.id
+        end
+
+        it "should list all provisional grades" do
+          pgs = @json['submissions'][0]['provisional_grades']
+          expect(pgs.size).to eq 2
+          expect(pgs.map { |pg| [pg['score'], pg['scorer_id'], pg['submission_comments'][0]['comment']] }).to eq(
+            [[2.0, @teacher.id, "provisional comment"], [3.0, @ta.id, "other provisional comment"]]
+          )
+        end
+
+        it "should include all the other provisional rubric assessments" do
+          pras = @json['context']['students'][0]['provisional_rubric_assessments']
+          expect(pras.count).to eq 1
+          expect(pras[0]['assessor_id']).to eq @ta.id
+        end
+      end
+
     end
   end
 
@@ -2817,29 +3029,70 @@ describe Assignment do
   end
 
   describe "update_student_submissions" do
-    before :once do
-      @student1, @student2 = create_users_in_course(@course, 2, return_type: :record)
-      @assignment = @course.assignments.create! grading_type: "pass_fail",
-                                                points_possible: 5
-      @sub1 = @assignment.grade_student(@student1, grade: "complete").first
-      @sub2 = @assignment.grade_student(@student2, grade: "incomplete").first
+    context "pass/fail assignments" do
+      before :once do
+        @student1, @student2 = create_users_in_course(@course, 2, return_type: :record)
+        @assignment = @course.assignments.create! grading_type: "pass_fail",
+        points_possible: 5
+        @sub1 = @assignment.grade_student(@student1, grade: "complete").first
+        @sub2 = @assignment.grade_student(@student2, grade: "incomplete").first
+      end
+
+      it "should save a version when changing grades" do
+        @assignment.update_attribute :points_possible, 10
+        expect(@sub1.reload.version_number).to eq 2
+      end
+
+      it "works for pass/fail assignments" do
+        @assignment.update_attribute :points_possible, 10
+        expect(@sub1.reload.grade).to eq "complete"
+        expect(@sub2.reload.grade).to eq "incomplete"
+      end
+
+      it "works for pass/fail assignments with 0 points possible" do
+        @assignment.update_attribute :points_possible, 0
+        expect(@sub1.reload.grade).to eq "complete"
+        expect(@sub2.reload.grade).to eq "incomplete"
+      end
     end
 
-    it "should save a version when changing grades" do
-      @assignment.update_attribute :points_possible, 10
-      expect(@sub1.reload.version_number).to eq 2
-    end
+    context "pass/fail assignments with initial 0 points possible" do
+      before :once do
+        setup_assignment_without_submission
+        @assignment.grading_type = "pass_fail"
+        @assignment.points_possible = 0.0
+        @assignment.save
+      end
 
-    it "works for pass/fail assignments" do
-      @assignment.update_attribute :points_possible, 10
-      expect(@sub1.reload.grade).to eq "complete"
-      expect(@sub2.reload.grade).to eq "incomplete"
-    end
+      let(:submission) { @assignment.submissions.first }
 
-    it "works for pass/fail assignments with 0 points possible" do
-      @assignment.update_attribute :points_possible, 0
-      expect(@sub1.reload.grade).to eq "complete"
-      expect(@sub2.reload.grade).to eq "incomplete"
+      it "preserves pass/fail grade when changing from 0 to positive points possible" do
+        @assignment.grade_student(@user, :grade => 'pass')
+        @assignment.points_possible = 1.0
+        @assignment.update_student_submissions
+
+        submission.reload
+        expect(submission.grade).to eql('complete')
+      end
+
+      it "changes the score of 'complete' pass/fail submissions to match the assignment's possible points" do
+        @assignment.grade_student(@user, :grade => 'pass')
+        @assignment.points_possible = 3.0
+        @assignment.update_student_submissions
+
+        submission.reload
+        expect(submission.score).to eql(3.0)
+      end
+
+      it "does not change the score of 'incomplete' pass/fail submissions if assignment points possible has changed" do
+        @assignment.grade_student(@user, :grade => 'fail')
+        @assignment.points_possible = 2.0
+        @assignment.update_student_submissions
+
+        submission.reload
+        expect(submission.score).to eql(0.0)
+      end
+
     end
   end
 
@@ -3350,6 +3603,65 @@ describe Assignment do
       a2 = assignment(@group_category)
       a2.group_category.destroy
       expect(a2.group_category_deleted_with_submissions?).to eq false
+    end
+  end
+
+  describe "moderated_grading validation" do
+    it "does not allow turning on if graded submissions exist" do
+      assignment_model(course: @course)
+      @assignment.grade_student @student, score: 0
+      @assignment.moderated_grading = true
+      expect(@assignment.save).to eq false
+      expect(@assignment.errors[:moderated_grading]).to be_present
+    end
+
+    it "does not allow turning on if is also peer reviewed" do
+      assignment_model(course: @course)
+      @assignment.peer_reviews = true
+      @assignment.moderated_grading = true
+      expect(@assignment.save).to eq false
+      expect(@assignment.errors[:moderated_grading]).to be_present
+    end
+
+    it "does not allow turning on if also a group assignment" do
+      assignment_model(course: @course)
+      @assignment.group_category = @course.group_categories.create!(name: "groups")
+      @assignment.moderated_grading = true
+      expect(@assignment.save).to eq false
+      expect(@assignment.errors[:moderated_grading]).to be_present
+    end
+
+    it "does not allow turning off if graded submissions exist" do
+      assignment_model(course: @course, moderated_grading: true)
+      expect(@assignment).to be_moderated_grading
+      @assignment.grade_student @student, score: 0
+      @assignment.moderated_grading = false
+      expect(@assignment.save).to eq false
+      expect(@assignment.errors[:moderated_grading]).to be_present
+    end
+
+    it "does not allow turning off if provisional grades exist" do
+      assignment_model(course: @course, moderated_grading: true)
+      expect(@assignment).to be_moderated_grading
+      submission = @assignment.submit_homework @student, body: "blah"
+      pg = submission.find_or_create_provisional_grade! scorer: @teacher, score: 0
+      @assignment.moderated_grading = false
+      expect(@assignment.save).to eq false
+      expect(@assignment.errors[:moderated_grading]).to be_present
+    end
+
+    it "does not allow turning on for an ungraded assignment" do
+      assignment_model(course: @course, submission_types: 'not_graded')
+      @assignment.moderated_grading = true
+      expect(@assignment.save).to eq false
+      expect(@assignment.errors[:moderated_grading]).to be_present
+    end
+
+    it "does not allow creating a new ungraded assignment with moderated grading" do
+      a = @course.assignments.build
+      a.moderated_grading = true
+      a.submission_types = 'not_graded'
+      expect(a).not_to be_valid
     end
   end
 end

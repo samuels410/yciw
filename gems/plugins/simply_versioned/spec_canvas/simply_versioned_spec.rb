@@ -72,7 +72,7 @@ describe 'simply_versioned' do
       woozel.name = 'Piglet'
       woozel.with_versioning(&:save!)
       expect(woozel.versions.loaded?).to eq false
-      all = woozel.versions.all
+      all = woozel.versions.to_a
       Woozel.connection.expects(:select_all).never
       all.each do |version|
         expect(version.versionable).to eq woozel
@@ -142,12 +142,12 @@ describe 'simply_versioned' do
       end
     end
   end
-  
+
   # INSTRUCTURE: shim for quizzes namespacing
   describe '.versionable_type' do
     it 'returns the correct representation of a quiz submission' do
       submission = quiz_model.quiz_submissions.create
-      submission.with_versioning(explicit: true, &:save!)
+      submission.with_versioning(explicit: true) { submission.save! }
       version = Version.where(:versionable_id => submission.id, :versionable_type => 'Quizzes::QuizSubmission').first
       expect(version).not_to be_nil
 
@@ -157,7 +157,7 @@ describe 'simply_versioned' do
 
     it 'returns the correct representation of a quiz' do
       quiz = quiz_model
-      quiz.with_versioning(explicit: true, &:save!)
+      quiz.with_versioning(explicit: true) { quiz.save! }
       version = Version.where(:versionable_id => quiz.id, :versionable_type => 'Quizzes::Quiz').first
 
       version.versionable_type = 'Quiz'
@@ -167,7 +167,7 @@ describe 'simply_versioned' do
 
     it 'returns the versionable type attribute if not a quiz' do
       assignment = assignment_model
-      assignment.with_versioning(explicit: true, &:save!)
+      assignment.with_versioning(explicit: true) { assignment.save! }
       assignment.versions.each do |version|
         expect(version.versionable_type).to eq 'Assignment'
       end

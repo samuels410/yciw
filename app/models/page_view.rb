@@ -226,27 +226,29 @@ class PageView < ActiveRecord::Base
     end
   end
 
-  def create
-    return super unless PageView.cassandra?
-    self.created_at ||= Time.zone.now
-    user.shard.activate do
-      run_callbacks(:create) do
-        PageView::EventStream.insert(self)
-        @new_record = false
-        self.id
+  class_eval <<-RUBY, __FILE__, __LINE__ + 1
+    def #{CANVAS_RAILS3 ? :create : :_create_record}(*args)
+      return super unless PageView.cassandra?
+      self.created_at ||= Time.zone.now
+      user.shard.activate do
+        run_callbacks(:create) do
+          PageView::EventStream.insert(self)
+          @new_record = false
+          self.id
+        end
       end
     end
-  end
 
-  def update
-    return super unless PageView.cassandra?
-    user.shard.activate do
-      run_callbacks(:update) do
-        PageView::EventStream.update(self)
-        true
+    def #{CANVAS_RAILS3 ? :update : :_update_record}(*args)
+      return super unless PageView.cassandra?
+      user.shard.activate do
+        run_callbacks(:update) do
+          PageView::EventStream.update(self)
+          true
+        end
       end
     end
-  end
+  RUBY
 
   scope :for_context, proc { |ctx| where(:context_type => ctx.class.name, :context_id => ctx) }
   scope :for_users, lambda { |users| where(:user_id => users) }
@@ -298,6 +300,27 @@ class PageView < ActiveRecord::Base
     # round down to the last 5 minute mark -- so 03:43:28 turns into 03:40:00
     utc = utc - ((utc.min % 5) * 60) - utc.sec
     "active_users:#{utc.as_json}"
+  end
+
+  # this is not intended to be called often; only from console as a debugging measure
+  def self.active_user_counts_by_shard(time = Time.now)
+    members = Set.new
+    time = time..time unless time.is_a?(Range)
+    bucket_time = time.begin
+    while (time.cover?(bucket_time))
+      bucket = user_count_bucket_for_time(bucket_time)
+      members.merge(Canvas.redis.smembers(bucket))
+      bucket_time += 5.minutes
+    end
+
+    result = {}
+    members.each do |uid|
+      shard = Shard.shard_for(uid)
+      next unless shard
+      result[shard.id] ||= 0
+      result[shard.id] += 1
+    end
+    result
   end
 
   def store_page_view_to_user_counts

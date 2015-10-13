@@ -17,21 +17,15 @@
 
     <% if @presenter.auth? %>
       <%= link_to(image_tag("delete.png") + t(:delete_auth_link, "Remove All Authentication"),
-                  context_url(@account, :context_remove_all_authorization_configs_url),
+                  account_remove_all_authentication_providers_url(@account),
                   confirm: t(:delete_auth_confirmation, "Are you sure? Users may not be able to log in if this is removed."),
                   method: :delete,
                   class: "delete_auth_link btn button-sidebar-wide")%>
     <% end %>
 
-    <div class="add_auth_div">
-      <span class="add">
-        <%= t(:add_auth_desc, "Add an identity provider to this account:")%>
-      </span>
-      <br/>
-      <%= select( "", "", @presenter.sso_options,
-                { include_blank: t(:choose_auth_type_option,
-                                   "Choose an authentication service") },
-                id: "add_auth_select") %>
+    <div id="add-authentication-provider"
+         class="add_auth_div"
+         data-options="<%= @presenter.sso_options.to_json %>">
     </div>
   </div>
 <% end %>
@@ -61,19 +55,8 @@
   </p>
 <% end %>
 
-<% if @presenter.canvas_auth_only? %>
-  <p>
-    <%= mt("If you configure settings that cause you to "\
-           "not be able to log in you can directly access regular Canvas "\
-           "login at %{url}",
-           url: canvas_login_url) %>
-  </p>
-<% end %>
-
-<% if @presenter.configs.size >= 1 %>
-    <%= render partial: 'sso_settings_form',
-               locals: { presenter: @presenter, account: @account }%>
-<% end %>
+<%= render partial: 'sso_settings_form',
+           locals: { presenter: @presenter, account: @account }%>
 
 <h2><%= t("Current Provider") %></h2>
 

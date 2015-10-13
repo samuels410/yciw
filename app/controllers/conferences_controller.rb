@@ -188,7 +188,7 @@ class ConferencesController < ApplicationController
     if @context.respond_to?(:participating_typical_users)
       scope = @context.participating_typical_users
     end
-    @users = scope.where("users.id<>?", @current_user).order(User.sortable_name_order_by_clause).all.uniq
+    @users = scope.where("users.id<>?", @current_user).order(User.sortable_name_order_by_clause).to_a.uniq
     # exposing the initial data as json embedded on page.
     js_env(
       current_conferences: ui_conferences_json(@new_conferences, @context, @current_user, session),
@@ -197,6 +197,7 @@ class ConferencesController < ApplicationController
       conference_type_details: conference_types_json(WebConference.conference_types),
       users: @users.map { |u| {:id => u.id, :name => u.last_name_first} },
     )
+    flash[:error] = t('Some conferences on this page are hidden because of errors while retrieving their status') if @errors
   end
   protected :web_index
 

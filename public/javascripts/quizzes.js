@@ -280,7 +280,7 @@ define([
         htmlValues: ['answer_html', 'answer_match_left_html']
       });
 
-      addHTMLFeedback($answer, answer, 'answer_comment');
+      addHTMLFeedback($answer.find('.answer_comments'), answer, 'answer_comment');
 
       if (answer.answer_weight > 0) {
         $answer.addClass('correct_answer');
@@ -793,12 +793,21 @@ define([
         if (isNaN(val) || val < 0) { val = 0; }
         tally += val;
       });
-      $("#questions .group_top:not(#group_top_new)").each(function() {
+      $("#questions .group_top:not(#group_top_new)").each(function(){
         var val = parseFloat($(this).find(".question_points").text());
         if (isNaN(val) || val < 0) { val = 0; }
-        var cnt = parseInt($(this).find(".pick_count").text(), 10);
-        if (isNaN(cnt)) { cnt = 0; }
-        tally += val * cnt;
+        var pickCount = parseInt($(this).find(".pick_count").text(), 10);
+        if (isNaN(pickCount)) { pickCount = 0; }
+        var groupId = this.id.replace("group_top_","")
+        questionCount = $(this.parentElement).find("[data-group-id='" + groupId + "']").length
+
+        // unless it is a question bank, make sure
+        // enough questions are in the group
+        if(!$(this).hasClass("question_bank_top")){
+          pickCount = Math.min(pickCount, questionCount)
+        }
+
+        tally += val * pickCount;
       });
       tally = Math.round(tally * 100.0) / 100.0;
       $(".points_possible").text(tally);
@@ -928,9 +937,7 @@ define([
 
       $pickers.each(function() {
         var $field = $(this);
-        // remove the second 'false' argument once the pickers know how to
-        // parse localized datetimes
-        var formattedDate = Handlebars.helpers.datetimeFormatted($field.val() || '', false);
+        var formattedDate = Handlebars.helpers.datetimeFormatted($field.val() || '');
 
         $field.val(formattedDate);
         $field.datetime_field();
@@ -2239,6 +2246,10 @@ define([
       $(".question_form:visible,.group_top.editing .quiz_group_form:visible").submit();
       var $question = makeQuestion();
       if ($(this).parents(".group_top").length > 0) {
+
+        groupID = $(this).parents(".group_top")[0].id.replace("group_top_","")
+        $($question[0]).attr("data-group-id", groupID)
+
         var $bottom = $(this).parents(".group_top").next();
         while($bottom.length > 0 && !$bottom.hasClass('group_bottom')) {
           $bottom = $bottom.next();
@@ -2992,6 +3003,11 @@ define([
 
       // rewrite the data so that it fits the jsonapi format
       processData: function(data) {
+        var quizGroupQuestionPoints = data['quiz_group[question_points]'];
+        if (quizGroupQuestionPoints && quizGroupQuestionPoints < 0) {
+          $(this).find("input[name='quiz_group[question_points]']").errorBox(I18n.t('question.positive_points', "Must be zero or greater"));
+          return false;
+        }
         var newData = {};
         _.each(data, function(val, key) {
           newData[key.replace('quiz_group[', 'quiz_groups[][')] = val;
@@ -3855,7 +3871,7 @@ define([
       var val = (Math.random() * data.range) + data.min;
       val = Math.round(val * data.rounder) / (data.rounder);
       $variable.attr('data-value', val);
-      if (!options || options.template) {
+      if (!options || options.template || options.recompute) {
         $variable.find(".value").text(val);
       }
       if (!options || options.recompute) {

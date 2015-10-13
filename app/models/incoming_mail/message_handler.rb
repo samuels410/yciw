@@ -35,13 +35,16 @@ module IncomingMail
         raise IncomingMail::Errors::UnknownAddress unless valid_user_and_context?(context, user)
         from_channel = sent_from_channel(user, incoming_message)
         raise IncomingMail::Errors::UnknownSender unless from_channel
-        context.reply_from({
+        Rails.cache.fetch(['incoming_mail_reply_from', context, incoming_message.message_id].cache_key, expires_in: 7.days) do
+          context.reply_from({
                                :purpose => 'general',
                                :user => user,
                                :subject => utf8ify(incoming_message.subject, incoming_message.header[:subject].try(:charset)),
                                :html => html_body,
                                :text => body
-                           })
+                             })
+          true
+        end
       end
     rescue IncomingMail::Errors::ReplyFrom => error
       bounce_message(original_message, incoming_message, error, outgoing_from_address, from_channel)
@@ -95,6 +98,14 @@ module IncomingMail
       ndr_subject = ""
       ndr_body = ""
       case error
+        when IncomingMail::Errors::ReplyToDeletedDiscussion
+          ndr_subject = I18n.t("Message Reply Failed: %{subject}", :subject => subject)
+          ndr_body = I18n.t(<<-BODY, :subject => subject).gsub(/^ +/, '')
+          The message titled "%{subject}" could not be delivered because the discussion topic has been deleted. If you are trying to contact someone through Canvas you can try logging in to your account and sending them a message using the Inbox tool.
+
+          Thank you,
+          Canvas Support
+          BODY
         when IncomingMail::Errors::ReplyToLockedTopic
           ndr_subject = I18n.t('lib.incoming_message_processor.locked_topic.subject', "Message Reply Failed: %{subject}", :subject => subject)
           ndr_body = I18n.t('lib.incoming_message_processor.locked_topic.body', <<-BODY, :subject => subject).gsub(/^ +/, '')
