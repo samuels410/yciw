@@ -53,8 +53,7 @@ class ContextModulesController < ApplicationController
         :MODULE_FILE_PERMISSIONS => {
            usage_rights_required: @context.feature_enabled?(:usage_rights_required),
            manage_files: @context.grants_right?(@current_user, session, :manage_files)
-        },
-        :NC_OR_ENABLED => @context.feature_enabled?(:nc_or)
+        }
     end
   end
   include ModuleIndexHelper
@@ -167,22 +166,12 @@ class ContextModulesController < ApplicationController
       info = {}
       now = Time.now.utc.iso8601
       @context.module_items_visible_to(@current_user).each do |tag|
-        if tag.can_have_assignment?
-          info[tag.id] = Rails.cache.fetch([tag, @current_user, "content_tag_assignment_info2"].cache_key) do
-            if tag.assignment
-              tag.assignment.context_module_tag_info(@current_user, @context)
-            else
-              {
-                :points_possible => nil,
-                :due_date => (tag.content_type_quiz? && tag.content.due_at ? tag.content.due_at.utc.iso8601 : nil)
-              }
-            end
-          end
+        info[tag.id] = if tag.can_have_assignment? && tag.assignment
+          tag.assignment.context_module_tag_info(@current_user, @context)
+        elsif tag.content_type_quiz?
+          tag.content.context_module_tag_info(@current_user, @context)
         else
-          info[tag.id] = {:points_possible => nil, :due_date => nil}
-        end
-        if info[tag.id][:due_date] && info[tag.id][:due_date] < now
-          info[tag.id][:past_due] = true
+          {:points_possible => nil, :due_date => nil}
         end
       end
       render :json => info
@@ -425,7 +414,14 @@ class ContextModulesController < ApplicationController
         elsif @context.grants_right?(@current_user, session, :participate_as_student)
           @progressions = @context.context_modules.active.order(:id).map{|m| m.evaluate_for(@current_user) }
         else
-          @progressions = []
+          # module progressions don't apply, but unlock_at still does
+          @progressions = @context.context_modules.active.order(:id).map do |m|
+            { :context_module_progression =>
+                { :context_module_id => m.id,
+                  :workflow_state => (m.to_be_unlocked ? 'locked' : 'unlocked'),
+                  :requirements_met => [],
+                  :incomplete_requirements => [] } }
+          end
         end
         render :json => @progressions
       elsif !@context.grants_right?(@current_user, session, :view_all_grades)

@@ -20,6 +20,10 @@ define [
   'jsx/gradebook/grid/actions/studentEnrollmentsActions'
   'jsx/gradebook/grid/stores/assignmentGroupsStore'
   'jsx/gradebook/grid/actions/assignmentGroupsActions'
+  'compiled/gradebook2/AssignmentGroupWeightsDialog'
+  'jsx/gradebook/grid/stores/sectionsStore'
+  'jsx/gradebook/grid/actions/sectionsActions'
+  'jsx/gradebook/grid/actions/tableActions'
   'jst/_avatar' #needed by row_student_name
   'jquery.ajaxJSON'
   'jquery.instructure_date_and_time'
@@ -34,15 +38,18 @@ define [
   'jqueryui/sortable'
   'compiled/jquery.kylemenu'
   'compiled/jquery/fixDialogButtons'
+  'vendor/jquery.ba-tinypubsub'
 ], (React, round, InputFilterView, I18n, GRADEBOOK_TRANSLATIONS, $, _,
   userSettings, Spinner, htmlEscape, PostGradesStore, PostGradesApp,
   columnHeaderTemplate, SectionMenuView, GradingPeriodMenuView,
   GradebookConstants, GradebookToolbarActions, StudentEnrollmentsActions,
-  AssignmentGroupsStore, AssignmentGroupActions) ->
+  AssignmentGroupsStore, AssignmentGroupActions, AssignmentGroupWeightsDialog,
+  SectionsStore, SectionsActions, TableActions) ->
 
   class Gradebook
     constructor: (@options) ->
       @initGradingPeriods()
+      @initSections()
       @initPostGradesStore()
       @showPostGradesButton()
       @initSettingsDropdown()
@@ -51,7 +58,32 @@ define [
       @attachSetWeightsDialogHandlers()
 
     initGradingPeriods: ->
-      @gradingPeriods = ENV.GRADEBOOK_OPTIONS.active_grading_periods
+      @gradingPeriods = @options.active_grading_periods
+
+    initSections: ->
+      @sections = {}
+      $.subscribe 'currentSection/change', @onSectionChange
+      SectionsStore.listen (sectionStoreData) =>
+        sections = sectionStoreData.sections
+        @sectionToShow = sectionStoreData.selected
+        @sections = {}
+        if (sections != null && sections != undefined)
+          for section in sections
+            htmlEscape(section)
+            @sections[section.id] = section
+
+          if sections.length > 2 # 2 because a filler "All sections" is inserted
+            @drawSectionSelectButton(@sections)
+
+
+    onSectionChange: (section) ->
+      TableActions.enterLoadingState()
+      SectionsActions.selectSection(section)
+      @sectionToShow = section
+      if @sectionToShow
+        userSettings.contextSet('grading_show_only_section', @sectionToShow)
+      else
+        userSettings.contextRemove('grading_show_only_section', @sectionToShow)
 
     initPostGradesStore: ->
       @postGradesStore = PostGradesStore
@@ -62,10 +94,10 @@ define [
       @postGradesStore.setSelectedSection @sectionToShow
 
     showPostGradesButton: ->
-      app = new PostGradesApp store: @postGradesStore
+      app = React.createElement(PostGradesApp, store: @postGradesStore)
       $placeholder = $('.post-grades-placeholder')
       if ($placeholder.length > 0)
-        React.renderComponent(app, $placeholder[0])
+        React.render(app, $placeholder[0])
 
     initSettingsDropdown: () ->
       preferences = @getInitialToolbarPreferences()
@@ -74,6 +106,21 @@ define [
       @initArrangeByOption(preferences)
       @initNotesColumnOption(preferences)
       @attachSettingsDropdownEventHandlers(preferences)
+
+    sectionList: ->
+      _.map @sections, (section, id) =>
+        if(section.passback_status)
+          date = new Date(section.passback_status.sis_post_grades_status.grades_posted_at)
+        { name: section.name, id: id, passback_status: section.passback_status, date: date, checked: @sectionToShow == id }
+
+    drawSectionSelectButton: (sections) ->
+      @sectionMenu = new SectionMenuView(
+        el: $('.section-button-placeholder'),
+        sections: sections,
+        course: {name: @options.course_name},
+        showSections: sections,
+        currentSection: @sectionToShow)
+      @sectionMenu.render()
 
     getInitialToolbarPreferences: () ->
       storedSortOrder = @options.gradebook_column_order_settings ||
@@ -118,7 +165,6 @@ define [
       $('#student_names_toggle').click(@studentNamesToggle)
       $('#arrange_by_toggle').click(@arrangeByToggle)
       $('#notes_toggle').click(@notesToggle)
-      $('#show_attendance').change -> GradebookToolbarActions.toggleShowAttendanceColumns(@checked)
       $('#show_concluded_enrollments').change(@concludedEnrollmentsChange)
 
     attachSetWeightsDialogHandlers: () ->
@@ -184,24 +230,10 @@ define [
 
     initHeader: ->
       @gradingPeriodToShow = @getGradingPeriodToShow()
-      @drawSectionSelectButton() if @sections_enabled || @course
       @drawGradingPeriodSelectButton() if @options.multiple_grading_periods_enabled
-      # don't show the "show attendance" link in the dropdown if there's no attendance assignments
-      unless (_.detect @assignments, (a) -> (''+a.submission_types) == 'attendance')
-        $('#show_attendance').closest('li').hide()
 
       $('#gradebook_settings').kyleMenu()
       $('#download_csv').kyleMenu()
-
-    drawSectionSelectButton: () ->
-      @sectionMenu = new SectionMenuView(
-        el: $('.section-button-placeholder'),
-        sections: @sectionList(),
-        course: @course,
-        showSections: @showSections(),
-        showSisSync: @options.post_grades_feature_enabled,
-        currentSection: @sectionToShow)
-      @sectionMenu.render()
 
     drawGradingPeriodSelectButton: () ->
       @gradingPeriodMenu = new GradingPeriodMenuView(

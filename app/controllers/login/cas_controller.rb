@@ -24,7 +24,7 @@ class Login::CasController < ApplicationController
   protect_from_forgery except: :destroy
 
   before_filter :forbid_on_files_domain
-  before_filter :run_login_hooks, :check_sa_delegated_cookie, only: :new
+  before_filter :run_login_hooks, :check_sa_delegated_cookie, :fix_ms_office_redirects, only: :new
 
   delegate :client, to: :aac
 
@@ -58,6 +58,8 @@ class Login::CasController < ApplicationController
 
     if st.is_valid?
       pseudonym = @domain_root_account.pseudonyms.for_auth_configuration(st.user, aac)
+      pseudonym ||= aac.provision_user(st.user) if aac.jit_provisioning?
+
       if pseudonym
         # Successful login and we have a user
         @domain_root_account.pseudonym_sessions.create!(pseudonym, false)

@@ -29,23 +29,20 @@ RSpec.configure do |c|
   c.color = true
 
   c.around(:each) do |example|
-    attempts = 0
-    begin
-      Timeout::timeout(180) {
-        example.run
-      }
-      if ENV['AUTORERUN']
-        e = @example.instance_variable_get('@exception')
-        if !e.nil? && (attempts += 1) < 2 && !example.metadata[:no_retry]
-          puts "FAILURE: #{@example.description} \n #{e}".red
-          puts "RETRYING: #{@example.description}".yellow
-          @example.instance_variable_set('@exception', nil)
-          redo
-        elsif e.nil? && attempts != 0
-          puts "SUCCESS: retry passed for \n #{@example.description}".green
+    Timeout::timeout(180) do
+      Rails.logger.info "STARTING SPEC #{example.full_description}"
+      example.run
+      exception = example.example.exception
+      case exception
+      when EOFError, Errno::ECONNREFUSED
+        if $selenium_driver
+          puts "SELENIUM: webdriver socket closed the connection.  Will try to re-initialize."
+          # this will cause the selenium driver to get re-initialized if it
+          # crashes for some reason
+          $selenium_driver = nil
         end
       end
-    end until true
+    end
   end
 end
 
@@ -59,9 +56,34 @@ ENV["RAILS_ENV"] = 'test'
 require File.expand_path('../../config/environment', __FILE__) unless defined?(Rails)
 require 'rspec/rails'
 
+# ensure people aren't creating records outside the rspec lifecycle, e.g.
+# inside a describe/context block rather than a let/before/example
+require_relative 'support/blank_slate_protection'
+BlankSlateProtection.enable!
+
 Dir[Rails.root.join("spec/support/**/*.rb")].each { |f| require f }
 
 ActionView::TestCase::TestController.view_paths = ApplicationController.view_paths
+
+module RSpec::Core::Hooks
+class AfterContextHook < Hook
+  def run(example)
+    exception_class = if defined?(RSpec::Support::AllExceptionsExceptOnesWeMustNotRescue)
+                        RSpec::Support::AllExceptionsExceptOnesWeMustNotRescue
+                      else
+                        Exception
+                      end
+    example.instance_exec(example, &block)
+  rescue exception_class => e
+    # TODO: Come up with a better solution for this.
+    RSpec.configuration.reporter.message <<-EOS
+An error occurred in an `after(:context)` hook.
+  #{e.class}: #{e.message}
+  occurred at #{e.backtrace.join("\n")}
+    EOS
+  end
+end
+end
 
 unless CANVAS_RAILS3
   Time.class_eval do
@@ -117,6 +139,7 @@ module RSpec::Rails
 
         real_controller = controller_class.new
         real_controller.instance_variable_set(:@_request, @controller.request)
+        real_controller.instance_variable_set(:@context, @controller.instance_variable_get(:@context))
         @controller.real_controller = real_controller
 
         # just calling "render 'path/to/view'" by default looks for a partial
@@ -233,9 +256,6 @@ def truncate_table(model)
       begin
         old_proc = model.connection.raw_connection.set_notice_processor {}
         model.connection.execute("TRUNCATE TABLE #{model.connection.quote_table_name(model.table_name)} CASCADE")
-
-        # mobile verify expects specific id seq for developer key, this forces the sequence to always start at 101
-        model.connection.execute("SELECT setval('developer_keys_id_seq', 100);") if model == DeveloperKey
       ensure
         model.connection.raw_connection.set_notice_processor(&old_proc)
       end
@@ -251,12 +271,14 @@ def truncate_all_tables
   model_connections.each do |connection|
     if connection.adapter_name == "PostgreSQL"
       # use custom SQL to exclude tables from extensions
+      schema = connection.shard.name if connection.instance_variable_get(:@config)[:use_qualified_names]
       table_names = connection.query(<<-SQL, 'SCHEMA').map(&:first)
          SELECT tablename
          FROM pg_tables
-         WHERE schemaname = ANY (current_schemas(false)) AND NOT tablename IN (
-           SELECT CAST(objid::regclass AS VARCHAR) FROM pg_depend WHERE deptype='e'
-         )
+         WHERE schemaname = #{schema ? "'#{schema}'" : 'ANY (current_schemas(false))'}
+           AND NOT tablename IN (
+             SELECT CAST(objid::regclass AS VARCHAR) FROM pg_depend WHERE deptype='e'
+           )
       SQL
       table_names.delete('schema_migrations')
       connection.execute("TRUNCATE TABLE #{table_names.map { |t| connection.quote_table_name(t) }.join(',')}")
@@ -353,6 +375,14 @@ module Helpers
   end
 end
 
+if CANVAS_RAILS3
+  ActionController::TestSession.class_eval do
+    def destroy
+      clear
+    end
+  end
+end
+
 RSpec.configure do |config|
   # If you're not using ActiveRecord you should remove these
   # lines, delete config/database.yml and disable :active_record
@@ -420,6 +450,7 @@ RSpec.configure do |config|
     Time.zone = 'UTC'
     LoadAccount.force_special_account_reload = true
     Account.clear_special_account_cache!(true)
+    PluginSetting.current_account = nil
     AdheresToPolicy::Cache.clear
     Setting.reset_cache!
     ConfigFile.unstub
@@ -434,6 +465,14 @@ RSpec.configure do |config|
     Rails::logger.try(:info, "Running #{self.class.description} #{@method_name}")
     Attachment.domain_namespace = nil
     $spec_api_tokens = {}
+  end
+
+  config.before :suite do
+    BlankSlateProtection.disable!
+
+    if ENV['TEST_ENV_NUMBER'].present?
+      Rails.logger.reopen("log/test#{ENV['TEST_ENV_NUMBER']}.log")
+    end
   end
 
   # this runs on post-merge builds to capture dependencies of each spec;
@@ -517,6 +556,30 @@ RSpec.configure do |config|
   def assert_require_login
     expect(response).to be_redirect
     expect(flash[:warning]).to eq "You must be logged in to access this page"
+  end
+
+  # Instead of directly comparing urls
+  # this will make sure urls match
+  # by parsing them, and comparing the results
+  # meaning these would match
+  #   http://test.dev/?foo=bar&other=1
+  #   http://test.dev/?other=1&foo=bar
+  def assert_url_parse_match(test_url, expected_url)
+    parsed_test = URI.parse(test_url)
+    parsed_expected = URI.parse(expected_url)
+
+    parsed_test_query = Rack::Utils.parse_nested_query(parsed_test.query)
+    parsed_expected_query = Rack::Utils.parse_nested_query(parsed_expected.query)
+
+    expect(parsed_test.scheme).to eq parsed_expected.scheme
+    expect(parsed_test.host).to eq parsed_expected.host
+    expect(parsed_test_query).to eq parsed_expected_query
+  end
+
+  def assert_hash_contains(test_hash, expected_hash)
+    expected_hash.each do |key, expected_value|
+      expect(test_hash[key]).to eq expected_value
+    end
   end
 
   def fixture_file_upload(path, mime_type=nil, binary=false)

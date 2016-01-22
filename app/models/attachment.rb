@@ -64,7 +64,7 @@ class Attachment < ActiveRecord::Base
   belongs_to :root_attachment, :class_name => 'Attachment'
   belongs_to :replacement_attachment, :class_name => 'Attachment'
   has_one :sis_batch
-  has_one :thumbnail, :foreign_key => "parent_id", :conditions => {:thumbnail => "thumb"}
+  has_one :thumbnail, -> { where(thumbnail: 'thumb') }, foreign_key: "parent_id"
   has_many :thumbnails, :foreign_key => "parent_id"
   has_many :children, foreign_key: :root_attachment_id, class_name: 'Attachment'
   has_one :crocodoc_document
@@ -599,11 +599,21 @@ class Attachment < ActiveRecord::Base
     context = context.quota_context if context.respond_to?(:quota_context) && context.quota_context
     if context
       Shackles.activate(:slave) do
-        quota = Setting.get('context_default_quota', 50.megabytes.to_s).to_i
-        quota = context.quota if (context.respond_to?("quota") && context.quota)
-        min = self.minimum_size_for_quota
-        # translated to ruby this is [size, min].max || 0
-        quota_used = context.attachments.active.where(root_attachment_id: nil).sum("COALESCE(CASE when size < #{min} THEN #{min} ELSE size END, 0)").to_i
+        context.shard.activate do
+          quota = Setting.get('context_default_quota', 50.megabytes.to_s).to_i
+          quota = context.quota if (context.respond_to?("quota") && context.quota)
+
+          attachment_scope = context.attachments.active.where(root_attachment_id: nil)
+
+          if context.is_a?(User)
+            excluded_attachment_ids = context.attachments.joins(:attachment_associations).where("attachment_associations.context_type = ?", "Submission").pluck(:id)
+            attachment_scope = attachment_scope.where("id NOT IN (?)", excluded_attachment_ids)
+          end
+
+          min = self.minimum_size_for_quota
+          # translated to ruby this is [size, min].max || 0
+          quota_used = attachment_scope.sum("COALESCE(CASE when size < #{min} THEN #{min} ELSE size END, 0)").to_i
+        end
       end
     end
     {:quota => quota, :quota_used => quota_used}
@@ -668,7 +678,7 @@ class Attachment < ActiveRecord::Base
   protected :assign_uuid
 
   def inline_content?
-    self.content_type.match(/\Atext/) || self.extension == '.html' || self.extension == '.htm' || self.extension == '.swf'
+    (self.content_type.match(/\Atext/) && !self.canvadocable?) || self.extension == '.html' || self.extension == '.htm' || self.extension == '.swf'
   end
 
   def self.shared_secret
@@ -690,6 +700,11 @@ class Attachment < ActiveRecord::Base
 
   def content_type_with_encoding
     encoding.blank? ? content_type : "#{content_type}; charset=#{encoding}"
+  end
+
+  def content_type_with_text_match
+    # treats all text/X files as text/plain (except text/html)
+    (content_type.to_s.match(/^text\/.*/) && content_type.to_s != "text/html") ? "text/plain" : content_type
   end
 
   # Returns an IO-like object containing the contents of the attachment file.
@@ -756,18 +771,6 @@ class Attachment < ActiveRecord::Base
     else
       block.call(filename, len)
     end
-  end
-
-  alias_method :original_sanitize_filename, :sanitize_filename
-  def sanitize_filename(filename)
-    if self.root_attachment && self.root_attachment.filename
-      filename = self.root_attachment.filename
-    else
-      filename = Attachment.truncate_filename(filename, 255) do |component, len|
-        CanvasTextHelper.cgi_escape_truncate(component, len)
-      end
-    end
-    filename
   end
 
   def save_without_broadcasting
@@ -959,7 +962,6 @@ class Attachment < ActiveRecord::Base
       "image/pjpeg" => "image",
       "image/png" => "image",
       "image/gif" => "image",
-      "image/x-psd" => "image",
       "application/x-rar" => "zip",
       "application/x-rar-compressed" => "zip",
       "application/x-zip" => "zip",
@@ -986,11 +988,21 @@ class Attachment < ActiveRecord::Base
     }[content_type] || "file"
   end
 
-  set_policy do
-    given { |user, session| self.context.grants_right?(user, session, :manage_files) } #admins.include? user }
-    can :read and can :update and can :delete and can :create and can :download
+  def associated_with_submission?
+    @associated_with_submission ||= self.attachment_associations.where(context_type: 'Submission').exists?
+  end
 
-    given { |user| self.public? }
+  set_policy do
+    given { |user|
+      self.context.grants_right?(user, :manage_files) &&
+      !self.associated_with_submission?
+    }
+    can :delete
+
+    given { |user, session| self.context.grants_right?(user, session, :manage_files) } #admins.include? user }
+    can :read and can :update and can :create and can :download
+
+    given { self.public? }
     can :read and can :download
 
     given { |user, session| self.context.grants_right?(user, session, :read) } #students.include? user }
@@ -1035,6 +1047,12 @@ class Attachment < ActiveRecord::Base
   # submission attachments
   attr_writer :skip_submission_attachment_lock_checks
 
+  # prevent an access attempt shortly before unlock_at from caching permissions beyond that time
+  def touch_on_unlock
+    send_later_enqueue_args(:touch, { :run_at => unlock_at,
+                                      :singleton => "touch_on_unlock_attachment_#{global_id}" })
+  end
+
   def locked_for?(user, opts={})
     return false if @skip_submission_attachment_lock_checks
     return false if opts[:check_policies] && self.grants_right?(user, :update)
@@ -1042,6 +1060,7 @@ class Attachment < ActiveRecord::Base
     Rails.cache.fetch(locked_cache_key(user), :expires_in => 1.minute) do
       locked = false
       if (self.unlock_at && Time.now < self.unlock_at)
+        touch_on_unlock if Time.now + 1.hour >= self.unlock_at
         locked = {:asset_string => self.asset_string, :unlock_at => self.unlock_at}
       elsif (self.lock_at && Time.now > self.lock_at)
         locked = {:asset_string => self.asset_string, :lock_at => self.lock_at}
@@ -1176,7 +1195,7 @@ class Attachment < ActiveRecord::Base
   end
 
   def canvadocable?
-    Canvadocs.enabled? && Canvadoc.mime_types.include?(content_type)
+    Canvadocs.enabled? && Canvadoc.mime_types.include?(content_type_with_text_match)
   end
 
   def self.submit_to_canvadocs(ids)
@@ -1463,12 +1482,13 @@ class Attachment < ActiveRecord::Base
   end
 
   def preview_params(user, type, crocodoc_ids = nil)
-    blob = {
+    h = {
       user_id: user.try(:global_id),
       attachment_id: id,
-      type: type,
-      crocodoc_ids: crocodoc_ids
-    }.to_json
+      type: type
+    }
+    h.merge!(crocodoc_ids: crocodoc_ids) if crocodoc_ids.present?
+    blob = h.to_json
     hmac = Canvas::Security.hmac_sha1(blob)
     "blob=#{URI.encode blob}&hmac=#{URI.encode hmac}"
   end

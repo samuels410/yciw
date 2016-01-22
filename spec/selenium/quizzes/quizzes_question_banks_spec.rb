@@ -1,18 +1,18 @@
-require File.expand_path(File.dirname(__FILE__) + '/../helpers/quizzes_common')
-require File.expand_path(File.dirname(__FILE__) + '/../helpers/testrail_report')
+require_relative '../common'
+require_relative '../helpers/quizzes_common'
+require_relative '../helpers/testrail_report'
 
 describe 'quizzes question banks' do
+  include_context "in-process server selenium tests"
+  include QuizzesCommon
 
-  include_context 'in-process server selenium tests'
-
-  context 'when logged in as a teacher' do
+  context 'as a teacher' do
 
     before(:each) do
       course_with_teacher_logged_in
     end
 
     it 'should be able to create question bank', priority: "1", test_id: 140667 do
-      # report_test(72402) do
       get "/courses/#{@course.id}/question_banks"
       question_bank_title = keep_trying_until do
         f('.add_bank_link').click
@@ -31,8 +31,7 @@ describe 'quizzes question banks' do
       question_bank
     end
 
-    it 'should be able to create quiz questions', priority: "1", test_id: 140668 do
-      # report_test(72403) do
+    it 'adds a basic multiple choice question to a question bank', priority: "1", test_id: 140668 do
       bank = AssessmentQuestionBank.create!(context: @course)
       get "/courses/#{@course.id}/question_banks/#{bank.id}"
 
@@ -51,11 +50,11 @@ describe 'quizzes question banks' do
       get "/courses/#{@course.id}/quizzes/#{quiz.id}/edit"
       find_questions_link = f('.find_question_link')
       click_questions_tab
-      keep_trying_until {
+      keep_trying_until do
         find_questions_link.click
         wait_for_ajaximations
         f('.select_all_link')
-      }.click
+      end.click
       submit_dialog('#find_question_dialog', '.submit_button')
       wait_for_ajaximations
       click_settings_tab
@@ -154,23 +153,13 @@ describe 'quizzes question banks' do
       get "/courses/#{@course.id}/quizzes/#{quiz.id}/edit"
       click_questions_tab
 
-      keep_trying_until do
-        f('.find_question_link').click
-        wait_for_ajaximations
-        expect(f('#find_question_dialog')).to be_displayed
-        expect(f('.select_all_link')).to be_displayed
-      end
-      expect(ffj('#find_question_dialog .bank:visible').size).to eq 1
+      expect(f('.find_question_link')).to be_nil
 
-      close_visible_dialog
       keep_trying_until do
         f('.add_question_group_link').click
         wait_for_ajaximations
-        expect(f('.find_bank_link')).to be_displayed
+        expect(f('.find_bank_link')).to be_nil
       end
-      f('.find_bank_link').click
-      wait_for_ajaximations
-      expect(ffj('#find_bank_dialog .bank:visible').size).to eq 1
     end
 
     it 'should create a question group from a question bank', priority: "1", test_id: 319907 do
@@ -184,6 +173,38 @@ describe 'quizzes question banks' do
       replace_content(group_form.find_element(:name, 'quiz_group[question_points]'), '2')
       submit_form(group_form)
       expect(f('#questions .group_top .group_display.name')).to include_text('new group')
+    end
+
+    it 'creates a question group from a question bank from within the Find Quiz Question modal', priority: "1", test_id: 140590 do
+      assessment_question_model(bank: AssessmentQuestionBank.create!(context: @course))
+
+      get "/courses/#{@course.id}/quizzes/new"
+      click_questions_tab
+      wait_for_ajaximations
+
+      # open Find Question dialogue
+      f('.find_question_link').click
+      wait_for_ajaximations
+
+      # select questions from question bank
+      f('.select_all_link').click
+      wait_for_ajaximations
+
+      # create new quiz question group from selected questions
+      question_group_name = 'Quiz Question Group A'
+      click_option(ffj('.quiz_group_select'), '[ New Group ]')
+      fj('#found_question_group_name').send_keys question_group_name
+      fj('#found_question_group_pick').send_keys '1'
+      fj('#found_question_group_points').send_keys '1'
+      submit_dialog(f('#add_question_group_dialog'), '.submit_button')
+      wait_for_ajaximations
+
+      # submit Find Question dialogue
+      submit_dialog(f('#find_question_dialog'), '.submit_button')
+      wait_for_ajaximations
+
+      expect(f('.quiz_group_form')).to include_text question_group_name
+      expect(f('#question_new_question_text').text).to match 'does [a] equal [b] ?'
     end
 
     it 'deleting AJAX-loaded questions should work', priority: "2", test_id: 201938 do
@@ -234,7 +255,7 @@ describe 'quizzes question banks' do
       new_name = 'I have been edited'
       new_question_text = "What is the answer to #{new_name}?"
 
-      get "/courses/#{@course.id}/quizzes/#{@q.id}/edit"
+      open_quiz_edit_form
       click_questions_tab
       hover_and_click("#question_#{@quest1.id} .edit_question_link")
       replace_content(f('.question_form [name=\'question_name\']'), new_name)
@@ -243,11 +264,82 @@ describe 'quizzes question banks' do
       click_save_settings_button
 
       # verify modifications
-      get "/courses/#{@course.id}/quizzes/#{@q.id}/edit"
+      open_quiz_edit_form
       click_questions_tab
 
       expect(f("#question_#{@quest1.id}")).to include_text new_name
       expect(f("#question_#{@quest1.id}")).to include_text new_question_text
+    end
+
+    it "should let teachers view question banks in a soft-concluded course (but not edit)", priority: "2", test_id: 456150 do
+      term = Account.default.enrollment_terms.create!
+      term.set_overrides(Account.default, 'TeacherEnrollment' => {:end_at => 3.days.ago})
+      @course.enrollment_term = term
+      @course.save!
+      @bank = @course.assessment_question_banks.create!(title: 'Test Bank')
+
+      get "/courses/#{@course.id}/quizzes"
+
+      view_banks_link = f('.view_question_banks')
+      expect(view_banks_link).to be_displayed
+
+      expect_new_page_load { view_banks_link.click }
+
+      expect(f('.add_bank_link')).to be_nil
+      expect(f('.edit_bank_link')).to be_nil
+      expect(f('.delete_bank_link')).to be_nil
+
+      view_bank_link = f("#question_bank_#{@bank.id} a.title")
+      expect(view_bank_link).to be_displayed
+
+      expect_new_page_load { view_bank_link.click }
+    end
+
+    it "should let account admins view question banks without :manage_assignments (but not edit)", priority: "2", test_id: 456162 do
+      user(:active_all => true)
+      user_session(@user)
+      @role = custom_account_role 'weakling', :account => @course.account
+      @course.account.role_overrides.create!(:permission => 'read_course_content', :enabled => true, :role => @role)
+      @course.account.role_overrides.create!(:permission => 'read_question_banks', :enabled => true, :role => @role)
+      @course.account.account_users.create!(user: @user, role: @role)
+
+      @bank = @course.assessment_question_banks.create!(title: 'Test Bank')
+
+      get "/courses/#{@course.id}/quizzes"
+
+      view_banks_link = f('.view_question_banks')
+      expect(view_banks_link).to be_displayed
+
+      expect_new_page_load { view_banks_link.click }
+
+      expect(f('.add_bank_link')).to be_nil
+      expect(f('.edit_bank_link')).to be_nil
+      expect(f('.delete_bank_link')).to be_nil
+
+      view_bank_link = f("#question_bank_#{@bank.id} a.title")
+      expect(view_bank_link).to be_displayed
+
+      expect_new_page_load { view_bank_link.click }
+    end
+
+    it "should lock out teachers when :read_question_banks is disabled", priority: "2", test_id: 456163 do
+      term = Account.default.enrollment_terms.create!
+      term.set_overrides(Account.default, 'TeacherEnrollment' => {:end_at => 3.days.ago})
+      @course.enrollment_term = term
+      @course.save!
+
+      @bank = @course.assessment_question_banks.create!(title: 'Test Bank')
+
+      Account.default.role_overrides.create(:permission => 'read_question_banks', :role => teacher_role, :enabled => false)
+
+      get "/courses/#{@course.id}/quizzes"
+      expect(f('.view_question_banks')).to be_nil
+
+      get "/courses/#{@course.id}/question_banks"
+      expect(f('#unauthorized_message')).to be_displayed
+
+      get "/courses/#{@course.id}/question_banks/#{@bank.id}"
+      expect(f('#unauthorized_message')).to be_displayed
     end
   end
 end

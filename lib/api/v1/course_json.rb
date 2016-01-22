@@ -60,13 +60,13 @@ module Api::V1
     end
 
     def set_sis_course_id(hash, course, user)
-      if course.root_account.grants_any_right?(user, :read_sis, :manage_sis)
+      if course.grants_any_right?(user, :read_sis, :manage_sis)
         hash['sis_course_id'] = course.sis_source_id
       end
     end
 
     def set_integration_id(hash, course, user)
-      if course.root_account.grants_any_right?(user, :read_sis, :manage_sis)
+      if course.grants_any_right?(user, :read_sis, :manage_sis)
         hash['integration_id'] = course.integration_id
       end
     end
@@ -89,8 +89,10 @@ module Api::V1
             :type => e.sis_type,
             :role => e.role.name,
             :role_id => e.role.id,
+            :user_id => e.user_id,
             :enrollment_state => e.workflow_state
           }
+          h[:associated_user_id] = e.associated_user_id if e.assigned_observer?
           if include_total_scores && e.student?
             h.merge!(
               :computed_current_score => e.computed_current_score,

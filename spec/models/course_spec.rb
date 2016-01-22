@@ -825,7 +825,7 @@ describe Course, "enroll" do
     @course.enroll_student(@user)
     scope = account.associated_courses.active.select([:id, :name]).eager_load(:teachers).joins(:teachers).where(:enrollments => { :workflow_state => 'active' })
     sql = scope.to_sql
-    expect(sql).to match(/enrollments.type = 'TeacherEnrollment'/)
+    expect(sql).to match(/"enrollments"\."type" IN \('TeacherEnrollment'\)/)
   end
 end
 
@@ -1010,7 +1010,7 @@ describe Course, "gradebook_to_csv" do
     a = @course.assignments.create! name: "asdf", points_possible: 10
     a.grade_student @student, excuse: true
     csv = CSV.parse(GradebookExporter.new(@course, @teacher).to_csv)
-    _name, _id, _section, score, _ = csv[-1]
+    _name, _id, _section, _sis_login_id, score, _ = csv[-1]
     expect(score).to eq "EX"
   end
 
@@ -1032,9 +1032,9 @@ describe Course, "gradebook_to_csv" do
     expect(csv).not_to be_nil
     rows = CSV.parse(csv)
     expect(rows.length).to equal(5)
-    expect(rows[2][2]).to eq "COMPSCI 123 DIS 101 and COMPSCI 123 LEC 001"
-    expect(rows[3][2]).to eq "COMPSCI 123 LEC 001"
-    expect(rows[4][2]).to eq "COMPSCI 123 DIS 101, COMPSCI 123 DIS 102, and COMPSCI 123 LEC 001"
+    expect(rows[2][3]).to eq "COMPSCI 123 DIS 101 and COMPSCI 123 LEC 001"
+    expect(rows[3][3]).to eq "COMPSCI 123 LEC 001"
+    expect(rows[4][3]).to eq "COMPSCI 123 DIS 101, COMPSCI 123 DIS 102, and COMPSCI 123 LEC 001"
   end
 
   it "should generate csv with final grade if enabled" do
@@ -1283,7 +1283,7 @@ describe Course, "gradebook_to_csv" do
     a.publish
     a.grade_student(@student, grade: "C")
     rows = CSV.parse(GradebookExporter.new(@course, @teacher).to_csv)
-    expect(rows[2][3]).to eql "C"
+    expect(rows[2][4]).to eql "C"
   end
 
   context "differentiated assignments" do
@@ -1315,14 +1315,14 @@ describe Course, "gradebook_to_csv" do
       csv = GradebookExporter.new(@course, @teacher).to_csv
       expect(csv).not_to be_nil
       rows = CSV.parse(csv)
-      expect(rows[2][3]).to eq "3"
-      expect(rows[2][4]).to eq "N/A"
+      expect(rows[2][4]).to eq "3"
+      expect(rows[2][5]).to eq "N/A"
 
-      expect(rows[3][3]).to eq "N/A"
-      expect(rows[3][4]).to eq "3"
+      expect(rows[3][4]).to eq "N/A"
+      expect(rows[3][5]).to eq "3"
 
-      expect(rows[4][3]).to eq "N/A"
       expect(rows[4][4]).to eq "N/A"
+      expect(rows[4][5]).to eq "N/A"
     end
   end
 end
@@ -3178,11 +3178,13 @@ describe Course, "section_visibility" do
     it "should return student view students to account admins" do
       @course.student_view_student
       @admin = account_admin_user
-      expect(@course.enrollments_visible_to(@admin).map(&:user)).to be_include(@course.student_view_student)
+      visible_enrollments = @course.apply_enrollment_visibility(@course.student_enrollments, @admin)
+      expect(visible_enrollments.map(&:user)).to be_include(@course.student_view_student)
     end
 
     it "should return student view students to student view students" do
-      expect(@course.enrollments_visible_to(@course.student_view_student).map(&:user)).to be_include(@course.student_view_student)
+      visible_enrollments = @course.apply_enrollment_visibility(@course.student_enrollments, @course.student_view_student)
+      expect(visible_enrollments.map(&:user)).to be_include(@course.student_view_student)
     end
   end
 
@@ -3196,7 +3198,7 @@ describe Course, "section_visibility" do
     end
 
     it "should return non-limited admins from other sections" do
-      expect(@course.enrollments_visible_to(@ta, :type => :teacher, :return_users => true)).to eq [@teacher]
+      expect(@course.apply_enrollment_visibility(@course.teachers, @ta)).to eq [@teacher]
     end
   end
 
@@ -3224,38 +3226,6 @@ describe Course, "section_visibility" do
                            :role => student_role, :enabled => false)
       expect(@course.enrollment_visibility_level_for(@student1, @course.section_visibilities_for(@student1), true)).to eql :restricted
     end
-  end
-end
-
-describe Course, ".import_from_migration" do
-  before :once do
-    course_with_teacher
-  end
-
-  before :each do
-    attachment_model(:uploaded_data => stub_file_data('test.m4v', 'asdf', 'video/mp4'))
-  end
-
-  it "should know when it has open course imports" do
-    # no course imports
-    expect(@course).not_to have_open_course_imports
-
-    course2 = @course.account.courses.create!
-    # created course import
-    @course.course_imports.create!(source: course2, import_type: 'test')
-    expect(@course).to have_open_course_imports
-
-    # started course import
-    @course.course_imports.first.update_attribute(:workflow_state, 'started')
-    expect(@course).to have_open_course_imports
-
-    # completed course import
-    @course.course_imports.first.update_attribute(:workflow_state, 'completed')
-    expect(@course).not_to have_open_course_imports
-
-    # failed course import
-    @course.course_imports.first.update_attribute(:workflow_state, 'failed')
-    expect(@course).not_to have_open_course_imports
   end
 end
 
@@ -4043,12 +4013,33 @@ describe Course do
       @course.enroll_student(user2).accept!
 
       dm_count = DelayedMessage.count
-      expect(DelayedMessage.where(:communication_channel_id => user1.communication_channels.first).count).to eq 0
+      count1 = DelayedMessage.where(:communication_channel_id => user1.communication_channels.first).count
       Notification.create!(:name => 'Enrollment Invitation')
-      @course.re_send_invitations!
+      @course.re_send_invitations!(@teacher)
 
       expect(DelayedMessage.count).to eq dm_count + 1
-      expect(DelayedMessage.where(:communication_channel_id => user1.communication_channels.first).count).to eq 1
+      expect(DelayedMessage.where(:communication_channel_id => user1.communication_channels.first).count).to eq count1 + 1
+    end
+
+    it "should respect section restrictions" do
+      course(:active_all => true)
+      section2 = @course.course_sections.create! :name => 'section2'
+      user1 = user_with_pseudonym(:active_all => true)
+      user2 = user_with_pseudonym(:active_all => true)
+      ta = user_with_pseudonym(:active_all => true)
+      @course.enroll_student(user1)
+      @course.enroll_student(user2, :section => section2)
+      @course.enroll_ta(ta, :active_all => true, :section => section2, :limit_privileges_to_course_section => true)
+
+      notification = Notification.where(:name => 'Enrollment Invitation').first_or_create!
+
+      count1 = user1.communication_channel.delayed_messages.where(notification_id: notification).count
+      count2 = user2.communication_channel.delayed_messages.where(notification_id: notification).count
+
+      @course.re_send_invitations!(ta)
+
+      expect(user1.communication_channel.delayed_messages.where(notification_id: notification).count).to eq count1
+      expect(user2.communication_channel.delayed_messages.where(notification_id: notification).count).to eq count2 + 1
     end
   end
 
@@ -4276,5 +4267,37 @@ describe Course, '#module_items_visible_to' do
   it "shows all items to teachers even when course is concluded" do
     @course.complete!
     expect(@course.module_items_visible_to(@teacher).map(&:title)).to match_array %w(published unpublished)
+  end
+end
+
+describe Course, '#update_enrolled_users' do
+  it "should update user associations when deleted" do
+    course_with_student(:active_all => true)
+    expect(@user.associated_accounts).to be_present
+    @course.destroy
+    @user.reload
+    expect(@user.associated_accounts).to be_blank
+  end
+end
+
+describe Course, "#apply_nickname_for!" do
+  before(:once) do
+    @course = Course.create! :name => 'some terrible name'
+    @user = User.new
+    @user.course_nicknames[@course.id] = 'nickname'
+    @user.save!
+  end
+
+  it "sets name to user's nickname (non-persistently)" do
+    @course.apply_nickname_for!(@user)
+    expect(@course.name).to eq 'nickname'
+    @course.save!
+    expect(Course.find(@course).name).to eq 'some terrible name'
+  end
+
+  it "undoes the change with nil user" do
+    @course.apply_nickname_for!(@user)
+    @course.apply_nickname_for!(nil)
+    expect(@course.name).to eq 'some terrible name'
   end
 end

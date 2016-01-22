@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 define([
   'react',
   '../components/column_types/headerRenderer'
@@ -12,4 +11,4 @@ define([
   };
 
   return { getHeader: getHeader };
-})
+});

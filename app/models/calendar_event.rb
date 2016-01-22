@@ -50,7 +50,7 @@ class CalendarEvent < ActiveRecord::Base
   validates_inclusion_of :context_type, :allow_nil => true, :in => ['Course', 'User', 'Group', 'AppointmentGroup', 'CourseSection']
   belongs_to :user
   belongs_to :parent_event, :class_name => 'CalendarEvent', :foreign_key => :parent_calendar_event_id, :inverse_of => :child_events
-  has_many :child_events, :class_name => 'CalendarEvent', :foreign_key => :parent_calendar_event_id, :conditions => "calendar_events.workflow_state <> 'deleted'", :inverse_of => :parent_event
+  has_many :child_events, -> { where("calendar_events.workflow_state <> 'deleted'") }, class_name: 'CalendarEvent', foreign_key: :parent_calendar_event_id, inverse_of: :parent_event
   validates_presence_of :context, :workflow_state
   validates_associated :context, :if => lambda { |record| record.validate_context }
   validates_length_of :description, :maximum => maximum_long_text_length, :allow_nil => true, :allow_blank => true
@@ -517,8 +517,10 @@ class CalendarEvent < ActiveRecord::Base
     end
   end
 
-  def to_ics(in_own_calendar=true, preloaded_attachments={})
-    return CalendarEvent::IcalEvent.new(self).to_ics(in_own_calendar, preloaded_attachments)
+  def to_ics(in_own_calendar: true, preloaded_attachments: {}, user: nil)
+    CalendarEvent::IcalEvent.new(self).to_ics(in_own_calendar:       in_own_calendar,
+                                              preloaded_attachments: preloaded_attachments,
+                                              include_description:   true)
   end
 
   def self.max_visible_calendars
@@ -568,7 +570,7 @@ class CalendarEvent < ActiveRecord::Base
     def location
     end
 
-    def to_ics(in_own_calendar, preloaded_attachments={})
+    def to_ics(in_own_calendar:, preloaded_attachments: {}, include_description: false)
       cal = Icalendar::Calendar.new
       # to appease Outlook
       cal.custom_property("METHOD","PUBLISH")
@@ -598,7 +600,7 @@ class CalendarEvent < ActiveRecord::Base
 
       event.summary = @event.title
 
-      if @event.is_a?(CalendarEvent) && @event.description
+      if @event.description && include_description
         html = api_user_content(@event.description, @event.context, nil, preloaded_attachments)
         event.description html_to_text(html)
         event.x_alt_desc(html, { 'FMTTYPE' => 'text/html' })

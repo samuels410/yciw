@@ -41,7 +41,8 @@ class Quizzes::QuizzesController < ApplicationController
     :read_only,
     :managed_quiz_data,
     :submission_versions,
-    :submission_html
+    :submission_html,
+    :toggle_post_to_sis
   ]
   before_filter :set_download_submission_dialog_title , only: [:show,:statistics]
   after_filter :lock_results, only: [ :show, :submission_html ]
@@ -117,10 +118,12 @@ class Quizzes::QuizzesController < ApplicationController
       },
       :PERMISSIONS => {
         create: can_do(@context.quizzes.scoped.new, @current_user, :create),
-        manage: can_manage
+        manage: can_manage,
+        read_question_banks: can_manage || can_do(@context, @current_user, :read_question_banks)
       },
       :FLAGS => {
-        question_banks: feature_enabled?(:question_banks)
+        question_banks: feature_enabled?(:question_banks),
+        post_to_sis_enabled: Assignment.sis_grade_export_enabled?(@context)
       },
       :quiz_menu_tools => external_tools_display_hashes(:quiz_menu)
     })
@@ -178,7 +181,7 @@ class Quizzes::QuizzesController < ApplicationController
 
       @context_module_tag = ContextModuleItem.find_tag_with_preferred([@quiz, @quiz.assignment], params[:module_item_id])
       @sequence_asset = @context_module_tag.try(:content)
-      @quiz.context_module_action(@current_user, :read) if !@locked
+      @quiz.context_module_action(@current_user, :read) unless @locked && !@locked_reason[:can_view]
 
       @assignment = @quiz.assignment
       @assignment = @assignment.overridden_for(@current_user) if @assignment
@@ -197,7 +200,7 @@ class Quizzes::QuizzesController < ApplicationController
         upload_url = api_v1_quiz_submission_files_path(:course_id => @context.id, :quiz_id => @quiz.id)
         js_env :UPLOAD_URL => upload_url
         js_env :SUBMISSION_VERSIONS_URL => course_quiz_submission_versions_url(@context, @quiz) unless @quiz.muted?
-        if !@submission.preview? && !@js_env[:QUIZ_SUBMISSION_EVENTS_URL]
+        if !@submission.preview? && (!@js_env || !@js_env[:QUIZ_SUBMISSION_EVENTS_URL])
           events_url = api_v1_course_quiz_submission_events_url(@context, @quiz, @submission)
           js_env QUIZ_SUBMISSION_EVENTS_URL: events_url
         end
@@ -293,6 +296,7 @@ class Quizzes::QuizzesController < ApplicationController
         :CONTEXT_ACTION_SOURCE => :quizzes,
         :REGRADE_OPTIONS => regrade_options,
         :quiz_max_combination_count => QUIZ_MAX_COMBINATION_COUNT,
+        :SHOW_QUIZ_ALT_TEXT_WARNING => true,
         :VALID_DATE_RANGE => CourseDateRange.new(@context)
       }
 
@@ -382,7 +386,6 @@ class Quizzes::QuizzesController < ApplicationController
 
             if params[:assignment] && Assignment.sis_grade_export_enabled?(@context)
               @quiz.assignment.post_to_sis = params[:assignment][:post_to_sis]
-              @quiz.assignment.save
             end
           end
 
@@ -402,6 +405,10 @@ class Quizzes::QuizzesController < ApplicationController
             @quiz.save!
           end
 
+          if old_assignment && @quiz.assignment.present?
+            @quiz.assignment.save
+          end
+
           batch_update_assignment_overrides(@quiz,overrides) unless overrides.nil?
 
           # quiz.rb restricts all assignment broadcasts if notify_of_update is
@@ -410,7 +417,10 @@ class Quizzes::QuizzesController < ApplicationController
             @quiz.assignment.do_notifications!(old_assignment, notify_of_update)
           end
           @quiz.reload
-          @quiz.update_quiz_submission_end_at_times if params[:quiz][:time_limit].present?
+
+          if params[:quiz][:time_limit].present?
+            @quiz.send_later_if_production_enqueue_args(:update_quiz_submission_end_at_times, { :priority => Delayed::HIGH_PRIORITY } )
+          end
 
           @quiz.publish! if params[:publish]
         end
@@ -476,6 +486,17 @@ class Quizzes::QuizzesController < ApplicationController
     end
   end
 
+  def toggle_post_to_sis
+    if authorized_action(@quiz, @current_user, :update)
+      @quiz.post_to_sis = params[:post_to_sis]
+      @quiz.save!
+      respond_to do |format|
+        format.html { redirect_to named_context_url(@context, :context_quizzes_url) }
+        format.json { render :json => {}, :status => :ok }
+      end
+    end
+  end
+
   # student_analysis report
   def statistics
     if @context.feature_enabled?(:quiz_stats)
@@ -527,6 +548,7 @@ class Quizzes::QuizzesController < ApplicationController
           js_env({
             quiz_url: api_v1_course_quiz_url(@context, @quiz),
             quiz_statistics_url: api_v1_course_quiz_statistics_url(@context, @quiz),
+            course_sections_url: api_v1_course_sections_url(@context),
             quiz_reports_url: api_v1_course_quiz_reports_url(@context, @quiz),
           })
 
@@ -843,7 +865,7 @@ class Quizzes::QuizzesController < ApplicationController
       redirect_to course_quiz_url(@context, @quiz) and return
     end
 
-    if !@submission.preview? && !@js_env[:QUIZ_SUBMISSION_EVENTS_URL]
+    if !@submission.preview? && (!@js_env || !@js_env[:QUIZ_SUBMISSION_EVENTS_URL])
       events_url = api_v1_course_quiz_submission_events_url(@context, @quiz, @submission)
       js_env QUIZ_SUBMISSION_EVENTS_URL: events_url
     end

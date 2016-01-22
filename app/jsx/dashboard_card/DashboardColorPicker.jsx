@@ -1,16 +1,15 @@
-/** @jsx React.DOM */
 define([
   'underscore',
   'react',
+  'jquery',
   'i18n!dashcards',
   'jsx/shared/ColorPicker',
-], function(_, React, I18n, ColorPickerComponent) {
+  'classnames'
+], function(_, React, $, I18n, ColorPicker, cx) {
 
   // ================
   //   COLOR PICKER
   // ================
-
-  var ColorPicker = React.createFactory(ColorPickerComponent);
 
   var SPACE_NEEDED_FOR_TOOLTIP = 300;
 
@@ -45,12 +44,20 @@ define([
       }
     },
 
+    checkEsc: function(e){
+      if (e.keyCode == 27) {
+        this.props.doneEditing();
+      }
+    },
+
     setHandlers: function(){
       $(window).resize( this.props.doneEditing );
       $(document).mouseup(this.closeIfClickedOutsideOf);
+      $(document).keyup(this.checkEsc);
     },
 
     unsetHandlers: function(){
+      $(document).unbind("keyup", this.checkEsc);
       $(document).unbind("mouseup", this.closeIfClickedOutsideOf);
       $(window).unbind("resize", this.props.doneEditing);
     },
@@ -64,7 +71,7 @@ define([
     },
 
     leftPlusElement: function(){
-      var parentWidth = $(this.props.parentNode).width();
+      var parentWidth = $(this.props.parentNode).outerWidth();
       return $(this.props.parentNode).offset().left + parentWidth;
     },
 
@@ -75,7 +82,7 @@ define([
     },
 
     topPosition: function(){
-      return $(this.props.parentNode).offset().top - $(window).scrollTop() - 6;
+      return $(this.props.parentNode).position().top - 6;
     },
 
     leftPosition: function(){
@@ -94,16 +101,15 @@ define([
     },
 
     render: function () {
-      var cx = React.addons.classSet;
-
       var classes = cx({
         'ic-DashboardCardColorPicker': true,
         'right': !this.tooltipOnRight(),
         'horizontal': true
       });
 
-      return(
-        <div className = {classes}
+      return (
+        <div id        = {this.props.elementID}
+             className = {classes}
              style     = {this.pickerToolTipStyle()} >
           <ColorPicker isOpen           = {true}
                        assetString      = {this.props.assetString}
@@ -111,7 +117,10 @@ define([
                        afterUpdateColor = {this.props.handleColorChange}
                        hidePrompt       = {true}
                        nonModal         = {true}
-                       currentColor     = {this.props.backgroundColor} />
+                       hideOnScroll     = {false}
+                       currentColor     = {this.props.backgroundColor}
+                       nicknameInfo     = {this.props.nicknameInfo}
+          />
         </div>
       )
     }

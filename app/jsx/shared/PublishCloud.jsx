@@ -21,15 +21,19 @@ define([
       }
     });
 
-    React.render(RestrictedDialogForm({
-      usageRightsRequiredForContext: this.props.usageRightsRequiredForContext,
-      models: [this.props.model],
-      closeDialog: function () { $dialog.dialog('close'); }
-    }), $dialog[0]);
+    React.render(
+      <RestrictedDialogForm
+        usageRightsRequiredForContext={this.props.usageRightsRequiredForContext}
+        models={[this.props.model]}
+        closeDialog={() => { $dialog.dialog('close'); }}
+      />
+    , $dialog[0]
+    );
 
   };
 
   PublishCloud.render = function () {
+    var fileName = this.props.fileName || I18n.t('This file');
     if (this.props.userCanManageFilesForContext) {
       if (this.state.published && this.state.restricted) {
         return (
@@ -40,7 +44,7 @@ define([
             ref='publishCloud'
             className='btn-link published-status restricted'
             title={this.getRestrictedText()}
-            aria-label={this.getRestrictedText() + ' - ' + I18n.t('Click to modify')}
+            aria-label={`${fileName} is ${this.getRestrictedText()} - ${I18n.t('Click to modify')}`}
           >
             <i className='icon-cloud-lock' />
           </button>
@@ -54,7 +58,7 @@ define([
             ref='publishCloud'
             className='btn-link published-status hiddenState'
             title={I18n.t('Hidden. Available with a link')}
-            aria-label={I18n.t('Hidden. Available with a link - Click to modify')}
+            aria-label={`${fileName} is ${I18n.t('Hidden. Available with a link - Click to modify')}`}
           >
             <i className='icon-cloud-lock' />
           </button>
@@ -68,7 +72,7 @@ define([
             ref='publishCloud'
             className='btn-link published-status published'
             title={I18n.t('Published')}
-            aria-label={I18n.t('Published - Click to modify')}
+            aria-label={`${fileName} is ${I18n.t('Published - Click to modify')}`}
           >
             <i className='icon-publish' />
           </button>
@@ -82,7 +86,7 @@ define([
             ref='publishCloud'
             className='btn-link published-status unpublished'
             title={I18n.t('Unpublished')}
-            aria-label={I18n.t('Unpublished - Click to modify')}
+            aria-label={`${fileName} is ${I18n.t('Unpublished - Click to modify')}`}
           >
             <i className='icon-unpublish' />
           </button>
@@ -97,7 +101,7 @@ define([
             ref='publishCloud'
             className='published-status restricted'
             title={this.getRestrictedText()}
-            aria-label={this.getRestrictedText()}
+            aria-label={`${fileName} is ${this.getRestrictedText()}`}
           >
             <i className='icon-calendar-day' />
           </div>

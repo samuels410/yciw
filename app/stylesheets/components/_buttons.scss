@@ -301,6 +301,10 @@ input[type="button"] {
     color: $textColor;
     background: transparent;
   }
+
+  i[class*=icon-], i[class^=icon-] {
+    margin-right: 3px;
+  }
 }
 
 // Icon "action" buttons
@@ -332,9 +336,8 @@ input[type="button"] {
 .Button--icon-action-rev {
   @extend .Button--icon-action;
   color: $ic-color-light;
-  &:hover, &:focus {
-    color: $ic-color-light;
-  }
+  &:hover, &:focus { color: $ic-color-light; }
+  &:focus { @include button-focus-dark; }
 }
 
 // Handle jQueryUI-generated button classes

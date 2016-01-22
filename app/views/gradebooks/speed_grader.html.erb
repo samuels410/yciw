@@ -9,7 +9,7 @@
   })
   @show_left_side = false
   @show_embedded_chat = false
-  @body_classes << 'full-width'
+  @body_classes << 'ic-no-flex-layout full-width'
   @can_edit_anything = !@context.completed?
 %>
 <% content_for :page_title, t(:page_title, "%{assignment_name}, SpeedGrader, %{course_name}", :assignment_name => @assignment.title, :course_name => @context.name) %>
@@ -54,8 +54,48 @@
     </div>
   <% end %>
 </div></div>
-
-<div id="full_width_container" style="display:none;">
+<div id="moderation_bar">
+  <div id="moderation_bar_content">
+    <div id="moderation_tabs" class="ui-tabs-minimal">
+      <ul>
+        <li data-pg-index="0"><a href="#dummy_container">
+          <span class="mark_title"><%= t('1st Reviewer') %></span>
+          <span class="mark_grade"></span>
+        </a></li>
+        <li data-pg-index="1"><a href="#dummy_container">
+          <span class="mark_title"><%= t('2nd Reviewer') %></span>
+          <span class="mark_grade"></span>
+        </a></li>
+        <li data-pg-index="final"><a href="#dummy_container">
+          <span class="mark_title"><%= t('Moderator') %></span>
+          <span class="mark_grade"></span>
+        </a></li>
+      </ul>
+      <div id="dummy_container"></div>
+    </div>
+    <div id="new_mark_container">
+      <a id="new_mark_dropdown_link" href="#dummy_container" class="al-trigger" data-popup-within="#full_width_container" tabindex="0">
+        <%= t('Add Review') %>
+        <i class="icon-mini-arrow-down"></i>
+      </a>
+      <ul id="new_mark_dropdown" class="al-options" role="menu" tabindex="0" aria-hidden="true" aria-expanded="false" aria-activedescendant="new_mark_dropdown_link1">
+        <li role="presentation">
+          <a href="#" id="new_mark_link" tabindex="-1" role="menuitem"><%= t('Add 2nd Review') %></a>
+        </li>
+        <li role="presentation">
+          <a href="#" id="new_mark_final_link" tabindex="-1" role="menuitem"><%= t('Add Moderator Review (New)') %></a>
+        </li>
+        <li role="presentation">
+          <a href="#" id="new_mark_copy_link1" tabindex="-1" role="menuitem"><%= t('Add Moderator Review (Copy 1st)') %></a>
+        </li>
+        <li role="presentation">
+          <a href="#" id="new_mark_copy_link2" tabindex="-1" role="menuitem"><%= t('Add Moderator Review (Copy 2nd)') %></a>
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>
+<div id="full_width_container" style="display:none">
   <div id="left_side" class="full_height">
     <div id="left_side_inner">
       <div id="no_annotation_warning" class="alert speedgrader_alert">
@@ -235,7 +275,7 @@
                   </button>
                 <% end %>
               </div>
-              <div style="display:none">
+              <div class="speech-recognition" style="display:none">
                 <a data-tooltip title="<%= t('tooltips.speech_recognition', "Speech Recognition") %>" href="#" class="btn btn-small speech_recognition_link">
                   <i class="icon-audio"></i>
                   <span class="screenreader-only">

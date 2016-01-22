@@ -34,6 +34,7 @@ define [
   'compiled/views/gradebook/SectionMenuView'
   'compiled/views/gradebook/GradingPeriodMenuView'
   'compiled/gradebook2/GradebookKeyboardNav'
+  'jsx/gradebook/grid/helpers/columnArranger'
   'jst/_avatar' #needed by row_student_name
   'jquery.ajaxJSON'
   'jquery.instructure_date_and_time'
@@ -52,7 +53,7 @@ define [
 ], (React, LongTextEditor, KeyboardNavDialog, keyboardNavTemplate, Slick, TotalColumnHeaderView, round, InputFilterView, I18n, GRADEBOOK_TRANSLATIONS,
   $, _, Backbone, tz, GradeCalculator, userSettings, Spinner, SubmissionDetailsDialog, AssignmentGroupWeightsDialog, GradeDisplayWarningDialog, PostGradesFrameDialog,
   SubmissionCell, GradebookHeaderMenu, numberCompare, htmlEscape, PostGradesStore, PostGradesApp, columnHeaderTemplate,
-  groupTotalCellTemplate, rowStudentNameTemplate, SectionMenuView, GradingPeriodMenuView, GradebookKeyboardNav) ->
+  groupTotalCellTemplate, rowStudentNameTemplate, SectionMenuView, GradingPeriodMenuView, GradebookKeyboardNav, ColumnArranger) ->
 
   class Gradebook
     columnWidths =
@@ -102,13 +103,14 @@ define [
       else
         'students_url'
 
-      @gotAllAssignmentGroupsPromise = $.Deferred().done => @gotAllAssignmentGroups()
-      gotAllStudents = $.Deferred().done(()=>
-        @gotAllAssignmentGroupsPromise.then(()=> @gotAllStudents())
-      )
+      gotAllStudentsPromise = $.Deferred()
+      @gotAllAssignmentGroupsPromise = $.Deferred()
+      gotAllStudentsAndAssignmentsPromise = $.Deferred()
 
-      # this method should be removed after a month in production
-      @alignCoursePreferencesWithLocalStorage()
+      $.when(gotAllStudentsPromise, @gotAllAssignmentGroupsPromise).then =>
+        @gotAllAssignmentGroups()
+        @gotAllStudents()
+        gotAllStudentsAndAssignmentsPromise.resolve()
 
       @assignmentGroupsParams = {exclude_descriptions: true}
       if @mgpEnabled && @gradingPeriodToShow && @gradingPeriodToShow != '0' && @gradingPeriodToShow != ''
@@ -127,9 +129,6 @@ define [
         })
         postGradesDialog.open()
 
-      if(@options.post_grades_feature_enabled)
-        ajax_calls.push($.ajaxJSON( @options.course_url, "GET", {}, @gotCourse))
-
       # getting all the enrollments for a course via the api in the polite way
       # is too slow, so we're going to cheat.
       $.when(ajax_calls...)
@@ -139,12 +138,12 @@ define [
         paginationLinks = xhr.getResponseHeader('Link')
         lastLink = paginationLinks.match(/<[^>]+>; *rel="last"/)
         unless lastLink?
-          gotAllStudents.resolve()
+          gotAllStudentsPromise.resolve()
           return
         lastPage = lastLink[0].match(/page=(\d+)/)[1]
         lastPage = parseInt lastPage, 10
         if lastPage == 1
-          gotAllStudents.resolve()
+          gotAllStudentsPromise.resolve()
           return
 
         fetchEnrollments = (page) =>
@@ -155,10 +154,10 @@ define [
             @gotChunkOfStudents responses[0]
           else
             @gotChunkOfStudents(students) for [students, x, y] in responses
-          gotAllStudents.resolve()
+          gotAllStudentsPromise.resolve()
 
       gotCustomColumns = @getCustomColumns()
-      @gotAllData = $.when(gotCustomColumns, gotAllStudents, @gotAllAssignmentGroupsPromise)
+      @gotAllData = $.when(gotCustomColumns, gotAllStudentsAndAssignmentsPromise)
 
       @allSubmissionsLoaded.done =>
         for c in @customColumns
@@ -192,7 +191,7 @@ define [
       closedAdminGradingPeriods = @getClosedAdminGradingPeriods()
 
       if closedAdminGradingPeriods.length > 0
-        assignments = @getAssignmentsInClosedGradingPeriods(closedAdminGradingPeriods)
+        assignments = @getAssignmentsInClosedGradingPeriods()
         @disabledAssignments = assignments.map (a) ->
           a.id
 
@@ -220,10 +219,8 @@ define [
       else
         ENV.GRADEBOOK_OPTIONS.current_grading_period_id
 
-    getAssignmentsInClosedGradingPeriods: (gradingPeriods) ->
-      latestEndDate = new Date(gradingPeriods[0]?.end_date)
-      for gradingPeriod in gradingPeriods
-        latestEndDate = new Date(gradingPeriod.end_date) if latestEndDate < new Date(gradingPeriod.end_date)
+    getAssignmentsInClosedGradingPeriods: () ->
+      latestEndDate = new Date(ENV.GRADEBOOK_OPTIONS.latest_end_date_of_admin_created_grading_periods_in_the_past)
       #return assignments whose end date is within the latest closed's end date
       _.select @assignments, (a) =>
         @assignmentIsDueBeforeEndDate(a, latestEndDate)
@@ -235,7 +232,7 @@ define [
         false
 
     onShow: ->
-      $(".post-grades-placeholder").show()
+      $(".post-grades-button-placeholder").show()
       return if @startedInitializing
       @startedInitializing = true
 
@@ -287,11 +284,15 @@ define [
         @assignmentGroups[group.id] = group
         group.assignments = _.select group.assignments, (a) -> a.published
         for assignment in group.assignments
+          htmlUrl = assignment.html_url
+          submissionsDownloadUrl = assignment.submissions_download_url
           htmlEscape(assignment)
+          assignment.html_url = htmlUrl
+          assignment.submissions_download_url = submissionsDownloadUrl
+
           assignment.assignment_group = group
           assignment.due_at = tz.parse(assignment.due_at)
           @assignments[assignment.id] = assignment
-
       @postGradesStore.setGradeBookAssignments @assignments
 
 
@@ -326,10 +327,6 @@ define [
           gotAssignmentGroupsChunk(groups) for [groups, x, y] in responses
         @gotAllAssignmentGroupsPromise.resolve()
 
-
-    gotCourse: (course) =>
-      @course = course
-
     gotSections: (sections) =>
       @sections = {}
       for section in sections
@@ -355,6 +352,9 @@ define [
 
     gotAllStudents: ->
       @withAllStudents (students) =>
+        if @mgpEnabled
+          gradingPeriods = @indexedGradingPeriods()
+          overrides = @indexedOverrides()
         #empty the array so this is idempotent, you can end up with too many rows
         @rows.length = 0
         for student_id, student of students
@@ -375,8 +375,11 @@ define [
           # fill in dummy submissions, so there's something there even if the
           # student didn't submit anything for that assignment
           for assignment_id, assignment of @assignments
-            student["assignment_#{assignment_id}"] ||= { assignment_id: assignment_id, user_id: student_id }
-
+            student["assignment_#{assignment_id}"] ?= { assignment_id: assignment_id, user_id: student_id }
+            submission = student["assignment_#{assignment_id}"]
+            if @submissionOutsideOfGradingPeriod(submission, student, gradingPeriods, overrides)
+              submission.hidden = true
+              submission.outsideOfGradingPeriod = true
           @rows.push(student)
 
     defaultSortType: 'assignment_group'
@@ -470,12 +473,9 @@ define [
       return (diffOfAssignmentGroupPosition * 1000000) + diffOfAssignmentPosition
 
     compareAssignmentDueDates: (a, b) ->
-      aDate = if a.object.due_at then (+a.object.due_at / 1000) else Number.MAX_VALUE
-      bDate = if b.object.due_at then (+b.object.due_at / 1000) else Number.MAX_VALUE
-      if aDate is bDate
-        return 0 if a.object.name is b.object.name
-        return (if a.object.name > b.object.name then 1 else -1)
-      return aDate - bDate
+      firstAssignment = a.object
+      secondAssignment = b.object
+      ColumnArranger.compareByDueDate(firstAssignment, secondAssignment)
 
     makeCompareAssignmentCustomOrderFn: (sortOrder) =>
       sortMap = {}
@@ -538,7 +538,7 @@ define [
 
     renderTotalHeader: () =>
       @totalHeader = new TotalColumnHeaderView
-        showingPoints: @displayPointTotals
+        showingPoints: @displayPointTotals()
         toggleShowingPoints: @togglePointsOrPercentTotals.bind(this)
         weightedGroups: @weightedGroups
         totalColumnInFront: @totalColumnInFront
@@ -645,6 +645,9 @@ define [
       activeCell = @grid.getActiveCell()
       editing = $(@grid.getActiveCellNode()).hasClass('editable')
       columns = @grid.getColumns()
+      if @mgpEnabled
+        gradingPeriods = @indexedGradingPeriods()
+        overrides = @indexedOverrides()
       for submission in submissions
         student = @student(submission.user_id)
         idToMatch = "assignment_#{submission.assignment_id}"
@@ -654,8 +657,16 @@ define [
           activeCell.row is student.row and
           activeCell.cell is cell
         #check for DA visible
-        submission["hidden"] = !submission.assignment_visible if submission.assignment_visible?
-        @updateAssignmentVisibilities(submission) if submission["hidden"]
+        if submission.assignment_visible?
+          submission.hidden = !submission.assignment_visible
+
+        if @submissionOutsideOfGradingPeriod(submission, student, gradingPeriods, overrides)
+          submission.hidden = true
+          submission.outsideOfGradingPeriod = true
+
+        if submission.hidden
+          @updateAssignmentVisibilities(submission)
+
         @updateSubmission(submission)
         @calculateStudentGrade(student)
         @grid.updateCell student.row, cell unless thisCellIsActive
@@ -669,6 +680,8 @@ define [
     cellFormatter: (row, col, submission) =>
       if !@rows[row].loaded
         @staticCellFormatter(row, col, '')
+      else if submission.outsideOfGradingPeriod
+        @uneditableCellOutsideOfGradingPeriodFormatter(row, col)
       else if submission.hidden
         @uneditableCellFormatter(row, col)
       else if !submission?
@@ -685,8 +698,83 @@ define [
           else
             (SubmissionCell[assignment.grading_type] || SubmissionCell).formatter(row, col, submission, assignment, @grid)
 
+
+    indexedOverrides: ->
+      indexed = { studentOverrides: {}, sectionOverrides: {} }
+      _.each @assignments, (assignment) ->
+        if assignment.has_overrides
+          _.each assignment.overrides, (override) ->
+            if override.student_ids
+              indexed.studentOverrides[assignment.id] ?= {}
+              _.each override.student_ids, (studentId) ->
+                indexed.studentOverrides[assignment.id][studentId] = override
+            else if sectionId = override.course_section_id
+              indexed.sectionOverrides[assignment.id] ?= {}
+              indexed.sectionOverrides[assignment.id][sectionId] = override
+      indexed
+
+    indexedGradingPeriods: ->
+      _.indexBy @gradingPeriods, 'id'
+
+    submissionOutsideOfGradingPeriod: (submission, student, gradingPeriods, overrides) ->
+      return false unless @mgpEnabled
+      selectedPeriodId = @gradingPeriodToShow
+      return false if @isAllGradingPeriods(selectedPeriodId)
+
+      assignment = @assignments[submission.assignment_id]
+      gradingPeriod = gradingPeriods[selectedPeriodId]
+      effectiveDueAt = assignment.due_at
+
+      if assignment.has_overrides
+        # we'll eventually need to consider group overrides here
+        # (group overrides are not yet a feature but are planned)
+        sectionOverrides = []
+        sectionOverridesOnAssignment = overrides.sectionOverrides[assignment.id]
+        if sectionOverridesOnAssignment
+          _.each student.sections, (sectionId) ->
+            sectionOverride = sectionOverridesOnAssignment[sectionId]
+            sectionOverrides.push sectionOverride if sectionOverride
+
+        studentOverrides = []
+        studentOverridesOnAssignment = overrides.studentOverrides[assignment.id]
+        if studentOverridesOnAssignment
+          studentOverride = studentOverridesOnAssignment[student.id]
+          studentOverrides.push studentOverride if studentOverride
+
+        allOverridesForSubmission = sectionOverrides.concat studentOverrides
+        overrideDates = _.chain(allOverridesForSubmission)
+          .pluck('due_at')
+          .map((dateString) -> tz.parse(dateString))
+          .value()
+
+        if overrideDates.length > 0
+          nullDueAtsExist = _.any(overrideDates, (date) -> _.isNull(date))
+          effectiveDueAt = if nullDueAtsExist then null else _.max(overrideDates)
+        else
+          return true if assignment.only_visible_to_overrides
+
+      showSubmission = @lastGradingPeriodAndDueAtNull(gradingPeriod, effectiveDueAt) || @dateIsInGradingPeriod(gradingPeriod, effectiveDueAt)
+      !showSubmission
+
+    lastGradingPeriodAndDueAtNull: (gradingPeriod, dueAt) ->
+      gradingPeriod.is_last && _.isNull(dueAt)
+
+    dateIsInGradingPeriod: (gradingPeriod, date) ->
+      return false if _.isNull(date)
+      startDate = tz.parse(gradingPeriod.start_date)
+      endDate = tz.parse(gradingPeriod.end_date)
+      startDate < date && date <= endDate
+
     staticCellFormatter: (row, col, val) ->
       "<div class='cell-content gradebook-cell'>#{htmlEscape(val)}</div>"
+
+    uneditableCellOutsideOfGradingPeriodFormatter: (row, col) ->
+      """
+        <div class='gradebook-tooltip'>
+          #{htmlEscape(I18n.t("Submission in another grading period"))}
+        </div>
+        <div class='cell-content gradebook-cell grayed-out cannot_edit'></div>
+      """
 
     uneditableCellFormatter: (row, col) ->
       "<div class='cell-content gradebook-cell grayed-out cannot_edit'></div>"
@@ -757,6 +845,7 @@ define [
     # this is a workaroud to make it so only assignments are sortable but at the same time
     # so that the total and final grade columns don't dissapear after reordering columns
     fixColumnReordering: =>
+      @renderTotalHeader()
       $headers = $('#gradebook_grid .container_1').find('.slick-header-columns')
       originalItemsSelector = $headers.sortable 'option', 'items'
       onlyAssignmentColsSelector = '> *:not([id*="assignment_group"]):not([id*="total_grade"])'
@@ -937,33 +1026,24 @@ define [
 
     sectionList: ->
       _.map @sections, (section, id) =>
-        if(section.passback_status)
-          date = new Date(section.passback_status.sis_post_grades_status.grades_posted_at)
-        { name: section.name, id: id, passback_status: section.passback_status, date: date, checked: @sectionToShow == id }
+        { name: section.name, id: id, checked: @sectionToShow == id }
 
     drawSectionSelectButton: () ->
       @sectionMenu = new SectionMenuView(
         el: $('.section-button-placeholder'),
         sections: @sectionList(),
-        course: @course,
         showSections: @showSections(),
-        showSisSync: @options.post_grades_feature_enabled,
         currentSection: @sectionToShow)
       @sectionMenu.render()
-      @togglePostGrades(not @sectionToShow? or @sectionList().length is 1)
 
     updateCurrentSection: (section, author) =>
       @sectionToShow = section
       @postGradesStore.setSelectedSection @sectionToShow
       userSettings[if @sectionToShow then 'contextSet' else 'contextRemove']('grading_show_only_section', @sectionToShow)
       @buildRows() if @grid
-      @togglePostGrades(not @sectionToShow? or @sectionList().length is 1)
 
     showSections: ->
-      if @sections_enabled && @options.post_grades_feature_enabled
-        true
-      else
-        false
+      @sections_enabled
 
     gradingPeriodList: ->
       _.map @gradingPeriods, (period) =>
@@ -985,37 +1065,27 @@ define [
         course:
           id:     ENV.GRADEBOOK_OPTIONS.context_id
           sis_id: ENV.GRADEBOOK_OPTIONS.context_sis_id
+      @postGradesStore.addChangeListener(@updatePowerschoolPostGradesButton)
 
       @postGradesStore.setSelectedSection @sectionToShow
-
 
     showPostGradesButton: ->
       $placeholder = $('.post-grades-placeholder')
       if $placeholder.length > 0
-        app = new PostGradesApp
+        app = React.createElement(PostGradesApp, {
           store: @postGradesStore
           renderAsButton: !$placeholder.hasClass('in-menu')
           labelText: if $placeholder.hasClass('in-menu') then I18n.t 'PowerSchool' else I18n.t 'Post Grades',
           returnFocusTo: $('#post_grades')
-        React.renderComponent(app, $placeholder[0])
+        })
+        React.render(app, $placeholder[0])
 
-    togglePostGrades: (visible) =>
-      # hide external tools elements
-      $('.external-tools-dialog').toggle(visible)
-      # remove menu placeholder if legacy placehoder button hidden
-      $('li.post-grades-placeholder').toggle(!$('li.post-grades-placeholder a').hasClass('hidden'))
-      # hide menu if no menu items visible
-      menuVisible = _.any(
-        _.filter(
-          $('li.external-tools-dialog, .post-grades-placeholder'),
-          (item) ->
-            return $(item).css('display') != 'none'
-        )
-      )
-      $('#post_grades').toggle(menuVisible)
+    updatePowerschoolPostGradesButton: =>
+      showButton = @postGradesStore.hasAssignments() && !!@postGradesStore.getState().selected.sis_id
+      $('.post-grades-placeholder').toggle(showButton)
 
     initHeader: =>
-      @drawSectionSelectButton() if @sections_enabled || @course
+      @drawSectionSelectButton() if @sections_enabled
       @drawGradingPeriodSelectButton() if @mgpEnabled
 
       $settingsMenu = $('#gradebook_settings').next()
@@ -1035,6 +1105,9 @@ define [
       unless (_.detect @assignments, (a) -> (''+a.submission_types) == "attendance")
         $settingsMenu.find('#show_attendance').closest('li').hide()
 
+      if @hideAggregateColumns()
+        $settingsMenu.find('#include-ungraded-list-item').hide()
+
       @$columnArrangementTogglers = $('#gradebook-toolbar [data-arrange-columns-by]').bind 'click', (event) =>
         event.preventDefault()
         newSortOrder = { sortType: $(event.currentTarget).data('arrangeColumnsBy') }
@@ -1050,7 +1123,6 @@ define [
       @userFilter = new InputFilterView el: '.gradebook_filter input'
       @userFilter.on 'input', @onUserFilterInput
 
-      @renderTotalHeader()
       @initGradebookExporter()
 
     initGradebookExporter: () =>
@@ -1071,14 +1143,19 @@ define [
 
         @pollProgressForCSVExport(loading_interval, attachment_progress)
 
-      $('.generate_new_csv').click ->
+      $('.generate_new_csv').click =>
         $('#download_csv').prop('disabled', true)
         loading_interval = self.exportingGradebookStatus()
         include_priors = $('#show_concluded_enrollments').prop('checked')
+
+        params =
+          include_priors: include_priors
+          grading_period_id: @getGradingPeriodToShow()
+
         $.ajaxJSON(
             ENV.GRADEBOOK_OPTIONS.export_gradebook_csv_url,
             'GET',
-            { "include_priors": include_priors }
+            params
         ).then((attachment_progress) ->
           self.pollProgressForCSVExport(loading_interval, attachment_progress)
         )
@@ -1100,7 +1177,7 @@ define [
 
                   updated_date = $.datetimeString(response.created_at)
                   updated_previous_report = "#{I18n.t('Previous (%{timestamp})', timestamp: updated_date)}"
-                  $previous_link = $('#csv_export_options').children('li').last().children('a')
+                  $previous_link = $('#csv_export_options .open_in_a_new_tab')
                   $previous_link.text(updated_previous_report)
                   $previous_link.attr('href', response.url)
                   $('#csv_export_options').children('li').last().css('display', 'block')
@@ -1294,53 +1371,55 @@ define [
               .unbind('gridready.render')
               .bind('gridready.render', => @grid.invalidate() )
         columnDef
+      if @hideAggregateColumns()
+        @aggregateColumns = []
+      else
+        @aggregateColumns = for id, group of @assignmentGroups
+          fieldName = "assignment_group_#{id}"
 
-      @aggregateColumns = for id, group of @assignmentGroups
-        fieldName = "assignment_group_#{id}"
+          aggregateWidth = testWidth(group.name, columnWidths.assignmentGroup.min, columnWidths.assignmentGroup.default_max)
+          if @gradebookColumnSizeSettings && @gradebookColumnSizeSettings[fieldName]
+            aggregateWidth = parseInt(@gradebookColumnSizeSettings[fieldName])
 
-        aggregateWidth = testWidth(group.name, columnWidths.assignmentGroup.min, columnWidths.assignmentGroup.default_max)
-        if @gradebookColumnSizeSettings && @gradebookColumnSizeSettings[fieldName]
-          aggregateWidth = parseInt(@gradebookColumnSizeSettings[fieldName])
+          {
+            id: fieldName
+            field: fieldName
+            formatter: @groupTotalFormatter
+            name: @assignmentGroupHtml(group.name, group.group_weight)
+            toolTip: group.name
+            object: group
+            minWidth: columnWidths.assignmentGroup.min,
+            maxWidth: columnWidths.assignmentGroup.max,
+            width: aggregateWidth
+            cssClass: "meta-cell assignment-group-cell",
+            sortable: true
+            type: 'assignment_group'
+          }
 
-        {
-          id: fieldName
-          field: fieldName
+        total = I18n.t "total", "Total"
+
+        totalWidth = testWidth("Total", columnWidths.total.min, columnWidths.total.max)
+        if @gradebookColumnSizeSettings && @gradebookColumnSizeSettings['total_grade']
+          totalWidth = parseInt(@gradebookColumnSizeSettings['total_grade'])
+
+        total_column =
+          id: "total_grade"
+          field: "total_grade"
           formatter: @groupTotalFormatter
-          name: @assignmentGroupHtml(group.name, group.group_weight)
-          toolTip: group.name
-          object: group
-          minWidth: columnWidths.assignmentGroup.min,
-          maxWidth: columnWidths.assignmentGroup.max,
-          width: aggregateWidth
-          cssClass: "meta-cell assignment-group-cell",
+          name: """
+            #{htmlEscape total}
+            <div id=total_column_header></div>
+          """
+          toolTip: total
+          minWidth: columnWidths.total.min
+          maxWidth: columnWidths.total.max
+          width: totalWidth
+          cssClass: if @totalColumnInFront then 'meta-cell' else 'total-cell'
           sortable: true
-          type: 'assignment_group'
-        }
+          type: 'total_grade'
 
-      total = I18n.t "total", "Total"
-
-      totalWidth = testWidth("Total", columnWidths.total.min, columnWidths.total.max)
-      if @gradebookColumnSizeSettings && @gradebookColumnSizeSettings['total_grade']
-        totalWidth = parseInt(@gradebookColumnSizeSettings['total_grade'])
-
-      total_column =
-        id: "total_grade"
-        field: "total_grade"
-        formatter: @groupTotalFormatter
-        name: """
-          #{htmlEscape total}
-          <div id=total_column_header></div>
-        """
-        toolTip: total
-        minWidth: columnWidths.total.min
-        maxWidth: columnWidths.total.max
-        width: totalWidth
-        cssClass: if @totalColumnInFront then 'meta-cell' else 'total-cell'
-        sortable: true
-        type: 'total_grade'
-
-      (if @totalColumnInFront then @parentColumns else
-        @aggregateColumns).push total_column
+        (if @totalColumnInFront then @parentColumns else
+          @aggregateColumns).push total_column
 
       $widthTester.remove()
 
@@ -1469,7 +1548,10 @@ define [
     setAssignmentWarnings: =>
       @totalGradeWarning = null
 
-      if _.any(@assignments, (a) -> a.muted)
+      gradebookVisibleAssignments = _.reject @assignments, (assignment) ->
+        _.contains(assignment.submission_types, 'not_graded')
+
+      if _.any(gradebookVisibleAssignments, (a) -> a.muted)
         @totalGradeWarning =
           warningText: I18n.t "This grade differs from the student's view of the grade because some assignments are muted"
           icon: "icon-muted"
@@ -1593,10 +1675,8 @@ define [
     isAllGradingPeriods: (currentPeriodId) ->
       currentPeriodId == "0"
 
-    # this method should be removed after a month in production
-    alignCoursePreferencesWithLocalStorage: () ->
-      local_storage_show_point_totals = userSettings.contextGet('show_point_totals')
-      if local_storage_show_point_totals and local_storage_show_point_totals != @options.show_total_grade_as_points
-        @options.show_total_grade_as_points = local_storage_show_point_totals
-        userSettings.contextRemove('show_point_totals')
-        $.ajaxJSON @options.setting_update_url, "PUT", show_total_grade_as_points: @options.show_total_grade_as_points
+    hideAggregateColumns: ->
+      return false unless @mgpEnabled
+      return false if @options.all_grading_periods_totals
+      selectedPeriodId = @getGradingPeriodToShow()
+      @isAllGradingPeriods(selectedPeriodId)

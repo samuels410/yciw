@@ -80,6 +80,7 @@ describe "profile" do
     end
 
     it "should add a new email address on profile settings page" do
+      @user.account.enable_feature!(:international_sms)
       notification_model(:category => 'Grading')
       notification_policy_model(:notification_id => @notification.id)
 
@@ -87,6 +88,8 @@ describe "profile" do
       add_email_link
 
       f('#communication_channels a[href="#register_sms_number"]').click
+
+      click_option('#communication_channel_sms_country', 'United States (+1)')
       replace_content(f('#register_sms_number #communication_channel_sms_email'), 'test@example.com')
       expect(f('#register_sms_number button[type="submit"]')).to be_displayed
       f('#communication_channels a[href="#register_email_address"]').click
@@ -159,9 +162,11 @@ describe "profile" do
     end
 
     it "should add another contact method - sms" do
+      @user.account.enable_feature!(:international_sms)
       test_cell_number = '8017121011'
       get "/profile/settings"
       f('.add_contact_link').click
+      click_option('#communication_channel_sms_country', 'United States (+1)')
       register_form = f('#register_sms_number')
       register_form.find_element(:css, '.sms_number').send_keys(test_cell_number)
       click_option('select.user_selected.carrier', 'AT&T')

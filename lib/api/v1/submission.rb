@@ -30,16 +30,23 @@ module Api::V1::Submission
     hash = submission_attempt_json(submission, assignment, current_user, session, context)
 
     if includes.include?("submission_history")
-      hash['submission_history'] = []
-      submission.submission_history.each do |ver|
-        ver.without_versioned_attachments do
-          hash['submission_history'] << submission_attempt_json(ver, assignment, current_user, session, context)
+      if submission.quiz_submission && assignment.quiz && !assignment.quiz.anonymous_survey?
+        hash['submission_history'] = submission.quiz_submission.versions.map do |ver|
+          ver.model.submission && ver.model.submission.without_versioned_attachments do
+            quiz_submission_attempt_json(ver.model, assignment, current_user, session, context)
+          end
+        end
+      else
+        hash['submission_history'] = submission.submission_history.map do |ver|
+          ver.without_versioned_attachments do
+            submission_attempt_json(ver, assignment, current_user, session, context)
+          end
         end
       end
     end
 
     if current_user && assignment && includes.include?('provisional_grades') && assignment.moderated_grading?
-      hash['provisional_grades'] = submission_provisional_grades_json(submission, assignment, current_user)
+      hash['provisional_grades'] = submission_provisional_grades_json(submission, assignment, current_user, includes)
     end
 
     if includes.include?("submission_comments")
@@ -47,9 +54,7 @@ module Api::V1::Submission
     end
 
     if includes.include?("rubric_assessment") && submission.rubric_assessment && submission.user_can_read_grade?(current_user)
-      ra = submission.rubric_assessment.data
-      hash['rubric_assessment'] = {}
-      ra.each { |rating| hash['rubric_assessment'][rating[:criterion_id]] = rating.slice(:points, :comments) }
+      hash['rubric_assessment'] = rubric_assessment_json(submission.rubric_assessment)
     end
 
     if includes.include?("assignment")
@@ -109,7 +114,7 @@ module Api::V1::Submission
 
     unless params[:exclude_response_fields] && params[:exclude_response_fields].include?('preview_url')
       preview_args = { 'preview' => '1' }
-      preview_args['version'] = attempt.version_number
+      preview_args['version'] = attempt.quiz_submission_version || attempt.version_number
       hash['preview_url'] = course_assignment_submission_url(
         context, assignment, attempt[:user_id], preview_args)
     end
@@ -151,6 +156,19 @@ module Api::V1::Submission
       end
       hash['discussion_entries'] = discussion_entry_api_json(entries, assignment.discussion_topic.context, user, session)
     end
+
+    hash
+  end
+
+  def quiz_submission_attempt_json(attempt, assignment, user, session, context = nil)
+    hash = submission_attempt_json(attempt.submission, assignment, user, session, context)
+    hash.each_key{|k| hash[k] = attempt[k] if attempt[k]}
+    hash[:submission_data] = attempt[:submission_data]
+    hash[:body] = nil
+
+    # since it is graded automatically the graded_at date should be the last time the
+    # quiz_submission ended
+    hash[:graded_at] = attempt[:end_at]
 
     hash
   end
@@ -207,19 +225,43 @@ module Api::V1::Submission
     attachment
   end
 
-  private
+  def rubric_assessment_json(rubric_assessment)
+    hash = {}
+    rubric_assessment.data.each do |rating|
+      hash[rating[:criterion_id]] = rating.slice(:points, :comments)
+    end
+    hash
+  end
 
-  def submission_provisional_grades_json(submission, assignment, current_user)
+  def provisional_grade_json(provisional_grade, submission, assignment, current_user, includes = [])
+    json = provisional_grade.grade_attributes
+    json.merge!(speedgrader_url: speed_grader_url(submission, assignment, provisional_grade))
+    if includes.include?('submission_comments')
+      json['submission_comments'] = submission_comments_json(provisional_grade.submission_comments, current_user)
+    end
+    if includes.include?('rubric_assessment')
+      json['rubric_assessments'] = provisional_grade.rubric_assessments.map{|ra| ra.as_json(:methods => [:assessor_name], :include_root => false)}
+    end
+    if includes.include?('crocodoc_urls')
+      json['crocodoc_urls'] = submission.versioned_attachments.map { |a| provisional_grade.crocodoc_attachment_info(current_user, a) }
+    end
+    json
+  end
+
+  def submission_provisional_grades_json(submission, assignment, current_user, includes)
     provisional_grades = submission.provisional_grades
-    unless assignment.context.grants_right?(current_user, :moderate_grades)
-      provisional_grades = provisional_grades.scored_by(current_user)
+    if assignment.context.grants_right?(current_user, :moderate_grades)
+      provisional_grades = provisional_grades.sort_by { |pg| pg.final ? CanvasSort::Last : pg.created_at }
+    else
+      provisional_grades = provisional_grades.select { |pg| pg.scorer_id == current_user.id }
     end
 
     provisional_grades.map do |provisional_grade|
-      speed_grader_url = speed_grader_url(submission, assignment, provisional_grade)
-      provisional_grade.grade_attributes.merge(speedgrader_url: speed_grader_url)
+      provisional_grade_json(provisional_grade, submission, assignment, current_user, includes)
     end
   end
+
+  private
 
   def speed_grader_url(submission, assignment, provisional_grade)
     speed_grader_course_gradebook_url(

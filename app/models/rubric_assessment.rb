@@ -149,6 +149,10 @@ class RubricAssessment < ActiveRecord::Base
     self.artifact_type == 'Submission' ? self.artifact.attempt : nil
   end
 
+  def set_graded_anonymously
+    @graded_anonymously_set = true
+  end
+
   def update_artifact
     if self.artifact_type == 'Submission' && self.artifact
       Submission.where(:id => self.artifact).update_all(:has_rubric_assessment => true)
@@ -157,6 +161,7 @@ class RubricAssessment < ActiveRecord::Base
           # TODO: this should go through assignment.grade_student to
           # handle group assignments.
           self.artifact.workflow_state = 'graded'
+          self.artifact.graded_anonymously = true if @graded_anonymously_set
           self.artifact.update_attributes(:score => self.score, :graded_at => Time.now, :grade_matches_current_submission => true, :grader => self.assessor)
         end
       end
@@ -236,7 +241,7 @@ class RubricAssessment < ActiveRecord::Base
   end
 
   def related_group_submissions_and_assessments
-    if self.rubric_association && self.rubric_association.association_object.is_a?(Assignment) && !self.rubric_association.association_object.grade_group_students_individually
+    if self.rubric_association && self.rubric_association.association_object.is_a?(Assignment) && !self.artifact.is_a?(ModeratedGrading::ProvisionalGrade) && !self.rubric_association.association_object.grade_group_students_individually
       students = self.rubric_association.association_object.group_students(self.user).last
       submissions = students.map do |student|
         submission = self.rubric_association.association_object.find_asset_for_assessment(self.rubric_association, student).first

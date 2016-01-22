@@ -811,7 +811,7 @@ describe Quizzes::Quiz do
     end
 
     it "should get the correct points possible" do
-      expect(@quiz.current_points_possible).to eq 15
+      expect(@quiz.current_points_possible).to eq 20 # actual_pick_count wasn't so actual after all
     end
 
     it "should omit top level questions when selecting from a question bank" do
@@ -1698,39 +1698,6 @@ describe Quizzes::Quiz do
   describe '.class_names' do
     it 'returns an array of all acceptable class names' do
       expect(Quizzes::Quiz.class_names).to eq ['Quiz', 'Quizzes::Quiz']
-    end
-  end
-
-  context 'with versioning' do
-    let_once(:quiz) { @course.quizzes.create! title: 'Test Quiz' }
-    describe "#versions" do
-      it "finds the versions of both namespaced and non-namespaced quizzes" do
-        quiz.title = "Renamed Test Quiz"
-        quiz.save
-        expect(quiz.versions.count).to eq 2
-
-        Version.update_all("versionable_type='Quiz'","versionable_id=#{quiz.id} AND versionable_type='Quizzes::Quiz'")
-
-        expect(Quizzes::Quiz.find(quiz).versions.count).to eq 2
-      end
-    end
-  end
-
-  describe '#context_module_tags' do
-    it "finds both namespaced and non-namespaced content tags" do
-      quiz = @course.quizzes.create! title: 'Test Quiz'
-      mod = @course.context_modules.create! name: 'Test Module'
-      tag1 = mod.add_item id: quiz.id, type: 'quiz'
-      tag2 = mod.add_item id: quiz.id, type: 'quiz'
-      tag3 = mod.add_item id: quiz.id, type: 'quiz'
-      ContentTag.where(id: tag2).update_all(content_type: 'Quiz')
-      tag3.destroy
-      expect(quiz.context_module_tags.pluck(:id).sort).to eql [tag1.id, tag2.id].sort
-    end
-
-    it "should act like an association" do
-      quiz = @course.quizzes.create! title: 'Test Quiz'
-      expect { quiz.context_module_tags.loaded? }.not_to raise_error
     end
   end
 

@@ -6,6 +6,7 @@ define [
   'compiled/gradebook2/Turnitin'
   'compiled/util/round'
   'jquery.ajaxJSON'
+  'jquery.instructure_misc_helpers' # raw
 ], (GRADEBOOK_TRANSLATIONS, htmlEscape,$, _, {extractData},round) ->
 
   class SubmissionCell
@@ -63,6 +64,7 @@ define [
       $.flashError(GRADEBOOK_TRANSLATIONS.submission_update_error)
 
     isValueChanged: () ->
+      return true if @submission_type? && @submission_type == "online_quiz"
       @val != @$input.val()
 
     validate: () ->
@@ -76,7 +78,11 @@ define [
         grade = if isNaN(grade)
           submission.grade
         else
-          round(grade,round.DEFAULT)
+          round(grade, round.DEFAULT)
+
+        if grade && assignment?.grading_type == "percent"
+          grade = grade.toString() + "%"
+
       this.prototype.cellWrapper(grade, {submission: submission, assignment: assignment, editable: false})
 
     cellWrapper: (innerContents, options = {}) ->
@@ -145,6 +151,7 @@ define [
   class SubmissionCell.out_of extends SubmissionCell
     init: () ->
       submission = @opts.item[@opts.column.field]
+      @submission_type = submission.submission_type
       @$wrapper = $(@cellWrapper("""
         <div class="overflow-wrapper">
           <div class="grade-and-outof-wrapper">

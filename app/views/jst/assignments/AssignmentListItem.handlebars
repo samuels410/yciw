@@ -56,6 +56,20 @@
 
     {{#if canManage}}
       <div class="ig-admin">
+        {{#if postToSISEnabled}}
+          {{#if postToSIS}}
+          <span class="post-to-sis-status enabled">
+            <i class="icon-post-to-sis" title='{{#t}}Post grade to SIS enabled. Click to toggle.{{/t}}' data-tooltip></i>
+            <span class="screenreader-only">{{#t}}The grade for this assignment will sync to the student information system. Click to here to toggle this setting.{{/t}}</span>
+          </span>
+          {{else}}
+          <span class="post-to-sis-status disabled">
+            <i class="icon-post-to-sis" title='{{#t}}Post grade to SIS disabled. Click to toggle.{{/t}}' data-tooltip></i>
+            <span class="screenreader-only">{{#t}}The grade for this assignment will not sync to the student information system. Click here to toggle this setting.{{/t}}</span>
+          </span>
+          {{/if}}
+        {{/if}}
+
         <span class="publish-icon" data-view="publish-icon"></span>
 
         <div class="inline-block">
@@ -106,14 +120,7 @@
               >{{#t "move"}}Move To…{{/t}}</a>
             </li>
             {{/if}}
-            {{#each menu_tools}}
-            <li role="presentation">
-              <a class="menu_tool_link" href="{{url}}">
-                {{#if icon_url}}<img class="icon" alt="" src="{{icon_url}}" />{{/if}}
-                {{title}}
-              </a>
-            </li>
-            {{/each}}
+            {{>ExternalTools/external_tools_menu menu_tools}}
           </ul>
         </div>
       </div>

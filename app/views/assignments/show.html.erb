@@ -3,7 +3,7 @@
   content_for :right_side, render(:partial => "assignment_sidebar")
 %>
 
-<% if @locked && (@locked[:context_module] || @locked[:unlock_at]) %>
+<% if @locked && !@locked[:can_view] %>
   <% js_bundle :module_sequence_footer %>
 
   <h1><%= @assignment.title %></h1>
@@ -54,14 +54,7 @@
             <span class="screenreader-only"><%= t('manage', 'Manage') %></span>
           </a>
           <ul id="toolbar-1" class="al-options" role="menu" tabindex="0" aria-hidden="true" aria-expanded="false">
-          <% @assignment_menu_tools.each do |tool_hash| %>
-            <li role="presentation">
-              <a class="menu_tool_link" href="<%= tool_hash[:base_url] %>&assignments[]=<%= @assignment.id %>" tabindex="-1" role="menuitem">
-                <% if tool_hash[:icon_url] %><img class="icon" alt="" src="<%= tool_hash[:icon_url] %>" /><% end %>
-                <%= tool_hash[:title] %>
-              </a>
-            </li>
-          <% end %>
+            <%= external_tools_menu_items(@assignment_menu_tools, {link_class: "menu_tool_link", settings_key: :assignment_menu, in_list: true, url_params: {:assignments => [@assignment.id]}}) %>
           </ul>
         <% end %>
       </div>
@@ -167,7 +160,7 @@
       </fieldset>
     </form>
 
-    <table class="table assignment_dates">
+    <table class="ic-Table assignment_dates">
       <thead>
         <tr>
           <th scope="col"><%= t(:due, 'Due') %></th>
@@ -183,12 +176,14 @@
     </table>
 
     <% if can_do(@assignment, @current_user, :update) %>
-      <a
-        href="<%= context_url(@context, :context_rubrics_url) %>"
-        class="add_rubric_link btn button-sidebar-wide icon-add"
-        style="<%= hidden if @assignment.rubric_association %>"
-        role="button"
-      ><%= t 'links.add_rubric', "Add Rubric" %></a>
+      <div class="content-box">
+        <a
+          href="<%= context_url(@context, :context_rubrics_url) %>"
+          class="add_rubric_link btn button-sidebar-wide icon-add"
+          style="<%= hidden if @assignment.rubric_association %>"
+          role="button"
+        ><%= t 'links.add_rubric', "Add Rubric" %></a>
+      </div>
     <% end %>
 
     <div class="course_id" style="display: none;"><%= @context.id if @context && @context.is_a?(Course) %></div>

@@ -1,9 +1,11 @@
-require File.expand_path(File.dirname(__FILE__) + '/../helpers/quizzes_common')
-require File.expand_path(File.dirname(__FILE__) + '/../helpers/assignment_overrides.rb')
+require_relative '../common'
+require_relative '../helpers/quizzes_common'
+require_relative '../helpers/assignment_overrides'
 
 describe 'editing a quiz' do
+  include_context "in-process server selenium tests"
+  include QuizzesCommon
   include AssignmentOverridesSeleniumHelper
-  include_context 'in-process server selenium tests'
 
   def delete_quiz
     expect_new_page_load do
@@ -41,20 +43,44 @@ describe 'editing a quiz' do
         type_in_tiny('#quiz_description', 'changed description')
         click_save_settings_button
         wait_for_ajax_requests
-        expect(f('#quiz-publish-link').text.strip!).to eq 'Published'
+        expect(f('#quiz-publish-link .publish-text').text.strip!).to eq 'Published'
       end
 
       it 'deletes the quiz', priority: "1", test_id: 351921 do
         delete_quiz
       end
 
-      it 'unpublishes the quiz', priority: "1", test_id: 351929 do
-        expect_new_page_load do
-          click_save_settings_button
+      it 'saves question changes with the |Save it now| button', priority: "1", test_id: 140647 do
+        course_with_student(course: @course)
+
+        # add new question without saving changes
+        click_questions_tab
+        click_new_question_button
+        question_description = 'New Test Question'
+        create_multiple_choice_question(description: question_description)
+        cancel_quiz_edit
+
+        # verify alert
+        alert_box = fj('.unpublished_warning', '.alert')
+        expect(alert_box.text).to \
+          eq "You have made changes to the questions in this quiz.\nThese "\
+            "changes will not appear for students until you save the quiz."
+
+        # verify button
+        save_it_now_button = fj('.btn.btn-primary', '.edit_quizzes_quiz')
+        expect(save_it_now_button).to be_displayed
+
+        # verify the alert disappears after clicking the button
+        save_it_now_button.click
+        wait_for_ajaximations
+        expect(alert_box).not_to be_displayed
+
+        # verify the student sees the changes
+        @user = @student
+        take_quiz do
+          expect(fj('.display_question.question.multiple_choice_question').text).to \
+            include_text question_description
         end
-        f('#quiz-publish-link').click
-        wait_for_ajax_requests
-        expect(f('#quiz-publish-link').text.strip!).to eq 'Publish'
       end
     end
 
@@ -90,7 +116,7 @@ describe 'editing a quiz' do
         end
         f('#quiz-publish-link').click
         wait_for_ajax_requests
-        expect(f('#quiz-publish-link').text.strip!).to eq 'Unpublish'
+        expect(f('#quiz-publish-link .publish-text').text.strip!).to eq 'Unpublish'
       end
     end
 
@@ -128,7 +154,7 @@ describe 'editing a quiz' do
       skip('This spec is frail')
       default_section = @course.course_sections.first
       other_section = @course.course_sections.create!(name: 'other section')
-      default_section_due = Time.zone.now + 1.days
+      default_section_due = Time.zone.now + 1.day
       other_section_due = Time.zone.now + 2.days
       get "/courses/#{@course.id}/quizzes/#{@quiz.id}/edit"
       wait_for_ajaximations
@@ -164,7 +190,7 @@ describe 'editing a quiz' do
 
       it 'flashes a warning message', priority: "1", test_id: 140609 do
         message = 'Keep in mind, some students have already taken or started taking this quiz'
-        expect(f('#flash_message_holder')).to include_text message
+        keep_trying_until(3) { expect(f('#flash_message_holder')).to include_text message }
       end
 
       it 'deletes the quiz', priority: "1", test_id: 210073 do

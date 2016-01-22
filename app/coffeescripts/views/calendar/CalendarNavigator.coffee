@@ -3,7 +3,8 @@ define [
   'jquery'
   'underscore'
   'Backbone',
-  'jst/calendar/calendarNavigator'
+  'jst/calendar/calendarNavigator',
+  'jquery.instructure_date_and_time' # $.date_field
 ], (I18n, $, _, Backbone, template) ->
 
   class CalendarNavigator extends Backbone.View
@@ -92,7 +93,7 @@ define [
 
     _dateFieldSelect: ->
       data = @_enterKeyData || @_currentSelectedDate()
-      @_triggerDate data.date unless data.invalid or data.blank
+      @_triggerDate data['unfudged-date'] unless data.invalid or data.blank
       @hidePicker()
 
     _triggerPrev: (event) ->

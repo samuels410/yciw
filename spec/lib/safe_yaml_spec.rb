@@ -24,9 +24,17 @@ describe "safe_yaml" do
 --- !ruby/object:ActionController::Base 
 real_format: 
 YAML
-    expect { YAML.load yaml }.to raise_error(SafeYAML::UnsafeTagError)
+    expect { YAML.load yaml }.to raise_error
     result = YAML.unsafe_load yaml
     expect(result.class).to eq ActionController::Base
+  end
+
+  it "doesn't allow deserialization of arbitrary classes" do
+    expect { YAML.load(YAML.dump(ActionController::Base)) }.to raise_error
+  end
+
+  it "allows deserialization of arbitrary classes when unsafe_loading" do
+    expect(YAML.unsafe_load(YAML.dump(ActionController::Base))).to eq ActionController::Base
   end
 
   it "should allow some whitelisted classes" do
@@ -37,6 +45,7 @@ hwia: !map:HashWithIndifferentAccess
   b: 2
 float: !float
   5.1
+float_with_exp: -1.7763568394002505e-15
 os: !ruby/object:OpenStruct
   modifiable: true
   table: 
@@ -96,6 +105,9 @@ YAML
 
     float = verify(result, 'float', Float)
     expect(float).to eq 5.1
+
+    float_with_exp = verify(result, 'float_with_exp', Float)
+    expect(float_with_exp).to eq(-1.7763568394002505e-15)
 
     os = verify(result, 'os', OpenStruct)
     expect(os.a).to eq 1

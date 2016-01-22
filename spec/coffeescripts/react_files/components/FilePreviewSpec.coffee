@@ -1,4 +1,5 @@
 define [
+  '../mockFilesENV'
   'jquery'
   'react'
   'react-router'
@@ -10,11 +11,10 @@ define [
   'compiled/models/File'
   'compiled/collections/FilesCollection'
   'compiled/collections/FoldersCollection'
-  '../mockFilesENV'
   '../TestLocation'
   '../../helpers/stubRouterContext'
   'vendor/date'
-], ($, React, Router, Modal, FilesApp, filesEnv, FilePreviewComponent, Folder, File, FilesCollection, FoldersCollection, mockFilesENV, TestLocation, stubRouterContext) ->
+], (mockFilesENV, $, React, Router, Modal, FilesApp, filesEnv, FilePreviewComponent, Folder, File, FilesCollection, FoldersCollection, TestLocation, stubRouterContext) ->
   Simulate = React.addons.TestUtils.Simulate
   wrapper = null
 
@@ -74,6 +74,7 @@ define [
       Modal.setAppElement(@div)
 
       properties =
+        isOpen: true
         currentFolder: @currentFolder
         collection: @filesCollection
         query: {}
@@ -84,7 +85,7 @@ define [
         new TestLocation([ path ])
 
       routes = [
-        Router.Route path: filesEnv.baseUrl, handler: FilePreviewComponent, name: 'rootFolder'
+        React.createElement(Router.Route, path: filesEnv.baseUrl, handler: FilePreviewComponent, name: 'rootFolder')
       ]
 
       @runRouter = () ->
@@ -95,7 +96,7 @@ define [
           callback = arguments[0]
 
         Router.run routes, location(path), (Handler) =>
-          React.render Handler(properties), @div, ->
+          React.render React.createElement(Handler, properties), @div, ->
             callback.call(null)
 
 
@@ -131,61 +132,9 @@ define [
       ok $('.ef-file-preview-header-download').length, 'The download button was not shown'
       ok $('.ef-file-preview-header-download').attr('href').match(@file3.get('url')), 'The download button url is incorrect'
 
-  module 'Folder Preview Rendering',
-    setup: ->
-      cleanEventHandlers()
-      # Initialize a few things to view in the preview.
-      @folder1 = new Folder({
-        id: '1'
-        cid: 'c1'
-        name: 'Folder 1'
-        'content/type': 'unknown/unknown'
-        created_at: +new Date()
-        updated_at: +new Date()
-      }, {preflightUrl: ''})
-
-      @folderCollection = new FoldersCollection()
-      @folderCollection.add @folder1
-      @currentFolder = new Folder()
-      @currentFolder.folders = @folderCollection
-      wrapper = document.getElementById('fixtures')
-      wrapper.innerHTML = "<div id='app_element'></div>"
-      @div = document.getElementById("app_element")
-
-      Modal.setAppElement(@div)
-
-      properties =
-        currentFolder: @currentFolder
-        collection: @filesCollection
-        query: {}
-        params:
-          splat: '/courses/1/files'
-
-      location = (path = '/courses/1/files?preview=1') ->
-        new TestLocation([ path ])
-
-      routes = [
-        Router.Route path: filesEnv.baseUrl, handler: FilePreviewComponent, name: 'rootFolder'
-      ]
-
-      @runRouter = () ->
-        if arguments.length > 1
-          path = arguments[0]
-          callback = arguments[1]
-        else
-          callback = arguments[0]
-
-        Router.run routes, location(path), (Handler) =>
-          React.render Handler(properties), @div, ->
-            callback.call(null)
-
-    teardown: ->
-       React.unmountComponentAtNode(@div)
-       wrapper.innerHTML = ""
-       window.backlogTracing = false
-
-  test 'opening the preview for a folder should show a folder preview icon', ->
-    @runRouter ->
-      ok $('.mimeClass-folder').length, 'Folder class added'
-      equal $('.ef-file-preview-frame').text(), 'Folder 1', 'Folder name displayed'
+  test 'opening file preview should aria-hide the appElement div only, not the body div', ->
+    equal $(@div).attr('aria-hidden'), null, "doesn't have an aria-hidden attribute"
+    @runRouter '/courses/1/files?preview=3',  =>
+      equal $(@div).attr('aria-hidden'), 'true', "adds the aria-hidden true attribute"
+      equal $(document.body).attr('aria-hidden'), null, "body doesn't have an aria-hidden attribute"
 

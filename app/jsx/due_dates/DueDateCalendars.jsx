@@ -1,13 +1,9 @@
-/** @jsx React.DOM */
-
 define([
   'underscore',
   'react',
   'jsx/due_dates/DueDateCalendarPicker',
   'i18n!assignments',
 ], (_ , React, DueDateCalendarPicker, I18n) => {
-
-  var DueDateCalendarPicker = React.createFactory(DueDateCalendarPicker)
 
   var DueDateCalendars = React.createClass({
 

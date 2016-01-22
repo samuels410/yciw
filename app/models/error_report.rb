@@ -91,6 +91,15 @@ class ErrorReport < ActiveRecord::Base
     end
   end
 
+  def self.configure_to_ignore(error_classes)
+    @classes_to_ignore ||= []
+    @classes_to_ignore += error_classes
+  end
+
+  def self.configured_to_ignore?(class_name)
+    (@classes_to_ignore || []).include?(class_name)
+  end
+
   # returns the new error report
   def self.log_error(category, opts = {})
     Reporter.new.log_error(category, opts)
@@ -111,6 +120,7 @@ class ErrorReport < ActiveRecord::Base
   end
 
   def self.log_exception_from_canvas_errors(exception, data)
+    return nil if configured_to_ignore?(exception.class.to_s)
     tags = data.fetch(:tags, {})
     extras = data.fetch(:extra, {})
     account_id = tags[:account_id]
@@ -127,13 +137,14 @@ class ErrorReport < ActiveRecord::Base
     end
   end
 
+  PROTECTED_FIELDS = [:id, :created_at, :updated_at, :data].freeze
 
   # assigns data attributes to the column if there's a column with that name,
   # otherwise goes into the general data hash
   def assign_data(data = {})
     self.data ||= {}
     data.each do |k,v|
-      if respond_to?(:"#{k}=")
+      if respond_to?(:"#{k}=") && !ErrorReport::PROTECTED_FIELDS.include?(k.to_sym)
         self.send(:"#{k}=", v)
       else
         # dup'ing because some strings come in from Rack as frozen sometimes,

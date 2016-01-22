@@ -25,9 +25,9 @@ class AssessmentQuestionBank < ActiveRecord::Base
 
   belongs_to :context, :polymorphic => true
   validates_inclusion_of :context_type, :allow_nil => true, :in => ['Account', 'Course']
-  has_many :assessment_questions, :order => 'assessment_questions.name, assessment_questions.position, assessment_questions.created_at'
+  has_many :assessment_questions, -> { order('assessment_questions.name, assessment_questions.position, assessment_questions.created_at') }
   has_many :assessment_question_bank_users
-  has_many :learning_outcome_alignments, as: :content, class_name: 'ContentTag', conditions: ['content_tags.tag_type = ? AND content_tags.workflow_state != ?', 'learning_outcome', 'deleted'], preload: :learning_outcome
+  has_many :learning_outcome_alignments, -> { where("content_tags.tag_type='learning_outcome' AND content_tags.workflow_state<>'deleted'").preload(:learning_outcome) }, as: :content, class_name: 'ContentTag'
   has_many :quiz_groups, class_name: 'Quizzes::QuizGroup'
   before_save :infer_defaults
   after_save :update_alignments
@@ -39,8 +39,11 @@ class AssessmentQuestionBank < ActiveRecord::Base
   end
 
   set_policy do
-    given{|user, session| self.context.grants_right?(user, session, :manage_assignments) }
+    given{|user, session| self.context.grants_right?(user, session, :read_question_banks) && self.context.grants_right?(user, session, :manage_assignments) }
     can :read and can :create and can :update and can :delete and can :manage
+
+    given{|user, session| self.context.grants_right?(user, session, :read_question_banks) }
+    can :read
 
     given{|user| user && self.assessment_question_bank_users.where(:user_id => user).exists? }
     can :read

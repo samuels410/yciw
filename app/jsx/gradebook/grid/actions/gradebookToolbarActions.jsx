@@ -9,9 +9,8 @@ define([
 
   var GradebookToolbarActions = Reflux.createActions({
     toggleStudentNames: { asyncResult: false },
-    toggleNotesColumn: { asyncResult: true },
+    toggleNotesColumn: { asyncResult: false },
     toggleTreatUngradedAsZero: { asyncResult: false },
-    toggleShowAttendanceColumns: { asyncResult: false },
     toggleTotalColumnInFront: { asyncResult: false },
     arrangeColumnsBy: { asyncResult: false },
     showTotalGradeAsPoints: { asyncResult: false },
@@ -24,10 +23,6 @@ define([
 
   GradebookToolbarActions.toggleTreatUngradedAsZero.preEmit = (treatUngradedAsZero) => {
     userSettings.contextSet('treatUngradedAsZero', treatUngradedAsZero);
-  };
-
-  GradebookToolbarActions.toggleShowAttendanceColumns.preEmit = (showAttendanceColumns) => {
-    userSettings.contextSet('showAttendanceColumns', showAttendanceColumns);
   };
 
   GradebookToolbarActions.toggleTotalColumnInFront.preEmit = (totalColumnInFront) => {
@@ -51,22 +46,10 @@ define([
     userSettings.contextSet('warned_about_totals_display', hideWarning);
   };
 
-  GradebookToolbarActions.toggleNotesColumn.listen(function(hideNotesColumn) {
-    if (!GradebookConstants.teacher_notes) {
-      $.ajaxJSON(GradebookConstants.custom_columns_url, 'POST', {
-        'column[title]': I18n.t('notes', 'Notes'),
-        'column[position]': 1,
-        'column[teacher_notes]': true
-      })
-        .done((response) => this.completed())
-        .fail((jqxhr, textStatus, error) => this.failed(error));
-    } else {
-      var url = GradebookConstants.custom_column_url.replace(/:id/, GradebookConstants.teacher_notes.id);
-      $.ajaxJSON(url, 'PUT', { 'column[hidden]': hideNotesColumn } )
-        .done((response) => this.completed(hideNotesColumn))
-        .fail((jqxhr, textStatus, error) => this.failed(error));
-    }
-  });
+  GradebookToolbarActions.toggleNotesColumn.preEmit = (hideNotesColumn) => {
+    var url = GradebookConstants.custom_column_url.replace(/:id/, GradebookConstants.teacher_notes.id);
+    $.ajaxJSON(url, 'PUT', { 'column[hidden]': hideNotesColumn });
+  };
 
   return GradebookToolbarActions;
 });

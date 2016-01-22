@@ -1,5 +1,3 @@
-/** @jsx React.DOM */
-
 define([
   'i18n!new_nav',
   'react',
@@ -29,7 +27,7 @@ define([
       }
       var groups =  this.props.groups.map((group) => {
         if (!group.concluded) {
-          return <li key={group.id}><a href={`/groups/${group.id}`}>{group.name}</a></li>;
+          return <li className="ReactTray-list-item" key={group.id}><a href={`/groups/${group.id}`}>{group.name}</a></li>;
         };
       });
       groups.push(

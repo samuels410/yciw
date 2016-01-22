@@ -1,8 +1,13 @@
-require File.expand_path(File.dirname(__FILE__) + '/helpers/context_modules_common')
-require File.expand_path(File.dirname(__FILE__) + '/helpers/quizzes_common')
+require_relative "common"
+require_relative "helpers/context_modules_common"
+require_relative "helpers/quizzes_common"
 
 describe "context modules" do
   include_context "in-process server selenium tests"
+  include ContextModulesCommon
+
+  let(:quiz_helper) { Class.new { extend QuizzesCommon } }
+
   context "progressions", priority: "1" do
     before :each do
       course_with_teacher_logged_in
@@ -230,7 +235,7 @@ describe "context modules" do
     end
 
     it "should show student progress once quiz-score atleast requirement is met", priority: "1", test_id: 126696 do
-      @quiz_1 = quiz_create
+      @quiz_1 = quiz_helper.quiz_create(course: @course)
       tag = @module1.add_item({id: @quiz_1.id, type: 'quiz'})
       add_requirement({tag.id => {type:'min_score', min_score: 0.5}})
       fln("Unnamed Quiz").click

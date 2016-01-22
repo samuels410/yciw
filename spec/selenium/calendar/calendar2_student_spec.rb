@@ -3,8 +3,9 @@ require File.expand_path(File.dirname(__FILE__) + '/../helpers/calendar2_common'
 
 describe "calendar2" do
   include_context "in-process server selenium tests"
+  include Calendar2Common
 
-  before (:each) do
+  before(:each) do
     Account.default.tap do |a|
       a.settings[:show_scheduler]   = true
       a.save!
@@ -12,7 +13,7 @@ describe "calendar2" do
   end
 
   context "as a student" do
-    before (:each) do
+    before(:each) do
       @student = course_with_student_logged_in(:active_all => true).user
     end
 
@@ -107,14 +108,14 @@ describe "calendar2" do
         event = calendar_event_model(:title => 'Test Event', :start_at => date, :end_at => (date + 1.hour))
 
         get "/courses/#{@course.id}/calendar_events/#{event.id}?calendar=1"
-        expect(fj('.calendar_header .navigation_title').text).to eq 'Julio 2012'
-        expect(fj('#calendar-app .fc-sun').text).to eq 'DOM'
-        expect(fj('#calendar-app .fc-mon').text).to eq 'LUN'
-        expect(fj('#calendar-app .fc-tue').text).to eq 'MAR'
-        expect(fj('#calendar-app .fc-wed').text).to eq 'MIE'
-        expect(fj('#calendar-app .fc-thu').text).to eq 'JUE'
-        expect(fj('#calendar-app .fc-fri').text).to eq 'VIE'
-        expect(fj('#calendar-app .fc-sat').text).to eq 'SAB'
+        expect(fj('.calendar_header .navigation_title').text).to eq 'julio 2012'
+        expect(fj('#calendar-app .fc-sun').text).to eq 'DOM.'
+        expect(fj('#calendar-app .fc-mon').text).to eq 'LUN.'
+        expect(fj('#calendar-app .fc-tue').text).to eq 'MAR.'
+        expect(fj('#calendar-app .fc-wed').text).to eq 'MIÉ.'
+        expect(fj('#calendar-app .fc-thu').text).to eq 'JUE.'
+        expect(fj('#calendar-app .fc-fri').text).to eq 'VIE.'
+        expect(fj('#calendar-app .fc-sat').text).to eq 'SÁB.'
       end
     end
 
@@ -125,7 +126,7 @@ describe "calendar2" do
         get "/calendar2"
         # Get the spanish text for the current month/year
         expect_month_year = I18n.l(Date.today, :format => '%B %Y', :locale => 'es')
-        expect(fj('#minical h2').text).to eq expect_month_year
+        expect(fj('#minical h2').text).to eq expect_month_year.downcase
       end
     end
   end

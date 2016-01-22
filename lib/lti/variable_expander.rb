@@ -216,6 +216,10 @@ module Lti
     register_expansion 'Canvas.xuser.allRoles', [],
                        -> { lti_helper.all_roles }
 
+    register_expansion 'Canvas.user.globalId', [],
+                       -> { @current_user.global_id},
+                       USER_GUARD
+
     # Substitutions for the primary pseudonym for the user for the account
     # This should hold all the SIS information for the user
     # This may not be the pseudonym the user is actually gingged in with
@@ -306,15 +310,15 @@ module Lti
 
     register_expansion 'Canvas.assignment.unlockAt.iso8601', [],
                        -> { @assignment.unlock_at.utc.iso8601 },
-                       ASSIGNMENT_GUARD
+                       -> {@assignment && @assignment.unlock_at.present?}
 
     register_expansion 'Canvas.assignment.lockAt.iso8601', [],
                        -> { @assignment.lock_at.utc.iso8601 },
-                       ASSIGNMENT_GUARD
+                       -> {@assignment && @assignment.lock_at.present?}
 
     register_expansion 'Canvas.assignment.dueAt.iso8601', [],
                        -> { @assignment.due_at.utc.iso8601 },
-                       ASSIGNMENT_GUARD
+                       -> {@assignment && @assignment.due_at.present?}
 
     register_expansion 'LtiLink.custom.url', [],
                        -> { @controller.show_lti_tool_settings_url(@tool_setting_link_id) },
@@ -329,7 +333,7 @@ module Lti
                        -> { @tool_setting_proxy_id }
 
     register_expansion 'ToolConsumerProfile.url', [],
-                       -> { @controller.named_context_url(@tool.context, :context_tool_consumer_profile_url, "339b6700-e4cb-47c5-a54f-3ee0064921a9", include_host: true )},
+                       -> { @controller.polymorphic_url([@tool.context, :tool_consumer_profile], tool_consumer_profile_id: Lti::ToolConsumerProfileCreator::TCP_UUID)},
                        -> { @tool }
 
     register_expansion 'Canvas.file.media.id', [],

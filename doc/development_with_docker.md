@@ -7,21 +7,20 @@ way to get started developing Canvas.
 
 ### Dependencies
 
+#### OS X
+
 On OS X, make sure you have the following installed:
 
-#### VMWare Fusion
+##### VMWare Fusion
 
-Preferred over VirtualBox for performance reasons.
+Preferred over VirtualBox for performance reasons. (although Virtualbox 5 is
+pretty close, about 90% of VMWare fusion in basic testing)
 
-#### Vagrant (with VMWare Fusion plugin)
-
-Required for Dinghy to work with VMWare Fusion.
-
-#### Dinghy
+##### Dinghy
 
 ```
 $ brew install https://github.com/codekitchen/dinghy/raw/latest/dinghy.rb
-$ dinghy up --memory=4096 --cpus=4 --provider=vmware_fusion --proxy
+$ dinghy create --memory=4096 --cpus=4 --provider=vmware_fusion
 ```
 
 Type `docker ps` in your terminal to make sure your Docker environment
@@ -30,10 +29,106 @@ is happy.
 Dinghy currently requires OS X Yosemite. Make sure you're using the most recent
 Dinghy release, or else you'll probably have a bad time.
 
+#### Linux
+
+In Linux you can run docker natively, as long as you are using
+a 64-bit kernel that is version 3.10 or higher.
+
+##### Install the package
+
+###### Arch Linux
+
+```
+$ pacman -S docker
+```
+
+###### Fedora
+
+```
+$ dnf install docker
+```
+
+###### Ubuntu
+
+```
+$ apt-get install docker.io
+```
+
+##### Start and optionally enable the docker service
+
+In order to use docker, the docker service must be running.  You can start the
+service using systemd:
+
+```
+systemctl start docker.service
+```
+
+You can optionally enable the docker service, which will cause it to
+start automatically at boot time:
+
+```
+systemctl enable docker.service
+```
+
+##### Avoid requiring sudo to run the docker command (optional)
+
+Because docker itelf runs with root privileges, you must be root
+in order to command it.  Unfortunately, this is very
+inconvenient and super annoying.  Fortunately, there is an elegant
+work-around that simply involves creating a 'docker' group and
+adding any users to that group that should have permission to
+run docker.  First, add the docker group:
+
+```
+groupadd docker
+```
+
+Now add your user to that group:
+
+```
+usermod -a -G docker $(whoami)
+```
+
+Now you can run the docker command without root or sudo.
+Note that you _will_ need to log out and back in for the group
+addition to take effect.
+
+NOTE: Adding non-privileged users to the docker group can be
+a security risk.  Don't add users to this group that shouldn't
+have root privileges.  Dev responsibly my friends.
+
 #### Docker-Compose
+
+##### OS X
 
 ```
 $ brew install docker-compose --without-boot2docker
+```
+
+##### Linux
+
+###### Arch Linux
+
+Install docker-compose from the AUR using your preferred method.  For example with aura:
+
+```
+aura -A docker-compose
+```
+
+###### Fedora
+
+In Fedora 22 and later, docker-compose is in the repos:
+
+```
+$ dnf install docker-compose
+```
+
+###### Ubuntu and others
+
+If you have [python pip](https://en.wikipedia.org/wiki/Pip_(package_manager)) installed, you can use it to install docker-compose:
+
+```
+$ pip install docker-compose
 ```
 
 ### Bootstrapping
@@ -65,8 +160,8 @@ $ docker-compose run --rm web bundle exec rake canvas:compile_assets
 $ docker-compose up
 ```
 
-Now you can open Canvas at http://canvas.docker/
-
+If on OS X and using dinghy, you can now open Canvas at http://canvas.docker/.
+If on Linux, canvas is listening and available on localhost port 3000 (http://localhost:3000)
 
 ## Normal Usage
 
@@ -100,4 +195,40 @@ the browser:
 
 ```
 $ open vnc://secret:secret@selenium.docker/
+```
+
+## Troubleshooting
+
+If you are having trouble running the `web` or `kinesis` containers, make sure that permissions on the directory are permissive.  You can try the owner change (less disruptive):
+
+```
+chown -R 1000:1000 canvas-lms
+```
+
+Or the permissions change (which will make docker work, but causes the git working directory to become filthy):
+
+```
+chmod a+rwx -R canvas-lms
+```
+
+If your distro is equipped with selinux, make sure it is not interfering.
+
+```
+$ sestatus
+...
+Current mode:                   disabled
+...
+
+```
+
+If so, it can be disabled temporarily with:
+
+```
+sudo setenforce 0
+```
+
+Or it can be disabled permanently by editing `/etc/selinux/config` thusly:
+
+```
+SELINUX=disabled
 ```

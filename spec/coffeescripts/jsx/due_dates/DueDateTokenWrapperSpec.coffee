@@ -37,7 +37,8 @@ define [
         currentlySearching: false
         rowKey: "nullnullnull"
 
-      @DueDateTokenWrapper = React.render(DueDateTokenWrapper(props), $('<div>').appendTo('body')[0])
+      DueDateTokenWrapperElement = React.createElement(DueDateTokenWrapper, props)
+      @DueDateTokenWrapper = React.render(DueDateTokenWrapperElement, $('<div>').appendTo('body')[0])
       @TokenInput = @DueDateTokenWrapper.refs.TokenInput
 
     teardown: ->
@@ -52,18 +53,21 @@ define [
     ok @TokenInput.isMounted()
 
   test 'call to fetchStudents on input changes', ->
-    fetch = @stub(@DueDateTokenWrapper, "fetchStudents")
+    fetch = @stub(@DueDateTokenWrapper, "safeFetchStudents")
     @DueDateTokenWrapper.handleInput("to")
     equal fetch.callCount, 1
     @DueDateTokenWrapper.handleInput("tre")
     equal fetch.callCount, 2
 
   test 'if a user types handleInput filters the options', ->
+    # having debouncing enabled for fetching makes tests hard to
+    # contend with.
+    @DueDateTokenWrapper.removeTimingSafeties()
+
     # 1 prompt, 3 sections, 4 students, 2 headers = 10
     equal @DueDateTokenWrapper.optionsForMenu().length, 10
 
     @DueDateTokenWrapper.handleInput("scipio")
-    @clock.tick(2000)
     # 0 sections, 1 student, 1 header = 2
     equal @DueDateTokenWrapper.optionsForMenu().length, 2
 

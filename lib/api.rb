@@ -104,7 +104,10 @@ module Api
         :scope => 'root_account_id' }.freeze,
     'users' =>
       { :lookups => { 'sis_user_id' => 'pseudonyms.sis_user_id',
-                      'sis_login_id' => 'pseudonyms.unique_id',
+                      'sis_login_id' => {
+                          column: 'LOWER(pseudonyms.unique_id)',
+                          transform: ->(id) { QuotedValue.new("LOWER(#{Pseudonym.connection.quote(id)})") }
+                      },
                       'id' => 'users.id',
                       'sis_integration_id' => 'pseudonyms.integration_id',
                       'lti_context_id' => 'users.lti_context_id',
@@ -156,6 +159,10 @@ module Api
 
     column = lookups[sis_column]
     return nil, nil unless column
+    if column.is_a?(Hash)
+      sis_id = column[:transform].call(sis_id)
+      column = column[:column]
+    end
     return column, sis_id
   end
 
@@ -379,7 +386,7 @@ module Api
     media_object_or_hash = OpenStruct.new(media_object_or_hash) if media_object_or_hash.is_a?(Hash)
     {
       'content-type' => "#{media_object_or_hash.media_type}/mp4",
-      'display_name' => media_object_or_hash.title,
+      'display_name' => media_object_or_hash.title.presence || media_object_or_hash.user_entered_title,
       'media_id' => media_object_or_hash.media_id,
       'media_type' => media_object_or_hash.media_type,
       'url' => user_media_download_url(:user_id => @current_user.id,
@@ -459,7 +466,7 @@ module Api
                 end
       end
 
-      unless obj && ((is_public && !obj.locked_for?(user)) || user_can_download_attachment?(obj, context, user))
+      unless obj && !obj.deleted? && ((is_public && !obj.locked_for?(user)) || user_can_download_attachment?(obj, context, user))
         if obj && obj.previewable_media? && (uri = URI.parse(match.url) rescue nil)
           uri.query = (uri.query.to_s.split("&") + ["no_preview=1"]).join("&")
           next uri.to_s
@@ -488,7 +495,7 @@ module Api
     html = rewriter.translate_content(html)
 
     url_helper = Html::UrlProxy.new(self, context, host, protocol)
-    account = Context.get_account(context, @domain_root_account)
+    account = Context.get_account(context) || @domain_root_account
     include_mobile = respond_to?(:mobile_device?, true) && mobile_device?
     Html::Content.rewrite_outgoing(html, account, url_helper, include_mobile: include_mobile)
   end

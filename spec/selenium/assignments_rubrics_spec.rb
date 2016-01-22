@@ -3,6 +3,7 @@ require File.expand_path(File.dirname(__FILE__) + '/helpers/rubrics_common')
 
 describe "assignment rubrics" do
   include_context "in-process server selenium tests"
+  include RubricsCommon
 
   context "assignment rubrics as a teacher" do
     before(:each) do
@@ -63,6 +64,7 @@ describe "assignment rubrics" do
       create_assignment_with_points(initial_points)
       get "/courses/#{@course.id}/assignments/#{@assignment.id}"
       f('.add_rubric_link').click
+      check_element_has_focus(fj('.find_rubric_link:visible:first'))
       set_value(f('.rubric_title input[name="title"]'), rubric_name)
       criterion_points = fj('.criterion_points:visible')
       set_value(criterion_points, initial_points)

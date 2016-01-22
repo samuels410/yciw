@@ -43,29 +43,7 @@ class AssignmentsController < ApplicationController
       # It'd be nice to do this as an after_create, but it's not that simple
       # because of course import/copy.
       @context.require_assignment_group
-
-      rights = [:manage_assignments, :manage_grades, :read_grades]
-      permissions = @context.rights_status(@current_user, *rights)
-      permissions[:manage] = permissions[:manage_assignments]
-      js_env({
-        :URLS => {
-          :new_assignment_url => new_polymorphic_url([@context, :assignment]),
-          :course_url => api_v1_course_url(@context),
-          :sort_url => reorder_course_assignment_groups_url,
-          :assignment_sort_base_url => course_assignment_groups_url,
-          :context_modules_url => api_v1_course_context_modules_path(@context),
-          :course_student_submissions_url => api_v1_course_student_submissions_url(@context)
-        },
-        :PERMISSIONS => permissions,
-        :DIFFERENTIATED_ASSIGNMENTS_ENABLED => @context.feature_enabled?(:differentiated_assignments),
-        :VALID_DATE_RANGE => CourseDateRange.new(@context),
-        :assignment_menu_tools => external_tools_display_hashes(:assignment_menu),
-        :discussion_topic_menu_tools => external_tools_display_hashes(:discussion_topic_menu),
-        :quiz_menu_tools => external_tools_display_hashes(:quiz_menu),
-        :current_user_has_been_observer_in_this_course => @context.user_has_been_observer?(@current_user),
-        :observed_student_ids => ObserverEnrollment.observed_student_ids(@context, @current_user)
-      })
-
+      set_js_assignment_data # in application_controller.rb, because the assignments page can be shared with the course home
 
       respond_to do |format|
         format.html do
@@ -102,7 +80,10 @@ class AssignmentsController < ApplicationController
       @locked = @assignment.locked_for?(@current_user, :check_policies => true, :deep_check_if_needed => true)
       @locked.delete(:lock_at) if @locked.is_a?(Hash) && @locked.has_key?(:unlock_at) # removed to allow proper translation on show page
       @unlocked = !@locked || @assignment.grants_right?(@current_user, session, :update)
-      @assignment.context_module_action(@current_user, :read) if @unlocked && !@assignment.new_record?
+
+      unless @assignment.new_record? || (@locked && !@locked[:can_view])
+        @assignment.context_module_action(@current_user, :read)
+      end
 
       if @assignment.grants_right?(@current_user, session, :read_own_submission) && @context.grants_right?(@current_user, session, :read_grades)
         @current_user_submission = @assignment.submissions.where(user_id: @current_user).first if @current_user
@@ -128,7 +109,7 @@ class AssignmentsController < ApplicationController
       end
 
       if @assignment.submission_types.include?("online_upload") || @assignment.submission_types.include?("online_url")
-        @external_tools = ContextExternalTool.all_tools_for(@context, :user => @current_user, :type => :homework_submission)
+        @external_tools = ContextExternalTool.all_tools_for(@context, :user => @current_user, :placements => :homework_submission)
       else
         @external_tools = []
       end
@@ -140,8 +121,10 @@ class AssignmentsController < ApplicationController
         :EXTERNAL_TOOLS => external_tools_json(@external_tools, @context, @current_user, session)
       })
 
-      if @assignment.grants_right?(@current_user, session, :grade)
-        visible_student_ids = @context.enrollments_visible_to(@current_user).pluck(:user_id)
+      @can_view_grades = @context.grants_right?(@current_user, session, :view_all_grades)
+      @can_grade = @assignment.grants_right?(@current_user, session, :grade)
+      if @can_view_grades || @can_grade
+        visible_student_ids = @context.apply_enrollment_visibility(@context.all_student_enrollments, @current_user).pluck(:user_id)
         @current_student_submissions = @assignment.submissions.where("submissions.submission_type IS NOT NULL").where(:user_id => visible_student_ids).to_a
       end
 
@@ -155,8 +138,6 @@ class AssignmentsController < ApplicationController
 
       @google_drive_upgrade = !!(logged_in_user && Canvas::Plugin.find(:google_drive).try(:settings) &&
           (!logged_in_user.user_services.where(service: 'google_drive').first || !(google_docs.verify_access_token rescue false)))
-      @google_authed = @google_docs_token and not @google_drive_upgrade
-
 
       add_crumb(@assignment.title, polymorphic_url([@context, @assignment]))
 
@@ -182,9 +163,15 @@ class AssignmentsController < ApplicationController
       add_crumb(t('Moderate'))
 
       js_env({
+        :ASSIGNMENT_TITLE => @assignment.title,
+        :GRADES_PUBLISHED => @assignment.grades_published?,
         :URLS => {
           :student_submissions_url => polymorphic_url([:api_v1, @context, @assignment, :submissions]) + "?include[]=user_summary&include[]=provisional_grades",
-          :publish_grades_url => api_v1_publish_provisional_grades_url({course_id: @context.id, assignment_id: @assignment.id})
+          :publish_grades_url => api_v1_publish_provisional_grades_url({course_id: @context.id, assignment_id: @assignment.id}),
+          :list_gradeable_students => api_v1_course_assignment_gradeable_students_url({course_id: @context.id, assignment_id: @assignment.id}) + "?include[]=provisional_grades&per_page=50",
+          :add_moderated_students => api_v1_add_moderated_students_url({course_id: @context.id, assignment_id: @assignment.id}),
+          :assignment_speedgrader_url => speed_grader_course_gradebook_url({course_id: @context.id, assignment_id: @assignment.id}),
+          :provisional_grades_base_url => polymorphic_url([:api_v1, @context, @assignment]) + "/provisional_grades"
         }})
 
       respond_to do |format|
@@ -419,11 +406,13 @@ class AssignmentsController < ApplicationController
         assignment_group_json(group, @current_user, session, [], {stringify_json_ids: true})
       end
 
+      post_to_sis = Assignment.sis_grade_export_enabled?(@context)
+
       hash = {
         :ASSIGNMENT_GROUPS => json_for_assignment_groups,
         :GROUP_CATEGORIES => group_categories,
         :KALTURA_ENABLED => !!feature_enabled?(:kaltura),
-        :POST_TO_SIS => Assignment.sis_grade_export_enabled?(@context),
+        :POST_TO_SIS => post_to_sis,
         :MODERATED_GRADING => @context.feature_enabled?(:moderated_grading),
         :HAS_GRADED_SUBMISSIONS => @assignment.graded_submissions_exist?,
         :SECTION_LIST => (@context.course_sections.active.map { |section|
@@ -444,6 +433,7 @@ class AssignmentsController < ApplicationController
         :VALID_DATE_RANGE => CourseDateRange.new(@context)
       }
 
+      hash[:POST_TO_SIS_DEFAULT] = @context.account.sis_default_grade_export[:value] if post_to_sis && @assignment.new_record?
       hash[:ASSIGNMENT] = assignment_json(@assignment, @current_user, session, override_dates: false)
       hash[:ASSIGNMENT][:has_submitted_submissions] = @assignment.has_submitted_submissions?
       hash[:URL_ROOT] = polymorphic_url([:api_v1, @context, :assignments])

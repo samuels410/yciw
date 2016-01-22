@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 define([
   'react',
   '../../mixins/gradeCellMixin',
@@ -22,10 +21,10 @@ define([
     ],
 
     renderViewGrade() {
-      var submission = this.state.submission;
+      var submission = this.props.cellData;
       if (submission && submission.grade) {
-        var gradingType = this.props.cellData.grading_type;
-            score = (gradingType == 'letter_grade') ? submission.score : ''
+        var gradingType = this.props.cellData.grading_type,
+            score = (gradingType == 'letter_grade') ? submission.score : '';
         return (
           <div ref="grade">
             {submission.grade}
@@ -35,7 +34,7 @@ define([
           </div>
         );
       } else {
-        return <div ref="grade">-</div>;
+        return <div className='grade' ref="grade">-</div>;
       }
     }
   });

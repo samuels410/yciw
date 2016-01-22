@@ -165,20 +165,16 @@ module Importers
             event.save_without_broadcasting
           end
 
-          migration.imported_migration_items_by_class(Announcement).each do |event|
-            event.reload
-            event.delayed_post_at = shift_date(event.delayed_post_at, shift_options)
-            event.save_without_broadcasting
-          end
-
           migration.imported_migration_items_by_class(Attachment).each do |event|
             event.lock_at = shift_date(event.lock_at, shift_options)
             event.unlock_at = shift_date(event.unlock_at, shift_options)
             event.save_without_broadcasting
           end
 
-          migration.imported_migration_items_by_class(DiscussionTopic).each do |event|
+          (migration.imported_migration_items_by_class(Announcement) +
+            migration.imported_migration_items_by_class(DiscussionTopic)).each do |event|
             event.reload
+            event.saved_by = :after_migration
             event.delayed_post_at = shift_date(event.delayed_post_at, shift_options)
             event.lock_at = shift_date(event.lock_at, shift_options)
             event.save_without_broadcasting
@@ -210,6 +206,13 @@ module Importers
           end
 
           course.set_course_dates_if_blank(shift_options)
+        else
+          (migration.imported_migration_items_by_class(Announcement) +
+            migration.imported_migration_items_by_class(DiscussionTopic)).each do |event|
+
+            event.saved_by = :after_migration
+            event.schedule_delayed_transitions
+          end
         end
       rescue
         migration.add_warning(t(:due_dates_warning, "Couldn't adjust the due dates."), $!)
@@ -282,6 +285,9 @@ module Importers
             migration.add_warning(t(:account_grading_standard_warning,"Couldn't find account grading standard for the course." ))
           end
         end
+      end
+      if settings[:lock_all_announcements]
+        Announcement.lock_from_course(course)
       end
     end
 

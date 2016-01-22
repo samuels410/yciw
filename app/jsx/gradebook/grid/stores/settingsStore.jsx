@@ -3,10 +3,10 @@ define([
   'jquery',
   '../actions/settingsActions'
 ], function (Reflux, $, SettingsActions) {
-  const MOUNT_ELEMENT = document.getElementById('gradebook-grid-wrapper'),
-        PADDING = 20,
-        TOOLBAR_HEIGHT = $('#gradebook-toolbar').height(),
-        TOOLBAR_OFFSET = $('#gradebook-toolbar').offset().top;
+  var MOUNT_ELEMENT = document.getElementById('gradebook-grid-wrapper'),
+      PADDING = 20,
+      TOOLBAR_HEIGHT = $('#gradebook-toolbar').height(),
+      TOOLBAR_OFFSET = $('#gradebook-toolbar').offset().top;
 
   var SettingsStore = Reflux.createStore({
     listenables: [SettingsActions],
@@ -16,11 +16,14 @@ define([
     },
 
     getInitialState() {
-      this.settings = {
-        width: this.getGradebookWidth(),
-        height: this.getGradebookHeight(),
-        columnWidths: this.columnWidths
-      };
+      if(this.settings === undefined) {
+        this.settings = {
+          width: this.getGradebookWidth(),
+          height: this.getGradebookHeight(),
+          columnWidths: this.columnWidths
+        };
+      }
+
       return this.settings;
     },
 

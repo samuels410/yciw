@@ -1,8 +1,9 @@
-require File.expand_path(File.dirname(__FILE__) + '/../common')
-require File.expand_path(File.dirname(__FILE__) + '/../helpers/announcements_common')
+require_relative '../common'
+require_relative '../helpers/announcements_common'
 
 describe "announcements public course" do
   include_context "in-process server selenium tests"
+  include AnnouncementsCommon
 
   context "replies on announcements" do
     before :each do
@@ -21,7 +22,7 @@ describe "announcements public course" do
     it "does not display replies on announcements to unauthenticated users", priority: "1", test_id: 220381 do
       get "/courses/#{@course.id}/discussion_topics/#{@announcement.id}"
       wait_for_ajaximations
-      expect(f('#discussion_subentries span').text).to match(/must log in/i)
+      keep_trying_until { expect(f('#discussion_subentries span').text).to match(/must log in/i) }
     end
 
     it "does not display replies on announcements to users not enrolled in the course", priority: "1", test_id: 220382 do
@@ -29,7 +30,7 @@ describe "announcements public course" do
 
       get "/courses/#{@course.id}/discussion_topics/#{@announcement.id}"
       wait_for_ajaximations
-      expect(f('#discussion_subentries span').text).to match(/must log in/i)
+      keep_trying_until { expect(f('#discussion_subentries span').text).to match(/must log in/i) }
     end
   end
 end

@@ -156,7 +156,10 @@ module ApplicationHelper
     includes = [:active_assignments, :active_discussion_topics, :active_quizzes, :active_context_modules]
     includes.each{|i| @wiki_sidebar_data[i] = @context.send(i).limit(150) if @context.respond_to?(i) }
     includes.each{|i| @wiki_sidebar_data[i] ||= [] }
-    @wiki_sidebar_data[:wiki_pages] = @context.wiki.wiki_pages.active.order(:title).limit(150) if @context.respond_to?(:wiki)
+    if @context.respond_to?(:wiki)
+      limit = Setting.get('wiki_sidebar_item_limit', 1000000).to_i
+      @wiki_sidebar_data[:wiki_pages] = @context.wiki.wiki_pages.active.order(:title).select('title, url, workflow_state').limit(limit)
+    end
     @wiki_sidebar_data[:wiki_pages] ||= []
     if can_do(@context, @current_user, :manage_files, :read_as_admin)
       @wiki_sidebar_data[:root_folders] = Folder.root_folders(@context)
@@ -229,6 +232,14 @@ module ApplicationHelper
     end
   end
 
+  def use_webpack?
+    if ENV['USE_WEBPACK'].present? && ENV['USE_WEBPACK'] != 'false'
+      !(params[:require_js])
+    else
+      params[:webpack]
+    end
+  end
+
   # Determines the location from which to load JavaScript assets
   #
   # uses optimized:
@@ -240,18 +251,26 @@ module ApplicationHelper
   #   * when ENV['USE_OPTIMIZED_JS'] is false
   #   * or when ?debug_assets=true is present in the url
   def js_base_url
-    use_optimized_js? ? '/optimized' : '/javascripts'
+    if use_webpack?
+      use_optimized_js? ? "/webpack-dist-optimized" : "/webpack-dist"
+    else
+      use_optimized_js? ? '/optimized' : '/javascripts'
+    end.freeze
   end
 
   # Returns a <script> tag for each registered js_bundle
   def include_js_bundles
-    paths = js_bundles.inject([]) do |ary, (bundle, plugin)|
-      base_url = "#{js_base_url}"
-      base_url += "/plugins/#{plugin}" if plugin
-      ary.concat(Canvas::RequireJs.extensions_for(bundle, 'plugins/')) unless use_optimized_js?
-      ary << "#{base_url}/compiled/bundles/#{bundle}.js"
+    common_bundles = []
+    common_bundles = ["#{js_base_url}/vendor.bundle.js", "#{js_base_url}/instructure-common.bundle.js"] if use_webpack?
+    paths = js_bundles.inject(common_bundles) do |ary, (bundle, plugin)|
+      if use_webpack?
+        ary << "#{js_base_url}/#{plugin ? "#{plugin}-" : ''}#{bundle}.bundle.js"
+      else
+        ary.concat(Canvas::RequireJs.extensions_for(bundle, 'plugins/')) unless use_optimized_js?
+        ary << "#{js_base_url}#{plugin ? "/plugins/#{plugin}" : ''}/compiled/bundles/#{bundle}.js"
+      end
     end
-    javascript_include_tag(*paths)
+    javascript_include_tag(*paths, type: nil)
   end
 
   def include_css_bundles
@@ -459,6 +478,7 @@ module ApplicationHelper
           :id => tool.id,
           :url => tool.editor_button(:url),
           :icon_url => tool.editor_button(:icon_url),
+          :canvas_icon_class => tool.editor_button(:canvas_icon_class),
           :width => tool.editor_button(:selection_width),
           :height => tool.editor_button(:selection_height)
         }
@@ -558,7 +578,7 @@ module ApplicationHelper
   def map_courses_for_menu(courses, opts={})
     mapped = courses.map do |course|
       tabs = opts[:include_section_tabs] && available_section_tabs(course)
-      presenter = CourseForMenuPresenter.new(course, tabs)
+      presenter = CourseForMenuPresenter.new(course, tabs, @current_user)
       presenter.to_h
     end
 
@@ -652,15 +672,51 @@ module ApplicationHelper
     end
   end
 
-  def account_context(context)
-    if context.is_a?(Account)
-      context
-    elsif context.is_a?(Course) || context.is_a?(CourseSection)
-      account_context(context.account)
-    elsif context.is_a?(Group)
-      account_context(context.context)
+
+  def active_brand_config(opts={})
+    @active_brand_config_cache ||= {}
+    return @active_brand_config_cache[opts] if @active_brand_config_cache.key?(opts)
+    @active_brand_config_cache[opts] = begin
+      if !use_new_styles? || (@current_user && @current_user.prefers_high_contrast?)
+        nil
+      elsif session.key?(:brand_config_md5)
+        BrandConfig.where(md5: session[:brand_config_md5]).first
+      else
+        brand_config_for_account(opts)
+      end
     end
   end
+
+  def brand_config_for_account(opts={})
+    account = Context.get_account(@context)
+
+    # for finding which values to show in the theme editor
+    if opts[:ignore_parents]
+      return account.brand_config if account.branding_allowed?
+      return
+    end
+
+    if !account
+      if @current_user.present?
+        # If we're not viewing a `context` with an account, like if we're on the dashboard or my
+        # user profile, show the branding for the lowest account where all my enrollments are. eg:
+        # if I'm at saltlakeschooldistrict.instructure.com, but I'm only enrolled in classes at
+        # Highland High, show Highland's branding even on the dashboard.
+        account = @current_user.common_account_chain(@domain_root_account).last
+      end
+      # If we're not logged in, or we have no enrollments anywhere in domain_root_account,
+      # and we're on the dashboard at eg: saltlakeschooldistrict.instructure.com, just
+      # show its branding
+      account ||= @domain_root_account
+    end
+
+    if account && (brand_config = account.effective_brand_config)
+      brand_config
+    elsif k12?
+      BrandConfig.k12_config
+    end
+  end
+  private :brand_config_for_account
 
   def get_global_includes
     return @global_includes if defined?(@global_includes)
@@ -668,7 +724,7 @@ module ApplicationHelper
     @global_includes << @domain_root_account.global_includes_hash if @domain_root_account.present?
     if @domain_root_account.try(:sub_account_includes?)
       # get the deepest account to start looking for branding
-      if acct = account_context(@context)
+      if (acct = Context.get_account(@context))
         key = [acct.id, 'account_context_global_includes'].cache_key
         includes = Rails.cache.fetch(key, :expires_in => 15.minutes) do
           acct.account_chain.reverse.map(&:global_includes_hash)
@@ -689,17 +745,18 @@ module ApplicationHelper
 
   def include_account_js(options = {})
     return if params[:global_includes] == '0'
-    if use_new_styles?
-      includes = brand_config_includes.slice(:js_overrides).values
+    includes = if use_new_styles?
+      if @domain_root_account.allow_global_includes? && active_brand_config
+        active_brand_config.css_and_js_overrides[:js_overrides]
+      end
     else
-      includes = get_global_includes.map do |global_include|
-        global_include[:js] if global_include[:js].present?
+      get_global_includes.each_with_object([]) do |global_include, memo|
+        memo << global_include[:js] if global_include[:js].present?
       end
     end
-    includes.compact!
-    if includes.length > 0
+    if includes.present?
       if options[:raw]
-        includes.unshift("/optimized/vendor/jquery-1.7.2.js")
+        includes = ["/optimized/vendor/jquery-1.7.2.js"] + includes
         javascript_include_tag(*includes)
       else
         str = <<-ENDSCRIPT
@@ -728,18 +785,19 @@ module ApplicationHelper
 
   def include_account_css
     return if disable_account_css?
-    if use_new_styles?
-      includes = []
-      includes << brand_config_includes[:css] if brand_config_includes[:css].present?
+
+    includes = if use_new_styles?
+      if @domain_root_account.allow_global_includes? && active_brand_config
+        active_brand_config.css_and_js_overrides[:css_overrides]
+      end
     else
-      includes = get_global_includes.inject([]) do |css_includes, global_include|
+      get_global_includes.each_with_object([]) do |global_include, css_includes|
         css_includes << global_include[:css] if global_include[:css].present?
-        css_includes
       end
     end
-    if includes.length > 0
-      includes << { :media => 'all' }
-      stylesheet_link_tag(*includes)
+
+    if includes.present?
+      stylesheet_link_tag(*(includes + [{media: 'all' }]))
     end
   end
 
@@ -854,12 +912,12 @@ module ApplicationHelper
   end
 
   def dashboard_url(opts={})
-    return super(opts) if opts[:login_success] || opts[:become_user_id]
+    return super(opts) if opts[:login_success] || opts[:become_user_id] || @domain_root_account.nil?
     custom_dashboard_url || super(opts)
   end
 
   def dashboard_path(opts={})
-    return super(opts) if opts[:login_success] || opts[:become_user_id]
+    return super(opts) if opts[:login_success] || opts[:become_user_id] || @domain_root_account.nil?
     custom_dashboard_url || super(opts)
   end
 
@@ -880,21 +938,14 @@ module ApplicationHelper
     end
   end
 
-  # Returns true if the given value is in the current path.
+  # Returns true if the current_path starts with the given value
   def active_path?(to_test)
     # Make sure to not include account external tools
-    if account_external_tool_path?(request.fullpath)
+    if controller.controller_name == 'external_tools' && Account === @context
       false
     else
-      request.fullpath.include?(to_test)
+      request.fullpath.start_with?(to_test)
     end
-  end
-
-  # Returns true if the active path is an account external tool (like Commons)
-  def account_external_tool_path?(to_test)
-    ext_tools_regex = /^\/accounts\/[^\/]*\/(external_tools)/
-    first_match_location = ext_tools_regex =~ to_test
-    !first_match_location.nil?
   end
 
   def link_to_parent_signup(auth_type)

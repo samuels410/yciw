@@ -655,18 +655,11 @@ module QuizzesHelper
     title = "title=\"#{titles.join(' ')}\"".html_safe if titles.length > 0
   end
 
-  def show_correct_answers?(quiz=@quiz, user=@current_user, submission=@submission)
-    @quiz && @quiz.try_rescue(:show_correct_answers?, @current_user, @submission)
-  end
-
-  def correct_answers_protected?(quiz=@quiz, user=@current_user, submission=@submission)
-    if !quiz
-      false
-    elsif !show_correct_answers?(quiz, user, submission)
-      true
-    elsif quiz.hide_correct_answers_at.present?
-      !quiz.grants_right?(user, :grade)
+  def show_correct_answers?
+    if @show_correct_answers.nil?
+      @show_correct_answers = !!(@quiz && @quiz.show_correct_answers?(@current_user, @submission))
     end
+    @show_correct_answers
   end
 
   def point_value_for_input(user_answer, question)
@@ -677,6 +670,10 @@ module QuizzesHelper
     else
       question[:points_possible] || 0
     end
+  end
+
+  def points_possible_display
+    @quiz.quiz_type == "survey" ? "" : @quiz.points_possible
   end
 
 end

@@ -29,12 +29,7 @@ module AccountReports
       @reports = SIS_CSV_REPORTS & @account_report.parameters.select { |_k, v| value_to_boolean(v) }.keys
       @sis_format = params[:sis_format]
       extra_text_term(@account_report)
-
-      if @account_report.has_parameter? "include_deleted"
-        @include_deleted = @account_report.parameters["include_deleted"]
-        add_extra_text(I18n.t('account_reports.grades.deleted',
-                              'Include Deleted Objects: true;'))
-      end
+      include_deleted_objects
     end
 
     def csv
@@ -42,11 +37,11 @@ module AccountReports
       @reports.each do |report_name|
         files << "#{report_name} "
       end
-      @account_report.parameters["extra_text"] << I18n.t(
+      add_extra_text(I18n.t(
         'account_reports.sis_exporter.reports',
         'Reports: %{files}',
         :files => files
-      )
+      ))
 
       if @reports.length == 0
         send_report()
@@ -124,7 +119,7 @@ module AccountReports
               row << u.sis_user_id
               row << u.unique_id
               row << nil if @sis_format
-              name_parts = User.name_parts(u.sortable_name)
+              name_parts = User.name_parts(u.sortable_name, likely_already_surname_first: true)
               row << name_parts[0] || '' # first name
               row << name_parts[1] || '' # last name
               row << u.name

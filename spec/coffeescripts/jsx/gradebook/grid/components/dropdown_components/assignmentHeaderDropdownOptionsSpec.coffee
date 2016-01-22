@@ -1,9 +1,10 @@
 define [
+  'react'
   'jsx/gradebook/grid/components/dropdown_components/assignmentHeaderDropdownOptions'
   'underscore'
   'jsx/gradebook/grid/constants'
   'helpers/fakeENV'
-], (DropdownOptions, _, GradebookConstants, fakeENV) ->
+], (React, DropdownOptions, _, GradebookConstants, fakeENV) ->
 
   wrapper = document.getElementById('fixtures')
 
@@ -17,18 +18,23 @@ define [
       speedgrader_url: '/courses/1/gradebook/speed_grader?assignment_id=1'
       muted: false
     assignmentAttributes = _.defaults(props || {}, defaultAssignmentAttributes)
-    { assignment: assignmentAttributes, idAttribute: 'assignmentOptions', enrollments: [] }
+    return {
+      assignment: assignmentAttributes,
+      submissions: {},
+      idAttribute: 'assignmentOptions',
+      enrollments: []
+    }
 
   renderComponent = (data) ->
-    componentFactory = React.createFactory(DropdownOptions)
-    React.render(componentFactory(data), wrapper)
+    element = React.createElement(DropdownOptions, data)
+    React.render(element, wrapper)
 
   buildComponent = (props) ->
     renderComponent(generateProps(props))
 
   module 'AssignmentHeaderDropdownOptions -- speedgrader enabled',
     setup: ->
-      fakeENV.setup({ GRADEBOOK_OPTIONS: { context_id: '1', speed_grader_enabled: true } })
+      fakeENV.setup({ GRADEBOOK_OPTIONS: { context_id: '1', speed_grader_enabled: true, gradebook_is_editable: true } })
       GradebookConstants.refresh()
     teardown: ->
       React.unmountComponentAtNode wrapper

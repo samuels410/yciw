@@ -26,7 +26,13 @@ class AccountAuthorizationConfig::OpenIDConnect < AccountAuthorizationConfig::Oa
   end
 
   def self.recognized_params
-    [ :client_id, :client_secret, :authorize_url, :token_url, :scope, :login_attribute ].freeze
+    [ :client_id,
+      :client_secret,
+      :authorize_url,
+      :token_url,
+      :scope,
+      :login_attribute,
+      :jit_provisioning ].freeze
   end
 
   def login_attribute
@@ -34,7 +40,9 @@ class AccountAuthorizationConfig::OpenIDConnect < AccountAuthorizationConfig::Oa
   end
 
   def unique_id(token)
-    JWT.decode(token.params['id_token'.freeze], nil, false).first[login_attribute]
+    jwt_string = token.params['id_token'.freeze]
+    jwt = ::Canvas::Security.decode_jwt(jwt_string, [:skip_verification])
+    jwt[login_attribute]
   end
 
   protected

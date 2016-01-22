@@ -321,7 +321,7 @@ class FilesController < ApplicationController
   end
 
   def react_files
-    if authorized_action(@context, @current_user, :read) && tab_enabled?(@context.class::TAB_FILES)
+    if authorized_action(@context, @current_user, [:read, :manage_files]) && tab_enabled?(@context.class::TAB_FILES)
       @contexts = [@context]
       get_all_pertinent_contexts(include_groups: true) if @context == @current_user
       files_contexts = @contexts.map do |context|
@@ -357,6 +357,7 @@ class FilesController < ApplicationController
         :FILES_CONTEXTS => files_contexts,
         :NEW_FOLDER_TREE => @context.feature_enabled?(:use_new_tree)
       })
+      log_asset_access([ "files", @context ], "files", "other")
 
       render :text => "".html_safe, :layout => true
     end
@@ -653,7 +654,7 @@ class FilesController < ApplicationController
       redirect_to safe_domain_file_url(attachment, @safer_domain_host, params[:verifier], !inline)
     elsif Attachment.local_storage?
       @headers = false if @files_domain
-      send_file(attachment.full_filename, :type => attachment.content_type_with_encoding, :disposition => (inline ? 'inline' : 'attachment'))
+      send_file(attachment.full_filename, :type => attachment.content_type_with_encoding, :disposition => (inline ? 'inline' : 'attachment'), :filename => attachment.display_name)
     elsif redirect_to_s3
       redirect_to(inline ? attachment.inline_url : attachment.download_url)
     else
@@ -873,6 +874,7 @@ class FilesController < ApplicationController
         @attachment.folder_id ||= @folder.id
         @attachment.workflow_state = nil
         @attachment.file_state = 'available'
+        @attachment.set_publish_state_for_usage_rights
         success = nil
         if params[:attachment] && params[:attachment][:source_attachment_id]
           a = Attachment.find(params[:attachment].delete(:source_attachment_id))
@@ -1050,7 +1052,7 @@ class FilesController < ApplicationController
   #        -H 'Authorization: Bearer <token>'
   def destroy
     @attachment = Attachment.find(params[:id])
-    if authorized_action(@attachment, @current_user, :delete)
+    if can_do(@attachment, @current_user, :delete)
       @attachment.destroy
       respond_to do |format|
         format.html {
@@ -1063,6 +1065,10 @@ class FilesController < ApplicationController
           format.json { render :json => @attachment }
         end
       end
+    elsif @attachment.associated_with_submission?
+      render :json => { :message => I18n.t('Cannot delete a file that has been submitted as part of an assignment') }, :status => :forbidden
+    else
+      render :json => { :message => I18n.t('Unauthorized to delete this file') }, :status => :unauthorized
     end
   end
 
@@ -1105,6 +1111,7 @@ class FilesController < ApplicationController
     if folder.name == 'profile pictures'
       json[:avatar] = avatar_json(@current_user, attachment, { :type => 'attachment' })
     end
+    Api.recursively_stringify_json_ids(json)
 
     render :json => json, :as_text => true
   end

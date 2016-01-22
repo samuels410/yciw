@@ -29,7 +29,7 @@ describe CalendarEventsApiController, type: :request do
       'all_day', 'all_day_date', 'child_events', 'child_events_count', 'comments',
       'context_code', 'created_at', 'description', 'duplicates', 'end_at', 'hidden', 'html_url',
       'id', 'location_address', 'location_name', 'parent_event_id', 'start_at',
-      'title', 'updated_at', 'url', 'workflow_state'
+      'title', 'type', 'updated_at', 'url', 'workflow_state'
     ]
     expected_slot_fields = (expected_fields + ['appointment_group_id', 'appointment_group_url', 'available_slots', 'participants_per_appointment', 'reserve_url', 'effective_context_code']).sort
     expected_reservation_event_fields = (expected_fields + ['appointment_group_id', 'appointment_group_url', 'effective_context_code']).sort
@@ -740,7 +740,7 @@ describe CalendarEventsApiController, type: :request do
       end
     end
 
-    it "should omit assignment description in ics" do
+    it "should omit assignment description in ics feed for a course" do
       HostUrl.stubs(:default_host).returns('www.example.com')
       assignment_model(description: "secret stuff here")
       get "/feeds/calendars/#{@course.feed_code}.ics"
@@ -818,7 +818,7 @@ describe CalendarEventsApiController, type: :request do
   context 'assignments' do
     expected_fields = [
       'all_day', 'all_day_date', 'assignment', 'context_code', 'created_at',
-      'description', 'end_at', 'html_url', 'id', 'start_at', 'title', 'updated_at',
+      'description', 'end_at', 'html_url', 'id', 'start_at', 'title', 'type', 'updated_at',
       'url', 'workflow_state'
     ]
 
@@ -1709,6 +1709,47 @@ describe CalendarEventsApiController, type: :request do
           end
         end
       end
+    end
+  end
+
+  context "user index" do
+    before :once do
+      @student = user(active_all: true, active_state: 'active')
+      @course.enroll_student(@student, enrollment_state: 'active')
+      @observer = user(active_all: true, active_state: 'active')
+      @course.enroll_user(
+        @observer,
+        'ObserverEnrollment',
+        enrollment_state: 'active',
+        associated_user_id: @student.id
+      )
+      @observer.user_observees.create do |uo|
+        uo.user_id = @student.id
+      end
+      @contexts = [@course.asset_string]
+      @ctx_str = @contexts.join("&context_codes[]=")
+      @me = @observer
+    end
+
+    it "should return observee's calendar events" do
+      3.times do |idx|
+        @course.calendar_events.create(title: "event #{idx}", workflow_state: 'active')
+      end
+      json = api_call(:get,
+        "/api/v1/users/#{@student.id}/calendar_events?all_events=true&context_codes[]=#{@ctx_str}", {
+        controller: 'calendar_events_api', action: 'user_index', format: 'json',
+        context_codes: @contexts, all_events: true, user_id: @student.id})
+      expect(json.length).to eql 3
+    end
+
+    it "should return submissions with assignments" do
+      assg = @course.assignments.create(workflow_state: 'published', due_at: 3.days.from_now, submission_types: "online_text_entry")
+      assg.submit_homework @student, submission_type: "online_text_entry"
+      json = api_call(:get,
+        "/api/v1/users/#{@student.id}/calendar_events?all_events=true&type=assignment&include[]=submissions&context_codes[]=#{@ctx_str}", {
+        controller: 'calendar_events_api', action: 'user_index', format: 'json', type: 'assignment', include: ['submissions'],
+        context_codes: @contexts, all_events: true, user_id: @student.id})
+      expect(json.first['assignment']['submission'].length).to eql 1
     end
   end
 

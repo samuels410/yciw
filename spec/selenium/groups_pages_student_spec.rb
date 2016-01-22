@@ -1,13 +1,22 @@
-require File.expand_path(File.dirname(__FILE__) + '/common')
-require File.expand_path(File.dirname(__FILE__) + '/helpers/groups_common')
-require File.expand_path(File.dirname(__FILE__) + '/helpers/announcements_common')
-require File.expand_path(File.dirname(__FILE__) + '/helpers/discussions_common')
-require File.expand_path(File.dirname(__FILE__) + '/helpers/wiki_and_tiny_common')
-require File.expand_path(File.dirname(__FILE__) + '/helpers/files_common')
-require File.expand_path(File.dirname(__FILE__) + '/helpers/conferences_common')
+require_relative 'common'
+require_relative 'helpers/groups_common'
+require_relative 'helpers/announcements_common'
+require_relative 'helpers/discussions_common'
+require_relative 'helpers/wiki_and_tiny_common'
+require_relative 'helpers/files_common'
+require_relative 'helpers/conferences_common'
+require_relative 'helpers/course_common'
+require_relative 'helpers/groups_shared_examples'
 
 describe "groups" do
   include_context "in-process server selenium tests"
+  include AnnouncementsCommon
+  include ConferencesCommon
+  include CourseCommon
+  include DiscussionsCommon
+  include FilesCommon
+  include GroupsCommon
+  include WikiAndTinyCommon
 
   setup_group_page_urls
 
@@ -33,6 +42,16 @@ describe "groups" do
     #-------------------------------------------------------------------------------------------------------------------
     describe "announcements page" do
       it_behaves_like 'announcements_page', 'student'
+
+      it "should allow group members to delete their own announcements", priority: "1", test_id: 326521 do
+        get announcements_page
+        create_group_announcement_manually("Announcement by #{@students.first.name}",'yo ho, yo ho')
+        wait_for_ajaximations
+        get announcements_page
+        expect(ff('.discussion-topic').size).to eq 1
+        delete_via_gear_menu
+        expect(ff('.discussion-topic').size).to eq 0
+      end
 
       it "should allow any group member to create an announcement", priority: "1", test_id: 273607 do
         get announcements_page
@@ -118,6 +137,24 @@ describe "groups" do
         expect(f('#new-discussion-btn')).to be_displayed
         verify_no_course_user_access(discussions_page)
       end
+
+      it "should allow discussions to be deleted by their creator", priority: "1", test_id: 329626 do
+        DiscussionTopic.create!(context: @testgroup.first, user: @user, title: 'Delete Me', message: 'Discussion text')
+        get discussions_page
+        expect(ff('.discussion-title-block').size).to eq 1
+        delete_via_gear_menu
+        expect(ff('.discussion-title-block').size).to eq 0
+      end
+
+      it "should not be able to delete a discussion by a different creator", priority: "1", test_id: 420009 do
+        DiscussionTopic.create!(context: @testgroup.first,
+                                user: @students.first,
+                                title: 'Back to the Future day',
+                                message: 'There are no hover boards!')
+        get discussions_page
+        expect(ff('.discussion-title-block').size).to eq 1
+        expect(f('#manage_link')).to be_nil
+      end
     end
 
     #-------------------------------------------------------------------------------------------------------------------
@@ -159,7 +196,7 @@ describe "groups" do
         get files_page
         add_folder
         delete(0, :cog_icon)
-        expect(get_all_files_folders.count).to eq 0
+        expect(all_files_folders.count).to eq 0
       end
 
       it "should allow group members to move a folder", priority: "1", test_id: 273632 do
@@ -178,10 +215,10 @@ describe "groups" do
         get files_page
         delete(0, :cog_icon)
         wait_for_ajaximations
-        expect(get_all_files_folders.count).to eq 1
+        expect(all_files_folders.count).to eq 1
         # Now try to delete the other one using toolbar menu
         delete(0, :toolbar_menu)
-        expect(get_all_files_folders.count).to eq 0
+        expect(all_files_folders.count).to eq 0
       end
 
       it "should allow group members to move a file", priority: "1", test_id: 273633 do
@@ -210,7 +247,7 @@ describe "groups" do
 
     #-------------------------------------------------------------------------------------------------------------------
     describe "conferences page" do
-      before(:all) do
+      before(:once) do
         PluginSetting.create!(name: "wimba", settings: {"domain" => "wimba.instructure.com"})
       end
 

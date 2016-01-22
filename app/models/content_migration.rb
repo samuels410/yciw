@@ -32,6 +32,7 @@ class ContentMigration < ActiveRecord::Base
   has_one :job_progress, :class_name => 'Progress', :as => :context
   serialize :migration_settings
   cattr_accessor :export_file_path
+  before_save :set_started_at_and_finished_at
   after_save :handle_import_in_progress_notice
   DATE_FORMAT = "%m/%d/%Y"
 
@@ -59,6 +60,17 @@ class ContentMigration < ActiveRecord::Base
   set_policy do
     given { |user, session| self.context.grants_right?(user, session, :manage_files) }
     can :manage_files and can :read
+  end
+
+  def set_started_at_and_finished_at
+    if workflow_state_changed?
+      if pre_processing? || exporting? || importing?
+        self.started_at ||= Time.now.utc
+      end
+      if failed? || imported? || exported?
+        self.finished_at ||= Time.now.utc
+      end
+    end
   end
 
   # the stream item context is decided by calling asset.context(user), i guess
@@ -304,7 +316,8 @@ class ContentMigration < ActiveRecord::Base
     set_default_settings
     plugin ||= Canvas::Plugin.find(migration_type)
     if plugin
-      queue_opts = {:priority => Delayed::LOW_PRIORITY, :max_attempts => 1}
+      queue_opts = {:priority => Delayed::LOW_PRIORITY, :max_attempts => 1,
+                    :expires_at => Setting.get('content_migration_job_expiration_hours', '48').to_i.hours.from_now}
       if self.strand
         queue_opts[:strand] = self.strand
       else
@@ -315,7 +328,7 @@ class ContentMigration < ActiveRecord::Base
         # it's ready to be imported
         self.workflow_state = :importing
         self.save
-        self.send_later_enqueue_args(:import_content, queue_opts)
+        self.send_later_enqueue_args(:import_content, queue_opts.merge(:on_permanent_failure => :fail_with_error!))
       else
         # find worker and queue for conversion
         begin

@@ -3,6 +3,7 @@ require File.expand_path(File.dirname(__FILE__) + '/../common')
 
 describe "discussions" do
   include_context "in-process server selenium tests"
+  include DiscussionsCommon
 
   let(:course) { course_model.tap{|course| course.offer!} }
   let(:teacher) { teacher_in_course(course: course, name: 'teacher', active_all: true).user }
@@ -102,7 +103,8 @@ describe "discussions" do
             # should correctly save changes to the assignment
             set_value f('#discussion_topic_assignment_points_possible'), '123'
           end
-          expect(Assignment.last.points_possible).to eq 123
+          assignment.reload
+          expect(assignment.points_possible).to eq 123
         end
 
         it "should warn user when leaving page unsaved", priority: "1", test_id: 270919 do

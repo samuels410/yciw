@@ -1,27 +1,27 @@
 define [
-  'react'
   'jsx/gradebook/grid/stores/gradebookToolbarStore'
   'underscore'
   'helpers/fakeENV'
   'compiled/userSettings'
-], (React, GradebookToolbarStore, _, fakeENV, userSettings) ->
+], (GradebookToolbarStore, _, fakeENV, userSettings) ->
 
   module 'ReactGradebook.gradebookToolbarStore',
     setup: ->
-      fakeENV.setup()
+      env = {
+        GRADEBOOK_OPTIONS: {}
+      }
+      fakeENV.setup(env)
       @defaultOptions =
         hideStudentNames: false
         hideNotesColumn: true
         treatUngradedAsZero: false
-        showAttendanceColumns: false
         arrangeColumnsBy: 'assignment_group'
         totalColumnInFront: false
         warnedAboutTotalsDisplay: false
         showTotalGradeAsPoints: false
-      ENV.GRADEBOOK_OPTIONS = {}
     teardown: ->
       fakeENV.teardown()
-      GradebookToolbarStore.toolbarOptions = null
+      GradebookToolbarStore.toolbarOptions = undefined
 
   test '#getInitialState returns default options if the user does not have saved preferences', ->
     initialState = GradebookToolbarStore.getInitialState()
@@ -48,11 +48,11 @@ define [
     deepEqual GradebookToolbarStore.toolbarOptions.hideStudentNames, true
     ok(triggerExpectation.once())
 
-  test '#onToggleNotesColumnCompleted should set toolbarOptions.hideNotesColumn and trigger a setState', ->
+  test '#onToggleNotesColumn should set toolbarOptions.hideNotesColumn and trigger a setState', ->
     triggerMock = @mock(GradebookToolbarStore)
     triggerExpectation = triggerMock.expects('trigger').once()
     GradebookToolbarStore.getInitialState()
-    GradebookToolbarStore.onToggleNotesColumnCompleted(false)
+    GradebookToolbarStore.onToggleNotesColumn(false)
 
     deepEqual GradebookToolbarStore.toolbarOptions.hideNotesColumn, false
     ok(triggerExpectation.once())
@@ -73,15 +73,6 @@ define [
     GradebookToolbarStore.onToggleTreatUngradedAsZero(true)
 
     deepEqual GradebookToolbarStore.toolbarOptions.treatUngradedAsZero, true
-    ok(triggerExpectation.once())
-
-  test '#onToggleShowAttendanceColumns should set toolbarOptions.showAttendanceColumns and trigger a setState', ->
-    triggerMock = @mock(GradebookToolbarStore)
-    triggerExpectation = triggerMock.expects('trigger').once()
-    GradebookToolbarStore.getInitialState()
-    GradebookToolbarStore.onToggleShowAttendanceColumns(true)
-
-    deepEqual GradebookToolbarStore.toolbarOptions.showAttendanceColumns, true
     ok(triggerExpectation.once())
 
   test '#onShowTotalGradeAsPoints should set toolbarOptions.showTotalGradeAsPoints and trigger a setState', ->

@@ -23,12 +23,12 @@ class QuestionBanksController < ApplicationController
   include Api::V1::Outcome
 
   def index
-    if @context == @current_user || authorized_action(@context, @current_user, :manage_assignments)
+    if @context == @current_user || authorized_action(@context, @current_user, :read_question_banks)
       @question_banks = @context.assessment_question_banks.active.except(:preload).to_a
       if params[:include_bookmarked] == '1'
         @question_banks += @current_user.assessment_question_banks.active
       end
-      if params[:inherited] == '1' && @context != @current_user && @context.grants_right?(@current_user, :read_question_banks)
+      if params[:inherited] == '1' && @context != @current_user
         @question_banks += @context.inherited_assessment_question_banks.active
       end
       @question_banks = @question_banks.select{|b| b.grants_right?(@current_user, :manage) } if params[:managed] == '1'
@@ -82,8 +82,8 @@ class QuestionBanksController < ApplicationController
         connection = @questions.connection
         attributes = attributes.map { |attr| connection.quote_column_name(attr) }
         now = connection.quote(Time.now.utc)
-        connection.execute(
-            "INSERT INTO assessment_questions (#{(%w{assessment_question_bank_id created_at updated_at} + attributes).join(', ')})" +
+        connection.insert(
+            "INSERT INTO #{AssessmentQuestion.quoted_table_name} (#{(%w{assessment_question_bank_id created_at updated_at} + attributes).join(', ')})" +
             @questions.select(([@new_bank.id, now, now] + attributes).join(', ')).to_sql)
       else
         @questions.update_all(:assessment_question_bank_id => @new_bank)

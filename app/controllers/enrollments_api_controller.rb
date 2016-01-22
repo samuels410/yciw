@@ -99,7 +99,7 @@
 #             "type": "string"
 #           },
 #           "limit_privileges_to_course_section": {
-#             "description": "User can only access his or her own course section.",
+#             "description": "User can only access his or her own course section. Applies to Teacher and TA enrollments.",
 #             "example": true,
 #             "type": "boolean"
 #           },
@@ -245,20 +245,24 @@ class EnrollmentsApiController < ApplicationController
     enrollments = enrollments.joins(:course) if has_courses
     enrollments = enrollments.shard(@shard_scope) if @shard_scope
     if params[:grading_period_id].present?
-      if !multiple_grading_periods?
-        render_create_errors([@@errors[:multiple_grading_periods_disabled]])
-        return false
-      end
-
       if @context.is_a? User
-        render(
-          json: {message: "grading_period_id can't be specified for users"},
-          status: 403
-        )
-        return false
+        unless @context.account.feature_enabled?(:multiple_grading_periods)
+          render_create_errors([@@errors[:multiple_grading_periods_disabled]])
+          return false
+        end
+
+        grading_period = @context.courses.lazy.map do |course|
+          GradingPeriod.context_find(course, params[:grading_period_id])
+        end.detect(&:present?)
+      else
+        unless multiple_grading_periods?
+          render_create_errors([@@errors[:multiple_grading_periods_disabled]])
+          return false
+        end
+
+        grading_period = GradingPeriod.context_find(@context, params[:grading_period_id])
       end
 
-      grading_period = GradingPeriod.context_find(@context, params[:grading_period_id])
       unless grading_period
         render(:json => {error: "invalid grading_period_id"}, :status => :bad_request)
         return
@@ -311,10 +315,14 @@ class EnrollmentsApiController < ApplicationController
   # @argument enrollment[role_id] [Integer]
   #   Assigns a custom course-level role to the user.
   #
-  # @argument enrollment[enrollment_state] [String, "active"|"invited"]
+  # @argument enrollment[enrollment_state] [String, "active"|"invited"|"inactive"]
   #   If set to 'active,' student will be immediately enrolled in the course.
   #   Otherwise they will be required to accept a course invitation. Default is
-  #   'invited.'
+  #   'invited.'.
+  #
+  #   If set to 'inactive', student will be listed in the course roster for
+  #   teachers, but will not be able to participate in the course until
+  #   their enrollment is activated.
   #
   # @argument enrollment[course_section_id] [Integer]
   #   The ID of the course section to enroll the student in. If the
@@ -322,8 +330,13 @@ class EnrollmentsApiController < ApplicationController
   #   ignored.
   #
   # @argument enrollment[limit_privileges_to_course_section] [Boolean]
-  #   If a teacher or TA enrollment, teacher/TA will be restricted to the
-  #   section given by course_section_id.
+  #   If set, the enrollment will only allow the user to see and interact with
+  #   users enrolled in the section given by course_section_id.
+  #   * For teachers and TAs, this includes grading privileges.
+  #   * Section-limited students will not see any users (including teachers
+  #     and TAs) not enrolled in their sections.
+  #   * Users may have other enrollments that grant privileges to
+  #     multiple sections in the same course.
   #
   # @argument enrollment[notify] [Boolean]
   #   If true, a notification will be sent to the enrolled user.
@@ -420,6 +433,9 @@ class EnrollmentsApiController < ApplicationController
       end
     end
 
+    params[:enrollment][:limit_privileges_to_course_section] = value_to_boolean(params[:enrollment][:limit_privileges_to_course_section]) if params[:enrollment].has_key?(:limit_privileges_to_course_section)
+    params[:enrollment].slice!(:enrollment_state, :section, :limit_privileges_to_course_section, :associated_user_id, :role, :start_at, :end_at, :self_enrolled, :no_notify)
+
     @enrollment = @context.enroll_user(user, type, params[:enrollment].merge(:allow_multiple_enrollments => true))
     @enrollment.valid? ?
       render(:json => enrollment_json(@enrollment, @current_user, session)) :
@@ -457,11 +473,12 @@ class EnrollmentsApiController < ApplicationController
     end
   end
 
-  # @API Conclude an enrollment
-  # Delete or conclude an enrollment.
+  # @API Conclude or inactivate an enrollment
+  # Delete, conclude or inactivate an enrollment.
   #
-  # @argument task [String, "conclude"|"delete"]
+  # @argument task [String, "conclude"|"delete"|"inactivate"]
   #   The action to take on the enrollment.
+  #   When inactive, a user will still appear in the course roster to admins, but be unable to participate.
   #
   # @example_request
   #   curl https://<canvas>/api/v1/courses/:course_id/enrollments/:enrollment_id \
@@ -471,14 +488,48 @@ class EnrollmentsApiController < ApplicationController
   # @returns Enrollment
   def destroy
     @enrollment = @context.enrollments.find(params[:id])
-    task = %w{conclude delete}.include?(params[:task]) ? params[:task] : 'conclude'
+    task = %w{conclude delete inactivate}.include?(params[:task]) ? params[:task] : 'conclude'
 
-    unless @enrollment.send("can_be_#{task}d_by", @current_user, @context, session)
+    permission = case task
+                 when 'conclude'
+                   :can_be_concluded_by
+                 when 'delete', 'inactivate'
+                   :can_be_deleted_by
+                 end
+
+    unless @enrollment.send(permission, @current_user, @context, session)
       return render_unauthorized_action
     end
 
     task = 'destroy' if task == 'delete'
     if @enrollment.send(task)
+      render :json => enrollment_json(@enrollment, @current_user, session)
+    else
+      render :json => @enrollment.errors, :status => :bad_request
+    end
+  end
+
+  # @API Re-activate an enrollment
+  # Activates an inactive enrollment
+  #
+  # @example_request
+  #   curl https://<canvas>/api/v1/courses/:course_id/enrollments/:enrollment_id/reactivate \
+  #     -X PUT
+  #
+  # @returns Enrollment
+  def reactivate
+    @enrollment = @context.enrollments.find(params[:id])
+
+    unless @enrollment.send(:can_be_deleted_by, @current_user, @context, session)
+      return render_unauthorized_action
+    end
+
+
+    unless @enrollment.workflow_state == 'inactive'
+      return render(:json => {:error => "enrollment not inactive"}, :status => :bad_request)
+    end
+
+    if @enrollment.reactivate
       render :json => enrollment_json(@enrollment, @current_user, session)
     else
       render :json => @enrollment.errors, :status => :bad_request
@@ -499,9 +550,11 @@ class EnrollmentsApiController < ApplicationController
     end
 
     if authorized_action(@context, @current_user, [:read_roster, :view_all_grades, :manage_grades])
-      scope = @context.enrollments_visible_to(@current_user, :type => :all, :include_priors => true).where(enrollment_index_conditions)
+      scope = @context.apply_enrollment_visibility(@context.all_enrollments, @current_user).where(enrollment_index_conditions)
+
       unless params[:state].present?
-        scope = scope.active_or_pending
+        include_inactive = @context.grants_right?(@current_user, session, :read_as_admin)
+        scope = include_inactive ? scope.all_active_or_pending : scope.active_or_pending
       end
       scope
     else
@@ -525,10 +578,11 @@ class EnrollmentsApiController < ApplicationController
         enrollments = user.enrollments.current_and_invited.where(enrollment_index_conditions)
       end
     else
+      is_approved_parent = user.grants_right?(@current_user, :read_as_parent)
       # otherwise check for read_roster rights on all of the requested
       # user's accounts
       approved_accounts = user.associated_root_accounts.inject([]) do |accounts, ra|
-        accounts << ra.id if ra.grants_right?(@current_user, session, :read_roster)
+        accounts << ra.id if is_approved_parent || ra.grants_right?(@current_user, session, :read_roster)
         accounts
       end
 

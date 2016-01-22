@@ -48,11 +48,9 @@ describe ExternalToolsController do
 
   describe "GET 'jwt_token'" do
 
-    before :once do
-      require 'jwt'
-
+    before :each do
       @iat = Time.zone.now
-      Time.zone.stubs(:now).returns(@iat)
+      Time.zone.class.any_instance.stubs(:now).returns(@iat)
       @tool = new_valid_tool(@course)
       @tool.course_navigation = { message_type: 'ContentItemSelectionResponse' }
       @tool.save!
@@ -63,7 +61,8 @@ describe ExternalToolsController do
     it "returns the correct JWT token when given using the tool_id param" do
       user_session(@teacher)
       response = get :jwt_token, {course_id: @course.id, tool_id: @tool.id}
-      decoded_token = JWT.decode(JSON.parse(response.body[9..-1])['jwt_token'], nil, false)[0]
+      jwt = JSON.parse(response.body[9..-1])['jwt_token']
+      decoded_token = Canvas::Security.decode_jwt(jwt, [:skip_verification])
 
       expect(decoded_token['custom_canvas_user_id']).to eq @teacher.id.to_s
       expect(decoded_token['custom_canvas_course_id']).to eq @course.id.to_s
@@ -74,7 +73,7 @@ describe ExternalToolsController do
     it "returns the correct JWT token when given using the tool_launch_url param" do
       user_session(@teacher)
       response = get :jwt_token, {course_id: @course.id, tool_launch_url: @tool.url}
-      decoded_token = JWT.decode(JSON.parse(response.body[9..-1])['jwt_token'], nil, false)[0]
+      decoded_token = Canvas::Security.decode_jwt(JSON.parse(response.body[9..-1])['jwt_token'], [:skip_verification])
 
       expect(decoded_token['custom_canvas_user_id']).to eq @teacher.id.to_s
       expect(decoded_token['custom_canvas_course_id']).to eq @course.id.to_s
@@ -112,6 +111,16 @@ describe ExternalToolsController do
         @course.save!
       end
 
+      it "generates the resource_link_id correctly" do
+        user_session(@teacher)
+        tool = @tool
+        tool.settings['post_only'] = 'true'
+        tool.url = "http://www.example.com/basic_lti?first=john&last=smith"
+        tool.save!
+        get :show, course_id: @course.id, id: tool.id
+        expect(assigns[:lti_launch].params['resource_link_id']).to eq opaque_id(@course)
+      end
+
       it "should remove query params when post_only is set" do
         user_session(@teacher)
         tool = @tool
@@ -133,7 +142,6 @@ describe ExternalToolsController do
 
       it "generates launch params for a ContentItemSelectionResponse message" do
         user_session(@teacher)
-        Lti::Asset.stubs(:opaque_identifier_for).returns('ABC123')
         HostUrl.stubs(:outgoing_email_address).returns('some_address')
 
         @course.root_account.lti_guid = 'root-account-guid'
@@ -149,8 +157,8 @@ describe ExternalToolsController do
         expect(lti_launch.launch_type).to be_nil
         expect(lti_launch.params['lti_message_type']).to eq 'ContentItemSelectionResponse'
         expect(lti_launch.params['lti_version']).to eq 'LTI-1p0'
-        expect(lti_launch.params['context_id']).to eq 'ABC123'
-        expect(lti_launch.params['resource_link_id']).to eq 'ABC123'
+        expect(lti_launch.params['context_id']).to eq opaque_id(@course)
+        expect(lti_launch.params['resource_link_id']).to eq opaque_id(@course)
         expect(lti_launch.params['context_title']).to eq 'a course'
         expect(lti_launch.params['roles']).to eq 'Instructor'
         expect(lti_launch.params['tool_consumer_instance_guid']).to eq 'root-account-guid'
@@ -306,6 +314,39 @@ describe ExternalToolsController do
 
         expect(response).to be_success
       end
+
+      it "generates the resource_link_id correctly" do
+        user_session(@teacher)
+        tool = @course.context_external_tools.new(:name => "bob",
+                                                          :consumer_key => "bob",
+                                                          :shared_secret => "bob")
+        tool.url = "http://www.example.com/basic_lti"
+        tool.course_navigation = { enabled: true }
+        tool.save!
+
+        get :show, :course_id => @course.id, id: tool.id
+        expect(assigns[:lti_launch].params['resource_link_id']).to eq opaque_id(@course)
+      end
+
+      it 'generates the correct resource_link_id for an assignment' do
+        user_session(@teacher)
+        assignment = @course.assignments.create!(name: 'an assignment')
+        assignment.save!
+        tool = @course.context_external_tools.new(:name => "bob",
+                                                  :consumer_key => "bob",
+                                                  :shared_secret => "bob")
+        tool.url = "http://www.example.com/basic_lti"
+        tool.course_navigation = { enabled: true }
+        tool.homework_submission = { enabled: true }
+        tool.save!
+
+        get :show, course_id: @course.id, id: tool.id, launch_type: 'homework_submission', assignment_id: assignment.id
+        expect(response).to be_success
+
+        lti_launch = assigns[:lti_launch]
+        expect(lti_launch.params['resource_link_id']).to eq opaque_id(@course)
+      end
+
     end
   end
 
@@ -539,6 +580,7 @@ describe ExternalToolsController do
 
     it "should be accessible even after course is soft-concluded" do
       user_session(@student)
+      @course.start_at = 2.days.ago
       @course.conclude_at = 1.day.ago
       @course.restrict_enrollments_to_course_dates = true
       @course.save!
@@ -920,4 +962,13 @@ describe ExternalToolsController do
       expect(tool_settings['custom_canvas_user_id']).to eq @user.id.to_s
     end
   end
+
+  def opaque_id(asset)
+    if asset.respond_to?('lti_context_id')
+      Lti::Asset.global_context_id_for(asset)
+    else
+      Lti::Asset.context_id_for(asset)
+    end
+  end
+
 end

@@ -189,7 +189,6 @@ describe GradebooksController do
       expect(assigns[:js_env][:submissions].sort_by { |s|
         s['assignment_id']
       }).to eq [
-        {'score' => nil, 'assignment_id' => a1.id},
         {'score' => 5, 'assignment_id' => a2.id}
       ]
     end
@@ -203,6 +202,25 @@ describe GradebooksController do
       get 'grade_summary', :course_id => @course.id, :id => @student.id
       assignment_ids = assigns[:presenter].assignments.select{|a| a.class == Assignment}.map(&:id)
       expect(assignment_ids).to eq [assignment3, assignment2, assignment1].map(&:id)
+    end
+
+    context "Multiple Grading Periods" do
+      before :once do
+        @course.root_account.enable_feature!(:multiple_grading_periods)
+      end
+
+      it "does not display totals if 'All Grading Periods' is selected" do
+        user_session(@student)
+        all_grading_periods_id = 0
+        get 'grade_summary', :course_id => @course.id, :id => @student.id, grading_period_id: all_grading_periods_id
+        expect(assigns[:exclude_total]).to eq true
+      end
+
+      it "displays totals if any grading period other than 'All Grading Periods' is selected" do
+        user_session(@student)
+        get 'grade_summary', :course_id => @course.id, :id => @student.id, grading_period_id: 1
+        expect(assigns[:exclude_total]).to eq false
+      end
     end
 
     context "with assignment due date overrides" do
@@ -536,6 +554,9 @@ describe GradebooksController do
 
       it "creates a final provisional grade" do
         submission = @assignment.submit_homework(@student, :body => "hello")
+        other_teacher = teacher_in_course(:course => @course, :active_all => true).user
+        pg = submission.find_or_create_provisional_grade!(scorer: other_teacher) # create one so we can make a final
+
         post 'update_submission',
           :format => :json,
           :course_id => @course.id,
@@ -546,6 +567,7 @@ describe GradebooksController do
             :provisional => true,
             :final => true
           }
+        expect(response).to be_success
 
         # confirm "real" grades/comments were not written
         submission.reload
@@ -563,6 +585,7 @@ describe GradebooksController do
         # confirm the response JSON shows provisional information
         json = JSON.parse response.body
         expect(json[0]['submission']['score']).to eq 100
+        expect(json[0]['submission']['provisional_grade_id']).to eq pg.id
         expect(json[0]['submission']['grade_matches_current_submission']).to eq true
         expect(json[0]['submission']['submission_comments'].first['submission_comment']['comment']).to eq 'provisional!'
       end

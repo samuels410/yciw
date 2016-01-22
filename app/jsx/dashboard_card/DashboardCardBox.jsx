@@ -1,12 +1,9 @@
-/** @jsx React.DOM */
-
 define([
   'jquery',
   'react',
-  'underscore',
   './DashboardCard',
   './DashboardCardBackgroundStore'
-], function($, React, _, DashboardCard, DashboardCardBackgroundStore) {
+], function($, React, DashboardCard, DashboardCardBackgroundStore) {
   var DashboardCardBox = React.createClass({
 
     displayName: 'DashboardCardBox',
@@ -37,7 +34,7 @@ define([
     },
 
     allCourseAssetStrings: function(){
-      return _.map(this.props.courseCards, (card) => card.assetString);
+      return this.props.courseCards.map(card => card.assetString);
     },
 
     colorForCard: function(assetString){
@@ -49,22 +46,25 @@ define([
     },
 
     render: function () {
-      var cards = this.props.courseCards.map(function(card) {
+      var cards = this.props.courseCards.map((card) => {
         return (
-          <div className="col-xs-6 col-lg-4 card">
-            <DashboardCard shortName={card.shortName}
-              courseCode={card.courseCode}
-              id={card.id}
-              href={card.href}
-              links={card.links}
-              term={card.term}
-              assetString={card.assetString}
-              backgroundColor={this.colorForCard(card.assetString)}
-              handleColorChange={this.handleColorChange.bind(this, card.assetString)}
-            />
+          <div className="col-xs-6 col-lg-4 card" key={card.id}>
+            <div>{/* Div here protects card container from grid cell's display: flex */}
+              <DashboardCard shortName={card.shortName}
+                originalName={card.originalName}
+                courseCode={card.courseCode}
+                id={card.id}
+                href={card.href}
+                links={card.links}
+                term={card.term}
+                assetString={card.assetString}
+                backgroundColor={this.colorForCard(card.assetString)}
+                handleColorChange={this.handleColorChange.bind(this, card.assetString)}
+              />
+            </div>
           </div>
         );
-      }, this);
+      });
       return (
         <div className="ic-DashboardCard_Box grid-row">
           {cards}

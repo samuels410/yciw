@@ -1,4 +1,10 @@
 @import "mixins/blue";
+@if $use_new_styles {
+@import "components/ic-typography";
+// Because we're not loading in /scaffold or /type for new ui anymore
+// this needs to be explicitly called out here because common.scss doesn't
+// load everywhere... and we need typography everywhere (^_^)
+}
 
 $body-bg-color:                     $ic-color-light;
 $embedded-bg:                       $ic-color-light;
@@ -145,12 +151,15 @@ body {
 // **********************************************************************************
 // all of the following are classes that should be applied to 'body' when appropriate
 
-@if $use_new_styles == false {
+@if $use_new_styles {
+  body.ic-framed-lti-tool #content { padding: 0 $ic-sp*2; }
+  body.ic-full-screen-lti-tool #content { padding: 0; }
+}
+
+@else {
   .padless-content #content,
   #content.padless { padding: 0; }
 }
-
-#content.horizontal-padding { padding: 0 $ic-sp*2; }
 
 .with-left-side {
   #left-side { display: block; }

@@ -1,13 +1,12 @@
-/** @jsx React.DOM */
-
 define([
   'react',
   'jsx/grading/dataRow',
   'jquery',
   'i18n!external_tools',
-  'underscore'
+  'underscore',
+  'compiled/str/splitAssetString'
 ],
-function(React, DataRow, $, I18n, _) {
+function(React, DataRow, $, I18n, _, splitAssetString) {
   var update = React.addons.update;
   var GradingStandard = React.createClass({
 
@@ -158,7 +157,7 @@ function(React, DataRow, $, I18n, _) {
       if(this.props.editing){
         return (
           <div className="pull-left" tabIndex="0">
-            <input type="text" onChange={this.changeTitle} className="grading_standard_title"
+            <input type="text" onChange={this.changeTitle}
                    name="grading_standard[title]" className="scheme_name" title={I18n.t("Grading standard title")}
                    value={this.state.editingStandard.title} ref="title"/>
           </div>
@@ -237,7 +236,8 @@ function(React, DataRow, $, I18n, _) {
     },
 
     renderIconsAndTitle: function() {
-      if(this.props.permissions.manage && !this.props.othersEditing){
+      if(this.props.permissions.manage && !this.props.othersEditing &&
+        (!this.props.standard.context_code || this.props.standard.context_code == ENV.context_asset_string)){
         return (
           <div>
             {this.renderTitle()}
@@ -250,15 +250,33 @@ function(React, DataRow, $, I18n, _) {
       return (
         <div>
           {this.renderTitle()}
-          <div className="disabled-links" ref="disabledLinks">
-            <i className="icon-edit standalone-icon"/>
-            <i className="icon-trash standalone-icon"/>
-          </div>
+          {this.renderDisabledLinks()}
           <div className="pull-left cannot-manage-notification">
             {this.renderCannotManageMessage()}
           </div>
         </div>
       );
+    },
+
+    renderDisabledLinks: function() {
+      if (this.props.permissions.manage &&
+         this.props.standard.context_code && (this.props.standard.context_code != ENV.context_asset_string)) {
+        var url = "/" + splitAssetString(this.props.standard.context_code).join('/') + "/grading_standards";
+        var titleText = I18n.t('Manage grading schemes in %{context_name}',
+          {context_name: this.props.standard.context_name || this.props.standard.context_type.toLowerCase()});
+        return (<a className='links cannot-manage-notification'
+                   href={url}
+                   title={titleText}
+                   data-tooltip='left'>
+                  <span className="screenreader-only">{titleText}</span>
+                  <i className="icon-more standalone-icon"/>
+                </a>);
+      } else {
+        return (<div className="disabled-links" ref="disabledLinks">
+                <i className="icon-edit standalone-icon"/>
+                <i className="icon-trash standalone-icon"/>
+              </div>);
+      }
     },
 
     renderInvalidStandardMessage: function() {
@@ -312,9 +330,9 @@ function(React, DataRow, $, I18n, _) {
                   </tr>
                   <tr>
                     <th scope="col" className="insert_row_container"/>
-                    <th scope="col" className="name_header">{I18n.t("Name:")}</th>
+                    <th scope="col" className="name_header">{I18n.t("Name")}</th>
                     <th scope="col" className="range_container" colSpan="2">
-                      <div className="range_label">{I18n.t("Range:")}</div>
+                      <div className="range_label">{I18n.t("Range")}</div>
                       <div className="clear"></div>
                     </th>
                   </tr>

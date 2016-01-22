@@ -21,10 +21,6 @@ require 'sanitize'
 class Quizzes::QuizSubmission < ActiveRecord::Base
   self.table_name = 'quiz_submissions'
 
-  def self.polymorphic_names
-    [self.name, "QuizSubmission"]
-  end
-
   include Workflow
 
   attr_accessible :quiz, :user, :temporary_user_code, :submission_data, :score_before_regrade, :has_seen_results
@@ -196,6 +192,11 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
     else
       true
     end
+  end
+
+  def results_visible_for_user?(user)
+    return true if user && self.quiz.grants_right?(user, :review_grades)
+    results_visible?
   end
 
   def last_attempt_completed?
@@ -637,18 +638,6 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
     end
   end
 
-  def update_if_needs_review(quiz=nil)
-    quiz = self.quiz if !quiz || quiz.id != self.quiz_id
-    return false unless self.completed?
-    return false if self.quiz_version && self.quiz_version >= quiz.version_number
-    if quiz.changed_significantly_since?(self.quiz_version)
-      self.workflow_state = 'pending_review'
-      self.save
-      return true
-    end
-    false
-  end
-
   def update_scores(params)
     params = (params || {}).with_indifferent_access
     self.manually_scored = false
@@ -819,6 +808,7 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
   delegate :assignment_id, :assignment, :to => :quiz
   delegate :graded_at, :to => :submission
   delegate :context, :to => :quiz
+  delegate :excused?, to: :submission, allow_nil: true
 
   # Determine whether the QS can be retried (ie, re-generated).
   #
@@ -856,11 +846,18 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
     fixer.run!(self)
   end
 
+  def due_at
+    return quiz.due_at if submission.blank?
+
+    quiz.overridden_for(submission.user).due_at
+  end
+
   # TODO: Extract? conceptually similar to Submission::Tardiness#late?
   def late?
     return false if finished_at.blank?
-    return false if quiz.due_at.blank?
+    return false if due_at.blank?
 
-    finished_at > quiz.due_at
+    check_time = finished_at - 60.seconds
+    check_time > due_at
   end
 end

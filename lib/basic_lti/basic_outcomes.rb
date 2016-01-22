@@ -20,10 +20,20 @@ require 'nokogiri'
 
 module BasicLTI
   module BasicOutcomes
-    class Unauthorized < Exception;
+    class Unauthorized < StandardError
+      def response_status
+        401
+      end
     end
 
-    class InvalidSourceId < Exception;
+
+    class InvalidRequest < StandardError
+      def response_status
+        415
+      end
+    end
+
+    class InvalidSourceId < StandardError
     end
 
     SOURCE_ID_REGEX = %r{^(\d+)-(\d+)-(\d+)-(\d+)-(\w+)$}
@@ -56,6 +66,7 @@ module BasicLTI
 
       unless res.handle_request(tool)
         res.code_major = 'unsupported'
+        res.description = 'Request could not be handled. ¯\_(ツ)_/¯'
       end
       return res
     end
@@ -65,6 +76,7 @@ module BasicLTI
 
       unless res.handle_request(tool)
         res.code_major = 'unsupported'
+        res.description = 'Legacy request could not be handled. ¯\_(ツ)_/¯'
       end
       return res
     end
@@ -196,7 +208,7 @@ module BasicLTI
         if error_message
           self.code_major = 'failure'
           self.description = error_message
-        elsif assignment.grading_type != "pass_fail" && (assignment.points_possible.nil? || assignment.points_possible == 0)
+        elsif assignment.grading_type != "pass_fail" && (assignment.points_possible.nil?)
 
           unless submission = Submission.where(user_id: user.id, assignment_id: assignment).first
             submission = Submission.create!(submission_hash.merge(:user => user,
@@ -214,8 +226,7 @@ to because the assignment has no points possible.
           end
 
           if new_score || raw_score
-            # meh, short circuit here
-            submission_hash[:grade] = "pass" if assignment.grading_type == "pass_fail" && new_score == 1
+            submission_hash[:grade] = (new_score >= 1 ? "pass" : "fail") if assignment.grading_type == "pass_fail"
             @submission = assignment.grade_student(user, submission_hash).first
           end
 

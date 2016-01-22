@@ -235,6 +235,23 @@ describe Assignment do
         expect(@result.first.excused?).to eql true
       end
     end
+
+    context 'with anonymous grading' do
+      it 'explicitly sets anonymous grading if given' do
+        @assignment.grade_student(@user, :graded_anonymously => true, :grade => "10")
+        @assignment.reload
+        expect(@assignment.submissions.first.graded_anonymously).to be_truthy
+      end
+
+      it 'does not set anonymous grading if not given' do
+        @assignment.grade_student(@user, :graded_anonymously => true, :grade => "10")
+        @assignment.reload
+        @assignment.grade_student(@user, :grade => "10")
+        @assignment.reload
+        # should still true because grade didn't actually change
+        expect(@assignment.submissions.first.graded_anonymously).to be_truthy
+      end
+    end
   end
 
   it "should update a submission's graded_at when grading it" do
@@ -1070,21 +1087,21 @@ describe Assignment do
     it "should assign multiple peer reviews" do
       @a.reload
       @submissions = []
-      users = create_users_in_course(@course, 3.times.map{ |i| {name: "user #{i}"} }, return_type: :record)
+      users = create_users_in_course(@course, 30.times.map{ |i| {name: "user #{i}"} }, return_type: :record)
       users.each do |u|
         @submissions << @a.submit_homework(u, :submission_type => "online_url", :url => "http://www.google.com")
       end
-      @a.peer_review_count = 2
+      @a.peer_review_count = 5
       res = @a.assign_peer_reviews
-      expect(res.length).to eql(@submissions.length * 2)
+      expect(res.length).to eql(@submissions.length * @a.peer_review_count)
       @submissions.each do |s|
         assets = res.select{|a| a.asset == s}
-        expect(assets.length).to be > 0 #eql(2)
+        expect(assets.length).to eql(@a.peer_review_count)
         expect(assets.map{|a| a.assessor_id}.uniq.length).to eql(assets.length)
 
         assessors = res.select{|a| a.assessor_asset == s}
-        expect(assessors.length).to eql(2)
-        expect(assessors[0].asset_id).not_to eql(assessors[1].asset_id)
+        expect(assessors.length).to eql(@a.peer_review_count)
+        expect(assessors.map(&:asset_id).uniq.length).to eq @a.peer_review_count
       end
     end
 
@@ -1318,7 +1335,7 @@ describe Assignment do
 
     it ".to_ics should not return data for null due dates" do
       assignment_model(:due_at => "", :course => @course)
-      res = @assignment.to_ics(false)
+      res = @assignment.to_ics(in_own_calendar: false)
       expect(res).to be_nil
     end
 
@@ -1351,7 +1368,7 @@ describe Assignment do
       assignment_model(:due_at => "Sep 3 2008 11:55am", :course => @course)
       # force known value so we can check serialization
       @assignment.updated_at = Time.at(1220443500) # 3 Sep 2008 12:05pm (UTC)
-      res = @assignment.to_ics(false)
+      res = @assignment.to_ics(in_own_calendar: false)
       expect(res).not_to be_nil
       expect(res.start.icalendar_tzid).to eq 'UTC'
       expect(res.start.strftime('%Y-%m-%dT%H:%M:%S')).to eq Time.zone.parse("Sep 3 2008 11:55am").in_time_zone('UTC').strftime('%Y-%m-%dT%H:%M:00')
@@ -1366,7 +1383,7 @@ describe Assignment do
       assignment_model(:due_at => "Sep 3 2008 11:55am", :course => @course)
       # force known value so we can check serialization
       @assignment.updated_at = Time.at(1220472300) # 3 Sep 2008 12:05pm (AKDT)
-      res = @assignment.to_ics(false)
+      res = @assignment.to_ics(in_own_calendar: false)
       expect(res).not_to be_nil
       expect(res.start.icalendar_tzid).to eq 'UTC'
       expect(res.start.strftime('%Y-%m-%dT%H:%M:%S')).to eq Time.zone.parse("Sep 3 2008 11:55am").in_time_zone('UTC').strftime('%Y-%m-%dT%H:%M:00')
@@ -1385,32 +1402,10 @@ describe Assignment do
       expect(res.match(/DTEND;VALUE=DATE:20080903/)).not_to be_nil
     end
 
-    it ".to_ics should return a plain-text description and alt html description" do
-      html = %{<div>
-        This assignment is due December 16th. Plz discuss the reading.
-        <p> </p>
-        <p>Test.</p>
-      </div>}
-      assignment_model(:due_at => "Sep 3 2008 12:00am", :description => html, :course => @course)
-      ev = @assignment.to_ics(false)
-      skip("assignment description disabled")
-      expect(ev.description).to eq "This assignment is due December 16th. Plz discuss the reading.\n  \n\n\n Test."
-      expect(ev.x_alt_desc).to eq html.strip
-    end
-
-    it ".to_ics should run the description through api_user_content to translate links" do
-      html = %{<a href="/calendar">Click!</a>}
-      assignment_model(:due_at => "Sep 3 2008 12:00am", :description => html, :course => @course)
-      ev = @assignment.to_ics(false)
-      skip("assignment description disabled")
-      expect(ev.description).to eq "[Click!](http://localhost/calendar)"
-      expect(ev.x_alt_desc).to eq %{<a href="http://localhost/calendar">Click!</a>}
-    end
-
     it ".to_ics should populate uid and summary fields" do
       Time.zone = 'UTC'
       assignment_model(:due_at => "Sep 3 2008 11:55am", :title => "assignment title", :course => @course)
-      ev = @a.to_ics(false)
+      ev = @a.to_ics(in_own_calendar: false)
       expect(ev.uid).to eq "event-assignment-#{@a.id}"
       expect(ev.summary).to eq "#{@a.title} [#{@a.context.course_code}]"
       # TODO: ev.url.should == ?
@@ -1425,7 +1420,7 @@ describe Assignment do
       @override.save!
 
       assignment = AssignmentOverrideApplicator.assignment_with_overrides(@a, [@override])
-      ev = assignment.to_ics(false)
+      ev = assignment.to_ics(in_own_calendar: false)
       expect(ev.uid).to eq "event-assignment-override-#{@override.id}"
       expect(ev.summary).to eq "#{@a.title} (#{@override.title}) [#{assignment.context.course_code}]"
       #TODO: ev.url.should == ?
@@ -1440,7 +1435,7 @@ describe Assignment do
       @override.save!
 
       assignment = AssignmentOverrideApplicator.assignment_with_overrides(@a, [@override])
-      ev = assignment.to_ics(false)
+      ev = assignment.to_ics(in_own_calendar: false)
       expect(ev.uid).to eq "event-assignment-#{@a.id}"
       expect(ev.summary).to eq "#{@a.title} [#{@a.context.course_code}]"
     end
@@ -1809,11 +1804,11 @@ describe Assignment do
       it "should include re-submitted submissions in the list of submissions needing grading" do
         expect(@assignment).to be_published
         expect(@assignment.submissions.size).to eq 1
-        expect(Assignment.need_grading_info(15).where(id: @assignment).first).to be_nil
+        expect(Assignment.need_grading_info.where(id: @assignment).first).to be_nil
         @assignment.submit_homework(@stu1, :body => "Changed my mind!")
         @sub1.reload
         expect(@sub1.body).to eq "Changed my mind!"
-        expect(Assignment.need_grading_info(15).where(id: @assignment).first).not_to be_nil
+        expect(Assignment.need_grading_info.where(id: @assignment).first).not_to be_nil
       end
     end
 
@@ -2415,6 +2410,17 @@ describe Assignment do
       expect(@assignment.instance_variable_get(:@ignored_files)).to eq [ignore_file]
     end
 
+    it "should ignore when assignment.id does not belog to the user" do
+      create_and_submit
+      false_attachment = @attachment
+      student_in_course(active_all: true, user_name: "other user")
+      create_and_submit
+      ignore_file = [@user.last_name_first, @user.id, false_attachment.id, @attachment.display_name].join("_")
+      @assignment.instance_variable_set :@ignored_files, []
+      expect(@assignment.send(:infer_comment_context_from_filename, ignore_file)).to be_nil
+      expect(@assignment.instance_variable_get(:@ignored_files)).to eq [ignore_file]
+    end
+
     it "should mark comments as hidden for submission zip uploads" do
       @assignment = @course.assignments.create! name: "Mute Comment Test",
                                                 submission_types: %w(online_upload)
@@ -2633,21 +2639,28 @@ describe Assignment do
       group_discussion_assignment
     end
 
-    it "should destroy the associated discussion topic" do
+    it "destroys the associated discussion topic" do
       @assignment.destroy
       expect(@topic.reload).to be_deleted
       expect(@assignment.reload).to be_deleted
     end
 
-    it "should not revive the discussion if touched after destroyed" do
+    it "does not revive the discussion if touched after destroyed" do
       @assignment.destroy
       expect(@topic.reload).to be_deleted
       @assignment.touch
       expect(@topic.reload).to be_deleted
     end
-    it 'should raise an error on validation error' do
+
+    it 'raises an error on validation error' do
       assignment = Assignment.new
       expect {assignment.destroy}.to raise_error(ActiveRecord::RecordInvalid)
+    end
+
+    it 'refreshes the course participation counts' do
+      Progress.any_instance.expects(:process_job)
+        .with(@assignment.context, :refresh_content_participation_counts)
+      @assignment.destroy
     end
   end
 
@@ -2907,7 +2920,7 @@ describe Assignment do
         @submission = @assignment.submit_homework(@student, :submission_type => 'online_text_entry', :body => 'ahem')
         @assignment.grade_student(@student, :comment => 'real comment', :score => 1)
 
-        @assignment.moderated_grading_selections.create!(:student => @student)
+        selection = @assignment.moderated_grading_selections.create!(:student => @student)
 
         @submission.add_comment(:author => @teacher, :comment => 'provisional comment', :provisional => true)
         teacher_pg = @submission.provisional_grade(@teacher)
@@ -2921,6 +2934,9 @@ describe Assignment do
               :comments => 'a comment',
             }
           })
+
+        selection.provisional_grade = teacher_pg
+        selection.save!
 
         @submission.add_comment(:author => @ta, :comment => 'other provisional comment', :provisional => true)
         ta_pg = @submission.provisional_grade(@ta)
@@ -2939,6 +2955,12 @@ describe Assignment do
         student_in_course(:course => @course, :user => @other_student, :active_all => true)
       end
 
+      it "should return submission comments with null provisional grade" do
+        course_with_ta :course => @course, :active_all => true
+        json = @assignment.speed_grader_json(@ta, :grading_role => :provisional_grader)
+        expect(json['submissions'][0]['submission_comments'].map { |comment| comment['comment'] }).to match_array ['real comment']
+      end
+
       describe "for provisional grader" do
         before(:once) do
           @json = @assignment.speed_grader_json(@ta, :grading_role => :provisional_grader)
@@ -2949,8 +2971,8 @@ describe Assignment do
           expect(@json['submissions'][0]['provisional_grades']).to be_nil
         end
 
-        it "should include only the grader's provisional comments" do
-          expect(@json['submissions'][0]['submission_comments'].map { |comment| comment['comment'] }).to eq ['other provisional comment']
+        it "should include only the grader's provisional comments (and the real ones)" do
+          expect(@json['submissions'][0]['submission_comments'].map { |comment| comment['comment'] }).to match_array ['other provisional comment', 'real comment']
         end
 
         it "should only include the grader's provisional rubric assessments" do
@@ -2972,7 +2994,7 @@ describe Assignment do
 
         it "should include the moderator's provisional grades and comments" do
           expect(@json['submissions'][0]['score']).to eq 2
-          expect(@json['submissions'][0]['submission_comments'].map { |comment| comment['comment'] }).to eq ['provisional comment']
+          expect(@json['submissions'][0]['submission_comments'].map { |comment| comment['comment'] }).to match_array ['provisional comment', 'real comment']
         end
 
         it "should include the moderator's provisional rubric assessments" do
@@ -2984,15 +3006,23 @@ describe Assignment do
         it "should list all provisional grades" do
           pgs = @json['submissions'][0]['provisional_grades']
           expect(pgs.size).to eq 2
-          expect(pgs.map { |pg| [pg['score'], pg['scorer_id'], pg['submission_comments'][0]['comment']] }).to eq(
-            [[2.0, @teacher.id, "provisional comment"], [3.0, @ta.id, "other provisional comment"]]
+          expect(pgs.map { |pg| [pg['score'], pg['scorer_id'], pg['submission_comments'].map{|c| c['comment']}.sort] }).to match_array(
+            [
+              [2.0, @teacher.id, ["provisional comment", "real comment"]],
+              [3.0, @ta.id, ["other provisional comment", "real comment"]]
+            ]
           )
         end
 
-        it "should include all the other provisional rubric assessments" do
-          pras = @json['context']['students'][0]['provisional_rubric_assessments']
-          expect(pras.count).to eq 1
-          expect(pras[0]['assessor_id']).to eq @ta.id
+        it "should include all the other provisional rubric assessments in their respective grades" do
+          ta_pras = @json['submissions'][0]['provisional_grades'][1]['rubric_assessments']
+          expect(ta_pras.count).to eq 1
+          expect(ta_pras[0]['assessor_id']).to eq @ta.id
+        end
+
+        it "should include whether the provisional grade is selected" do
+          expect(@json['submissions'][0]['provisional_grades'][0]['selected']).to be_truthy
+          expect(@json['submissions'][0]['provisional_grades'][1]['selected']).to be_falsey
         end
       end
 
@@ -3358,18 +3388,26 @@ describe Assignment do
   end
 
   describe "#restore" do
-    it "should restore to unpublished if draft state w/ no submissions" do
+    it "restores to unpublished if draft state w/ no submissions" do
       assignment_model course: @course
       @a.destroy
       @a.restore
       expect(@a.reload).to be_unpublished
     end
 
-    it "should restore to published if draft state w/ submissions" do
+    it "restores to published if draft state w/ submissions" do
       setup_assignment_with_homework
       @assignment.destroy
       @assignment.restore
       expect(@assignment.reload).to be_published
+    end
+
+    it 'refreshes the course participation counts' do
+      assignment = assignment_model(course: @course)
+      assignment.destroy
+      Progress.any_instance.expects(:process_job)
+        .with(assignment.context, :refresh_content_participation_counts).once
+      assignment.restore
     end
   end
 
@@ -3663,6 +3701,60 @@ describe Assignment do
       a.submission_types = 'not_graded'
       expect(a).not_to be_valid
     end
+
+    it "does not consider nil -> false to be a state change" do
+      assignment_model(course: @course)
+      @assignment.grade_student @student, score: 0
+      expect(@assignment.moderated_grading).to be_nil
+      @assignment.moderated_grading = false
+      @assignment.due_at = 1.day.from_now
+      expect(@assignment).to be_valid
+    end
+  end
+
+  describe "context_module_tag_info" do
+    before(:once) do
+      @assignment = @course.assignments.create!(:due_at => 1.week.ago,
+                                               :points_possible => 100,
+                                               :submission_types => 'online_text_entry')
+    end
+
+    it "returns past_due if an assignment is due in the past and no submission exists" do
+      info = @assignment.context_module_tag_info(@student, @course)
+      expect(info[:past_due]).to be_truthy
+    end
+
+    it "does not return past_due for assignments that don't expect submissions" do
+      @assignment.submission_types = ''
+      @assignment.save!
+      info = @assignment.context_module_tag_info(@student, @course)
+      expect(info[:past_due]).to be_falsey
+    end
+
+    it "does not return past_due for assignments that were turned in on time" do
+      Timecop.freeze(2.weeks.ago) { @assignment.submit_homework(@student, :submission_type => 'online_text_entry', :body => 'blah') }
+      info = @assignment.context_module_tag_info(@student, @course)
+      expect(info[:past_due]).to be_falsey
+    end
+
+    it "does not return past_due for assignments that were turned in late" do
+      @assignment.submit_homework(@student, :submission_type => 'online_text_entry', :body => 'blah')
+      info = @assignment.context_module_tag_info(@student, @course)
+      expect(info[:past_due]).to be_falsey
+    end
+  end
+
+  describe '#touch_submissions_if_muted' do
+    before(:once) do
+      @assignment = @course.assignments.create! points_possible: 10
+      @submission = @assignment.submit_homework(@student, body: "hello")
+    end
+
+    it "touches submissions if you mute the assignment" do
+      @assignment.mute!
+      touched = @submission.reload.updated_at > @assignment.updated_at
+      expect(touched).to eq true
+    end
   end
 end
 
@@ -3706,7 +3798,9 @@ def setup_assignment_with_students
 end
 
 def submit_homework(student)
-  a = Attachment.create! context: student,
+  file_context = @assignment.group_category.group_for(student) if @assignment.has_group_category?
+  file_context ||= student
+  a = Attachment.create! context: file_context,
                          filename: "homework.pdf",
                          uploaded_data: StringIO.new("blah blah blah")
   @assignment.submit_homework(student, attachments: [a],

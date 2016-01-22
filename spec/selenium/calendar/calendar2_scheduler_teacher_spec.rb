@@ -4,17 +4,20 @@ require File.expand_path(File.dirname(__FILE__) + '/../helpers/scheduler_common'
 
 describe "scheduler" do
   include_context "in-process server selenium tests"
+  include Calendar2Common
+  include SchedulerCommon
+
   context "as a teacher" do
 
-    before (:once) do
-        Account.default.tap do |a|
+    before(:once) do
+      Account.default.tap do |a|
         a.settings[:show_scheduler]   = true
         a.settings[:agenda_view]      = true
         a.save!
       end
     end
 
-    before (:each) do
+    before(:each) do
       course_with_teacher_logged_in
       make_full_screen
     end
@@ -171,9 +174,10 @@ describe "scheduler" do
       create_appointment_group
       get "/calendar2"
       click_scheduler_link
+      wait_for_ajaximations
       click_appointment_link
-      click_appointment_link
-      expect(element_exists('.fc-event-bg')).to be_truthy
+      wait_for_ajaximations
+      expect(element_exists('.fc-event')).to be_truthy
     end
 
     it "should not allow limiting the max appointments per participant to less than 1", priority: "1", test_id: 140194 do

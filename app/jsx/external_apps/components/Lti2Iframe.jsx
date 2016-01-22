@@ -1,5 +1,3 @@
-/** @jsx React.DOM */
-
 define([
   'i18n!external_tools',
   'jquery',
@@ -10,6 +8,7 @@ define([
     displayName: 'Lti2Iframe',
 
     propTypes: {
+      reregistration: React.PropTypes.bool,
       registrationUrl: React.PropTypes.string.isRequired,
       handleInstall: React.PropTypes.func.isRequired
     },
@@ -21,13 +20,18 @@ define([
           message = JSON.parse(e.data);
         }
         if (message.subject === 'lti.lti2Registration') {
-          this.props.handleInstall(message);
+          this.props.handleInstall(message, e);
         }
       }.bind(this), false);
     },
 
     getLaunchUrl() {
-      return ENV.LTI_LAUNCH_URL + '?display=borderless&tool_consumer_url=' + this.props.registrationUrl;
+      if (this.props.reregistration) {
+        return this.props.registrationUrl
+      }
+      else {
+        return ENV.LTI_LAUNCH_URL + '?display=borderless&tool_consumer_url=' + this.props.registrationUrl;
+      }
     },
 
     render() {

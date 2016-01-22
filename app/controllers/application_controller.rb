@@ -20,11 +20,6 @@
 # Likewise, all the methods added will be available for all controllers.
 
 class ApplicationController < ActionController::Base
-  def self.promote_view_path(path)
-    self.view_paths = self.view_paths.to_ary.reject{ |p| p.to_s == path }
-    prepend_view_path(path)
-  end
-
   attr_accessor :active_tab
   attr_reader :context
 
@@ -124,6 +119,7 @@ class ApplicationController < ActionController::Base
           open_registration: @domain_root_account.try(:open_registration?)
         }
       }
+      @js_env[:page_view_update_url] = page_view_path(@page_view.id, page_view_token: @page_view.token) if @page_view
       @js_env[:IS_LARGE_ROSTER] = true if !@js_env[:IS_LARGE_ROSTER] && @context.respond_to?(:large_roster?) && @context.large_roster?
       @js_env[:context_asset_string] = @context.try(:asset_string) if !@js_env[:context_asset_string]
       @js_env[:ping_url] = polymorphic_url([:api_v1, @context, :ping]) if @context.is_a?(Course)
@@ -151,21 +147,34 @@ class ApplicationController < ActionController::Base
     return [] if context.is_a?(Group)
 
     context = context.account if context.is_a?(User)
-    tools = ContextExternalTool.all_tools_for(context, {:type => type,
+    tools = ContextExternalTool.all_tools_for(context, {:placements => type,
       :root_account => @domain_root_account, :current_user => @current_user})
 
-    extension_settings = [:icon_url] + custom_settings
     tools.map do |tool|
-      hash = {
-          :title => tool.label_for(type, I18n.locale),
-          :base_url => named_context_url(context, :context_external_tool_path, tool, :launch_type => type)
-      }
-      extension_settings.each do |setting|
-        hash[setting] = tool.extension_setting(type, setting)
-      end
-      hash
+      external_tool_display_hash(tool, type, {}, context, custom_settings)
     end
   end
+
+  def external_tool_display_hash(tool, type, url_params={}, context=@context, custom_settings=[])
+
+    url_params = {
+      id: tool.id,
+      launch_type: type
+    }.merge(url_params)
+
+    hash = {
+      :title => tool.label_for(type, I18n.locale),
+      :base_url =>  polymorphic_url([context, :external_tool], url_params),
+      :is_new => tool.integration_type == 'lor'
+    }
+
+    extension_settings = [:icon_url, :canvas_icon_class] | custom_settings
+    extension_settings.each do |setting|
+      hash[setting] = tool.extension_setting(type, setting)
+    end
+    hash
+  end
+  helper_method :external_tool_display_hash
 
   def k12?
     @domain_root_account && @domain_root_account.feature_enabled?(:k12)
@@ -206,6 +215,10 @@ class ApplicationController < ActionController::Base
     @real_current_user || @current_user
   end
 
+  def not_fake_student_user
+    @current_user && @current_user.fake_student? ? logged_in_user : @current_user
+  end
+
   def rescue_action_dispatch_exception
     rescue_action_in_public(request.env['action_dispatch.exception'])
   end
@@ -229,6 +242,11 @@ class ApplicationController < ActionController::Base
     self.send name, *opts
   end
 
+  def self.promote_view_path(path)
+    self.view_paths = self.view_paths.to_ary.reject{ |p| p.to_s == path }
+    prepend_view_path(path)
+  end
+
   protected
 
   # we track the cost of each request in Canvas::RequestThrottle in order
@@ -247,7 +265,7 @@ class ApplicationController < ActionController::Base
   def assign_localizer
     I18n.localizer = lambda {
       infer_locale :context => @context,
-                   :user => logged_in_user,
+                   :user => not_fake_student_user,
                    :root_account => @domain_root_account,
                    :session_locale => session[:locale],
                    :accept_language => request.headers['Accept-Language']
@@ -291,7 +309,7 @@ class ApplicationController < ActionController::Base
 
   # scopes all time objects to the user's specified time zone
   def set_time_zone
-    user = logged_in_user
+    user = not_fake_student_user
     if user && !user.time_zone.blank?
       Time.zone = user.time_zone
       if Time.zone && Time.zone.name == "UTC" && user.time_zone && user.time_zone.name.match(/\s/)
@@ -339,14 +357,14 @@ class ApplicationController < ActionController::Base
       super
   end
 
-  def tab_enabled?(id)
+  def tab_enabled?(id, opts = {})
     return true unless @context && @context.respond_to?(:tabs_available)
     tabs = @context.tabs_available(@current_user,
                                    :session => session,
                                    :include_hidden_unused => true,
                                    :root_account => @domain_root_account)
     valid = tabs.any?{|t| t[:id] == id }
-    render_tab_disabled unless valid
+    render_tab_disabled unless valid || opts[:no_render]
     return valid
   end
 
@@ -403,6 +421,18 @@ class ApplicationController < ActionController::Base
   end
   alias :authorized_action? :authorized_action
 
+  def fix_ms_office_redirects
+    if ms_office?
+      # Office will follow 302's internally, until it gets to a 200. _then_ it will pop it out
+      # to a web browser - but you've lost your cookies! This breaks not only store_location,
+      # but in the case of delegated authentication where the provider does an additional
+      # redirect storing important information in session, makes it impossible to log in at all
+      render text: '', status: 200
+      return false
+    end
+    true
+  end
+
   def render_unauthorized_action
     respond_to do |format|
       @show_left_side = false
@@ -412,6 +442,7 @@ class ApplicationController < ActionController::Base
       @headers = !!@current_user if @headers != false
       @files_domain = @account_domain && @account_domain.host_type == 'files'
       format.html {
+        return unless fix_ms_office_redirects
         store_location
         return redirect_to login_url(params.slice(:authentication_provider)) if !@files_domain && !@current_user
 
@@ -488,17 +519,13 @@ class ApplicationController < ActionController::Base
         @context = api_find(Course.active, params[:course_id])
         params[:context_id] = params[:course_id]
         params[:context_type] = "Course"
-        if @context && session[:enrollment_uuid_course_id] == @context.id
-          session[:enrollment_uuid_count] ||= 0
-          if session[:enrollment_uuid_count] > 4
-            session[:enrollment_uuid_count] = 0
-            self.extend(TextHelper)
-            flash[:html_notice] = mt "#application.notices.need_to_accept_enrollment", "You'll need to [accept the enrollment invitation](%{url}) before you can fully participate in this course.", :url => course_url(@context)
-          end
-          session[:enrollment_uuid_count] += 1
+        if @context && @current_user
+          context_enrollments = @context.enrollments.where(user_id: @current_user)
+          Canvas::Builders::EnrollmentDateBuilder.preload(context_enrollments)
+          @context_enrollment = context_enrollments.sort_by{|e| [e.state_with_date_sortable, e.rank_sortable, e.id] }.first
         end
-        @context_enrollment = @context.enrollments.where(user_id: @current_user).sort_by{|e| [e.state_sortable, e.rank_sortable, e.id] }.first if @context && @current_user
         @context_membership = @context_enrollment
+        check_for_readonly_enrollment_state
       elsif params[:account_id] || (self.is_a?(AccountsController) && params[:account_id] = params[:id])
         @context = api_find(Account, params[:account_id])
         params[:context_id] = @context.id
@@ -546,7 +573,7 @@ class ApplicationController < ActionController::Base
 
         if @context && @context.respond_to?(:short_name)
           crumb_url = named_context_url(@context, :context_url) if @context.grants_right?(@current_user, session, :read)
-          add_crumb(@context.short_name, crumb_url)
+          add_crumb(@context.nickname_for(@current_user, :short_name), crumb_url)
         end
 
         @set_badge_counts = true
@@ -614,6 +641,26 @@ class ApplicationController < ActionController::Base
     Course.require_assignment_groups(@contexts)
     @context_enrollment = @context.membership_for_user(@current_user) if @context.respond_to?(:membership_for_user)
     @context_membership = @context_enrollment
+  end
+
+  def check_for_readonly_enrollment_state
+    return unless request.format.html?
+    if @context_enrollment && @context_enrollment.is_a?(Enrollment) && ['invited', 'active'].include?(@context_enrollment.workflow_state) && action_name != "enrollment_invitation"
+      state = @context_enrollment.state_based_on_date
+      case state
+      when :invited
+        if @context_enrollment.available_at
+          flash[:html_notice] = mt "#application.notices.need_to_accept_future_enrollment",
+            "You'll need to [accept the enrollment invitation](%{url}) before you can fully participate in this course, starting on %{date}.",
+            :url => course_url(@context),:date => datetime_string(@context_enrollment.available_at)
+        else
+          flash[:html_notice] = mt "#application.notices.need_to_accept_enrollment",
+            "You'll need to [accept the enrollment invitation](%{url}) before you can fully participate in this course.", :url => course_url(@context)
+        end
+      when :accepted
+        flash[:html_notice] = t("This course hasn’t started yet. You will not be able to participate in this course until %{date}.", :date => datetime_string(@context_enrollment.available_at))
+      end
+    end
   end
 
   def set_badge_counts_for(context, user, enrollment=nil)
@@ -947,10 +994,16 @@ class ApplicationController < ActionController::Base
     user = @current_user || (@accessed_asset && @accessed_asset[:user])
     if user && @log_page_views != false
       updated_fields = params.slice(:interaction_seconds)
-      if request.xhr? && params[:page_view_id] && !updated_fields.empty? && !(@page_view && @page_view.generated_by_hand)
-        @page_view = PageView.find_for_update(params[:page_view_id])
+      if request.xhr? && params[:page_view_token] && !updated_fields.empty? && !(@page_view && @page_view.generated_by_hand)
+        RequestContextGenerator.store_interaction_seconds_update(params[:page_view_token], updated_fields[:interaction_seconds])
+
+        page_view_info = PageView.decode_token(params[:page_view_token])
+        @page_view = PageView.find_for_update(page_view_info[:request_id])
         if @page_view
-          response.headers["X-Canvas-Page-View-Id"] = @page_view.id.to_s if @page_view.id
+          if @page_view.id
+            response.headers["X-Canvas-Page-View-Update-Url"] = page_view_path(
+              @page_view.id, page_view_token: @page_view.token)
+          end
           @page_view.do_update(updated_fields)
           @page_view_update = true
         end
@@ -1045,13 +1098,20 @@ class ApplicationController < ActionController::Base
       type = nil
       type = '404' if status == '404 Not Found'
 
+      # TODO: get rid of exceptions that implement this "skip_error_report?" thing, instead
+      # use the initializer in config/initializers/errors.rb to configure
+      # exceptions we want skipped
       unless exception.respond_to?(:skip_error_report?) && exception.skip_error_report?
         opts = {type: type}
+        opts[:canvas_error_info] = exception.canvas_error_info if exception.respond_to?(:canvas_error_info)
         info = Canvas::Errors::Info.new(request, @domain_root_account, @current_user, opts)
         error_info = info.to_h
         error_info[:tags][:response_code] = response_code
         capture_outputs = Canvas::Errors.capture(exception, error_info)
-        error = ErrorReport.find(capture_outputs[:error_report])
+        error = nil
+        if capture_outputs[:error_report]
+          error = ErrorReport.find(capture_outputs[:error_report])
+        end
       end
 
       if api_request?
@@ -1136,6 +1196,9 @@ class ApplicationController < ActionController::Base
       data = { errors: [{message: 'Invalid access token.'}] }
     when ActionController::ParameterMissing
       data = { errors: [{message: "#{exception.param} is missing"}] }
+    when BasicLTI::BasicOutcomes::Unauthorized,
+        BasicLTI::BasicOutcomes::InvalidRequest
+      data = { errors: [{message: exception.message}] }
     else
       if status_code.is_a?(Symbol)
         status_code_string = status_code.to_s
@@ -1674,41 +1737,6 @@ class ApplicationController < ActionController::Base
     super
   end
 
-  def active_brand_config(opts={})
-    return @active_brand_config if defined? @active_brand_config
-    @active_brand_config = begin
-      if !use_new_styles? || (@current_user && @current_user.prefers_high_contrast?)
-        nil
-      elsif session.key?(:brand_config_md5)
-        BrandConfig.where(md5: session[:brand_config_md5]).first
-      else
-        brand_config_for_account(opts)
-      end
-    end
-  end
-  helper_method :active_brand_config
-
-  def brand_config_for_account(opts)
-    account = @account || Context.get_account(@context, @domain_root_account)
-    if account.brand_config && account.branding_allowed?
-      account.brand_config
-    elsif !opts[:ignore_parents] && account.first_parent_brand_config
-      account.first_parent_brand_config
-    elsif k12?
-      BrandConfig.k12_config
-    end
-  end
-  private :brand_config_for_account
-
-  def brand_config_includes
-    return {} unless @domain_root_account.allow_global_includes?
-    @brand_config_includes ||= BrandConfig::OVERRIDE_TYPES.each_with_object({}) do |override_type, hsh|
-      url = active_brand_config.presence.try(override_type)
-      hsh[override_type] = url if url.present?
-    end
-  end
-  helper_method :brand_config_includes
-
   def css_bundles
     @css_bundles ||= []
   end
@@ -1828,6 +1856,10 @@ class ApplicationController < ActionController::Base
     params[:mobile] || request.user_agent.to_s =~ /ipod|iphone|ipad|Android/i
   end
 
+  def ms_office?
+    request.user_agent.to_s =~ /ms-office/
+  end
+
   def profile_data(profile, viewer, session, includes)
     extend Api::V1::UserProfile
     extend Api::V1::Course
@@ -1914,6 +1946,35 @@ class ApplicationController < ActionController::Base
     end
 
     js_env hash
+  end
+
+  def set_js_assignment_data
+    rights = [:manage_assignments, :manage_grades, :read_grades]
+    permissions = @context.rights_status(@current_user, *rights)
+    permissions[:manage] = permissions[:manage_assignments]
+    js_env({
+      :URLS => {
+        :new_assignment_url => new_polymorphic_url([@context, :assignment]),
+        :course_url => api_v1_course_url(@context),
+        :sort_url => reorder_course_assignment_groups_url(@context),
+        :assignment_sort_base_url => course_assignment_groups_url(@context),
+        :context_modules_url => api_v1_course_context_modules_path(@context),
+        :course_student_submissions_url => api_v1_course_student_submissions_url(@context)
+      },
+      :POST_TO_SIS => Assignment.sis_grade_export_enabled?(@context),
+      :PERMISSIONS => permissions,
+      :DIFFERENTIATED_ASSIGNMENTS_ENABLED => @context.feature_enabled?(:differentiated_assignments),
+      :MULTIPLE_GRADING_PERIODS_ENABLED => @context.feature_enabled?(:multiple_grading_periods),
+      :VALID_DATE_RANGE => CourseDateRange.new(@context),
+      :assignment_menu_tools => external_tools_display_hashes(:assignment_menu),
+      :discussion_topic_menu_tools => external_tools_display_hashes(:discussion_topic_menu),
+      :quiz_menu_tools => external_tools_display_hashes(:quiz_menu),
+      :current_user_has_been_observer_in_this_course => @context.user_has_been_observer?(@current_user),
+      :observed_student_ids => ObserverEnrollment.observed_student_ids(@context, @current_user)
+    })
+    if @context.feature_enabled?(:multiple_grading_periods)
+      js_env(:active_grading_periods => GradingPeriod.json_for(@context, @current_user))
+    end
   end
 
   def google_docs_connection

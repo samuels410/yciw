@@ -20,17 +20,6 @@ require File.expand_path(File.dirname(__FILE__) + '/../sharding_spec_helper.rb')
 
 describe Account do
 
-  describe ".find_cached" do
-    specs_require_sharding
-
-    it "works relative to a different shard" do
-      @shard1.activate do
-        a = Account.create!
-        expect(Account.find_cached(a.id)).to eq a
-      end
-    end
-  end
-
   it "should provide a list of courses" do
     expect{ Account.new.courses }.not_to raise_error
   end
@@ -438,7 +427,7 @@ describe Account do
     end
 
     limited_access = [ :read, :manage, :update, :delete, :read_outcomes ]
-    account_enabled_access = [ :view_notifications, :manage_catalog, :moderate_grades ]
+    account_enabled_access = [ :view_notifications, :manage_catalog ]
     full_access = RoleOverride.permissions.keys + limited_access - account_enabled_access + [:create_courses]
     siteadmin_access = [:app_profiling]
     full_root_access = full_access - RoleOverride.permissions.select { |k, v| v[:account_only] == :site_admin }.map(&:first)
@@ -1407,4 +1396,44 @@ describe Account do
       end
     end
   end
+
+  context "account cache" do
+    specs_require_sharding
+
+    describe ".find_cached" do
+      let(:nonsense_id){ 987654321 }
+
+      it "works relative to a different shard" do
+        @shard1.activate do
+          a = Account.create!
+          expect(Account.find_cached(a.id)).to eq a
+        end
+      end
+
+      it "errors if infrastructure fails and we can't see the account" do
+        expect{ Account.find_cached(nonsense_id) }.to raise_error(::Canvas::AccountCacheError)
+      end
+
+      it "includes the account id in the error message" do
+        begin
+          Account.find_cached(nonsense_id)
+        rescue ::Canvas::AccountCacheError => e
+          expect(e.message).to eq("Couldn't find Account with id=#{nonsense_id}")
+        end
+      end
+    end
+
+    describe ".invalidate_cache" do
+      it "works relative to a different shard" do
+        enable_cache do
+          @shard1.activate do
+            a = Account.create!
+            Account.find_cached(a.id) # set the cache
+            expect(Account.invalidate_cache(a.id)).to eq true
+          end
+        end
+      end
+    end
+  end
+
 end

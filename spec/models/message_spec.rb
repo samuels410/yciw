@@ -76,6 +76,25 @@ describe Message do
       expect(msg.subject).to include(@assignment.title)
     end
 
+    it "should default to the account time zone if the user has no time zone" do
+      original_time_zone = Time.zone
+      Time.zone = 'UTC'
+      course_with_teacher
+      account = @course.account
+      account.default_time_zone = 'Pretoria'
+      account.save!
+      due_at = Time.zone.parse('2014-06-06 11:59:59')
+      assignment_model(course: @course, due_at: due_at)
+      msg = generate_message(:assignment_created, :email, @assignment)
+
+      presenter = Utils::DatetimeRangePresenter.new(due_at, nil, :event, ActiveSupport::TimeZone.new('Pretoria'))
+      due_at_string = presenter.as_string(shorten_midnight: false)
+
+      expect(msg.body.include?(due_at_string)).to eq true
+      expect(msg.html_body.include?(due_at_string)).to eq true
+      Time.zone = original_time_zone
+    end
+
     it "should not html escape the user_name" do
       course_with_teacher
       @teacher.name = "For some reason my parent's gave me a name with an apostrophe"
@@ -98,6 +117,37 @@ describe Message do
       @au = AccountUser.create(:account => account)
       msg = generate_message(:account_user_notification, :email, @au)
       expect(msg.html_body).to include('awesomelogo.jpg')
+    end
+
+    describe "course nicknames" do
+      before(:once) do
+        course_with_student(:active_all => true, :course_name => 'badly-named-course')
+        @student.course_nicknames[@course.id] = 'student-course-nick'
+        @student.save!
+      end
+
+      def check_message(message, asset)
+        msg = generate_message(message, :email, asset, :user => @student)
+        expect(msg.html_body).not_to include 'badly-named-course'
+        expect(msg.html_body).to include 'student-course-nick'
+        expect(@course.name).to eq 'badly-named-course'
+
+        msg = generate_message(message, :email, asset, :user => @teacher)
+        expect(msg.html_body).to include 'badly-named-course'
+        expect(msg.html_body).not_to include 'student-course-nick'
+      end
+
+      it "applies nickname to asset" do
+        check_message(:grade_weight_changed, @course)
+      end
+
+      it "applies nickname to asset.course" do
+        check_message(:enrollment_registration, @student.enrollments.first)
+      end
+
+      it "applies nickname to asset.context" do
+        check_message(:assignment_changed, @course.assignments.create!)
+      end
     end
   end
 
@@ -233,7 +283,7 @@ describe Message do
           path_type: 'sms',
           user: @user
         )
-        Canvas::Twilio.expects(:deliver).with('+18015550100', @message.body)
+        Canvas::Twilio.expects(:deliver).with('+18015550100', @message.body, from_recipient_country: true)
         @message.expects(:deliver_via_email).never
         @message.deliver
       end
@@ -296,8 +346,7 @@ describe Message do
         expect(@message.workflow_state).to eq('cancelled')
       end
 
-      it "doesn't send when the :international_sms feature flag is disabled" do
-        @user.account.disable_feature!(:international_sms)
+      it 'sends from recipient country' do
         message_model(
           dispatch_at: Time.now,
           workflow_state: 'staged',
@@ -306,8 +355,10 @@ describe Message do
           path_type: 'sms',
           user: @user
         )
-        Canvas::Twilio.expects(:deliver).never
+        Canvas::Twilio.expects(:deliver).with('+18015550100', anything, from_recipient_country: true)
         @message.deliver
+        @message.reload
+        expect(@message.workflow_state).to eq('sent')
       end
     end
   end
@@ -401,6 +452,22 @@ describe Message do
           expect(message.from_name).to eq "OutgoingName"
         end
 
+      end
+    end
+
+    describe "#translate" do
+      it "should work with an explicit key" do
+        message = message_model
+        message.get_template("new_discussion_entry.email.erb") # populate @i18n_scope
+        message = message.translate(:key, "value %{link}", link: 'hi')
+        expect(message).to eq "value hi"
+      end
+
+      it "should work with an implicit key" do
+        message = message_model
+        message.get_template("new_discussion_entry.email.erb") # populate @i18n_scope
+        message = message.translate("value %{link}", link: 'hi')
+        expect(message).to eq "value hi"
       end
     end
   end

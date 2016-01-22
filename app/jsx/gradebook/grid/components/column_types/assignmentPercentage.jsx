@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 define([
   'react',
   '../../actions/submissionsActions',
@@ -25,7 +24,7 @@ define([
 
     renderViewGrade() {
       return (
-        <div ref="grade">
+        <div className="grade" ref="grade">
           {this.getDisplayGrade().replace("%", "")}
         </div>
       );

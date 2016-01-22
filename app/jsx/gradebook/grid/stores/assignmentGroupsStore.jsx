@@ -8,30 +8,36 @@ define([
   var AssignmentGroupsStore = Reflux.createStore({
     listenables: [AssignmentGroupsActions],
 
-    getInitialState() {
-      this.assignmentGroups = {
+    init() {
+      this.state = {
         data: null,
         error: null
       };
-      return this.assignmentGroups;
+    },
+
+    getInitialState() {
+      if (this.state === undefined) {
+        this.init();
+      }
+      return this.state;
     },
 
     onLoadFailed(error) {
-      this.assignmentGroups.error = error;
-      this.trigger(this.assignmentGroups);
+      this.state.error = error;
+      this.trigger(this.state);
     },
 
     onLoadCompleted(json) {
       var assignmentGroups;
       this.setNoPointsWarning(json);
       assignmentGroups = this.formatAssignmentGroups(json);
-      this.assignmentGroups.data = assignmentGroups;
-      this.trigger(this.assignmentGroups);
+      this.state.data = assignmentGroups;
+      this.trigger(this.state);
     },
 
     onReplaceAssignmentGroups(updatedAssignmentGroups) {
-      this.assignmentGroups.data = updatedAssignmentGroups;
-      this.trigger(this.assignmentGroups);
+      this.state.data = updatedAssignmentGroups;
+      this.trigger(this.state);
     },
 
     setNoPointsWarning(assignmentGroups) {
@@ -45,21 +51,19 @@ define([
     },
 
     onReplaceAssignment(updatedAssignment) {
-      var assignmentGroups = this.assignmentGroups.data,
-          assignments = _.flatten(_.pluck(assignmentGroups, 'assignments')),
-          assignment = _.find(assignments, assignment => updatedAssignment.id === assignment.id);
+      var assignments = _.flatten(_.pluck(this.state.data, 'assignments')),
+        assignment = _.find(assignments, assignment => updatedAssignment.id === assignment.id);
 
       assignment.muted = updatedAssignment.muted;
-      this.assignmentGroups.data = assignmentGroups;
-      this.trigger(this.assignmentGroups);
+      this.trigger(this.state);
     },
 
     formatAssignmentGroups(groups) {
       return _.map(groups, (group) => {
-        group.assignments = _.map(
-          group.assignments,
-          assignment => this.formatAssignment(assignment, group)
-        );
+        group.assignments = _.chain(group.assignments)
+          .reject(assignment => _.contains(assignment.submission_types, 'not_graded'))
+          .map(assignment => this.formatAssignment(assignment, group))
+          .value();
 
         return group;
       });
@@ -88,7 +92,7 @@ define([
     assignments(assignmentIds) {
       var assignmentGroups, assignments, allAssignments;
 
-      assignmentGroups = this.assignmentGroups.data;
+      assignmentGroups = this.state.data;
       allAssignments = _.map(assignmentGroups, group => group.assignments);
       allAssignments = _.flatten(allAssignments);
 
@@ -96,6 +100,7 @@ define([
                           _.find(allAssignments, assignment =>
                                  assignment.id === assignmentId));
 
+      assignments = _.reject(assignments, assignment => assignment === undefined);
       return assignments;
     }
   });

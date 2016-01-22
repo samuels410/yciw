@@ -1,5 +1,3 @@
-/** @jsx React.DOM */
-
 define([
   'underscore',
   'react',
@@ -11,9 +9,6 @@ define([
   'jquery',
   'compiled/jquery.rails_flash_notifications'
 ], (_ ,React, DueDateRow, DueDateAddRowButton, OverrideStudentStore, TokenActions, I18n, $) => {
-
-  var DueDateRow = React.createFactory(DueDateRow)
-  var DueDateAddRowButton = React.createFactory(DueDateAddRowButton)
 
   var DueDates = React.createClass({
 
@@ -158,26 +153,41 @@ define([
       return _.chain([datedKeys,numberedKeys]).flatten().compact().value()
     },
 
+
+    rowRef(rowKey){
+      return "due_date_row-" + rowKey;
+    },
+
     // ------------------------
     // Adding and Removing Rows
     // ------------------------
 
     addRow(){
       var newRowCount = this.state.addedRowCount + 1
-
       this.replaceRow(newRowCount, [], {})
-      this.setState({ addedRowCount: newRowCount })
+      this.setState({ addedRowCount: newRowCount }, function() {
+        this.focusRow(newRowCount);
+      })
     },
 
     removeRow(rowToRemoveKey){
       if ( !this.canRemoveRow() ) return
 
-      var newRows = _.omit(this.state.rows, rowToRemoveKey)
-      this.setState({ rows: newRows })
+      var previousIndex = _.indexOf(this.sortedRowKeys(), rowToRemoveKey);
+      var newRows = _.omit(this.state.rows, rowToRemoveKey);
+      this.setState({ rows: newRows }, function() {
+        var ks = this.sortedRowKeys();
+        var previousRowKey = ks[previousIndex] || ks[ks.length - 1];
+        this.focusRow(previousRowKey);
+      })
     },
 
     canRemoveRow(){
-      return this.sortedRowKeys().length > 1
+      return this.sortedRowKeys().length > 1;
+    },
+
+    focusRow(rowKey){
+      this.refs[this.rowRef(rowKey)].getDOMNode().querySelector('input').focus();
     },
 
     // --------------------------
@@ -282,7 +292,8 @@ define([
         var row = this.state.rows[rowKey]
         var overrides = row.overrides || []
         var dates = row.dates || {}
-        return <DueDateRow overrides            = {overrides}
+        return <DueDateRow ref                  = {this.rowRef(rowKey)}
+                           overrides            = {overrides}
                            key                  = {rowKey}
                            rowKey               = {rowKey}
                            dates                = {dates}

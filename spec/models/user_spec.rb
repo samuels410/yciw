@@ -511,6 +511,8 @@ describe User do
       @course5.enroll_user(@user, 'TeacherEnrollment')
 
       @course6 = course(:course_name => "active but date restricted", :active_course => true)
+      @course6.restrict_student_future_view = true
+      @course6.save!
       e = @course6.enroll_user(@user, 'StudentEnrollment')
       e.accept!
       e.start_at = 1.day.from_now
@@ -524,7 +526,6 @@ describe User do
       e.end_at = 1.day.ago
       e.save!
 
-
       # only four, in the right order (type, then name), and with the top type per course
       expect(@user.courses_with_primary_enrollment.map{|c| [c.id, c.primary_enrollment_type]}).to eql [
         [@course5.id, 'TeacherEnrollment'],
@@ -532,6 +533,18 @@ describe User do
         [@course3.id, 'TeacherEnrollment'],
         [@course1.id, 'StudentEnrollment']
       ]
+    end
+
+    it "includes invitations to temporary users" do
+      user1 = user
+      user2 = user
+      c1 = course(name: 'a', active_course: true)
+      e = c1.enroll_teacher(user1)
+      user2.stubs(:temporary_invitations).returns([e])
+      c2 = course(name: 'b', active_course: true)
+      c2.enroll_user(user2)
+
+      expect(user2.courses_with_primary_enrollment.map(&:id)).to eq [c1.id, c2.id]
     end
 
     describe 'with cross sharding' do
@@ -810,9 +823,7 @@ describe User do
     end
 
     it "should not include users from other sections if visibility is limited to sections" do
-      enrollment = @course.enroll_user(@student, 'StudentEnrollment', :enrollment_state => 'active', :limit_privileges_to_course_section => true)
-      # we currently force limit_privileges_to_course_section to be false for students; override it in the db
-      Enrollment.where(:id => enrollment).update_all(:limit_privileges_to_course_section => true)
+      @course.enroll_user(@student, 'StudentEnrollment', :enrollment_state => 'active', :limit_privileges_to_course_section => true)
       messageable_users = search_messageable_users(@student).map(&:id)
       expect(messageable_users).to include @this_section_user.id
       expect(messageable_users).not_to include @other_section_user.id
@@ -881,9 +892,7 @@ describe User do
     end
 
     it "should respect section visibility when returning users for a specified group" do
-      enrollment = @course.enroll_user(@student, 'StudentEnrollment', :enrollment_state => 'active', :limit_privileges_to_course_section => true)
-      # we currently force limit_privileges_to_course_section to be false for students; override it in the db
-      Enrollment.where(:id => enrollment).update_all(:limit_privileges_to_course_section => true)
+      @course.enroll_user(@student, 'StudentEnrollment', :enrollment_state => 'active', :limit_privileges_to_course_section => true)
 
       @group.users << @other_section_user
 
@@ -1198,16 +1207,27 @@ describe User do
       expect(User.name_parts('Cody Cutrer')).to eq ['Cody', 'Cutrer', nil]
       expect(User.name_parts('  Cody  Cutrer   ')).to eq ['Cody', 'Cutrer', nil]
       expect(User.name_parts('Cutrer, Cody')).to eq ['Cody', 'Cutrer', nil]
+      expect(User.name_parts('Cutrer, Cody',
+                             likely_already_surname_first: true)).to eq ['Cody', 'Cutrer', nil]
       expect(User.name_parts('Cutrer, Cody Houston')).to eq ['Cody Houston', 'Cutrer', nil]
+      expect(User.name_parts('Cutrer, Cody Houston',
+                             likely_already_surname_first: true)).to eq ['Cody Houston', 'Cutrer', nil]
       expect(User.name_parts('St. Clair, John')).to eq ['John', 'St. Clair', nil]
+      expect(User.name_parts('St. Clair, John',
+                             likely_already_surname_first: true)).to eq ['John', 'St. Clair', nil]
       # sorry, can't figure this out
       expect(User.name_parts('John St. Clair')).to eq ['John St.', 'Clair', nil]
       expect(User.name_parts('Jefferson Thomas Cutrer IV')).to eq ['Jefferson Thomas', 'Cutrer', 'IV']
       expect(User.name_parts('Jefferson Thomas Cutrer, IV')).to eq ['Jefferson Thomas', 'Cutrer', 'IV']
       expect(User.name_parts('Cutrer, Jefferson, IV')).to eq ['Jefferson', 'Cutrer', 'IV']
+      expect(User.name_parts('Cutrer, Jefferson, IV',
+                             likely_already_surname_first: true)).to eq ['Jefferson', 'Cutrer', 'IV']
       expect(User.name_parts('Cutrer, Jefferson IV')).to eq ['Jefferson', 'Cutrer', 'IV']
+      expect(User.name_parts('Cutrer, Jefferson IV',
+                             likely_already_surname_first: true)).to eq ['Jefferson', 'Cutrer', 'IV']
       expect(User.name_parts(nil)).to eq [nil, nil, nil]
       expect(User.name_parts('Bob')).to eq ['Bob', nil, nil]
+      expect(User.name_parts('Ho, Chi, Min')).to eq ['Chi Min', 'Ho', nil]
       expect(User.name_parts('Ho, Chi, Min')).to eq ['Chi Min', 'Ho', nil]
       # sorry, don't understand cultures that put the surname first
       # they should just manually specify their sort name
@@ -1215,10 +1235,17 @@ describe User do
       expect(User.name_parts('')).to eq [nil, nil, nil]
       expect(User.name_parts('John Doe')).to eq ['John', 'Doe', nil]
       expect(User.name_parts('Junior')).to eq ['Junior', nil, nil]
-      expect(User.name_parts('John St. Clair', 'St. Clair')).to eq ['John', 'St. Clair', nil]
-      expect(User.name_parts('John St. Clair', 'Cutrer')).to eq ['John St.', 'Clair', nil]
-      expect(User.name_parts('St. Clair', 'St. Clair')).to eq [nil, 'St. Clair', nil]
+      expect(User.name_parts('John St. Clair', prior_surname: 'St. Clair')).to eq ['John', 'St. Clair', nil]
+      expect(User.name_parts('John St. Clair', prior_surname: 'Cutrer')).to eq ['John St.', 'Clair', nil]
+      expect(User.name_parts('St. Clair', prior_surname: 'St. Clair')).to eq [nil, 'St. Clair', nil]
       expect(User.name_parts('St. Clair,')).to eq [nil, 'St. Clair', nil]
+      # don't get confused by given names that look like suffixes
+      expect(User.name_parts('Duing, Vi')).to eq ['Vi', 'Duing', nil]
+      # we can't be perfect. don't know what to do with this
+      expect(User.name_parts('Duing Chi Min, Vi')).to eq ['Duing Chi', 'Min', 'Vi']
+      # unless we thought it was already last name first
+      expect(User.name_parts('Duing Chi Min, Vi',
+                             likely_already_surname_first: true)).to eq ['Vi', 'Duing Chi Min', nil]
     end
 
     it "should keep the sortable_name up to date if all that changed is the name" do
@@ -2056,12 +2083,12 @@ describe User do
         skip "requires icu locally"
       end
       I18n.locale = :es
-      expect(User.sortable_name_order_by_clause).to match /es/
-      expect(User.sortable_name_order_by_clause).not_to match /root/
+      expect(User.sortable_name_order_by_clause).to match(/'es'/)
+      expect(User.sortable_name_order_by_clause).not_to match(/'root'/)
       # english has no specific sorting rules, so use root
       I18n.locale = :en
-      expect(User.sortable_name_order_by_clause).not_to match /es/
-      expect(User.sortable_name_order_by_clause).to match /root/
+      expect(User.sortable_name_order_by_clause).not_to match(/'es'/)
+      expect(User.sortable_name_order_by_clause).to match(/'root'/)
     end
   end
 
@@ -2205,6 +2232,15 @@ describe User do
       Account.default.account_users.create!(user: user)
 
       expect(user.mfa_settings).to eq :optional
+    end
+
+    it "short circuits when a hint is provided" do
+      account = Account.create!(:settings => { :mfa_settings => :required_for_admins })
+      p = user.pseudonyms.create!(:account => account, :unique_id => 'user')
+      account.account_users.create!(user: user)
+
+      user.expects(:pseudonyms).never
+      expect(user.mfa_settings(pseudonym_hint: p)).to eq :required
     end
   end
 
@@ -2387,6 +2423,34 @@ describe User do
 
       it "should show all submissions with the feature flag off" do
         expect(@teacher.assignments_needing_grading.length).to eq 3
+      end
+    end
+
+    context "#assignments_needing_moderation" do
+      before :once do
+        @course2.account.allow_feature!(:moderated_grading)
+        @course2.enable_feature!(:moderated_grading)
+        @course2.assignments.first.update_attribute(:moderated_grading, true)
+      end
+
+      it "should not count assignments with no provisional grades" do
+        expect(@teacher.assignments_needing_moderation.length).to eq 0
+      end
+
+      it "should count assignments needing moderation" do
+        assmt = @course2.assignments.first
+        assmt.grade_student(@studentA, :grade => "1", :grader => @teacher, :provisional => true)
+        expect(@teacher.assignments_needing_moderation.length).to eq 1
+
+        assmt.update_attribute(:grades_published_at, Time.now.utc)
+        expect(@teacher.assignments_needing_moderation.length).to eq 0 # should not count anymore once grades are published
+      end
+
+      it "should not give a count for non-moderators" do
+        assmt = @course2.assignments.first
+        assmt.grade_student(@studentA, :grade => "1", :grader => @teacher, :provisional => true)
+        ta = ta_in_course(:course => @course, :active_all => true).user
+        expect(ta.assignments_needing_moderation.length).to eq 0
       end
     end
   end
@@ -2653,6 +2717,25 @@ describe User do
     end
   end
 
+  describe "check_accounts_right?" do
+    describe "sharding" do
+      specs_require_sharding
+
+      it "should check for associated accounts on shards the user shares with the seeker" do
+        # create target user on defualt shard
+        target = user()
+        # create account on another shard
+        account = @shard1.activate{ Account.create! }
+        # associate target user with that account
+        account_admin_user(user: target, account: account, role: Role.get_built_in_role('AccountMembership'))
+        # create seeking user as admin on that account
+        seeker = account_admin_user(account: account, role: Role.get_built_in_role('AccountAdmin'))
+        # ensure seeking user gets permissions it should on target user
+        expect(target.grants_right?(seeker, :view_statistics)).to be_truthy
+      end
+    end
+  end
+
   describe "#conversation_context_codes" do
     before :once do
       @user = user(:active_all => true)
@@ -2862,6 +2945,11 @@ describe User do
     it "includes 'teacher' if the user has a designer enrollment" do
       @enrollment = @course.enroll_user(@user, 'DesignerEnrollment', enrollment_state: 'active')
       expect(@user.roles(@account)).to eq %w[user teacher]
+    end
+
+    it "includes 'observer' if the user has an observer enrollment" do
+      @enrollment = @course.enroll_user(@user, 'ObserverEnrollment', enrollment_state: 'active')
+      expect(@user.roles(@account)).to eq %w[user observer]
     end
 
     it "includes 'admin' if the user has an admin user record" do

@@ -404,7 +404,6 @@ class MessageableUser
     # NOTE: the common_courses of the returned MessageableUser objects will be
     # populated only with the course given.
     def messageable_users_in_course_scope(course_or_id, enrollment_types=nil, options={})
-      return unless course_or_id
       course = course_or_id.is_a?(Course) ? course_or_id : Course.where(id: course_or_id).first
       return unless course
 
@@ -775,10 +774,7 @@ class MessageableUser
       fully_visible_scope = GroupMembership.
         select("group_memberships.group_id AS group_id").
         uniq.
-        joins(<<-SQL).
-          INNER JOIN users ON users.id=group_memberships.user_id
-          INNER JOIN groups ON groups.id=group_memberships.group_id
-        SQL
+        joins(:user, :group).
         where(:workflow_state => 'accepted').
         where("groups.workflow_state<>'deleted'").
         where(MessageableUser::AVAILABLE_CONDITIONS).
@@ -787,13 +783,12 @@ class MessageableUser
       section_visible_scope = GroupMembership.
         select("group_memberships.group_id AS group_id").
         uniq.
+        joins(:user, :group).
         joins(<<-SQL).
-          INNER JOIN users ON users.id=group_memberships.user_id
-          INNER JOIN groups ON groups.id=group_memberships.group_id
-          INNER JOIN enrollments ON
+          INNER JOIN #{Enrollment.quoted_table_name} ON
             enrollments.user_id=users.id AND
             enrollments.course_id=groups.context_id
-          INNER JOIN courses ON courses.id=enrollments.course_id
+          INNER JOIN #{Course.quoted_table_name} ON courses.id=enrollments.course_id
         SQL
         where(:workflow_state => 'accepted').
         where("groups.workflow_state<>'deleted'").

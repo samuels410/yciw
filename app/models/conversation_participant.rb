@@ -249,24 +249,18 @@ class ConversationParticipant < ActiveRecord::Base
     }.merge(options)
 
     shard.activate do
-      if !options[:include_indirect_participants] && !options[:include_participant_contexts]
-        # this is cached in the conversation model
-        conversation.participants
-      else
-        # use a user specific cache record for the modified participant list
-        Rails.cache.fetch([conversation, user, 'participants', options].cache_key) do
-          participants = conversation.participants
-          if options[:include_indirect_participants]
-            user_ids = messages.map(&:all_forwarded_messages).flatten.map(&:author_id)
-            user_ids -= participants.map(&:id)
-            participants += Shackles.activate(:slave) { MessageableUser.available.where(:id => user_ids).to_a }
-          end
-          if options[:include_participant_contexts]
-            # we do this to find out the contexts they share with the user
-            user.load_messageable_users(participants, :strict_checks => false)
-          else
-            participants
-          end
+      Rails.cache.fetch([conversation, user, 'participants', options].cache_key) do
+        participants = conversation.participants
+        if options[:include_indirect_participants]
+          user_ids = messages.map(&:all_forwarded_messages).flatten.map(&:author_id)
+          user_ids -= participants.map(&:id)
+          participants += Shackles.activate(:slave) { MessageableUser.available.where(:id => user_ids).to_a }
+        end
+        if options[:include_participant_contexts]
+          # we do this to find out the contexts they share with the user
+          user.load_messageable_users(participants, :strict_checks => false)
+        else
+          participants
         end
       end
     end
@@ -450,8 +444,8 @@ class ConversationParticipant < ActiveRecord::Base
         older = times.reject!{ |t| t <= last_message_at} || []
         older.first || times.reverse.first
       end
-      self.has_attachments = messages.with_attachments.first.present?
-      self.has_media_objects = messages.with_media_comments.first.present?
+      self.has_attachments = messages.with_attachments.exists?
+      self.has_media_objects = messages.with_media_comments.exists?
       self.visible_last_authored_at = if latest.author_id == user_id
         latest.created_at
       elsif latest_authored = last_authored_message

@@ -278,7 +278,7 @@ module AssignmentOverridesSeleniumHelper
     date.strftime('%b %-d')
   end
 
-  # Formatted output: Mmm d at h, e.g. 'Jan 1 at 1:01pm'
+  # Formatted output: Mmm d at h:mm, e.g. 'Jan 1 at 1:01pm'
   # Note: Removes on-the-hour minutes, e.g. '5:00pm' becomes '5pm'
   def format_time_for_view(time)
     formatter = '%b %-d at %-l'
@@ -333,7 +333,15 @@ module AssignmentOverridesSeleniumHelper
   def validate_vdd_quiz_tooltip_dates(context_selector, message)
     keep_trying_until(2) do
       driver.mouse.move_to fln('Multiple Dates', f("#{context_selector}"))
-      expect(fj('.ui-tooltip')).to include_text("#{message}")
+      wait_for_ajaximations
+      expect(fj('.ui-tooltip:visible')).to include_text("#{message}")
     end
+  end
+
+  def create_assignment_override(assignment, section, due_date)
+    override = assignment.assignment_overrides.build
+    override.set = section
+    override.due_at = due_date.days.from_now
+    override.save!
   end
 end

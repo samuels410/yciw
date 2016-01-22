@@ -1,12 +1,26 @@
 module CC::Exporter::Epub
   class Book
+    include CC::Exporter::Epub::Converters
+
     def initialize(content)
       @title = content.delete(:title)
+      @files = content.delete(:files)
       @content = content
     end
-    attr_reader :content, :title
+    attr_reader :content, :files, :title
+
+    def add_files
+      files.each do |file_data|
+        File.open(file_data[:path_to_file]) do |file|
+          epub.add_item(file_data[:local_path], file, file_data[:identifier], {
+            'media-type' => file_data[:media_type]
+          })
+        end
+      end
+    end
 
     def build
+      add_files
       content.each do |key, template|
         epub.add_ordered_item("#{key}.xhtml").
           add_content(StringIO.new(template.parse)).
@@ -23,9 +37,10 @@ module CC::Exporter::Epub
 
     def epub
       @_epub ||= GEPUB::Book.new.tap do |b|
-        b.add_identifier('http:/example.jp/bookid_in_url', 'BookID', 'URL')
+        b.set_primary_identifier(pub_id)
+        b.language = I18n.locale
         b.add_title(title, nil, GEPUB::TITLE_TYPE::MAIN) do |title|
-          title.file_as = "#{title} Epub"
+          title.file_as = "#{title} ePub"
           title.display_seq = 1
         end
         b.add_creator('Canvas by Instructure') do |creator|
@@ -34,8 +49,14 @@ module CC::Exporter::Epub
       end
     end
 
+    def pub_id
+      @_pub_id ||= SecureRandom.uuid
+    end
+
     def filename
-      "#{SecureRandom.uuid}.#{title}.epub"
+      name = CanvasTextHelper.truncate_text(title, {:max_length => 200, :ellipsis => ''})
+      timestamp = Time.zone.now.strftime('%Y-%b-%d_%H-%M-%S')
+      "#{name}-#{timestamp}.epub"
     end
   end
 end

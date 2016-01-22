@@ -1,4 +1,3 @@
-/** @jsx React.DOM */
 define([
   'react',
   'underscore',
@@ -59,8 +58,13 @@ define([
 
     getTitle() {
       if (this.shouldDisplayAssignmentWarning()) {
-        return I18n.t("Assignments in this group have no points possible and cannot be included in grade calculation");
+        return I18n.t('Assignments in this group have no points possible and cannot be included in grade calculation');
       }
+    },
+
+    getWidth() {
+      var paddingAdjustment = GradebookConstants.DEFAULT_LAYOUTS.headers.paddingAdjustment;
+      return this.props.width - paddingAdjustment;
     },
 
     label(columnData) {
@@ -70,29 +74,33 @@ define([
       label = this.props.label;
 
       if (assignment) {
-        var paddingAdjustment = GradebookConstants.DEFAULT_LAYOUTS.headers.paddingAdjustment,
-            className = "assignment-name" + ((assignment.muted) ? ' muted' : '');
-
+        var className = 'assignment-name' + ((assignment.muted) ? ' muted' : '');
         return (
-          <div className='gradebook-label' style={{width: this.props.width - paddingAdjustment}}>
-            <a className={className}
-               title={label}
-               href={assignment.html_url}>
-              { this.shouldDisplayAssignmentWarning() && <i ref="icon" title={this.getTitle()} className="icon-warning"></i> }
+          <div title={label} className='gradebook-label' style={{width: this.getWidth()}}>
+            <a className={className} href={assignment.html_url}>
+              { this.shouldDisplayAssignmentWarning() && <i ref='icon' title={this.getTitle()} className='icon-warning'></i> }
               {label}
             </a>
           </div>
         );
+      } else {
+        return (
+          <div title={label} className='gradebook-label' style={{width: this.getWidth()}}>
+            {label}
+          </div>
+        );
       }
 
-      return {label};
+      return label;
     },
 
     renderDropdown(columnData) {
-      var columnType  = columnData.columnType,
-          assignment  = columnData.assignment,
-          enrollments = columnData.enrollments,
-          key, dropdownOptionsId;
+      let columnType  = columnData.columnType,
+        assignment  = columnData.assignment,
+        enrollments = columnData.enrollments,
+        submissions = columnData.submissions,
+        key, dropdownOptionsId;
+
       if (assignment) {
         key = 'assignment-' + assignment.id;
         dropdownOptionsId = key + '-options';
@@ -100,8 +108,10 @@ define([
           <GradebookKyleMenu key={key} dropdownOptionsId={dropdownOptionsId}
             idToAppendTo='gradebook_grid' screenreaderText={I18n.t('Assignment Options')}
             defaultClassNames='gradebook-header-drop' options={{ noButton: true }}>
+
             <AssignmentHeaderDropdownOptions key={dropdownOptionsId}
-              idAttribute={dropdownOptionsId} assignment={assignment} enrollments={enrollments}/>
+              idAttribute={dropdownOptionsId} assignment={assignment}
+              enrollments={enrollments} submissions={submissions}/>
           </GradebookKyleMenu>
         );
       } else if (columnType === 'total') {
@@ -116,13 +126,17 @@ define([
     },
 
     render() {
-      var columnData = this.props.columnData,
-          dueDate    = this.headerDate(columnData);
+      let columnData = this.props.columnData,
+        dueDate    = this.headerDate(columnData),
+        className  = (dueDate) ? '' : ' title';
+
       return (
-        <div className='gradebook-header-column'>
+        <div style={{width: this.getWidth()}}
+             title={this.props.label}
+             className={'gradebook-label gradebook-header-column' + className}>
           {this.label(columnData)}
           {this.renderDropdown(columnData)}
-          <div className='assignment-due-date' ref='dueDate'>
+          <div title={dueDate} className='assignment-due-date' ref='dueDate'>
             {dueDate}
           </div>
         </div>

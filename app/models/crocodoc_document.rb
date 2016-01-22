@@ -23,6 +23,8 @@ class CrocodocDocument < ActiveRecord::Base
 
   belongs_to :attachment
 
+  has_and_belongs_to_many :submissions, -> { readonly(true) }, join_table: :canvadocs_submissions
+
   MIME_TYPES = %w(
     application/pdf
     application/msword
@@ -31,7 +33,7 @@ class CrocodocDocument < ActiveRecord::Base
     application/vnd.openxmlformats-officedocument.presentationml.presentation
     application/excel
     application/vnd.ms-excel
-  )
+  ).freeze
 
   def upload
     return if uuid.present?
@@ -94,13 +96,7 @@ class CrocodocDocument < ActiveRecord::Base
       opts[:filter] = user.crocodoc_id!
     end
 
-    submissions = attachment.attachment_associations.
-      where(:context_type => 'Submission').
-      preload(context: [:assignment]).
-      map(&:context)
-
-    return opts unless submissions
-
+    submissions = self.submissions.preload(:assignment)
     if submissions.any? { |s| s.grants_right? user, :read_grade }
       opts[:filter] = 'all'
 
@@ -114,7 +110,31 @@ class CrocodocDocument < ActiveRecord::Base
       opts[:filter] = 'none'
     end
 
+    apply_whitelist(user, opts, whitelist) if whitelist
+
     opts
+  end
+
+  def apply_whitelist(user, opts, whitelist)
+    whitelisted_users = case opts[:filter]
+    when 'all'
+      whitelist
+    when 'none'
+      []
+    else
+      opts[:filter].to_s.split(',').map(&:to_i) & whitelist
+    end
+
+    unless whitelisted_users.include?(user.crocodoc_id!)
+      opts[:admin] = false
+      opts[:editable] = false
+    end
+
+    opts[:filter] = if whitelisted_users.empty?
+      'none'
+    else
+      whitelisted_users.join(',')
+    end
   end
 
   def available?

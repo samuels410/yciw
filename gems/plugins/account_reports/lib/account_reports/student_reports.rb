@@ -26,6 +26,7 @@ module AccountReports
     def initialize(account_report)
       @account_report = account_report
       @account_report.parameters ||= {}
+      include_deleted_objects
     end
 
     def start_and_end_times
@@ -177,14 +178,14 @@ module AccountReports
                   c.name AS course_name, s.id AS section_id,
                   s.sis_source_id AS section_sis_id, s.name AS section_name,
                   p.user_id, p.sis_user_id, u.sortable_name").
-          joins("INNER JOIN courses c ON c.id = enrollments.course_id
+          joins("INNER JOIN #{Course.quoted_table_name} c ON c.id = enrollments.course_id
                    AND c.workflow_state = 'available'
-                 INNER JOIN course_sections s ON s.id = enrollments.course_section_id
+                 INNER JOIN #{CourseSection.quoted_table_name} s ON s.id = enrollments.course_section_id
                    AND s.workflow_state = 'active'
-                 INNER JOIN pseudonyms p ON p.user_id = enrollments.user_id
+                 INNER JOIN #{Pseudonym.quoted_table_name} p ON p.user_id = enrollments.user_id
                    AND p.account_id = enrollments.root_account_id
                    AND p.workflow_state = 'active'
-                 INNER JOIN users u ON u.id = p.user_id").
+                 INNER JOIN #{User.quoted_table_name} u ON u.id = p.user_id").
           where("enrollments.type = 'StudentEnrollment'
                  AND enrollments.workflow_state = 'active'")
 
@@ -247,7 +248,7 @@ module AccountReports
       file = AccountReports.generate_file(@account_report)
       CSV.open(file, "w") do |csv|
 
-        students = root_account.pseudonyms.active.
+        students = root_account.pseudonyms.
           select('pseudonyms.last_request_at, pseudonyms.user_id,
                   pseudonyms.sis_user_id, users.sortable_name,
                   pseudonyms.current_login_ip').
@@ -268,6 +269,12 @@ module AccountReports
                    INNER JOIN #{Course.quoted_table_name} c on c.id = e.course_id").
             where('c.id = ?', course)
         end
+
+        if course || term
+          students = students.where('e.workflow_state <> ?', "deleted") unless @include_deleted
+        end
+
+        students = students.active unless @include_deleted
 
         headers = []
         headers << I18n.t('#account_reports.report_header_user_id', 'user id')
@@ -296,5 +303,50 @@ module AccountReports
       send_report(file)
     end
 
+
+    # shows last_activity_at on enrollments for users with
+    # enrollments in this account
+
+    # note: activity on other root accounts' enrollments will not show
+    def last_enrollment_activity
+      report_extra_text
+      file = AccountReports.generate_file(@account_report)
+      CSV.open(file, "w") do |csv|
+
+        headers = []
+        headers << I18n.t('#account_reports.report_header_user_id', 'user id')
+        headers << I18n.t('#account_reports.report_header_user_name', 'user name')
+        headers << I18n.t('#account_reports.report_header_last_activity_at', 'last activity at')
+
+        csv << headers
+
+        students = User.joins(:enrollments).
+          select(["users.id", :last_activity_at, :sortable_name]).
+          order("users.id, sortable_name, last_activity_at DESC").
+          distinct_on("users.id, sortable_name")
+
+        students = add_user_sub_account_scope(students)
+
+        potential_courses = Course.where(root_account_id: @domain_root_account)
+        potential_courses = potential_courses.where(enrollment_term_id: term) if term
+        potential_courses = potential_courses.where(id: course) if course
+        potential_courses = potential_courses.
+          joins(:course_account_associations).
+          where(course_account_associations: {account_id: account})
+
+        students = students.where(enrollments: {course_id: potential_courses})
+
+        students.find_in_batches do |batch|
+          batch.each do |u|
+            row = []
+            row << u.id
+            row << u.sortable_name
+            row << default_timezone_format(u.last_activity_at)
+            csv << row
+          end
+        end
+      end
+      send_report(file)
+    end
   end
 end

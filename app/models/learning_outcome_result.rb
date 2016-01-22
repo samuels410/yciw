@@ -33,7 +33,7 @@ class LearningOutcomeResult < ActiveRecord::Base
   validates_inclusion_of :associated_asset_type, :allow_nil => true, :in => ['AssessmentQuestion', 'Quizzes::Quiz', 'LiveAssessments::Assessment']
   belongs_to :context, :polymorphic => true
   validates_inclusion_of :context_type, :allow_nil => true, :in => ['Course']
-  has_many :learning_outcome_question_results
+  has_many :learning_outcome_question_results, dependent: :destroy
   simply_versioned
 
   EXPORTABLE_ATTRIBUTES = [
@@ -121,4 +121,5 @@ class LearningOutcomeResult < ActiveRecord::Base
   scope :for_outcome_ids, lambda { |ids| where(:learning_outcome_id => ids) }
   scope :for_association, lambda { |association| where(:association_type => association.class.to_s, :association_id => association.id) }
   scope :for_associated_asset, lambda { |associated_asset| where(:associated_asset_type => associated_asset.class.to_s, :associated_asset_id => associated_asset.id) }
+  scope :active, lambda { where("content_tags.workflow_state <> 'deleted'").joins(:alignment) }
 end

@@ -17,8 +17,9 @@
 module Lti
   class AppCollator
 
-    def initialize(context)
+    def initialize(context, reregistration_url_builder = nil)
       @context = context
+      @reregistration_url_builder = reregistration_url_builder
     end
 
     def bookmarked_collection
@@ -55,7 +56,9 @@ module Lti
         enabled: true,
         tool_configuration: external_tool.tool_configuration,
         context: external_tool.context_type,
-        context_id: external_tool.context.id
+        context_id: external_tool.context.id,
+        reregistration_url: nil,
+        has_update: nil
       }
     end
 
@@ -69,10 +72,26 @@ module Lti
         enabled: tool_proxy.workflow_state == 'active',
         tool_configuration: nil,
         context: tool_proxy.context_type,
-        context_id: tool_proxy.context.id
+        context_id: tool_proxy.context.id,
+        reregistration_url: build_reregistration_url(tool_proxy),
+        has_update: root_account.feature_enabled?(:lti2_rereg) ? tool_proxy.update? : nil
       }
     end
 
+    def root_account
+      if @context.respond_to?(:root_account)
+        @context.root_account
+      else
+        @context.account.root_account
+      end
+    end
 
+    def build_reregistration_url(tool_proxy)
+      if root_account.feature_enabled?(:lti2_rereg) && @reregistration_url_builder &&
+          tool_proxy.reregistration_message_handler
+
+        @reregistration_url_builder.call(@context, tool_proxy.id)
+      end
+    end
   end
 end

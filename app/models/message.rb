@@ -62,11 +62,15 @@ class Message < ActiveRecord::Base
   before_save :set_asset_context_code
 
   # Validations
-  validates_length_of :body,                :maximum => maximum_text_length, :allow_nil => true, :allow_blank => true
-  validates_length_of :transmission_errors, :maximum => maximum_text_length, :allow_nil => true, :allow_blank => true
-  validates_length_of :to, :maximum => maximum_text_length, :allow_nil => true, :allow_blank => true
-  validates_length_of :from, :maximum => maximum_text_length, :allow_nil => true, :allow_blank => true
-  validates_length_of :url, :maximum => maximum_text_length, :allow_nil => true, :allow_blank => true
+  validates :body, length: {maximum: maximum_text_length}, allow_nil: true, allow_blank: true
+  validates :html_body, length: {maximum: maximum_text_length}, allow_nil: true, allow_blank: true
+  validates :transmission_errors, length: {maximum: maximum_text_length}, allow_nil: true, allow_blank: true
+  validates :to, length: {maximum: maximum_text_length}, allow_nil: true, allow_blank: true
+  validates :from, length: {maximum: maximum_text_length}, allow_nil: true, allow_blank: true
+  validates :url, length: {maximum: maximum_text_length}, allow_nil: true, allow_blank: true
+  validates :subject, length: {maximum: maximum_string_length}, allow_nil: true, allow_blank: true
+  validates :from_name, length: {maximum: maximum_string_length}, allow_nil: true, allow_blank: true
+  validates :reply_to_name, length: {maximum: maximum_string_length}, allow_nil: true, allow_blank: true
 
   # Stream policy
   on_create_send_to_streams do
@@ -272,6 +276,11 @@ class Message < ActiveRecord::Base
       end
       context
     end
+  end
+
+  # infer a root account time zone
+  def root_account_time_zone
+    link_root_account.time_zone if link_root_account.respond_to?(:time_zone)
   end
 
   # Internal: Store any transmission errors in the database to help with later
@@ -480,8 +489,11 @@ class Message < ActiveRecord::Base
 
     # Get the users timezone but maintain the original timezone in order to set it back at the end
     original_time_zone = Time.zone.name || "UTC"
-    user_time_zone     = self.user.try(:time_zone) || original_time_zone
+    user_time_zone     = self.user.try(:time_zone) || root_account_time_zone || original_time_zone
     Time.zone          = user_time_zone
+
+    # (temporarily) override course name with user's nickname for the course
+    hacked_course = apply_course_nickname_to_asset(self.context, self.user)
 
     # Ensure we have a path_type
     path_type = 'dashboard' if to == 'summary'
@@ -518,6 +530,8 @@ class Message < ActiveRecord::Base
     # Set the timezone back to what it originally was
     Time.zone = original_time_zone if original_time_zone.present?
 
+    hacked_course.apply_nickname_for!(nil) if hacked_course
+
     @i18n_scope = nil
   end
 
@@ -540,7 +554,32 @@ class Message < ActiveRecord::Base
       return nil
     end
 
+    if user.account.feature_enabled?(:notification_service) && path_type != "yo"
+      message_body = path_type == "email" ? Mailer.create_message(self).to_s : body
+      NotificationService.process(message_body, path_type, to, remote_configuration)
+      complete_dispatch
+      return
+    end
     send(delivery_method)
+  end
+
+  class RemoteConfigurationError < StandardError; end
+  # Public: Determine the remote configuration for notification_service
+  #
+  # Returns string remote configuration (eventually a hash).
+  def remote_configuration
+    case path_type
+    when "email"
+      return "email.amazonaws.com"
+    when "push"
+      return "push.com"
+    when "twitter"
+      return 'twitter'
+    when "sms"
+      return if to =~ /^\+[0-9]+$/ ? "Twilio.com" : "email.amazonaws.com"
+    else
+      raise RemoteConfigurationError, "No matching path types for notification service"
+    end
   end
 
   # Public: Fetch the dashboard messages for the given messages.
@@ -616,13 +655,15 @@ class Message < ActiveRecord::Base
   # options - An options hash passed to translate (default: {}).
   #
   # Returns a translated string.
-  def translate(key, default, options={})
+  def translate(*args)
+    key, options = I18nliner::CallHelpers.infer_arguments(args)
+
     # Add scope if it's present in the model and missing from the key.
-    if @i18n_scope && key !~ /\A#/
+    if !options[:i18nliner_inferred_key] && @i18n_scope && key !~ /\A#/
       key = "##{@i18n_scope}.#{key}"
     end
 
-    super(key, default, options)
+    super(key, options)
   end
   alias :t :translate
 
@@ -680,7 +721,6 @@ class Message < ActiveRecord::Base
   def deliver_via_email
     res = nil
     logger.info "Delivering mail: #{self.inspect}"
-
     begin
       res = Mailer.create_message(self).deliver
     rescue Net::SMTPServerBusy => e
@@ -691,7 +731,6 @@ class Message < ActiveRecord::Base
       @exception = e
       logger.error "Exception: #{e.class}: #{e.message}\n\t#{e.backtrace.join("\n\t")}"
     end
-
     if res
       complete_dispatch
     elsif @exception
@@ -755,8 +794,13 @@ class Message < ActiveRecord::Base
         unless user.account.feature_enabled?(:international_sms)
           raise "International SMS is currently disabled for this user's account"
         end
-
-        Canvas::Twilio.deliver(to, body) if Canvas::Twilio.enabled?
+        if Canvas::Twilio.enabled?
+          Canvas::Twilio.deliver(
+            to,
+            body,
+            from_recipient_country: user.account.feature_enabled?(:international_sms_from_recipient_country)
+          )
+        end
       rescue StandardError => e
         logger.error "Exception: #{e.class}: #{e.message}\n\t#{e.backtrace.join("\n\t")}"
         Canvas::Errors.capture(
@@ -816,6 +860,18 @@ class Message < ActiveRecord::Base
 
   def message_context
     @_message_context ||= Messages::AssetContext.new(context, notification_name)
+  end
+
+  def apply_course_nickname_to_asset(asset, user)
+    hacked_course = if asset.is_a?(Course)
+      asset
+    elsif asset.respond_to?(:context) && asset.context.is_a?(Course)
+      asset.context
+    elsif asset.respond_to?(:course) && asset.course.is_a?(Course)
+      asset.course
+    end
+    hacked_course.apply_nickname_for!(user) if hacked_course
+    hacked_course
   end
 
 end

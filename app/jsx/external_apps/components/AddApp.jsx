@@ -1,5 +1,3 @@
-/** @jsx React.DOM */
-
 define([
   'i18n!external_tools',
   'underscore',
@@ -11,6 +9,22 @@ define([
   'jquery.disableWhileLoading',
   'compiled/jquery.rails_flash_notifications'
 ], function(I18n, _, $, React, Modal, ConfigOptionField, ExternalTool) {
+
+  const modalOverrides = {
+    overlay : {
+      backgroundColor: 'rgba(0,0,0,0.5)'
+    },  
+    content : {
+      position: 'static',
+      top: '0',
+      left: '0',
+      right: 'auto',
+      bottom: 'auto',
+      borderRadius: '0',
+      border: 'none',
+      padding: '0'
+    }
+  };
 
   return React.createClass({
     displayName: 'AddApp',
@@ -157,7 +171,7 @@ define([
       newTool.set('app_center_id', this.props.app.short_name);
 
       $(e.target).attr('disabled', 'disabled');
-      
+
       newTool.save();
     },
 
@@ -207,6 +221,7 @@ define([
           <Modal className="ReactModal__Content--canvas"
             overlayClassName="ReactModal__Overlay--canvas"
             isOpen={this.state.modalIsOpen}
+            style={modalOverrides}
             onRequestClose={this.closeModal}>
 
             <div className="ReactModal__Layout">

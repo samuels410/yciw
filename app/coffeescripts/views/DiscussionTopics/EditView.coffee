@@ -44,6 +44,7 @@ htmlEscape, DiscussionTopic, Announcement, Assignment, $, preventDefault, Missin
     events: _.extend(@::events,
       'click .removeAttachment' : 'removeAttachment'
       'click .save_and_publish': 'saveAndPublish'
+      'click .cancel_button' : 'handleCancel'
       'change #use_for_grading' : 'toggleAvailabilityOptions'
       'change #discussion_topic_assignment_points_possible' : 'handlePointsChange'
     )
@@ -89,6 +90,11 @@ htmlEscape, DiscussionTopic, Announcement, Assignment, $, preventDefault, Missin
       json
 
 
+    handleCancel: (ev) =>
+      ev.preventDefault()
+      @unwatchUnload()
+      window.location = ENV.CANCEL_REDIRECT_URL if ENV.CANCEL_REDIRECT_URL?
+
     handlePointsChange:(ev) =>
       ev.preventDefault()
       if @assignment.hasSubmittedSubmissions()
@@ -115,7 +121,7 @@ htmlEscape, DiscussionTopic, Announcement, Assignment, $, preventDefault, Missin
       _.defer(@renderGradingTypeOptions)
       _.defer(@renderGroupCategoryOptions)
       _.defer(@renderPeerReviewOptions)
-      _.defer(@renderPostToSisOptions) if ENV.POST_GRADES
+      _.defer(@renderPostToSisOptions) if ENV.POST_TO_SIS
       _.defer(@watchUnload)
       _.defer(@attachKeyboardShortcuts)
 

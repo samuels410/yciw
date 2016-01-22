@@ -32,42 +32,15 @@ define([
   'media_comments' /* mediaComment, mediaCommentThumbnail */
 ], function(INST, I18n, $, _, GradeCalculator, round, htmlEscape) {
 
-  function removeAssignmentsNotInCurrentGradingPeriod() {
-    var gradingPeriod = ENV.grading_period;
-    var assignmentGroups = $.extend(true, [], ENV.assignment_groups);
-    var filteredAssignmentGroups;
-
-    if (gradingPeriod) {
-      _.each(assignmentGroups, function (assignmentGroup) {
-        var updatedAssignments = [];
-        _.each(assignmentGroup.assignments, function (assignment){
-          var gradingPeriodStartDate = new Date(gradingPeriod.start_date);
-          var gradingPeriodEndDate = new Date(gradingPeriod.end_date);
-          var assignmentDueDate = assignment.due_at ? new Date(assignment.due_at) : null;
-          var assignmentInGradingPeriod = gradingPeriodStartDate <= assignmentDueDate
-              && gradingPeriodEndDate >= assignmentDueDate
-
-          if(assignmentInGradingPeriod || (gradingPeriod.is_last && !assignmentDueDate)) {
-            updatedAssignments.push(assignment);
-          }
-        });
-        assignmentGroup.assignments = updatedAssignments;
-      });
-    }
-
-    return assignmentGroups;
-  }
-
   function updateStudentGrades() {
     var ignoreUngradedSubmissions = $("#only_consider_graded_assignments").attr('checked');
     var currentOrFinal = ignoreUngradedSubmissions ? 'current' : 'final';
     var groupWeightingScheme = ENV.group_weighting_scheme;
-    var showTotalGradeAsPoints = ENV.show_total_grade_as_points;
-    var assignmentGroups = removeAssignmentsNotInCurrentGradingPeriod(ENV.assignment_groups);
+    var includeTotal = !ENV.exclude_total;
 
     var calculatedGrades = GradeCalculator.calculate(
       ENV.submissions,
-      assignmentGroups,
+      ENV.assignment_groups,
       groupWeightingScheme
     );
 
@@ -84,6 +57,14 @@ define([
     var droppedMessage = I18n.t('This assignment is dropped and will not be considered in the total calculation');
     $('.dropped').attr('aria-label', droppedMessage);
     $('.dropped').attr('title', droppedMessage);
+
+    if (includeTotal) {
+      calculateTotals(calculatedGrades, currentOrFinal, groupWeightingScheme);
+    }
+  }
+
+  var calculateTotals = function(calculatedGrades, currentOrFinal, groupWeightingScheme) {
+    var showTotalGradeAsPoints = ENV.show_total_grade_as_points;
 
     var calculateGrade = function(score, possible) {
       if (possible === 0 || isNaN(score)) {
@@ -130,7 +111,7 @@ define([
     }
 
     $(".revert_all_scores").showIf($("#grades_summary .revert_score_link").length > 0);
-  }
+  };
 
 
   $(document).ready(function() {
@@ -168,23 +149,27 @@ define([
       $(this).closest('.rubric_assessments, .comments').hide();
     });
 
-    $('.student_assignment.editable .assignment_score').click(function(event) {
-      if ($('#grades_summary.editable').length === 0 || $(this).find('#grade_entry').length > 0 || $(event.target).closest('.revert_score_link').length > 0) {
-        return;
-      }
-      // Store the original score so that we can restore it after "What-If" calculations
-      if (!$(this).find('.grade').data('originalValue')){
-        $(this).find('.grade').data('originalValue', $(this).find('.grade').html());
-      }
-      var $screenreader_link_clone = $(this).find('.screenreader-only').clone(true);
-      $(this).find('.grade').data("screenreader_link", $screenreader_link_clone);
-      $(this).find('.grade').empty().append($("#grade_entry"));
-      $(this).find('.score_value').hide();
+    var editWhatifGrade = function(event) {
+      if (event.type === "click" || event.keyCode === 13) {
+        if ($('#grades_summary.editable').length === 0 || $(this).find('#grade_entry').length > 0 || $(event.target).closest('.revert_score_link').length > 0) {
+          return;
+        }
+        // Store the original score so that we can restore it after "What-If" calculations
+        if (!$(this).find('.grade').data('originalValue')){
+          $(this).find('.grade').data('originalValue', $(this).find('.grade').html());
+        }
+        var $screenreader_link_clone = $(this).find('.screenreader-only').clone(true);
+        $(this).find('.grade').data("screenreader_link", $screenreader_link_clone);
+        $(this).find('.grade').empty().append($("#grade_entry"));
+        $(this).find('.score_value').hide();
 
-      // Get the current shown score (possibly a "What-If" score) and use it as the default value in the text entry field
-      var val = $(this).parents('.student_assignment').find('.what_if_score').text();
-      $('#grade_entry').val(parseFloat(val) || '0').show().focus().select();
-    });
+        // Get the current shown score (possibly a "What-If" score) and use it as the default value in the text entry field
+        var val = $(this).parents('.student_assignment').find('.what_if_score').text();
+        $('#grade_entry').val(parseFloat(val) || '0').show().focus().select();
+      };
+    };
+
+    $('.student_assignment.editable .assignment_score').on("click keypress", editWhatifGrade);
 
     $("#grade_entry").keydown(function(event) {
       if(event.keyCode == 13) {
@@ -390,7 +375,7 @@ define([
   }
 
 
-  $(document).on('change', '#grading_periods_selector', function(e){
+  $(document).on('change', '.grading_periods_selector', function(e){
     var newGP = $(this).val();
     if (matches = location.href.match(/grading_period_id=\d*/)) {
       location.href = location.href.replace(matches[0], "grading_period_id=" + newGP);

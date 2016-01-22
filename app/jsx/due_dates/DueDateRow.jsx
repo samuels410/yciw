@@ -1,5 +1,3 @@
-/** @jsx React.DOM */
-
 define([
   'underscore',
   'react',
@@ -10,9 +8,6 @@ define([
   'jquery'
 ], (_ , React, DueDateTokenWrapper, DueDateCalendars, DueDateRemoveRowLink, I18n, $) => {
 
-  var DueDateTokenWrapper = React.createFactory(DueDateTokenWrapper)
-  var DueDateCalendars = React.createFactory(DueDateCalendars)
-  var DueDateRemoveRowLink = React.createFactory(DueDateRemoveRowLink)
 
   var DueDateRow = React.createClass({
 

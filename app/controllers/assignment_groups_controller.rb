@@ -91,9 +91,9 @@ class AssignmentGroupsController < ApplicationController
   # Returns the list of assignment groups for the current context. The returned
   # groups are sorted by their position field.
   #
-  # @argument include[] [String, "assignments"|"discussion_topic"|"all_dates"|"assignment_visibility"|"overrides"]
+  # @argument include[] [String, "assignments"|"discussion_topic"|"all_dates"|"assignment_visibility"|"overrides"|"submission"]
   #  Associations to include with the group. "discussion_topic", "all_dates"
-  #  "assignment_visibility" are only valid are only valid if "assignments" is also included.
+  #  "assignment_visibility" & "submission" are only valid are only valid if "assignments" is also included.
   #  The "assignment_visibility" option additionally requires that the Differentiated Assignments course feature be turned on.
   #
   # @argument override_assignment_dates [Boolean]
@@ -114,9 +114,13 @@ class AssignmentGroupsController < ApplicationController
         []
       end
 
+      if assignments.any? && include_params.include?('submission')
+        submissions = submissions_hash(['submission'], assignments)
+      end
+
       respond_to do |format|
         format.json do
-          render json: index_groups_json(@context, @current_user, groups, assignments)
+          render json: index_groups_json(@context, @current_user, groups, assignments, submissions)
         end
       end
     end
@@ -139,7 +143,7 @@ class AssignmentGroupsController < ApplicationController
       Assignment.where(:id => order, :context_id => @context, :context_type => @context.class.to_s).update_all(:assignment_group_id => @group)
       @group.assignments.first.update_order(order) unless @group.assignments.empty?
       groups = AssignmentGroup.where(:id => group_ids)
-      groups.update_all(:updated_at => Time.now.utc)
+      groups.touch_all
       groups.each{|assignment_group| AssignmentGroup.notify_observers(:assignments_changed, assignment_group)}
       ids = @group.active_assignments.map(&:id)
       @context.recompute_student_scores rescue nil
@@ -234,8 +238,24 @@ class AssignmentGroupsController < ApplicationController
     includes = [:context, :external_tool_tag, {:quiz => :context}]
     includes += [:rubric, :rubric_association] unless params[:exclude_rubrics]
     includes << :discussion_topic if include_params.include?("discussion_topic")
-    includes << :assignment_overrides if override_dates? || include_params.include?('all_dates') || include_params.include?('overrides')
+    includes << :assignment_overrides if include_overrides?
     includes
+  end
+
+  def filter_by_grading_period?
+    return false if all_grading_periods_selected?
+    params[:grading_period_id].present? && multiple_grading_periods?
+  end
+
+  def all_grading_periods_selected?
+    params[:grading_period_id] == '0'
+  end
+
+  def include_overrides?
+    override_dates? ||
+      include_params.include?('all_dates') ||
+      include_params.include?('overrides') ||
+      filter_by_grading_period?
   end
 
   def assignment_visibilities(course, assignments)
@@ -254,7 +274,7 @@ class AssignmentGroupsController < ApplicationController
     @context.feature_enabled?(:differentiated_assignments)
   end
 
-  def index_groups_json(context, current_user, groups, assignments)
+  def index_groups_json(context, current_user, groups, assignments, submissions = [])
     include_overrides = include_params.include?('overrides')
 
     assignments_by_group = assignments.group_by(&:assignment_group_id)
@@ -282,7 +302,8 @@ class AssignmentGroupsController < ApplicationController
           assignment_visibilities: assignment_visibilities(context, assignments),
           differentiated_assignments_enabled: differentiated_assignments?,
           exclude_descriptions: !!params[:exclude_descriptions],
-          overrides: group_overrides
+          overrides: group_overrides,
+          submissions: submissions
         }
       )
     end
@@ -305,48 +326,41 @@ class AssignmentGroupsController < ApplicationController
   end
 
   def visible_assignments(context, current_user, groups)
-    if include_params.include?('assignments')
-      # TODO: possible keyword arguments refactor
-      assignments = AssignmentGroup.visible_assignments(
-        current_user,
+    return Assignment.none unless include_params.include?('assignments')
+    # TODO: possible keyword arguments refactor
+    assignments = AssignmentGroup.visible_assignments(
+      current_user,
+      context,
+      groups,
+      assignment_includes
+    ).with_student_submission_count.all
+
+    if params[:grading_period_id].present? && multiple_grading_periods?
+      grading_period = GradingPeriod.context_find(
         context,
-        groups,
-        assignment_includes
-      ).with_student_submission_count
+        params.fetch(:grading_period_id)
+      )
 
-      if params[:grading_period_id].present? && multiple_grading_periods?
-        grading_period = GradingPeriod.context_find(
-          context,
-          params.fetch(:grading_period_id)
-        )
-
-        assignments = Assignment::FilterWithOverridesByDueAt.new(
-          assignments: assignments,
-          grading_period: grading_period,
-          differentiated_assignments: differentiated_assignments?
-        ).filter_assignments
-      end
-
-      # because of a bug with including content_tags, we are preloading
-      # here rather than in assignments with multiple associations
-      # referencing content_tags table and therefore aliased table names
-      # the conditions on has_many :context_module_tags will break
-      if include_params.include?("module_ids") || !context.grants_right?(@current_user, session, :read_as_admin)
-        # loading the context module information here will improve performance for `locked_json` immensely
-        Assignment.preload_context_module_tags(assignments)
-      end
-
-      if AssignmentOverrideApplicator.should_preload_override_students?(assignments, @current_user, "assignment_groups_api")
-        AssignmentOverrideApplicator.preload_assignment_override_students(assignments, @current_user)
-      end
-
-      if assignment_includes.include?(:assignment_overrides)
-        assignments.each { |a| a.has_no_overrides = true if a.assignment_overrides.size == 0 }
-      end
-
-      assignments
-    else
-      Assignment.none
+      assignments = grading_period.assignments(assignments) if grading_period
     end
+
+    # because of a bug with including content_tags, we are preloading
+    # here rather than in assignments with multiple associations
+    # referencing content_tags table and therefore aliased table names
+    # the conditions on has_many :context_module_tags will break
+    if include_params.include?("module_ids") || !context.grants_right?(@current_user, session, :read_as_admin)
+      # loading the context module information here will improve performance for `locked_json` immensely
+      Assignment.preload_context_module_tags(assignments)
+    end
+
+    if AssignmentOverrideApplicator.should_preload_override_students?(assignments, @current_user, "assignment_groups_api")
+      AssignmentOverrideApplicator.preload_assignment_override_students(assignments, @current_user)
+    end
+
+    if assignment_includes.include?(:assignment_overrides)
+      assignments.each { |a| a.has_no_overrides = true if a.assignment_overrides.size == 0 }
+    end
+
+    assignments
   end
 end

@@ -3,8 +3,9 @@ require File.expand_path(File.dirname(__FILE__) + '/../helpers/calendar2_common'
 
 describe "calendar2" do
   include_context "in-process server selenium tests"
+  include Calendar2Common
 
-  before (:each) do
+  before(:each) do
     Account.default.tap do |a|
       a.settings[:show_scheduler]   = true
       a.save!
@@ -12,7 +13,7 @@ describe "calendar2" do
   end
 
   context "as a teacher" do
-    before (:each) do
+    before(:each) do
       course_with_teacher_logged_in
     end
 
@@ -109,7 +110,7 @@ describe "calendar2" do
     it "should make an assignment undated if you delete the start date" do
       create_middle_day_assignment("undate me")
       keep_trying_until do
-        fj('.fc-event-inner').click()
+        fj('.fc-event').click()
         driver.execute_script("$('.popover-links-holder .edit_event_link').hover().click()")
         f('.ui-dialog #assignment_due_at').displayed?
       end
@@ -202,9 +203,9 @@ describe "calendar2" do
       current_month = Date::MONTHNAMES[current_month_num]
 
       change_calendar
-      expect(get_header_text).not_to eq current_month
+      expect(header_text).not_to eq current_month
       change_calendar(:today)
-      expect(get_header_text).to eq(current_month + ' ' + Time.now.year.to_s)
+      expect(header_text).to eq(current_month + ' ' + Time.zone.now.year.to_s)
     end
 
     it "should allow viewing an unenrolled calendar via include_contexts" do
@@ -225,16 +226,6 @@ describe "calendar2" do
         expect(f("#context-list li[data-context=course_#{@course.id}]")).to have_class('not-checked')
         expect(f("#context-list li[data-context=user_#{@user.id}]")).to have_class('not-checked')
       end
-    end
-
-    it "tooltip is correct for creating new event", priority: "1", test_id: 138852 do
-     load_month_view
-
-      driver.mouse.move_to f("#create_new_event_link")
-      wait_for_animations
-      tooltip = fj('.ui-tooltip:visible')
-      tooltip = fj('.ui-tooltip:visible')
-      expect(tooltip).to include_text 'Create New Event'
     end
 
     it "graded discussion appears on all calendars", priority: "1", test_id: 138851 do

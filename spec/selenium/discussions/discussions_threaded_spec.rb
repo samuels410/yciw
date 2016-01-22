@@ -2,6 +2,7 @@ require File.expand_path(File.dirname(__FILE__) + '/../helpers/discussions_commo
 
 describe "threaded discussions" do
   include_context "in-process server selenium tests"
+  include DiscussionsCommon
 
   before(:each) do
     @topic_title = 'threaded discussion topic'
@@ -59,6 +60,28 @@ describe "threaded discussions" do
     get "/courses/#{@course.id}/discussion_topics/#{@topic.id}"
     edit_entry(entry, edit_text)
     expect(entry.reload.message).to match(edit_text)
+  end
+
+  it "should not allow edits for a concluded student", priority: "2", test_id: 222526 do
+    student_enrollment = course_with_student(:course => @course, :user => @student, :active_enrollment => true)
+    entry = @topic.discussion_entries.create!(user: @student,
+                                              message: 'new threaded reply from student')
+    user_session(@student)
+    get "/courses/#{@course.id}/discussion_topics/#{@topic.id}"
+    student_enrollment.send("conclude")
+    get "/courses/#{@course.id}/discussion_topics/#{@topic.id}"
+    check_edit_entry(entry)
+  end
+
+  it "should not allow deletes for a concluded student", priority: "2", test_id: 222526 do
+    student_enrollment = course_with_student(:course => @course, :user => @student, :active_enrollment => true)
+    entry = @topic.discussion_entries.create!(user: @student,
+                                              message: 'new threaded reply from student')
+    user_session(@student)
+    get "/courses/#{@course.id}/discussion_topics/#{@topic.id}"
+    student_enrollment.send("conclude")
+    get "/courses/#{@course.id}/discussion_topics/#{@topic.id}"
+    check_delete_entry(entry)
   end
 
   it "should allow edits to discussion with replies", priority: "1", test_id: 150513 do

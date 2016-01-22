@@ -29,6 +29,13 @@ describe ContextModule do
       course_module
       expect(@module.available_for?(nil)).to eql(true)
     end
+
+    it "returns true by default when require_sequential_progress is true and there are no requirements" do
+      course_module
+      @module.require_sequential_progress = true
+      @module.save!
+      expect(@module.available_for?(nil)).to eql(true)
+    end
   end
 
   describe "prerequisites=" do
@@ -354,6 +361,7 @@ describe ContextModule do
       @user = User.create!(:name => "some name")
       @course.enroll_student(@user)
 
+      Canvas::Plugin.find!('grade_export').stubs(:enabled?).returns(true)
       @course.expects(:publish_final_grades).with(@user, @user.id).once
 
       @module.evaluate_for(@user)
@@ -673,6 +681,11 @@ describe ContextModule do
 
         @assign.reload
         @assign.grade_student(@student, :grade => "5", :grader => @teacher)
+        expect(@module.evaluate_for(@student)).to be_unlocked
+
+        @assign.reload
+        @assign.grade_student(@student, :grade => nil, :grader => @teacher)
+        # removing the grade manually shouldn't mark as completed either
         expect(@module.evaluate_for(@student)).to be_unlocked
       end
 

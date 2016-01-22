@@ -24,7 +24,7 @@ class ContextModule < ActiveRecord::Base
   belongs_to :context, :polymorphic => true
   validates_inclusion_of :context_type, :allow_nil => true, :in => ['Course']
   has_many :context_module_progressions, :dependent => :destroy
-  has_many :content_tags, :dependent => :destroy, :order => 'content_tags.position, content_tags.title'
+  has_many :content_tags, -> { order('content_tags.position, content_tags.title') }, dependent: :destroy
   acts_as_list scope: { context: self, workflow_state: ['active', 'unpublished'] }
 
   EXPORTABLE_ATTRIBUTES = [
@@ -237,7 +237,8 @@ class ContextModule < ActiveRecord::Base
   end
 
   def available_for?(user, opts={})
-    return true if self.active? && !self.to_be_unlocked && self.prerequisites.blank? && !self.require_sequential_progress
+    return true if self.active? && !self.to_be_unlocked && self.prerequisites.blank? &&
+      (self.completion_requirements.empty? || !self.require_sequential_progress)
     if self.grants_right?(user, :read_as_admin)
       return true
     elsif !self.active?
@@ -528,8 +529,8 @@ class ContextModule < ActiveRecord::Base
   def update_for(user, action, tag, points=nil)
     retry_count = 0
     return nil unless self.context.users.include?(user)
-    return nil unless ContextModuleProgression.prerequisites_satisfied?(user, self)
-    return nil unless progression = self.find_or_create_progression(user)
+    return nil unless progression = self.evaluate_for(user)
+    return nil if progression.locked?
 
     progression.update_requirement_met!(action, tag, points)
     progression
@@ -674,7 +675,7 @@ class ContextModule < ActiveRecord::Base
 
   def completion_event_callbacks
     callbacks = []
-    if publish_final_grade?
+    if publish_final_grade? && (plugin = Canvas::Plugin.find('grade_export')) && plugin.enabled?
       callbacks << lambda { |user| context.publish_final_grades(user, user.id) }
     end
     callbacks

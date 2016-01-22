@@ -205,12 +205,12 @@ define [
 
       results
 
-    search: (regex) ->
+    search: (regex, gradingPeriod) ->
       @resetBorders()
 
       atleastone = false
       @collection.each (as) =>
-        atleastone = true if as.search(regex)
+        atleastone = true if as.search(regex, gradingPeriod)
       if atleastone
         @show()
         @expand(false)
@@ -281,7 +281,6 @@ define [
 
     showAccessibilityWarning: (ev) =>
       @$accessibilityWarning.removeClass('screenreader-only')
-      @$accessibilityWarning.focus()
 
     hideAccessibilityWarning: (ev) =>
       @$accessibilityWarning.addClass('screenreader-only')

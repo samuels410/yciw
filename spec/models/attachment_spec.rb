@@ -164,6 +164,12 @@ describe Attachment do
       Canvadocs::API.any_instance.stubs(:upload).returns "id" => 1234
     end
 
+    it "should treat text files equally" do
+      a = attachment_model(:content_type => 'text/x-ruby-script')
+      Canvadoc.stubs(:mime_types).returns(['text/plain'])
+      expect(a.canvadocable?).to be_truthy
+    end
+
     describe "submit_to_canvadocs" do
       it "submits canvadocable documents" do
         a = canvadocable_attachment_model
@@ -486,6 +492,13 @@ describe Attachment do
       expect(a.filename.length).to eql(252)
       expect(a.unencoded_filename).to be_valid_encoding
       expect(a.unencoded_filename).to eql("\u2603" * 28)
+    end
+
+    it "should truncate thumbnail names" do
+      a = attachment_model(:filename => "#{"a" * 251}.png")
+      thumbname = a.thumbnail_name_for("thumb")
+      expect(thumbname.length).to eq 255
+      expect(thumbname).to eq "#{"a" * 245}_thumb.png"
     end
 
     it "should not double-escape a root attachment's filename" do
@@ -1240,6 +1253,21 @@ describe Attachment do
       quota = Attachment.get_quota(@course)
       expect(quota[:quota_used]).to eq Attachment.minimum_size_for_quota
     end
+
+    it "should not count attachments a student has used for submissions towards the quota" do
+      course_with_student(:active_all => true)
+      attachment_model(:context => @user, :uploaded_data => stub_png_data, :filename => "homework.png")
+      @attachment.update_attribute(:size, 1.megabyte)
+
+      @assignment = @course.assignments.create!
+      sub = @assignment.submit_homework(@user, attachments: [@attachment])
+
+      attachment_model(:context => @user, :uploaded_data => stub_png_data, :filename => "otherfile.png")
+      @attachment.update_attribute(:size, 1.megabyte)
+
+      quota = Attachment.get_quota(@user)
+      expect(quota[:quota_used]).to eq 1.megabyte
+    end
   end
 
   context "#open" do
@@ -1440,5 +1468,42 @@ describe Attachment do
     mod = @course.context_modules.create!(:name => "some module")
     tag1 = mod.add_item(:id => att.id, :type => 'attachment')
     expect(tag1).not_to be_nil
+  end
+
+  it "should unlock files at the right time even if they're accessed shortly before" do
+    enable_cache do
+      course_with_student :active_all => true
+      attachment_model uploaded_data: default_uploaded_data, unlock_at: 30.seconds.from_now
+      expect(@attachment.grants_right?(@student, :download)).to eq false # prime cache
+      Timecop.freeze(@attachment.unlock_at + 1.second) do
+        run_jobs
+        expect(Attachment.find(@attachment).grants_right?(@student, :download)).to eq true
+      end
+    end
+  end
+
+  describe 'local storage' do
+    it 'should properly sanitie a filename containing a slash' do
+      local_storage!
+      course
+      a = attachment_model(filename: 'ENGL_100_/_ENGL_200.csv')
+      expect(a.filename).to eql('ENGL_100___ENGL_200.csv')
+    end
+
+    it 'should still properly escape the same filename on s3' do
+      s3_storage!
+      course
+      a = attachment_model(filename: 'ENGL_100_/_ENGL_200.csv')
+      expect(a.filename).to eql('ENGL_100_%2F_ENGL_200.csv')
+    end
+  end
+
+  describe "preview_params" do
+    it "includes crocodoc_ids only when a whitelist is given" do
+      course :active_all => true
+      att = attachment_model
+      expect(att.send :preview_params, @teacher, 'document/msword').not_to include 'crocodoc_ids'
+      expect(att.send :preview_params, @teacher, 'document/msword', [1]).to include 'crocodoc_ids'
+    end
   end
 end

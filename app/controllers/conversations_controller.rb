@@ -248,6 +248,7 @@ class ConversationsController < ApplicationController
       hash = {
         :ATTACHMENTS_FOLDER_ID => @current_user.conversation_attachments_folder.id,
         :ACCOUNT_CONTEXT_CODE => "account_#{@domain_root_account.id}",
+        :CAN_MESSAGE_ACCOUNT_CONTEXT => valid_account_context?(@domain_root_account),
         :MAX_GROUP_CONVERSATION_SIZE => Conversation.max_group_conversation_size
       }
 
@@ -633,7 +634,7 @@ class ConversationsController < ApplicationController
   #       -X DELETE \
   #       -H 'Authorization: Bearer <token>'
   def delete_for_all
-    return unless authorized_action(Account.site_admin, @current_user, :become_user)
+    return unless authorized_action(Account.site_admin, @current_user, :manage_students)
 
     Conversation.find(params[:id]).delete_for_all
 
@@ -996,17 +997,33 @@ class ConversationsController < ApplicationController
   end
 
   def normalize_recipients
-    if params[:recipients]
-      recipient_ids = params[:recipients]
-      if recipient_ids.is_a?(String)
-        params[:recipients] = recipient_ids = recipient_ids.split(/,/)
-      end
-      @recipients = @current_user.load_messageable_users(MessageableUser.individual_recipients(recipient_ids), :conversation_id => params[:from_conversation_id])
-      MessageableUser.context_recipients(recipient_ids).map do |context|
-        @recipients.concat @current_user.messageable_users_in_context(context)
-      end
-      @recipients = @recipients.uniq(&:id)
+    return unless params[:recipients]
+    unless params[:recipients].is_a? Array
+      params[:recipients] = params[:recipients].split ","
     end
+
+    recipient_ids = MessageableUser.individual_recipients(params[:recipients])
+    contexts      = MessageableUser.context_recipients(params[:recipients])
+
+    if params[:context_code] =~ MessageableUser::Calculator::CONTEXT_RECIPIENT
+      is_admin = Context.
+        find_by_asset_string(params[:context_code]).
+        grants_right?(@current_user, :read_as_admin)
+      @recipients = @current_user.
+        messageable_user_calculator.
+        messageable_users_in_context(
+          params[:context_code],
+          admin_context: is_admin
+        ).select { |user| recipient_ids.include? user.id }
+    else
+      @recipients = @current_user.load_messageable_users(recipient_ids, conversation_id: params[:from_conversation_id])
+    end
+
+    contexts.map do |context|
+      @recipients.concat @current_user.messageable_users_in_context(context)
+    end
+
+    @recipients.uniq!(&:id)
   end
 
   def infer_tags

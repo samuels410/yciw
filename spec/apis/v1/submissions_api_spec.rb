@@ -567,17 +567,15 @@ describe 'Submissions API', type: :request do
   end
 
   it "should return a valid preview url for quiz submissions" do
-    student1 = user(:active_all => true)
+    @student = student1 = user(:active_all => true)
     course_with_teacher_logged_in(:active_all => true) # need to be logged in to view the preview url below
     @course.enroll_student(student1).accept!
-    quiz = Quizzes::Quiz.create!(:title => 'quiz1', :context => @course)
-    quiz.did_edit!
-    quiz.offer!
-    a1 = quiz.assignment
-    sub = a1.find_or_create_submission(student1)
-    sub.submission_type = 'online_quiz'
-    sub.workflow_state = 'submitted'
-    sub.save!
+    quiz_with_submission
+    a1 = @quiz.assignment
+    sub = @quiz.assignment.submissions.where(user_id: student1).first
+    sub.quiz_submission.with_versioning(true) do
+      sub.quiz_submission.update_attribute(:finished_at, 1.hour.ago)
+    end
 
     json = api_call(:get,
           "/api/v1/courses/#{@course.id}/assignments/#{a1.id}/submissions.json",
@@ -586,9 +584,36 @@ describe 'Submissions API', type: :request do
             :assignment_id => a1.id.to_s },
           { :include => %w(submission_history submission_comments rubric_assessment) })
 
-    get_via_redirect json.first['preview_url']
+    preview_url = json.first['preview_url']
+    expect(Rack::Utils.parse_query(URI(preview_url).query)['version'].to_i).to eq sub.quiz_submission_version
+    get_via_redirect preview_url
     expect(response).to be_success
-    expect(response.body).to match(/Redirecting to quiz page/)
+    expect(response.body).to match(/#{@quiz.quiz_title} Results/)
+  end
+
+  it "should return a correct submission_history for quiz submissions" do
+    student1 = user(:active_all => true)
+    course_with_teacher_logged_in(:active_all => true) # need to be logged in to view the preview url below
+    @course.enroll_student(student1).accept!
+    quiz = Quizzes::Quiz.create!(:title => 'quiz1', :context => @course)
+    quiz.did_edit!
+    quiz.offer!
+    qs = quiz.generate_submission(student1)
+    qs.mark_completed
+    Quizzes::SubmissionGrader.new(qs).grade_submission
+    qs.reload
+    qs.attempt = 2
+    qs.with_versioning(true, &:save)
+
+    json = api_call(:get,
+          "/api/v1/courses/#{@course.id}/assignments/#{quiz.assignment.id}/submissions.json",
+          { :controller => 'submissions_api', :action => 'index',
+            :format => 'json', :course_id => @course.id.to_s,
+            :assignment_id => quiz.assignment.id.to_s },
+          { :include => %w(submission_history) })
+
+    expect(json.first['submission_history'].count).to eq 2
+    expect(json.first['submission_history'].first.include? "submission_data").to be_truthy
   end
 
   it "should allow students to retrieve their own submission" do
@@ -1848,8 +1873,8 @@ describe 'Submissions API', type: :request do
     context "observers" do
       before :once do
         @observer = user :active_all => true
-        @course.enroll_user(@observer, 'ObserverEnrollment', :associated_user_id => @student1.id).accept!
-        @course.enroll_user(@observer, 'ObserverEnrollment', :allow_multiple_enrollments => true, :associated_user_id => @student2.id).accept!
+        @course.enroll_user(@observer, 'ObserverEnrollment', :associated_user_id => @student1.id)
+        @course.enroll_user(@observer, 'ObserverEnrollment', :allow_multiple_enrollments => true, :associated_user_id => @student2.id)
       end
 
       it "should allow an observer to view observed students' submissions" do
@@ -2955,7 +2980,7 @@ describe 'Submissions API', type: :request do
   end
 
   it "includes preview urls for attachments" do
-    Canvadocs.stubs(:enabled?).returns(true)
+    Canvadocs.stubs(:config).returns({a: 1})
 
     course_with_teacher_logged_in active_all: true
     student_in_course active_all: true
@@ -3148,7 +3173,7 @@ describe 'Submissions API', type: :request do
 
       grade_data = {
         :grade_data => {
-          @student1.id => { :posted_grade => '75%'},
+          @student1.id => { :posted_grade => '75%' },
           @student2.id => {
             :rubric_assessment => {
               :crit1 => { :points => 7 },
@@ -3236,95 +3261,43 @@ describe 'Submissions API', type: :request do
       expect(progress.failed?).to be_truthy
       expect(progress.message).to eq "Couldn't find User(s) with API ids '#{@student2.id}'"
     end
-  end
 
-  describe "publish_provisional_grades" do
-    before :once do
-      course_with_student :active_all => true
-      course_with_ta :course => @course, :active_all => true
-      @course.root_account.allow_feature! :moderated_grading
-      @assignment = @course.assignments.create!
-      @path = "/api/v1/courses/#{@course.id}/assignments/#{@assignment.id}/publish_provisional_grades"
-      @params = { :controller => 'submissions_api', :action => 'publish_provisional_grades',
-                  :format => 'json', :course_id => @course.to_param, :assignment_id => @assignment.to_param }
+    it "should maintain grade when updating comments" do
+      @a1.grade_student(@student1, :grade => '5%')
+
+      grade_data = {
+        :grade_data => {
+          @student1.id => { :text_comment => "Awesome comment" }
+        }
+      }
+      api_call(:post,
+        "/api/v1/sections/#{@section.id}/assignments/#{@a1.id}/submissions/update_grades",
+        { :controller => 'submissions_api', :action => 'bulk_update',
+          :format => 'json', :section_id => @section.id.to_s,
+          :assignment_id => @a1.id.to_s }, grade_data)
+
+      run_jobs
+      s1 = @student1.submissions.first
+      expect(s1.grade).to eq '5%'
     end
 
-    it "requires moderated grading" do
-      @assignment.update_attribute :moderated_grading, true
-      json = api_call_as_user(@teacher, :post, @path, @params, {}, {}, { :expected_status => 400 })
-      expect(json['message']).to eq 'Assignment does not use moderated grading'
-    end
+    it "should nil grade when receiving empty posted_grade" do
+      @a1.grade_student(@student1, :grade => '5%')
 
-    it "requires a moderated assignment" do
-      @course.enable_feature! :moderated_grading
-      json = api_call_as_user(@teacher, :post, @path, @params, {}, {}, { :expected_status => 400 })
-      expect(json['message']).to eq 'Assignment does not use moderated grading'
-    end
+      grade_data = {
+        :grade_data => {
+          @student1.id => { :posted_grade => nil }
+        }
+      }
+      api_call(:post,
+        "/api/v1/sections/#{@section.id}/assignments/#{@a1.id}/submissions/update_grades",
+        { :controller => 'submissions_api', :action => 'bulk_update',
+          :format => 'json', :section_id => @section.id.to_s,
+          :assignment_id => @a1.id.to_s }, grade_data)
 
-    context "with moderated assignment" do
-      before(:once) do
-        @course.enable_feature! :moderated_grading
-        @assignment.update_attribute :moderated_grading, true
-      end
-
-      it "requires moderate_grades permissions" do
-        api_call_as_user(@ta, :post, @path, @params, {}, {}, { :expected_status => 401 })
-      end
-
-      it "fails if grades were already published" do
-        @assignment.update_attribute :grades_published_at, Time.now.utc
-        json = api_call_as_user(@teacher, :post, @path, @params, {}, {}, { :expected_status => 400 })
-        expect(json['message']).to eq 'Assignment grades have already been published'
-      end
-
-      context "with provisional grades" do
-        before(:once) do
-          @submission = @assignment.submit_homework(@student, :body => "hello")
-          @assignment.grade_student(@student, { :grader => @ta, :score => 100, :provisional => true })
-        end
-
-        it "publishes provisional grades" do
-          @student.communication_channels.create(:path => 'student@example.edu', :path_type => 'email').confirm
-          n = Notification.create!(:name => 'Submission Graded', :category => 'TestImmediately')
-          NotificationPolicy.create!(:notification => n,
-                                     :communication_channel => @student.communication_channel,
-                                     :frequency => 'immediately')
-
-          expect(@submission.workflow_state).to eq 'submitted'
-          expect(@submission.score).to be_nil
-          expect(@student.messages).to be_empty
-
-          api_call_as_user(@teacher, :post, @path, @params)
-
-          expect(@submission.reload.workflow_state).to eq 'graded'
-          expect(@submission.grader).to eq @ta
-          expect(@submission.score).to eq 100
-
-          @assignment.reload
-          expect(@assignment.grades_published_at).to be_within(1.minute).of(Time.now.utc)
-
-          @student.reload
-          expect(@student.messages.map(&:notification_name)).to be_include 'Submission Graded'
-        end
-
-        it "publishes the selected provisional grade when the student is in the moderation set" do
-          @submission.provisional_grade(@ta).update_attribute(:graded_at, 1.minute.ago)
-
-          @other_ta = user :active_user => true
-          @course.enroll_ta @other_ta, :enrollment_state => 'active'
-          @assignment.grade_student(@student, { :grader => @other_ta, :score => 90, :provisional => true })
-          sel = @assignment.moderated_grading_selections.build
-          sel.student_id = @student.id
-          sel.selected_provisional_grade_id = @submission.provisional_grade(@other_ta).id
-          sel.save!
-
-          api_call_as_user(@teacher, :post, @path, @params)
-
-          expect(@submission.reload.workflow_state).to eq 'graded'
-          expect(@submission.grader).to eq @other_ta
-          expect(@submission.score).to eq 90
-        end
-      end
+      run_jobs
+      s1 = @student1.submissions.first
+      expect(s1.grade).to be_nil
     end
   end
 
@@ -3395,7 +3368,8 @@ describe 'Submissions API', type: :request do
                 "scorer_id"=>@ta.id,
                 "provisional_grade_id"=>pg.id,
                 "grade_matches_current_submission"=>true,
-                "final"=>false}]},
+                "final"=>false,
+                "speedgrader_url"=>"http://www.example.com/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}#%7B%22student_id%22:#{@student1.id},%22provisional_grade_id%22:#{pg.id}%7D"}]},
            {"id"=>@student2.id,
             "display_name"=>"User",
             "avatar_image_url"=>"https://localhost/images/messages/avatar-50.png",
@@ -3407,48 +3381,56 @@ describe 'Submissions API', type: :request do
       end
     end
   end
-
-  describe "select_provisional_grade" do
-    before(:once) do
-      course_with_student :active_all => true
-      ta_in_course :active_all => true
-      @course.root_account.allow_feature! :moderated_grading
-      @course.enable_feature! :moderated_grading
-      @assignment = @course.assignments.build
-      @assignment.moderated_grading = true
-      @assignment.save!
-      subs = @assignment.grade_student @student, :grader => @ta, :score => 0, :provisional => true
-      @pg = subs.first.provisional_grade(@ta)
-      @path = "/api/v1/courses/#{@course.id}/assignments/#{@assignment.id}/select_provisional_grade/#{@pg.id}"
-      @params = { :controller => 'submissions_api', :action => 'select_provisional_grade',
-                  :format => 'json', :course_id => @course.to_param, :assignment_id => @assignment.to_param,
-                  :provisional_grade_id => @pg.to_param }
-    end
-
-    it "should fail if the student isn't in the moderation set" do
-      json = api_call_as_user(@teacher, :put, @path, @params, {}, {}, { :expected_status => 400 })
-      expect(json['message']).to eq 'student not in moderation set'
-    end
-
-    context "with moderation set" do
-      before(:once) do
-        @selection = @assignment.moderated_grading_selections.build
-        @selection.student_id = @student.id
-        @selection.save!
+  describe '#index' do
+    context 'grouped_submissions' do
+      let(:test_course) { course() }
+      let(:teacher)   { user(active_all: true) }
+      let(:student1)  { user(active_all: true) }
+      let(:student2)  { user(active_all: true) }
+      let(:group) do
+        group_category = test_course.group_categories.create(name: 'Engineering')
+        test_course.groups.create(name: 'Group1', group_category: group_category)
+      end
+      let(:assignment) do
+        test_course.assignments.create!(
+          title: 'group assignment',
+          grading_type: 'points',
+          points_possible: 10,
+          submission_types: 'online_text_entry',
+          group_category: group.group_category
+        )
       end
 
-      it "should require :moderate_grades" do
-        api_call_as_user(@ta, :put, @path, @params, {}, {}, { :expected_status => 401 })
+      let!(:enroll_teacher_and_students) do
+        test_course.enroll_teacher(teacher).accept!
+        test_course.enroll_student(student1, enrollment_state: 'active')
+        test_course.enroll_student(student2, enrollment_state: 'active')
+      end
+      let!(:add_students_to_group) do
+        group.add_user(student1)
+        group.add_user(student2)
+      end
+      let!(:submit_homework) { assignment.submit_homework(student1) }
+
+      let(:path) { "/api/v1/courses/#{test_course.id}/assignments/#{assignment.id}/submissions" }
+      let(:params) do
+        {
+          controller: 'submissions_api', action: 'index',
+          format: 'json', course_id: test_course.id.to_s,
+          assignment_id: assignment.id.to_s
+        }
       end
 
-      it "should select a provisional grade" do
-        json = api_call_as_user(@teacher, :put, @path, @params)
-        expect(json).to eq({
-                             'assignment_id' => @assignment.id,
-                             'student_id' => @student.id,
-                             'selected_provisional_grade_id' => @pg.id
-                           })
-        expect(@selection.reload.provisional_grade).to eq(@pg)
+      it 'should return two assignment and submission objects for a user group' do
+        params[:grouped] = false
+        json = api_call_as_user(teacher, :get, path, params)
+        expect(json.size).to eq 2
+      end
+
+      it 'should return a single assignment and submission object per user group' do
+        params[:grouped] = true
+        json = api_call_as_user(teacher, :get, path, params)
+        expect(json.size).to eq 1
       end
     end
   end

@@ -1,6 +1,7 @@
 class BrandConfigsController < ApplicationController
 
   include Api::V1::Progress
+  include Api::V1::Account
 
   before_filter :require_account_context
   before_filter :require_user
@@ -12,6 +13,7 @@ class BrandConfigsController < ApplicationController
     css_bundle :common, :theme_editor
     js_bundle :theme_editor
     brand_config = active_brand_config(ignore_parents: true) || BrandConfig.new
+
     js_env brandConfig: brand_config.as_json(include_root: false),
            hasUnsavedChanges: session.key?(:brand_config_md5),
            variableSchema: default_schema,
@@ -19,6 +21,10 @@ class BrandConfigsController < ApplicationController
            allowGlobalIncludes: @account.allow_global_includes?,
            account_id: @account.id
     render text: '', layout: 'layouts/bare'
+  end
+
+  def show
+    # this is the controller action for the preview in the theme editor
   end
 
   def default_schema
@@ -39,7 +45,14 @@ class BrandConfigsController < ApplicationController
   def duped_brandable_vars
     BrandableCSS::BRANDABLE_VARIABLES.map do |group|
       new_group = group.deep_dup
+      new_group["group_name"] =  BrandableCSS::GROUP_NAMES[new_group['group_key']].call
       new_group["variables"] = new_group["variables"].map(&:deep_dup)
+      new_group["variables"].each do |v|
+        v["human_name"] = BrandableCSS::VARIABLE_HUMAN_NAMES[v['variable_name']].call
+        if helper_text_proc = BrandableCSS::HELPER_TEXTS[v['variable_name']]
+          v["helper_text"] = helper_text_proc.call
+        end
+      end
       new_group
     end
   end
@@ -112,11 +125,13 @@ class BrandConfigsController < ApplicationController
     @account.brand_config = new_brand_config
     @account.save!
 
-    @account.recompile_descendant_brand_configs(@current_user)
+    sub_account_progresses = @account.recompile_descendant_brand_configs(@current_user)
 
     BrandConfig.destroy_if_unused(old_md5)
 
-    redirect_to account_path(@account), notice: t('Success! All users on this domain will now see this branding.')
+    render json: {
+      subAccountProgresses: sub_account_progresses.map{|p| progress_json(p, @current_user, session)}
+    }
   end
 
   # When you close the theme editor, it will send a DELETE to this action to

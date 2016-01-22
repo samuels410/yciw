@@ -60,6 +60,7 @@ class WikiPagesController < ApplicationController
     return unless authorized_action(@context.wiki, @current_user, :read) && tab_enabled?(@context.class::TAB_PAGES)
 
     if @page && !@page.new_record?
+      wiki_page_jsenv(@context)
       @padless = true
       render template: 'wiki_pages/show'
     else
@@ -95,9 +96,7 @@ class WikiPagesController < ApplicationController
     if authorized_action(@page, @current_user, :read)
       add_crumb(@page.title)
       log_asset_access(@page, 'wiki', @wiki)
-
-      js_env :wiki_page_menu_tools => external_tools_display_hashes(:wiki_page_menu)
-
+      wiki_page_jsenv(@context)
       @mark_done = MarkDonePresenter.new(self, @context, params["module_item_id"], @current_user)
       @padless = true
     end
@@ -135,6 +134,12 @@ class WikiPagesController < ApplicationController
   end
 
   def revisions_redirect
-    redirect_to polymorphic_url([@context, @page, :revisions]), status: :moved_permanently 
+    redirect_to polymorphic_url([@context, @page, :revisions]), status: :moved_permanently
+  end
+
+  private
+  def wiki_page_jsenv(context)
+    js_env :wiki_page_menu_tools => external_tools_display_hashes(:wiki_page_menu)
+    js_env :DISPLAY_SHOW_ALL_LINK => tab_enabled?(context.class::TAB_PAGES, {no_render: true})
   end
 end

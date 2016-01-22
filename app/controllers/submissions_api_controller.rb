@@ -152,8 +152,11 @@ class SubmissionsApiController < ApplicationController
   #
   # Get all existing submissions for an assignment.
   #
-  # @argument include[] [String, "submission_history"|"submission_comments"|"rubric_assessment"|"assignment"|"visibility"]
+  # @argument include[] [String, "submission_history"|"submission_comments"|"rubric_assessment"|"assignment"|"visibility"|"course"|"user"]
   #   Associations to include with the group.
+  #
+  # @argument grouped [Boolean]
+  #   If this argument is true, the response will be grouped by student groups.
   #
   # @response_field assignment_id The unique identifier for the assignment.
   # @response_field user_id The id of the user who submitted the assignment.
@@ -173,8 +176,15 @@ class SubmissionsApiController < ApplicationController
   def index
     if authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
       @assignment = @context.assignments.active.find(params[:assignment_id])
-      submissions = @assignment.submissions.where(:user_id => visible_user_ids)
+      visible_student_ids = @context.apply_enrollment_visibility(@context.student_enrollments, @current_user, section_ids).pluck(:user_id)
+      submissions = @assignment.submissions.where(:user_id => visible_student_ids)
       includes = Array.wrap(params[:include])
+
+      # this provides one assignment object(and submission object within), per user group
+      if value_to_boolean(params[:grouped])
+        user_groups_ids = @assignment.representatives(@current_user).map(&:id)
+        submissions = @assignment.submissions.where(user_id: user_groups_ids)
+      end
 
       if includes.include?("visibility") && @context.feature_enabled?(:differentiated_assignments)
         json = bulk_process_submissions_for_visibility(submissions, includes)
@@ -215,7 +225,7 @@ class SubmissionsApiController < ApplicationController
   #   The id of the grading period in which submissions are being requested
   #   (Requires the Multiple Grading Periods account feature turned on)
   #
-  # @argument include[] [String, "submission_history"|"submission_comments"|"rubric_assessment"|"assignment"|"total_scores"|"visibility"]
+  # @argument include[] [String, "submission_history"|"submission_comments"|"rubric_assessment"|"assignment"|"total_scores"|"visibility"|"course"|"user"]
   #   Associations to include with the group. `total_scores` requires the
   #   `grouped` argument.
   #
@@ -247,14 +257,11 @@ class SubmissionsApiController < ApplicationController
 
     can_view_all = @context.grants_any_right?(@current_user, session, :manage_grades, :view_all_grades)
     if all && can_view_all
-      opts = { include_priors: true }
-      if @section
-        opts[:section_ids] = [@section.id]
-      end
       # this is a scope, and will generate subqueries
-      student_ids = @context.enrollments_visible_to(@current_user, opts).select(:user_id)
+      student_ids = @context.apply_enrollment_visibility(@context.all_student_enrollments, @current_user, section_ids).select(:user_id)
     elsif can_view_all
-      inaccessible_students = student_ids - visible_user_ids(:include_priors => true)
+      visible_student_ids = @context.apply_enrollment_visibility(@context.all_student_enrollments, @current_user, section_ids).pluck(:user_id)
+      inaccessible_students = student_ids - visible_student_ids
       if !inaccessible_students.empty?
         return render_unauthorized_action
       end
@@ -404,7 +411,7 @@ class SubmissionsApiController < ApplicationController
   #
   # Get a single submission, based on user id.
   #
-  # @argument include[] [String, "submission_history"|"submission_comments"|"rubric_assessment"|"visibility"]
+  # @argument include[] [String, "submission_history"|"submission_comments"|"rubric_assessment"|"visibility"|"course"|"user"]
   #   Associations to include with the group.
   def show
     @assignment = @context.assignments.active.find(params[:assignment_id])
@@ -589,6 +596,7 @@ class SubmissionsApiController < ApplicationController
         submission[:grade] = params[:submission].delete(:posted_grade)
         submission[:excuse] = params[:submission].delete(:excuse)
         submission[:provisional] = value_to_boolean(params[:submission][:provisional])
+        submission[:final] = value_to_boolean(params[:submission][:final]) && @context.grants_right?(@current_user, :moderate_grades)
       end
       if submission[:grade] || submission[:excuse]
         @submissions = @assignment.grade_student(@user, submission)
@@ -665,57 +673,6 @@ class SubmissionsApiController < ApplicationController
     end
   end
 
-  # undocumented @API Publish provisional grades for an assignment
-  #
-  # Publish the selected provisional grade for all submissions to an assignment.
-  # Use the "Select provisional grade" endpoint to choose which provisional grade to publish
-  # for a particular submission.
-  #
-  # Students not in the moderation set will have their one and only provisional grade published.
-  #
-  # WARNING: This is irreversible. This will overwrite any existing grades in the gradebook.
-  #
-  # @example_request
-  #
-  #   curl 'https://<canvas>/api/v1/courses/1/assignments/2/publish_provisional_grades' \
-  #        -X POST
-  #
-  def publish_provisional_grades
-    if authorized_action(@context, @current_user, :moderate_grades)
-      @assignment = @context.assignments.active.find(params[:assignment_id])
-      unless @context.feature_enabled?(:moderated_grading) && @assignment.moderated_grading?
-        return render :json => { :message => "Assignment does not use moderated grading" }, :status => :bad_request
-      end
-      if @assignment.grades_published?
-        return render :json => { :message => "Assignment grades have already been published" }, :status => :bad_request
-      end
-
-      submissions = @assignment.submissions.preload(:all_submission_comments,
-                                                     { :provisional_grades => :rubric_assessments })
-      selections = @assignment.moderated_grading_selections.index_by(&:student_id)
-      submissions.each do |submission|
-        if (selection = selections[submission.user_id])
-          # student in moderation: choose the selected provisional grade
-          selected_provisional_grade = submission.provisional_grades
-            .detect { |pg| pg.id == selection.selected_provisional_grade_id }
-        else
-          # student not in moderation: choose the first one with a grade (there should only be one)
-          selected_provisional_grade = submission.provisional_grades
-            .select { |pg| pg.graded_at.present? }
-            .sort_by { |pg| pg.created_at }
-            .first
-        end
-
-        if selected_provisional_grade
-          selected_provisional_grade.publish!
-        end
-      end
-
-      @assignment.update_attribute(:grades_published_at, Time.now.utc)
-      render :json => { :message => "OK" }
-    end
-  end
-
   # @API List gradeable students
   #
   # List students eligible to submit the assignment. The caller must have permission to view grades.
@@ -744,7 +701,7 @@ class SubmissionsApiController < ApplicationController
                       selected_provisional_grade_id: selection && selection.selected_provisional_grade_id)
           sub = submissions[student.id]
           pg_list = if sub
-            sub.provisional_grades.sort_by { |pg| pg.created_at }.map(&:grade_attributes)
+            submission_provisional_grades_json(sub, @assignment, @current_user, includes)
           else
             []
           end
@@ -752,30 +709,6 @@ class SubmissionsApiController < ApplicationController
         end
         json
       }
-    end
-  end
-
-  # undocumented @API Select provisional grade
-  #
-  # Choose which provisional grade the student should receive for a submission.
-  # The caller must have :moderate_grades rights.
-  #
-  # @example_response
-  #   {
-  #     "assignment_id": 867,
-  #     "student_id": 5309,
-  #     "selected_provisional_grade_id": 53669
-  #   }
-  #
-  def select_provisional_grade
-    if authorized_action(@context, @current_user, :moderate_grades)
-      assignment = @context.assignments.active.find(params[:assignment_id])
-      pg = assignment.provisional_grades.find(params[:provisional_grade_id])
-      selection = assignment.moderated_grading_selections.where(student_id: pg.submission.user_id).first
-      return render :json => { :message => 'student not in moderation set' }, :status => :bad_request unless selection
-      selection.provisional_grade = pg
-      selection.save!
-      render :json => selection.as_json(:include_root => false, :only => %w(assignment_id student_id selected_provisional_grade_id))
     end
   end
 
@@ -897,19 +830,15 @@ class SubmissionsApiController < ApplicationController
   end
 
   def get_user_considering_section(user_id)
-    students = @context.students_visible_to(@current_user)
+    students = @context.students_visible_to(@current_user, true)
     if @section
       students = students.where(:enrollments => { :course_section_id => @section })
     end
     api_find(students, user_id)
   end
 
-  def visible_user_ids(opts = {})
-    if @section
-      opts[:section_ids] = [@section.id]
-    end
-    scope = @context.enrollments_visible_to(@current_user, opts)
-    scope.pluck(:user_id)
+  def section_ids
+    @section ? [@section.id] : nil
   end
 
   def bulk_load_attachments_and_previews(submissions)

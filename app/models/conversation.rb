@@ -20,7 +20,7 @@ class Conversation < ActiveRecord::Base
   include SimpleTags
 
   has_many :conversation_participants, :dependent => :destroy
-  has_many :conversation_messages, :order => "created_at DESC, id DESC", :dependent => :delete_all
+  has_many :conversation_messages, -> { order("created_at DESC, id DESC") }, dependent: :delete_all
   has_many :conversation_message_participants, :through => :conversation_messages
   has_one :stream_item, :as => :asset
   belongs_to :context, :polymorphic => true
@@ -34,19 +34,12 @@ class Conversation < ActiveRecord::Base
   # see also MessageableUser
   def participants(reload = false)
     if !@participants || reload
-      @participants = Rails.cache.fetch([self, 'participants'].cache_key, expires_in: 1.day) do
-        Conversation.preload_participants([self])
-        @participants
-      end
+      Conversation.preload_participants([self])
     end
     @participants
   end
 
   attr_accessible
-
-  def delete_participant_cache
-    Rails.cache.delete([self, 'participants'].cache_key)
-  end
 
   def reload(options = nil)
     @current_context_strings = {}
@@ -134,7 +127,7 @@ class Conversation < ActiveRecord::Base
     self.shard.activate do
       user_ids = users.map(&:id).uniq
       raise "can't add participants to a private conversation" if private?
-      message = transaction do
+      transaction do
         lock!
         user_ids -= conversation_participants.map(&:user_id)
         next if user_ids.empty?
@@ -171,9 +164,9 @@ class Conversation < ActiveRecord::Base
           # give them all messages
           # NOTE: individual messages in group conversations don't have tags
           connection.execute(sanitize_sql([<<-SQL, self.id, current_user.id, user_ids]))
-            INSERT INTO conversation_message_participants(conversation_message_id, conversation_participant_id, user_id, workflow_state)
+            INSERT INTO #{ConversationMessageParticipant.quoted_table_name}(conversation_message_id, conversation_participant_id, user_id, workflow_state)
             SELECT conversation_messages.id, conversation_participants.id, conversation_participants.user_id, 'active'
-            FROM conversation_messages, conversation_participants, conversation_message_participants
+            FROM #{ConversationMessage.quoted_table_name}, #{ConversationParticipant.quoted_table_name}, #{ConversationMessageParticipant.quoted_table_name}
             WHERE conversation_messages.conversation_id = ?
               AND conversation_messages.conversation_id = conversation_participants.conversation_id
             AND conversation_message_participants.conversation_message_id = conversation_messages.id
@@ -185,8 +178,6 @@ class Conversation < ActiveRecord::Base
           add_event_message(current_user, {:event_type => :users_added, :user_ids => user_ids}, options)
         end
       end
-      delete_participant_cache
-      message
     end
   end
 
@@ -710,7 +701,6 @@ class Conversation < ActiveRecord::Base
       conversation_message_participants.scoped.delete_all
     end
     conversation_participants.shard(self).delete_all
-    delete_participant_cache
   end
 
   protected

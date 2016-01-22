@@ -133,7 +133,7 @@
 #         "type": "string"
 #       },
 #       "numerical_answer_type": {
-#         "description": "Used in numerical questions.  Values can be 'exact_answer' or 'range_answer'.",
+#         "description": "Used in numerical questions.  Values can be 'exact_answer', 'range_answer', or 'precision_answer'.",
 #         "example": "exact_answer",
 #         "type": "string"
 #       },
@@ -145,6 +145,18 @@
 #       },
 #       "margin": {
 #         "description": "Used in numerical questions of type 'exact_answer'. The margin of error allowed for the student's answer.",
+#         "example": 4,
+#         "type": "integer",
+#         "format": "int64"
+#       },
+#       "approximate": {
+#         "description": "Used in numerical questions of type 'precision_answer'.  The value the answer should equal.",
+#         "example": 1.2346e+9,
+#         "type": "float",
+#         "format": "float64"
+#       },
+#       "precision": {
+#         "description": "Used in numerical questions of type 'precision_answer'. The numerical precision that will be used when comparing the student's answer.",
 #         "example": 4,
 #         "type": "integer",
 #         "format": "int64"
@@ -278,7 +290,7 @@ class Quizzes::QuizQuestionsController < ApplicationController
       guard_against_big_fields do
         @question = @quiz.quiz_questions.create(:quiz_group => @group, :question_data => question_data)
         @quiz.did_edit if @quiz.created?
-        render json: question_json(@question, @current_user, session, [:assessment_question])
+        render json: question_json(@question, @current_user, session, @context, [:assessment_question, :plain_html])
       end
 
     end
@@ -358,7 +370,7 @@ class Quizzes::QuizQuestionsController < ApplicationController
         @question.question_data = question_data
         @question.save
         @quiz.did_edit if @quiz.created?
-        render json: question_json(@question, @current_user, session, [:assessment_question])
+        render json: question_json(@question, @current_user, session, @context, [:assessment_question, :plain_html])
       end
     end
   end
@@ -431,6 +443,8 @@ class Quizzes::QuizQuestionsController < ApplicationController
       scope = Quizzes::QuizQuestion.where({
         id: @quiz_submission.quiz_data.map { |question| question['id'] }
       })
+
+      reject! "Cannot view questions due to quiz settings", 401 unless @quiz_submission.results_visible_for_user?(@current_user)
 
       render_question_set(scope, @quiz_submission.quiz_data)
     end

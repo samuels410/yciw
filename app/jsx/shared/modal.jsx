@@ -1,5 +1,3 @@
-/** @jsx React.DOM */
-
 define([
   'react',
   'jquery',
@@ -9,10 +7,6 @@ define([
   './modal-content',
   './modal-buttons',
 ], function (React, $, _, preventDefault,  ReactModal, ModalContent, ModalButtons) {
-
-  ReactModal.setAppElement(document.body)
-  ReactModal.injectCSS()
-  ReactModal = React.createFactory(ReactModal)
 
   var Modal = React.createClass({
 
@@ -36,6 +30,7 @@ define([
     closeModal() {
       this.setState({modalIsOpen: false}, function(){
         this.props.onRequestClose();
+        $(this.getAppElement()).removeAttr('aria-hidden');
       });
     },
     closeWithX() {
@@ -47,15 +42,19 @@ define([
       var promise = this.props.onSubmit();
       $(this.refs.modal.getDOMNode()).disableWhileLoading(promise);
     },
+    getAppElement () {
+      // Need to wait for the dom to load before we can get the default #application dom element
+      return this.props.appElement || document.getElementById('application');
+    },
     processMultipleChildren(props){
       var content = null;
       var buttons = null;
 
       React.Children.forEach(props.children, function(child){
-        if(child.type == ModalContent.type){
+        if(child.type == ModalContent){
           content = child;
         }
-        if(child.type == ModalButtons.type){
+        if(child.type == ModalButtons){
           buttons = child;
         }
       });
@@ -84,10 +83,13 @@ define([
       return (
         <div className="canvasModal">
           <ReactModal
+                 ariaHideApp={this.state.modalIsOpen}
                  isOpen={this.state.modalIsOpen}
                  onRequestClose={this.closeModal}
                  className={this.props.className}
-                 overlayClassName={this.props.overlayClassName}>
+                 overlayClassName={this.props.overlayClassName}
+                 appElement={this.getAppElement()}
+           >
             <div ref="modal" className="ReactModal__Layout">
 
               <div className="ReactModal__Header">

@@ -125,7 +125,8 @@ module OtherHelperMethods
       "c_file.txt" => File.read(File.expand_path(File.dirname(__FILE__) + '/../../../fixtures/files/c_file.txt')),
       "amazing_file.txt" => File.read(File.expand_path(File.dirname(__FILE__) + '/../../../fixtures/files/amazing_file.txt')),
       "Dog_file.txt" => File.read(File.expand_path(File.dirname(__FILE__) + '/../../../fixtures/files/Dog_file.txt')),
-      "cn-image.jpg" => File.read(File.expand_path(File.dirname(__FILE__) + '/../../../fixtures/files/cn_image.jpg'))
+      "cn-image.jpg" => File.read(File.expand_path(File.dirname(__FILE__) + '/../../../fixtures/files/cn_image.jpg')),
+      "empty_file.txt" => File.read(File.expand_path(File.dirname(__FILE__) + '/../../../fixtures/files/empty_file.txt')),
   }.freeze
 
   def get_file(filename, data = nil)
@@ -148,8 +149,10 @@ module OtherHelperMethods
       cattr_accessor :test_secret
 
       def call_with_test_secret(env)
-        @secret = self.class.test_secret
-        @encryption_key = unhex(@secret)
+        if self.class.test_secret.present?
+          @secret = self.class.test_secret
+          @encryption_key = unhex(@secret)
+        end
         call_without_test_secret(env)
       end
 

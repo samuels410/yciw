@@ -61,14 +61,13 @@ switch($toolForm.data('tool-launch-type')){
     } catch(e){}
 
     $("#tool_content").bind("load", function(){
-      if (ENV.use_new_styles) {
-        $("#content").addClass('horizontal-padding');
-      }
-      else {
+      if (!ENV.use_new_styles) {
         $("#content").addClass('padless');
       }
-      $('#insecure_content_msg').hide();
-      $toolForm.hide();
+      if(document.location.protocol !== "https:" || $("#tool_form")[0].action.indexOf("https:") > -1) {
+        $('#insecure_content_msg').hide();
+        $toolForm.hide();
+      }
     });
     setTimeout(function(){
       if($('#insecure_content_msg').is(":visible")){
@@ -98,18 +97,34 @@ var resize_tool_content_wrapper = function(height) {
   tool_content_wrapper().height(tool_height > height ? tool_height : height);
 }
 
+//moduleSequenceFooter visibility handler
+function module_sequence_footer(){
+  if (ENV.use_new_styles) {
+    return $('.module-sequence-footer');
+  }
+  else {
+    return $('#sequence_footer');
+  }
+}
+
 $(function() {
   var $window = $(window);
   $tool_content_wrapper = $('.tool_content_wrapper');
+
+  // for new UI, full-screen LTI iframe will always be 100%,
+  // so no need to calculate it
   if (ENV.use_new_styles) {
-    canvas_chrome_height = $tool_content_wrapper.offset().top + $('#footer').outerHeight(true);
+    if ( !$('body').hasClass('ic-full-screen-lti-tool') ) {
+      canvas_chrome_height = $tool_content_wrapper.offset().top + $('#footer').outerHeight(true);
+    }
   }
   else {
     min_tool_height = $('#main').height();
-    canvas_chrome_height = $tool_content_wrapper.offset().top + $('#wrapper').height() - $('#main').height(); 
+    canvas_chrome_height = $tool_content_wrapper.offset().top + $('#wrapper').height() - $('#main').height();
   }
-
-  if ($tool_content_wrapper.length) {
+  // Only calculate height on resize if body does not have
+  // .ic-full-screen-lti-tool class
+  if ( $tool_content_wrapper.length && !$('body').hasClass('ic-full-screen-lti-tool') ) {
     $window.resize(function () {
       if (!$tool_content_wrapper.data('height_overridden')) {
         resize_tool_content_wrapper($window.height() - canvas_chrome_height);
@@ -138,6 +153,18 @@ window.addEventListener('message', function(e) {
 
         tool_content_wrapper().data('height_overridden', true);
         resize_tool_content_wrapper(height);
+        break;
+
+      case 'lti.showModuleNavigation':
+        if(message.show === true || message.show === false){
+          module_sequence_footer().toggle(message.show);
+        }
+        break;
+
+      case 'lti.scrollToTop':
+        $('html,body').animate({
+           scrollTop: $('.tool_content_wrapper').offset().top
+         }, 'fast');
         break;
 
       case 'lti.setUnloadMessage':

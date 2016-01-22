@@ -19,7 +19,7 @@
 class GradingStandard < ActiveRecord::Base
   include Workflow
 
-  attr_accessible :title, :standard_data
+  attr_accessible :title, :standard_data, :data
 
   belongs_to :context, :polymorphic => true
   belongs_to :user
@@ -68,7 +68,7 @@ class GradingStandard < ActiveRecord::Base
   VERSION = 2
 
   set_policy do
-    given { |user| self.context.grants_right?(user, :manage) }
+    given { |user| self.context.grants_right?(user, :manage_grades) }
     can :manage
   end
 

@@ -20,6 +20,7 @@
       @show_left_side ||= (section_tabs.length > 0 || left_side_custom.try(:length))
     end
     @body_classes << "with-left-side" if @show_left_side
+    @body_classes << "course-menu-expanded" if @body_classes.include? "with-left-side"
     #we dont want to render a right side unless there is actually content in it.
     @body_classes << "with-right-side" if right_side and not right_side.strip.empty?
     @body_classes << "padless-content" if @padless
@@ -47,21 +48,20 @@
 <div id="application" <% if use_new_styles? %>class="ic-app"<% end %>>
 
   <% if use_new_styles? %>
-    <%= render(:partial => 'shared/new_nav_header') %>
-
-  <%# Begin default Canvas header %>
+    <%= render(:partial => 'shared/new_nav_header') unless @headers == false %>
   <% else %>
-  <div id="header" class="no-print <%= 'no-user' unless @current_user %>">
-    <div id="header-inner">
-      <a href="#content" id="skip_navigation_link"><%= t 'Skip To Content' %></a>
-      <a id="header-logo" href="<%= dashboard_url %>"><%= t 'links.dashboard', "My Dashboard" %></a>
-      <b id="header-logo-secondary"></b>
-      <%= render(:partial => "shared/user_header_navigation") %>
-      <%= render(:partial => "shared/keyboard_navigation_hint") if keyboard_navigation %>
-      <%= render(:partial => "shared/primary_header_navigation") %>
+    <%# Begin default Canvas header %>
+    <div id="header" class="no-print <%= 'no-user' unless @current_user %>">
+      <div id="header-inner">
+        <a href="#content" id="skip_navigation_link"><%= t 'Skip To Content' %></a>
+        <a id="header-logo" href="<%= dashboard_url %>"><%= t 'links.dashboard', "My Dashboard" %></a>
+        <b id="header-logo-secondary"></b>
+        <%= render(:partial => "shared/user_header_navigation") %>
+        <%= render(:partial => "shared/keyboard_navigation_hint") if keyboard_navigation %>
+        <%= render(:partial => "shared/primary_header_navigation") %>
+      </div>
     </div>
-  </div>
-  <%# End default Canvas header %>
+    <%# End default Canvas header %>
   <% end %>
 
   <div id="instructure_ajax_error_box">
@@ -77,7 +77,7 @@
       <% if crumbs.length > 1 && use_new_styles? %>
         <div class="ic-app-nav-toggle-and-crumbs">
           <% if @show_left_side %>
-            <button type="button" aria-hidden="true" id="courseMenuToggle" class="Button Button--link Button--small ic-app-course-nav-toggle" title="<%= t('Show and hide courses menu') %>"><i class="icon-hamburger"></i></button> 
+            <button type="button" aria-hidden="true" id="courseMenuToggle" class="Button Button--link Button--small ic-app-course-nav-toggle" title="<%= t('Show and hide courses menu') %>"><i class="icon-hamburger"></i></button>
             <div class="ic-app-crumbs">
           <% end %>
           <%= render_crumbs %>
@@ -171,8 +171,7 @@
         <span id="switched_role_type" class="<%= @context.asset_string %>" data-role="<%= temp_type %>"><%= Enrollment.readable_type(temp_type) %></span>
       <% end %>
       <% if @page_view %>
-        <a href="<%= page_view_path(@page_view.id || @page_view.temporary_id) %>" id="page_view_update_path">&nbsp;</a>
-        <div id="page_view_id"><%= @page_view.id || @page_view.temporary_id %></div>
+        <div id="page_view_id"><%= @page_view.id %></div>
       <% end %>
       <% if equella_enabled? %>
         <a id="equella_endpoint_url" href="<%= @equella_settings.endpoint %>">&nbsp;</a>

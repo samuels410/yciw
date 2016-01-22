@@ -1,5 +1,3 @@
-
-/** @jsx React.DOM */
 define([
   'react',
   'jquery',
@@ -22,9 +20,9 @@ define([
   AssignmentGroupsActions
 ) {
 
-  const MUTE = I18n.t('Mute Assignment'),
-        UNMUTE = I18n.t('Unmute Assignment'),
-        MUTING_EVENT = 'assignment_muting_toggled';
+  var MUTE = I18n.t('Mute Assignment'),
+      UNMUTE = I18n.t('Unmute Assignment'),
+      MUTING_EVENT = 'assignment_muting_toggled';
 
   var MuteAssignmentOption = React.createClass({
 

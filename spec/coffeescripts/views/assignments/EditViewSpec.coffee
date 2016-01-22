@@ -60,6 +60,9 @@ define [
       ENV.VALID_DATE_RANGE = {}
     teardown: ->
       fakeENV.teardown()
+      $(".ui-dialog").remove()
+      $("ul[id^=ui-id-]").remove()
+      $(".form-dialog").remove()
     editView: ->
       editView.apply(this, arguments)
 
@@ -94,6 +97,35 @@ define [
     data = points_possible: '-1', grading_type: 'letter_grade'
     errors = view._validatePointsRequired(data, [])
     equal errors['points_possible'][0]['message'], 'Points possible must be 0 or more for selected grading type'
+
+  test "requires name to save assignment", ->
+    view = @editView()
+    data =
+      name: ""
+    errors = view.validateBeforeSave(data, [])
+
+    ok errors["name"]
+    equal errors["name"].length, 1
+    equal errors["name"][0]["message"], "Name is required!"
+
+  test "requires a name < 255 chars to save assignment", ->
+    view = @editView()
+    l1 = 'aaaaaaaaaa'
+    l2 = l1 + l1 + l1 + l1 + l1 + l1
+    l3 = l2 + l2 + l2 + l2 + l2 + l2
+    ok l3.length > 255
+
+    errors = view.validateBeforeSave(name: l3, [])
+    ok errors["name"]
+    equal errors["name"].length, 1
+    equal errors["name"][0]["message"], "Name is too long"
+
+  test "don't validate name if it is frozen", ->
+    view = @editView()
+    view.model.set('frozen_attributes', ['title'])
+
+    errors = view.validateBeforeSave({}, [])
+    ok !errors["name"]
 
   test 'does show error message on assignment point change with submissions', ->
     view = @editView has_submitted_submissions: true
@@ -136,6 +168,12 @@ define [
     errors = view._validateExternalTool(data, [])
     equal errors["external_tool_tag_attributes[url]"][0]['message'], 'External Tool URL cannot be left blank'
 
+  test 'does not validate allowed extensions if file uploads is not a submission type', ->
+    view = @editView()
+    data = submission_types: ["online_url"], allowed_extensions: []
+    errors = view._validateAllowedExtensions(data, [])
+    equal errors["allowed_extensions"], null
+
   test 'removes group_category_id if an external tool is selected', ->
     view = @editView()
     data = {
@@ -149,6 +187,22 @@ define [
     desc = "<p>&lt;E&gt;</p>"
     view = @editView description: "<p>&lt;E&gt;</p>"
     equal view.$description.val().match(desc), desc
+
+  test 'allows changing moderation setting if no graded submissions exist', ->
+    ENV.MODERATED_GRADING = true
+    ENV.HAS_GRADED_SUBMISSIONS = false
+    view = @editView has_submitted_submissions: true, moderated_grading: true
+    ok view.$("[type=checkbox][name=moderated_grading]").prop("checked")
+    ok !view.$("[type=checkbox][name=moderated_grading]").prop("disabled")
+    equal view.$('[type=hidden][name=moderated_grading]').attr('value'), '0'
+
+  test 'locks down moderation setting after students submit', ->
+    ENV.MODERATED_GRADING = true
+    ENV.HAS_GRADED_SUBMISSIONS = true
+    view = @editView has_submitted_submissions: true, moderated_grading: true
+    ok view.$("[type=checkbox][name=moderated_grading]").prop("checked")
+    ok view.$("[type=checkbox][name=moderated_grading]").prop("disabled")
+    equal view.$('[type=hidden][name=moderated_grading]').attr('value'), '1'
 
   module 'EditView: group category locked',
     setup: ->

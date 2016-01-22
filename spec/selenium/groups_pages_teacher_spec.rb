@@ -1,13 +1,22 @@
-require File.expand_path(File.dirname(__FILE__) + '/common')
-require File.expand_path(File.dirname(__FILE__) + '/helpers/groups_common')
-require File.expand_path(File.dirname(__FILE__) + '/helpers/announcements_common')
-require File.expand_path(File.dirname(__FILE__) + '/helpers/discussions_common')
-require File.expand_path(File.dirname(__FILE__) + '/helpers/wiki_and_tiny_common')
-require File.expand_path(File.dirname(__FILE__) + '/helpers/files_common')
-require File.expand_path(File.dirname(__FILE__) + '/helpers/conferences_common')
+require_relative 'common'
+require_relative 'helpers/groups_common'
+require_relative 'helpers/announcements_common'
+require_relative 'helpers/discussions_common'
+require_relative 'helpers/wiki_and_tiny_common'
+require_relative 'helpers/files_common'
+require_relative 'helpers/conferences_common'
+require_relative 'helpers/course_common'
+require_relative 'helpers/groups_shared_examples'
 
 describe "groups" do
   include_context "in-process server selenium tests"
+  include AnnouncementsCommon
+  include ConferencesCommon
+  include CourseCommon
+  include DiscussionsCommon
+  include FilesCommon
+  include GroupsCommon
+  include WikiAndTinyCommon
 
   setup_group_page_urls
 
@@ -48,7 +57,7 @@ describe "groups" do
 
         get announcements_page
         expect(ff('.discussion-topic').size).to eq 1
-        delete_announcement_via_gear_menu
+        delete_via_gear_menu
         expect(ff('.discussion-topic').size).to eq 0
       end
 
@@ -57,7 +66,7 @@ describe "groups" do
 
         get announcements_page
         expect(ff('.discussion-topic').size).to eq 1
-        delete_announcement_via_gear_menu
+        delete_via_gear_menu
         expect(ff('.discussion-topic').size).to eq 0
       end
 
@@ -155,7 +164,7 @@ describe "groups" do
         get files_page
         add_folder
         delete(0, :toolbar_menu)
-        expect(get_all_files_folders.count).to eq 0
+        expect(all_files_folders.count).to eq 0
       end
 
       it "should allow a teacher to delete a file", priority: "2", test_id: 304183 do
@@ -163,7 +172,7 @@ describe "groups" do
         get files_page
         delete(0, :toolbar_menu)
         wait_for_ajaximations
-        expect(get_all_files_folders.count).to eq 0
+        expect(all_files_folders.count).to eq 0
       end
 
       it "should allow teachers to move a file", priority: "2", test_id: 304185 do
@@ -198,7 +207,7 @@ describe "groups" do
 
     #-------------------------------------------------------------------------------------------------------------------
     describe "conferences page" do
-      before(:all) do
+      before(:once) do
         PluginSetting.create!(name: "wimba", settings: {"domain" => "wimba.instructure.com"})
       end
 

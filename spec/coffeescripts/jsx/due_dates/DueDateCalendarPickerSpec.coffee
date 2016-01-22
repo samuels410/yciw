@@ -24,12 +24,13 @@ define [
         rowKey: "nullnullnull"
         labelledBy: "foo"
 
-      @dueDateCalendarPicker = React.render(DueDateCalendarPicker(props), $('<div>').appendTo('body')[0])
+      DueDateCalendarPickerElement = React.createElement(DueDateCalendarPicker, props)
+      @dueDateCalendarPicker = React.render(DueDateCalendarPickerElement, $('<div>').appendTo('body')[0])
 
     teardown: ->
       fakeENV.teardown()
       React.unmountComponentAtNode(@dueDateCalendarPicker.getDOMNode().parentNode)
-      @clock = sinon.restore()
+      @clock.restore()
 
   test 'renders', ->
     ok @dueDateCalendarPicker.isMounted()
@@ -85,12 +86,13 @@ define [
         rowKey: "nullnullnull"
         labelledBy: "foo"
 
-      @dueDateCalendarPicker = React.render(DueDateCalendarPicker(props), $('<div>').appendTo('body')[0])
+      DueDateCalendarPickerElement = React.createElement(DueDateCalendarPicker, props)
+      @dueDateCalendarPicker = React.render(DueDateCalendarPickerElement, $('<div>').appendTo('body')[0])
 
     teardown: ->
       fakeENV.teardown()
       React.unmountComponentAtNode(@dueDateCalendarPicker.getDOMNode().parentNode)
-      @clock = sinon.restore()
+      @clock.restore()
 
   test 'recieved proper class depending on dateType', ->
     classes = @dueDateCalendarPicker.refs.datePickerWrapper.props.className

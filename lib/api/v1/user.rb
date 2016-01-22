@@ -27,6 +27,9 @@ module Api::V1::User
   }
 
   def user_json_preloads(users, preload_email=false)
+    # for User#account
+    ActiveRecord::Associations::Preloader.new(users, :pseudonym => :account).run
+
     # pseudonyms for User#sis_pseudoym_for and User#find_pseudonym_for_account
     # pseudonyms account for Pseudonym#works_for_account?
     ActiveRecord::Associations::Preloader.new(users, pseudonyms: :account).run if user_json_is_admin?
@@ -57,7 +60,7 @@ module Api::V1::User
           json[:login_id] = pseudonym.unique_id
         end
       end
-      if service_enabled?(:avatars) && includes.include?('avatar_url')
+      if includes.include?('avatar_url') && user.account.service_enabled?(:avatars)
         json[:avatar_url] = avatar_url_for_user(user, blank_fallback)
       end
       if enrollments
@@ -65,7 +68,7 @@ module Api::V1::User
       end
       # include a permissions check here to only allow teachers and admins
       # to see user email addresses.
-      if includes.include?('email') && context.grants_right?(current_user, session, :read_as_admin)
+      if includes.include?('email') && context.grants_right?(current_user, session, :read_roster)
         json[:email] = user.email
       end
 
@@ -135,12 +138,14 @@ module Api::V1::User
       else
         polymorphic_url([parent_context, user])
       end
-    return {
+    hash = {
       id: user.id,
       display_name: user.short_name,
       avatar_image_url: avatar_url_for_user(user, blank_fallback),
       html_url: participant_url
     }
+    hash[:fake_student] = true if user.fake_student?
+    hash
   end
 
   # optimization hint, currently user only needs to pull pseudonyms from the db
@@ -194,8 +199,13 @@ module Api::V1::User
 
         if has_grade_permissions?(user, enrollment)
           if opts[:grading_period]
+            student_id = user.id
+            if enrollment.is_a? StudentEnrollment
+              student_id = enrollment.student.id
+            end
+
             course = enrollment.course
-            gc = GradeCalculator.new(user.id, course,
+            gc = GradeCalculator.new(student_id, course,
                                      grading_period: opts[:grading_period])
             ((current, _), (final, _)) = gc.compute_scores.first
             json[:grades][:current_score] = current[:grade]
@@ -239,6 +249,7 @@ module Api::V1::User
     course = enrollment.course
 
     (user.id == enrollment.user_id && !course.hide_final_grades?) ||
-     course.grants_any_right?(user, :manage_grades, :view_all_grades)
+     course.grants_any_right?(user, :manage_grades, :view_all_grades) ||
+     enrollment.user.grants_right?(user, :read_as_parent)
   end
 end

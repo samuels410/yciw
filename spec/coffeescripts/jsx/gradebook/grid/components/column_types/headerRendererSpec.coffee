@@ -1,9 +1,10 @@
 define [
+  'react'
   'jsx/gradebook/grid/components/column_types/headerRenderer'
   'jquery'
   'jquery.instructure_date_and_time'
   'translations/_core_en'
-], (HeaderRenderer, $) ->
+], (React, HeaderRenderer, $) ->
 
   wrapper = document.getElementById('fixtures')
 
@@ -15,10 +16,11 @@ define [
     columnData:
       assignment:
         due_at: '2015-07-17T05:59:59Z'
+      enrollments: []
 
   renderComponent = (data) ->
-    componentFactory = React.createFactory(HeaderRenderer)
-    React.render(componentFactory(data), wrapper)
+    element = React.createElement(HeaderRenderer, data)
+    React.render(element, wrapper)
 
   buildComponent = (props) ->
     columnData = props
@@ -54,7 +56,8 @@ define [
     deepEqual displayedDueDate(component), 'No due date'
 
   test 'displays the override due date if the assignment has no due date and one' +
-  'override with a due date', ->
+  ' override with a due date', ->
+    @stub($, 'sameYear').returns(true)
     props = defaultProps()
     props.columnData.assignment.due_at = null
     props.columnData.assignment.overrides = [

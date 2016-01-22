@@ -2,6 +2,7 @@ require File.expand_path(File.dirname(__FILE__) + '/../helpers/discussions_commo
 
 describe "discussions" do
   include_context "in-process server selenium tests"
+  include DiscussionsCommon
 
   let(:course) { course_model.tap{|course| course.offer!} }
   let(:default_section) { course.default_section }
@@ -102,6 +103,30 @@ describe "discussions" do
           errorBoxes = driver.execute_script("return $('.errorBox').filter('[id!=error_box_template]').toArray();")
           visBoxes, hidBoxes = errorBoxes.partition { |eb| eb.displayed? }
           expect(visBoxes.first.text).to eq "Please select a group set for this assignment"
+        end
+      end
+
+      context "post to sis default setting" do
+        before do
+          @account = @course.root_account
+          @account.enable_feature!(:bulk_sis_grade_export)
+        end
+
+        it "should default to post grades if account setting is enabled" do
+          @account.settings[:sis_default_grade_export] = {:locked => false, :value => true}
+          @account.save!
+
+          get url
+          f('input[type=checkbox][name="assignment[set_assignment]"]').click
+
+          expect(is_checked('#assignment_post_to_sis')).to be_truthy
+        end
+
+        it "should not default to post grades if account setting is not enabled" do
+          get url
+          f('input[type=checkbox][name="assignment[set_assignment]"]').click
+
+          expect(is_checked('#assignment_post_to_sis')).to be_falsey
         end
       end
     end
