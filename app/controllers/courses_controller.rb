@@ -198,8 +198,8 @@ require 'securerandom'
 #         },
 #         "permissions": {
 #           "description": "optional: the permissions the user has for the course. returned only for a single course and include[]=permissions",
-#           "example": "{\"create_discussion_topic\"=>true,\"create_announcement\"=>true}",
-#           "type": "map",
+#           "example": {"create_discussion_topic": true, "create_announcement": true},
+#           "type": "object",
 #           "key": { "type": "string" },
 #           "value": { "type": "boolean" }
 #         },
@@ -225,7 +225,7 @@ require 'securerandom'
 #         },
 #         "storage_quota_used_mb": {
 #           "example": 5,
-#           "type": "float"
+#           "type": "number"
 #         },
 #         "hide_final_grades": {
 #           "example": false,
@@ -287,11 +287,12 @@ require 'securerandom'
 class CoursesController < ApplicationController
   include SearchHelper
   include ContextExternalToolsHelper
+  include CustomSidebarLinksHelper
 
   before_filter :require_user, :only => [:index]
   before_filter :require_user_or_observer, :only=>[:user_index]
   before_filter :require_context, :only => [:roster, :locks, :create_file, :ping]
-  skip_after_filter :update_enrollment_last_activity_at, only: [:enrollment_invitation]
+  skip_after_filter :update_enrollment_last_activity_at, only: [:enrollment_invitation, :activity_stream_summary]
 
   include Api::V1::Course
   include Api::V1::Progress
@@ -318,7 +319,7 @@ class CoursesController < ApplicationController
   #   'StudentEnrollment', 'TeacherEnrollment', 'TaEnrollment', 'ObserverEnrollment',
   #   or 'DesignerEnrollment'.
   #
-  # @argument include[] [String, "needs_grading_count"|"syllabus_body"|"total_scores"|"term"|"course_progress"|"sections"|"storage_quota_used_mb"|"total_students"|"favorites"|"teachers"|"observed_users"]
+  # @argument include[] [String, "needs_grading_count"|"syllabus_body"|"total_scores"|"term"|"course_progress"|"sections"|"storage_quota_used_mb"|"total_students"|"favorites"|"teachers"|"observed_users"|"current_grading_period_scores"]
   #   - "needs_grading_count": Optional information to include with each Course.
   #     When needs_grading_count is given, and the current user has grading
   #     rights, the total number of submissions needing grading for all
@@ -327,16 +328,23 @@ class CoursesController < ApplicationController
   #     When syllabus_body is given the user-generated html for the course
   #     syllabus is returned.
   #   - "total_scores": Optional information to include with each Course.
-  #     When total_scores is given, any enrollments with type 'student' will also
-  #     include the fields 'calculated_current_score', 'calculated_final_score',
-  #     'calculated_current_grade', and 'calculated_final_grade'.
-  #     calculated_current_score is the student's score in the course, ignoring
-  #     ungraded assignments. calculated_final_score is the student's score in
-  #     the course including ungraded assignments with a score of 0.
-  #     calculated_current_grade is the letter grade equivalent of
-  #     calculated_current_score (if available). calculated_final_grade is the
-  #     letter grade equivalent of calculated_final_score (if available). This
-  #     argument is ignored if the course is configured to hide final grades.
+  #     When total_scores is given, any student enrollments will also
+  #     include the fields 'computed_current_score', 'computed_final_score',
+  #     'computed_current_grade', and 'computed_final_grade' (see Enrollment
+  #     documentation for more information on these fields). This argument
+  #     is ignored if the course is configured to hide final grades.
+  #   - "current_grading_period_scores": Optional information to include with
+  #     each Course. When current_grading_period_scores is given and total_scores
+  #     is given, any student enrollments will also include the fields
+  #     'multiple_grading_periods_enabled',
+  #     'totals_for_all_grading_periods_option', 'current_grading_period_title',
+  #     'current_grading_period_id', current_period_computed_current_score',
+  #     'current_period_computed_final_score',
+  #     'current_period_computed_current_grade', and
+  #     'current_period_computed_final_grade' (see Enrollment documentation for
+  #     more information on these fields). This argument is ignored if the course
+  #     is configured to hide final grades or if the total_scores argument is not
+  #     included.
   #   - "term": Optional information to include with each Course. When
   #     term is given, the information for the enrollment term for each course
   #     is returned.
@@ -384,7 +392,7 @@ class CoursesController < ApplicationController
         @future_enrollments  = []
         Canvas::Builders::EnrollmentDateBuilder.preload(all_enrollments)
         all_enrollments.group_by{|e| [e.course_id, e.type]}.values.each do |enrollments|
-          e = enrollments.first
+          e = enrollments.sort_by{|e| e.state_with_date_sortable}.first
           if enrollments.count > 1
             e.course_section = nil
             e.readonly!
@@ -396,7 +404,7 @@ class CoursesController < ApplicationController
           else
             start_at, end_at = e.enrollment_dates.first
             if start_at && start_at > Time.now.utc
-              @future_enrollments << e
+              @future_enrollments << e unless e.restrict_future_listing?
             elsif state != :inactive
               @current_enrollments << e
             end
@@ -404,8 +412,8 @@ class CoursesController < ApplicationController
         end
         @visible_groups = @current_user.visible_groups
 
-        @past_enrollments.sort_by!{|e| Canvas::ICU.collation_key(e.long_name)}
-        [@current_enrollments, @future_enrollments].each{|list| list.sort_by!{|e| [e.active? ? 1 : 0, Canvas::ICU.collation_key(e.long_name)] }}
+        @past_enrollments.sort_by!{|e| Canvas::ICU.collation_key(e.long_name(@current_user))}
+        [@current_enrollments, @future_enrollments].each{|list| list.sort_by!{|e| [e.active? ? 1 : 0, Canvas::ICU.collation_key(e.long_name(@current_user))] }}
       }
 
       format.json {
@@ -417,7 +425,7 @@ class CoursesController < ApplicationController
   # @API List courses for a user
   # Returns a list of active courses for this user. To view the course list for a user other than yourself, you must be either an observer of that user or an administrator.
   #
-  # @argument include[] [String, "needs_grading_count"|"syllabus_body"|"total_scores"|"term"|"course_progress"|"sections"|"storage_quota_used_mb"|"total_students"|"favorites"]
+  # @argument include[] [String, "needs_grading_count"|"syllabus_body"|"total_scores"|"term"|"course_progress"|"sections"|"storage_quota_used_mb"|"total_students"|"favorites"|"current_grading_period_scores"]
   #   - "needs_grading_count": Optional information to include with each Course.
   #     When needs_grading_count is given, and the current user has grading
   #     rights, the total number of submissions needing grading for all
@@ -426,16 +434,23 @@ class CoursesController < ApplicationController
   #     When syllabus_body is given the user-generated html for the course
   #     syllabus is returned.
   #   - "total_scores": Optional information to include with each Course.
-  #     When total_scores is given, any enrollments with type 'student' will also
-  #     include the fields 'calculated_current_score', 'calculated_final_score',
-  #     'calculated_current_grade', and 'calculated_final_grade'.
-  #     calculated_current_score is the student's score in the course, ignoring
-  #     ungraded assignments. calculated_final_score is the student's score in
-  #     the course including ungraded assignments with a score of 0.
-  #     calculated_current_grade is the letter grade equivalent of
-  #     calculated_current_score (if available). calculated_final_grade is the
-  #     letter grade equivalent of calculated_final_score (if available). This
-  #     argument is ignored if the course is configured to hide final grades.
+  #     When total_scores is given, any student enrollments will also
+  #     include the fields 'computed_current_score', 'computed_final_score',
+  #     'computed_current_grade', and 'computed_final_grade' (see Enrollment
+  #     documentation for more information on these fields). This argument
+  #     is ignored if the course is configured to hide final grades.
+  #   - "current_grading_period_scores": Optional information to include with
+  #     each Course. When current_grading_period_scores is given and total_scores
+  #     is given, any student enrollments will also include the fields
+  #     'multiple_grading_periods_enabled',
+  #     'totals_for_all_grading_periods_option', 'current_grading_period_title',
+  #     'current_grading_period_id', current_period_computed_current_score',
+  #     'current_period_computed_final_score',
+  #     'current_period_computed_current_grade', and
+  #     'current_period_computed_final_grade' (see Enrollment documentation for
+  #     more information on these fields). This argument is ignored if the course
+  #     is configured to hide final grades or if the total_scores argument is not
+  #     included.
   #   - "term": Optional information to include with each Course. When
   #     term is given, the information for the enrollment term for each course
   #     is returned.
@@ -476,9 +491,6 @@ class CoursesController < ApplicationController
 
   # @API Create a new course
   # Create a new course
-  #
-  # @argument account_id [Required, Integer]
-  #   The unique ID of the account to create to course under.
   #
   # @argument course[name] [String]
   #   The name of the course. If omitted, the course will be named "Unnamed
@@ -566,7 +578,7 @@ class CoursesController < ApplicationController
   #   The grading standard id to set for the course.  If no value is provided for this argument the current grading_standard will be un-set from this course.
   #
   # @argument course[course_format] [String]
-  #   Optional. Specifies the format of the course. (Should be either 'on_campus' or 'online')
+  #   Optional. Specifies the format of the course. (Should be 'on_campus', 'online', or 'blended')
   #
   # @argument enable_sis_reactivation [Boolean]
   #   When true, will first try to re-activate a deleted course with matching sis_course_id if possible.
@@ -582,7 +594,7 @@ class CoursesController < ApplicationController
       end
 
       if (sub_account_id = params[:course].delete(:account_id)) && sub_account_id.to_i != @account.id
-        @sub_account = @account.find_child(sub_account_id) || raise(ActiveRecord::RecordNotFound)
+        @sub_account = @account.find_child(sub_account_id)
       end
 
       term_id = params[:course].delete(:term_id).presence || params[:course].delete(:enrollment_term_id).presence
@@ -753,7 +765,7 @@ class CoursesController < ApplicationController
   #   'StudentEnrollment', 'TeacherEnrollment', 'TaEnrollment', 'ObserverEnrollment',
   #   or 'DesignerEnrollment'.
   #
-  # @argument include[] [String, "email"|"enrollments"|"locked"|"avatar_url"|"test_student"|"bio"]
+  # @argument include[] [String, "email"|"enrollments"|"locked"|"avatar_url"|"test_student"|"bio"|"custom_links"]
   #   - "email": Optional user email.
   #   - "enrollments":
   #   Optionally include with each Course the user's current and invited
@@ -766,7 +778,8 @@ class CoursesController < ApplicationController
   #   - "bio": Optionally include each user's bio.
   #   - "test_student": Optionally include the course's Test Student,
   #   if present. Default is to not include Test Student.
-  #
+  #   - "custom_links": Optionally include plugin-supplied custom links for each student,
+  #   such as analytics information
   # @argument user_id [String]
   #   If included, the user will be queried and if the user is part of the
   #   users set, the page parameter will be modified so that the page
@@ -788,7 +801,8 @@ class CoursesController < ApplicationController
       params[:per_page] ||= params[:limit]
 
       search_params = params.slice(:search_term, :enrollment_role, :enrollment_role_id, :enrollment_type, :enrollment_state)
-      include_inactive = @context.grants_right?(@current_user, session, :read_as_admin)
+      include_inactive = @context.grants_right?(@current_user, session, :read_as_admin) && (!params.has_key?(:include_inactive) || value_to_boolean(params[:include_inactive]))
+
       search_params[:include_inactive_enrollments] = true if include_inactive
       search_term = search_params[:search_term].presence
 
@@ -803,7 +817,7 @@ class CoursesController < ApplicationController
       user_id = params[:user_id]
       if user_id.present? && user = users.where(:users => { :id => user_id }).first
         position_scope = users.where("#{User.sortable_name_order_by_clause}<=#{User.best_unicode_collation_key('?')}", user.sortable_name)
-        position = position_scope.count(:select => "users.id", :distinct => true)
+        position = position_scope.uniq.count(:all)
         per_page = Api.per_page_for(self)
         params[:page] = (position.to_f / per_page.to_f).ceil
       end
@@ -825,7 +839,12 @@ class CoursesController < ApplicationController
         enrollment_scope = @context.enrollments.
           where(user_id: users).
           preload(:course)
-        enrollment_scope = include_inactive ? enrollment_scope.all_active_or_pending : enrollment_scope.active_or_pending
+
+        if search_params[:enrollment_state]
+          enrollment_scope = enrollment_scope.where(:workflow_state => search_params[:enrollment_state])
+        else
+          enrollment_scope = include_inactive ? enrollment_scope.all_active_or_pending : enrollment_scope.active_or_pending
+        end
         enrollments_by_user = enrollment_scope.group_by(&:user_id)
       end
       render :json => users.map { |u|
@@ -874,12 +893,8 @@ class CoursesController < ApplicationController
       if includes.include?('enrollments')
         # not_ended_enrollments for enrollment_json
         # enrollments course for has_grade_permissions?
-        preload_scope = if CANVAS_RAILS3
-          {:conditions => ['enrollments.course_id = ?', @context.id]}
-        else
-          Enrollment.where(:course_id => @context)
-        end
-        ActiveRecord::Associations::Preloader.new(users, {:not_ended_enrollments => :course}, preload_scope).run
+        ActiveRecord::Associations::Preloader.new.preload(users, :not_ended_enrollments, Enrollment.where(:course_id => @context))
+        ActiveRecord::Associations::Preloader.new.preload(users, {:not_ended_enrollments => :course})
       end
       user = users.first or raise ActiveRecord::RecordNotFound
       enrollments = user.not_ended_enrollments if includes.include?('enrollments')
@@ -1738,7 +1753,7 @@ class CoursesController < ApplicationController
                           :search_method => @context.user_list_search_mode_for(@current_user),
                           :initial_type => params[:enrollment_type])
       if !@context.concluded? && (@enrollments = EnrollmentsFromUserList.process(list, @context, enrollment_options))
-        ActiveRecord::Associations::Preloader.new(@enrollments, [:course_section, {:user => [:communication_channel, :pseudonym]}]).run
+        ActiveRecord::Associations::Preloader.new.preload(@enrollments, [:course_section, {:user => [:communication_channel, :pseudonym]}])
         json = @enrollments.map { |e|
           { 'enrollment' =>
             { 'associated_user_id' => e.associated_user_id,
@@ -1846,7 +1861,7 @@ class CoursesController < ApplicationController
       @course.start_at = DateTime.parse(params[:course][:start_at]).utc rescue nil
       @course.conclude_at = DateTime.parse(params[:course][:conclude_at]).utc rescue nil
       @course.workflow_state = 'claimed'
-      @course.save
+      @course.save!
       @course.enroll_user(@current_user, 'TeacherEnrollment', :enrollment_state => 'active')
 
       @content_migration = @course.content_migrations.build(:user => @current_user, :source_course => @context, :context => @course, :migration_type => 'course_copy_importer', :initiated_source => api_request? ? :api : :manual)
@@ -1883,7 +1898,7 @@ class CoursesController < ApplicationController
   # editable through this endpoint will be "syllabus_body"
   #
   # @argument course[account_id] [Integer]
-  #   The unique ID of the account to create to course under.
+  #   The unique ID of the account to move the course to.
   #
   # @argument course[name] [String]
   #   The name of the course. If omitted, the course will be named "Unnamed
@@ -2030,15 +2045,17 @@ class CoursesController < ApplicationController
 
       if params[:course].has_key? :grading_standard_id
         standard_id = params[:course].delete :grading_standard_id
-        if authorized_action?(@course, @current_user, :manage_grades)
-          if standard_id.present?
-            grading_standard = GradingStandard.for(@course).where(id: standard_id).first
-            @course.grading_standard = grading_standard if grading_standard
+        grading_standard = GradingStandard.for(@course).where(id: standard_id).first if standard_id.present?
+        if grading_standard != @course.grading_standard
+          if authorized_action?(@course, @current_user, :manage_grades)
+            if standard_id.present?
+              @course.grading_standard = grading_standard if grading_standard
+            else
+              @course.grading_standard = nil
+            end
           else
-            @course.grading_standard = nil
+            return
           end
-        else
-          return
         end
       end
       unless @course.account.grants_right? @current_user, session, :manage_storage_quotas
@@ -2420,10 +2437,12 @@ class CoursesController < ApplicationController
     Canvas::Builders::EnrollmentDateBuilder.preload(enrollments)
     enrollments_by_course = enrollments.group_by(&:course_id).values
     enrollments_by_course = Api.paginate(enrollments_by_course, self, api_v1_courses_url) if api_request?
-    if includes.include?("teachers")
-      courses = enrollments_by_course.map(&:first).map(&:course)
-      ActiveRecord::Associations::Preloader.new(courses, :teachers).run
-    end
+    courses = enrollments_by_course.map(&:first).map(&:course)
+    preloads = [:account]
+    preloads << :teachers if includes.include?('teachers')
+    preloads << :grading_standard if includes.include?('total_scores')
+    ActiveRecord::Associations::Preloader.new.preload(courses, preloads)
+
     enrollments_by_course.each do |course_enrollments|
       course = course_enrollments.first.course
       hash << course_json(course, user, session, includes, course_enrollments)

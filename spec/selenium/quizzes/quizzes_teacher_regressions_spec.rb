@@ -8,10 +8,9 @@ describe 'quizzes regressions' do
   include AssignmentOverridesSeleniumHelper
 
   before(:each) do
-    course_with_teacher_logged_in
-    @course.update_attributes(name: 'teacher course')
-    @course.save!
-    @course.reload
+    course_with_teacher_logged_in(course_name: 'teacher course')
+    @student = user_with_pseudonym(:active_user => true, :username => 'student@example.com', :password => 'qwerty')
+    @course.enroll_user(@student, "StudentEnrollment", :enrollment_state => 'active')
   end
 
   it 'calendar pops up on top of #main', priority: "1", test_id: 209957 do
@@ -21,31 +20,6 @@ describe 'quizzes regressions' do
     cal = f('#ui-datepicker-div')
     expect(cal).to be_displayed
     expect(cal.style('z-index')).to be > f('#main').style('z-index')
-  end
-
-  it 'can flag a quiz question while taking a quiz as a teacher', priority: "1", test_id: 209958 do
-    quiz_with_new_questions(false)
-
-    open_quiz_show_page
-
-    expect_new_page_load do
-      f('#take_quiz_link').click
-      wait_for_ajaximations
-    end
-
-    # flag first question
-    hover_and_click("#question_#{@quest1.id} .flag_question")
-
-    # click second answer
-    f("#question_#{@quest2.id} .answers .answer:first-child input").click
-    f('#submit_quiz_button').click
-
-    # dismiss dialog and submit quiz
-    confirm_dialog = driver.switch_to.alert
-    confirm_dialog.dismiss
-    f("#question_#{@quest1.id} .answers .answer:last-child input").click
-    expect_new_page_load { f('#submit_quiz_button').click }
-    expect(f('#quiz_title').text).to eq @quiz.title
   end
 
   it 'marks questions as answered when the window loses focus', priority: "1", test_id: 209959 do
@@ -89,19 +63,10 @@ describe 'quizzes regressions' do
     end
   end
 
-  it 'creates assignment with default due date', priority: "1", test_id: 209960 do
-    skip('daylight savings time fix')
-    get "/courses/#{@course.id}/quizzes/new"
-    wait_for_ajaximations
-    fill_assignment_overrides
-    replace_content(f('#quiz_title'), 'VDD Quiz')
-
-    expect_new_page_load do
-      click_save_settings_button
-      wait_for_ajax_requests
-    end
-
-    compare_assignment_times(Quizzes::Quiz.where(title: 'VDD Quiz').first)
+  it 'quiz show page displays the quiz due date', priority: "1", test_id: 209960 do
+    due_date = Time.zone.now + 4.days
+    create_quiz_with_due_date(due_at: due_date)
+    verify_quiz_show_page_due_date(format_date_for_view(due_date))
   end
 
   it 'doesn\'t show \'use for grading\' as an option in rubrics', priority: "2", test_id: 209962 do

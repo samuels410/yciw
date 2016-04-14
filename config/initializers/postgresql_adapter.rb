@@ -37,8 +37,10 @@ module PostgreSQLAdapterExtensions
     options.delete(:delay_validation) unless supports_delayed_constraint_validation?
     # pointless if we're in a transaction
     options.delete(:delay_validation) if open_transactions > 0
-    column  = options[:column] || "#{to_table.to_s.singularize}_id"
-    foreign_key_name = foreign_key_name(from_table, column, options)
+    options[:column] ||= "#{to_table.to_s.singularize}_id"
+    column = options[:column]
+
+    foreign_key_name = CANVAS_RAILS4_0 ? foreign_key_name(from_table, column, options) : foreign_key_name(from_table, options)
 
     if options[:delay_validation]
       options[:options] = 'NOT VALID'
@@ -88,7 +90,8 @@ module PostgreSQLAdapterExtensions
       raise warning unless Rails.env.production?
       return
     end
-    if index_exists?(table_name, index_name, false)
+
+    if index_exists?(table_name, column_names, :name => index_name)
       @logger.warn("Index name '#{index_name}' on table '#{table_name}' already exists. Skipping.")
       return
     end
@@ -223,12 +226,36 @@ module PostgreSQLAdapterExtensions
     select_value("SELECT 1 FROM pg_available_extensions WHERE name='#{extension}'").to_i == 1
   end
 
+  def set_search_path_on_function(function, args = "()", search_path = Shard.current.name)
+    execute("ALTER FUNCTION #{quote_table_name(function)}#{args} SET search_path TO #{search_path}")
+  end
+
+  # temporarily adds schema to the search_path (i.e. so you can use an extension that won't work
+  # using qualified names)
+  def add_schema_to_search_path(schema)
+    if schema_search_path.split(',').include?(schema)
+      yield
+    else
+      old_search_path = schema_search_path
+      transaction(requires_new: true) do
+        begin
+          self.schema_search_path += ",#{schema}"
+          yield
+        ensure
+          # the transaction rolling back or committing will revert the search path change;
+          # we don't need to do another query to set it
+          @schema_search_path = old_search_path
+        end
+      end
+    end
+  end
+
   private
 
-  OID = ActiveRecord::ConnectionAdapters::PostgreSQLAdapter::OID if Rails.version >= '4'
+  OID = ActiveRecord::ConnectionAdapters::PostgreSQLAdapter::OID
 
   def initialize_type_map(*args)
-    return super if Rails.version >= '4.2'
+    return super unless CANVAS_RAILS4_0
 
     known_type_names = OID::NAMES.keys.map { |n| "'#{n}'" } + OID::NAMES.keys.map { |n| "'_#{n}'" }
     known_type_names.concat(%w{'name' 'oidvector' 'int2vector' 'line' 'point' 'box' 'lseg'})
@@ -240,7 +267,7 @@ module PostgreSQLAdapterExtensions
     result = execute(sql, 'SCHEMA')
     leaves, nodes = result.partition { |row| row['typelem'] == '0' }
 
-    if Rails.version < '4.1'
+    if CANVAS_RAILS4_0
       # populate the leaf nodes
       leaves.find_all { |row| OID.registered_type? row['typname'] }.each do |row|
         OID::TYPE_MAP[row['oid'].to_i] = OID::NAMES[row['typname']]
@@ -293,27 +320,3 @@ module PostgreSQLAdapterExtensions
 end
 
 ActiveRecord::ConnectionAdapters::PostgreSQLAdapter.prepend(PostgreSQLAdapterExtensions)
-
-if CANVAS_RAILS3
-  module PostgreSQLAdapterFloatFixes
-    # Handle quoting properly for Infinity and NaN. This fix exists in Rails 4.0
-    # and can be safely removed once we upgrade.
-    #
-    # This patch is covered by tests in spec/initializers/active_record_quoting_spec.rb
-    def quote(value, column = nil) #:nodoc:
-      if value.kind_of?(Float)
-        if value.infinite? && column && column.type == :datetime
-          "'#{value.to_s.downcase}'"
-        elsif value.infinite? || value.nan?
-          "'#{value}'"
-        else
-          super
-        end
-      else
-        super
-      end
-    end
-  end
-
-  ActiveRecord::ConnectionAdapters::PostgreSQLAdapter.prepend(PostgreSQLAdapterFloatFixes)
-end

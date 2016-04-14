@@ -16,7 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-require File.expand_path(File.dirname(__FILE__) + '/../spec_helper.rb')
+require File.expand_path(File.dirname(__FILE__) + '/../sharding_spec_helper.rb')
 
 describe AssignmentOverride do
   before :once do
@@ -142,6 +142,14 @@ describe AssignmentOverride do
 
     def invalid_id_for_model(model)
       (model.maximum(:id) || 0) + 1
+    end
+
+    it "should propagate student errors" do
+      student = student_in_course(course: @override.assignment.context, name: 'Johnny Manziel').user
+      @override.assignment_override_students.create(user: student)
+      @override.assignment_override_students.build(user: student)
+      expect(@override).not_to be_valid
+      expect(@override.errors[:assignment_override_students].first.type).to eq :taken
     end
 
     it "should reject non-nil set_id with an adhoc set" do
@@ -632,6 +640,35 @@ describe AssignmentOverride do
     end
   end
 
+  describe "destroy_if_empty_set" do
+    before do
+      @override = assignment_override_model
+    end
+
+    it "does nothing if it is not ADHOC" do
+      @override.stubs(:set_type).returns "NOT_ADHOC"
+      @override.expects(:destroy).never
+
+      @override.destroy_if_empty_set
+    end
+
+    it "does nothing if the set is not empty" do
+      @override.stubs(:set_type).returns "ADHOC"
+      @override.stubs(:set).returns [1,2,3]
+      @override.expects(:destroy).never
+
+      @override.destroy_if_empty_set
+    end
+
+    it "destroys itself if the set is empty" do
+      @override.stubs(:set_type).returns 'ADHOC'
+      @override.stubs(:set).returns []
+      @override.expects(:destroy).once
+
+      @override.destroy_if_empty_set
+    end
+  end
+
   describe "applies_to_students" do
     before do
       student_in_course
@@ -660,6 +697,51 @@ describe AssignmentOverride do
       @course.enroll_student(@student,:enrollment_state => 'active', :section => @override.set)
 
       expect(@override.applies_to_students).to eq [@student]
+    end
+  end
+
+  describe "assignment_edits" do
+    before do
+      @override = assignment_override_model
+    end
+
+    it "returns false if no students who are active in course for ADHOC" do
+      @override.stubs(:set_type).returns "ADHOC"
+      @override.stubs(:set).returns []
+
+      expect(@override.set_not_empty?).to eq false
+    end
+
+    it "returns true if no students who are active in course and CourseSection or Group" do
+      @override.stubs(:set_type).returns "CourseSection"
+      @override.stubs(:set).returns []
+
+      expect(@override.set_not_empty?).to eq true
+
+      @override.stubs(:set_type).returns "Group"
+
+      expect(@override.set_not_empty?).to eq true
+    end
+
+    it "returns true if has students who are active in course for ADHOC" do
+      student = student_in_course(course: @override.assignment.context)
+      @override.set_type = "ADHOC"
+      @override_student = @override.assignment_override_students.build
+      @override_student.user = student.user
+      @override_student.save!
+
+      expect(@override.set_not_empty?).to eq true
+    end
+  end
+
+  describe '.only_visible_to' do
+    specs_require_sharding
+
+    it "references tables correctly for an out of shard query" do
+      # the critical thing is visible_students_only is called the default shard,
+      # but the query executes on a different shard, but it should still be
+      # well-formed (especially with qualified names)
+      AssignmentOverride.visible_students_only([1, 2]).shard(@shard1).to_a
     end
   end
 end

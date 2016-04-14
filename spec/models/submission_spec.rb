@@ -438,6 +438,55 @@ describe Submission do
   end
 
   context "turnitin" do
+
+    context "Turnitin LTI" do
+      let(:lti_tii_data) do
+        {
+            "attachment_42" => {
+                :status => "error",
+                :outcome_response => {
+                    "outcomes_tool_placement_url" => "https://api.turnitin.com/api/lti/1p0/invalid?lang=en_us",
+                    "paperid" => "607954245",
+                    "lis_result_sourcedid" => "10-5-42-8-invalid"
+                },
+                :public_error_message => "Turnitin has not returned a score after 11 attempts to retrieve one."
+            }
+        }
+      end
+
+      let(:submission) { Submission.new }
+
+      describe "#turnitinable_by_lti?" do
+        it 'returns true if there is an associated lti tool and data stored' do
+          submission.turnitin_data = lti_tii_data
+          expect(submission.turnitinable_by_lti?).to be true
+        end
+      end
+
+      describe "#resubmit_lti_tii" do
+        let(:tool) do
+          @course.context_external_tools.create(
+              name: "a",
+              consumer_key: '12345',
+              shared_secret: 'secret',
+              url: 'http://example.com/launch')
+        end
+
+        it 'resubmits errored tii attachments' do
+          a = @course.assignments.create!(title: "test",
+                                          submission_types: 'external_tool',
+                                          external_tool_tag_attributes: {url: tool.url})
+          submission.assignment = a
+          submission.turnitin_data = lti_tii_data
+          submission.user = @user
+          outcome_response_processor_mock = mock('outcome_response_processor')
+          outcome_response_processor_mock.expects(:resubmit).with(submission, "attachment_42")
+          Turnitin::OutcomeResponseProcessor.stubs(:new).returns(outcome_response_processor_mock)
+          submission.retrieve_lti_tii_score
+        end
+      end
+    end
+
     context "submission" do
       def init_turnitin_api
         @turnitin_api = Turnitin::Client.new('test_account', 'sekret')
@@ -1173,6 +1222,32 @@ describe Submission do
       expect(a1.crocodoc_document(true)).to eq cd
       expect(a2.crocodoc_document).to eq a2.crocodoc_document
     end
+
+    it "doesn't create jobs for non-previewable documents" do
+      job_scope = Delayed::Job.where(strand: "canvadocs")
+      orig_job_count = job_scope.count
+
+      attachment = attachment_model(context: @user)
+      s = @assignment.submit_homework(@user,
+                                      submission_type: "online_upload",
+                                      attachments: [attachment])
+      expect(job_scope.count).to eq orig_job_count
+    end
+
+    it "doesn't use canvadocs for moderated grading assignments" do
+      @assignment.update_attribute :moderated_grading, true
+      Canvas::Crocodoc.stubs(:enabled?).returns true
+      Canvadocs.stubs(:enabled?).returns true
+      Canvadocs.stubs(:annotations_supported?).returns true
+
+      attachment = crocodocable_attachment_model(context: @user)
+      s = @assignment.submit_homework(@user,
+                                      submission_type: "online_upload",
+                                      attachments: [attachment])
+      run_jobs
+      expect(@attachment.canvadoc).to be_nil
+      expect(@attachment.crocodoc_document).not_to be_nil
+    end
   end
 
   describe "cross-shard attachments" do
@@ -1269,8 +1344,6 @@ describe Submission do
 
     context "moderated" do
       before(:once) do
-        @course.root_account.allow_feature! :moderated_grading
-        @course.enable_feature! :moderated_grading
         @assignment.moderated_grading = true
         @assignment.save!
         @submission.reload
@@ -1331,6 +1404,69 @@ describe Submission do
                                                                    moderator.reload.crocodoc_id!])
           end
         end
+      end
+    end
+  end
+
+  describe '#rubric_association_with_assessing_user_id' do
+    before :once do
+      submission_model assignment: @assignment, user: @student
+      rubric_association_model association_object: @assignment, purpose: 'grading'
+    end
+    subject { @submission.rubric_association_with_assessing_user_id }
+
+    it 'sets assessing_user_id to submission.user_id' do
+      expect(subject.assessing_user_id).to eq @submission.user_id
+    end
+  end
+
+  describe '#visible_rubric_assessments_for' do
+    before :once do
+      submission_model assignment: @assignment, user: @student
+      @viewing_user = @teacher
+    end
+    subject { @submission.visible_rubric_assessments_for(@viewing_user) }
+
+    it 'returns empty if assignment is muted?' do
+      @assignment.update_attribute(:muted, true)
+      expect(@assignment.muted?).to be_truthy, 'precondition'
+      expect(subject).to be_empty
+    end
+
+    it 'returns empty if viewing user cannot :read_grade' do
+      student_in_course(active_all: true)
+      @viewing_user = @student
+      expect(@submission.grants_right?(@viewing_user, :read_grade)).to be_falsey, 'precondition'
+      expect(subject).to be_empty
+    end
+
+    context 'with rubric_assessments' do
+      before :once do
+        @assessed_user = @student
+        rubric_association_model association_object: @assignment, purpose: 'grading'
+        student_in_course(active_all: true)
+        [ @teacher, @student ].each do |user|
+          @rubric_association.rubric_assessments.create!({
+            artifact: @submission,
+            assessment_type: 'grading',
+            assessor: user,
+            rubric: @rubric,
+            user: @assessed_user
+          })
+        end
+        @teacher_assessment = @submission.rubric_assessments.where(assessor_id: @teacher).first
+        @student_assessment = @submission.rubric_assessments.where(assessor_id: @student).first
+      end
+      subject { @submission.visible_rubric_assessments_for(@viewing_user) }
+
+      it 'returns rubric_assessments for teacher' do
+        expect(subject).to include(@teacher_assessment)
+      end
+
+      it 'returns only student rubric assessment' do
+        @viewing_user = @student
+        expect(subject).not_to include(@teacher_assessment)
+        expect(subject).to include(@student_assessment)
       end
     end
   end

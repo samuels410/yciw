@@ -56,7 +56,7 @@ HEREDOC
 <div id="collaborations">
 <% @collaborations.each do |collaboration| %>
   <% if can_do(collaboration, @current_user, :read) %>
-    <% if !collaboration.is_a?(GoogleDocsCollaboration) || (collaboration.is_a?(GoogleDocsCollaboration) && !@google_drive_upgrade) %>
+    <% if !collaboration.is_a?(GoogleDocsCollaboration) || (collaboration.is_a?(GoogleDocsCollaboration) && @user_has_google_drive) %>
       <div class="collaboration <%= collaboration.style_class %> collaboration_<%= collaboration.id %>" data-id="<%= collaboration.id %>">
         <div class="collaboration-header clearfix">
           <h2>
@@ -65,10 +65,10 @@ HEREDOC
           <% if can_do(collaboration, @current_user, :update) || can_do(collaboration, @current_user, :delete) %>
             <div class="links">
               <% if can_do(collaboration, @current_user, :update) %>
-                <a class="edit_collaboration_link no-hover" role="button" href="<%= context_url(@context, :context_collaboration_url, collaboration.id) %>" title="<%= t 'links.edit', "Edit this Collaboration" %>"><%= image_tag "edit.png" %></a>
+                <a class="edit_collaboration_link no-hover" role="button" href="<%= context_url(@context, :context_collaboration_url, collaboration.id) %>" title="<%= t 'links.edit', "Edit this Collaboration" %>"><%= image_tag "edit.png", :alt => t('Edit this Collaboration') %></a>
               <% end %>
               <% if can_do(collaboration, @current_user, :delete) %>
-                <a class="delete_collaboration_link no-hover" role="button" href="<%= context_url(@context, :context_collaboration_url, collaboration.id) %>" title="<%= t 'links.delete', "Delete this Collaboration" %>"><%= image_tag "delete.png" %></a>
+                <a class="delete_collaboration_link no-hover" role="button" href="<%= context_url(@context, :context_collaboration_url, collaboration.id) %>" title="<%= t 'links.delete', "Delete this Collaboration" %>"><%= image_tag "delete.png", :alt => t('Delete this Collaboration') %></a>
               <% end %>
             </div>
           <% end %>
@@ -81,7 +81,7 @@ HEREDOC
                 :at => datetime_string(collaboration.created_at) %>
         </small>
       </div>
-    <% elsif  @google_drive_upgrade %>
+    <% elsif !@user_has_google_drive %>
         <div class="collaboration <%= collaboration.style_class %> collaboration_<%= collaboration.id %>" data-id="<%= collaboration.id %>">
           <h3><%= collaboration.title %></h3>
           <div style="margin-bottom: 5px;" class="description">

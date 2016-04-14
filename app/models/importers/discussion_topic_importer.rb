@@ -65,9 +65,9 @@ module Importers
       topic = DiscussionTopic.where(context_type: context.class.to_s, context_id: context.id).
         where(['id = ? OR (migration_id IS NOT NULL AND migration_id = ?)', options[:id], options[:migration_id]]).first
       topic ||= if options[:type] =~ /announcement/i
-                  context.announcements.scoped.new
+                  context.announcements.temp_record
                 else
-                  context.discussion_topics.scoped.new
+                  context.discussion_topics.temp_record
                 end
       topic.saved_by = :migration
       topic
@@ -95,7 +95,7 @@ module Importers
       item.last_reply_at   = nil if item.new_record?
 
       if options[:workflow_state].present?
-        item.workflow_state = options[:workflow_state]
+        item.workflow_state = options[:workflow_state] if (options[:workflow_state] != 'unpublished') || item.new_record?
       elsif item.should_not_post_yet
         item.workflow_state = 'post_delayed'
       else

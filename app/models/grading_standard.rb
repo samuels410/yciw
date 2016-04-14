@@ -21,15 +21,10 @@ class GradingStandard < ActiveRecord::Base
 
   attr_accessible :title, :standard_data, :data
 
-  belongs_to :context, :polymorphic => true
+  belongs_to :context, polymorphic: [:account, :course]
   belongs_to :user
   has_many :assignments
 
-
-  EXPORTABLE_ATTRIBUTES = [:id, :title, :data, :context_id, :context_type, :created_at, :updated_at, :user_id, :usage_count, :context_code, :workflow_state, :version]
-  EXPORTABLE_ASSOCIATIONS = [:context, :user, :assignments]
-
-  validates_inclusion_of :context_type, :allow_nil => true, :in => ['Account', 'Course']
   validates_presence_of :context_id, :context_type, :workflow_state, :data
   validate :valid_grading_scheme_data
 
@@ -184,7 +179,7 @@ class GradingStandard < ActiveRecord::Base
     res
   end
 
-  alias_method :destroy!, :destroy
+  alias_method :destroy_permanently!, :destroy
   def destroy
     self.workflow_state = 'deleted'
     self.save

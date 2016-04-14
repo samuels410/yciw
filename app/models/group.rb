@@ -34,8 +34,7 @@ class Group < ActiveRecord::Base
   has_many :users, -> { where("users.workflow_state<>'deleted'") }, through: :group_memberships
   has_many :participating_group_memberships, -> { where(workflow_state: 'accepted') }, class_name: "GroupMembership"
   has_many :participating_users, :source => :user, :through => :participating_group_memberships
-  belongs_to :context, :polymorphic => true
-  validates_inclusion_of :context_type, :allow_nil => true, :in => ['Course', 'Account']
+  belongs_to :context, polymorphic: [:course, { context_account: 'Account' }]
   belongs_to :group_category
   belongs_to :account
   belongs_to :root_account, :class_name => "Account"
@@ -56,6 +55,7 @@ class Group < ActiveRecord::Base
   has_many :external_feeds, :as => :context, :dependent => :destroy
   has_many :messages, :as => :context, :dependent => :destroy
   belongs_to :wiki
+  has_many :wiki_pages, foreign_key: 'wiki_page', primary_key: 'wiki_page'
   has_many :web_conferences, :as => :context, :dependent => :destroy
   has_many :collaborations, -> { order('title, created_at') }, as: :context, dependent: :destroy
   has_many :media_objects, :as => :context
@@ -65,21 +65,6 @@ class Group < ActiveRecord::Base
   has_many :usage_rights, as: :context, class_name: 'UsageRights', dependent: :destroy
   belongs_to :avatar_attachment, :class_name => "Attachment"
   belongs_to :leader, :class_name => "User"
-
-  EXPORTABLE_ATTRIBUTES = [
-    :id, :name, :workflow_state, :created_at, :updated_at, :context_id,
-    :context_type, :category, :max_membership, :is_public, :account_id,
-    :default_wiki_editing_roles, :wiki_id, :deleted_at, :join_level,
-    :default_view, :storage_quota, :uuid, :root_account_id, :sis_source_id,
-    :sis_batch_id, :group_category_id, :description, :avatar_attachment_id
-  ].freeze
-
-  EXPORTABLE_ASSOCIATIONS = [
-    :users, :group_memberships, :users, :context, :group_category, :account,
-    :root_account, :calendar_events, :discussion_topics, :discussion_entries,
-    :announcements, :attachments, :folders, :collaborators, :wiki,
-    :web_conferences, :collaborations, :media_objects, :avatar_attachment
-  ].freeze
 
   before_validation :ensure_defaults
   before_save :maintain_category_attribute
@@ -124,8 +109,9 @@ class Group < ActiveRecord::Base
       participating_users_association
   end
 
-  def participating_users_in_context(user_ids = nil)
+  def participating_users_in_context(user_ids = nil, sort: false)
     users = participating_users(user_ids)
+    users = users.order_by_sortable_name if sort
     return users unless self.context.is_a? Course
     context.participating_users(users.pluck(:id))
   end
@@ -203,7 +189,7 @@ class Group < ActiveRecord::Base
     return false unless self.context
     case self.context
     when Course
-      self.context.available?
+      self.context.available? && (!self.context.respond_to?(:concluded?) || !self.context.concluded?)
     else
       true
     end
@@ -286,7 +272,7 @@ class Group < ActiveRecord::Base
     self.available? || self.closed?
   end
 
-  alias_method :destroy!, :destroy
+  alias_method :destroy_permanently!, :destroy
   def destroy
     self.workflow_state = 'deleted'
     self.deleted_at = Time.now.utc
@@ -324,13 +310,17 @@ class Group < ActiveRecord::Base
       when 'parent_context_auto_join' then 'accepted'
       end
     attrs[:workflow_state] = new_record_state if new_record_state
-    if member = self.group_memberships.where(user_id: user).first
-      member.workflow_state = new_record_state unless member.active?
-      # only update moderator if true/false is explicitly passed in
-      member.moderator = moderator unless moderator.nil?
-      member.save if member.changed?
-    else
-      member = self.group_memberships.create(attrs)
+
+    member = nil
+    GroupMembership.unique_constraint_retry do
+      if member = self.group_memberships.where(user_id: user).first
+        member.workflow_state = new_record_state unless member.active?
+        # only update moderator if true/false is explicitly passed in
+        member.moderator = moderator unless moderator.nil?
+        member.save if member.changed?
+      else
+        member = self.group_memberships.create(attrs)
+      end
     end
     # permissions for this user in the group are probably different now
     clear_permissions_cache(user)
@@ -491,6 +481,7 @@ class Group < ActiveRecord::Base
       can :post_to_forum and
       can :read and
       can :read_forum and
+      can :read_announcements and
       can :read_roster and
       can :send_messages and
       can :send_messages_all and
@@ -536,6 +527,7 @@ class Group < ActiveRecord::Base
       can :post_to_forum and
       can :read and
       can :read_forum and
+      can :read_announcements and
       can :read_roster and
       can :send_messages and
       can :send_messages_all and
@@ -543,7 +535,7 @@ class Group < ActiveRecord::Base
       can :view_unpublished_items
 
       given { |user, session| self.context && self.context.grants_right?(user, session, :view_group_pages) }
-      can :read and can :read_forum and can :read_roster
+      can :read and can :read_forum and can :read_announcements and can :read_roster
 
       # Join is participate + the group being in a state that allows joining directly (free_association)
       given { |user| user && can_participate?(user) && free_association?(user)}
@@ -570,13 +562,21 @@ class Group < ActiveRecord::Base
     return false unless user.present? && self.context.present?
     return true if self.group_category.try(:communities?)
     if self.context.is_a?(Course)
-      return self.context.enrollments.not_fake.except(:preload).where(:user_id => user.id).exists?
+      return self.context.enrollments.not_fake.except(:preload).where(:user_id => user.id).any?(&:participating?)
     elsif self.context.is_a?(Account)
       return self.context.root_account.user_account_associations.where(:user_id => user.id).exists?
     end
     return false
   end
   private :can_participate?
+
+  def can_join?(user)
+    if self.context.is_a?(Course)
+      self.context.enrollments.not_fake.except(:preload).where(:user_id => user.id).exists?
+    else
+      can_participate?(user)
+    end
+  end
 
   def user_can_manage_own_discussion_posts?(user)
     return true unless self.context.is_a?(Course)
@@ -716,9 +716,11 @@ class Group < ActiveRecord::Base
     self.content_exports.where(user_id: user)
   end
 
-  def account_chain
+  def account_chain(include_site_admin: false)
     @account_chain ||= Account.account_chain(account_id)
-    @account_chain.dup
+    result = @account_chain.dup
+    Account.add_site_admin_to_chain!(result) if include_site_admin
+    result
   end
 
   def sortable_name

@@ -55,9 +55,50 @@ module ActiveRecord
           User.connection.cache { User.find_each(batch_size: 1) { |u| found << u } }
           expect(found).to eq users
         end
+
+        it "cleans up the cursor" do
+          # two cursors with the same name; if it didn't get cleaned up, it would error
+          User.all.find_each {}
+          User.all.find_each {}
+        end
+
+        it "cleans up the temp table for non-DB error" do
+          User.create!
+          # two temp tables with the same name; if it didn't get cleaned up, it would error
+          expect do
+            User.all.find_each do
+              raise ArgumentError
+            end
+          end.to raise_error(ArgumentError)
+
+          User.all.find_each {}
+        end
+
+        it "doesnt obfuscate the error when it dies in a transaction" do
+          account = Account.create!
+          course = account.courses.create!
+          User.create!
+          expect do
+            ActiveRecord::Base.transaction do
+              User.all.find_each do |batch|
+                # to force a foreign key error
+                Account.where(id: account).delete_all
+              end
+            end
+          end.to raise_error(ActiveRecord::InvalidForeignKey)
+        end
       end
 
       describe "with temp table" do
+        around do |example|
+          begin
+            ActiveRecord::Base.in_migration = true
+            example.run
+          ensure
+            ActiveRecord::Base.in_migration = false
+          end
+        end
+
         it "should use a temp table when you select without an id" do
           User.create!
           User.select(:name).find_in_batches do |batch|
@@ -68,7 +109,7 @@ module ActiveRecord
         it "should not use a temp table for a plain query" do
           User.create!
           User.find_in_batches do |batch|
-            expect { User.connection.select_value("SELECT COUNT(*) FROM users_find_in_batches_temp_table_#{User.scoped.to_sql.hash.abs.to_s(36)}") }.to raise_error
+            expect { User.connection.select_value("SELECT COUNT(*) FROM users_find_in_batches_temp_table_#{User.all.to_sql.hash.abs.to_s(36)}") }.to raise_error
           end
         end
 
@@ -87,6 +128,38 @@ module ActiveRecord
               User.select(selector).find_in_batches(start: 0){|batch| }
             }.not_to raise_error
           end
+        end
+
+        it "cleans up the temp table" do
+          # two temp tables with the same name; if it didn't get cleaned up, it would error
+          User.all.find_in_batches_with_temp_table {}
+          User.all.find_in_batches_with_temp_table {}
+        end
+
+        it "cleans up the temp table for non-DB error" do
+          User.create!
+          # two temp tables with the same name; if it didn't get cleaned up, it would error
+          expect do
+            User.all.find_in_batches_with_temp_table do
+              raise ArgumentError
+            end
+          end.to raise_error(ArgumentError)
+
+          User.all.find_in_batches_with_temp_table {}
+        end
+
+        it "doesnt obfuscate the error when it dies in a transaction" do
+          account = Account.create!
+          course = account.courses.create!
+          User.create!
+          expect do
+            ActiveRecord::Base.transaction do
+              User.all.find_in_batches_with_temp_table do |batch|
+                # to force a foreign key error
+                Account.where(id: account).delete_all
+              end
+            end
+          end.to raise_error(ActiveRecord::InvalidForeignKey)
         end
 
       end

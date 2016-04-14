@@ -16,6 +16,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 define([
+  'jsx/shared/rce/RceCommandShim',
   'INST' /* INST */,
   'i18n!instructure',
   'jquery' /* jQuery, $ */,
@@ -32,7 +33,7 @@ define([
   'compiled/jquery.rails_flash_notifications',
   'tinymce.editor_box' /* editorBox */,
   'vendor/jquery.scrollTo' /* /\.scrollTo/ */
-], function(INST, I18n, $, _, FakeXHR, authenticity_token, htmlEscape) {
+], function(RceCommandShim, INST, I18n, $, _, FakeXHR, authenticity_token, htmlEscape) {
 
   // Intercepts the default form submission process.  Uses the form tag's
   // current action and method attributes to know where to submit to.
@@ -684,7 +685,7 @@ define([
       }
       try {
         if($input.data('rich_text')) {
-          val = $input.editorBox('get_code', false);
+          val = new RceCommandShim().send($input, "get_code", false);
         }
       } catch(e) {}
       var attr = $input.prop('name') || '';
@@ -1024,7 +1025,14 @@ define([
       }).fadeIn('fast');
 
       var cleanup = function() {
+        var $screenReaderErrors = $("#flash_screenreader_holder").find("span");
+        var srError = _.find($screenReaderErrors, function(node){
+          return $(node).text() == $box.text();
+        });
         $box.remove();
+        if(srError){
+          $(srError).remove();
+        };
         $obj.removeData('associated_error_box');
         $obj.removeData('associated_error_object');
       };
@@ -1093,6 +1101,7 @@ define([
   $.fn.hideErrors = function(options) {
     if(this.length) {
       var $oldBox = this.data('associated_error_box');
+      var $screenReaderErrors = $("#flash_screenreader_holder").find("span");
       if($oldBox) {
         $oldBox.remove();
         this.data('associated_error_box', null);
@@ -1103,6 +1112,12 @@ define([
         if($oldBox) {
           $oldBox.remove();
           $obj.data('associated_error_box', null);
+          srError = _.find($screenReaderErrors, function(node){
+            return $(node).text() == $oldBox.text();
+          });
+          if(srError){
+            $(srError).remove();
+          };
         }
       });
     }

@@ -47,8 +47,8 @@ describe RubricAssessment do
     expect(@assessment.data.first[:comments]).to eq comment
     t = Class.new
     t.extend HtmlTextHelper
-    # data has been round-tripped through YAML, and syck doesn't preserve carriage returns
-    expect(@assessment.data.first[:comments_html]).to eq t.format_message(comment).first.gsub("\r", '')
+    expected = t.format_message(comment).first
+    expect(@assessment.data.first[:comments_html]).to eq expected
   end
 
   context "grading" do

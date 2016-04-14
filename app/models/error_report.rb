@@ -73,9 +73,9 @@ class ErrorReport < ActiveRecord::Base
 
     def create_error_report(opts)
       Shackles.activate(:master) do
-        report = ErrorReport.new
-        report.assign_data(opts)
         begin
+          report = ErrorReport.new
+          report.assign_data(opts)
           report.save!
           Rails.logger.info("Created ErrorReport ID #{report.global_id}")
         rescue => e
@@ -192,7 +192,7 @@ class ErrorReport < ActiveRecord::Base
   end
 
   def self.categories
-    distinct('category')
+    distinct_values('category')
   end
 
   # Send the error report based on configuration either via a POST or email to an external location.

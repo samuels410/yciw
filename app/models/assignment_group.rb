@@ -21,16 +21,9 @@ class AssignmentGroup < ActiveRecord::Base
   include Workflow
 
   attr_accessible :name, :rules, :assignment_weighting_scheme, :group_weight, :position, :default_assignment_name
-  EXPORTABLE_ATTRIBUTES = [
-    :id, :name, :rules, :default_assignment_name, :assignment_weighting_scheme, :group_weight, :context_id,
-    :context_type, :workflow_state, :created_at, :updated_at, :cloned_item_id, :context_code
-  ]
-
-  EXPORTABLE_ASSOCIATIONS = [:context, :assignments]
 
   attr_readonly :context_id, :context_type
-  belongs_to :context, :polymorphic => true
-  validates_inclusion_of :context_type, :allow_nil => true, :in => ['Course']
+  belongs_to :context, polymorphic: [:course]
   acts_as_list scope: { context: self, workflow_state: 'available' }
   has_a_broadcast_policy
 
@@ -63,7 +56,7 @@ class AssignmentGroup < ActiveRecord::Base
 
   def update_student_grades
     if self.rules_changed? || self.group_weight_changed?
-      connection.after_transaction_commit { self.context.recompute_student_scores }
+      self.class.connection.after_transaction_commit { self.context.recompute_student_scores }
     end
   end
 
@@ -84,7 +77,7 @@ class AssignmentGroup < ActiveRecord::Base
     state :deleted
   end
 
-  alias_method :destroy!, :destroy
+  alias_method :destroy_permanently!, :destroy
   def destroy
     self.workflow_state = 'deleted'
     self.assignments.active.include_quiz_and_topic.each{|a| a.destroy }

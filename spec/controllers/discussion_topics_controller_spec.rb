@@ -61,6 +61,12 @@ describe DiscussionTopicsController do
       assert_unauthorized
     end
 
+    it 'does not show announcements without :read_announcements' do
+      @course.account.role_overrides.create!(permission: 'read_announcements', role: student_role, enabled: false)
+      get 'index', course_id: @course.id
+      assert_unauthorized
+    end
+
     it "should load for :view_group_pages students" do
       @course.account.role_overrides.create!(
         role: student_role,
@@ -82,7 +88,6 @@ describe DiscussionTopicsController do
           permission: 'view_group_pages',
           enabled: true
         )
-        @course.enable_feature!(:differentiated_assignments)
 
         group_discussion_assignment
         @child_topic = @topic.child_topics.first
@@ -136,7 +141,6 @@ describe DiscussionTopicsController do
         permission: 'view_group_pages',
         enabled: true
       )
-      @course.enable_feature!(:differentiated_assignments)
 
       group_category(context: @course)
       membership = group_with_user(group_category: @group_category, user: @student, context: @course)
@@ -167,14 +171,14 @@ describe DiscussionTopicsController do
       assert_unauthorized
     end
 
-    it "should work for announcements in a public course" do
+    it "should not work for announcements in a public course" do
       @course.update_attribute(:is_public, true)
       @announcement = @course.announcements.create!(
         :title => "some announcement",
         :message => "some message"
       )
       get 'show', :course_id => @course.id, :id => @announcement.id
-      expect(response).to be_success
+      expect(response).to_not be_success
     end
 
     it "should not display announcements in private courses to users who aren't logged in" do
@@ -364,6 +368,22 @@ describe DiscussionTopicsController do
         get 'show', :course_id => @course.id, :id => @topic.id
         redirect_path = "/groups/#{@group1.id}/discussion_topics?root_discussion_topic_id=#{@topic.id}"
         expect(response).to redirect_to redirect_path
+      end
+
+      it "should not change the name of the child topic when navigating to it" do
+        user_session(@student)
+        @group1.add_user(@student)
+
+        course_topic(user: @teacher, with_assignment: true)
+        @topic.group_category = @group_category
+        @topic.save!
+
+        child_topic = @topic.child_topic_for(@student)
+        old_title = child_topic.title
+
+        get 'index', :group_id => @group1.id, :root_discussion_topic_id => @topic.id
+
+        expect(@topic.child_topic_for(@student).title).to eq old_title
       end
     end
 
@@ -558,7 +578,6 @@ describe DiscussionTopicsController do
     it 'does not dispatch new topic notification when hidden by selective release' do
       notification = Notification.create(name: 'New Discussion Topic', category: 'TestImmediately')
       @student.communication_channels.create!(path: 'student@example.com') {|cc| cc.workflow_state = 'active'}
-      @course.enable_feature!(:differentiated_assignments)
       new_section = @course.course_sections.create!
       obj_params = topic_params(@course, published: true).merge(assignment_params(@course, only_visible_to_overrides: true, assignment_overrides: [{course_section_id: new_section.id}]))
       user_session(@teacher)

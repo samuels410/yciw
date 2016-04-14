@@ -1,5 +1,6 @@
 require 'timeout'
 require 'json'
+require_relative "../../config/initializers/webpack"
 
 namespace :js do
 
@@ -70,7 +71,7 @@ namespace :js do
   desc 'test javascript specs with Karma'
   task :test, :reporter do |task, args|
     reporter = args[:reporter]
-    if ENV['USE_WEBPACK'].present? && ENV['USE_WEBPACK'] != 'false'
+    if CANVAS_WEBPACK
       Rake::Task['i18n:generate_js'].invoke
       webpack_test_dir = Rails.root + "spec/javascripts/webpack"
       FileUtils.rm_rf(webpack_test_dir)
@@ -293,21 +294,26 @@ namespace :js do
 
   desc "build webpack js for production"
   task :webpack do
-    if ENV['USE_WEBPACK'].present? && ENV['USE_WEBPACK'] != 'false' && ENV['USE_WEBPACK'] != 'False'
+    if CANVAS_WEBPACK
       if ENV['RAILS_ENV'] == 'production'
         puts "--> Building PRODUCTION webpack bundles"
         `npm run webpack-production`
+        raise "Error running js:webpack: \nABORTING" if $?.exitstatus != 0
       else
-        puts "--> Building DEVELOPMENT webpack bundles"
-        `npm run webpack-development`
-        if ENV['USE_OPTIMIZED_JS'] == 'true'
-          # if this var is set, we'll need to have optimized version of the
-          # webpack bundles available too
-          puts "--> Building OPTIMIZED webpack bundles"
-          `npm run webpack-production`
+        commands = ['npm run webpack-development']
+
+        # if this var is set, we'll need to have optimized version of the
+        # webpack bundles available too
+        if ENV['USE_OPTIMIZED_JS'] == 'true' || ENV['USE_OPTIMIZED_JS'] == 'True'
+          commands << 'npm run webpack-production'
+        end
+        require 'parallel'
+        Parallel.each(commands) do |command|
+          puts "--> Running #{command}"
+          system(command)
+          raise "Error running #{command}\nABORTING" if $?.exitstatus != 0
         end
       end
-      raise "Error running js:webpack: \nABORTING" if $?.exitstatus != 0
     end
   end
 
@@ -340,8 +346,18 @@ namespace :js do
 
   desc "Compile React JSX to JS"
   task :jsx do
+    # Get the canvas-lms jsx and specs to compile
     dirs = [["#{Rails.root}/app/jsx", "#{Rails.root}/public/javascripts/jsx"],
             ["#{Rails.root}/spec/javascripts/jsx", "#{Rails.root}/spec/javascripts/compiled"]]
+    # Get files that need compilation in plugins
+    plugin_jsx_dirs = Dir.glob("#{Rails.root}/gems/plugins/*/**/jsx")
+    plugin_jsx_dirs.each do |directory|
+      plugin_name = directory.match(/gems\/plugins\/([^\/]+)\//)[1]
+      destination = "#{Rails.root}/public/javascripts/plugins/#{plugin_name}/compiled/jsx"
+      FileUtils.mkdir_p(destination)
+      dirs << [directory, destination]
+    end
+
     dirs.each { |source,dest|
       if Rails.env == 'development'
         msg = `node_modules/.bin/babel #{source} --out-dir #{dest} --source-maps inline 2>&1 >/dev/null`

@@ -30,14 +30,6 @@ class AppointmentGroup < ActiveRecord::Base
   has_many :appointment_group_contexts
   has_many :appointment_group_sub_contexts, -> { preload(:sub_context) }
 
-  EXPORTABLE_ATTRIBUTES = [
-    :id, :title, :description, :location_name, :location_address, :context_id, :context_type, :context_code, :sub_context_id, :sub_context_type,
-    :sub_context_code, :workflow_state, :created_at, :updated_at, :start_at, :end_at, :participants_per_appointment, :max_appointments_per_participant,
-    :min_appointments_per_participant, :participant_visibility
-  ]
-
-  EXPORTABLE_ASSOCIATIONS = [:appointments, :appointment_participants, :appointment_group_contexts, :appointment_group_sub_contexts]
-
   def context
     appointment_group_contexts.first.context
   end
@@ -47,7 +39,7 @@ class AppointmentGroup < ActiveRecord::Base
   end
 
   def active_contexts
-    contexts.reject { |context| context.workflow_state == 'deleted' }
+    contexts.reject { |context| context.workflow_state == 'deleted' || context.concluded? }
   end
 
   def sub_contexts
@@ -451,7 +443,7 @@ class AppointmentGroup < ActiveRecord::Base
     state :deleted
   end
 
-  alias_method :destroy!, :destroy
+  alias_method :destroy_permanently!, :destroy
   def destroy
     transaction do
       self.workflow_state = 'deleted'

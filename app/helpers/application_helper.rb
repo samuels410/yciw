@@ -223,7 +223,7 @@ module ApplicationHelper
 
   # See `js_base_url`
   def use_optimized_js?
-    if ENV['USE_OPTIMIZED_JS'] == 'true'
+    if ENV['USE_OPTIMIZED_JS'] == 'true' || ENV['USE_OPTIMIZED_JS'] == 'True'
       # allows overriding by adding ?debug_assets=1 or ?debug_js=1 to the url
       !(params[:debug_assets] || params[:debug_js])
     else
@@ -233,7 +233,7 @@ module ApplicationHelper
   end
 
   def use_webpack?
-    if ENV['USE_WEBPACK'].present? && ENV['USE_WEBPACK'] != 'false'
+    if CANVAS_WEBPACK
       !(params[:require_js])
     else
       params[:webpack]
@@ -260,14 +260,13 @@ module ApplicationHelper
 
   # Returns a <script> tag for each registered js_bundle
   def include_js_bundles
-    common_bundles = []
-    common_bundles = ["#{js_base_url}/vendor.bundle.js", "#{js_base_url}/instructure-common.bundle.js"] if use_webpack?
-    paths = js_bundles.inject(common_bundles) do |ary, (bundle, plugin)|
+    paths = []
+    paths = ["#{js_base_url}/vendor.bundle.js", "#{js_base_url}/instructure-common.bundle.js"] if use_webpack?
+    js_bundles.each do |(bundle, plugin)|
       if use_webpack?
-        ary << "#{js_base_url}/#{plugin ? "#{plugin}-" : ''}#{bundle}.bundle.js"
+        paths << "#{js_base_url}/#{plugin ? "#{plugin}-" : ''}#{bundle}.bundle.js"
       else
-        ary.concat(Canvas::RequireJs.extensions_for(bundle, 'plugins/')) unless use_optimized_js?
-        ary << "#{js_base_url}#{plugin ? "/plugins/#{plugin}" : ''}/compiled/bundles/#{bundle}.js"
+        paths << "#{js_base_url}#{plugin ? "/plugins/#{plugin}" : ''}/compiled/bundles/#{bundle}.js"
       end
     end
     javascript_include_tag(*paths, type: nil)
@@ -322,7 +321,7 @@ module ApplicationHelper
     tabs = @context.tabs_available(@current_user, :for_reordering => true, :root_account => @domain_root_account)
     tabs.select do |tab|
       if (tab[:id] == @context.class::TAB_COLLABORATIONS rescue false)
-        Collaboration.any_collaborations_configured?
+        Collaboration.any_collaborations_configured?(@context)
       elsif (tab[:id] == @context.class::TAB_CONFERENCES rescue false)
         feature_enabled?(:web_conferences)
       else
@@ -387,7 +386,7 @@ module ApplicationHelper
 
   def license_help_link
     @include_license_dialog = true
-    link_to(image_tag('help.png'), '#', :class => 'license_help_link no-hover', :title => "Help with content licensing")
+    link_to(image_tag('help.png', :alt => I18n.t("Help with content licensing")), '#', :class => 'license_help_link no-hover', :title => I18n.t("Help with content licensing"))
   end
 
   def equella_enabled?
@@ -453,7 +452,6 @@ module ApplicationHelper
       :disableScribdPreviews    => !feature_enabled?(:scribd),
       :disableCrocodocPreviews  => !feature_enabled?(:crocodoc),
       :enableScribdHtml5        => feature_enabled?(:scribd_html5),
-      :enableHtml5FirstVideos   => @domain_root_account.feature_enabled?(:html5_first_videos),
       :logPageViews             => !@body_class_no_headers,
       :maxVisibleEditorButtons  => 3,
       :editorButtons            => editor_buttons,
@@ -469,21 +467,12 @@ module ApplicationHelper
   def editor_buttons
     contexts = ContextExternalTool.contexts_to_search(@context)
     return [] if contexts.empty?
-    Rails.cache.fetch((['editor_buttons_for'] + contexts.uniq).cache_key) do
+    cached_tools = Rails.cache.fetch((['editor_buttons_for'] + contexts.uniq).cache_key) do
       tools = ContextExternalTool.shard(@context.shard).active.
           having_setting('editor_button').polymorphic_where(context: contexts)
-      tools.sort_by(&:id).map do |tool|
-        {
-          :name => tool.label_for(:editor_button, I18n.locale),
-          :id => tool.id,
-          :url => tool.editor_button(:url),
-          :icon_url => tool.editor_button(:icon_url),
-          :canvas_icon_class => tool.editor_button(:canvas_icon_class),
-          :width => tool.editor_button(:selection_width),
-          :height => tool.editor_button(:selection_height)
-        }
-      end
+      tools.sort_by(&:id)
     end
+    ContextExternalTool.shard(@context.shard).editor_button_json(cached_tools, @context, @current_user, session)
   end
 
   def nbsp
@@ -677,7 +666,7 @@ module ApplicationHelper
     @active_brand_config_cache ||= {}
     return @active_brand_config_cache[opts] if @active_brand_config_cache.key?(opts)
     @active_brand_config_cache[opts] = begin
-      if !use_new_styles? || (@current_user && @current_user.prefers_high_contrast?)
+      if !use_new_styles? || (!opts[:ignore_high_contrast_preference] && @current_user && @current_user.prefers_high_contrast?)
         nil
       elsif session.key?(:brand_config_md5)
         BrandConfig.where(md5: session[:brand_config_md5]).first
@@ -720,24 +709,36 @@ module ApplicationHelper
 
   def get_global_includes
     return @global_includes if defined?(@global_includes)
-    @global_includes = [Account.site_admin.global_includes_hash]
-    @global_includes << @domain_root_account.global_includes_hash if @domain_root_account.present?
-    if @domain_root_account.try(:sub_account_includes?)
+    @global_includes = if @domain_root_account.try(:sub_account_includes?)
       # get the deepest account to start looking for branding
       if (acct = Context.get_account(@context))
+
+        # cache via the id because it could be that the root account js changes
+        # but the cache is for the sub-account, and we'd rather have everything
+        # reset after 15 minutes then have some places update immediately and
+        # some places wait.
         key = [acct.id, 'account_context_global_includes'].cache_key
-        includes = Rails.cache.fetch(key, :expires_in => 15.minutes) do
-          acct.account_chain.reverse.map(&:global_includes_hash)
+        Rails.cache.fetch(key, :expires_in => 15.minutes) do
+          acct.account_chain(include_site_admin: true).
+            reverse.map(&:global_includes_hash)
         end
-        @global_includes.concat(includes)
       elsif @current_user.present?
-        key = [@domain_root_account.id, 'common_account_global_includes', @current_user.id].cache_key
-        includes = Rails.cache.fetch(key, :expires_in => 15.minutes) do
-          @current_user.common_account_chain(@domain_root_account).map(&:global_includes_hash)
+        key = [
+          @domain_root_account.id,
+          'common_account_global_includes',
+          @current_user.id
+        ].cache_key
+        Rails.cache.fetch(key, :expires_in => 15.minutes) do
+          chain = @domain_root_account.account_chain(include_site_admin: true).reverse
+          chain.concat(@current_user.common_account_chain(@domain_root_account))
+          chain.uniq.map(&:global_includes_hash)
         end
-        @global_includes.concat(includes)
       end
     end
+
+    @global_includes ||= (@domain_root_account || Account.site_admin).
+      account_chain(include_site_admin: true).
+      reverse.map(&:global_includes_hash)
     @global_includes.uniq!
     @global_includes.compact!
     @global_includes
@@ -746,8 +747,8 @@ module ApplicationHelper
   def include_account_js(options = {})
     return if params[:global_includes] == '0'
     includes = if use_new_styles?
-      if @domain_root_account.allow_global_includes? && active_brand_config
-        active_brand_config.css_and_js_overrides[:js_overrides]
+      if @domain_root_account.allow_global_includes? && (abc = active_brand_config(ignore_high_contrast_preference: true))
+        abc.css_and_js_overrides[:js_overrides]
       end
     else
       get_global_includes.each_with_object([]) do |global_include, memo|
@@ -787,8 +788,8 @@ module ApplicationHelper
     return if disable_account_css?
 
     includes = if use_new_styles?
-      if @domain_root_account.allow_global_includes? && active_brand_config
-        active_brand_config.css_and_js_overrides[:css_overrides]
+      if @domain_root_account.allow_global_includes? && (abc = active_brand_config(ignore_high_contrast_preference: true))
+        abc.css_and_js_overrides[:css_overrides]
       end
     else
       get_global_includes.each_with_object([]) do |global_include, css_includes|

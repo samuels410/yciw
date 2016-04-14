@@ -1,16 +1,16 @@
 module AccountServices
+  class AllowedServicesHash < Hash
+    def _dump(*args); ''; end
+    def self._load(*args); nil; end
+  end
+
   def self.allowable_services
-    {
-        :google_docs => {
-            :name => I18n.t("Google Docs"),
-            :description => "",
-            :expose_to_ui => :service,
-            :expose_to_ui_proc => proc { !!GoogleDocs::Connection.config }
-        },
+    AllowedServicesHash.new.merge({
         :google_drive => {
             :name => I18n.t("Google Drive"),
             :description => "",
-            :expose_to_ui => false
+            :expose_to_ui => :service,
+            :expose_to_ui_proc => proc { !!GoogleDrive::Connection.config }
         },
         :google_docs_previews => {
             :name => I18n.t("Google Docs Preview"),
@@ -69,7 +69,7 @@ module AccountServices
               user && account && account.grants_right?(user, :manage_site_settings)
             end
         },
-    }.merge(@plugin_services || {}).freeze
+    }).merge(@plugin_services || {}).freeze
   end
 
   def self.register_service(service_name, info_hash)

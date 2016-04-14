@@ -56,8 +56,7 @@ class DiscussionTopic < ActiveRecord::Base
   has_many :root_discussion_entries, -> { preload(:user).where("discussion_entries.parent_id IS NULL AND discussion_entries.workflow_state<>'deleted'") }, class_name: 'DiscussionEntry'
   has_one :external_feed_entry, :as => :asset
   belongs_to :external_feed
-  belongs_to :context, :polymorphic => true
-  validates_inclusion_of :context_type, :allow_nil => true, :in => ['Course', 'Group']
+  belongs_to :context, polymorphic: [:course, :group]
   belongs_to :attachment
   belongs_to :assignment
   belongs_to :editor, :class_name => 'User'
@@ -71,14 +70,6 @@ class DiscussionTopic < ActiveRecord::Base
   has_many :assignment_student_visibilities, :through => :assignment
 
   belongs_to :user
-
-  EXPORTABLE_ATTRIBUTES = [
-    :id, :title, :message, :context_id, :context_type, :type, :user_id, :workflow_state, :last_reply_at, :created_at, :updated_at, :delayed_post_at, :posted_at, :assignment_id,
-    :attachment_id, :deleted_at, :root_topic_id, :could_be_locked, :cloned_item_id, :context_code, :position, :subtopics_refreshed_at, :last_assignment_id, :external_feed_id,
-    :editor_id, :podcast_enabled, :podcast_has_student_posts, :require_initial_post, :discussion_type, :lock_at, :pinned, :locked
-  ]
-
-  EXPORTABLE_ASSOCIATIONS = [:discussion_entries, :external_feed_entry, :external_feed, :context, :assignment, :attachment, :editor, :root_topic, :child_topics, :discussion_entry_participants, :user]
 
   validates_presence_of :context_id, :context_type
   validates_inclusion_of :discussion_type, :in => DiscussionTypes::TYPES
@@ -195,24 +186,28 @@ class DiscussionTopic < ActiveRecord::Base
     category = self.group_category
     return unless category && self.root_topic_id.blank?
     category.groups.active.each do |group|
-      group.shard.activate do
-        DiscussionTopic.unique_constraint_retry do
-          topic = DiscussionTopic.where(:context_id => group, :context_type => 'Group', :root_topic_id => self).first
-          topic ||= group.discussion_topics.build{ |dt| dt.root_topic = self }
-          topic.message = self.message
-          topic.title = "#{self.title} - #{group.name}"
-          topic.assignment_id = self.assignment_id
-          topic.attachment_id = self.attachment_id
-          topic.group_category_id = self.group_category_id
-          topic.user_id = self.user_id
-          topic.discussion_type = self.discussion_type
-          topic.workflow_state = self.workflow_state
-          topic.allow_rating = self.allow_rating
-          topic.only_graders_can_rate = self.only_graders_can_rate
-          topic.sort_by_rating = self.sort_by_rating
-          topic.save if topic.changed?
-          topic
-        end
+      ensure_child_topic_for(group)
+    end
+  end
+
+  def ensure_child_topic_for(group)
+    group.shard.activate do
+      DiscussionTopic.unique_constraint_retry do
+        topic = DiscussionTopic.where(:context_id => group, :context_type => 'Group', :root_topic_id => self).first
+        topic ||= group.discussion_topics.build{ |dt| dt.root_topic = self }
+        topic.message = self.message
+        topic.title = "#{self.title} - #{group.name}"
+        topic.assignment_id = self.assignment_id
+        topic.attachment_id = self.attachment_id
+        topic.group_category_id = self.group_category_id
+        topic.user_id = self.user_id
+        topic.discussion_type = self.discussion_type
+        topic.workflow_state = self.workflow_state
+        topic.allow_rating = self.allow_rating
+        topic.only_graders_can_rate = self.only_graders_can_rate
+        topic.sort_by_rating = self.sort_by_rating
+        topic.save if topic.changed?
+        topic
       end
     end
   end
@@ -234,6 +229,9 @@ class DiscussionTopic < ActiveRecord::Base
       self.assignment.workflow_state = 'published' if self.assignment.deleted?
       unless is_announcement
         self.assignment.workflow_state = published? ? 'published' : 'unpublished'
+      end
+      if group_category_id_changed?
+        self.assignment.validate_assignment_overrides(force_override_destroy: true)
       end
       self.assignment.save
     end
@@ -661,11 +659,7 @@ class DiscussionTopic < ActiveRecord::Base
       else
         student_ids = opts[:student_ids] || self.context.all_real_student_enrollments.select(:user_id)
         if self.for_group_discussion?
-          if CANVAS_RAILS3
-            !DiscussionEntry.active.where(user_id: student_ids, discussion_topic_id: child_topics).exists?
-          else
           !DiscussionEntry.active.joins(:discussion_topic).merge(child_topics).where(user_id: student_ids).exists?
-          end
         else
           !self.discussion_entries.active.where(:user_id => student_ids).exists?
         end
@@ -781,7 +775,7 @@ class DiscussionTopic < ActiveRecord::Base
     end
   end
 
-  alias_method :destroy!, :destroy
+  alias_method :destroy_permanently!, :destroy
   def destroy
     ContentTag.delete_for(self)
     self.workflow_state = 'deleted'
@@ -940,8 +934,15 @@ class DiscussionTopic < ActiveRecord::Base
 
   def ensure_submission(user)
     submission = Submission.where(assignment_id: self.assignment_id, user_id: user).first
-    return if submission && submission.submission_type == 'discussion_topic' && submission.workflow_state != 'unsubmitted'
-    self.assignment.submit_homework(user, :submission_type => 'discussion_topic')
+    unless submission && submission.submission_type == 'discussion_topic' && submission.workflow_state != 'unsubmitted'
+      submission = self.assignment.submit_homework(user, :submission_type => 'discussion_topic')
+    end
+    topic = self.root_topic? ? self.child_topic_for(user) : self
+    attachment_ids = topic.discussion_entries.where(:user_id => user).where.not(:attachment_id => nil).pluck(:attachment_id)
+    if attachment_ids.any?
+      submission.attachment_ids = attachment_ids.sort.map(&:to_s).join(",")
+      submission.save! if submission.changed?
+    end
   end
 
   def send_notification_for_context?
@@ -988,7 +989,7 @@ class DiscussionTopic < ActiveRecord::Base
   end
 
   def active_participants_with_visibility
-    return active_participants if !self.for_assignment? || !course.feature_enabled?(:differentiated_assignments)
+    return active_participants if !self.for_assignment?
     users_with_visibility = AssignmentStudentVisibility.where(assignment_id: self.assignment_id, course_id: course.id).pluck(:user_id)
 
     admin_ids = course.participating_admins.pluck(:id)
@@ -1011,9 +1012,9 @@ class DiscussionTopic < ActiveRecord::Base
     legacy_sub_ids &= poster_ids
     sub_ids += legacy_sub_ids
 
-    subscribed_users = participating_users(sub_ids)
+    subscribed_users = participating_users(sub_ids).to_a
 
-    if course.feature_enabled?(:differentiated_assignments) && self.for_assignment?
+    if self.for_assignment?
       students_with_visibility = AssignmentStudentVisibility.where(course_id: course.id, assignment_id: assignment_id).pluck(:user_id)
 
       admin_ids = course.participating_admins.pluck(:id)
@@ -1181,7 +1182,7 @@ class DiscussionTopic < ActiveRecord::Base
       if asset.is_a?(DiscussionTopic)
         link = "http://#{HostUrl.context_host(asset.context)}/#{asset.context_url_prefix}/discussion_topics/#{asset.id}"
       elsif asset.is_a?(DiscussionEntry)
-        link = "http://#{HostUrl.context_host(asset.context)}/#{asset.context_url_prefix}/discussion_topics/#{asset.discussion_topic_id}"
+        link = "http://#{HostUrl.context_host(asset.context)}/#{asset.context_url_prefix}/discussion_topics/#{asset.discussion_topic_id}#entry-#{asset.id}"
       end
 
       item.link = link

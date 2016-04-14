@@ -16,8 +16,6 @@
   <% else %>
     <%= t(:quiz_not_yet_taken, "The quiz hasn't been taken yet.") %>
   <% end %>
-<% elsif @quiz.anonymous_survey? %>
-  <%= t("This student's responses are hidden because this assignment is anonymous.") %>
 <% elsif !(@current_submission || @submission).results_visible_for_user?(@current_user) %>
   <div class="quiz_score" style="<%= hidden if @quiz.ungraded? %>">
     <% if @quiz.allowed_attempts != 1 %>
@@ -52,7 +50,7 @@
 <% if @submission.pending_review? %>
   <% if editable %>
     <% if @quiz.changed_significantly_since?(@submission.quiz_version) %>
-      <%= image_tag "pending_review.png" %> <%= t(:quiz_submission_needs_review, "The quiz has changed significantly since this submission was made. This submission may need re-grading.") %><br/>
+      <%= image_tag "pending_review.png", :alt => '' %> <%= t(:quiz_submission_needs_review, "The quiz has changed significantly since this submission was made. This submission may need re-grading.") %><br/>
     <% end %>
     <% questions_needing_review = submission_data.find_all do |answer|
          question_data = submission_questions_hash[answer[:question_id]]

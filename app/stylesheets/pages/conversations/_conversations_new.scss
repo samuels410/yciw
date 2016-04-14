@@ -40,7 +40,10 @@
     border-bottom: 1px solid $ic-border-light;
     height: 112px;
     padding: $ic-sp;
-    @include breakpoint(wide) {
+    // TODO: revisit when breakpoint fixed
+    // until we have a better breakpoint for desktop
+    // need to put in direct amount for better ux
+    @media only screen and (min-width: 1200px) {
       height: 62px;
       display: flex;
       align-items: center;
@@ -49,7 +52,10 @@
     }
     .panel__primary {
       margin-bottom: $ic-sp;
-      @include breakpoint(wide) {
+      // TODO: revisit when breakpoint fixed
+      // until we have a better breakpoint for desktop
+      // need to put in direct amount for better ux
+      @media only screen and (min-width: 1200px) {
         margin-bottom: 0;
         flex: 1;
         white-space: nowrap;
@@ -60,7 +66,10 @@
       }
     }
     .panel__secondary {
-      @include breakpoint(wide) { white-space: nowrap; }
+      // TODO: revisit when breakpoint fixed
+      // until we have a better breakpoint for desktop
+      // need to put in direct amount for better ux
+      @media only screen and (min-width: 1200px) { white-space: nowrap; }
       > div {
         display: inline-block;
         vertical-align: middle;
@@ -195,7 +204,7 @@
   bottom: 0;
   @if $use_new_styles {
     top: 112px;
-    @include breakpoint(wide) { top: 62px; }
+    @media only screen and (min-width: 1200px) { top: 62px; }
   }
   @else { top: 58px; }
 }
@@ -248,7 +257,6 @@
     }
     &:hover .message-actions a, .message-actions a:focus {
       left: 0;
-      outline: none;
     }
   }
 
@@ -261,7 +269,7 @@
   }
 
   h2.author {
-    font-size: 13px;
+    @include fontSize(13px);
     font-weight: bold;
     line-height: 20px;
     margin: 0px;
@@ -280,7 +288,7 @@
   }
 
   p {
-    font-size: 12px;
+    @include fontSize($ic-font-size--xsmall);
     line-height: 16px;
     margin-bottom: 8px;
   }
@@ -299,12 +307,12 @@
 
 h3.subject {
  margin: 0px 0px 8px 0;
- font-size: 13px;
+ @include fontSize(13px);
  line-height: 20px;
 }
 
 h2.subject {
-  font-size: 13px;
+  @include fontSize(13px);
   font-weight: bold;
   margin: 0px;
 }
@@ -318,7 +326,7 @@ h2.subject {
 }
 
 .message-count {
-  font-size: 11px;
+  @include fontSize(11px);
   position: absolute;
   right: 13px;
   top: 43%;
@@ -368,7 +376,7 @@ h2.subject {
     color: $ic-color-dark;
     display: inline-block;
     font-family: 'Hiragino Kaku Gothic Pro', 'Lucida Sans Unicode', 'Arial Unicode MS';
-    font-size: 16px;
+    @include fontSize($ic-font-size--medium);
     left: -9999em;
 
     &:hover {
@@ -434,7 +442,7 @@ h2.subject {
   .no-messages {
     color: #bbbbbb;
     display: block;
-    font-size: 20px;
+    @include fontSize(20px);
     font-weight: bold;
     margin-top: 5%;
     text-align: center;
@@ -447,7 +455,7 @@ h2.subject {
       width: 100%;
 
       &:before {
-        font-size: 120px;
+        @include fontSize(120px);
       }
     }
   }

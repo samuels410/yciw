@@ -16,7 +16,6 @@ class AddRoleIdColumns < ActiveRecord::Migration
 
     # populate built-in roles
     change_column_null :roles, :account_id, true
-    remove_index :roles, :name => 'index_roles_unique_account_name'
 
     Role.ensure_built_in_roles!
 
@@ -65,6 +64,7 @@ class AddRoleIdColumns < ActiveRecord::Migration
             ) WHERE id = NEW.id
         SQL_ACTIONS
       end
+      connection.set_search_path_on_function("account_user_after_insert_set_role_id__tr")
 
       create_trigger("account_notification_role_after_insert_set_role_id__tr", :generated => true).
           on("account_notification_roles").
@@ -91,6 +91,7 @@ class AddRoleIdColumns < ActiveRecord::Migration
             ) WHERE id = NEW.id
         SQL_ACTIONS
       end
+      connection.set_search_path_on_function("account_notification_role_after_insert_set_role_id__tr")
 
       create_trigger("enrollment_after_insert_set_role_id_if_role_name__tr", :generated => true).
           on("enrollments").
@@ -117,6 +118,7 @@ class AddRoleIdColumns < ActiveRecord::Migration
             ) WHERE id = NEW.id
         SQL_ACTIONS
       end
+      connection.set_search_path_on_function("enrollment_after_insert_set_role_id_if_role_name__tr")
 
       create_trigger("enrollment_after_insert_set_role_id_if_no_role_name__tr", :generated => true).
           on("enrollments").
@@ -128,6 +130,7 @@ class AddRoleIdColumns < ActiveRecord::Migration
             WHERE id = NEW.id
         SQL_ACTIONS
       end
+      connection.set_search_path_on_function("enrollment_after_insert_set_role_id_if_no_role_name__tr")
 
       create_trigger("role_override_after_insert_set_role_id__tr", :generated => true).
           on("role_overrides").
@@ -154,6 +157,7 @@ class AddRoleIdColumns < ActiveRecord::Migration
             ) WHERE id = NEW.id
         SQL_ACTIONS
       end
+      connection.set_search_path_on_function("role_override_after_insert_set_role_id__tr")
     end
 
     # Populate the role_ids for account_users and role_overrides (and enrollments with custom role_names)
@@ -172,7 +176,7 @@ class AddRoleIdColumns < ActiveRecord::Migration
       next if role.built_in?
       applicable_account_ids[role.account_id] ||= Account.sub_account_ids_recursive(role.account_id) + [role.account_id]
       while AccountNotificationRole.where("role_id IS NULL AND role_type = ? AND (SELECT account_id FROM
-         account_notifications WHERE id = account_notification_roles.account_notification_id LIMIT 1) IN (?)", role.name,
+         #{AccountNotification.quoted_table_name} WHERE id = account_notification_roles.account_notification_id LIMIT 1) IN (?)", role.name,
                               applicable_account_ids[role.account_id]).limit(1000).update_all(:role_id => role.id) > 0; end
       while AccountUser.where("role_id IS NULL AND membership_type = ? AND account_id IN (?)", role.name,
                               applicable_account_ids[role.account_id]).limit(1000).update_all(:role_id => role.id) > 0; end
@@ -192,7 +196,7 @@ class AddRoleIdColumns < ActiveRecord::Migration
       end
 
       while AccountNotificationRole.where("role_id IS NULL AND role_type = ? AND (SELECT account_id FROM
-         account_notifications WHERE id = account_notification_roles.account_notification_id LIMIT 1) IN (?)", role.name,
+         #{AccountNotification.quoted_table_name} WHERE id = account_notification_roles.account_notification_id LIMIT 1) IN (?)", role.name,
                               applicable_account_ids[role.account_id]).limit(1000).update_all(:role_id => role.id) > 0; end
       while RoleOverride.where("role_id IS NULL AND enrollment_type = ? AND context_type = ? AND context_id IN (?)", role.name, 'Account',
                                applicable_account_ids[role.account_id]).limit(1000).update_all(:role_id => role.id) > 0; end
@@ -245,8 +249,6 @@ class AddRoleIdColumns < ActiveRecord::Migration
     remove_column :role_overrides, :role_id
 
     Role.where(:workflow_state => "built_in").delete_all
-
-    add_index :roles, [:account_id, :name], :unique => true, :name => "index_roles_unique_account_name"
 
     change_column_null :roles, :account_id, false
     change_column :account_users, :membership_type, :string, :default => "AccountAdmin"

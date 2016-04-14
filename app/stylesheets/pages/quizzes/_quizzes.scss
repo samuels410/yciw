@@ -15,7 +15,7 @@ $answersSprite: url(/images/answers_sprite.png);
 
 .accessibility-warning {
   @include accessibility-prompt;
-  font-size: 12px;
+  @include fontSize($ic-font-size--xsmall);
   position: absolute;
   left: 0px;
   top: -16px;
@@ -35,8 +35,7 @@ li.quiz {
   }
   .ig-title {
     flex: 1;
-    @include breakpoint(desktop) { flex: 0 0 25%; }
-    @include breakpoint(wide) { flex: 0 0 30%; }
+    @include breakpoint(desktop) { flex: 0 0 30%;}
   }
   .ig-details { flex: 1; }
   .default-dates .status-description { font-weight: bold; }
@@ -52,10 +51,7 @@ li.quiz {
       text-align: right;
       line-height: 36px;
     }
-    #preview_quiz_button {
-      font-weight: normal;
-      color: #333333;
-    }
+
     .unpublished_quiz_warning, .unsaved_quiz_warning {
       display: block;
     }
@@ -83,6 +79,11 @@ li.quiz {
     margin-top: 20px;
   }
   .take_quiz_button {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 1.3em;
+  }
+  .preview_quiz_button {
     text-align: center;
     margin-top: 20px;
     font-size: 1.3em;
@@ -128,7 +129,7 @@ li.quiz {
       tr {
         th {
           font-weight: bold;
-          font-size: 14px;
+          @include fontSize($ic-font-size--small);
           padding: 0.5em;
         }
         td {
@@ -219,8 +220,10 @@ li.quiz {
 }
 
 #submit_quiz_form {
-  .question_holder {
-    overflow: hidden;
+  @if not $use_new_styles {
+    .question_holder {
+      overflow: hidden;
+    }
   }
   .button-container .btn, #submit_quiz_button {
     min-width: 120px;
@@ -456,7 +459,7 @@ li.quiz {
       font-weight: bold;
       padding-right: 20px;
       line-height: 20px;
-      font-size: 14px;
+      @include fontSize($ic-font-size--small);
       display: inline;
     }
     .group_display.hidden {
@@ -574,7 +577,9 @@ li.quiz {
   background-color: #fff;
   position: relative;
   min-height: 50px;
-  min-width: 515px;
+  @if not $use_new_styles {
+    min-width: 515px;
+  }
   margin: 0.7em auto 30px auto;
   _height: 10px;
   &.modified_but_not_saved {
@@ -1356,7 +1361,7 @@ ul#quiz_versions {
         color: #999;
       }
       .option-caption {
-        font-size: 15px;
+        @include fontSize(15px);
         font-weight: bold;
         line-height: 1.4em;
         &:not(:first-of-type) {
@@ -1667,7 +1672,7 @@ ul#quiz_versions {
   background-image: $answersSprite;
   background-repeat: repeat-x;
   display: inline-block;
-  font-size: 12px;
+  @include fontSize($ic-font-size--xsmall);
   font-weight: bold;
   line-height: 27px;
   min-width: 96px;
@@ -1741,7 +1746,7 @@ ul#quiz_versions {
   filter: none;
   border-radius: 5px;
   box-shadow: 0 1px 2px rgba(#000, 0.2);
-  font-size: 14px;
+  @include fontSize($ic-font-size--small);
   min-width: 100px;
   padding: 14px;
   position: relative;
@@ -1837,7 +1842,7 @@ ul#quiz_versions {
   }
   .header {
     .question_points_holder {
-      font-size: 12px;
+      @include fontSize($ic-font-size--xsmall);
       margin: 0;
     }
     .question_input {
@@ -1848,7 +1853,7 @@ ul#quiz_versions {
   .short_answer_question {
     .answers {
       .question_input {
-        font-size: 13px;
+        @include fontSize(13px);
         width: 125px;
       }
     }
@@ -1856,7 +1861,7 @@ ul#quiz_versions {
 }
 
 .summary .footnote {
-  font-size: 12px;
+  @include fontSize($ic-font-size--xsmall);
   text-align: right;
 }
 
@@ -2074,9 +2079,8 @@ ul#quiz_versions {
 }
 
 .regrade-options {
-  margin-top: 12px;
   color: #333;
-  padding: 2px 10px 13px 10px;
+  padding: 2px 10px;
   h3 {
     margin: 0;
     text-transform: uppercase;
@@ -2088,16 +2092,15 @@ ul#quiz_versions {
     }
   }
   .checkbox {
-    padding-left: 12px;
     input {
       height: 16px;
       margin: 0 9px 0 0;
     }
   }
-}
-
-.regrade-options label {
-  display: block;
+  label {
+    display: block;
+    padding-left: 0px;
+  }
 }
 
 .user-regrade-points {
@@ -2201,7 +2204,7 @@ ul#quiz_versions {
     background-clip: padding-box;
     width: 40%;
     max-width: 45%;
-    font-size: 13px;
+    @include fontSize(13px);
     color: #303030;
     // margin: 0 6px 6px 0
     outline: none;
@@ -2218,7 +2221,7 @@ ul#quiz_versions {
       right: 0;
       top: 0;
       padding: 10px 36px;
-      font-size: 15px;
+      @include fontSize(15px);
     }
   }
   span.field + span.field {

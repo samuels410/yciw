@@ -1,9 +1,25 @@
+var fs = require("fs");
 var karmaFiles = [];
-var usingWebpack = (process.env.USE_WEBPACK == 'True' || process.env.USE_WEBPACK == 'true');
+
+var webpackFileExists = false;
+var webpackFilePath = __dirname + "/config/WEBPACK";
+try {
+  fs.statSync(webpackFilePath);
+  webpackFileExists = true;
+}
+catch (e) {
+  console.log("no webpack file....")
+}
+
+var usingWebpack = (process.env.USE_WEBPACK == 'True' ||
+                    process.env.USE_WEBPACK == 'true' ||
+                    webpackFileExists);
+
 // If we're using webpack, we don't want to load all the requirejs stuff;
 if(usingWebpack){
   karmaFiles = [
     'spec/javascripts/support/sinon/sinon-1.17.2.js',
+    'spec/javascripts/support/axe.js',
     {pattern: 'spec/javascripts/webpack/*.bundle.test.js', included: true, served: true},
     {pattern: 'spec/javascripts/fixtures/*', included: false, served: true}
   ];
@@ -15,6 +31,7 @@ if(usingWebpack){
     'node_modules/karma-requirejs/lib/adapter.js',
     'spec/javascripts/support/sinon/sinon-1.17.2.js',
     'spec/javascripts/support/sinon/sinon-qunit-1.0.0.js',
+    'spec/javascripts/support/axe.js',
     {pattern: 'public/javascripts/*.js', included: false, served: true},
     {pattern: 'spec/javascripts/fixtures/*.html', included: false, served: true},
     {pattern: 'spec/javascripts/tests.js', included: false, served: true},
@@ -57,7 +74,7 @@ var karmaConfig = {
   // - Safari (only Mac; has to be installed with `npm install karma-safari-launcher`)
   // - PhantomJS
   // - IE (only Windows; has to be installed with `npm install karma-ie-launcher`)
-  browsers: ['Chrome'],
+  browsers: ['Chrome', 'PhantomJS'],
 
   // If browser does not capture in given timeout [ms], kill it
   captureTimeout: 60000,

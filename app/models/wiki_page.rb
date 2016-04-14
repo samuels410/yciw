@@ -33,14 +33,9 @@ class WikiPage < ActiveRecord::Base
   after_update :post_to_pandapub_when_revised
 
   belongs_to :wiki, :touch => true
+  belongs_to :course, foreign_key: 'wiki_id', primary_key: 'wiki_id'
+  belongs_to :group, foreign_key: 'wiki_id', primary_key: 'wiki_id'
   belongs_to :user
-
-  EXPORTABLE_ATTRIBUTES = [
-    :id, :wiki_id, :title, :body, :workflow_state, :recent_editors, :user_id, :created_at, :updated_at, :url, :delayed_post_at, :protected_editing,
-    :editing_roles, :view_count, :revised_at, :could_be_locked, :cloned_item_id, :wiki_page_comments_count
-  ]
-
-  EXPORTABLE_ASSOCIATIONS = [:wiki, :user]
 
   acts_as_url :title, :scope => [:wiki_id, :not_deleted], :sync_url => true
 
@@ -112,7 +107,7 @@ class WikiPage < ActiveRecord::Base
         return unless send(scope)
         base_scope = base_scope.send(scope)
       else
-        conditions.first << " and #{connection.quote_column_name(scope)} = ?"
+        conditions.first << " and #{self.class.connection.quote_column_name(scope)} = ?"
         conditions << send(scope)
       end
     end
@@ -215,7 +210,7 @@ class WikiPage < ActiveRecord::Base
 
   def locked_for?(user, opts={})
     return false unless self.could_be_locked
-    Rails.cache.fetch(locked_cache_key(user), :expires_in => 1.minute) do
+    Rails.cache.fetch([locked_cache_key(user), opts[:deep_check_if_needed]].cache_key, :expires_in => 1.minute) do
       locked = false
       if item = locked_by_module_item?(user, opts[:deep_check_if_needed])
         locked = {:asset_string => self.asset_string, :context_module => item.context_module.attributes}
@@ -305,7 +300,7 @@ class WikiPage < ActiveRecord::Base
     return true if wiki.grants_right?(user, session, :manage)
 
     return false unless published? || (unpublished? && wiki.grants_right?(user, session, :view_unpublished_items))
-    return false if locked_for?(user)
+    return false if locked_for?(user, :deep_check_if_needed => true)
 
     true
   end

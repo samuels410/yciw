@@ -76,6 +76,12 @@ describe Message do
       expect(msg.subject).to include(@assignment.title)
     end
 
+    it "should allow over 255 char in the subject" do
+      assignment_model(title: 'this is crazy ridiculous '*10)
+      msg = generate_message(:assignment_created, :email, @assignment)
+      expect(msg.subject.length).to be > 255
+    end
+
     it "should default to the account time zone if the user has no time zone" do
       original_time_zone = Time.zone
       Time.zone = 'UTC'
@@ -236,6 +242,20 @@ describe Message do
       Mailer.expects(:create_message).raises("450 recipient address rejected")
       ErrorReport.expects(:log_exception).never
       expect(@message.deliver).to eq false
+    end
+
+    it "completes delivery without a user" do
+      message = message_model({
+        dispatch_at: Time.now,
+        to: 'somebody',
+        updated_at: Time.now.utc - 11.minutes,
+        user: nil,
+        path_type: 'email'
+      })
+      message.workflow_state = "staged"
+      Mailer.stubs(create_message: stub(deliver: "Response!"))
+      expect(message.workflow_state).to eq("staged")
+      expect{ message.deliver }.not_to raise_error
     end
 
     context 'push' do
@@ -470,63 +490,6 @@ describe Message do
         expect(message).to eq "value hi"
       end
     end
-  end
-
-  describe '.context_type' do
-    it 'returns the correct representation of a quiz regrade run' do
-      message = message_model
-      regrade = Quizzes::QuizRegrade.create(:user_id => user_model.id, :quiz_id => quiz_model.id, :quiz_version => 1)
-      regrade_run = Quizzes::QuizRegradeRun.create(quiz_regrade_id: regrade.id)
-
-      message.context = regrade_run
-      message.save
-      expect(message.context_type).to eq "Quizzes::QuizRegradeRun"
-
-      Message.where(id: message).update_all(context_type: 'QuizRegradeRun')
-
-      expect(Message.find(message.id).context_type).to eq 'Quizzes::QuizRegradeRun'
-    end
-
-    it 'returns the correct representation of a quiz submission' do
-      message = message_model
-      submission = quiz_model.quiz_submissions.create!
-      message.context = submission
-      message.save
-      expect(message.context_type).to eq 'Quizzes::QuizSubmission'
-
-      Message.where(id: message).update_all(context_type: 'QuizSubmission')
-
-      expect(Message.find(message.id).context_type).to eq 'Quizzes::QuizSubmission'
-    end
-  end
-
-  describe '.asset_context_type' do
-    it 'returns the correct representation of a quiz regrade run' do
-      message = message_model
-      regrade = Quizzes::QuizRegrade.create(:user_id => user_model.id, :quiz_id => quiz_model.id, :quiz_version => 1)
-      regrade_run = Quizzes::QuizRegradeRun.create(quiz_regrade_id: regrade.id)
-
-      message.asset_context = regrade_run
-      message.save
-      expect(message.asset_context_type).to eq "Quizzes::QuizRegradeRun"
-
-      Message.where(id: message).update_all(asset_context_type: 'QuizRegradeRun')
-
-      expect(Message.find(message.id).asset_context_type).to eq 'Quizzes::QuizRegradeRun'
-    end
-
-    it 'returns the correct representation of a quiz submission' do
-      message = message_model
-      submission = quiz_model.quiz_submissions.create!
-      message.asset_context = submission
-      message.save
-      expect(message.asset_context_type).to eq 'Quizzes::QuizSubmission'
-
-      Message.where(id: message).update_all(asset_context_type: 'QuizSubmission')
-
-      expect(Message.find(message.id).asset_context_type).to eq 'Quizzes::QuizSubmission'
-    end
-
   end
 
   describe "author interface" do

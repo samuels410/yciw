@@ -107,6 +107,23 @@ describe ContentMigration do
       expect(new_topic.message).to match(Regexp.new("/courses/#{@copy_to.id}/files/#{new_att.id}/preview"))
     end
 
+    it "should preserve links to files in poorly named folders" do
+      rf = Folder.root_folders(@copy_from).first
+      folder = rf.sub_folders.create!(:name => "course files", :context => @copy_from)
+      att = Attachment.create!(:filename => 'test.txt', :display_name => "testing.txt", :uploaded_data => StringIO.new('file'), :folder => folder, :context => @copy_from)
+      topic = @copy_from.discussion_topics.create!(:title => "some topic", :message => "<img src='/courses/#{@copy_from.id}/files/#{att.id}/preview'>")
+
+      run_course_copy
+
+      new_att = @copy_to.attachments.where(migration_id: CC::CCHelper.create_key(att)).first
+      expect(new_att).not_to be_nil
+
+      new_topic = @copy_to.discussion_topics.where(migration_id: CC::CCHelper.create_key(topic)).first
+      expect(new_topic).not_to be_nil
+
+      expect(new_topic.message).to match(Regexp.new("/courses/#{@copy_to.id}/files/#{new_att.id}/preview"))
+    end
+
     it "should keep date-locked files locked" do
       student = user
       @copy_from.enroll_student(student)
@@ -431,6 +448,30 @@ describe ContentMigration do
 
       expect(mod2_to.prerequisites.count).to eq 1
       expect(mod2_to.prerequisites.first[:id]).to eq mod1_to.id
+    end
+
+    it "should sync module items (even when removed) on re-copy" do
+      mod = @copy_from.context_modules.create!(:name => "some module")
+      page = @copy_from.wiki.wiki_pages.create(:title => "some page")
+      tag1 = mod.add_item({:id => page.id, :type => 'wiki_page'})
+      asmnt = @copy_from.assignments.create!(:title => "some assignment")
+      tag2 = mod.add_item({:id => asmnt.id, :type => 'assignment', :indent => 1})
+
+      run_course_copy
+
+      mod_to = @copy_to.context_modules.where(:migration_id => mig_id(mod)).first
+      tag1_to = mod_to.content_tags.where(:migration_id => mig_id(tag1)).first
+      tag2_to = mod_to.content_tags.where(:migration_id => mig_id(tag2)).first
+
+      tag2.destroy
+
+      run_course_copy
+
+      tag1_to.reload
+      tag2_to.reload
+
+      expect(tag1_to).to_not be_deleted
+      expect(tag2_to).to be_deleted
     end
 
     it "should preserve media comment links" do

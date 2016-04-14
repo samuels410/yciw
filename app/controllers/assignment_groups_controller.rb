@@ -37,7 +37,7 @@
 #         },
 #         "never_drop": {
 #           "description": "Assignment IDs that should never be dropped.",
-#           "example": "[33, 17, 24]",
+#           "example": [33, 17, 24],
 #           "type": "array",
 #           "items": {"type": "integer"}
 #         }
@@ -70,7 +70,7 @@
 #         },
 #         "assignments": {
 #           "description": "the assignments in this Assignment Group (see the Assignment API for a detailed list of fields)",
-#           "example": "[]",
+#           "example": [],
 #           "type": "array",
 #           "items": {"type": "integer"}
 #         },
@@ -101,11 +101,18 @@ class AssignmentGroupsController < ApplicationController
   #
   # @argument grading_period_id [Integer]
   #   The id of the grading period in which assignment groups are being requested
-  #   (Requires the Multiple Grading Periods account feature turned on)
+  #   (Requires the Multiple Grading Periods feature turned on.)
+  #
+  # @argument scope_assignments_to_student [Boolean]
+  #   If true, all assignments returned will apply to the current user in the
+  #   specified grading period. If assignments apply to other students in the
+  #   specified grading period, but not the current user, they will not be
+  #   returned. (Requires the grading_period_id argument and the Multiple Grading
+  #   Periods feature turned on. In addition, the current user must be a student.)
   #
   # @returns [AssignmentGroup]
   def index
-    if authorized_action(@context.assignment_groups.scoped.new, @current_user, :read)
+    if authorized_action(@context.assignment_groups.temp_record, @current_user, :read)
       groups = Api.paginate(@context.assignment_groups.active, self, api_v1_course_assignment_groups_url(@context))
 
       assignments = if include_params.include?('assignments')
@@ -127,7 +134,7 @@ class AssignmentGroupsController < ApplicationController
   end
 
   def reorder
-    if authorized_action(@context.assignment_groups.scoped.new, @current_user, :update)
+    if authorized_action(@context.assignment_groups.temp_record, @current_user, :update)
       order = params[:order].split(',')
       @context.assignment_groups.first.update_order(order)
       new_order = @context.assignment_groups.pluck(:id)
@@ -147,9 +154,7 @@ class AssignmentGroupsController < ApplicationController
       groups.each{|assignment_group| AssignmentGroup.notify_observers(:assignments_changed, assignment_group)}
       ids = @group.active_assignments.map(&:id)
       @context.recompute_student_scores rescue nil
-      respond_to do |format|
-        format.json { render :json => {:reorder => true, :order => ids}, :status => :ok }
-      end
+      render :json => {:reorder => true, :order => ids}, :status => :ok
     end
   end
 
@@ -171,7 +176,7 @@ class AssignmentGroupsController < ApplicationController
   end
 
   def create
-    @assignment_group = @context.assignment_groups.scoped.new(params[:assignment_group])
+    @assignment_group = @context.assignment_groups.temp_record(params[:assignment_group])
     if authorized_action(@assignment_group, @current_user, :create)
       respond_to do |format|
         if @assignment_group.save
@@ -259,19 +264,12 @@ class AssignmentGroupsController < ApplicationController
   end
 
   def assignment_visibilities(course, assignments)
-    if include_visibility? && differentiated_assignments?
-      AssignmentStudentVisibility.users_with_visibility_by_assignment(
-        course_id: course.id,
-        assignment_id: assignments.map(&:id)
-      )
+    if include_visibility?
+      AssignmentStudentVisibility.assignments_with_user_visibilities(course, assignments)
     else
       params.fetch(:include, []).delete('assignment_visibility')
       AssignmentStudentVisibility.none
     end
-  end
-
-  def differentiated_assignments?
-    @context.feature_enabled?(:differentiated_assignments)
   end
 
   def index_groups_json(context, current_user, groups, assignments, submissions = [])
@@ -300,7 +298,6 @@ class AssignmentGroupsController < ApplicationController
           preloaded_user_content_attachments: preloaded_attachments,
           assignments: group_assignments,
           assignment_visibilities: assignment_visibilities(context, assignments),
-          differentiated_assignments_enabled: differentiated_assignments?,
           exclude_descriptions: !!params[:exclude_descriptions],
           overrides: group_overrides,
           submissions: submissions
@@ -336,12 +333,7 @@ class AssignmentGroupsController < ApplicationController
     ).with_student_submission_count.all
 
     if params[:grading_period_id].present? && multiple_grading_periods?
-      grading_period = GradingPeriod.context_find(
-        context,
-        params.fetch(:grading_period_id)
-      )
-
-      assignments = grading_period.assignments(assignments) if grading_period
+      assignments = filter_assignments_by_grading_period(assignments, context)
     end
 
     # because of a bug with including content_tags, we are preloading
@@ -362,5 +354,17 @@ class AssignmentGroupsController < ApplicationController
     end
 
     assignments
+  end
+
+  def filter_assignments_by_grading_period(assignments, course)
+    grading_period = GradingPeriod.context_find(course, params.fetch(:grading_period_id))
+    return assignments unless grading_period
+
+    if params[:scope_assignments_to_student] &&
+      course.user_is_student?(@current_user, include_future: true, include_fake_student: true)
+      grading_period.assignments_for_student(assignments, @current_user)
+    else
+      grading_period.assignments(assignments)
+    end
   end
 end

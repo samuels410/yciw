@@ -99,8 +99,10 @@ class AccountsController < ApplicationController
   before_filter :require_user, :only => [:index]
   before_filter :reject_student_view_student
   before_filter :get_context
+  before_filter :rich_content_service_config, only: [:settings]
 
   include Api::V1::Account
+  include CustomSidebarLinksHelper
 
   INTEGER_REGEX = /\A[+-]?\d+\z/
 
@@ -127,7 +129,7 @@ class AccountsController < ApplicationController
         else
           @accounts = []
         end
-        ActiveRecord::Associations::Preloader.new(@accounts, :root_account).run
+        ActiveRecord::Associations::Preloader.new.preload(@accounts, :root_account)
 
         # originally had 'includes' instead of 'include' like other endpoints
         includes = params[:include] || params[:includes]
@@ -154,7 +156,7 @@ class AccountsController < ApplicationController
     else
       @accounts = []
     end
-    ActiveRecord::Associations::Preloader.new(@accounts, :root_account).run
+    ActiveRecord::Associations::Preloader.new.preload(@accounts, :root_account)
     render :json => @accounts.map { |a| account_json(a, @current_user, session, params[:includes] || [], true) }
   end
 
@@ -175,7 +177,7 @@ class AccountsController < ApplicationController
         js_env(:ACCOUNT_COURSES_PATH => account_courses_path(@account, :format => :json))
         load_course_right_side
         @courses = @account.fast_all_courses(:term => @term, :limit => @maximum_courses_im_gonna_show, :hide_enrollmentless_courses => @hide_enrollmentless_courses)
-        ActiveRecord::Associations::Preloader.new(@courses, :enrollment_term).run
+        ActiveRecord::Associations::Preloader.new.preload(@courses, :enrollment_term)
         build_course_stats
       end
       format.json { render :json => account_json(@account, @current_user, session, params[:includes] || [],
@@ -196,7 +198,8 @@ class AccountsController < ApplicationController
       can_read_course_list: can_read_course_list,
       can_read_roster: can_read_roster,
       can_create_courses: @account.grants_right?(@current_user, session, :manage_courses),
-      can_create_users: @account.root_account? && @account.grants_right?(@current_user, session, :manage_user_logins)
+      can_create_users: @account.root_account? && @account.grants_right?(@current_user, session, :manage_user_logins),
+      analytics: @account.service_enabled?(:analytics)
     }
     render template: "accounts/course_user_search"
   end
@@ -237,7 +240,7 @@ class AccountsController < ApplicationController
     @accounts = Api.paginate(@accounts, self, api_v1_sub_accounts_url,
                              :total_entries => recursive ? nil : @accounts.count)
 
-    ActiveRecord::Associations::Preloader.new(@accounts, [:root_account, :parent_account]).run
+    ActiveRecord::Associations::Preloader.new.preload(@accounts, [:root_account, :parent_account])
     render :json => @accounts.map { |a| account_json(a, @current_user, session, []) }
   end
 
@@ -292,7 +295,7 @@ class AccountsController < ApplicationController
   #
   # @returns [Course]
   def courses_api
-    return unless authorized_action(@account, @current_user, :read)
+    return unless authorized_action(@account, @current_user, :read_course_list)
 
     params[:state] ||= %w{created claimed available completed}
     params[:state] = %w{created claimed available completed deleted} if Array(params[:state]).include?('all')
@@ -367,8 +370,8 @@ class AccountsController < ApplicationController
     page_opts[:total_entries] = nil if params[:search_term] # doesn't calculate a total count
     @courses = Api.paginate(@courses, self, api_v1_account_courses_url, page_opts)
 
-    ActiveRecord::Associations::Preloader.new(@courses, [:account, :root_account]).run
-    ActiveRecord::Associations::Preloader.new(@courses, [:teachers]).run if includes.include?("teachers")
+    ActiveRecord::Associations::Preloader.new.preload(@courses, [:account, :root_account])
+    ActiveRecord::Associations::Preloader.new.preload(@courses, [:teachers]) if includes.include?("teachers")
 
     if includes.include?("total_students")
       student_counts = StudentEnrollment.where("enrollments.workflow_state NOT IN ('rejected', 'completed', 'deleted', 'inactive')").
@@ -562,6 +565,9 @@ class AccountsController < ApplicationController
           @account[:settings][:edit_institution_email] = value_to_boolean(can_edit_email)
         end
 
+        remove_ip_filters = params[:account].delete(:remove_ip_filters)
+        params[:account][:ip_filters] = [] if remove_ip_filters
+
         if @account.update_attributes(params[:account])
           format.html { redirect_to account_settings_url(@account) }
           format.json { render :json => @account }
@@ -593,7 +599,7 @@ class AccountsController < ApplicationController
       end
       load_course_right_side
       @account_users = @account.account_users
-      ActiveRecord::Associations::Preloader.new(@account_users, user: :communication_channels).run
+      ActiveRecord::Associations::Preloader.new.preload(@account_users, user: :communication_channels)
       order_hash = {}
       @account.available_account_roles.each_with_index do |role, idx|
         order_hash[role.id] = idx
@@ -604,7 +610,7 @@ class AccountsController < ApplicationController
       @account_roles = @account.available_account_roles.sort_by(&:display_sort_index).map{|role| {:id => role.id, :label => role.label}}
       @course_roles = @account.available_course_roles.sort_by(&:display_sort_index).map{|role| {:id => role.id, :label => role.label}}
 
-      @announcements = @account.announcements
+      @announcements = @account.announcements.order(:created_at).paginate(page: params[:page], per_page: 50)
       @external_integration_keys = ExternalIntegrationKey.indexed_keys_for(@account)
 
       js_env({
@@ -793,7 +799,7 @@ class AccountsController < ApplicationController
   end
 
   def sis_import
-    if authorized_action(@account, @current_user, :manage_sis)
+    if authorized_action(@account, @current_user, [:import_sis, :manage_sis])
       return redirect_to account_settings_url(@account) if !@account.allow_sis_import || !@account.root_account?
       @current_batch = @account.current_sis_batch
       @last_batch = @account.sis_batches.order('created_at DESC').first
@@ -924,9 +930,9 @@ class AccountsController < ApplicationController
     end
   end
 
-  def process_external_integration_keys
+  def process_external_integration_keys(account = @account)
     if params_keys = params[:account][:external_integration_keys]
-      ExternalIntegrationKey.indexed_keys_for(@account).each do |key_type, key|
+      ExternalIntegrationKey.indexed_keys_for(account).each do |key_type, key|
         next unless params_keys.key?(key_type)
         next unless key.grants_right?(@current_user, :write)
         unless params_keys[key_type].blank?
@@ -944,4 +950,8 @@ class AccountsController < ApplicationController
   end
   private :format_avatar_count
 
+  protected
+  def rich_content_service_config
+    js_env(Services::RichContent.env_for(@domain_root_account, risk_level: :basic))
+  end
 end

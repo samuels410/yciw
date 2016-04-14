@@ -5,15 +5,14 @@ class ContextExternalTool < ActiveRecord::Base
   has_many :content_tags, :as => :content
   has_many :context_external_tool_placements, :autosave => true
 
-  belongs_to :context, :polymorphic => true
-  validates_inclusion_of :context_type, :allow_nil => true, :in => ['Course', 'Account']
+  belongs_to :context, polymorphic: [:course, :account]
   attr_accessible :privacy_level, :domain, :url, :shared_secret, :consumer_key,
                   :name, :description, :custom_fields, :custom_fields_string,
                   :course_navigation, :account_navigation, :user_navigation,
                   :resource_selection, :editor_button, :homework_submission,
                   :course_home_sub_navigation, :course_settings_sub_navigation,
                   :config_type, :config_url, :config_xml, :tool_id,
-                  :integration_type, :not_selectable
+                  :not_selectable
 
   validates_presence_of :context_id, :context_type, :workflow_state
   validates_presence_of :name, :consumer_key, :shared_secret
@@ -42,13 +41,27 @@ class ContextExternalTool < ActiveRecord::Base
     can :read and can :update and can :delete
   end
 
-  EXTENSION_TYPES = [
-    :user_navigation, :course_navigation, :account_navigation, :resource_selection,
-    :editor_button, :homework_submission, :migration_selection, :course_home_sub_navigation,
-    :course_settings_sub_navigation, :global_navigation,
-    :assignment_menu, :file_menu, :discussion_topic_menu, :module_menu, :quiz_menu, :wiki_page_menu,
-    :tool_configuration, :link_selection, :assignment_selection, :post_grades
-  ].freeze
+  EXTENSION_TYPES = [:account_navigation,
+                     :assignment_menu,
+                     :assignment_selection,
+                     :collaboration,
+                     :course_home_sub_navigation,
+                     :course_navigation,
+                     :course_settings_sub_navigation,
+                     :discussion_topic_menu,
+                     :editor_button,
+                     :file_menu,
+                     :global_navigation,
+                     :homework_submission,
+                     :link_selection,
+                     :migration_selection,
+                     :module_menu,
+                     :post_grades,
+                     :quiz_menu,
+                     :resource_selection,
+                     :tool_configuration,
+                     :user_navigation,
+                     :wiki_page_menu].freeze
 
   CUSTOM_EXTENSION_KEYS = {:file_menu => [:accept_media_types].freeze}.freeze
 
@@ -62,6 +75,13 @@ class ContextExternalTool < ActiveRecord::Base
         set_extension_setting(:#{type}, hash)
       end
     RUBY
+  end
+
+  def self.tool_for_assignment(assignment)
+    tag = assignment.external_tool_tag
+    return unless tag
+    launch_url = assignment.external_tool_tag.url
+    self.find_external_tool(launch_url, assignment.context)
   end
 
   def extension_setting(type, property = nil)
@@ -108,13 +128,13 @@ class ContextExternalTool < ActiveRecord::Base
 
   def sync_placements!(placements)
     old_placements = self.context_external_tool_placements.pluck(:placement_type)
-    (placements - old_placements).each do |new_placement|
-      self.context_external_tool_placements.new(:placement_type => new_placement)
-    end
     placements_to_delete = EXTENSION_TYPES.map(&:to_s) - placements
     if placements_to_delete.any?
       self.context_external_tool_placements.where(placement_type: placements_to_delete).delete_all if self.persisted?
-      self.context_external_tool_placements.delete_if{|p| placements_to_delete.include?(p.placement_type)}
+      self.context_external_tool_placements.reload if self.context_external_tool_placements.loaded?
+    end
+    (placements - old_placements).each do |new_placement|
+      self.context_external_tool_placements.new(:placement_type => new_placement)
     end
   end
   private :sync_placements!
@@ -129,7 +149,7 @@ class ContextExternalTool < ActiveRecord::Base
   end
 
   def settings
-    read_attribute(:settings) || write_attribute(:settings, {})
+    read_or_initialize_attribute(:settings, {})
   end
 
   def label_for(key, lang=nil)
@@ -229,8 +249,8 @@ class ContextExternalTool < ActiveRecord::Base
 
     converter = CC::Importer::BLTIConverter.new
     tool_hash = if config_type == 'by_url'
-                  uri = URI.parse(config_url)
-                  raise URI::Error unless uri.host && uri.port
+                  uri = Addressable::URI.parse(config_url)
+                  raise URI::Error unless uri.host
                   converter.retrieve_and_convert_blti_url(config_url)
                 else
                   converter.convert_blti_xml(config_xml)
@@ -365,7 +385,7 @@ class ContextExternalTool < ActiveRecord::Base
   #This aggressively updates the domain on all URLs in this tool
   def change_domain!(new_domain)
     replace_host = lambda do |url, host|
-      uri = URI.parse(url)
+      uri = Addressable::URI.parse(url)
       uri.host = host
       uri.to_s
     end
@@ -389,14 +409,14 @@ class ContextExternalTool < ActiveRecord::Base
   end
 
   def self.standardize_url(url)
-    return "" if url.empty?
+    return "" if url.blank?
     url = "http://" + url unless url.match(/:\/\//)
-    res = URI.parse(url).normalize
+    res = Addressable::URI.parse(url).normalize
     res.query = res.query.split(/&/).sort.join('&') if !res.query.blank?
     res.to_s
   end
 
-  alias_method :destroy!, :destroy
+  alias_method :destroy_permanently!, :destroy
   def destroy
     self.workflow_state = 'deleted'
     save!
@@ -435,26 +455,26 @@ class ContextExternalTool < ActiveRecord::Base
       return true if url == standard_url
     elsif standard_url.present?
       if !defined?(@url_params)
-        res = URI.parse(standard_url)
+        res = Addressable::URI.parse(standard_url)
         @url_params = res.query.present? ? res.query.split(/&/) : []
       end
-      res = URI.parse(url).normalize
+      res = Addressable::URI.parse(url).normalize
       res.query = res.query.split(/&/).select{|p| @url_params.include?(p)}.sort.join('&') if res.query.present?
       res.query = nil if res.query.blank?
       res.normalize!
       return true if res.to_s == standard_url
     end
-    host = URI.parse(url).host rescue nil
+    host = Addressable::URI.parse(url).host rescue nil
     !!(host && ('.' + host).match(/\.#{domain}\z/))
   end
 
   def matches_domain?(url)
     url = ContextExternalTool.standardize_url(url)
-    host = URI.parse(url).host
+    host = Addressable::URI.parse(url).host
     if domain
       domain == host
     elsif standard_url
-      URI.parse(standard_url).host == host
+      Addressable::URI.parse(standard_url).host == host
     else
       false
     end
@@ -495,10 +515,12 @@ class ContextExternalTool < ActiveRecord::Base
     contexts.concat contexts_to_search(context)
     return nil if contexts.empty?
 
-    scope = ContextExternalTool.shard(context.shard).polymorphic_where(context: contexts).active
-    scope = scope.placements(*placements)
-    scope = scope.selectable if Canvas::Plugin.value_to_boolean(options[:selectable])
-    scope.order("#{ContextExternalTool.best_unicode_collation_key('context_external_tools.name')}, context_external_tools.id")
+    context.shard.activate do
+      scope = ContextExternalTool.shard(context.shard).polymorphic_where(context: contexts).active
+      scope = scope.placements(*placements)
+      scope = scope.selectable if Canvas::Plugin.value_to_boolean(options[:selectable])
+      scope.order("#{ContextExternalTool.best_unicode_collation_key('context_external_tools.name')}, context_external_tools.id")
+    end
   end
 
   def self.find_external_tool_by_id(id, context)
@@ -540,17 +562,8 @@ class ContextExternalTool < ActiveRecord::Base
     nil
   end
 
-  def self.find_integration_for(context, type)
-    contexts_to_search(context).each do |context|
-      tools = context.context_external_tools.active.where(integration_type: type)
-      return tools.first unless tools.empty?
-    end
-
-    nil
-  end
-
   scope :having_setting, lambda { |setting| setting ? joins(:context_external_tool_placements).
-      where("context_external_tool_placements.placement_type = ?", setting) : scoped }
+      where("context_external_tool_placements.placement_type = ?", setting) : all }
 
   scope :placements, lambda { |*placements|
     if placements.present?
@@ -566,7 +579,7 @@ class ContextExternalTool < ActiveRecord::Base
             ContextExternalToolPlacement.where(placement_type: placements).
         where("context_external_tools.id = context_external_tool_placements.context_external_tool_id"))
     else
-      scoped
+      all
     end
   }
 
@@ -664,7 +677,7 @@ class ContextExternalTool < ActiveRecord::Base
   end
 
   def self.global_navigation_tools(root_account, visibility)
-    tools = root_account.context_external_tools.active.having_setting(:global_navigation)
+    tools = root_account.context_external_tools.active.having_setting(:global_navigation).to_a
     if visibility == 'members'
       # reject the admin only tools
       tools.reject!{|tool| tool.global_navigation[:visibility] == 'admins'}
@@ -678,6 +691,31 @@ class ContextExternalTool < ActiveRecord::Base
     Rails.cache.fetch(key) do
       tools = global_navigation_tools(root_account, visibility)
       Digest::MD5.hexdigest(tools.map(&:cache_key).join('/'))
+    end
+  end
+
+  def self.visible?(visibility, user, context, session = nil)
+    visibility = visibility.to_s
+    return true unless %w(public members admins).include?(visibility)
+    return true if visibility == 'public'
+    return true if visibility == 'members' &&
+        context.grants_any_right?(user, session, :participate_as_student, :read_as_admin)
+    return true if visibility == 'admins' && context.grants_right?(user, session, :read_as_admin)
+    false
+  end
+
+  def self.editor_button_json(tools, context, user, session=nil)
+    tools.select! {|tool| visible?(tool.editor_button['visibility'], user, context, session)}
+    tools.map do |tool|
+      {
+          :name => tool.label_for(:editor_button, I18n.locale),
+          :id => tool.id,
+          :url => tool.editor_button(:url),
+          :icon_url => tool.editor_button(:icon_url),
+          :canvas_icon_class => tool.editor_button(:canvas_icon_class),
+          :width => tool.editor_button(:selection_width),
+          :height => tool.editor_button(:selection_height)
+      }
     end
   end
 end

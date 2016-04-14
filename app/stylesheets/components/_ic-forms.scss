@@ -1151,8 +1151,10 @@ Reduce the width of your screen to see how the example components below both sca
 
 */
 
-$ic-Input-border: lighten($ic-color-dark, 65);
-@if $use_high_contrast {$ic-Input-border: $ic-color-dark;}
+
+@if $use_high_contrast { $ic-Input-border: $ic-color-dark; }
+@else { $ic-Input-border: lighten($ic-color-dark, 65); }
+$ic-Input-standard-height: 38px;
 
 @mixin ic-input-variant($border-color: $ic-Input-border, $color: $ic-brand-primary) {
   border-color: $border-color;
@@ -1183,7 +1185,7 @@ input[type="tel"], input[type="color"], .uneditable-input {
 
   &.ic-Input {
     // Overwrite legacy forms styles from Bootstrap 2.
-    width: 100%; height: auto;
+    width: 100%; height: $ic-Input-standard-height;
     display: block;
     margin-top: 0;
     margin-bottom: 0;
@@ -1198,7 +1200,6 @@ input[type="tel"], input[type="color"], .uneditable-input {
     outline-offset: -$ic-sp;
     background: $ic-color-light;
     padding: 8px 12px;
-    min-height: 38px;
 
     // Remove the webkit gloss in iOS
     -webkit-appearance: none;
@@ -1253,18 +1254,39 @@ input[type="tel"], input[type="color"], .uneditable-input {
 
 // special styles for select
 select.ic-Input, input[type="file"].ic-Input {
-  height: 38px;
   padding: 0 0 0 $ic-sp;
 }
 
-select.ic-Input {
-  // Webkit-only hack because we have removed -webkit-appearance from the
-  // selects and need to add an arrow and remove padding
-  &:not(*:root) {
-    background: url("/images/forms/ic-icon-arrow-down.svg") no-repeat calc(100% - #{$ic-sp - 4}) 50% $ic-color-light;
-    background-size: 10px 5.667px;
-  }
+// special styles for textarea
+textarea.ic-Input {
+  height: auto;
 }
+
+
+// We removed -webkit-appearance from anything with the
+// .ic-Input class, to give us more styling control. 
+// This makes the select's caret disappear in IE Edge and Webkit.
+// So we add it back in with these hacks.
+
+@mixin add-arrow-for-webkit-and-ie-edge($bg-position-x) {
+  background-color: $ic-color-light;
+  background-image: url("/images/forms/ic-icon-arrow-down.svg");
+  background-repeat: no-repeat;
+  background-size: 10px 5.667px;
+  background-position: $bg-position-x 50%;
+  padding: 0 $ic-sp;
+}
+
+// webkit hack
+select.ic-Input:not(*:root) {
+  @include add-arrow-for-webkit-and-ie-edge( calc(100% - #{$ic-sp - 4}) );
+}
+
+// IE Edge hack (doesn't support calc here, so we need to use a percentage)
+@supports (-ms-accelerator:true) {
+  select.ic-Input { @include add-arrow-for-webkit-and-ie-edge(99%); }
+}
+
 
 .ic-Form-group {
 
@@ -1308,7 +1330,6 @@ select.ic-Input {
 
         .ic-Label {
           margin-bottom: 0;
-          text-align: right;
           flex: 0 0 $ic-horizontal-form-offset;
           padding-right: $ic-sp*2;
         }
@@ -1371,7 +1392,7 @@ select.ic-Input {
   display: flex;
   align-items: center;
   padding: ($ic-sp - 4) ($ic-sp - 4) ($ic-sp - 4) 0;
-  font-size: $baseFontSize - 2;
+  @include fontSize($ic-font-size--xsmall);
   line-height: 1.2;
   color: $ic-color-light;
   box-shadow: 0 2px 2px rgba(black, 0.2);
@@ -1484,7 +1505,7 @@ form.ic-Form-group { margin: 0; }
   display: block;
   line-height: $ic-label-line-height;
   font-weight: 500;
-  font-size: $baseFontSize;
+  @include fontSize($ic-font-size--small);
 }
 
 .ic-Form-actions {
@@ -1709,7 +1730,7 @@ form.ic-Form-group { margin: 0; }
 
   .ic-Input-group__add-on,
   .ic-Label {
-    height: 38px;
+    height: $ic-Input-standard-height;
     background: $ic-color-light;
     border: 1px solid $ic-Input-border;
     display: flex;

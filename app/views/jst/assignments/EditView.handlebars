@@ -6,10 +6,10 @@
 
 <div class="control-group">
   <div>
+    <label for="assignment_name" class="screenreader-only">{{#t}}Assignment Name{{/t}}</label>
     <input id="assignment_name"
       name="name"
       placeholder="{{#t "assignment_name"}}Assignment Name{{/t}}"
-      aria-label="{{#t "assignment_name"}}Assignment Name{{/t}}"
       value="{{name}}"
       type="text"
       maxlength="254"
@@ -108,20 +108,18 @@
     </fieldset>
   {{/if}}
 
-  {{#if moderatedGradingEnabled}}
-    <fieldset>
-      <div class="form-column-left">{{#t}}Moderated Grading{{/t}}</div>
-      <div class="form-column-right" style="margin-top: 14px;">
-        <label class="checkbox">
-          {{checkbox "moderatedGrading"
-            id="assignment_moderated_grading"
-            name="moderated_grading"
-          }}
-          {{#t}}Allow a moderator to review multiple independent grades for selected submissions{{/t}}
-        </label>
-      </div>
-    </fieldset>
-  {{/if}}
+  <fieldset>
+    <div class="form-column-left">{{#t}}Moderated Grading{{/t}}</div>
+    <div class="form-column-right" style="margin-top: 14px;">
+      <label class="checkbox">
+        {{checkbox "moderatedGrading"
+          id="assignment_moderated_grading"
+          name="moderated_grading"
+        }}
+        {{#t}}Allow a moderator to review multiple independent grades for selected submissions{{/t}}
+      </label>
+    </div>
+  </fieldset>
 
 </div>
 

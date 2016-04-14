@@ -21,18 +21,11 @@ class GroupCategory < ActiveRecord::Base
   attr_reader :create_group_count
   attr_accessor :assign_unassigned_members
 
-  belongs_to :context, :polymorphic => true
-  validates_inclusion_of :context_type, :allow_nil => true, :in => ['Course', 'Account']
+  belongs_to :context, polymorphic: [:course, :account]
   has_many :groups, :dependent => :destroy
   has_many :assignments, :dependent => :nullify
   has_many :progresses, :as => 'context', :dependent => :destroy
   has_one :current_progress, -> { where(workflow_state: ['queued', 'running']).order(:created_at) }, as: 'context', class_name: 'Progress'
-
-  EXPORTABLE_ATTRIBUTES = [ :id, :context_id, :context_type, :name, :role,
-    :deleted_at, :self_signup, :group_limit, :auto_leader
-  ]
-
-  EXPORTABLE_ASSOCIATIONS = [:context, :groups, :assignments]
 
   after_save :auto_create_groups
   after_update :update_groups_max_membership
@@ -81,7 +74,7 @@ class GroupCategory < ActiveRecord::Base
   end
 
   Bookmarker = BookmarkedCollection::SimpleBookmarker.new(GroupCategory, :name, :id)
-  
+
   scope :by_name, -> { order(Bookmarker.order_by) }
   scope :active, -> { where(:deleted_at => nil) }
   scope :other_than, lambda { |cat| where("group_categories.id<>?", cat.id || 0) }
@@ -200,7 +193,7 @@ class GroupCategory < ActiveRecord::Base
     groups.active.where("EXISTS (?)", GroupMembership.active.where("group_id=groups.id").where(user_id: user)).any?
   end
 
-  alias_method :destroy!, :destroy
+  alias_method :destroy_permanently!, :destroy
   def destroy
     # TODO: this is kinda redundant with the :dependent => :destroy on the
     # groups association, but that doesn't get called since we override
@@ -216,7 +209,8 @@ class GroupCategory < ActiveRecord::Base
       complete_progress
       return []
     end
-
+    members = members.to_a
+    groups = groups.to_a
     ##
     # new memberships to be returned
     new_memberships = []
@@ -354,7 +348,10 @@ class GroupCategory < ActiveRecord::Base
     end
 
     if self.auto_leader
-      groups.each{|group| GroupLeadership.new(group).auto_assign!(auto_leader) }
+      groups.each do |group|
+        group.users.reload
+        GroupLeadership.new(group).auto_assign!(auto_leader)
+      end
     end
 
     if !groups.empty?

@@ -24,20 +24,10 @@ class SubmissionComment < ActiveRecord::Base
   belongs_to :author, :class_name => 'User'
   belongs_to :recipient, :class_name => 'User'
   belongs_to :assessment_request
-  belongs_to :context, :polymorphic => true
+  belongs_to :context, polymorphic: [:course]
   belongs_to :provisional_grade, :class_name => 'ModeratedGrading::ProvisionalGrade'
-  validates_inclusion_of :context_type, :allow_nil => true, :in => ['Course']
   has_many :submission_comment_participants, :dependent => :destroy
   has_many :messages, :as => :context, :dependent => :destroy
-
-  EXPORTABLE_ATTRIBUTES = [
-    :id, :comment, :submission_id, :recipient_id, :author_id, :author_name, :group_comment_id, :created_at,
-    :updated_at, :attachment_ids, :assessment_request_id, :media_comment_id, :media_comment_type, :context_id,
-    :context_type, :cached_attachments, :anonymous, :teacher_only_comment, :hidden
-  ].freeze
-  EXPORTABLE_ASSOCIATIONS = [
-    :submission, :author, :recipient, :assessment_request, :context, :submission_comment_participants
-  ].freeze
 
   validates_length_of :comment, :maximum => maximum_text_length, :allow_nil => true, :allow_blank => true
   validates_length_of :comment, :minimum => 1, :allow_nil => true, :allow_blank => true
@@ -55,10 +45,14 @@ class SubmissionComment < ActiveRecord::Base
 
   serialize :cached_attachments
 
+  scope :visible, -> { where(:hidden => false) }
+  scope :after, lambda { |date| where("submission_comments.created_at>?", date) }
+  scope :for_final_grade, -> { where(:provisional_grade_id => nil) }
+  scope :for_provisional_grade, ->(id) { where(:provisional_grade_id => id) }
   scope :for_assignment_id, lambda { |assignment_id| where(:submissions => { :assignment_id => assignment_id }).joins(:submission) }
 
   def delete_other_comments_in_this_group
-    return if !self.group_comment_id || @skip_destroy_callbacks
+    return if !group_comment_id || skip_destroy_callbacks?
 
     # grab comment ids first because the objects built off
     # readonly attributes/objects are marked as readonly and
@@ -66,17 +60,13 @@ class SubmissionComment < ActiveRecord::Base
     comment_ids = SubmissionComment
       .for_assignment_id(submission.assignment_id)
       .where(group_comment_id: group_comment_id)
-      .where('submission_comments.id <> ?', id)
+      .where.not(id: id)
       .pluck(:id)
 
     SubmissionComment.find(comment_ids).each do |comment|
       comment.skip_destroy_callbacks!
       comment.destroy
     end
-  end
-
-  def skip_destroy_callbacks!
-    @skip_destroy_callbacks = true
   end
 
   has_a_broadcast_policy
@@ -224,9 +214,9 @@ class SubmissionComment < ActiveRecord::Base
   end
 
   def self.preload_attachments(comments)
-    ActiveRecord::Associations::Preloader.new(comments, [:submission]).run
+    ActiveRecord::Associations::Preloader.new.preload(comments, [:submission])
     submissions = comments.map(&:submission).uniq
-    ActiveRecord::Associations::Preloader.new(submissions, :assignment => :attachments).run
+    ActiveRecord::Associations::Preloader.new.preload(submissions, :assignment => :attachments)
   end
 
   def update_submission
@@ -260,13 +250,6 @@ class SubmissionComment < ActiveRecord::Base
     methods
   end
 
-  scope :visible, -> { where(:hidden => false) }
-
-  scope :after, lambda { |date| where("submission_comments.created_at>?", date) }
-
-  scope :for_final_grade, -> { where(:provisional_grade_id => nil) }
-  scope :for_provisional_grade, ->(id) { where(:provisional_grade_id => id) }
-
   def update_participation
     # id_changed? because new_record? is false in after_save callbacks
     if id_changed? || (hidden_changed? && !hidden?)
@@ -280,5 +263,15 @@ class SubmissionComment < ActiveRecord::Base
         :workflow_state => "unread",
       })
     end
+  end
+
+  protected
+  def skip_destroy_callbacks!
+    @skip_destroy_callbacks = true
+  end
+
+  private
+  def skip_destroy_callbacks?
+    !!@skip_destroy_callbacks
   end
 end

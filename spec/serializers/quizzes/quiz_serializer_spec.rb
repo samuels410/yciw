@@ -21,7 +21,7 @@ describe Quizzes::QuizSerializer do
   end
 
   before do
-    @context = Course.new
+    @context = Account.default.courses.new
     @context.id = 1
     @quiz = Quizzes::Quiz.new title: 'test quiz', description: 'default quiz description'
     @quiz.id = 1
@@ -257,7 +257,7 @@ describe Quizzes::QuizSerializer do
         before { skip }
 
         it "serialize the assignment group's url when present" do
-          @quiz.stubs(:context).returns course = Course.new
+          @quiz.stubs(:context).returns course = Account.default.courses.new
           course.id = 1
           @quiz.assignment_group = assignment_group = AssignmentGroup.new
           assignment_group.id = 1
@@ -335,7 +335,7 @@ describe Quizzes::QuizSerializer do
 
     describe 'quiz_reports' do
       it 'sends the url' do
-        quiz.stubs(context: Course.new.tap { |c| c.id = 3 })
+        quiz.stubs(context: Account.default.courses.new.tap { |c| c.id = 3 })
         expect(serializer.as_json[:quiz]['links']['quiz_reports']).to eq(
           controller.send(:api_v1_course_quiz_reports_url, 3, quiz.id)
         )
@@ -343,7 +343,7 @@ describe Quizzes::QuizSerializer do
 
       it 'sends the url as quiz_reports_url' do
         controller.expects(:accepts_jsonapi?).at_least_once.returns false
-        quiz.stubs(context: Course.new.tap { |c| c.id = 3 })
+        quiz.stubs(context: Account.default.courses.new.tap { |c| c.id = 3 })
         expect(serializer.as_json[:quiz][:quiz_reports_url]).to eq(
           controller.send(:api_v1_course_quiz_reports_url, 3, quiz.id)
         )
@@ -352,7 +352,7 @@ describe Quizzes::QuizSerializer do
 
     describe "quiz_statistics" do
       it "sends the url" do
-        quiz.stubs(context: Course.new.tap { |c| c.id = 3 })
+        quiz.stubs(context: Account.default.courses.new.tap { |c| c.id = 3 })
         expect(serializer.as_json[:quiz]['links']['quiz_statistics']).to eq(
           controller.send(:api_v1_course_quiz_statistics_url, 3, quiz.id)
         )
@@ -360,7 +360,7 @@ describe Quizzes::QuizSerializer do
 
       it "sends the url in non-JSONAPI too" do
         controller.expects(:accepts_jsonapi?).at_least_once.returns false
-        quiz.stubs(context: Course.new.tap { |c| c.id = 3 })
+        quiz.stubs(context: Account.default.courses.new.tap { |c| c.id = 3 })
         expect(serializer.as_json[:quiz][:quiz_statistics_url]).to eq(
           controller.send(:api_v1_course_quiz_statistics_url, 3, quiz.id)
         )
@@ -541,8 +541,7 @@ describe Quizzes::QuizSerializer do
         course_quiz(true)
       end
 
-      it "returns the value when the feature flag is on" do
-        @quiz.context.stubs(:feature_enabled?).with(:differentiated_assignments).returns true
+      it "returns the value for DA" do
         @quiz.only_visible_to_overrides = true
         json = quiz_serializer(scope: @teacher).as_json
         expect(json[:quiz][:only_visible_to_overrides]).to be_truthy
@@ -551,12 +550,6 @@ describe Quizzes::QuizSerializer do
         json = quiz_serializer(scope: @teacher).as_json
         expect(json[:quiz]).to have_key :only_visible_to_overrides
         expect(json[:quiz][:only_visible_to_overrides]).to be_falsey
-      end
-
-      it "is not in the hash when the feature flag is off" do
-        @quiz.only_visible_to_overrides = true
-        json = quiz_serializer(scope: @teacher).as_json
-        expect(json[:quiz]).not_to have_key :only_visible_to_overrides
       end
     end
 

@@ -59,6 +59,7 @@ class ActiveRecord::Base
     'communication_channels' => %w(access_token_id internal_path).freeze,
     'content_exports' => %w(course_id).freeze,
     'content_tags' => %w(sequence_position context_module_association_id).freeze,
+    'context_external_tools' => %w(integration_type).freeze,
     'context_modules' => %w(downstream_modules).freeze,
     'conversation_messages' => %w(context_message_id).freeze,
     'course_sections' => %w(sis_cross_listed_section_id
@@ -88,6 +89,7 @@ class ActiveRecord::Base
     'eportfolio_entries' => %w(attachment_id artifact_type).freeze,
     'external_feeds' => %w(body_match feed_type feed_purpose).freeze,
     'failed_jobs' => %w(original_id).freeze,
+    'feature_flags' => %w(locking_account_id).freeze,
     'gradebook_uploads' => %w(context_type context_id).freeze,
     'grading_periods' => %w(course_id account_id).freeze,
     'groups' => %w(sis_name type groupable_id groupable_type hashtag

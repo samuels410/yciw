@@ -19,10 +19,68 @@
 require File.expand_path(File.dirname(__FILE__) + '/../spec_helper.rb')
 
 describe "safe_yaml" do
+  let(:test_yaml) {
+    yaml = <<-YAML
+---
+hwia: !map:HashWithIndifferentAccess
+  a: 1
+  b: 2
+float: !float
+  5.1
+float_with_exp: -1.7763568394002505e-15
+float_inf: .inf
+os: !ruby/object:OpenStruct
+  modifiable: true
+  table:
+    :a: 1
+    :b: 2
+    :sub: !ruby/object:OpenStruct
+      modifiable: true
+      table:
+        :c: 3
+str: !str
+  hai
+mime: !ruby/object:Mime::Type
+  string: png
+  symbol:
+  synonyms: []
+http: !ruby/object:URI::HTTP
+  fragment:
+  host: example.com
+  opaque:
+  parser:
+  password:
+  path: /
+  port: 80
+  query:
+  registry:
+  scheme: http
+  user:
+https: !ruby/object:URI::HTTPS
+  fragment:
+  host: example.com
+  opaque:
+  parser:
+  password:
+  path: /
+  port: 443
+  query:
+  registry:
+  scheme: https
+  user:
+ab: !ruby/object:Class AcademicBenchmark::Converter
+qt: !ruby/object:Class Qti::Converter
+verbose_symbol: !ruby/symbol blah
+oo: !ruby/object:OpenObject
+  table:
+    :a: 1
+    YAML
+  }
+
   it "should be used by default" do
     yaml = <<-YAML
---- !ruby/object:ActionController::Base 
-real_format: 
+--- !ruby/object:ActionController::Base
+real_format:
 YAML
     expect { YAML.load yaml }.to raise_error
     result = YAML.unsafe_load yaml
@@ -38,61 +96,7 @@ YAML
   end
 
   it "should allow some whitelisted classes" do
-    yaml = <<-YAML
----
-hwia: !map:HashWithIndifferentAccess
-  a: 1
-  b: 2
-float: !float
-  5.1
-float_with_exp: -1.7763568394002505e-15
-os: !ruby/object:OpenStruct
-  modifiable: true
-  table: 
-    :a: 1
-    :b: 2
-    :sub: !ruby/object:OpenStruct
-      modifiable: true
-      table: 
-        :c: 3
-str: !str
-  hai
-mime: !ruby/object:Mime::Type
-  string: png
-  symbol: 
-  synonyms: []
-http: !ruby/object:URI::HTTP 
-  fragment: 
-  host: example.com
-  opaque: 
-  parser: 
-  password: 
-  path: /
-  port: 80
-  query: 
-  registry: 
-  scheme: http
-  user: 
-https: !ruby/object:URI::HTTPS 
-  fragment: 
-  host: example.com
-  opaque: 
-  parser: 
-  password: 
-  path: /
-  port: 443
-  query: 
-  registry: 
-  scheme: https
-  user: 
-ab: !ruby/object:Class AcademicBenchmark::Converter
-qt: !ruby/object:Class Qti::Converter
-verbose_symbol: !ruby/symbol blah
-oo: !ruby/object:OpenObject
-  table:
-    :a: 1
-YAML
-    result = YAML.load yaml
+    result = YAML.load(test_yaml)
 
     def verify(result, key, klass)
       obj = result[key]
@@ -108,6 +112,9 @@ YAML
 
     float_with_exp = verify(result, 'float_with_exp', Float)
     expect(float_with_exp).to eq(-1.7763568394002505e-15)
+
+    float_inf = verify(result, 'float_inf', Float)
+    expect(float_inf).to eq(Float::INFINITY)
 
     os = verify(result, 'os', OpenStruct)
     expect(os.a).to eq 1
@@ -134,5 +141,40 @@ YAML
 
     oo = verify(result, 'oo', OpenObject)
     expect(oo.a).to eq 1
+  end
+
+  it "should allow some whitelisted classes through psych" do
+    old_result = YAML.load(test_yaml)
+    psych_yaml = YAML.dump(old_result)
+    expect(Psych.load(psych_yaml)).to eq old_result
+    expect(YAML.load(psych_yaml)).to eq old_result
+  end
+
+  it "should seamlessly dump yaml into a psych-compatible format (and be cross-compatible)" do
+    yaml = "--- \nsadness: \"\\xF0\\x9F\\x98\\x82\"\n"
+    hash = YAML.load(yaml)
+
+    psych_dump = "---\nsadness: \"\\U0001F602\"\n#{Syckness::TAG}"
+    expect(hash.to_yaml).to eq psych_dump
+    expect(YAML.dump(hash)).to eq psych_dump
+
+    expect(YAML.load(psych_dump)).to eq hash
+    expect(YAML.unsafe_load(psych_dump)).to eq hash
+  end
+
+  it "should work with aliases" do
+    hash = {:a => 1}.with_indifferent_access
+    obj = {:blah => hash, :bloop => hash}.with_indifferent_access
+    yaml = Psych.dump(obj)
+    expect(YAML.load(yaml)).to eq obj
+  end
+
+  it "should dump whole floats correctly" do
+    expect(YAML.dump(1.0)).to include("1.0")
+  end
+
+  it "should dump freaky floaty-looking strings" do
+    str = "1.E+01"
+    expect(YAML.load(YAML.dump(str))).to eq str
   end
 end

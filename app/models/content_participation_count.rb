@@ -19,12 +19,8 @@
 class ContentParticipationCount < ActiveRecord::Base
   attr_accessible :context, :user, :content_type, :unread_count
 
-  belongs_to :context, :polymorphic => true
-  validates_inclusion_of :context_type, :allow_nil => true, :in => ['Course']
+  belongs_to :context, polymorphic: [:course]
   belongs_to :user
-
-  EXPORTABLE_ATTRIBUTES = [:id, :content_type, :context_type, :context_id, :user_id, :unread_count, :created_at, :updated_at]
-  EXPORTABLE_ASSOCATIONS = [:context, :user]
 
   def self.create_or_update(opts={})
     opts = opts.with_indifferent_access
@@ -105,7 +101,7 @@ class ContentParticipationCount < ActiveRecord::Base
   end
 
   def unread_count(refresh = true)
-    refresh_unread_count if refresh && !frozen? && ttl.present? && self.updated_at.utc < ttl.ago.utc
+    refresh_unread_count if refresh && !frozen? && ttl.present? && self.updated_at.utc < ttl.seconds.ago.utc
     read_attribute(:unread_count)
   end
 

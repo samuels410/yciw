@@ -28,15 +28,12 @@ class RubricAssessment < ActiveRecord::Base
   belongs_to :rubric_association
   belongs_to :user
   belongs_to :assessor, :class_name => 'User'
-  belongs_to :artifact, :polymorphic => true, :touch => true
-  validates_inclusion_of :artifact_type, :allow_nil => true, :in => ['Submission', 'Assignment', 'ModeratedGrading::ProvisionalGrade']
+  belongs_to :artifact, touch: true,
+             polymorphic: [:submission, :assignment, { provisional_grade: 'ModeratedGrading::ProvisionalGrade' }]
   has_many :assessment_requests, :dependent => :destroy
   serialize_utf8_safe :data
 
   simply_versioned
-
-  EXPORTABLE_ATTRIBUTES = [:id, :user_id, :rubric_id, :rubric_association_id, :score, :data, :created_at, :updated_at, :artifact_id, :artifact_type, :assessment_type, :assessor_id, :artifact_attempt]
-  EXPORTABLE_ASSOCIATIONS = [:rubric, :rubric_association, :user, :assessor, :artifact, :assessment_requests]
 
   validates_presence_of :assessment_type, :rubric_id, :artifact_id, :artifact_type, :assessor_id
 

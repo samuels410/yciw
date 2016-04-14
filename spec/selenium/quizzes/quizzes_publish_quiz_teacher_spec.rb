@@ -3,13 +3,12 @@ require_relative '../helpers/quizzes_common'
 
 describe 'publishing a quiz' do
   include_context "in-process server selenium tests"
-
-  let(:quiz_helper) { Class.new { extend QuizzesCommon } }
+  include QuizzesCommon
 
   context 'as a teacher' do
     before(:each) do
       course_with_teacher_logged_in
-      @quiz = quiz_helper.create_quiz_with_due_date(course: @course)
+      @quiz = create_quiz_with_due_date(course: @course)
       @quiz.workflow_state = 'unavailable'
       @quiz.save!
     end
@@ -17,17 +16,14 @@ describe 'publishing a quiz' do
     context 'when on the quiz show page' do
       before(:each) do
         get "/courses/#{@course.id}/quizzes/#{@quiz.id}"
-        f('#quiz-publish-link').click
-      end
-
-      context 'before the ajax calls finish' do
-        it 'temporarily changes the button text to |Publishing...|', priority: "1", test_id: 398935 do
-          expect(fj('.publish-text', '#quiz-publish-link').text).to include_text 'Publishing...'
-        end
       end
 
       context 'after the ajax calls finish' do
-        before(:each) { wait_for_ajaximations }
+        before(:each) do
+          f('#quiz-publish-link').click
+          wait_for_ajaximations
+          wait_for_quiz_publish_button_to_populate
+        end
 
         it 'changes the button\'s text to \'Published\'', priority: "1", test_id: 140649 do
           driver.mouse.move_to f('#footer')
@@ -53,8 +49,8 @@ describe 'publishing a quiz' do
           expect(links_text).to include 'SpeedGrader'
         end
 
-        it 'displays the |Take the Quiz| button', priority: "1", test_id: 398939 do
-          expect(f('#take_quiz_link').text).to eq 'Take the Quiz'
+        it 'displays both |Preview| buttons', priority: "1", test_id: 398939 do
+          expect(ff('#preview_quiz_button').count).to eq 2
         end
 
         context 'when clicking the cog menu tool' do

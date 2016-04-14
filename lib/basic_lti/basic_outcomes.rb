@@ -40,11 +40,14 @@ module BasicLTI
 
     def self.decode_source_id(tool, sourceid)
       tool.shard.activate do
+        raise InvalidSourceId, 'Invalid sourcedid' if sourceid.blank?
         md = sourceid.match(SOURCE_ID_REGEX)
         raise InvalidSourceId, 'Invalid sourcedid' unless md
         new_encoding = [md[1], md[2], md[3], md[4]].join('-')
-        return false unless Canvas::Security.verify_hmac_sha1(md[5], new_encoding, key: tool.shard.settings[:encryption_key])
-        return false unless tool.id == md[1].to_i
+        raise InvalidSourceId, 'Invalid signature' unless Canvas::Security.
+            verify_hmac_sha1(md[5], new_encoding, key: tool.shard.settings[:encryption_key])
+        
+        raise InvalidSourceId, 'Tool is invalid' unless tool.id == md[1].to_i
         course = Course.active.where(id: md[2]).first
         raise InvalidSourceId, 'Course is invalid' unless course
 
@@ -55,7 +58,8 @@ module BasicLTI
         raise InvalidSourceId, 'Assignment is invalid' unless assignment
 
         tag = assignment.external_tool_tag if assignment
-        raise InvalidSourceId, 'Assignment is no longer associated with this tool' unless tag and tool.matches_url?(tag.url, false) and tool.workflow_state != 'deleted'
+        raise InvalidSourceId, 'Assignment is no longer associated with this tool' unless tag and tool.
+            matches_url?(tag.url, false) and tool.workflow_state != 'deleted'
 
         return course, assignment, user
       end
@@ -156,13 +160,15 @@ module BasicLTI
       end
 
       def handle_request(tool)
+        #check if we recognize the xml structure
+        return false unless operation_ref_identifier
         # verify the lis_result_sourcedid param, which will be a canvas-signed
         # tuple of (course, assignment, user) to ensure that only this launch of
         # the tool is attempting to modify this data.
         source_id = self.sourcedid
 
         begin
-          course, assignment, user = BasicLTI::BasicOutcomes.decode_source_id(tool, source_id) if source_id
+          course, assignment, user = BasicLTI::BasicOutcomes.decode_source_id(tool, source_id)
         rescue InvalidSourceId => e
           self.code_major = 'failure'
           self.description = e.to_s
@@ -193,6 +199,8 @@ module BasicLTI
           submission_hash[:url] = url
           submission_hash[:submission_type] = 'online_url'
         end
+
+        old_submission = assignment.submissions.where(user_id: user.id).first
 
         if raw_score
           submission_hash[:grade] = raw_score
@@ -230,7 +238,10 @@ to because the assignment has no points possible.
             @submission = assignment.grade_student(user, submission_hash).first
           end
 
-          unless @submission
+          if @submission
+            @submission.submission_type = old_submission.submission_type if old_submission
+            @submission.save
+          else
             self.code_major = 'failure'
             self.description = I18n.t('lib.basic_lti.no_submission_created', 'This outcome request failed to create a new homework submission.')
           end

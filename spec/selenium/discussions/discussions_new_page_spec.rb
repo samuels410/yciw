@@ -99,7 +99,11 @@ describe "discussions" do
           close_visible_dialog
           f('.btn-primary[type=submit]').click
           wait_for_ajaximations
-
+          keep_trying_until do
+            expect(driver.execute_script(
+              "return $('.errorBox').filter('[id!=error_box_template]')"
+            )).to be_present
+          end
           errorBoxes = driver.execute_script("return $('.errorBox').filter('[id!=error_box_template]').toArray();")
           visBoxes, hidBoxes = errorBoxes.partition { |eb| eb.displayed? }
           expect(visBoxes.first.text).to eq "Please select a group set for this assignment"
@@ -141,7 +145,7 @@ describe "discussions" do
         replace_content(f('input[name=title]'), "Student Delayed")
         type_in_tiny('textarea[name=message]', 'This is the discussion description.')
         target_time = 1.day.from_now
-        unlock_text = target_time.strftime('%b %-d at %-l:%M%P')
+        unlock_text = format_time_for_view(target_time)
         unlock_text_index_page = target_time.strftime('%b %-d')
         f('#delayed_post_at').send_keys(unlock_text)
         expect_new_page_load {submit_form('.form-actions')}

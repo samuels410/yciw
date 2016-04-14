@@ -36,7 +36,7 @@ describe "speed grader - discussion submissions" do
         create!(:user => student, :message => @first_message)
     entry.update_topic
     entry.context_module_action
-    @attachment_thing = attachment_model(:context => student_2, :filename => 'horse.js')
+    @attachment_thing = attachment_model(:context => student_2, :filename => 'horse.doc', :content_type => 'application/msword')
     entry_2 = @discussion_topic.discussion_entries.
         create!(:user => student_2, :message => @second_message, :attachment => @attachment_thing)
     entry_2.update_topic
@@ -100,6 +100,7 @@ describe "speed grader - discussion submissions" do
       keep_trying_until { f('#speedgrader_iframe') }
       in_frame 'speedgrader_iframe' do
         f('#discussion_view_link').click
+        wait_for_ajaximations
         authors = ff('h2.discussion-title span')
         expect(authors[0]).to include_text("This Student")
         expect(authors[1]).to include_text("Discussion Participant")
@@ -111,6 +112,7 @@ describe "speed grader - discussion submissions" do
       keep_trying_until { f('#speedgrader_iframe') }
       in_frame 'speedgrader_iframe' do
         f('.header_title a').click
+        wait_for_ajaximations
         authors = ff('h2.discussion-title span')
         expect(authors[0]).to include_text("This Student")
         expect(authors[1]).to include_text("Discussion Participant")

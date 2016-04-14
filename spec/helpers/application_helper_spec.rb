@@ -394,8 +394,10 @@ describe ApplicationHelper do
 
         context "with custom js" do
           it "should include account javascript" do
-            @domain_root_account.settings = @domain_root_account.settings.merge(global_includes: true)
-            @domain_root_account.settings = @domain_root_account.settings.merge(global_javascript: '/path/to/js')
+            @domain_root_account.settings = @domain_root_account.settings.merge(
+              global_includes: true,
+              global_javascript: '/path/to/js'
+            )
             @domain_root_account.save!
 
             output = helper.include_account_js
@@ -404,8 +406,10 @@ describe ApplicationHelper do
           end
 
           it "should include site admin javascript" do
-            @site_admin.settings = @site_admin.settings.merge(global_includes: true)
-            @site_admin.settings = @site_admin.settings.merge(global_javascript: '/path/to/js')
+            @site_admin.settings = @site_admin.settings.merge(
+              global_includes: true,
+              global_javascript: '/path/to/js'
+            )
             @site_admin.save!
 
             output = helper.include_account_js
@@ -414,12 +418,16 @@ describe ApplicationHelper do
           end
 
           it "should include both site admin and root account javascript, site admin first" do
-            @domain_root_account.settings = @domain_root_account.settings.merge(global_includes: true)
-            @domain_root_account.settings = @domain_root_account.settings.merge(global_javascript: '/path/to/root/js')
+            @domain_root_account.settings = @domain_root_account.settings.merge(
+              global_includes: true,
+              global_javascript: '/path/to/root/js'
+            )
             @domain_root_account.save!
 
-            @site_admin.settings = @site_admin.settings.merge(global_includes: true)
-            @site_admin.settings = @site_admin.settings.merge(global_javascript: '/path/to/admin/js')
+            @site_admin.settings = @site_admin.settings.merge(
+              global_includes: true,
+              global_javascript: '/path/to/admin/js'
+            )
             @site_admin.save!
 
             output = helper.include_account_js
@@ -442,6 +450,83 @@ describe ApplicationHelper do
           @site_admin.expects(:global_includes_hash).once.returns(nil)
           expect(helper.include_account_css).to be_nil
           expect(helper.include_account_js).to be_nil
+        end
+      end
+
+      describe "get_global_includes" do
+        before :once do
+          @domain_root_account = Account.default
+          @domain_root_account.settings = @domain_root_account.settings.merge(
+            global_includes: true,
+            global_javascript: '/path/to/js'
+          )
+          @domain_root_account.save!
+        end
+
+        it "should return default account includes" do
+          includes = helper.get_global_includes
+          expect(includes).to eq [{js: '/path/to/js'}]
+        end
+
+        it "should return sub-account includes if enabled" do
+          @domain_root_account.settings = @domain_root_account.settings.merge(
+            sub_account_includes: true
+          )
+          @domain_root_account.save!
+          @sub_account = account_model(root_account: @domain_root_account)
+          @sub_account.settings = @sub_account.settings.merge(
+            global_javascript: '/path/to/sub/js'
+          )
+          @sub_account.save!
+          @context = @sub_account
+
+          includes = helper.get_global_includes
+          expect(includes).to eq [{js: '/path/to/js'}, {js: '/path/to/sub/js'}]
+        end
+
+        it "should not include sub-account includes if disabled" do
+          @sub_account = account_model(root_account: @domain_root_account)
+          @sub_account.settings = @sub_account.settings.merge(
+            global_javascript: '/path/to/sub/js'
+          )
+          @sub_account.save!
+          @context = @sub_account
+
+          includes = helper.get_global_includes
+          expect(includes).to eq [{js: '/path/to/js'}]
+        end
+
+        it "should not include stale values when updated" do
+          enable_cache do
+            now = Time.now.utc
+            Timecop.freeze(now) do
+              @domain_root_account.settings = @domain_root_account.settings.merge(
+                sub_account_includes: true
+              )
+              @domain_root_account.save!
+              @context = @domain_root_account
+
+              includes = helper.get_global_includes
+              expect(includes).to eq [{js: '/path/to/js'}]
+
+              # a little time passes, so updated_at changes
+              Timecop.freeze(now + 5.seconds)
+
+              @domain_root_account.settings = @domain_root_account.settings.merge(
+                global_javascript: '/path/to/new/js'
+              )
+              @domain_root_account.save!
+
+              # simulate the next request
+              helper.remove_instance_variable(:@global_includes)
+
+              includes = helper.get_global_includes
+
+              # we still get the old javascript because it's cached, the real
+              # test here is that we don't get BOTH.
+              expect(includes).to eq [{js: '/path/to/js'}]
+            end
+          end
         end
       end
     end
@@ -573,6 +658,15 @@ describe ApplicationHelper do
             expect(output.scan(%r{https://example.com/(root|child|grandchild)?/account.css})).to eql [['root']]
           end
 
+          it "should load custom css even for high contrast users" do
+            @current_user = user
+            user.enable_feature!(:high_contrast)
+            @context = @grandchild_account
+            output = helper.include_account_css
+            expect(output).to have_tag 'link'
+            expect(output.scan(%r{https://example.com/(root|child|grandchild)?/account.css})).to eql [["root"], ["child"], ["grandchild"]]
+          end
+
           it "should include site admin css/js" do
             raise pending("need to handle site admin css/js from theme editor: CNVS-25229")
           end
@@ -609,6 +703,14 @@ describe ApplicationHelper do
             end
 
             it "should just include domain root account's when there is no context or @current_user" do
+              output = helper.include_account_js
+              expect(output).to have_tag 'script'
+              expect(output).to match(/#{Regexp.quote('["https:\/\/example.com\/root\/account.js"].forEach')}/)
+            end
+
+            it "should load custom js even for high contrast users" do
+              @current_user = user
+              user.enable_feature!(:high_contrast)
               output = helper.include_account_js
               expect(output).to have_tag 'script'
               expect(output).to match(/#{Regexp.quote('["https:\/\/example.com\/root\/account.js"].forEach')}/)

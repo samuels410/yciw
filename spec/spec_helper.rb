@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2016 Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -17,12 +17,11 @@
 #
 
 begin
-  require RUBY_VERSION >= '2.0.0' ? 'byebug' : 'debugger'
+  require 'byebug'
 rescue LoadError
 end
 
 require 'securerandom'
-require 'test/unit' if RUBY_VERSION >= '2.2.0'
 
 RSpec.configure do |c|
   c.raise_errors_for_deprecations!
@@ -32,26 +31,17 @@ RSpec.configure do |c|
     Timeout::timeout(180) do
       Rails.logger.info "STARTING SPEC #{example.full_description}"
       example.run
-      exception = example.example.exception
-      case exception
-      when EOFError, Errno::ECONNREFUSED
-        if $selenium_driver
-          puts "SELENIUM: webdriver socket closed the connection.  Will try to re-initialize."
-          # this will cause the selenium driver to get re-initialized if it
-          # crashes for some reason
-          $selenium_driver = nil
-        end
-      end
     end
   end
 end
 
-begin
-  ; require File.expand_path(File.dirname(__FILE__) + "/../parallelized_specs/lib/parallelized_specs.rb");
-rescue LoadError;
-end
-
 ENV["RAILS_ENV"] = 'test'
+
+if ENV['COVERAGE'] == "1"
+  puts "Code Coverage enabled"
+  require 'coverage_tool'
+  CoverageTool.start("RSpec:#{Process.pid}#{ENV['TEST_ENV_NUMBER']}")
+end
 
 require File.expand_path('../../config/environment', __FILE__) unless defined?(Rails)
 require 'rspec/rails'
@@ -64,6 +54,36 @@ BlankSlateProtection.enable!
 Dir[Rails.root.join("spec/support/**/*.rb")].each { |f| require f }
 
 ActionView::TestCase::TestController.view_paths = ApplicationController.view_paths
+
+# this makes sure that a broken transaction becomes functional again
+# by the time we hit rescue_action_in_public, so that the error report
+# can be recorded
+ActionController::Base.set_callback(:process_action, :around, ->(_r, block) do
+  exception = nil
+  ActiveRecord::Base.transaction(joinable: false, requires_new: true) do
+    begin
+      if Rails.version < '5'
+        # that transaction didn't count as a "real" transaction within the test
+        test_open_transactions = ActiveRecord::Base.connection.instance_variable_get(:@test_open_transactions)
+        ActiveRecord::Base.connection.instance_variable_set(:@test_open_transactions, test_open_transactions.to_i - 1)
+        begin
+          block.call
+        ensure
+          ActiveRecord::Base.connection.instance_variable_set(:@test_open_transactions, test_open_transactions)
+        end
+      else
+        block.call
+      end
+    rescue ActiveRecord::StatementInvalid
+      # these need to properly roll back the transaction
+      raise
+    rescue
+      # anything else, the transaction needs to commit, but we need to re-raise outside the transaction
+      exception = $!
+    end
+  end
+  raise exception if exception
+end)
 
 module RSpec::Core::Hooks
 class AfterContextHook < Hook
@@ -85,20 +105,18 @@ An error occurred in an `after(:context)` hook.
 end
 end
 
-unless CANVAS_RAILS3
-  Time.class_eval do
-    def compare_with_round(other)
-      other = Time.at(other.to_i, other.usec) if other.respond_to?(:usec)
-      Time.at(self.to_i, self.usec).compare_without_round(other)
-    end
-    alias_method :compare_without_round, :<=>
-    alias_method :<=>, :compare_with_round
+Time.class_eval do
+  def compare_with_round(other)
+    other = Time.at(other.to_i, other.usec) if other.respond_to?(:usec)
+    Time.at(self.to_i, self.usec).compare_without_round(other)
   end
-
-  # temporary patch to keep things sane
-  # TODO: actually fix the deprecation messages once we're on Rails 4 permanently and remove this
-  ActiveSupport::Deprecation.silenced = true
+  alias_method :compare_without_round, :<=>
+  alias_method :<=>, :compare_with_round
 end
+
+# temporary patch to keep things sane
+# TODO: actually fix the deprecation messages once we're on Rails 4 permanently and remove this
+ActiveSupport::Deprecation.silenced = true
 
 module RSpec::Rails
   module ViewExampleGroup
@@ -154,39 +172,9 @@ module RSpec::Rails
     end
   end
 
-  module Matchers
-    class HaveTag
-      include ActionDispatch::Assertions::SelectorAssertions
-      include Test::Unit::Assertions
-
-      def initialize(expected)
-        @expected = expected
-      end
-
-      def matches?(html, &block)
-        @selected = [HTML::Document.new(html).root]
-        assert_select(*@expected, &block)
-        return !@failed
-      end
-
-      def assert(val, msg=nil)
-        unless !!val
-          @msg = msg
-          @failed = true
-        end
-      end
-
-      def failure_message
-        @msg
-      end
-
-      def failure_message_when_negated
-        @msg
-      end
-    end
-
-    def have_tag(*args)
-      HaveTag.new(args)
+  RSpec::Matchers.define :have_tag do |expected|
+    match do |actual|
+      !!Nokogiri::HTML(actual).at_css(expected)
     end
   end
 end
@@ -218,18 +206,6 @@ def pend_with_bullet
   if defined?(Bullet) && Bullet.enable?
     skip ('PENDING: Bullet')
   end
-end
-
-def require_webmock
-  # pull in webmock for selected tests, but leave it disabled by default.
-  # funky require order is to skip typhoeus because of an incompatibility
-  # see: https://github.com/typhoeus/typhoeus/issues/196
-  require 'webmock/util/version_checker'
-  require 'webmock/http_lib_adapters/http_lib_adapter_registry'
-  require 'webmock/http_lib_adapters/http_lib_adapter'
-  require 'webmock/http_lib_adapters/typhoeus_hydra_adapter'
-  WebMock::HttpLibAdapterRegistry.instance.http_lib_adapters.delete :typhoeus
-  require 'webmock/rspec'
 end
 
 # rspec aliases :describe to :context in a way that it's pretty much defined
@@ -267,30 +243,34 @@ def truncate_table(model)
 end
 
 def truncate_all_tables
-  model_connections = ActiveRecord::Base.descendants.map(&:connection).uniq
-  model_connections.each do |connection|
-    if connection.adapter_name == "PostgreSQL"
-      # use custom SQL to exclude tables from extensions
-      schema = connection.shard.name if connection.instance_variable_get(:@config)[:use_qualified_names]
-      table_names = connection.query(<<-SQL, 'SCHEMA').map(&:first)
-         SELECT tablename
-         FROM pg_tables
-         WHERE schemaname = #{schema ? "'#{schema}'" : 'ANY (current_schemas(false))'}
-           AND NOT tablename IN (
-             SELECT CAST(objid::regclass AS VARCHAR) FROM pg_depend WHERE deptype='e'
-           )
-      SQL
-      table_names.delete('schema_migrations')
-      connection.execute("TRUNCATE TABLE #{table_names.map { |t| connection.quote_table_name(t) }.join(',')}")
-    else
-      connection.tables.each { |model| truncate_table(model) }
+  raise "don't use truncate_all_tables with transactional fixtures. this kills the postgres" if ActiveRecord::Base.connection.open_transactions > 0
+
+  Shard.with_each_shard do
+    model_connections = ActiveRecord::Base.descendants.map(&:connection).uniq
+    model_connections.each do |connection|
+      if connection.adapter_name == "PostgreSQL"
+        # use custom SQL to exclude tables from extensions
+        schema = connection.shard.name if connection.instance_variable_get(:@config)[:use_qualified_names]
+        table_names = connection.query(<<-SQL, 'SCHEMA').map(&:first)
+           SELECT relname
+           FROM pg_class INNER JOIN pg_namespace ON relnamespace=pg_namespace.oid
+           WHERE nspname = #{schema ? "'#{schema}'" : 'ANY (current_schemas(false))'}
+             AND relkind='r'
+             AND NOT EXISTS (
+               SELECT 1 FROM pg_depend WHERE deptype='e' AND objid=pg_class.oid
+             )
+        SQL
+        table_names.delete('schema_migrations')
+        next if table_names.empty?
+        connection.execute("TRUNCATE TABLE #{table_names.map { |t| connection.quote_table_name(t) }.join(',')}")
+      else
+        connection.tables.each { |model| truncate_table(model) }
+      end
     end
+
+    Role.ensure_built_in_roles!
   end
 end
-
-# wipe out the test db, in case some non-transactional tests crapped out before
-# cleaning up after themselves
-truncate_all_tables
 
 # Make AR not puke if MySQL auto-commits the transaction
 module MysqlOutsideTransaction
@@ -375,14 +355,6 @@ module Helpers
   end
 end
 
-if CANVAS_RAILS3
-  ActionController::TestSession.class_eval do
-    def destroy
-      clear
-    end
-  end
-end
-
 RSpec.configure do |config|
   # If you're not using ActiveRecord you should remove these
   # lines, delete config/database.yml and disable :active_record
@@ -391,6 +363,8 @@ RSpec.configure do |config|
   config.use_instantiated_fixtures = false
   config.fixture_path = Rails.root+'spec/fixtures/'
   config.infer_spec_type_from_file_location!
+
+  config.order = :random
 
   config.include Helpers
 
@@ -402,7 +376,6 @@ RSpec.configure do |config|
   Onceler.configure do |c|
     c.before :record do
       Account.clear_special_account_cache!(true)
-      Role.ensure_built_in_roles!
       AdheresToPolicy::Cache.clear
       Folder.reset_path_lookups!
     end
@@ -428,13 +401,9 @@ RSpec.configure do |config|
   config.before :all do
     # so before(:all)'s don't get confused
     Account.clear_special_account_cache!(true)
-    Role.ensure_built_in_roles!
     AdheresToPolicy::Cache.clear
     # silence migration specs
     ActiveRecord::Migration.verbose = false
-
-    # allow tests to still run in non-DA state even though it's hard-coded on
-    Feature.definitions["differentiated_assignments"].send(:instance_variable_set, '@state', 'allowed')
   end
 
   def delete_fixtures!
@@ -464,6 +433,7 @@ RSpec.configure do |config|
     Delayed::Job.redis.flushdb if Delayed::Job == Delayed::Backend::Redis::Job
     Rails::logger.try(:info, "Running #{self.class.description} #{@method_name}")
     Attachment.domain_namespace = nil
+    Canvas::DynamicSettings.reset_cache!
     $spec_api_tokens = {}
   end
 
@@ -473,6 +443,16 @@ RSpec.configure do |config|
     if ENV['TEST_ENV_NUMBER'].present?
       Rails.logger.reopen("log/test#{ENV['TEST_ENV_NUMBER']}.log")
     end
+
+    if ENV['COVERAGE'] == "1"
+      # do this in a hook so that results aren't clobbered under test-queue
+      # (it forks and changes the TEST_ENV_NUMBER)
+      SimpleCov.command_name("rspec:#{Process.pid}:#{ENV['TEST_ENV_NUMBER']}")
+    end
+
+    # wipe out the test db, in case some non-transactional tests crapped out before
+    # cleaning up after themselves
+    truncate_all_tables
   end
 
   # this runs on post-merge builds to capture dependencies of each spec;
@@ -588,10 +568,6 @@ RSpec.configure do |config|
 
   def default_uploaded_data
     fixture_file_upload('scribd_docs/doc.doc', 'application/msword', true)
-  end
-
-  def valid_gradebook_csv_content
-    File.read(File.expand_path(File.join(File.dirname(__FILE__), %w(fixtures default_gradebook.csv))))
   end
 
   def factory_with_protected_attributes(ar_klass, attrs, do_save = true)
@@ -836,7 +812,7 @@ RSpec.configure do |config|
   end
 
   def content_type_key
-    CANVAS_RAILS3 ? 'content-type' : 'Content-Type'
+    'Content-Type'
   end
 
   def force_string_encoding(str, encoding = "UTF-8")

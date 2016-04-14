@@ -68,10 +68,10 @@ describe SIS::CSV::EnrollmentImporter do
       "NONEXISTENT,U001,student,1B,active",
       "C001,U001,student,NONEXISTENT,active",
       "C002,U001,student,1B,active")
-    warnings = importer.warnings.map { |r| r.last }
+    warnings = importer.warnings.map(&:last)
     expect(warnings).to eq ["An enrollment referenced a non-existent course NONEXISTENT",
-                        "An enrollment referenced a non-existent section NONEXISTENT",
-                        "An enrollment listed a section and a course that are unrelated"]
+                            "An enrollment referenced a non-existent section NONEXISTENT",
+                            "An enrollment listed a section (1B) and a course (C002) that are unrelated for user (U001)"]
     expect(importer.errors).to eq []
   end
 
@@ -497,7 +497,9 @@ describe SIS::CSV::EnrollmentImporter do
 
     @observer.reload
     expect(@observer.enrollments.count).to eq 1
-    expect(@observer.enrollments.first.workflow_state).to eq 'completed'
+    e = @observer.enrollments.first
+    expect(e.workflow_state).to eq 'completed'
+    expect(e.completed_at).to be_present
   end
 
   it "should only queue up one DueDateCacher job per course" do

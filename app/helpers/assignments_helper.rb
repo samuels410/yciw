@@ -43,12 +43,16 @@ module AssignmentsHelper
     link_to submission_author_name_for(assessment), context_url(context, :context_assignment_submission_url, assignment.id, assessment.asset.user_id), link_options
   end
 
-  def due_at(assignment, user, format='datetime')
+  def due_at(assignment, user)
     if assignment.multiple_due_dates_apply_to?(user)
       multiple_due_dates(assignment)
     else
       assignment = assignment.overridden_for(user)
-      send("#{format}_string", assignment.due_at, :short)
+      if assignment.due_at
+        datetime_string(assignment.due_at)
+      else
+        I18n.t('No Due Date')
+      end
     end
   end
 
@@ -60,7 +64,7 @@ module AssignmentsHelper
     if assignment.expects_submission? && can_do(assignment, user, :submit)
       submit_text = user_submission.try(:has_submission?) ? I18n.t("Re-submit Assignment") : I18n.t("Submit Assignment")
       late = user_submission.try(:late?) ? "late" : ""
-      link_to(submit_text, '#', :class => "btn btn-primary submit_assignment_link #{late}", :style => "margin-top: 5px")
+      link_to(submit_text, '#', :class => "btn btn-primary submit_assignment_link #{late}")
     end
   end
 
@@ -70,5 +74,10 @@ module AssignmentsHelper
     else
       @user.try_rescue(:short_name)
     end
+  end
+
+  def turnitin_active?
+    @assignment.turnitin_enabled? && @context.turnitin_enabled? &&
+    !@assignment.submission_types.include?("none")
   end
 end

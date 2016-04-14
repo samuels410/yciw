@@ -9,17 +9,41 @@ $ic-DashboardCard-action-hover-font-color: $ic-brand-primary;
 $ic-DashboardCard-toggle-size: 60px;
 
 // Optional parent container padding
-.ic-DashboardCard_Box { padding: $ic-sp 0 0; }
+.ic-DashboardCard__box {
+  padding: $ic-sp 0 0;
+
+}
+
+@keyframes placeholder {
+  to { opacity: 0.5; }
+}
+
+.ic-DashboardCard__placeholder-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  .ic-DashboardCard__placeholder-animates > * {
+    fill: darken($ic-bg-light-neutral, 3%);
+    animation-name: placeholder;
+    animation-duration: 0.5s;
+    animation-iteration-count: infinite;
+    @for $i from 2 through 7 {
+      &:nth-child(#{$i}) {
+       animation-delay: 0.1s * $i;
+      }
+    }
+  }
+}
 
 .ic-DashboardCard {
   box-sizing: border-box;
-  margin-bottom: $ic-sp*2;
   box-shadow: 0 0 10px rgba(black, 0.2);
   border-bottom: 4px solid #eee;
-  @include breakpoint(wide) {
-    margin: 0 auto $ic-sp*2;
-    max-width: 260px;
-  }
+  background: $ic-color-light;
+  width: 262px;
+  display: inline-block;
+  vertical-align: top;
+  margin: 0 $ic-sp*3 $ic-sp*3 0;
   .no-touch & {
     &:hover { box-shadow: 0 4px 18px rgba(black, 0.25); }
   }
@@ -33,11 +57,8 @@ $ic-DashboardCard-toggle-size: 60px;
 
 .ic-DashboardCard__header_hero {
   box-sizing: border-box;
-  height: 150px;
+  height: 146px;
   border: 1px solid rgba(black, 0.1);
-  @include breakpoint(short) {
-    height: 138px;
-  }
 }
 
 .ic-DashboardCard__header_content {
@@ -45,10 +66,6 @@ $ic-DashboardCard-toggle-size: 60px;
   padding: $ic-sp*1.5 $ic-sp*1.5 0;
   background: $ic-color-light;
   height: 80px;
-  @include breakpoint(short) {
-    height: 70px;
-    padding-top: $ic-sp;
-  }
 }
 
 .ic-DashboardCard__header-button {
@@ -78,8 +95,8 @@ $ic-DashboardCard-toggle-size: 60px;
   margin: $ic-sp/3 0 0;
 }
 
-.ic-DashboardCard__header-term { 
-  margin-bottom: 0;
+.ic-DashboardCard__header-term {
+  margin: 0;
   line-height: 1.3;
   font-size: $baseFontSize - 2;
 }
@@ -109,14 +126,12 @@ $ic-DashboardCard-toggle-size: 60px;
 
 .ic-DashboardCard__action-container {
   background: $ic-color-light;
-  &:not(.ic-DashboardCard__action-container--is-empty) {
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
-  }
+  box-sizing: border-box;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
   &.ic-DashboardCard__action-container--is-empty {
-    background: $ic-color-light;
-    box-sizing: border-box;
+    display: block;
     height: $ic-DashboardCard-action-height;
   }
   .ic-DashboardCard__action {
@@ -159,8 +174,8 @@ $ic-DashboardCard-toggle-size: 60px;
     .dashboard-toggle-button-switch:after {
       @if $use_high_contrast {
         box-shadow:
-          inset 0 0 0 1px $ic-color-light,
-          inset 0 0 0 3px $ic-color-dark,
+          inset 0 0 0 3px $ic-link-color,
+          0 0 0 2px $ic-color-light,
           0 3px 6px rgba(black, 0.3);
       }
       @else {

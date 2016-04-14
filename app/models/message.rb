@@ -22,12 +22,6 @@ class Message < ActiveRecord::Base
   # Included modules
   include Rails.application.routes.url_helpers
 
-  include PolymorphicTypeOverride
-  override_polymorphic_types context_type: {'QuizSubmission' => 'Quizzes::QuizSubmission',
-                                            'QuizRegradeRun' => 'Quizzes::QuizRegradeRun'},
-                             asset_context_type: {'QuizSubmission' => 'Quizzes::QuizSubmission',
-                                                  'QuizRegradeRun' => 'Quizzes::QuizRegradeRun'}
-
   include ERB::Util
   include SendToStream
   include TextHelper
@@ -36,6 +30,8 @@ class Message < ActiveRecord::Base
   include Messages::PeerReviewsHelper
 
   extend TextHelper
+
+  MAX_TWITTER_MESSAGE_LENGTH = 140
 
 
   # Associations
@@ -68,8 +64,8 @@ class Message < ActiveRecord::Base
   validates :to, length: {maximum: maximum_text_length}, allow_nil: true, allow_blank: true
   validates :from, length: {maximum: maximum_text_length}, allow_nil: true, allow_blank: true
   validates :url, length: {maximum: maximum_text_length}, allow_nil: true, allow_blank: true
-  validates :subject, length: {maximum: maximum_string_length}, allow_nil: true, allow_blank: true
-  validates :from_name, length: {maximum: maximum_string_length}, allow_nil: true, allow_blank: true
+  validates :subject, length: {maximum: maximum_text_length}, allow_nil: true, allow_blank: true
+  validates :from_name, length: {maximum: maximum_text_length}, allow_nil: true, allow_blank: true
   validates :reply_to_name, length: {maximum: maximum_string_length}, allow_nil: true, allow_blank: true
 
   # Stream policy
@@ -90,12 +86,14 @@ class Message < ActiveRecord::Base
           MessageDispatcher.dispatch(self)
         end
       end
+      event :set_transmission_error, :transitions_to => :transmission_error
       event :cancel, :transitions_to => :cancelled
       event :close, :transitions_to => :closed # needed for dashboard messages
     end
 
     state :staged do
       event :dispatch, :transitions_to => :sending
+      event :set_transmission_error, :transitions_to => :transmission_error
       event :cancel, :transitions_to => :cancelled
       event :close, :transitions_to => :closed # needed for dashboard messages
     end
@@ -104,6 +102,7 @@ class Message < ActiveRecord::Base
       event :complete_dispatch, :transitions_to => :sent do
         self.sent_at ||= Time.now
       end
+      event :set_transmission_error, :transitions_to => :transmission_error
       event :cancel, :transitions_to => :cancelled
       event :close, :transitions_to => :closed
       event :errored_dispatch, :transitions_to => :staged do
@@ -113,6 +112,7 @@ class Message < ActiveRecord::Base
     end
 
     state :sent do
+      event :set_transmission_error, :transitions_to => :transmission_error
       event :close, :transitions_to => :closed
       event :bounce, :transitions_to => :bounced do
         # Permenant reminder that this bounced.
@@ -128,12 +128,19 @@ class Message < ActiveRecord::Base
     end
 
     state :dashboard do
+      event :set_transmission_error, :transitions_to => :transmission_error
       event :close, :transitions_to => :closed
       event :cancel, :transitions_to => :closed
     end
+
     state :cancelled
 
+    state :transmission_error do
+      event :close, :transitions_to => :closed
+    end
+
     state :closed do
+      event :set_transmission_error, :transitions_to => :transmission_error
       event :send_message, :transitions_to => :closed do
         self.sent_at ||= Time.now
       end
@@ -554,13 +561,42 @@ class Message < ActiveRecord::Base
       return nil
     end
 
-    if user.account.feature_enabled?(:notification_service) && path_type != "yo"
-      message_body = path_type == "email" ? Mailer.create_message(self).to_s : body
-      NotificationService.process(message_body, path_type, to, remote_configuration)
-      complete_dispatch
-      return
+    if user && user.account.feature_enabled?(:notification_service) && path_type != "yo"
+      if Setting.get("notification_service_traffic", nil).present?
+        send(delivery_method)
+      end
+      enqueue_to_sqs
+    else
+      send(delivery_method)
     end
-    send(delivery_method)
+  end
+
+  # Public: Enqueues a message to the notification_service's sqs queue
+  #
+  # Returns nothing
+  def enqueue_to_sqs
+    notification_targets.each do |target|
+      Services::NotificationService.process(
+        global_id,
+        notification_message,
+        path_type,
+        target
+      )
+      complete_dispatch if Setting.get("notification_service_traffic", nil).nil?
+    end
+  rescue AWS::SQS::Errors::Base => e
+    Canvas::Errors.capture(
+      e,
+      message: 'Message delivery failed',
+      to: to,
+      object: inspect.to_s
+    )
+    if Setting.get("notification_service_traffic", nil).nil?
+      error_string = "Exception: #{e.class}: #{e.message}\n\t#{e.backtrace.join("\n\t")}"
+      self.transmission_errors = error_string
+      self.errored_dispatch
+      raise
+    end
   end
 
   class RemoteConfigurationError < StandardError; end
@@ -579,6 +615,44 @@ class Message < ActiveRecord::Base
       return if to =~ /^\+[0-9]+$/ ? "Twilio.com" : "email.amazonaws.com"
     else
       raise RemoteConfigurationError, "No matching path types for notification service"
+    end
+  end
+
+  # Public: Determines the message body for a notification endpoint
+  #
+  # Returns target notification message body
+  def notification_message
+    case path_type
+    when "email"
+      Mailer.create_message(self).to_s
+    when "push"
+      sns_json
+    when "twitter"
+      url = self.main_link || self.url
+      message_length = MAX_TWITTER_MESSAGE_LENGTH - url.length - 1
+      truncated_body = HtmlTextHelper.strip_and_truncate(body, max_length: message_length)
+      "#{truncated_body} #{url}"
+    else
+      body
+    end
+  end
+
+  # Public: Returns all notification_service targets to send to
+  #
+  # Returns the targets in which to send the notification to
+  def notification_targets
+    case path_type
+    when "push"
+      self.user.notification_endpoints.map(&:arn)
+    when "twitter"
+      twitter_service = user.user_services.where(service: 'twitter').first
+      [
+        "access_token"=> twitter_service.token,
+        "access_token_secret"=> twitter_service.secret,
+        "user_id"=> twitter_service.service_user_id
+      ]
+    else
+      [to]
     end
   end
 
@@ -798,7 +872,7 @@ class Message < ActiveRecord::Base
           Canvas::Twilio.deliver(
             to,
             body,
-            from_recipient_country: user.account.feature_enabled?(:international_sms_from_recipient_country)
+            from_recipient_country: true
           )
         end
       rescue StandardError => e

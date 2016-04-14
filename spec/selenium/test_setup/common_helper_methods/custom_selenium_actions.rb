@@ -9,61 +9,82 @@ module CustomSeleniumActions
   end
 
   def find(css)
+    raise 'need to do a get to use find' unless @click_ready
     driver.find(css)
   end
 
   def find_all(css)
+    raise 'need to do a get to use find' unless @click_ready
     driver.find_all(css)
   end
 
   def not_found(css)
+    raise 'need to do a get to use find' unless @click_ready
     driver.not_found(css)
   end
 
   def find_radio_button_by_value(value, scope = nil)
+    raise 'need to do a get to use find' unless @click_ready
     fj("input[type=radio][value=#{value}]", scope)
   end
 
   # f means "find" this is a shortcut to finding elements
   def f(selector, scope = nil)
-    (scope || driver).find_element :css, selector
-  rescue
-    nil
+    raise 'need to do a get to use find' unless @click_ready
+    begin
+      (scope || driver).find_element :css, selector
+    rescue
+      nil
+    end
   end
 
   # short for find with link
   def fln(link_text, scope = nil)
-    (scope || driver).find_element :link, link_text
-  rescue
-    nil
+    raise 'need to do a get to use find' unless @click_ready
+    begin
+      (scope || driver).find_element :link, link_text
+    rescue
+      nil
+    end
   end
 
   # short for find with jquery
   def fj(selector, scope = nil)
-    find_with_jquery selector, scope
-  rescue
-    nil
+    raise 'need to do a get to use find' unless @click_ready
+    begin
+      find_with_jquery selector, scope
+    rescue
+      nil
+    end
   end
 
   # same as `f` except tries to find several elements instead of one
   def ff(selector, scope = nil)
-    (scope || driver).find_elements :css, selector
-  rescue
-    []
+    raise 'need to do a get to use find' unless @click_ready
+    begin
+      (scope || driver).find_elements :css, selector
+    rescue
+      []
+    end
   end
 
   # same as find with jquery but tries to find several elements instead of one
   def ffj(selector, scope = nil)
-    find_all_with_jquery selector, scope
-  rescue
-    []
+    raise 'need to do a get to use find' unless @click_ready
+    begin
+      find_all_with_jquery selector, scope
+    rescue
+      []
+    end
   end
 
   def find_with_jquery(selector, scope = nil)
+    raise 'need to do a get to use find' unless @click_ready
     driver.execute_script("return $(arguments[0], arguments[1] && $(arguments[1]))[0];", selector, scope)
   end
 
   def find_all_with_jquery(selector, scope = nil)
+    raise 'need to do a get to use find' unless @click_ready
     driver.execute_script("return $(arguments[0], arguments[1] && $(arguments[1])).toArray();", selector, scope)
   end
 
@@ -125,8 +146,14 @@ module CustomSeleniumActions
     driver.execute_script("return $('<div />').append('#{string_of_html}').find('#{css_selector}')")
   end
 
-  def type_in_tiny(tiny_controlling_element, text)
-    scr = "$(#{tiny_controlling_element.to_s.to_json}).editorBox('execute', 'mceInsertContent', false, #{text.to_s.to_json})"
+  def type_in_tiny(tiny_controlling_element, text, clear: false)
+    selector = tiny_controlling_element.to_s.to_json
+    wait = Selenium::WebDriver::Wait.new(timeout: 5)
+    wait.until do
+      driver.execute_script("return $(#{selector}).editorBox('exists?');")
+    end
+    tiny_action = clear ? "mceSetContent" : "mceInsertContent"
+    scr = "$(#{selector}).editorBox('execute', '#{tiny_action}', false, #{text.to_s.to_json})"
     driver.execute_script(scr)
   end
 
@@ -153,7 +180,6 @@ module CustomSeleniumActions
       else
         replace_content(input, value)
     end
-    driver.execute_script(input['onchange']) if input['onchange']
   end
 
   def click_option(select_css, option_text, select_by = :text)
@@ -186,9 +212,11 @@ module CustomSeleniumActions
     fj("#ui-datepicker-div a:contains(#{day_text})").click
   end
 
-  def replace_content(el, value)
-    el.clear
-    el.send_keys(value)
+  MODIFIER_KEY = RUBY_PLATFORM =~ /darwin/ ? :command : :control
+  def replace_content(el, value, options = {})
+    keys = [MODIFIER_KEY, "a"], :backspace, value
+    keys << :tab if options[:tab_out]
+    el.send_keys *keys
   end
 
   # can pass in either an element or a forms css
@@ -272,5 +300,14 @@ module CustomSeleniumActions
   def error_displayed?
     # after it fades out, it's still visible, just off the screen
     driver.execute_script("return $('.error_text:visible').filter(function(){ return $(this).offset().left >= 0 }).length > 0")
+  end
+
+  def double_click(selector)
+    el = driver.find_element :css, selector
+    driver.action.double_click(el).perform
+  end
+
+  def replace_value(selector, value)
+    driver.execute_script("$('#{selector}').val(#{value})")
   end
 end

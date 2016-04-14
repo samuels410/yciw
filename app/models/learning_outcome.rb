@@ -21,13 +21,10 @@ class LearningOutcome < ActiveRecord::Base
   attr_accessible :context, :description, :short_description, :title, :display_name
   attr_accessible :rubric_criterion, :vendor_guid, :calculation_method, :calculation_int
 
-  belongs_to :context, :polymorphic => true
-  validates_inclusion_of :context_type, :allow_nil => true, :in => ['Account', 'Course']
+  belongs_to :context, polymorphic: [:account, :course]
   has_many :learning_outcome_results
   has_many :alignments, -> { where("content_tags.tag_type='learning_outcome' AND content_tags.workflow_state<>'deleted'") }, class_name: 'ContentTag'
 
-  EXPORTABLE_ATTRIBUTES = [:id, :context_id, :context_type, :short_description, :context_code, :description, :data, :workflow_state, :created_at, :updated_at, :vendor_guid, :low_grade, :high_grade]
-  EXPORTABLE_ASSOCIATIONS = [:context, :learning_outcome_results, :alignments]
   serialize_utf8_safe :data
 
   before_validation :infer_default_calculation_method, :adjust_calculation_int
@@ -41,7 +38,7 @@ class LearningOutcome < ActiveRecord::Base
   }.freeze
   VALID_CALCULATION_INTS = {
     "decaying_average" => (1..99),
-    "n_mastery" => (2..5),
+    "n_mastery" => (1..5),
     "highest" => [].freeze,
     "latest" => [].freeze,
   }.freeze
@@ -261,7 +258,7 @@ class LearningOutcome < ActiveRecord::Base
     self.data[:rubric_criterion] = criterion
   end
 
-  alias_method :destroy!, :destroy
+  alias_method :destroy_permanently!, :destroy
   def destroy
     # delete any remaining links to the outcome. in case of UI, this was
     # triggered by ContentTag#destroy and the checks have already run, we don't

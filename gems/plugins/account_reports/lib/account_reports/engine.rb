@@ -26,6 +26,7 @@ module AccountReports
       require 'account_reports/report_helper'
       require 'account_reports/sis_exporter'
       require 'account_reports/student_reports'
+      require 'account_reports/lti_reports'
 
       AccountReports.configure_account_report 'Default', {
         'grade_export_csv' => {
@@ -257,6 +258,17 @@ module AccountReports
             }
           }
         },
+        'course_storage_csv' => {
+          :title => proc { I18n.t('Course Storage') },
+          :description_partial => true,
+          :parameters_partial => 'term_selector_parameters',
+          :parameters => {
+            :enrollment_term_id => {
+              :required => false,
+              :description => 'The canvas id of the term to get courses from for storage report'
+            }
+          }
+        },
         'unused_courses_csv' => {
           :title => proc { I18n.t(:unused_courses_title, 'Unused Courses') },
           :description_partial => true,
@@ -286,6 +298,16 @@ module AccountReports
               :description => 'The course to report on'
             }
           }
+        },
+        'user_access_tokens_csv' => {
+          :title => proc { I18n.t(:user_access_tokens_title, 'User Access Tokens') },
+          :description_partial => true,
+          :parameters => {
+          }
+        },
+        'lti_report_csv' => {
+          :title => proc { I18n.t('LTI Report') },
+          :description_partial => true
         }
       }
     end

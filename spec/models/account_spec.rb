@@ -251,9 +251,17 @@ describe Account do
     end
 
     it "should not wipe out services that are substrings of each other" do
+
+      AccountServices.register_service(
+        :google_docs_prev,
+        {
+          :name => "My google docs prev", :description => "", :expose_to_ui => :service, :default => true
+        }
+      )
+
       @a.disable_service('google_docs_previews')
-      @a.disable_service('google_docs')
-      expect(@a.allowed_services).to eq '-google_docs_previews,-google_docs'
+      @a.disable_service('google_docs_prev')
+      expect(@a.allowed_services).to eq '-google_docs_previews,-google_docs_prev'
     end
 
     describe "services_exposed_to_ui_hash" do
@@ -394,19 +402,21 @@ describe Account do
     [ admin, user ]
   end
 
-
   it "should set up access policy correctly" do
     # stub out any "if" permission conditions
     RoleOverride.permissions.each do |k, v|
       next unless v[:if]
       Account.any_instance.stubs(v[:if]).returns(true)
     end
+    site_admin = Account.site_admin
 
     # Set up a hierarchy of 4 accounts - a root account, a sub account,
     # a sub sub account, and SiteAdmin account.  Create a 'Restricted Admin'
     # role available for each one, and create an admin user and a user in that restricted role
-    @sa_role = custom_account_role('Restricted SA Admin', :account => Account.site_admin)
+    @sa_role = custom_account_role('Restricted SA Admin', account: site_admin)
 
+    site_admin.settings[:mfa_settings] = 'required'
+    site_admin.save!
     root_account = Account.create
     @root_role = custom_account_role('Restricted Root Admin', :account => root_account)
 
@@ -427,16 +437,16 @@ describe Account do
     end
 
     limited_access = [ :read, :manage, :update, :delete, :read_outcomes ]
-    account_enabled_access = [ :view_notifications, :manage_catalog ]
-    full_access = RoleOverride.permissions.keys + limited_access - account_enabled_access + [:create_courses]
+    conditional_access = RoleOverride.permissions.select { |_, v| v[:account_allows] }.map(&:first)
+    full_access = RoleOverride.permissions.keys + limited_access - conditional_access + [:create_courses]
     siteadmin_access = [:app_profiling]
     full_root_access = full_access - RoleOverride.permissions.select { |k, v| v[:account_only] == :site_admin }.map(&:first)
     full_sub_access = full_root_access - RoleOverride.permissions.select { |k, v| v[:account_only] == :root }.map(&:first)
     # site admin has access to everything everywhere
     hash.each do |k, v|
       account = v[:account]
-      expect(account.check_policy(hash[:site_admin][:admin])).to match_array full_access + (k == :site_admin ? [:read_global_outcomes] : [])
-      expect(account.check_policy(hash[:site_admin][:user])).to match_array siteadmin_access + limited_access + (k == :site_admin ? [:read_global_outcomes] : [])
+      expect(account.check_policy(hash[:site_admin][:admin]) - conditional_access).to match_array full_access + (k == :site_admin ? [:read_global_outcomes] : [])
+      expect(account.check_policy(hash[:site_admin][:user]) - conditional_access).to match_array siteadmin_access + limited_access + (k == :site_admin ? [:read_global_outcomes] : [])
     end
 
     # root admin has access to everything except site admin
@@ -446,7 +456,7 @@ describe Account do
     hash.each do |k, v|
       next if k == :site_admin
       account = v[:account]
-      expect(account.check_policy(hash[:root][:admin])).to match_array full_root_access
+      expect(account.check_policy(hash[:root][:admin]) - conditional_access).to match_array full_root_access
       expect(account.check_policy(hash[:root][:user])).to match_array limited_access
     end
 
@@ -460,7 +470,7 @@ describe Account do
     hash.each do |k, v|
       next if k == :site_admin || k == :root
       account = v[:account]
-      expect(account.check_policy(hash[:sub][:admin])).to match_array full_sub_access
+      expect(account.check_policy(hash[:sub][:admin]) - conditional_access).to match_array full_sub_access
       expect(account.check_policy(hash[:sub][:user])).to match_array limited_access
     end
 
@@ -469,6 +479,7 @@ describe Account do
     hash.each do |k, v|
       account = v[:account]
       account.role_overrides.create!(:permission => 'read_reports', :role => (k == :site_admin ? @sa_role : @root_role), :enabled => true)
+      account.role_overrides.create!(:permission => 'reset_any_mfa', :role => @sa_role, :enabled => true)
       # clear caches
       v[:account] = Account.find(account)
     end
@@ -476,8 +487,11 @@ describe Account do
     AdheresToPolicy::Cache.clear
     hash.each do |k, v|
       account = v[:account]
-      expect(account.check_policy(hash[:site_admin][:admin])).to match_array full_access + (k == :site_admin ? [:read_global_outcomes] : [])
-      expect(account.check_policy(hash[:site_admin][:user])).to match_array siteadmin_access + some_access + (k == :site_admin ? [:read_global_outcomes] : [])
+      admin_array = full_access + (k == :site_admin ? [:read_global_outcomes] : [])
+      user_array = siteadmin_access + some_access + [:reset_any_mfa] +
+        (k == :site_admin ? [:read_global_outcomes] : [])
+      expect(account.check_policy(hash[:site_admin][:admin]) - conditional_access).to match_array admin_array
+      expect(account.check_policy(hash[:site_admin][:user])).to match_array user_array
     end
 
     account = hash[:site_admin][:account]
@@ -486,7 +500,7 @@ describe Account do
     hash.each do |k, v|
       next if k == :site_admin
       account = v[:account]
-      expect(account.check_policy(hash[:root][:admin])).to match_array full_root_access
+      expect(account.check_policy(hash[:root][:admin]) - conditional_access).to match_array full_root_access
       expect(account.check_policy(hash[:root][:user])).to match_array some_access
     end
 
@@ -500,8 +514,21 @@ describe Account do
     hash.each do |k, v|
       next if k == :site_admin || k == :root
       account = v[:account]
-      expect(account.check_policy(hash[:sub][:admin])).to match_array full_sub_access
+      expect(account.check_policy(hash[:sub][:admin]) - conditional_access).to match_array full_sub_access
       expect(account.check_policy(hash[:sub][:user])).to match_array some_access
+    end
+  end
+
+  context "sharding" do
+    specs_require_sharding
+
+    it "queries for enrollments correctly when another shard is active" do
+      teacher_in_course
+      @enrollment.accept!
+
+      @shard1.activate do
+        expect(Account.default.grants_right?(@user, :read_sis)).to eq true
+      end
     end
   end
 
@@ -538,6 +565,16 @@ describe Account do
         ["&nbsp;&nbsp;&nbsp;&nbsp;sub2-1", sub2_1.id]
       ]
     )
+  end
+
+  it "should correctly return sub-account_ids recursively" do
+    a = Account.default
+    subs = []
+    sub = Account.create!(name: 'sub', parent_account: a)
+    subs << grand_sub = Account.create!(name: 'grand_sub', parent_account: sub)
+    subs << great_grand_sub = Account.create!(name: 'great_grand_sub', parent_account: grand_sub)
+    subs << Account.create!(name: 'great_great_grand_sub', parent_account: great_grand_sub)
+    expect(Account.sub_account_ids_recursive(sub.id).sort).to eq(subs.map(&:id).sort)
   end
 
   it "should return the correct user count" do
@@ -875,6 +912,58 @@ describe Account do
       expect(Account.default.grants_right?(@user, :read_sis)).to be_truthy
     end
 
+    it "should be able to disable :read_sis for custom teachers" do
+      user_with_pseudonym(:active_all => 1)
+      role = custom_teacher_role("teecher", :account => Account.default)
+
+      @course = Account.default.courses.create!
+      @course.enroll_teacher(@user, :role => role).accept!
+      expect(Account.default.grants_right?(@user, :read_sis)).to be_truthy
+
+      Account.default.role_overrides.create!(:permission => "read_sis", :role => role, :enabled => false)
+      AdheresToPolicy::Cache.clear
+      RoleOverride.clear_cached_contexts
+
+      expect(Account.default.grants_right?(@user, :read_sis)).to be_falsey
+    end
+
+    it "should be able to disable :read_sis for teacher-students if the account so desires" do
+      user_with_pseudonym(:active_all => 1)
+      a = Account.default
+
+      course1 = a.courses.create!
+      course1.enroll_teacher(@user).accept!
+      course2 = a.courses.create!
+      course2.offer!
+      course2.enroll_student(@user).accept!
+
+      expect(a.grants_right?(@user, :read_sis)).to be_truthy
+
+      AdheresToPolicy::Cache.clear
+      RoleOverride.clear_cached_contexts
+
+      a.settings[:strict_sis_check] = true
+      a.save!
+      expect(a.grants_right?(@user, :read_sis)).to be_falsey
+
+      @user.student_enrollments.each(&:destroy!)
+
+      AdheresToPolicy::Cache.clear
+      RoleOverride.clear_cached_contexts
+
+      expect(a.grants_right?(@user, :read_sis)).to be_truthy
+    end
+
+    it "should not break trying to check :read_sis for sub-account custom teachers" do
+      user_with_pseudonym(:active_all => 1)
+      sub_account = Account.default.sub_accounts.create!
+      role = custom_teacher_role("teecher", :account => sub_account)
+
+      @course = sub_account.courses.create!
+      @course.enroll_teacher(@user, :role => role).accept!
+      expect(Account.default.grants_right?(@user, :read_sis)).to be_falsey
+    end
+
     it "should grant :read_global_outcomes to any user iff site_admin" do
       @site_admin = Account.site_admin
       expect(@site_admin.grants_right?(User.new, :read_global_outcomes)).to be_truthy
@@ -932,7 +1021,7 @@ describe Account do
     let(:account){ Account.default }
 
     before do
-      account.authentication_providers.scoped.delete_all
+      account.authentication_providers.scope.delete_all
       expect(account.delegated_authentication?).to eq false
     end
 
@@ -963,6 +1052,27 @@ describe Account do
       Account.default.authentication_providers.create!(auth_type: 'ldap')
       account.authentication_providers.destroy_all
       expect(account.non_canvas_auth_configured?).to be_falsey
+    end
+  end
+
+  describe '#find_child' do
+    it 'works for root accounts' do
+      sub = Account.default.sub_accounts.create!
+      expect(Account.default.find_child(sub.id)).to eq sub
+    end
+
+    it 'works for children accounts' do
+      sub = Account.default.sub_accounts.create!
+      sub_sub = sub.sub_accounts.create!
+      sub_sub_sub = sub_sub.sub_accounts.create!
+      expect(sub.find_child(sub_sub_sub.id)).to eq sub_sub_sub
+    end
+
+    it 'raises for out-of-tree accounts' do
+      sub = Account.default.sub_accounts.create!
+      sub_sub = sub.sub_accounts.create!
+      sibling = sub.sub_accounts.create!
+      expect { sub_sub.find_child(sibling.id) }.to raise_error(ActiveRecord::RecordNotFound)
     end
   end
 
@@ -1140,7 +1250,7 @@ describe Account do
       account = Account.default.sub_accounts.create!
       c1 = account.courses.create!
       c2 = account.courses.create!
-      account.course_account_associations.scoped.delete_all
+      account.course_account_associations.scope.delete_all
       expect(account.associated_courses).to eq []
       account.update_account_associations
       account.reload
@@ -1418,7 +1528,7 @@ describe Account do
         begin
           Account.find_cached(nonsense_id)
         rescue ::Canvas::AccountCacheError => e
-          expect(e.message).to eq("Couldn't find Account with id=#{nonsense_id}")
+          expect(e.message).to eq(CANVAS_RAILS4_0 ? "Couldn't find Account with id=#{nonsense_id}" : "Couldn't find Account with 'id'=#{nonsense_id}")
         end
       end
     end

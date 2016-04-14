@@ -37,28 +37,27 @@ class GradebookImporter
     end
   end
 
-  attr_reader :context, :contents, :assignments, :students, :submissions, :missing_assignments, :missing_students
+  attr_reader :context, :contents, :attachment, :assignments, :students,
+              :submissions, :missing_assignments, :missing_students, :upload
 
-  def self.create_from(progress, course, user, attachment)
-    uploaded_gradebook = new(course, attachment, user, progress)
-    uploaded_gradebook.parse!
+  def self.create_from(progress, gradebook_upload, user, attachment)
+    self.new(gradebook_upload, attachment, user, progress).parse!
   end
 
-  def initialize(context=nil, csv=nil, user=nil, progress=nil)
-    raise ArgumentError, "Must provide a valid context for this gradebook." unless valid_context?(context)
-    raise ArgumentError, "Must provide CSV contents." unless csv
-    @context = context
+  def initialize(upload=nil, attachment=nil, user=nil, progress=nil)
+    @upload = upload
+    @context = upload.course
+
+    raise ArgumentError, "Must provide a valid context for this gradebook." unless valid_context?(@context)
+    raise ArgumentError, "Must provide attachment." unless attachment
+
     @user = user
-    @contents = csv
+    @attachment = attachment
     @progress = progress
 
-    @upload = GradebookUpload.new course: @context, user: @user, progress: @progress
-
-    if @context.feature_enabled?(:differentiated_assignments)
-      @visible_assignments = AssignmentStudentVisibility.visible_assignment_ids_in_course_by_user(
-        course_id: @context.id, user_id: @context.all_students.pluck(:id)
-      )
-    end
+    @visible_assignments = AssignmentStudentVisibility.visible_assignment_ids_in_course_by_user(
+      course_id: @context.id, user_id: @context.all_students.pluck(:id)
+    )
   end
 
   CSV::Converters[:nil] = lambda do |e|
@@ -80,37 +79,32 @@ class GradebookImporter
       .select(['users.id', :name, :sortable_name])
       .index_by(&:id)
 
-    csv = CSV.parse(contents, :converters => :nil)
-    @assignments = process_header(csv)
+    @assignments = nil
     @root_accounts = {}
     @pseudonyms_by_sis_id = {}
     @pseudonyms_by_login_id = {}
     @students = []
     @pp_row = []
-    csv.each do |row|
-      if row[0] =~ /Points Possible/
-        row.shift(@student_columns)
-        process_pp(row)
-        next
+
+    csv_stream do |row|
+      already_processed = check_for_non_student_row(row)
+      unless already_processed
+        @students << process_student(row)
+        process_submissions(row, @students.last)
       end
-
-      next if row.compact.all? { |c| c.strip =~ /^(Muted|)$/i }
-
-      @students << process_student(row)
-      process_submissions(row, @students.last)
     end
-
 
     @assignments_outside_current_periods = []
     if @context.feature_enabled? :multiple_grading_periods
-      memo = @assignments
-      current_grading_period = GradingPeriod.for(@context).current
+      current_period = GradingPeriod.for(@context).current.first
 
-      unless current_grading_period.empty?
-        @assignments = select_in_grading_period @assignments, @context, current_grading_period.first
+      if current_period.present?
+        with_due_at = @assignments.select(&:due_at)
+        in_current_period = select_in_grading_period(with_due_at, @context, current_period)
+
+        @assignments_outside_current_periods = with_due_at - in_current_period
+        @assignments = @assignments - @assignments_outside_current_periods
       end
-
-      @assignments_outside_current_periods = memo - @assignments
     end
 
     @missing_assignments = []
@@ -202,8 +196,7 @@ class GradebookImporter
     end
   end
 
-  def process_header(csv)
-    row = csv.shift
+  def process_header(row)
     raise "Couldn't find header row" unless header?(row)
 
     row = strip_non_assignment_columns(row)
@@ -357,6 +350,45 @@ class GradebookImporter
   end
 
   protected
+
+  CSV_PARSE_OPTIONS = {
+    converters: :nil,
+    skip_lines: /^[, ]*$/
+  }.freeze
+
+  def check_for_non_student_row(row)
+    # check if this is the first row, a header row
+    if @assignments.nil?
+      @assignments = process_header(row)
+      return true
+    end
+
+
+    if row[0] =~ /Points Possible/
+      # this row is describing the assignment, has no student data
+      row.shift(@student_columns)
+      process_pp(row)
+      return true
+    end
+
+    if row.compact.all? { |c| c.strip =~ /^(Muted|)$/i }
+      # this row is muted or empty and should not be processed at all
+      return true
+    end
+
+    false # nothing unusual, signal to process as a student row
+  end
+
+  def csv_stream
+    csv_file = attachment.open(need_local_file: true)
+    # using "foreach" rather than "parse" processes a chunk of the
+    # file at a time rather than loading the whole file into memory
+    # at once, a boon for memory consumption
+    CSV.foreach(csv_file.path, CSV_PARSE_OPTIONS) do |row|
+      yield row
+    end
+  end
+
   def add_root_account_to_pseudonym_cache(root_account)
     pseudonyms = root_account.shard.activate do
       root_account.pseudonyms

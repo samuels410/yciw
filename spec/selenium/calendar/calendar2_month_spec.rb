@@ -58,6 +58,19 @@ describe "calendar2" do
         create_middle_day_assignment
       end
 
+      it 'should translate am/pm time strings in assignment event datepicker', priority: "2", test_id: 467482 do
+        @user.locale = 'fa-IR'
+        @user.save!
+        load_month_view
+        f('#create_new_event_link').click
+        f('#edit_event .edit_assignment_option').click
+        f('#assignment_title').send_keys('test assignment')
+        f('#edit_assignment_form .ui-datepicker-trigger.btn').click
+        wait_for_ajaximations
+        expect(f('#ui-datepicker-div .ui-datepicker-time-ampm')).to include_text('قبل از ظهر')
+        expect(f('#ui-datepicker-div .ui-datepicker-time-ampm')).to include_text('بعد از ظهر')
+      end
+
       context "drag and drop" do
 
         def element_location
@@ -72,6 +85,31 @@ describe "calendar2" do
           @initial_time_str = @initial_time.strftime('%Y-%m-%d')
           @one_day_later = @initial_time + 24.hours
           @three_days_earlier = @initial_time - 72.hours
+        end
+
+        it "should drag and drop assignment override forward" do
+          assignment1 = @course.assignments.create!(title: 'new month view assignment')
+          assignment1.assignment_overrides.create! do |override|
+            override.set = @course.course_sections.first
+            override.due_at = @initial_time
+            override.due_at_overridden = true
+          end
+          get "/calendar2"
+          quick_jump_to_date(@initial_time_str)
+
+          # Move assignment from Thursday to Friday
+          drag_and_drop_element(find('.calendar .fc-event'),
+                                find('.calendar .fc-day.fc-widget-content.fc-fri.fc-past'))
+
+          # Expect no pop up errors with drag and drop
+          expect(flash_message_present?(:error)).to be false
+
+          # Assignment should be moved to Friday
+          expect(element_location).to eq @friday
+
+          # Assignment time should stay at 9:00am
+          assignment1.reload
+          expect(assignment1.assignment_overrides.first.due_at).to eql(@one_day_later)
         end
 
         it "should drag and drop assignment forward", priority: "1", test_id: 495537 do
@@ -152,6 +190,20 @@ describe "calendar2" do
           # Event time should stay at 9:00am
           event1.reload
           expect(event1.start_at).to eql(@three_days_earlier)
+        end
+
+        it "should extend event to multiple days by draging", priority: "2", test_id: 419527 do
+          create_middle_day_event
+          date_of_middle_day = find_middle_day.attribute('data-date')
+          date_of_next_day = (date_of_middle_day.to_datetime + 1.day).strftime('%Y-%m-%d')
+          f('.fc-content-skeleton .fc-event-container .fc-resizer')
+          next_day = fj("[data-date = #{date_of_next_day}]")
+          drag_and_drop_element(f('.fc-content-skeleton .fc-event-container .fc-resizer'), next_day)
+          fj('.fc-event:visible').click
+          # observe the event details show date range from event start to date to end date
+          original_day_text = date_of_middle_day.to_datetime.strftime('%b %-d at %-l:%M%P')
+          extended_day_text = (date_of_next_day.to_datetime + 1.day).strftime('%b %-d at %-l:%M%P')
+          expect(f('.event-details-timestring .date-range').text).to eq("#{original_day_text} - #{extended_day_text}")
         end
       end
 

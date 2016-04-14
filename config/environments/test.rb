@@ -1,13 +1,3 @@
-if ENV['COVERAGE'] == "1"
-  puts "Code Coverage enabled"
-  begin
-    require 'spec/coverage_tool'
-    CoverageTool.start("RSpec:#{Process.pid}#{ENV['TEST_ENV_NUMBER']}")
-  rescue LoadError => e
-    puts "Error: #{e}"
-  end
-end
-
 environment_configuration(defined?(config) && config) do |config|
 
   if ENV['BULLET_GEM']
@@ -29,12 +19,6 @@ environment_configuration(defined?(config) && config) do |config|
   # your test database is "scratch space" for the test suite and is wiped
   # and recreated between test runs.  Don't rely on the data there!
   config.cache_classes = true
-
-  if CANVAS_RAILS3
-    # Log error messages when you accidentally call methods on nil.
-    # in 1.9, whiny_nils causes a huge performance penalty on tests for some reason
-    config.whiny_nils = false
-  end
 
   # Show full error reports and disable caching
   config.consider_all_requests_local = true
@@ -62,9 +46,7 @@ environment_configuration(defined?(config) && config) do |config|
   # Print deprecation notices to the stderr
   config.active_support.deprecation = :stderr
 
-  unless CANVAS_RAILS3
-    config.eager_load = false
-  end
+  config.eager_load = false
 
   # eval <env>-local.rb if it exists
   Dir[File.dirname(__FILE__) + "/" + File.basename(__FILE__, ".rb") + "-*.rb"].each { |localfile| eval(File.new(localfile).read, nil, localfile, 1) }

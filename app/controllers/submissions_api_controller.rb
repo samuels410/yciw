@@ -79,7 +79,7 @@
 #         "score": {
 #           "description": "The raw score",
 #           "example": 13.5,
-#           "type": "float"
+#           "type": "number"
 #         },
 #         "submission_comments": {
 #           "description": "Associated comments for a submission (optional)",
@@ -152,8 +152,8 @@ class SubmissionsApiController < ApplicationController
   #
   # Get all existing submissions for an assignment.
   #
-  # @argument include[] [String, "submission_history"|"submission_comments"|"rubric_assessment"|"assignment"|"visibility"|"course"|"user"]
-  #   Associations to include with the group.
+  # @argument include[] [String, "submission_history"|"submission_comments"|"rubric_assessment"|"assignment"|"visibility"|"course"|"user"|"group"]
+  #   Associations to include with the group.  "group" will add group_id and group_name.
   #
   # @argument grouped [Boolean]
   #   If this argument is true, the response will be grouped by student groups.
@@ -176,22 +176,30 @@ class SubmissionsApiController < ApplicationController
   def index
     if authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
       @assignment = @context.assignments.active.find(params[:assignment_id])
-      visible_student_ids = @context.apply_enrollment_visibility(@context.student_enrollments, @current_user, section_ids).pluck(:user_id)
-      submissions = @assignment.submissions.where(:user_id => visible_student_ids)
       includes = Array.wrap(params[:include])
 
-      # this provides one assignment object(and submission object within), per user group
-      if value_to_boolean(params[:grouped])
-        user_groups_ids = @assignment.representatives(@current_user).map(&:id)
-        submissions = @assignment.submissions.where(user_id: user_groups_ids)
-      end
+      student_ids = if value_to_boolean(params[:grouped])
+                      # this provides one assignment object(and
+                      # submission object within), per user group
+                      @assignment.representatives(@current_user).map(&:id)
+                    else
+                      @context.apply_enrollment_visibility(@context.student_enrollments,
+                                                           @current_user, section_ids)
+                        .pluck(:user_id)
+                    end
+      submissions = @assignment.submissions.where(user_id: student_ids)
 
-      if includes.include?("visibility") && @context.feature_enabled?(:differentiated_assignments)
+      if includes.include?("visibility")
         json = bulk_process_submissions_for_visibility(submissions, includes)
       else
         submissions = submissions.order(:user_id)
-        submissions = Api.paginate(submissions, self, api_v1_course_assignment_submissions_url(@context, @assignment))
+
+        submissions = submissions.preload(:group) if includes.include?("group")
+
+        submissions = Api.paginate(submissions, self,
+                                   api_v1_course_assignment_submissions_url(@context, @assignment))
         bulk_load_attachments_and_previews(submissions)
+
         json = submissions.map { |s|
           s.visible_to_user = true
           submission_json(s, @assignment, @current_user, session, @context, includes)
@@ -307,12 +315,7 @@ class SubmissionsApiController < ApplicationController
     end
 
     assignment_visibilities = {}
-    if @context.feature_enabled?(:differentiated_assignments)
-      assignment_visibilities = AssignmentStudentVisibility.users_with_visibility_by_assignment(course_id: @context.id, user_id: student_ids, assignment_id: assignments.map(&:id))
-    else
-      students_with_visibility = @context.all_students.pluck(:id).uniq.to_set
-      assignments.each { |a| assignment_visibilities[a.id] = students_with_visibility }
-    end
+    assignment_visibilities = AssignmentStudentVisibility.users_with_visibility_by_assignment(course_id: @context.id, user_id: student_ids, assignment_id: assignments.map(&:id))
 
     # unless teacher, filter assignments down to only assignments current user can see
     unless @context.grants_any_right?(@current_user, :read_as_admin, :manage_grades, :manage_assignments)
@@ -420,11 +423,10 @@ class SubmissionsApiController < ApplicationController
     bulk_load_attachments_and_previews([@submission])
 
     if authorized_action(@submission, @current_user, :read)
-      if !(da_on = @context.feature_enabled?(:differentiated_assignments)) ||
-           @context.grants_any_right?(@current_user, :read_as_admin, :manage_grades, :manage_assignments) ||
-           @submission.assignment_visible_to_user?(@current_user, differentiated_assignments: da_on)
+      if @context.grants_any_right?(@current_user, :read_as_admin, :manage_grades, :manage_assignments) ||
+           @submission.assignment_visible_to_user?(@current_user)
         includes = Array(params[:include])
-        @submission.visible_to_user = includes.include?("visibility") && @context.feature_enabled?(:differentiated_assignments) ? @assignment.visible_to_user?(@submission.user) : true
+        @submission.visible_to_user = includes.include?("visibility") ? @assignment.visible_to_user?(@submission.user) : true
         render :json => submission_json(@submission, @assignment, @current_user, session, @context, includes)
       else
         @unauthorized_message = t('#application.errors.submission_unauthorized', "You cannot access this submission.")
@@ -652,9 +654,8 @@ class SubmissionsApiController < ApplicationController
       includes.concat(Array.wrap(params[:include]) & ['visibility'])
       includes << 'provisional_grades' if submission[:provisional]
 
-      da_enabled = @context.feature_enabled?(:differentiated_assignments)
       visiblity_included = includes.include?("visibility")
-      if visiblity_included && da_enabled
+      if visiblity_included
         user_ids = @submissions.map(&:user_id)
         users_with_visibility = AssignmentStudentVisibility.where(course_id: @context, assignment_id: @assignment, user_id: user_ids).pluck(:user_id).to_set
       end
@@ -664,7 +665,7 @@ class SubmissionsApiController < ApplicationController
       json[:all_submissions] = @submissions.map { |submission|
 
         if visiblity_included
-          submission.visible_to_user = da_enabled ? users_with_visibility.include?(submission.user_id) : true
+          submission.visible_to_user = users_with_visibility.include?(submission.user_id)
         end
 
         submission_json(submission, @assignment, @current_user, session, @context, includes)
@@ -684,7 +685,7 @@ class SubmissionsApiController < ApplicationController
     if authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
       @assignment = @context.assignments.active.find(params[:assignment_id])
       includes = Array(params[:include])
-      student_scope = context.students_visible_to(@current_user)
+      student_scope = context.students_visible_to(@current_user, include: :inactive)
       student_scope = @assignment.students_with_visibility(student_scope)
       student_scope = student_scope.order(:id)
       students = Api.paginate(student_scope, self, api_v1_course_assignment_gradeable_students_url(@context, @assignment))
@@ -830,7 +831,7 @@ class SubmissionsApiController < ApplicationController
   end
 
   def get_user_considering_section(user_id)
-    students = @context.students_visible_to(@current_user, true)
+    students = @context.students_visible_to(@current_user, include: :priors)
     if @section
       students = students.where(:enrollments => { :course_section_id => @section })
     end
@@ -844,8 +845,8 @@ class SubmissionsApiController < ApplicationController
   def bulk_load_attachments_and_previews(submissions)
     Submission.bulk_load_versioned_attachments(submissions)
     attachments = submissions.flat_map &:versioned_attachments
-    ActiveRecord::Associations::Preloader.new(attachments,
-      [:canvadoc, :crocodoc_document]).run
+    ActiveRecord::Associations::Preloader.new.preload(attachments,
+      [:canvadoc, :crocodoc_document])
   end
 
   def bulk_process_submissions_for_visibility(submissions_scope, includes)

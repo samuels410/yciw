@@ -1007,11 +1007,10 @@ describe CalendarEventsApiController, type: :request do
       end
     end
 
-    context 'differentiated assignments on' do
+    context 'differentiated assignments' do
       before :once do
         Timecop.travel(Time.utc(2015)) do
           course_with_teacher(:active_course => true, :active_enrollment => true, :user => @teacher)
-          @course.enable_feature!(:differentiated_assignments)
 
           @student_in_overriden_section = User.create
           @student_in_general_section = User.create
@@ -1746,10 +1745,10 @@ describe CalendarEventsApiController, type: :request do
       assg = @course.assignments.create(workflow_state: 'published', due_at: 3.days.from_now, submission_types: "online_text_entry")
       assg.submit_homework @student, submission_type: "online_text_entry"
       json = api_call(:get,
-        "/api/v1/users/#{@student.id}/calendar_events?all_events=true&type=assignment&include[]=submissions&context_codes[]=#{@ctx_str}", {
-        controller: 'calendar_events_api', action: 'user_index', format: 'json', type: 'assignment', include: ['submissions'],
+        "/api/v1/users/#{@student.id}/calendar_events?all_events=true&type=assignment&include[]=submission&context_codes[]=#{@ctx_str}", {
+        controller: 'calendar_events_api', action: 'user_index', format: 'json', type: 'assignment', include: ['submission'],
         context_codes: @contexts, all_events: true, user_id: @student.id})
-      expect(json.first['assignment']['submission'].length).to eql 1
+      expect(json.first['assignment']['submission']).not_to be_nil
     end
   end
 

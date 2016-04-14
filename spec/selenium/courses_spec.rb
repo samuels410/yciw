@@ -47,6 +47,14 @@ describe "courses" do
         expect(@course.lock_all_announcements).to be_truthy
       end
 
+      it "should display a creative commons license when set", priority: "1", test_id: 272274 do
+        @course.license =  'cc_by_sa'
+        @course.save!
+        get "/courses/#{@course.id}"
+        wait_for_ajaximations
+        expect(f('.public-license-text').text).to include('This course content is offered under a')
+      end
+
       it "should allow unpublishing of a course through the course status actions" do
         get "/courses/#{@course.id}"
         course_status_buttons = ff('#course_status_actions button')
@@ -123,64 +131,10 @@ describe "courses" do
         expect(f("#wizard_#{item}.ic-wizard-box__content-trigger--checked")).to be_nil
       end
 
-      it "should properly hide the wizard and remember its hidden state" do
-        # For now we are not allowing the wizard to popup automatically
-        # so this spec doesn't apply, it may in the future though.
-        pending
-        course_with_teacher_logged_in
-        create_new_course
-        wizard_box = f(".ic-wizard-box")
-        keep_trying_until { expect(wizard_box).to be_displayed }
-        f(".ic-wizard-box__close a").click
-        refresh_page
-        wait_for_ajaximations # we need to give the wizard a chance to pop up
-        wizard_box = f(".ic-wizard-box")
-        expect(wizard_box).to eq nil
-        # un-remember the setting
-        driver.execute_script "localStorage.clear()"
-      end
-
-      it "should open and close wizard after initial close" do
-        # For now we are not allowing the wizard to popup automatically
-        # so this spec doesn't apply, it may in the future though.
-        pending
-        def find_wizard_box
-          wizard_box = keep_trying_until do
-            wizard_box = f(".ic-wizard-box")
-            expect(wizard_box).to be_displayed
-            wizard_box
-          end
-          wizard_box
-        end
-
-        course_with_teacher_logged_in
-        create_new_course
-
-        wait_for_ajaximations
-        wizard_box = find_wizard_box
-        f(".ic-wizard-box__close a").click
-        wait_for_ajaximations
-        wizard_box = f(".ic-wizard-box")
-        expect(wizard_box).to eq nil
-        checklist_button = f('.wizard_popup_link')
-        expect(checklist_button).to be_displayed
-        checklist_button.click
-        wait_for_ajaximations
-        wizard_box = find_wizard_box
-        f(".ic-wizard-box__close a").click
-        wait_for_ajaximations
-        wizard_box = f(".ic-wizard-box")
-        expect(wizard_box).to eq nil
-        expect(checklist_button).to be_displayed
-      end
-
       it "should open up the choose home page dialog from the wizard" do
         course_with_teacher_logged_in
         create_new_course
 
-        # Because of the specs about automatically opening are currently
-        # pending, we need to cause the wizard to open by way of click. When
-        # those specs are no longer pendings, the click line should be removed.
         go_to_checklist
 
         f("#wizard_home_page").click
@@ -317,7 +271,7 @@ describe "courses" do
       course2 = course_with_teacher(:user => teacher, :active_all => 1, :course_name => 'course2').course
       student_in_course(:user => student, :active_all => 1)
 
-      create_session(student.pseudonyms.first, false)
+      create_session(student.pseudonyms.first)
 
       get "/courses/#{course1.id}/grades/#{student.id}"
 

@@ -27,15 +27,8 @@ class PageView < ActiveRecord::Base
 
   before_save :ensure_account
   before_save :cap_interaction_seconds
-  belongs_to :context, :polymorphic => true
-  validates_inclusion_of :context_type, :allow_nil => true, :in => ['Course', 'Account', 'Group', 'User', 'UserProfile']
+  belongs_to :context, polymorphic: [:course, :account, :group, :user, :user_profile], polymorphic_prefix: true
 
-  EXPORTABLE_ATTRIBUTES = [
-    :request_id, :session_id, :user_id, :url, :context_id, :context_type, :asset_id, :asset_type, :controller, :action, :interaction_seconds, :created_at, :updated_at,
-    :user_request, :render_time, :user_agent, :asset_user_access_id, :participated, :summarized, :account_id, :real_user_id, :http_method, :remote_ip
-  ]
-
-  EXPORTABLE_ASSOCIATIONS = [:user, :account, :real_user, :asset_user_access, :context]
   attr_accessor :generated_by_hand
   attr_accessor :is_update
 
@@ -182,9 +175,8 @@ class PageView < ActiveRecord::Base
     end
   end
 
-  def self.find(ids, options={})
+  def self.find(ids)
     return super unless PageView.cassandra?
-    raise(NotImplementedError, "options not implemented: #{options.inspect}") if options.present?
 
     case ids
     when Array
@@ -259,29 +251,27 @@ class PageView < ActiveRecord::Base
     end
   end
 
-  class_eval <<-RUBY, __FILE__, __LINE__ + 1
-    def #{CANVAS_RAILS3 ? :create : :_create_record}(*args)
-      return super unless PageView.cassandra?
-      self.created_at ||= Time.zone.now
-      user.shard.activate do
-        run_callbacks(:create) do
-          PageView::EventStream.insert(self)
-          @new_record = false
-          self.id
-        end
+  def _create_record(*args)
+    return super unless PageView.cassandra?
+    self.created_at ||= Time.zone.now
+    user.shard.activate do
+      run_callbacks(:create) do
+        PageView::EventStream.insert(self)
+        @new_record = false
+        self.id
       end
     end
+  end
 
-    def #{CANVAS_RAILS3 ? :update : :_update_record}(*args)
-      return super unless PageView.cassandra?
-      user.shard.activate do
-        run_callbacks(:update) do
-          PageView::EventStream.update(self)
-          true
-        end
+  def _update_record(*args)
+    return super unless PageView.cassandra?
+    user.shard.activate do
+      run_callbacks(:update) do
+        PageView::EventStream.update(self)
+        true
       end
     end
-  RUBY
+  end
 
   scope :for_context, proc { |ctx| where(:context_type => ctx.class.name, :context_id => ctx) }
   scope :for_users, lambda { |users| where(:user_id => users) }

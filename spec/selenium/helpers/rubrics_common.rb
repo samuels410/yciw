@@ -5,6 +5,7 @@ module RubricsCommon
     get rubric_url
 
     f("#right-side-wrapper .add_rubric_link").click
+    check_element_has_focus(fj("#rubric_new :text:first"))
     criterion_points = f("#criterion_1 .criterion_points")
     set_value(criterion_points, points.to_s)
     criterion_points.send_keys(:return)
@@ -77,7 +78,9 @@ module RubricsCommon
 
   def should_round_to_2_decimal_places
     create_rubric_with_criterion_points "5.249"
-    expect(fj(".rubric .criterion:visible .display_criterion_points").text).to eq '5.25'
+    keep_trying_until do
+        expect(fj(".rubric .criterion:visible .display_criterion_points").text).to eq '5.25'
+    end
   end
 
   def should_round_to_an_integer_when_splitting

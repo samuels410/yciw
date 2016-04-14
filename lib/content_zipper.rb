@@ -74,8 +74,21 @@ class ContentZipper
 
     filename    = assignment_zip_filename(assignment)
     user        = zip_attachment.user
-    students    = assignment.representatives(user).index_by(&:id)
-    submissions = assignment.submissions.where(:user_id => students.keys)
+
+    # It is possible to get this far if an assignment allows the
+    # downloadable submissions below as well as those that can't be
+    # downloaded. In that case, only retrieve the ones that can be
+    # downloaded.
+    downloadable_submissions = ["online_upload", "online_url", "online_text_entry"]
+    if @context.completed?
+      submissions = assignment.submissions.where(submission_type: downloadable_submissions)
+      # This neglects the complexity of group assignments
+      students = User.where(id: submissions.pluck(:user_id)).index_by(&:id)
+    else
+      students    = assignment.representatives(user).index_by(&:id)
+      submissions = assignment.submissions.where(user_id: students.keys,
+                                                 submission_type: downloadable_submissions)
+    end
 
     make_zip_tmpdir(filename) do |zip_name|
       @logger.debug("creating #{zip_name}")
@@ -261,7 +274,9 @@ class ContentZipper
         @files_added = false if @files_added.nil?
       end
     end
-    folder.active_sub_folders.select{|f| !@check_user || f.grants_right?(@user, :read_contents)}.each do |sub_folder|
+    folder.active_sub_folders.select do |f|
+      !@check_user || f.grants_right?(@user, :read_contents_for_export)
+    end.each do |sub_folder|
       new_names = Array.new(folder_names) << sub_folder.name
       if callback
         zip_folder(sub_folder, zipfile, new_names, opts, &callback)
@@ -345,8 +360,8 @@ class ContentZipper
     #
     # All other attachments toss on the static attachment pile for
     # later processing.
-    if entry.content.present?
-      entry.content.select { |c| c[:section_type] == "rich_text" }.each do |rt|
+    if entry.content.is_a?(Array) && entry.content.present?
+      entry.content.select { |c| c.is_a?(Hash) && c[:section_type] == "rich_text" }.each do |rt|
         rt[:content].gsub!(StaticAttachment::FILES_REGEX) do |match|
           att = Attachment.find_by_id(Regexp.last_match(:obj_id))
           if att.nil?

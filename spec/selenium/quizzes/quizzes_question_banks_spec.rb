@@ -27,6 +27,7 @@ describe 'quizzes question banks' do
       expect(question_bank).to be_present
       expect(question_bank.workflow_state).to eq 'active'
       expect(f('#question_bank_adding .title')).to(include_text('goober'))
+      expect(driver.switch_to.active_element).to eq(f('#question_bank_adding .title'))
       expect(question_bank.bookmarked_for?(User.last)).to be_truthy
       question_bank
     end
@@ -163,16 +164,33 @@ describe 'quizzes question banks' do
     end
 
     it 'should create a question group from a question bank', priority: "1", test_id: 319907 do
+      bank = AssessmentQuestionBank.create!(context: @course)
+      3.times { assessment_question_model(bank: bank) }
+
       get "/courses/#{@course.id}/quizzes/new"
       click_questions_tab
 
       f('.add_question_group_link').click
       wait_for_ajaximations
       group_form = f('#group_top_new .quiz_group_form')
-      group_form.find_element(:name, 'quiz_group[name]').send_keys('new group')
-      replace_content(group_form.find_element(:name, 'quiz_group[question_points]'), '2')
+
+      # give the question group a title
+      question_group_title = 'New Question Group'
+      group_form.find_element(:name, 'quiz_group[name]').send_keys(question_group_title)
+
+      fln('Link to a Question Bank').click
+      wait_for_ajaximations
+
+      # select a question bank
+      hover_and_click('li.bank:nth-child(2)')
+      fj('div.button-container:nth-child(2) > button:nth-child(1)').click
+
+      message = "Questions will be pulled from the bank: #{bank.title}"
+      expect(fj('.assessment_question_bank')).to include_text message
       submit_form(group_form)
-      expect(f('#questions .group_top .group_display.name')).to include_text('new group')
+
+      expect(f('#questions .group_top .group_display.name')).to include_text question_group_title
+      expect(fj('.assessment_question_bank')).to include_text message
     end
 
     it 'creates a question group from a question bank from within the Find Quiz Question modal', priority: "1", test_id: 140590 do
@@ -340,6 +358,36 @@ describe 'quizzes question banks' do
 
       get "/courses/#{@course.id}/question_banks/#{@bank.id}"
       expect(f('#unauthorized_message')).to be_displayed
+    end
+
+    it "should move paginated questions in a question bank from one bank to another", priority: "2", test_id: 312864 do
+      @context = @course
+      source_bank = @course.assessment_question_banks.create!(title: 'Source Bank')
+      target_bank = @course.assessment_question_banks.create!(title: 'Target Bank')
+      @q = quiz_model
+      assessment_question = []
+      @quiz_question = []
+      answers = [ {'id' => 1}, {'id' => 2}, {'id' => 3} ]
+      51.times do |o|
+        assessment_question[o] = source_bank.assessment_questions.create!
+        @quiz_question.push(@q.quiz_questions.create!(question_data:
+                                                   {name: "question #{o}", question_type: 'multiple_choice_question',
+                                                   'answers' => answers, points_possible: 1},
+                                                      assessment_question: assessment_question[o]))
+
+      end
+      get "/courses/#{@course.id}/question_banks/#{source_bank.id}"
+      f('.more_questions_link').click
+      wait_for_ajaximations
+      f("#question_teaser_#{assessment_question[50].id} .move_question_link").click
+      f("#question_bank_#{target_bank.id}").click
+      f('input[type=checkbox][name=copy]').click
+      submit_dialog('#move_question_dialog', '.submit_button')
+      wait_for_ajaximations
+      refresh_page
+      expect(f('.more_questions_link')).not_to be_present
+      expect(source_bank.assessment_question_count).to eq(50)
+      expect(target_bank.assessment_question_count).to eq(1)
     end
   end
 end

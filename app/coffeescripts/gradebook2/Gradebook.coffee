@@ -163,7 +163,6 @@ define [
         for c in @customColumns
           url = @options.custom_column_data_url.replace /:id/, c.id
           @getCustomColumnData(c.id)
-        @assignment_visibility() if ENV.GRADEBOOK_OPTIONS.differentiated_assignments_enabled
         @disableAssignmentsInClosedGradingPeriods() if @mgpEnabled
 
       @showCustomColumnDropdownOption()
@@ -171,13 +170,14 @@ define [
       @showPostGradesButton()
       @checkForUploadComplete()
 
-    assignment_visibility: ->
-      allStudentIds = _.keys @students
-      for assignmentId, a of @assignments
-        if a.only_visible_to_overrides
-          hiddenStudentIds = @hiddenStudentIdsForAssignment(allStudentIds, a)
-          for studentId in hiddenStudentIds
-            @updateSubmission { assignment_id: assignmentId, user_id: studentId, hidden: true }
+    setAssignmentVisibility: ->
+      @withAllStudents (students) =>
+        allStudentIds = _.keys(students)
+        for assignmentId, a of @assignments
+          if a.only_visible_to_overrides
+            hiddenStudentIds = @hiddenStudentIdsForAssignment(allStudentIds, a)
+            for studentId in hiddenStudentIds
+              @updateSubmission assignment_id: assignmentId, user_id: studentId, hidden: true
 
     hiddenStudentIdsForAssignment: (studentIds, assignment) ->
       _.difference studentIds, assignment.assignment_visibility
@@ -268,6 +268,7 @@ define [
     doSlickgridStuff: =>
       @initGrid()
       @buildRows()
+      @setAssignmentVisibility()
       @getSubmissionsChunks()
       @initHeader()
 
@@ -280,16 +281,9 @@ define [
       # an assigmentGroup's .group_weight and @options.group_weighting_scheme
       new AssignmentGroupWeightsDialog context: @options, assignmentGroups: assignmentGroups
       for group in assignmentGroups
-        # note that assignmentGroups are not yet htmlEscaped like assignments and sections
         @assignmentGroups[group.id] = group
         group.assignments = _.select group.assignments, (a) -> a.published
         for assignment in group.assignments
-          htmlUrl = assignment.html_url
-          submissionsDownloadUrl = assignment.submissions_download_url
-          htmlEscape(assignment)
-          assignment.html_url = htmlUrl
-          assignment.submissions_download_url = submissionsDownloadUrl
-
           assignment.assignment_group = group
           assignment.due_at = tz.parse(assignment.due_at)
           @assignments[assignment.id] = assignment
@@ -347,8 +341,13 @@ define [
           @studentViewStudents[student.id] ||= htmlEscape(student)
         else
           @students[student.id] ||= htmlEscape(student)
-        @student(student.id).sections ||= []
-        @student(student.id).sections.push(studentEnrollment.course_section_id)
+
+        student = @student(student.id)
+        student.enrollment_states ||= []
+        student.enrollment_states.push(studentEnrollment.enrollment_state)
+
+        student.sections ||= []
+        student.sections.push(studentEnrollment.course_section_id)
 
     gotAllStudents: ->
       @withAllStudents (students) =>
@@ -361,6 +360,7 @@ define [
           student.computed_current_score ||= 0
           student.computed_final_score ||= 0
           student.secondary_identifier = student.sis_login_id || student.login_id
+          student.is_inactive = _.all student.enrollment_states, (state) -> state == 'inactive'
 
           if @sections_enabled
             mySections = (@sections[sectionId].name for sectionId in student.sections when @sections[sectionId])
@@ -385,7 +385,7 @@ define [
     defaultSortType: 'assignment_group'
 
     studentsThatCanSeeAssignment: (potential_students, assignment) ->
-      if ENV.GRADEBOOK_OPTIONS.differentiated_assignments_enabled
+      if assignment.only_visible_to_overrides
         _.pick potential_students, assignment.assignment_visibility...
       else
         potential_students
@@ -605,8 +605,8 @@ define [
       for data in student_submissions
         student = @student(data.user_id)
         for submission in data.submissions
-          current_submission = student["assignment_#{submission.assignment_id}"]
-          @updateSubmission(submission) unless current_submission?["hidden"]
+          @updateSubmission(submission)
+
         student.loaded = true
         @grid.invalidateRow(student.row)
         @calculateStudentGrade(student)
@@ -634,7 +634,8 @@ define [
     updateSubmission: (submission) =>
       student = @student(submission.user_id)
       submission.submitted_at = tz.parse(submission.submitted_at)
-      student["assignment_#{submission.assignment_id}"] = submission
+      cell = student["assignment_#{submission.assignment_id}"] ||= {}
+      _.extend(cell, submission)
 
     # this is used after the CurveGradesDialog submit xhr comes back.  it does not use the api
     # because there is no *bulk* submissions#update endpoint in the api.
@@ -700,9 +701,13 @@ define [
 
 
     indexedOverrides: ->
-      indexed = { studentOverrides: {}, sectionOverrides: {} }
+      indexed = {
+        studentOverrides: {},
+        groupOverrides: {},
+        sectionOverrides: {}
+      }
       _.each @assignments, (assignment) ->
-        if assignment.has_overrides
+        if assignment.has_overrides && assignment.overrides
           _.each assignment.overrides, (override) ->
             if override.student_ids
               indexed.studentOverrides[assignment.id] ?= {}
@@ -711,6 +716,9 @@ define [
             else if sectionId = override.course_section_id
               indexed.sectionOverrides[assignment.id] ?= {}
               indexed.sectionOverrides[assignment.id][sectionId] = override
+            else if groupId = override.group_id
+              indexed.groupOverrides[assignment.id] ?= {}
+              indexed.groupOverrides[assignment.id][groupId] = override
       indexed
 
     indexedGradingPeriods: ->
@@ -725,23 +733,23 @@ define [
       gradingPeriod = gradingPeriods[selectedPeriodId]
       effectiveDueAt = assignment.due_at
 
-      if assignment.has_overrides
-        # we'll eventually need to consider group overrides here
-        # (group overrides are not yet a feature but are planned)
-        sectionOverrides = []
-        sectionOverridesOnAssignment = overrides.sectionOverrides[assignment.id]
-        if sectionOverridesOnAssignment
-          _.each student.sections, (sectionId) ->
-            sectionOverride = sectionOverridesOnAssignment[sectionId]
-            sectionOverrides.push sectionOverride if sectionOverride
+      if assignment.has_overrides && assignment.overrides
+        IDsByOverrideType = {
+          "sectionOverrides": student.sections
+          "groupOverrides": student.group_ids
+          "studentOverrides": [student.id]
+        }
 
-        studentOverrides = []
-        studentOverridesOnAssignment = overrides.studentOverrides[assignment.id]
-        if studentOverridesOnAssignment
-          studentOverride = studentOverridesOnAssignment[student.id]
-          studentOverrides.push studentOverride if studentOverride
+        getOverridesForType = (typeIds, overrideType) ->
+          _.map typeIds, (typeId) ->
+            overrides[overrideType]?[assignment.id]?[typeId]
 
-        allOverridesForSubmission = sectionOverrides.concat studentOverrides
+        allOverridesForSubmission = _.chain(IDsByOverrideType)
+          .map(getOverridesForType)
+          .flatten()
+          .compact()
+          .value()
+
         overrideDates = _.chain(allOverridesForSubmission)
           .pluck('due_at')
           .map((dateString) -> tz.parse(dateString))
@@ -1088,8 +1096,8 @@ define [
       @drawSectionSelectButton() if @sections_enabled
       @drawGradingPeriodSelectButton() if @mgpEnabled
 
-      $settingsMenu = $('#gradebook_settings').next()
-      $.each ['show_attendance', 'include_ungraded_assignments', 'show_concluded_enrollments'], (i, setting) =>
+      $settingsMenu = $('.gradebook_dropdown')
+      $.each ['show_attendance', 'include_ungraded_assignments', 'show_concluded_enrollments'], (_i, setting) =>
         $settingsMenu.find("##{setting}").prop('checked', !!@[setting]).change (event) =>
           if setting is 'show_concluded_enrollments' and @options.course_is_concluded and @show_concluded_enrollments
             $("##{setting}").prop('checked', true)
@@ -1114,11 +1122,14 @@ define [
         @arrangeColumnsBy(newSortOrder, false)
       @arrangeColumnsBy(@getStoredSortOrder(), true)
 
-      $('#gradebook_settings').kyleMenu()
-      $('#download_csv').kyleMenu()
+      $('#gradebook_settings').kyleMenu(returnFocusTo: $('#gradebook_settings'))
+      $('#download_csv').kyleMenu(returnFocusTo: $('#download_csv'))
       $('#post_grades').kyleMenu()
 
       $settingsMenu.find('.student_names_toggle').click(@studentNamesToggle)
+      $('#keyboard-shortcuts').click ->
+        questionMarkKeyDown = $.Event('keydown', keyCode: 191)
+        $(document).trigger(questionMarkKeyDown)
 
       @userFilter = new InputFilterView el: '.gradebook_filter input'
       @userFilter.on 'input', @onUserFilterInput
@@ -1145,6 +1156,7 @@ define [
 
       $('.generate_new_csv').click =>
         $('#download_csv').prop('disabled', true)
+        $('.icon-import').parent().focus()
         loading_interval = self.exportingGradebookStatus()
         include_priors = $('#show_concluded_enrollments').prop('checked')
 
@@ -1242,24 +1254,24 @@ define [
       else
         @options.show_total_grade_as_points
 
-    switch_total_display: =>
+    switchTotalDisplay: =>
       @options.show_total_grade_as_points = not @options.show_total_grade_as_points
       $.ajaxJSON @options.setting_update_url, "PUT", show_total_grade_as_points: @displayPointTotals()
       @grid.invalidate()
-      @totalHeader.render()
+      @totalHeader.switchTotalDisplay(@options.show_total_grade_as_points)
 
-    switch_total_display_and_mark_user_as_warned: =>
+    switchTotalDisplayAndMarkUserAsWarned: =>
       userSettings.contextSet('warned_about_totals_display', true)
-      @switch_total_display()
+      @switchTotalDisplay()
 
     togglePointsOrPercentTotals: =>
       if userSettings.contextGet('warned_about_totals_display')
-        @switch_total_display()
+        @switchTotalDisplay()
       else
         dialog_options =
           showing_points: @options.show_total_grade_as_points
-          unchecked_save: @switch_total_display
-          checked_save: @switch_total_display_and_mark_user_as_warned
+          unchecked_save: @switchTotalDisplay
+          checked_save: @switchTotalDisplayAndMarkUserAsWarned
         new GradeDisplayWarningDialog(dialog_options)
 
     onUserFilterInput: (term) =>
@@ -1267,14 +1279,21 @@ define [
       @buildRows()
 
     getVisibleGradeGridColumns: ->
-      res = [].concat @parentColumns, @customColumnDefinitions()
+      columns = []
+
       for column in @allAssignmentColumns
         if @disabledAssignments && @disabledAssignments.indexOf(column.object.id) != -1
           column.cssClass = "cannot_edit"
         submissionType = ''+ column.object.submission_types
-        res.push(column) unless submissionType is "not_graded" or
-                                submissionType is "attendance" and !@show_attendance
-      res.concat(@aggregateColumns)
+        columns.push(column) unless submissionType is "not_graded" or
+                                submissionType is "attendance" and not @show_attendance
+
+      if @gradebookColumnOrderSettings?.sortType
+        columns.sort @makeColumnSortFn(@getStoredSortOrder())
+
+      columns = columns.concat(@aggregateColumns)
+      headers = @parentColumns.concat(@customColumnDefinitions())
+      headers.concat(columns)
 
     assignmentHeaderHtml: (assignment) ->
       columnHeaderTemplate

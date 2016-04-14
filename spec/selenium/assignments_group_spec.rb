@@ -1,6 +1,27 @@
 require File.expand_path(File.dirname(__FILE__) + '/common')
 require File.expand_path(File.dirname(__FILE__) + '/helpers/assignments_common')
 
+describe "assignment group that can't manage a course" do
+  include_context "in-process server selenium tests"
+  include AssignmentsCommon
+
+  it "does not dipsplay the manage cog menu" do
+    @domain_root_account = Account.default
+    course
+    account_admin_user_with_role_changes(:role_changes => {:manage_courses => false})
+    user_session(@user)
+    @course.require_assignment_group
+    @assignment_group = @course.assignment_groups.first
+    @course.assignments.create(name: "test", assignment_group: @assignment_group)
+    get "/courses/#{@course.id}/assignments"
+
+    cog = ff("#assignmentSettingsCog")[0]
+    wait_for_ajaximations
+
+    expect(cog).to be_nil
+  end
+end
+
 describe "assignment groups" do
   include_context "in-process server selenium tests"
   include AssignmentsCommon
@@ -209,46 +230,46 @@ describe "assignment groups" do
   it "should allow quick-adding an assignment to a group", priority: "1", test_id: 210083 do
     @course.require_assignment_group
     ag = @course.assignment_groups.first
-    time = Timecop.freeze(2015,2,7,4,15).utc
-    current_time = time.strftime('%b %-d at %-l:%M') << time.strftime('%p').downcase
-    assignment_name, assignment_points = ["Do this", "13"]
+    time = DateTime.new(Time.now.year,2,7,4,15)
+    Timecop.freeze(time) do
+      current_time = time.strftime('%b %-d at %-l:%M') << time.strftime('%p').downcase
+      assignment_name, assignment_points = ["Do this", "13"]
 
-    # Navigates to assignments index page.
-    get "/courses/#{@course.id}/assignments"
-    wait_for_ajaximations
+      # Navigates to assignments index page.
+      get "/courses/#{@course.id}/assignments"
+      wait_for_ajaximations
 
-    # Finds and clicks the Add Assignment button on an assignment group.
-    f("#assignment_group_#{ag.id} .add_assignment").click
-    wait_for_ajaximations
+      # Finds and clicks the Add Assignment button on an assignment group.
+      f("#assignment_group_#{ag.id} .add_assignment").click
+      wait_for_ajaximations
 
-    # Enters in values for Name, Due, and Points, then clicks save.
-    replace_content(f("#ag_#{ag.id}_assignment_name"), assignment_name)
-    replace_content(f("#ag_#{ag.id}_assignment_due_at"), current_time)
-    replace_content(f("#ag_#{ag.id}_assignment_points"), assignment_points)
-    fj('.create_assignment:visible').click
-    wait_for_ajaximations
+      # Enters in values for Name, Due, and Points, then clicks save.
+      replace_content(f("#ag_#{ag.id}_assignment_name"), assignment_name)
+      replace_content(f("#ag_#{ag.id}_assignment_due_at"), current_time)
+      replace_content(f("#ag_#{ag.id}_assignment_points"), assignment_points)
+      fj('.create_assignment:visible').click
+      wait_for_ajaximations
 
-    # Checks for correct values in back end.
-    a = ag.reload.assignments.last
-    expect(a.name).to eq "Do this"
-    expect(a.due_at).to eq time
-    expect(a.points_possible).to eq 13
+      # Checks for correct values in back end.
+      a = ag.reload.assignments.last
+      expect(a.name).to eq "Do this"
+      expect(a.due_at).to eq time
+      expect(a.points_possible).to eq 13
 
-    # Checks Assignments Index page UI for correct values.
-    expect(ff("#assignment_group_#{ag.id} .ig-title").last.text).to match "#{assignment_name}"
-    expect(ff("#assignment_group_#{ag.id} .assignment-date-due").last.text).to match current_time
-    expect(f("#assignment_#{a.id} .non-screenreader").text).to match "#{assignment_points} pts"
+      # Checks Assignments Index page UI for correct values.
+      expect(ff("#assignment_group_#{ag.id} .ig-title").last.text).to match "#{assignment_name}"
+      expect(ff("#assignment_group_#{ag.id} .assignment-date-due").last.text).to match current_time
+      expect(f("#assignment_#{a.id} .non-screenreader").text).to match "#{assignment_points} pts"
 
-    # Navigates to Assignment Show page.
-    get "/courses/#{@course.id}/assignments/#{a.id}"
-    wait_for_ajaximations
+      # Navigates to Assignment Show page.
+      get "/courses/#{@course.id}/assignments/#{a.id}"
+      wait_for_ajaximations
 
-    # Checks Assignment Show page for correct values.
-    expect(f(".title").text).to match "#{assignment_name}"
-    expect(f(".points_possible").text).to match "#{assignment_points}"
-    expect(f(".assignment_dates").text).to match "#{current_time}"
-    Timecop.return
-
+      # Checks Assignment Show page for correct values.
+      expect(f(".title").text).to match "#{assignment_name}"
+      expect(f(".points_possible").text).to match "#{assignment_points}"
+      expect(f(".assignment_dates").text).to match "#{current_time}"
+    end
   end
 
   it "should allow quick-adding two assignments to a group (dealing with form re-render)", priority: "2", test_id: 210084 do
@@ -341,4 +362,18 @@ describe "assignment groups" do
     end
   end
 
+  it "Should be able to delete assignments when deleting assignment Groups", priority: "2", test_id: 56007 do
+    group0 = @course.assignment_groups.create!(name: "Guybrush Group")
+    assignment = @course.assignments.create!(title: "Fine Leather Jacket", assignment_group: group0,)
+    get "/courses/#{@course.id}/assignments"
+    expect(f('#ag-list')).to include_text(assignment.name)
+
+    f("#ag_#{group0.id}_manage_link").click
+
+    f("#assignment_group_#{group0.id} .delete_group").click
+    wait_for_ajaximations
+    fj('.delete_group:visible').click
+    wait_for_ajaximations
+    expect(f('#ag-list')).not_to include_text(assignment.name)
+  end
 end

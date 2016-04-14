@@ -379,7 +379,7 @@ class DiscussionTopicsApiController < ApplicationController
   #   ]
   def entry_list
     ids = Array(params[:ids])
-    entries = @topic.discussion_entries.find(ids, :order => :id)
+    entries = @topic.discussion_entries.order(:id).find(ids)
     @entries = Api.paginate(entries, self, entry_pagination_url(@topic))
     render :json => discussion_entry_api_json(@entries, @context, @current_user, session, [])
   end
@@ -579,8 +579,8 @@ class DiscussionTopicsApiController < ApplicationController
   def save_entry
     has_attachment = params[:attachment].present? && params[:attachment].size > 0 &&
       @entry.grants_right?(@current_user, session, :attach)
-    return if has_attachment && params[:attachment].size > 1.kilobytes &&
-      quota_exceeded(named_context_url(@context, :context_discussion_topic_url, @topic.id))
+    return if has_attachment && !@topic.for_assignment? && params[:attachment].size > 1.kilobytes &&
+      quota_exceeded(@current_user, named_context_url(@context, :context_discussion_topic_url, @topic.id))
     if @entry.save
       @entry.update_topic
       log_asset_access(@topic, 'topics', 'topics', 'participate')
@@ -646,8 +646,7 @@ class DiscussionTopicsApiController < ApplicationController
   end
 
   def check_differentiated_assignments
-    return true unless da_on = @context.feature_enabled?(:differentiated_assignments)
-    return render_unauthorized_action if @topic.for_assignment? && !@topic.assignment.visible_to_user?(@current_user, differentiated_assignments: da_on)
+    return render_unauthorized_action if @topic.for_assignment? && !@topic.assignment.visible_to_user?(@current_user)
   end
 
   # the result of several state change functions are the following:

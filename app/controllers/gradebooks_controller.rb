@@ -35,7 +35,7 @@ class GradebooksController < ApplicationController
   MAX_POST_GRADES_TOOLS = 10
 
   def grade_summary
-    @presenter = GradeSummaryPresenter.new(@context, @current_user, params[:id])
+    @presenter = GradeSummaryPresenter.new(@context, @current_user, params[:id], presenter_options)
     # do this as the very first thing, if the current user is a teacher in the course and they are not trying to view another user's grades, redirect them to the gradebook
     if @presenter.user_needs_redirection?
       return redirect_to polymorphic_url([@context, 'gradebook'])
@@ -60,7 +60,7 @@ class GradebooksController < ApplicationController
         @exclude_total = exclude_total?(@context)
         Shackles.activate(:slave) do
           #run these queries on the slave database for speed
-          @presenter.assignments(gp_id)
+          @presenter.assignments(grading_period_id: gp_id)
           @presenter.groups_assignments = groups_as_assignments(
             @presenter.groups,
             :out_of_final => true,
@@ -89,6 +89,20 @@ class GradebooksController < ApplicationController
       else
         render :grade_summary_list
       end
+    end
+  end
+
+  def save_assignment_order
+    if authorized_action(@context, @current_user, :read)
+      whitelisted_orders = {
+        'due_at' => :due_at, 'title' => :title,
+        'module' => :module, 'assignment_group' => :assignment_group
+      }
+      assignment_order = whitelisted_orders.fetch(params.fetch(:assignment_order), :due_at)
+      @current_user.preferences[:course_grades_assignment_order] ||= {}
+      @current_user.preferences[:course_grades_assignment_order][@context.id] = assignment_order
+      @current_user.save!
+      redirect_to :back
     end
   end
 
@@ -240,7 +254,7 @@ class GradebooksController < ApplicationController
       @current_grading_period_id = params[:grading_period_id].to_i
     else
       return if view_all_grading_periods?
-      current = GradingPeriod.for(@context).find(&:current?)
+      current = GradingPeriod.current_period_for(@context)
       @current_grading_period_id = current ? current.id : 0
     end
   end
@@ -269,9 +283,7 @@ class GradebooksController < ApplicationController
     @gradebook_is_editable = @context.grants_right?(@current_user, session, :manage_grades)
     per_page = Setting.get('api_max_per_page', '50').to_i
     teacher_notes = @context.custom_gradebook_columns.not_deleted.where(:teacher_notes=> true).first
-    ag_includes = [:assignments]
-    ag_includes << :assignment_visibility if @context.feature_enabled?(:differentiated_assignments)
-    ag_includes << 'overrides' if @context.feature_enabled?(:differentiated_assignments)
+    ag_includes = [:assignments, :assignment_visibility, 'overrides']
     chunk_size = if @context.assignments.published.count < Setting.get('gradebook2.assignments_threshold', '20').to_i
       Setting.get('gradebook2.submissions_chunk_size', '35').to_i
     else
@@ -282,8 +294,8 @@ class GradebooksController < ApplicationController
       :assignment_groups_url => api_v1_course_assignment_groups_url(@context, :include => ag_includes, :override_assignment_dates => "false"),
       :sections_url => api_v1_course_sections_url(@context),
       :course_url => api_v1_course_url(@context),
-      :students_url => api_v1_course_enrollments_url(@context, :include => [:avatar_url], :type => ['StudentEnrollment', 'StudentViewEnrollment'], :per_page => per_page),
-      :students_url_with_concluded_enrollments => api_v1_course_enrollments_url(@context, :include => [:avatar_url], :type => ['StudentEnrollment', 'StudentViewEnrollment'], :state => ['active', 'invited', 'completed'], :per_page => per_page),
+      :students_url => api_v1_course_enrollments_url(@context, :include => [:avatar_url, :group_ids], :type => ['StudentEnrollment', 'StudentViewEnrollment'], :per_page => per_page),
+      :students_url_with_concluded_enrollments => api_v1_course_enrollments_url(@context, :include => [:avatar_url, :group_ids], :type => ['StudentEnrollment', 'StudentViewEnrollment'], :state => ['active', 'invited', 'completed'], :per_page => per_page),
       :submissions_url => api_v1_course_student_submissions_url(@context, :grouped => '1'),
       :outcome_links_url => api_v1_course_outcome_group_links_url(@context, :outcome_style => :full),
       :outcome_rollups_url => api_v1_course_outcome_rollups_url(@context, :per_page => 100),
@@ -304,7 +316,6 @@ class GradebooksController < ApplicationController
       :publish_to_sis_enabled => @context.allows_grade_publishing_by(@current_user) && @gradebook_is_editable,
       :publish_to_sis_url => context_url(@context, :context_details_url, :anchor => 'tab-grade-publishing'),
       :speed_grader_enabled => @context.allows_speed_grader?,
-      :differentiated_assignments_enabled => @context.feature_enabled?(:differentiated_assignments),
       :multiple_grading_periods_enabled => multiple_grading_periods?,
       :active_grading_periods => active_grading_periods,
       :latest_end_date_of_admin_created_grading_periods_in_the_past => latest_end_date_of_admin_created_grading_periods_in_the_past,
@@ -367,9 +378,9 @@ class GradebooksController < ApplicationController
                     else
                       [params[:submission]]
                     end
-      valid_user_ids = Set.new(@context.students_visible_to(@current_user).pluck(:id))
+      valid_user_ids = Set.new(@context.students_visible_to(@current_user, include: :inactive).pluck(:id))
       submissions.select! { |s| valid_user_ids.include? s[:user_id].to_i }
-      users = @context.students.uniq.find(submissions.map { |s| s[:user_id] })
+      users = @context.admin_visible_students.uniq.find(submissions.map { |s| s[:user_id] })
         .index_by(&:id)
       assignments = @context.assignments.active.find(submissions.map { |s|
         s[:assignment_id]
@@ -479,10 +490,9 @@ class GradebooksController < ApplicationController
                          'SpeedGrader is enabled only for published content.')
       return redirect_to polymorphic_url([@context, @assignment])
     end
-    if Canvadocs.enabled? &&
-       Canvadocs.annotations_supported? &&
-       @assignment.submission_types.include?('online_upload') &&
-       request.user_agent.to_s =~ /Firefox/
+
+    if canvadoc_annotations_enabled_in_firefox? ||
+        submisions_attachment_crocodocable_in_firefox?(@assignment.submissions)
         flash[:notice] = t("Warning: Crocodoc has limitations when used in Firefox. Comments will not always be saved.")
     end
     grading_role = if moderated_grading_enabled_and_no_grades_published
@@ -524,9 +534,12 @@ class GradebooksController < ApplicationController
       end
 
       format.json do
-        render :json => @assignment.speed_grader_json(@current_user,
-                                                      avatars: service_enabled?(:avatars),
-                                                      grading_role: grading_role)
+        render json: Assignment::SpeedGrader.new(
+          @assignment,
+          @current_user,
+          avatars: service_enabled?(:avatars),
+          grading_role: grading_role
+        ).json
       end
     end
   end
@@ -664,9 +677,7 @@ class GradebooksController < ApplicationController
   private
 
   def moderated_grading_enabled_and_no_grades_published
-    @context.feature_enabled?(:moderated_grading) &&
-      @assignment.moderated_grading? &&
-      !@assignment.grades_published?
+    @assignment.moderated_grading? && !@assignment.grades_published?
   end
 
   def exclude_total?(context)
@@ -676,5 +687,28 @@ class GradebooksController < ApplicationController
       multiple_grading_periods? && view_all_grading_periods?
     hide_all_grading_periods_totals = !context.feature_enabled?(:all_grading_periods_totals)
     all_grading_periods_selected && hide_all_grading_periods_totals
+  end
+
+  def submisions_attachment_crocodocable_in_firefox?(submissions)
+    request.user_agent.to_s =~ /Firefox/ &&
+    submissions.
+      joins("left outer join #{submissions.connection.quote_table_name('canvadocs_submissions')} cs on cs.submission_id = submissions.id").
+      joins("left outer join #{CrocodocDocument.quoted_table_name} on cs.crocodoc_document_id = crocodoc_documents.id").
+      joins("left outer join #{Canvadoc.quoted_table_name} on cs.canvadoc_id = canvadocs.id").
+      where("cs.crocodoc_document_id IS NOT null or cs.canvadoc_id IS NOT null").
+      exists?
+  end
+
+  def canvadoc_annotations_enabled_in_firefox?
+    request.user_agent.to_s =~ /Firefox/ &&
+    Canvadocs.enabled? &&
+    Canvadocs.annotations_supported? &&
+    @assignment.submission_types.include?('online_upload')
+  end
+
+  def presenter_options
+    order_preferences = @current_user && @current_user.preferences[:course_grades_assignment_order]
+    saved_order = order_preferences && @context && order_preferences[@context.id]
+    saved_order ? { assignment_order: saved_order } : {}
   end
 end

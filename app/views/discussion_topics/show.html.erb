@@ -53,7 +53,15 @@
 <% else %>
   <div id="discussion-managebar" class="toolbarView">
     <div class="headerBar">
-      <div class="row-fluid form-inline" style="overflow: visible;">
+      <div class="form-inline" style="overflow: visible;">
+        <div id="keyboard-shortcut-modal-info" tabindex="0">
+          <span aria-hidden="true" class="accessibility-warning">
+            <%= t 'Press the comma key or shift + ? to see a list of keyboard shortcuts' %>
+          </span>
+          <span class="screenreader-only">
+            <%= t 'Press the comma key or shift + question mark to see a list of keyboard shortcuts' %>
+          </span>
+        </div>
         <div class="pull-right">
           <% if !@topic.is_announcement && can_do(@context, @current_user, :moderate_forum) %>
             <button
@@ -167,7 +175,7 @@
           <% end %>
         <% end %>
         <% if @topic.for_group_discussion? %>
-          <%= render :partial => 'group_discussion' %>
+          <%= render :partial => 'group_discussion', :locals => {show_da_note: (@topic.for_assignment? && @topic.assignment.only_visible_to_overrides)} %>
         <% end %>
         <header class="discussion-section clearfix">
           <%= avatar((@topic.user), context_code: @context.asset_string) if @topic.user %>
@@ -272,18 +280,17 @@
               <button id="expandAll" class="btn disableWhileFiltering" title="<%= t('expand_replies', 'Expand replies') %>" aria-label="<%= t('expand_replies', 'Expand replies') %>">
                 <%= image_tag 'discussions/expand_icon.png', :alt => t('expand_replies', 'Expand replies') %>
               </button>
-
             </div>
 
             <div class="span3 right-align">
-              <a role="button" href='#' class='btn topic-subscribe-button' data-tooltip="bottom"
+              <a href='#' class='btn topic-subscribe-button' data-tooltip="bottom"
                  title="<%= t('topic_subscribe_tooltip', 'You are unsubscribed and will not be notified of new comments') %>"
                  role="button"
                  aria-label="<%= t('You are unsubscribed and will not be notified of new comments. Click to subscribe') %> ">
                 <i class='icon-discussion-check' aria-hidden="hidden"></i>
                 <%= t(:topic_subscribe, 'Subscribe') %>
               </a>
-              <a href='#' class='btn topic-unsubscribe-button btn-success' data-tooltip="bottom" role="button"
+              <a href='#' class='btn topic-unsubscribe-button btn-success' data-tooltip="bottom"
                  title="<%= t('topic_subscribed_tooltip', 'You are subscribed and will be notified of new comments') %>"
                  role="button"
                  aria-label="<%= t('You are subscribed and will be notified of new comments. Click to unsubscribe') %> ">
@@ -320,38 +327,5 @@
     </div>
   <% end %>
 
-  <% content_for :keyboard_navigation do %>
-    <ul class="navigation_list" tabindex="-1">
-      <li>
-        <span class="keycode">j</span>
-        <span class="colon">:</span>
-        <span class="description"><%= t :next_message, "Next Message" %></span>
-      </li>
-      <li>
-        <span class="keycode">k</span>
-        <span class="colon">:</span>
-        <span class="description"><%= t :previous_message, "Previous Message" %></span>
-      </li>
-      <li>
-        <span class="keycode">e</span>
-        <span class="colon">:</span>
-        <span class="description"><%= t :edit_current_message, "Edit Current Message" %></span>
-      </li>
-      <li>
-        <span class="keycode">d</span>
-        <span class="colon">:</span>
-        <span class="description"><%= t :delete_current_message, "Delete Current Message" %></span>
-      </li>
-      <li>
-        <span class="keycode">r</span>
-        <span class="colon">:</span>
-        <span class="description"><%= t :reply_to_message, "Reply to Current Message" %></span>
-      </li>
-      <li>
-        <span class="keycode">n</span>
-        <span class="colon">:</span>
-        <span class="description"><%= t :reply_to_topic, "Reply to Topic" %></span>
-      </li>
-    </ul>
-  <% end %>
+  <div id="keyboard-shortcut-modal"></div>
 <% end %>

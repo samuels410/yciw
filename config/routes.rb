@@ -228,12 +228,21 @@ CanvasRails::Application.routes.draw do
     get 'grades' => 'gradebooks#grade_summary', id: nil
     get 'grading_rubrics' => 'gradebooks#grading_rubrics'
     get 'grades/:id' => 'gradebooks#grade_summary', as: :student_grades
+    post 'save_assignment_order' => 'gradebooks#save_assignment_order', as: :save_assignment_order
     concerns :announcements
     get 'calendar' => 'calendars#show2', as: :old_calendar
     get :locks
     concerns :discussions
     resources :assignments do
       get 'moderate' => 'assignments#show_moderate'
+      get 'submissions/:id', to: 'submissions/previews#show',
+        constraints: ->(request) do
+          request.query_parameters.key?(:preview) && request.format == :html
+        end
+      get 'submissions/:id', to: 'submissions/downloads#show',
+        constraints: ->(request) do
+          request.query_parameters.key?(:download)
+        end
       resources :submissions do
         post 'turnitin/resubmit' => 'submissions#resubmit_to_turnitin', as: :resubmit_to_turnitin
         get 'turnitin/:asset_string' => 'submissions#turnitin_report', as: :turnitin_report
@@ -394,6 +403,7 @@ CanvasRails::Application.routes.draw do
     delete 'test_student' => 'courses#reset_test_student'
     get 'content_migrations' => 'content_migrations#index'
     get 'link_validator' => 'courses#link_validator', :as => :link_validator
+    get 'score_range_defaults', controller: 'conditional_release/score_range_defaults', action: 'index', as: :score_range_defaults
   end
 
   get 'quiz_statistics/:quiz_statistics_id/files/:file_id/download' => 'files#show', as: :quiz_statistics_download, download: '1'
@@ -547,7 +557,7 @@ CanvasRails::Application.routes.draw do
 
     # create/delete are handled by specific routes just above
     resources :users, only: [:index, :new, :edit, :show, :update]
-    resources :account_notifications, only: [:create, :destroy]
+    resources :account_notifications, only: [:create, :update, :destroy]
     concerns :announcements
     resources :assignments
     resources :submissions
@@ -891,6 +901,7 @@ CanvasRails::Application.routes.draw do
 
     scope(controller: :account_notifications) do
       post 'accounts/:account_id/account_notifications', action: :create, as: 'account_notification'
+      put 'accounts/:account_id/account_notifications/:id', action: :update, as: 'account_notification_update'
       get 'accounts/:account_id/users/:user_id/account_notifications', action: :user_index, as: 'user_account_notifications'
       delete 'accounts/:account_id/users/:user_id/account_notifications/:id', action: :user_close_notification, as: 'user_account_notification'
     end
@@ -1284,6 +1295,8 @@ CanvasRails::Application.routes.draw do
       get 'users/:user_id/communication_channels', action: :index, as: 'communication_channels'
       post 'users/:user_id/communication_channels', action: :create
       post 'users/:user_id/communication_channels/:id', action: :reset_bounce_count, as: 'reset_bounce_count'
+      get 'accounts/:account_id/bouncing_communication_channels.csv', action: :bouncing_channel_report
+      post 'accounts/:account_id/bouncing_communication_channels/reset', action: :bulk_reset_bounce_counts
       delete 'users/:user_id/communication_channels/:id', action: :destroy
       delete 'users/:user_id/communication_channels/:type/:address', action: :destroy, constraints: { address: %r{[^/?]+} }
     end

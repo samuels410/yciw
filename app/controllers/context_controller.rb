@@ -18,11 +18,12 @@
 
 class ContextController < ApplicationController
   include SearchHelper
+  include CustomSidebarLinksHelper
 
   before_filter :require_context, :except => [:inbox, :create_media_object, :kaltura_notifications, :media_object_redirect, :media_object_inline, :media_object_thumbnail, :object_snippet]
   before_filter :require_user, :only => [:inbox, :report_avatar_image]
   before_filter :reject_student_view_student, :only => [:inbox]
-  protect_from_forgery :except => [:kaltura_notifications, :object_snippet]
+  protect_from_forgery :except => [:kaltura_notifications, :object_snippet], with: :exception
 
   def create_media_object
     @context = Context.find_by_asset_string(params[:context_code])
@@ -180,7 +181,7 @@ class ContextController < ApplicationController
   end
 
   def roster
-    return unless authorized_action(@context, @current_user, [:read_roster, :manage_students, :manage_admin_users])
+    return unless authorized_action(@context, @current_user, :read_roster)
     log_asset_access([ "roster", @context ], 'roster', 'other')
 
     if @context.is_a?(Course)
@@ -222,7 +223,11 @@ class ContextController < ApplicationController
         }
       })
     elsif @context.is_a?(Group)
-      @users         = @context.participating_users.order_by_sortable_name.uniq
+      if @context.grants_right?(@current_user, :read_as_admin)
+        @users = @context.participating_users.order_by_sortable_name.uniq
+      else
+        @users = @context.participating_users_in_context(sort: true).uniq
+      end
       @primary_users = { t('roster.group_members', 'Group Members') => @users }
       if course = @context.context.try(:is_a?, Course) && @context.context
         @secondary_users = { t('roster.teachers_and_tas', 'Teachers & TAs') => course.instructors.order_by_sortable_name.uniq }
@@ -349,10 +354,17 @@ class ContextController < ApplicationController
     end
   end
 
+  WORKFLOW_TYPES = [
+    :all_discussion_topics, :assignments, :assignment_groups,
+    :enrollments, :rubrics, :collaborations, :quizzes, :context_modules
+  ].freeze
+  ITEM_TYPES = WORKFLOW_TYPES + [
+    :wiki_pages, :attachments
+  ].freeze
   def undelete_index
     if authorized_action(@context, @current_user, :manage_content)
-      @item_types = [:all_discussion_topics, :assignments, :assignment_groups, :enrollments,
-                     :rubrics, :collaborations, :quizzes, :context_modules].map {|assoc| @context.send(assoc) if @context.respond_to?(assoc)}.compact
+      @item_types = WORKFLOW_TYPES.select { |type| @context.reflections.key?(type) }.
+          map { |type| @context.association(type).reader }
 
       @item_types << @context.wiki.wiki_pages if @context.respond_to? :wiki
       @deleted_items = []
@@ -372,7 +384,9 @@ class ContextController < ApplicationController
       scope = @context
       scope = @context.wiki if type == 'wiki_page'
       type = 'all_discussion_topic' if type == 'discussion_topic'
-      @item = scope.send(type.pluralize).find(id)
+      type = type.pluralize.to_sym
+      raise "invalid type" unless ITEM_TYPES.include?(type) && scope.reflections.key?(type)
+      @item = scope.association(type).reader.find(id)
       @item.restore
       render :json => @item
     end

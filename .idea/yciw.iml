@@ -434,16 +434,6 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="google_docs (v1.0.0, /Users/samuel/dev/c/dev/yciw/gems/google_docs) [path][gem]">
-        <CLASSES>
-          <root url="file://$MODULE_DIR$/gems/google_docs/lib" />
-        </CLASSES>
-        <SOURCES>
-          <root url="file://$MODULE_DIR$/gems/google_docs/lib" />
-        </SOURCES>
-      </library>
-    </orderEntry>
-    <orderEntry type="module-library">
       <library name="google_drive (v1.0.0, /Users/samuel/dev/c/dev/yciw/gems/google_drive) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/google_drive/lib" />
@@ -669,7 +659,7 @@
         </SOURCES>
       </library>
     </orderEntry>
-    <orderEntry type="library" scope="PROVIDED" name="bundler (v1.9.4, RVM: ruby-1.9.3-p551 [subscription]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="bundler (v1.11.2, RVM: ruby-1.9.3-p551 [subscription]) [gem]" level="application" />
   </component>
   <component name="RModuleSettingsStorage">
     <LOAD_PATH number="0" />

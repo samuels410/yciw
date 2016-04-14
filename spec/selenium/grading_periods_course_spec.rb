@@ -97,14 +97,14 @@ describe 'Course Grading Periods' do
     end
 
     it 'allows a user to save a grading period', priority: "1", test_id: 202317 do
-      grading_period_title = 'grading period name'
+      grading_period_title = 'grading period X'
       get "/courses/#{@course.id}/grading_standards"
       f('#add-period-button').click
-
       replace_content f('#period_title_new2'), grading_period_title
       replace_content f('#period_start_date_new2'), 'Feb 12, 2015 at 12:00am'
       replace_content f('#period_end_date_new2'), 'Feb 22, 2015 at 11:59pm'
       f('.grading-period').click
+      wait_for_ajaximations
       f('#update-button').click
       wait_for_ajax_requests
       expect(GradingPeriod.last.title).to eq(grading_period_title)
@@ -143,8 +143,8 @@ describe 'Course Grading Periods Inheritance' do
   include_examples 'in-process server selenium tests'
 
   let(:title) {'hi'}
-  let(:start_date) {'Feb 1'}
-  let(:end_date)  {'Feb 28'}
+  let(:start_date) { 3.months.from_now.strftime('%b %-d') }
+  let(:end_date) { (4.months.from_now - 1.day).strftime('%b %-d') }
   let(:date_time_format)  {'%b %-d, %Y at %-l:%M%P'}   # e.g. May 28, 2015 at 8:58pm
 
   before(:each) do

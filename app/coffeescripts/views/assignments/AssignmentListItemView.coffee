@@ -69,7 +69,11 @@ define [
       @moveAssignmentView = false
 
       if @canManage()
-        @publishIconView    = new PublishIconView(model: @model)
+        @publishIconView    = new PublishIconView({
+          model: @model,
+          publishText: I18n.t("Unpublished. Click to publish %{name}", name: @model.get('name')),
+          unpublishText: I18n.t("Published. Click to unpublish %{name}", name: @model.get('name'))
+        })
         @editAssignmentView = new CreateAssignmentView(model: @model)
         @moveAssignmentView = new MoveDialogView
           model: @model
@@ -274,11 +278,13 @@ define [
             $t.removeClass('post-to-sis-status enabled')
             $t.addClass('post-to-sis-status disabled')
             $t.find('.icon-post-to-sis').prop('title', I18n.t("Post grade to SIS disabled. Click to toggle."))
+                                        .prop('src', '/images/svg-icons/svg_icon_post_to_sis.svg')
             $t.find('.screenreader-only').text(I18n.t("The grade for this assignment will not sync to the student information system. Click here to toggle this setting."))
           else
             $t.removeClass('post-to-sis-status disabled')
             $t.addClass('post-to-sis-status enabled')
             $t.find('.icon-post-to-sis').prop('title', I18n.t("Post grade to SIS enabled. Click to toggle."))
+                                        .prop('src', '/images/svg-icons/svg_icon_post_to_sis_active.svg')
             $t.find('.screenreader-only').text(I18n.t("The grade for this assignment will sync to the student information system. Click here to toggle this setting."))
       })
 

@@ -64,9 +64,7 @@ class AssignmentsController < ApplicationController
       return
     end
     if authorized_action(@assignment, @current_user, :read)
-      if (da_on = @context.feature_enabled?(:differentiated_assignments)) &&
-           @current_user && @assignment &&
-           !@assignment.visible_to_user?(@current_user, differentiated_assignments: da_on)
+      if @current_user && @assignment && !@assignment.visible_to_user?(@current_user)
         respond_to do |format|
           flash[:error] = t 'notices.assignment_not_available', "The assignment you requested is not available to your course section."
           format.html { redirect_to named_context_url(@context, :context_assignments_url) }
@@ -128,16 +126,8 @@ class AssignmentsController < ApplicationController
         @current_student_submissions = @assignment.submissions.where("submissions.submission_type IS NOT NULL").where(:user_id => visible_student_ids).to_a
       end
 
-      begin
-        google_docs = google_service_connection
-        @google_service = google_docs.service_type
-        @google_docs_token = google_service_connection.verify_access_token && google_docs.retrieve_access_token rescue false
-      rescue GoogleDocs::NoTokenError
-        # Just fail I guess.
-      end
-
-      @google_drive_upgrade = !!(logged_in_user && Canvas::Plugin.find(:google_drive).try(:settings) &&
-          (!logged_in_user.user_services.where(service: 'google_drive').first || !(google_docs.verify_access_token rescue false)))
+      # this will set @user_has_google_drive
+      user_has_google_drive
 
       add_crumb(@assignment.title, polymorphic_url([@context, @assignment]))
 
@@ -153,7 +143,6 @@ class AssignmentsController < ApplicationController
   end
 
   def show_moderate
-    raise ActiveRecord::RecordNotFound unless @context.feature_enabled?(:moderated_grading)
     @assignment ||= @context.assignments.find(params[:assignment_id])
 
     raise ActiveRecord::RecordNotFound unless @assignment.moderated_grading? && @assignment.published?
@@ -186,8 +175,10 @@ class AssignmentsController < ApplicationController
     if assignment.allow_google_docs_submission? && @real_current_user.blank?
       docs = {}
       begin
-        docs = google_service_connection.list_with_extension_filter(assignment.allowed_extensions)
-      rescue GoogleDocs::NoTokenError => e
+        docs = google_drive_connection.list_with_extension_filter(assignment.allowed_extensions)
+      rescue GoogleDrive::NoTokenError => e
+        Canvas::Errors.capture_exception(:oauth, e)
+      rescue Google::APIClient::AuthorizationError => e
         Canvas::Errors.capture_exception(:oauth, e)
       rescue ArgumentError => e
         Canvas::Errors.capture_exception(:oauth, e)
@@ -293,6 +284,7 @@ class AssignmentsController < ApplicationController
   end
 
   def syllabus
+    js_env(Services::RichContent.env_for(@domain_root_account, risk_level: :sidebar))
     add_crumb t '#crumbs.syllabus', "Syllabus"
     active_tab = "Syllabus"
     if authorized_action(@context, @current_user, [:read, :read_syllabus])
@@ -337,9 +329,13 @@ class AssignmentsController < ApplicationController
   end
 
   def create
+    if params[:assignment] && params[:assignment][:post_to_sis].nil?
+      params[:assignment][:post_to_sis] = @context.account.sis_default_grade_export[:value]
+    end
     params[:assignment][:time_zone_edited] = Time.zone.name if params[:assignment]
     group = get_assignment_group(params[:assignment])
     @assignment ||= @context.assignments.build(params[:assignment])
+
     @assignment.workflow_state ||= "unpublished"
     @assignment.updating_user = @current_user
     @assignment.content_being_saved_by(@current_user)
@@ -361,7 +357,7 @@ class AssignmentsController < ApplicationController
   end
 
   def new
-    @assignment ||= @context.assignments.scoped.new
+    @assignment ||= @context.assignments.temp_record
     @assignment.workflow_state = 'unpublished'
     add_crumb t :create_new_crumb, "Create new"
 
@@ -375,6 +371,7 @@ class AssignmentsController < ApplicationController
   end
 
   def edit
+    js_env(Services::RichContent.env_for(@domain_root_account, risk_level: :highrisk))
     @assignment ||= @context.assignments.active.find(params[:id])
     if authorized_action(@assignment, @current_user, @assignment.new_record? ? :create : :update)
       @assignment.title = params[:title] if params[:title]
@@ -413,7 +410,6 @@ class AssignmentsController < ApplicationController
         :GROUP_CATEGORIES => group_categories,
         :KALTURA_ENABLED => !!feature_enabled?(:kaltura),
         :POST_TO_SIS => post_to_sis,
-        :MODERATED_GRADING => @context.feature_enabled?(:moderated_grading),
         :HAS_GRADED_SUBMISSIONS => @assignment.graded_submissions_exist?,
         :SECTION_LIST => (@context.course_sections.active.map { |section|
           {
@@ -426,10 +422,10 @@ class AssignmentsController < ApplicationController
         }),
         :ASSIGNMENT_OVERRIDES =>
           (assignment_overrides_json(
-            @assignment.overrides_for(@current_user)
+            @assignment.overrides_for(@current_user, ensure_set_not_empty: true),
+            @current_user
             )),
         :ASSIGNMENT_INDEX_URL => polymorphic_url([@context, :assignments]),
-        :DIFFERENTIATED_ASSIGNMENTS_ENABLED => @context.feature_enabled?(:differentiated_assignments),
         :VALID_DATE_RANGE => CourseDateRange.new(@context)
       }
 

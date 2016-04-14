@@ -19,8 +19,7 @@
 class ContentMigration < ActiveRecord::Base
   include Workflow
   include TextHelper
-  belongs_to :context, :polymorphic => true
-  validates_inclusion_of :context_type, :allow_nil => true, :in => ['Course', 'Account', 'Group', 'User']
+  belongs_to :context, polymorphic: [:course, :account, :group, { context_user: 'User' }]
   validate :valid_date_shift_options
   belongs_to :user
   belongs_to :attachment
@@ -86,7 +85,7 @@ class ContentMigration < ActiveRecord::Base
   end
 
   def migration_settings
-    read_attribute(:migration_settings) || write_attribute(:migration_settings,{}.with_indifferent_access)
+    read_or_initialize_attribute(:migration_settings, {}.with_indifferent_access)
   end
 
   def update_migration_settings(new_settings)

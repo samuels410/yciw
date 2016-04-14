@@ -17,12 +17,11 @@
 #
 
 class LearningOutcomeQuestionResult < ActiveRecord::Base
-  include PolymorphicTypeOverride
-  override_polymorphic_types associated_asset_type: {'Quiz' => 'Quizzes::Quiz'}
-
   belongs_to :learning_outcome_result
   belongs_to :learning_outcome
-  belongs_to :associated_asset, :polymorphic => true
+  belongs_to :associated_asset, polymorphic: [:assessment_question]
+
+  strong_params
 
   simply_versioned
 

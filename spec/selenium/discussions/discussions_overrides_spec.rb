@@ -36,8 +36,8 @@ describe "discussions overrides" do
       @assignment.due_at = default_due_at
       add_user_specific_due_date_override(@assignment, due_at: override_due_at, section: @new_section)
       @discussion_topic.save!
-      @default_due_at_time = default_due_at.strftime('%b %-d at %-l:%M') << default_due_at.strftime('%p').downcase
-      @override_due_at_time = override_due_at.strftime('%b %-d at %-l:%M') << override_due_at.strftime('%p').downcase
+      @default_due_at_time = format_time_for_view(default_due_at)
+      @override_due_at_time = format_time_for_view(override_due_at)
       get "/courses/#{@course.id}/discussion_topics/#{@discussion_topic.id}"
     end
 
@@ -72,7 +72,7 @@ describe "discussions overrides" do
       f('.form-actions button[type=submit]').click
       wait_for_ajaximations
       expect(f('.ui-dialog')).to be_present
-      expect(f('#ui-id-7').text).to include('Do you want to go back and select a due date?')
+      expect(f('#ui-id-7').text).to include('Not all sections will be assigned this item')
       f('.ui-dialog .ui-dialog-buttonset .btn-primary').click
       wait_for_ajaximations
       f('.toggle_due_dates').click
@@ -81,10 +81,6 @@ describe "discussions overrides" do
       expect(f('.discussion-topic-due-dates')).to be_present
       expect(f('.discussion-topic-due-dates tbody tr td:nth-of-type(1)').text).to include(@override_due_at_time)
       expect(f('.discussion-topic-due-dates tbody tr td:nth-of-type(2)').text).to include('New Section')
-      expect(f('.discussion-topic-due-dates tbody tr:nth-of-type(2) td:nth-of-type(1)').text).
-                                                                                    not_to include(@default_due_at_time)
-      expect(f('.discussion-topic-due-dates tbody tr:nth-of-type(2) td:nth-of-type(2)').text).
-                                                                                             to include('Everyone else')
     end
 
     context "outside discussions page" do
@@ -112,12 +108,15 @@ describe "discussions overrides" do
         expect(f('.detail_list tbody tr td .special_date_title').text).to include(@new_section.name)
       end
 
-      it "should list the discussions in course and main dashboard page", priority: "2", test_id: 114322 do
+      it "should list the discussions in course dashboard page", priority: "2", test_id: 114322 do
         get "/courses/#{@course.id}"
         expect(f('.coming_up .event a').text).to eq("#{@discussion_topic.title}\nMultiple Due Dates")
+      end
+
+      it "should list the discussions in main dashboard page", priority: "2", test_id: 632022 do
         course_with_admin_logged_in(course: @course)
         get ""
-        expect(f('.coming_up .event a').text).to eq("#{@discussion_topic.title}\nMultiple Due Dates")
+        expect(f('.coming_up .event a').text).to eq("#{@discussion_topic.title}\n#{course.name}\nMultiple Due Dates")
       end
     end
   end

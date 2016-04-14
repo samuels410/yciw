@@ -24,13 +24,10 @@ class StreamItem < ActiveRecord::Base
 
   has_many :stream_item_instances
   has_many :users, :through => :stream_item_instances
-  belongs_to :context, :polymorphic => true
-  validates_inclusion_of :context_type, :allow_nil => true, :in => ['Course', 'Account', 'Group', 'AssignmentOverride', 'Assignment']
-  belongs_to :asset, :polymorphic => true, :types => [
+  belongs_to :context, polymorphic: [:course, :account, :group, :assignment_override, :assignment]
+  belongs_to :asset, polymorphic: [
       :collaboration, :conversation, :discussion_entry,
       :discussion_topic, :message, :submission, :web_conference, :assessment_request]
-  validates_inclusion_of :asset_type, :allow_nil => true, :in => ['Collaboration', 'Conversation', 'DiscussionEntry',
-      'DiscussionTopic', 'Message', 'Submission', 'WebConference', 'AssessmentRequest']
   validates_presence_of :asset_type, :data
 
   attr_accessible :context, :asset
@@ -76,6 +73,15 @@ class StreamItem < ActiveRecord::Base
       res.instance_variable_set(:@participants, users)
     end
 
+    # unnecessary after old stream items have expired
+    if res.is_a?(Conversation) && !data.has_key?('updated_at')
+      data['updated_at'] = Time.now.utc
+    end
+
+    unless CANVAS_RAILS4_0
+      data = res.class.attributes_builder.build_from_database(data) # @attributes is now an AttributeSet
+    end
+
     res.instance_variable_set(:@attributes, data)
     res.instance_variable_set(:@attributes_cache, {})
     res.instance_variable_set(:@new_record, false) if data['id']
@@ -110,7 +116,7 @@ class StreamItem < ActiveRecord::Base
   end
 
   def prepare_conversation(conversation)
-    res = conversation.attributes.slice('id', 'has_attachments')
+    res = conversation.attributes.slice('id', 'has_attachments', 'updated_at')
     res['private'] = conversation.private?
     res['participant_count'] = conversation.conversation_participants.size
     # arbitrary limit. would be nice to say "John, Jane, Michael, and 6
@@ -256,8 +262,6 @@ class StreamItem < ActiveRecord::Base
 
       # do the bulk insert in user id order to avoid locking problems on postges < 9.3 (foreign keys)
       user_ids_subset.sort!
-      #find out what the current largest stream item instance is so that we can delete them all once the new ones are created
-      greatest_existing_id = StreamItemInstance.where(:stream_item_id => stream_item_id, :user_id => user_ids_subset).maximum(:id) || 0
 
       inserts = user_ids_subset.map do |user_id|
         {
@@ -270,19 +274,15 @@ class StreamItem < ActiveRecord::Base
         }
       end
 
-      StreamItemInstance.bulk_insert(inserts)
+      StreamItemInstance.unique_constraint_retry do
+        StreamItemInstance.where(:stream_item_id => stream_item_id, :user_id => user_ids_subset).delete_all
+        StreamItemInstance.bulk_insert(inserts)
+      end
 
       #reset caches manually because the observer wont trigger off of the above mass inserts
       user_ids_subset.each do |user_id|
         StreamItemCache.invalidate_recent_stream_items(user_id, l_context_type, l_context_id)
       end
-
-      # Then delete any old instances from these users' streams.
-      # This won't actually delete StreamItems out of the table, it just deletes
-      # the join table entries.
-      # Old stream items are deleted in a periodic job.
-      StreamItemInstance.where("user_id in (?) AND stream_item_id = ? AND id <= ?",
-            user_ids_subset, stream_item_id, greatest_existing_id).delete_all
 
       # touch all the users to invalidate the cache
       User.where(id: user_ids_subset).touch_all
@@ -307,7 +307,7 @@ class StreamItem < ActiveRecord::Base
   def self.prepare_object_for_unread(object)
     case object
       when DiscussionTopic
-        ActiveRecord::Associations::Preloader.new(object, :discussion_topic_participants).run
+        ActiveRecord::Associations::Preloader.new.preload(object, :discussion_topic_participants)
     end
   end
 
@@ -330,7 +330,7 @@ class StreamItem < ActiveRecord::Base
 
   # call destroy_stream_items using a before_date based on the global setting
   def self.destroy_stream_items_using_setting
-    ttl = Setting.get('stream_items_ttl', 4.weeks).to_i.ago
+    ttl = Setting.get('stream_items_ttl', 4.weeks).to_i.seconds.ago
     # we pass false for the touch_users argument, on the assumption that these
     # stream items that we delete aren't visible on the user's dashboard anymore
     # anyway, so there's no need to invalidate all the caches.

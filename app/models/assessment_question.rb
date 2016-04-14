@@ -19,12 +19,6 @@
 class AssessmentQuestion < ActiveRecord::Base
   include Workflow
   attr_accessible :name, :question_data, :form_question_data
-  EXPORTABLE_ATTRIBUTES = [
-    :id, :name, :question_data, :context_id, :context_type, :workflow_state,
-    :created_at, :updated_at, :assessment_question_bank_id, :deleted_at, :position
-  ]
-
-  EXPORTABLE_ASSOCIATIONS = [:quiz_questions, :attachments, :context, :assessment_question_bank]
 
   has_many :quiz_questions, :class_name => 'Quizzes::QuizQuestion'
   has_many :attachments, :as => :context
@@ -103,7 +97,7 @@ class AssessmentQuestion < ActiveRecord::Base
         file = Folder.find_attachment_in_context_with_path(assessment_question_bank.context, path)
       end
       begin
-        new_file = file.clone_for(self)
+        new_file = file.try(:clone_for, self)
       rescue => e
         new_file = nil
         er_id = Canvas::Errors.capture_exception(:file_clone_during_translate_links, e)[:error_report]
@@ -189,7 +183,8 @@ class AssessmentQuestion < ActiveRecord::Base
   def question_data
     if data = read_attribute(:question_data)
       if data.class == Hash
-        data = write_attribute(:question_data, data.with_indifferent_access)
+         write_attribute(:question_data, data.with_indifferent_access)
+         data = read_attribute(:question_data)
       end
     end
 
@@ -230,7 +225,7 @@ class AssessmentQuestion < ActiveRecord::Base
   end
 
   def find_or_create_quiz_question(quiz_id, exclude_ids=[])
-    query = quiz_questions.where(quiz_id: quiz_id)
+    query = quiz_questions.where(quiz_id: quiz_id).order(:id)
     query = query.where('id NOT IN (?)', exclude_ids) if exclude_ids.present?
 
     if qq = query.first
@@ -247,9 +242,10 @@ class AssessmentQuestion < ActiveRecord::Base
     text
   end
 
-  alias_method :destroy!, :destroy
+  alias_method :destroy_permanently!, :destroy
   def destroy
     self.workflow_state = 'deleted'
+    self.deleted_at = Time.now.utc
     self.save
   end
 

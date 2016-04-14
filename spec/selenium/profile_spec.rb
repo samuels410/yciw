@@ -14,7 +14,7 @@ describe "profile" do
   def add_skype_service
     f('#unregistered_service_skype > a').click
     skype_dialog = f('#unregistered_service_skype_dialog')
-    skype_dialog.find_element(:id, 'user_service_user_name').send_keys("jakesorce")
+    skype_dialog.find_element(:id, 'skype_user_service_user_name').send_keys("jakesorce")
     submit_dialog(skype_dialog, '.btn')
     wait_for_ajaximations
     expect(f('#registered_services')).to include_text("Skype")
@@ -123,7 +123,7 @@ describe "profile" do
       new_user_name = 'new user name'
       get "/profile/settings"
       edit_form = click_edit
-      edit_form.find_element(:id, 'user_name').send_keys(new_user_name)
+      replace_content(edit_form.find_element(:id, 'user_name'), new_user_name)
       submit_form(edit_form)
       wait_for_ajaximations
       keep_trying_until { expect(f('.full_name').text).to eq new_user_name }
@@ -133,7 +133,7 @@ describe "profile" do
       new_display_name = 'test name'
       get "/profile/settings"
       edit_form = click_edit
-      edit_form.find_element(:id, 'user_short_name').send_keys(new_display_name)
+      replace_content(edit_form.find_element(:id, 'user_short_name'), new_display_name)
       submit_form(edit_form)
       wait_for_ajaximations
       refresh_page
@@ -196,15 +196,17 @@ describe "profile" do
     it "should toggle service visibility" do
       get "/profile/settings"
       add_skype_service
-      initial_state = @user.show_user_services
-
-      f('#show_user_services').click
+      selector = "#show_user_services"
+      expect(f(selector).selected?).to be_truthy
+      f(selector).click
       wait_for_ajaximations
-      expect(@user.reload.show_user_services).not_to eq initial_state
+      refresh_page
+      expect(f(selector).selected?).to be_falsey
 
-      f('#show_user_services').click
+      f(selector).click
       wait_for_ajaximations
-      expect(@user.reload.show_user_services).to eq initial_state
+      refresh_page
+      expect(f(selector).selected?).to be_truthy
     end
 
     it "should generate a new access token" do
@@ -237,6 +239,18 @@ describe "profile" do
       driver.switch_to.alert.accept
       wait_for_ajaximations
       expect(f('#access_tokens')).not_to be_displayed
+      check_element_has_focus f(".add_access_token_link")
+    end
+
+    it "should set focus to the previous access token when deleting and multiple exist" do
+      @token1 = @user.access_tokens.create! purpose: 'token_one'
+      @token2 = @user.access_tokens.create! purpose: 'token_two'
+      get "/profile/settings"
+      fj(".delete_key_link[rel$=#{@token2.id}]").click
+      expect(driver.switch_to.alert).not_to be_nil
+      driver.switch_to.alert.accept
+      wait_for_ajaximations
+      check_element_has_focus fj(".delete_key_link[rel$=#{@token1.id}]")
     end
   end
 
@@ -413,4 +427,3 @@ describe "profile" do
     end
   end
 end
-

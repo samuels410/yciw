@@ -65,7 +65,7 @@ class ContextModulesController < ApplicationController
 
       if @context.grants_right?(@current_user, session, :participate_as_student)
         return unless tab_enabled?(@context.class::TAB_MODULES)
-        ActiveRecord::Associations::Preloader.new(@modules, :content_tags).run
+        ActiveRecord::Associations::Preloader.new.preload(@modules, :content_tags)
         @modules.each{|m| m.evaluate_for(@current_user) }
         session[:module_progressions_initialized] = true
       end
@@ -122,7 +122,7 @@ class ContextModulesController < ApplicationController
   end
 
   def create
-    if authorized_action(@context.context_modules.scoped.new, @current_user, :create)
+    if authorized_action(@context.context_modules.temp_record, @current_user, :create)
       @module = @context.context_modules.build
       @module.workflow_state = 'unpublished'
       @module.attributes = params[:context_module]
@@ -139,7 +139,7 @@ class ContextModulesController < ApplicationController
   end
 
   def reorder
-    if authorized_action(@context.context_modules.scoped.new, @current_user, :update)
+    if authorized_action(@context.context_modules.temp_record, @current_user, :update)
       m = @context.context_modules.not_deleted.first
 
       m.update_order(params[:order].split(","))
@@ -155,9 +155,7 @@ class ContextModulesController < ApplicationController
 
       # # Background this, not essential that it happen right away
       # ContextModule.send_later(:update_tag_order, @context)
-      respond_to do |format|
-        format.json { render :json => @modules.map{ |m| m.as_json(include: :content_tags, methods: :workflow_state) } }
-      end
+      render :json => @modules.map{ |m| m.as_json(include: :content_tags, methods: :workflow_state) }
     end
   end
 
@@ -306,9 +304,7 @@ class ContextModulesController < ApplicationController
       ContentTag.update_could_be_locked(affected_items)
       @context.touch
       @module.reload
-      respond_to do |format|
-        format.json { render :json => @module.as_json(:include => :content_tags, :methods => :workflow_state, :permissions => {:user => @current_user, :session => session}) }
-      end
+      render :json => @module.as_json(:include => :content_tags, :methods => :workflow_state, :permissions => {:user => @current_user, :session => session})
     end
   end
 
@@ -362,6 +358,9 @@ class ContextModulesController < ApplicationController
     @module = @context.context_modules.not_deleted.find(params[:context_module_id])
     if authorized_action(@module, @current_user, :update)
       @tag = @module.add_item(params[:item])
+      unless @tag.valid?
+        return render :json => @tag.errors, :status => :bad_request
+      end
       json = @tag.as_json
       json['content_tag'].merge!(
           publishable: module_item_publishable?(@tag),
@@ -391,7 +390,11 @@ class ContextModulesController < ApplicationController
       @tag.url = params[:content_tag][:url] if %w(ExternalUrl ContextExternalTool).include?(@tag.content_type) && params[:content_tag] && params[:content_tag][:url]
       @tag.indent = params[:content_tag][:indent] if params[:content_tag] && params[:content_tag][:indent]
       @tag.new_tab = params[:content_tag][:new_tab] if params[:content_tag] && params[:content_tag][:new_tab]
-      @tag.save
+
+      unless @tag.save
+        return render :json => @tag.errors, :status => :bad_request
+      end
+
       @tag.update_asset_name! if params[:content_tag][:title]
       render :json => @tag
     end
@@ -443,16 +446,12 @@ class ContextModulesController < ApplicationController
       elsif params[:unpublish]
         @module.unpublish
       end
-      respond_to do |format|
-        if @module.update_attributes(params[:context_module])
-          format.json do
-            json = @module.as_json(:include => :content_tags, :methods => :workflow_state, :permissions => {:user => @current_user, :session => session})
-            json['context_module']['relock_warning'] = true if @module.relock_warning?
-            render :json => json
-          end
-        else
-          format.json { render :json => @module.errors, :status => :bad_request }
-        end
+      if @module.update_attributes(params[:context_module])
+        json = @module.as_json(:include => :content_tags, :methods => :workflow_state, :permissions => {:user => @current_user, :session => session})
+        json['context_module']['relock_warning'] = true if @module.relock_warning?
+        render :json => json
+      else
+        render :json => @module.errors, :status => :bad_request
       end
     end
   end

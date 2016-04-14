@@ -375,6 +375,11 @@ class AccountAuthorizationConfigsController < ApplicationController
   #
   #   Space separated additional scopes to request for the token.
   #
+  # - end_session_endpoint [Optional]
+  #
+  #   URL to send the end user to after logging out of Canvas. See
+  #   https://openid.net/specs/openid-connect-session-1_0.html#RPLogout
+  #
   # - login_attribute [Optional]
   #
   #   The attribute of the ID token to look up the user's login in Canvas.
@@ -481,6 +486,21 @@ class AccountAuthorizationConfigsController < ApplicationController
     data = filter_data(aac_data)
     deselect_parent_registration(data)
     account_config = @account.authentication_providers.build(data)
+    if account_config.class.singleton? && @account.authentication_providers.active.where(auth_type: account_config.auth_type).exists?
+      respond_to do |format|
+        format.html do
+          flash[:error] = t(
+            "Duplicate provider %{provider}", provider: account_config.auth_type
+          )
+          redirect_to(account_authentication_providers_path(@account))
+        end
+        format.json do
+          msg = "duplicate provider #{account_config.auth_type}"
+          render json: { errors: [ { message:  msg } ] }, status: 422
+        end
+      end
+      return
+    end
     update_deprecated_account_settings_data(aac_data, account_config)
 
     if position.present?

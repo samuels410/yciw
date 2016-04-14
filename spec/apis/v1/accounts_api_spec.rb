@@ -71,6 +71,26 @@ describe "Accounts API", type: :request do
       ]
     end
 
+    it "doesn't include deleted accounts" do
+      @a2.destroy
+      json = api_call(:get, "/api/v1/accounts.json",
+                      { :controller => 'accounts', :action => 'index', :format => 'json' })
+
+      expect(json.sort_by { |a| a['id'] }).to eq [
+        {
+          'id' => @a1.id,
+          'name' => 'root',
+          'root_account_id' => nil,
+          'parent_account_id' => nil,
+          'default_time_zone' => 'Etc/UTC',
+          'default_storage_quota_mb' => 123,
+          'default_user_storage_quota_mb' => 45,
+          'default_group_storage_quota_mb' => 42,
+          'workflow_state' => 'active',
+        },
+      ]
+    end
+
     it "should return accounts found through admin enrollments with the account list (but in limited form)" do
       course_with_teacher(:user => @user, :account => @a1)
       course_with_teacher(:user => @user, :account => @a1)# don't find it twice
@@ -490,6 +510,7 @@ describe "Accounts API", type: :request do
 
     it "should honor the includes[]" do
       @c1 = course_model(:name => 'c1', :account => @a1, :root_account => @a1)
+      @a1.account_users.create!(user: @user)
       json = api_call(:get, "/api/v1/accounts/#{@a1.id}/courses?include[]=storage_quota_used_mb",
                       { :controller => 'accounts', :action => 'courses_api', :account_id => @a1.to_param, :format => 'json', :include => ['storage_quota_used_mb'] }, {})
       expect(json[0].has_key?("storage_quota_used_mb")).to be_truthy
@@ -497,6 +518,7 @@ describe "Accounts API", type: :request do
 
     it "should include enrollment term information for each course" do
       @c1 = course_model(:name => 'c1', :account => @a1, :root_account => @a1)
+      @a1.account_users.create!(user: @user)
       json = api_call(:get, "/api/v1/accounts/#{@a1.id}/courses?include[]=term",
                       { :controller => 'accounts', :action => 'courses_api', :account_id => @a1.to_param, :format => 'json', :include => ['term'] })
       expect(json[0].has_key?('term')).to be_truthy

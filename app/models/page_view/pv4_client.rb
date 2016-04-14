@@ -50,23 +50,23 @@ class PageView
         pv['account_id'] = pv.delete('root_account_id')
         pv['remote_ip'] = pv.delete('client_ip')
         pv['render_time'] = pv.delete('microseconds').to_f / 1_000_000
-        pv['http_method'].downcase!
+        pv['http_method'].try(:downcase!)
 
         PageView.from_attributes(pv)
       end
     end
 
-    def for_user(user_id, start_time: nil, end_time: nil)
+    def for_user(user_id, oldest: nil, newest: nil)
       bookmarker = Bookmarker.new(self)
       BookmarkedCollection.build(bookmarker) do |pager|
         bookmark = pager.current_bookmark
         if bookmark
           end_time, last_page_view_id = bookmark
-          end_time = Time.zone.parse(end_time)
+          newest = Time.zone.parse(end_time)
         end
         pager.replace(fetch(user_id,
-              start_time: start_time,
-              end_time: end_time,
+              start_time: oldest,
+              end_time: newest,
               last_page_view_id: last_page_view_id,
               limit: pager.per_page))
         pager.has_more! unless pager.empty?

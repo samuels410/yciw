@@ -231,6 +231,8 @@ describe User do
   it "should be able to remove itself from a root account" do
     account1 = Account.create
     account2 = Account.create
+    sub = account2.sub_accounts.create!
+
     user = User.create
     user.register!
     p1 = user.pseudonyms.create(:unique_id => "user1")
@@ -241,6 +243,8 @@ describe User do
     p2.save!
     account1.account_users.create!(user: user)
     account2.account_users.create!(user: user)
+    sub.account_users.create!(user: user)
+
     course1 = account1.courses.create
     course2 = account2.courses.create
     course1.offer!
@@ -253,10 +257,12 @@ describe User do
     enrollment2.save!
     expect(user.associated_account_ids.include?(account1.id)).to be_truthy
     expect(user.associated_account_ids.include?(account2.id)).to be_truthy
+
     user.remove_from_root_account(account2)
     user.reload
     expect(user.associated_account_ids.include?(account1.id)).to be_truthy
     expect(user.associated_account_ids.include?(account2.id)).to be_falsey
+    expect(user.account_users.where(:account_id => [account2, sub])).to be_empty
   end
 
   it "should search by multiple fields" do
@@ -1132,6 +1138,8 @@ describe User do
     end
 
     it "should return a useful avatar_fallback_url" do
+      HostUrl.stubs(:protocol).returns('https')
+
       expect(User.avatar_fallback_url).to eq(
         "https://#{HostUrl.default_host}/images/messages/avatar-50.png"
       )
@@ -1668,6 +1676,17 @@ describe User do
         expect(events.first).to eq assignment2
       end
 
+      it "doesn't include events for enrollments that are inactive due to date" do
+        @enrollment.start_at = 1.day.ago
+        @enrollment.end_at = 2.days.from_now
+        @enrollment.save!
+        event = @course.calendar_events.create!(title: 'published', start_at: 4.days.from_now)
+        expect(@user.upcoming_events).to include(event)
+        Timecop.freeze(3.days.from_now) do
+          expect(User.find(@user).upcoming_events).not_to include(event) # re-find user to clear cached_contexts
+        end
+      end
+
       context "after db section context_code filtering" do
         before do
           course_with_teacher(:active_all => true)
@@ -1766,22 +1785,10 @@ describe User do
     end
 
     context "as student" do
-      context "differentiated_assignments on" do
-        before {@course.enable_feature!(:differentiated_assignments)}
-        it "should return assignments only when a student has overrides" do
-          expect(@student1.assignments_visible_in_course(@course).include?(@assignment)).to be_truthy
-          expect(@student2.assignments_visible_in_course(@course).include?(@assignment)).to be_falsey
-          expect(@student1.assignments_visible_in_course(@course).include?(@unpublished_assignment)).to be_falsey
-        end
-      end
-
-      context "differentiated_assignments off" do
-        before {
-          @course.disable_feature!(:differentiated_assignments)
-        }
-        it "should return all assignments" do
-          expect(@student1.assignments_visible_in_course(@course).include?(@assignment)).to be_truthy
-        end
+      it "should return assignments only when a student has overrides" do
+        expect(@student1.assignments_visible_in_course(@course).include?(@assignment)).to be_truthy
+        expect(@student2.assignments_visible_in_course(@course).include?(@assignment)).to be_falsey
+        expect(@student1.assignments_visible_in_course(@course).include?(@unpublished_assignment)).to be_falsey
       end
     end
 
@@ -1797,44 +1804,21 @@ describe User do
         @observer = User.create
         @observer_enrollment = @course.enroll_user(@observer, 'ObserverEnrollment', :section => @section2, :enrollment_state => 'active', :allow_multiple_enrollments => true)
       end
-      context "differentiated_assignments on" do
-        before{@course.enable_feature!(:differentiated_assignments)}
-        context "observer watching student with visibility" do
-          before{ @observer_enrollment.update_attribute(:associated_user_id, @student1.id) }
-          it "should be true" do
-            expect(@observer.assignments_visible_in_course(@course).include?(@assignment)).to be_truthy
-          end
-        end
-        context "observer watching student without visibility" do
-          before{ @observer_enrollment.update_attribute(:associated_user_id, @student2.id) }
-          it "should be false" do
-            expect(@observer.assignments_visible_in_course(@course).include?(@assignment)).to be_falsey
-          end
-        end
-        context "observer watching a only section" do
-          it "should be true" do
-            expect(@observer.assignments_visible_in_course(@course).include?(@assignment)).to be_truthy
-          end
+      context "observer watching student with visibility" do
+        before{ @observer_enrollment.update_attribute(:associated_user_id, @student1.id) }
+        it "should be true" do
+          expect(@observer.assignments_visible_in_course(@course).include?(@assignment)).to be_truthy
         end
       end
-      context "differentiated_assignments off" do
-        before{@course.disable_feature!(:differentiated_assignments)}
-        context "observer watching student with visibility" do
-          before{ @observer_enrollment.update_attribute(:associated_user_id, @student1.id) }
-          it "should be true" do
-            expect(@observer.assignments_visible_in_course(@course).include?(@assignment)).to be_truthy
-          end
+      context "observer watching student without visibility" do
+        before{ @observer_enrollment.update_attribute(:associated_user_id, @student2.id) }
+        it "should be false" do
+          expect(@observer.assignments_visible_in_course(@course).include?(@assignment)).to be_falsey
         end
-        context "observer watching student without visibility" do
-          before{ @observer_enrollment.update_attribute(:associated_user_id, @student2.id) }
-          it "should be true" do
-            expect(@observer.assignments_visible_in_course(@course).include?(@assignment)).to be_truthy
-          end
-        end
-        context "observer watching a only section" do
-          it "should be true" do
-            expect(@observer.assignments_visible_in_course(@course).include?(@assignment)).to be_truthy
-          end
+      end
+      context "observer watching a only section" do
+        it "should be true" do
+          expect(@observer.assignments_visible_in_course(@course).include?(@assignment)).to be_truthy
         end
       end
     end
@@ -1947,7 +1931,7 @@ describe User do
     def create_course_with_assignment_needing_submitting(opts={})
       student = opts[:student]
       course_with_student_logged_in(:active_all => true, :user => student)
-      @course.enrollments.each(&:destroy!) #student removed from default section
+      @course.enrollments.each(&:destroy_permanently!) #student removed from default section
       section = @course.course_sections.create!
       student_in_section(section, user: student)
       assignment_quiz([], :course => @course, :user => student)
@@ -1955,9 +1939,6 @@ describe User do
       @assignment.publish
       @quiz.due_at = 2.days.from_now
       @quiz.save!
-      if opts[:differentiated_assignments]
-        @course.enable_feature!(:differentiated_assignments)
-      end
       if opts[:override]
         create_section_override_for_assignment(@assignment, {course_section: section})
       end
@@ -1965,39 +1946,20 @@ describe User do
     end
 
     context "differentiated_assignments" do
-      context "feature flag on" do
-        before {@student = User.create!(name: "Test Student")}
-        it "should not return the assignments without an override" do
-          assignment = create_course_with_assignment_needing_submitting({differentiated_assignments: true, override: false, student: @student})
-          expect(@student.assignments_needing_submitting(contexts: Course.all).include?(assignment)).to be_falsey
-        end
-
-        it "should return the assignments with an override" do
-          assignment = create_course_with_assignment_needing_submitting({differentiated_assignments: true, override: true, student: @student})
-          expect(@student.assignments_needing_submitting(contexts: Course.all).include?(assignment)).to be_truthy
-        end
-
-        it "should not return the assignments without an override" do
-          assignment = create_course_with_assignment_needing_submitting({differentiated_assignments: true, override: false, student: @student})
-          expect(@student.assignments_needing_submitting(contexts: Course.all).include?(assignment)).to be_falsey
-        end
-
-        it "should return the assignments in both types of courses" do
-          assignment0 = create_course_with_assignment_needing_submitting({differentiated_assignments: true, override: true, student: @student})
-          assignment1 = create_course_with_assignment_needing_submitting({differentiated_assignments: true, override: false, student: @student})
-          assignment2 = create_course_with_assignment_needing_submitting({differentiated_assignments: false, override: false, student: @student})
-          expect(@student.assignments_needing_submitting(contexts: Course.all).include?(assignment0)).to be_truthy
-          expect(@student.assignments_needing_submitting(contexts: Course.all).include?(assignment1)).to be_falsey
-          expect(@student.assignments_needing_submitting(contexts: Course.all).include?(assignment2)).to be_truthy
-        end
+      before {@student = User.create!(name: "Test Student")}
+      it "should not return the assignments without an override" do
+        assignment = create_course_with_assignment_needing_submitting({override: false, student: @student})
+        expect(@student.assignments_needing_submitting(contexts: Course.all).include?(assignment)).to be_falsey
       end
 
-      context "feature flag off" do
-        before {@student = User.create!(name: "Test Student")}
-        it "should return the assignment without an override" do
-          assignment = create_course_with_assignment_needing_submitting({differentiated_assignments: false, override: false, student: @student})
-          expect(@student.assignments_needing_submitting(contexts: Course.all).include?(assignment)).to be_truthy
-        end
+      it "should return the assignments with an override" do
+        assignment = create_course_with_assignment_needing_submitting({override: true, student: @student})
+        expect(@student.assignments_needing_submitting(contexts: Course.all).include?(assignment)).to be_truthy
+      end
+
+      it "should not return the assignments without an override" do
+        assignment = create_course_with_assignment_needing_submitting({override: false, student: @student})
+        expect(@student.assignments_needing_submitting(contexts: Course.all).include?(assignment)).to be_falsey
       end
     end
   end
@@ -2417,19 +2379,12 @@ describe User do
       end
 
       it "should not include submissions from students without visibility" do
-        @course1.enable_feature!(:differentiated_assignments)
         expect(@teacher.assignments_needing_grading.length).to eq 2
-      end
-
-      it "should show all submissions with the feature flag off" do
-        expect(@teacher.assignments_needing_grading.length).to eq 3
       end
     end
 
     context "#assignments_needing_moderation" do
       before :once do
-        @course2.account.allow_feature!(:moderated_grading)
-        @course2.enable_feature!(:moderated_grading)
         @course2.assignments.first.update_attribute(:moderated_grading, true)
       end
 
@@ -2627,14 +2582,22 @@ describe User do
       end
 
       it "should not grant admins :reset_mfa on partially admined users" do
+        account1.settings[:mfa_settings] = :required
+        account1.save!
+        account2.settings[:mfa_settings] = :required
+        account2.save!
         pseudonym(bob, account: account1)
         pseudonym(bob, account: account2)
         expect(bob).not_to be_grants_right(sally, :reset_mfa)
       end
 
       it "should not grant subadmins :reset_mfa on stronger admins" do
+        account1.settings[:mfa_settings] = :required
+        account1.save!
+        sub = Account.create(root_account_id: account1)
+        AccountUser.create(account: sub, user: bob)
         pseudonym(alice, account: account1)
-        expect(alice).not_to be_grants_right(sally, :reset_mfa)
+        expect(alice).not_to be_grants_right(bob, :reset_mfa)
       end
 
       context "MFA is required on the account" do

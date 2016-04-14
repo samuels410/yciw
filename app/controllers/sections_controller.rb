@@ -137,7 +137,7 @@ class SectionsController < ApplicationController
   #
   # @returns Section
   def create
-    if authorized_action(@context.course_sections.scoped.new, @current_user, :create)
+    if authorized_action(@context.course_sections.temp_record, @current_user, :create)
       sis_section_id = params[:course_section].try(:delete, :sis_section_id)
       can_manage_sis = api_request? && sis_section_id.present? &&
         @context.root_account.grants_right?(@current_user, session, :manage_sis)
@@ -182,7 +182,7 @@ class SectionsController < ApplicationController
     # cross-listing should only be allowed within the same root account
     @new_course = @section.root_account.all_courses.not_deleted.where(id: course_id).first if course_id =~ Api::ID_REGEX
     @new_course ||= @section.root_account.all_courses.not_deleted.where(sis_source_id: course_id).first if course_id.present?
-    allowed = @new_course && @section.grants_right?(@current_user, session, :update) && @new_course.grants_right?(@current_user, session, :manage_admin_users)
+    allowed = @new_course && @section.grants_right?(@current_user, session, :update) && @new_course.grants_right?(@current_user, session, :manage)
     res = {:allowed => !!allowed}
     if allowed
       @account = @new_course.account
@@ -209,7 +209,7 @@ class SectionsController < ApplicationController
       end
     end
   end
-  
+
   # @API De-cross-list a Section
   # Undo cross-listing of a Section, returning it to its original course.
   #

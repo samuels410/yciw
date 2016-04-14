@@ -21,18 +21,10 @@ class Rubric < ActiveRecord::Base
   attr_accessible :user, :rubric, :context, :points_possible, :title, :description, :reusable, :public, :free_form_criterion_comments, :hide_score_total
   belongs_to :user
   belongs_to :rubric # based on another rubric
-  belongs_to :context, :polymorphic => true
-  validates_inclusion_of :context_type, :allow_nil => true, :in => ['Course', 'Account']
+  belongs_to :context, polymorphic: [:course, :account]
   has_many :rubric_associations, :class_name => 'RubricAssociation', :dependent => :destroy
   has_many :rubric_assessments, :through => :rubric_associations, :dependent => :destroy
   has_many :learning_outcome_alignments, -> { where("content_tags.tag_type='learning_outcome' AND content_tags.workflow_state<>'deleted'").preload(:learning_outcome) }, as: :content, class_name: 'ContentTag'
-
-  EXPORTABLE_ATTRIBUTES = [
-    :id, :user_id, :rubric_id, :context_id, :context_type, :data, :points_possible, :title, :description, :created_at, :updated_at, :reusable, :public, :read_only,
-    :association_count, :free_form_criterion_comments, :context_code, :hide_score_total, :workflow_state
-  ]
-
-  EXPORTABLE_ASSOCIATIONS = [:user, :rubric, :context, :rubric_associations, :rubric_assessments, :learning_outcome_alignments]
 
   validates_presence_of :context_id, :context_type, :workflow_state
   validates_length_of :description, :maximum => maximum_text_length, :allow_nil => true, :allow_blank => true
@@ -94,7 +86,7 @@ class Rubric < ActiveRecord::Base
     self.context_code = "#{self.context_type.underscore}_#{self.context_id}" rescue nil
   end
 
-  alias_method :destroy!, :destroy
+  alias_method :destroy_permanently!, :destroy
   def destroy
     rubric_associations.update_all(:bookmarked => false, :updated_at => Time.now.utc)
     self.workflow_state = 'deleted'

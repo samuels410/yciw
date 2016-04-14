@@ -104,6 +104,26 @@ describe "context modules" do
       validate_context_module_status_icon(@module_3.id, @completed_icon)
     end
 
+    it "should not cache a changed module requirement" do
+      other_assmt = @course.assignments.create!(:title => "assignment")
+      other_tag = @module_1.add_item({:id => other_assmt.id, :type => 'assignment'})
+      @module_1.completion_requirements = {@tag_1.id => {:type => 'must_view'}, other_tag.id => {:type => 'must_view'}}
+      @module_1.save!
+
+      get "/courses/#{@course.id}/assignments/#{@assignment_1.id}"
+
+      # fulfill the must_view
+      go_to_modules
+      validate_context_module_item_icon(@tag_1.id, @completed_icon)
+
+      # change the req
+      @module_1.completion_requirements = {@tag_1.id => {:type => 'must_submit'}, other_tag.id => {:type => 'must_view'}}
+      @module_1.save!
+
+      go_to_modules
+      validate_context_module_item_icon(@tag_1.id, @open_item_icon)
+    end
+
     it "should show progression in large_roster courses" do
       @course.large_roster = true
       @course.save!
@@ -183,7 +203,6 @@ describe "context modules" do
       @assignment_2.only_visible_to_overrides = true
       @assignment_2.save!
 
-      @course.enable_feature!(:differentiated_assignments)
       @student.enrollments.each(&:destroy)
       @overriden_section = @course.course_sections.create!(name: "test section")
       student_in_section(@overriden_section, user: @student)
@@ -654,5 +673,21 @@ describe "context modules" do
     prog = mod.evaluate_for(@student)
     expect(prog).to be_completed
     expect(prog.requirements_met.count).to eq 3
+  end
+
+  it "should not lock a page module item on first load" do
+    course_with_student_logged_in(:active_all => true)
+    page = @course.wiki.wiki_pages.create!(:title => "some page", :body => "some body")
+    page.set_as_front_page!
+
+    mod = @course.context_modules.create!(:name => "module")
+    tag = mod.add_item({:id => page.id, :type => 'wiki_page'})
+    mod.require_sequential_progress = true
+    mod.completion_requirements = {tag.id => {:type => 'must_view'}}
+    mod.save!
+
+    get "/courses/#{@course.id}/pages/#{page.url}"
+
+    expect(f('.user_content')).to include_text(page.body)
   end
 end

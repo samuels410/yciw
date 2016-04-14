@@ -68,20 +68,8 @@ class CollaborationsController < ApplicationController
     @collaborations = @context.collaborations.active
     log_asset_access([ "collaborations", @context ], "collaborations", "other")
 
-    safe_token_valid = lambda do |service|
-      begin
-        self.send(service).verify_access_token
-      rescue => e
-        Canvas::Errors.capture(e, { source: 'rescue nil' })
-        false
-      end
-    end
-
-    @google_drive_upgrade = logged_in_user && Canvas::Plugin.find(:google_drive).try(:settings) &&
-      (!logged_in_user.user_services.where(service: 'google_drive').first ||
-      !safe_token_valid.call(:google_drive_connection))
-
-    @google_docs_authorized = !@google_drive_upgrade && safe_token_valid.call(:google_service_connection)
+    # this will set @user_has_google_drive
+    user_has_google_drive
 
     @sunsetting_etherpad = EtherpadCollaboration.config.try(:[], :domain) == "etherpad.instructure.com/p"
     @has_etherpad_collaborations = @collaborations.any? {|c| c.collaboration_type == 'EtherPad'}
@@ -108,7 +96,7 @@ class CollaborationsController < ApplicationController
           flash[:error] = t 'errors.cannot_load_collaboration', "Cannot load collaboration"
           redirect_to named_context_url(@context, :context_collaborations_url)
         end
-      rescue GoogleDocs::DriveConnectionException => drive_exception
+      rescue GoogleDrive::ConnectionException => drive_exception
         Canvas::Errors.capture(drive_exception)
         flash[:error] = t 'errors.cannot_load_collaboration', "Cannot load collaboration"
         redirect_to named_context_url(@context, :context_collaborations_url)
@@ -118,19 +106,27 @@ class CollaborationsController < ApplicationController
 
   def create
     return unless authorized_action(@context.collaborations.build, @current_user, :create)
-    users     = User.where(:id => Array(params[:user])).to_a
-    group_ids = Array(params[:group])
-    params[:collaboration][:user] = @current_user
-    @collaboration = Collaboration.typed_collaboration_instance(params[:collaboration].delete(:collaboration_type))
+    if params['contentItems']
+      @collaboration = collaboration_from_content_item(JSON.parse(params['contentItems']).first)
+      users = []
+      group_ids = []
+    else
+      users     = User.where(:id => Array(params[:user])).to_a
+      group_ids = Array(params[:group])
+      params[:collaboration][:user] = @current_user
+      @collaboration = Collaboration.typed_collaboration_instance(params[:collaboration].delete(:collaboration_type))
+      @collaboration.attributes = params[:collaboration]
+    end
     @collaboration.context = @context
-    @collaboration.attributes = params[:collaboration]
     respond_to do |format|
       if @collaboration.save
+        Lti::ContentItemUtil.new(params['contentItems'].first).success_callback if params['contentItems']
         # After saved, update the members
         @collaboration.update_members(users, group_ids)
         format.html { redirect_to @collaboration.url }
         format.json { render :json => @collaboration.as_json(:methods => [:collaborator_ids], :permissions => {:user => @current_user, :session => session}) }
       else
+        Lti::ContentItemUtil.new(params['contentItems'].first).failure_callback if params['contentItems']
         flash[:error] = t 'errors.create_failed', "Collaboration creation failed"
         format.html { redirect_to named_context_url(@context, :context_collaborations_url) }
         format.json { render :json => @collaboration.errors, :status => :bad_request }
@@ -163,7 +159,7 @@ class CollaborationsController < ApplicationController
           format.json { render :json => @collaboration.errors, :status => :bad_request }
         end
       end
-    rescue GoogleDocs::DriveConnectionException => error
+    rescue GoogleDrive::ConnectionException => error
       Rails.logger.warn error
       flash[:error] = t 'errors.update_failed', "Collaboration update failed" # generic failure message
       if error.message.include?('File not found')
@@ -216,11 +212,23 @@ class CollaborationsController < ApplicationController
   end
 
   def require_collaborations_configured
-    unless Collaboration.any_collaborations_configured?
+    unless Collaboration.any_collaborations_configured?(@context)
       flash[:error] = t 'errors.not_enabled', "Collaborations have not been enabled for this Canvas site"
       redirect_to named_context_url(@context, :context_url)
       return false
     end
   end
+
+  def collaboration_from_content_item(content_item, collaboration = ExternalToolCollaboration.new)
+    collaboration.attributes = {
+        title: content_item['title'],
+        description: content_item['text'],
+        user: @current_user
+    }
+    collaboration.data = content_item
+    collaboration.url = polymorphic_url([:retrieve, @context, :external_tools], url: content_item['url'], display: 'borderless')
+    collaboration
+  end
+  private :collaboration_from_content_item
 
 end

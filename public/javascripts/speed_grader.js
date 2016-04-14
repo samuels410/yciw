@@ -17,6 +17,7 @@
  */
 
 define([
+  'jst/speed_grader/student_viewed_at',
   'jst/speed_grader/submissions_dropdown',
   'jst/speed_grader/speech_recognition',
   'compiled/util/round',
@@ -29,6 +30,7 @@ define([
   'str/htmlEscape',
   'rubric_assessment',
   'speed_grader_select_menu',
+  'speed_grader_helpers',
   'jst/_turnitinInfo',
   'jst/_turnitinScore',
   'jqueryui/draggable' /* /\.draggable/ */,
@@ -51,7 +53,7 @@ define([
   'vendor/jquery.spin' /* /\.spin/ */,
   'vendor/spin' /* new Spinner */,
   'vendor/ui.selectmenu' /* /\.selectmenu/ */
-], function(submissionsDropdownTemplate, speechRecognitionTemplate, round, _, INST, I18n, $, tz, userSettings, htmlEscape, rubricAssessment, SpeedgraderSelectMenu, turnitinInfoTemplate, turnitinScoreTemplate) {
+], function(studentViewedAtTemplate, submissionsDropdownTemplate, speechRecognitionTemplate, round, _, INST, I18n, $, tz, userSettings, htmlEscape, rubricAssessment, SpeedgraderSelectMenu, SpeedgraderHelpers, turnitinInfoTemplate, turnitinScoreTemplate) {
 
   // fire off the request to get the jsonData
   window.jsonData = {};
@@ -125,6 +127,7 @@ define([
       $submission_not_newest_notice = $("#submission_not_newest_notice"),
       $submission_files_container = $("#submission_files_container"),
       $submission_files_list = $("#submission_files_list"),
+      $submission_attachment_viewed_at = $("#submission_attachment_viewed_at_container"),
       $submission_file_hidden = $("#submission_file_hidden").removeAttr('id').detach(),
       $assignment_submission_url = $("#assignment_submission_url"),
       $assignment_submission_turnitin_report_url = $("#assignment_submission_turnitin_report_url"),
@@ -389,6 +392,9 @@ define([
       settings: {
         form: $('#settings_form'),
         link: $('#settings_link')
+      },
+      keyinfo: {
+        icon: $('#keyboard-shortcut-info-icon')
       }
     },
     courseId: utils.getParam('courses'),
@@ -405,6 +411,7 @@ define([
       this.elements.mute.link.click($.proxy(this.onMuteClick, this));
       this.elements.settings.form.submit(this.submitSettingsForm.bind(this));
       this.elements.settings.link.click(this.showSettingsModal.bind(this));
+      this.elements.keyinfo.icon.click(this.keyboardShortcutInfoModal.bind(this));
     },
     addSpinner: function(){
       this.elements.mute.link.append(this.elements.spinner.el);
@@ -444,6 +451,11 @@ define([
     toAssignment: function(e){
       e.preventDefault();
       EG[e.target.getAttribute('class')]();
+    },
+
+    keyboardShortcutInfoModal: function(e) {
+      var questionMarkKeyDown = $.Event('keydown', { keyCode: 191 });
+      $(document).trigger(questionMarkKeyDown);
     },
 
     submitSettingsForm: function(e){
@@ -980,7 +992,10 @@ define([
       $window.bind('hashchange', EG.handleFragmentChange);
       $('#eg_sort_by').val(userSettings.get('eg_sort_by'));
       $('#submit_same_score').click(function(e) {
-        EG.handleGradeSubmit();
+        // By passing true as the second argument, we're telling
+        // handleGradeSubmit to use the existing previous submission score
+        // for the current grade.
+        EG.handleGradeSubmit(e, true);
         e.preventDefault();
       });
 
@@ -1525,6 +1540,10 @@ define([
             $.isPreviewable(attachment.content_type, 'google')) {
           inlineableAttachments.push(attachment);
         }
+        var viewedAtHTML = studentViewedAtTemplate({
+          viewed_at: $.datetimeString(attachment.viewed_at)
+        });
+        $submission_attachment_viewed_at.html($.raw(viewedAtHTML));
         if (browserableCssClasses.test(attachment.mime_class)) {
           browserableAttachments.push(attachment);
         }
@@ -1568,7 +1587,10 @@ define([
       // show the first scridbable doc if there is one
       // then show the first image if there is one,
       // if not load the generic thing for the current submission (by not passing a value)
-      this.loadAttachmentInline(inlineableAttachments[0] || browserableAttachments[0]);
+      var preview_attachment = null;
+      if (submission.submission_type != 'discussion_topic')
+        preview_attachment = inlineableAttachments[0] || browserableAttachments[0];
+      this.loadAttachmentInline(preview_attachment);
 
       // if there is any submissions after this one, show a notice that they are not looking at the newest
       $submission_not_newest_notice.showIf($submission_to_view.filter(":visible").find(":selected").nextAll().length);
@@ -1978,7 +2000,11 @@ define([
 
       return student;
     },
-    handleGradeSubmit: function(){
+    // If the second argument is passed as true, the grade used will
+    // be the existing score from the previous submission.  This
+    // should only be called from the anonymous function attached so
+    // #submit_same_score.
+    handleGradeSubmit: function(e, use_existing_score){
       var url    = $(".update_submission_grade_url").attr('href'),
           method = $(".update_submission_grade_url").attr('title'),
           formData = {
@@ -1986,7 +2012,10 @@ define([
             'submission[user_id]':       EG.currentStudent.id,
             'submission[graded_anonymously]': utils.shouldHideStudentNames()
           };
-      var grade = $grade.val();
+
+      var grade = SpeedgraderHelpers.determineGradeToSubmit(use_existing_score,
+                                                            EG.currentStudent, $grade);
+
       if (grade.toUpperCase() === "EX") {
         formData["submission[excuse]"] = true;
       } else {

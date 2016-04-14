@@ -52,6 +52,7 @@ describe Api::V1::User do
   before :each do
     @test_api = TestUserApi.new
     @test_api.services_enabled = []
+    @test_api.request.protocol = 'http'
   end
 
   context 'user_json' do
@@ -65,6 +66,13 @@ describe Api::V1::User do
       expect(@test_api.user_json(@student, @admin, {}, ['avatar_url'], @course)["avatar_url"]).to match(
         %r{^https://secure.gravatar.com/avatar/#{Digest::MD5.hexdigest(@student.email)}.*#{CGI.escape("/images/messages/avatar-50.png")}}
       )
+    end
+
+    it 'should support optionally including group_ids' do
+      @group = @course.groups.create!(:name => "My Group")
+      @group.add_user(@student, 'accepted', true)
+      expect(@test_api.user_json(@student, @admin, {}, [], @course).has_key?("group_ids")).to be_falsey
+      expect(@test_api.user_json(@student, @admin, {}, ['group_ids'], @course)["group_ids"]).to eq([@group.id])
     end
 
     it 'should use the correct SIS pseudonym' do

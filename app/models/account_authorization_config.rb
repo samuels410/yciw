@@ -127,7 +127,7 @@ class AccountAuthorizationConfig < ActiveRecord::Base
     enable_canvas_authentication
     send_later_if_production(:soft_delete_pseudonyms)
   end
-  alias_method :destroy!, :destroy
+  alias_method :destroy_permanently!, :destroy
 
   def auth_password=(password)
     return if password.blank?
@@ -166,6 +166,12 @@ class AccountAuthorizationConfig < ActiveRecord::Base
     uncached do
       pseudonyms.active.by_unique_id(unique_id).first!
     end
+  end
+
+  protected
+
+  def statsd_prefix
+    "auth.account_#{Shard.global_id_for(account_id)}.config_#{self.global_id}"
   end
 
   private

@@ -139,7 +139,6 @@ describe 'Submissions API', type: :request do
     end
 
     it "should return assignment_visible" do
-      @course.enable_feature!(:differentiated_assignments)
       json = api_call(:get,
         "/api/v1/sections/#{@section.id}/assignments/#{@a1.id}/submissions.json",
         { :controller => 'submissions_api', :action => 'index',
@@ -178,7 +177,6 @@ describe 'Submissions API', type: :request do
     end
 
     it "should return assignment_visible after posting to submissions" do
-      @course.enable_feature!(:differentiated_assignments)
       json = api_call(:put,
         "/api/v1/sections/#{@section.id}/assignments/#{@a1.id}/submissions/#{@student1.id}",
         { :controller => 'submissions_api', :action => 'update',
@@ -190,7 +188,6 @@ describe 'Submissions API', type: :request do
     end
 
     it "should be able to handle an update without visibility when DA is on" do
-      @course.enable_feature!(:differentiated_assignments)
       json = api_call(:put,
         "/api/v1/sections/#{@section.id}/assignments/#{@a1.id}/submissions/#{@student1.id}",
         { :controller => 'submissions_api', :action => 'update',
@@ -506,7 +503,7 @@ describe 'Submissions API', type: :request do
       "id" => @student.id,
       "display_name" => "User",
       "html_url" => "http://www.example.com/courses/#{@course.id}/users/#{@student.id}",
-      "avatar_image_url" => User.avatar_fallback_url
+      "avatar_image_url" => User.avatar_fallback_url(nil, request)
     })
   end
 
@@ -668,7 +665,7 @@ describe 'Submissions API', type: :request do
               "id" => @teacher.id,
               "display_name" => "User",
               "html_url" => "http://www.example.com/courses/#{@course.id}/users/#{@teacher.id}",
-              "avatar_image_url" => User.avatar_fallback_url
+              "avatar_image_url" => User.avatar_fallback_url(nil, request)
            },
            "author_name"=>"User",
            "id" => comment.id,
@@ -939,7 +936,7 @@ describe 'Submissions API', type: :request do
              "id" => @teacher.id,
              "display_name" => "User",
              "html_url" => "http://www.example.com/courses/#{@course.id}/users/#{@teacher.id}",
-             "avatar_image_url" => User.avatar_fallback_url
+             "avatar_image_url" => User.avatar_fallback_url(nil, request)
            },
            "author_name"=>"User",
            "id"=>comment.id,
@@ -1331,7 +1328,7 @@ describe 'Submissions API', type: :request do
 
         user = json.first['user']
         expect(user['display_name']).to eql @student.name
-        expect(user['avatar_image_url']).to eql "https://localhost/images/messages/avatar-50.png"
+        expect(user['avatar_image_url']).to eql "http://www.example.com/images/messages/avatar-50.png"
         expect(user['html_url']).to eql polymorphic_url([@course, @student])
       end
     end
@@ -1394,8 +1391,7 @@ describe 'Submissions API', type: :request do
     end
 
     context "as student" do
-      context "differentiated_assignments on" do
-        before { @course.enable_feature!(:differentiated_assignments) }
+      context "differentiated_assignments" do
         it "should return the submissons if the student is in the overriden section" do
           json = call_to_for_students(as_student: true)
 
@@ -1404,7 +1400,7 @@ describe 'Submissions API', type: :request do
         end
 
         it "should not return the submissons if the student is not in the overriden section and has a submission with no grade" do
-          @student.enrollments.each(&:destroy!)
+          @student.enrollments.each(&:destroy_permanently!)
           student_in_section(@section2, user: @student)
           @assignment.grade_student(@student, grade: nil)
 
@@ -1414,22 +1410,10 @@ describe 'Submissions API', type: :request do
         end
 
         it "should return the submissons if the student is not in the overriden section but has a graded submission" do
-          @student.enrollments.each(&:destroy!)
+          @student.enrollments.each(&:destroy_permanently!)
           student_in_section(@section2, user: @student)
           @assignment.grade_student(@student, grade: 5)
 
-          json = call_to_for_students(as_student: true)
-
-          expect(json.size).to eq 1
-          json.each { |submission| expect(submission['user_id']).to eq @student.id }
-        end
-      end
-
-      context "differentiated_assignments off" do
-        before {@course.disable_feature!(:differentiated_assignments)}
-        it "should return the submission regardless of section" do
-          @student.enrollments.each(&:destroy!)
-          student_in_section(@section2, user: @student)
           json = call_to_for_students(as_student: true)
 
           expect(json.size).to eq 1
@@ -1443,10 +1427,8 @@ describe 'Submissions API', type: :request do
         @observer = User.create
         observer_enrollment = @course.enroll_user(@observer, 'ObserverEnrollment', :section => @section2, :enrollment_state => 'active')
         observer_enrollment.update_attribute(:associated_user_id, @student.id)
-        @course.enable_feature!(:differentiated_assignments)
       }
       context "differentiated_assignments on" do
-        before {@course.enable_feature!(:differentiated_assignments)}
         it "should return the submissons if the observed student is in the overriden section" do
           json = call_to_for_students(as_observer: true)
 
@@ -1455,7 +1437,7 @@ describe 'Submissions API', type: :request do
         end
 
         it "should not return the submissons if the observed student is not in the overriden section and has a submission with no grade" do
-          @student.enrollments.each(&:destroy!)
+          @student.enrollments.each(&:destroy_permanently!)
           student_in_section(@section2, user: @student)
           @assignment.grade_student(@student, grade: nil)
 
@@ -1465,22 +1447,10 @@ describe 'Submissions API', type: :request do
         end
 
         it "should return the submissons if the observed student is not in the overriden section but has a graded submission" do
-          @student.enrollments.each(&:destroy!)
+          @student.enrollments.each(&:destroy_permanently!)
           student_in_section(@section2, user: @student)
           @assignment.grade_student(@student, grade: 5)
 
-          json = call_to_for_students(as_observer: true)
-
-          expect(json.size).to eq 1
-          json.each { |submission| expect(submission['user_id']).to eq @student.id }
-        end
-      end
-
-      context "differentiated_assignments off" do
-        before {@course.disable_feature!(:differentiated_assignments)}
-        it "should return the submission regardless of observed students section" do
-          @student.enrollments.each(&:destroy!)
-          student_in_section(@section2, user: @student)
           json = call_to_for_students(as_observer: true)
 
           expect(json.size).to eq 1
@@ -1491,7 +1461,6 @@ describe 'Submissions API', type: :request do
 
     context "as teacher" do
       context "differentiated_assignments on" do
-        before{@course.enable_feature!(:differentiated_assignments)}
         it "should return the submissons if the student is in the overriden section" do
           json = call_to_for_students(as_student: false)
 
@@ -1500,20 +1469,7 @@ describe 'Submissions API', type: :request do
         end
 
         it "should return the submissons even if the student is not in the overriden section" do
-          @student.enrollments.each(&:destroy!)
-          student_in_section(@section2, user: @student)
-
-          json = call_to_for_students(as_student: false)
-
-          expect(json.size).to eq 1
-          json.each { |submission| expect(submission['user_id']).to eq @student.id }
-        end
-      end
-
-      context "differentiated_assignments off" do
-        before {@course.disable_feature!(:differentiated_assignments)}
-        it "should return the submission regardless of section" do
-          @student.enrollments.each(&:destroy!)
+          @student.enrollments.each(&:destroy_permanently!)
           student_in_section(@section2, user: @student)
 
           json = call_to_for_students(as_student: false)
@@ -1538,7 +1494,7 @@ describe 'Submissions API', type: :request do
       @assignment = @course.assignments.create!(:title => 'assignment1', :grading_type => 'letter_grade', :points_possible => 15, :only_visible_to_overrides => true)
       create_section_override_for_assignment(@assignment, course_section: @section1)
       submit_homework(@assignment, @student)
-      @student.enrollments.each(&:destroy!)
+      @student.enrollments.each(&:destroy_permanently!)
       student_in_section(@section2, user: @student)
 
       user_session(@student)
@@ -1558,7 +1514,6 @@ describe 'Submissions API', type: :request do
 
     context "as teacher" do
       context "with differentiated_assignments" do
-        before {@course.enable_feature!(:differentiated_assignments)}
         it "should return the assignment" do
           json = call_to_submissions_show(as_student: false)
 
@@ -1570,19 +1525,10 @@ describe 'Submissions API', type: :request do
           expect(json["assignment_visible"]).not_to be_nil
         end
       end
-      context "without differentiated_assignments" do
-        before {@course.disable_feature!(:differentiated_assignments)}
-        it "should return the assignment" do
-          json = call_to_submissions_show(as_student: false)
-
-          expect(json["assignment_id"]).not_to be_nil
-        end
-      end
     end
 
     context "as student in a section without an override" do
       context "with differentiated_assignments" do
-        before {@course.enable_feature!(:differentiated_assignments)}
         it "should return an unauthorized error" do
           api_call_as_user(@student, :get,
               "/api/v1/courses/#{@course.id}/assignments/#{@assignment.id}/submissions/#{@student.id}.json",
@@ -1601,14 +1547,6 @@ describe 'Submissions API', type: :request do
         it "should return assignment_visible false" do
           json = call_to_submissions_show(as_student: false, includes: ["visibility"])
           expect(json["assignment_visible"]).to eq(false)
-        end
-      end
-      context "without differentiated_assignments" do
-        before {@course.disable_feature!(:differentiated_assignments)}
-        it "should return the assignment" do
-          json = call_to_submissions_show(as_student: true)
-
-          expect(json["assignment_id"]).not_to be_nil
         end
       end
     end
@@ -3099,7 +3037,6 @@ describe 'Submissions API', type: :request do
       @a1.only_visible_to_overrides = true
       @a1.save!
       create_section_override_for_assignment(@a1, course_section: @section)
-      @course.enable_feature!(:differentiated_assignments)
 
       student3 = user_with_pseudonym(:active_all => true)
       student3.pseudonym.update_attribute(:sis_user_id, 'my-student-id')
@@ -3125,7 +3062,7 @@ describe 'Submissions API', type: :request do
       expect(progress.failed?).to be_truthy
       expect(progress.message).to eq "Couldn't find User(s) with API ids '#{@student2.id}', 'sis_user_id:my-student-id'"
 
-      @course.disable_feature!(:differentiated_assignments)
+      create_section_override_for_assignment(@a1, course_section: @course.default_section)
       json = api_call(:post,
                       "/api/v1/courses/#{@course.id}/assignments/#{@a1.id}/submissions/update_grades",
                       { :controller => 'submissions_api', :action => 'bulk_update',
@@ -3307,8 +3244,6 @@ describe 'Submissions API', type: :request do
       ta_in_course :active_all => true
       @student1 = student_in_course(:active_all => true).user
       @student2 = student_in_course(:active_all => true).user
-      @course.root_account.allow_feature! :moderated_grading
-      @course.enable_feature! :moderated_grading
       @assignment = @course.assignments.build
       @assignment.moderated_grading = true
       @assignment.save!
@@ -3357,7 +3292,7 @@ describe 'Submissions API', type: :request do
         expect(json).to match_array(
           [{"id"=>@student1.id,
             "display_name"=>"User",
-            "avatar_image_url"=>"https://localhost/images/messages/avatar-50.png",
+            "avatar_image_url"=>"http://www.example.com/images/messages/avatar-50.png",
             "html_url"=>"http://www.example.com/courses/#{@course.id}/users/#{@student1.id}",
             "in_moderation_set"=>true,
             "selected_provisional_grade_id"=>pg.id,
@@ -3372,7 +3307,7 @@ describe 'Submissions API', type: :request do
                 "speedgrader_url"=>"http://www.example.com/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}#%7B%22student_id%22:#{@student1.id},%22provisional_grade_id%22:#{pg.id}%7D"}]},
            {"id"=>@student2.id,
             "display_name"=>"User",
-            "avatar_image_url"=>"https://localhost/images/messages/avatar-50.png",
+            "avatar_image_url"=>"http://www.example.com/images/messages/avatar-50.png",
             "html_url"=>"http://www.example.com/courses/#{@course.id}/users/#{@student2.id}",
             "in_moderation_set"=>false,
             "selected_provisional_grade_id"=>nil,
@@ -3431,6 +3366,13 @@ describe 'Submissions API', type: :request do
         params[:grouped] = true
         json = api_call_as_user(teacher, :get, path, params)
         expect(json.size).to eq 1
+      end
+
+      it 'includes the group_id and group_name if include[]=group is passed' do
+        params[:include] = %w/group/
+        json = api_call_as_user(teacher, :get, path, params)
+        expect(json.first.fetch('group').fetch('id')).to eq group.id
+        expect(json.first.fetch('group').fetch('name')).to eq group.name
       end
     end
   end

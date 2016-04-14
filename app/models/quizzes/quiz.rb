@@ -49,26 +49,9 @@ class Quizzes::Quiz < ActiveRecord::Base
   has_many :attachments, :as => :context, :dependent => :destroy
   has_many :quiz_regrades, class_name: 'Quizzes::QuizRegrade'
   has_many :quiz_student_visibilities
-  belongs_to :context, :polymorphic => true
-  validates_inclusion_of :context_type, :allow_nil => true, :in => ['Course']
+  belongs_to :context, polymorphic: [:course]
   belongs_to :assignment
   belongs_to :assignment_group
-
-  EXPORTABLE_ATTRIBUTES = [
-    :id, :title, :description, :quiz_data, :points_possible, :context_id,
-    :context_type, :assignment_id, :workflow_state, :shuffle_answers,
-    :show_correct_answers, :time_limit, :allowed_attempts, :scoring_policy,
-    :quiz_type, :created_at, :updated_at, :lock_at, :unlock_at, :deleted_at,
-    :could_be_locked, :cloned_item_id, :unpublished_question_count, :due_at,
-    :question_count, :last_assignment_id, :published_at, :last_edited_at,
-    :anonymous_submissions, :assignment_group_id, :hide_results, :ip_filter,
-    :require_lockdown_browser, :require_lockdown_browser_for_results,
-    :one_question_at_a_time, :cant_go_back, :show_correct_answers_at,
-    :hide_correct_answers_at, :require_lockdown_browser_monitor,
-    :lockdown_browser_monitor_data, :only_visible_to_overrides
-  ]
-
-  EXPORTABLE_ASSOCIATIONS = [:quiz_questions, :quiz_submissions, :quiz_groups, :quiz_statistics, :attachments, :quiz_regrades, :context, :assignment, :assignment_group]
 
   validates_length_of :description, :maximum => maximum_long_text_length, :allow_nil => true, :allow_blank => true
   validates_length_of :title, :maximum => maximum_string_length, :allow_nil => true
@@ -105,7 +88,7 @@ class Quizzes::Quiz < ActiveRecord::Base
   # method would fire first, meaning that the overrides would reflect the
   # last version of the assignment, because the next callback would be a
   # simply_versioned callback updating the version.
-  after_save :link_assignment_overrides, :if => :assignment_id_changed?
+  after_save :link_assignment_overrides, :if => :new_assignment_id?
 
   # override has_one relationship provided by simply_versioned
   def current_version_unidirectional
@@ -266,7 +249,7 @@ class Quizzes::Quiz < ActiveRecord::Base
     self.assignment && self.assignment.muted?
   end
 
-  alias_method :destroy!, :destroy
+  alias_method :destroy_permanently!, :destroy
 
   def destroy
     self.workflow_state = 'deleted'
@@ -376,6 +359,15 @@ class Quizzes::Quiz < ActiveRecord::Base
     self.quiz_submissions.each { |s| s.save! }
   end
 
+  def destroy_related_submissions
+    self.quiz_submissions.each do |qs|
+      submission = qs.submission
+      qs.submission = nil
+      qs.save! if qs.changed?
+      submission.try(:destroy)
+    end
+  end
+
   attr_accessor :saved_by
 
   def update_assignment
@@ -384,24 +376,22 @@ class Quizzes::Quiz < ActiveRecord::Base
       self.context_module_tags.preload(:context_module => :content_tags).each { |tag| tag.confirm_valid_module_requirements }
     end
     if !self.graded? && (@old_assignment_id || self.last_assignment_id)
-      ::Assignment.where(:id => [@old_assignment_id, self.last_assignment_id].compact, :submission_types => 'online_quiz').update_all(:workflow_state => 'deleted', :updated_at => Time.now.utc)
-      self.quiz_submissions.each do |qs|
-        submission = qs.submission
-        qs.submission = nil
-        qs.save! if qs.changed?
-        submission.try(:destroy)
-      end
+      ::Assignment.where(
+        id: [@old_assignment_id, self.last_assignment_id].compact,
+        submission_types: 'online_quiz'
+      ).update_all(:workflow_state => 'deleted', :updated_at => Time.now.utc)
+      send_later_if_production_enqueue_args(:destroy_related_submissions, priority: Delayed::HIGH_PRIORITY)
       ::ContentTag.delete_for(::Assignment.find(@old_assignment_id)) if @old_assignment_id
       ::ContentTag.delete_for(::Assignment.find(self.last_assignment_id)) if self.last_assignment_id
     end
 
     send_later_if_production(:update_existing_submissions) if @update_existing_submissions
     if (self.assignment || @assignment_to_set) && (@assignment_id_set || self.for_assignment?) && @saved_by != :assignment
-      if !self.graded? && @old_assignment_id
-      else
+      unless !self.graded? && @old_assignment_id
         Quizzes::Quiz.where("assignment_id=? AND id<>?", self.assignment_id, self).update_all(:workflow_state => 'deleted', :assignment_id => nil, :updated_at => Time.now.utc) if self.assignment_id
         self.assignment = @assignment_to_set if @assignment_to_set && !self.assignment
         a = self.assignment
+        a.quiz.clear_changes_information if a.quiz && !CANVAS_RAILS4_0 # AR#changes persist in after_saves now - needed to prevent an autosave loop
         a.points_possible = self.points_possible
         a.description = self.description
         a.title = self.title
@@ -613,7 +603,7 @@ class Quizzes::Quiz < ActiveRecord::Base
     can_take = Quizzes::QuizEligibility.new(course: self.context, quiz: self, user: submission.user)
 
     fallback_end_at = if can_take.section_dates_currently_apply?
-      can_take.course_section.end_at
+      can_take.active_sections_max_end_at
     elsif course.restrict_enrollments_to_course_dates
       course.end_at || course.enrollment_term.end_at
     else
@@ -783,7 +773,7 @@ class Quizzes::Quiz < ActiveRecord::Base
 
   # virtual attribute
   def locked=(new_val)
-    new_val = ::ActiveRecord::ConnectionAdapters::Column.value_to_boolean(new_val)
+    new_val = Canvas::Plugin.value_to_boolean(new_val)
     if new_val
       #lock the quiz either until unlock_at, or indefinitely if unlock_at.nil?
       self.lock_at = Time.now
@@ -813,7 +803,7 @@ class Quizzes::Quiz < ActiveRecord::Base
   end
 
   def check_if_submissions_need_review
-    self.connection.after_transaction_commit do
+    self.class.connection.after_transaction_commit do
       version_num = self.version_number
       submissions_to_update = []
       self.quiz_submissions.each do |sub|
@@ -1314,4 +1304,8 @@ class Quizzes::Quiz < ActiveRecord::Base
     'quizzes:quiz'
   end
 
+  def run_if_overrides_changed!
+    self.relock_modules!
+    self.assignment.relock_modules! if self.assignment
+  end
 end

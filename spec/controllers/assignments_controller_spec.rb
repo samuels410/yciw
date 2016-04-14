@@ -70,6 +70,7 @@ describe AssignmentsController do
         expect(assigns[:js_env][:PERMISSIONS][:manage_grades]).to be_truthy
         expect(assigns[:js_env][:PERMISSIONS][:manage_assignments]).to be_falsey
         expect(assigns[:js_env][:PERMISSIONS][:manage]).to be_falsey
+        expect(assigns[:js_env][:PERMISSIONS][:manage_course]).to be_truthy
       end
     end
   end
@@ -77,7 +78,6 @@ describe AssignmentsController do
   describe "GET 'show_moderate'" do
 
     it "should set the js_env for URLS" do
-      @course.account.enable_feature!(:moderated_grading)
       user_session(@teacher)
       assignment = @course.assignments.create(:title => "some assignment")
       assignment.workflow_state = 'published'
@@ -90,7 +90,6 @@ describe AssignmentsController do
     end
 
     it "should set the js_env for ASSIGNMENT_TITLE" do
-      @course.account.enable_feature!(:moderated_grading)
       user_session(@teacher)
       assignment = @course.assignments.create(:title => "some assignment")
       assignment.workflow_state = 'published'
@@ -177,7 +176,12 @@ describe AssignmentsController do
 
     it "should require login for external tools in a public course" do
       @course.update_attribute(:is_public, true)
-      @course.context_external_tools.create!(:shared_secret => 'test_secret', :consumer_key => 'test_key', :name => 'test tool', :domain => 'example.com')
+      @course.context_external_tools.create!(
+        :shared_secret => 'test_secret',
+        :consumer_key => 'test_key',
+        :name => 'test tool',
+        :domain => 'example.com'
+      )
       @assignment.submission_types = 'external_tool'
       @assignment.build_external_tool_tag(:url => "http://example.com/test")
       @assignment.save!
@@ -186,30 +190,51 @@ describe AssignmentsController do
       assert_require_login
     end
 
-    it 'should not error out when google docs is not configured' do
-      GoogleDocs::Connection.stubs(:config).returns nil
-      user_session(@student)
-      a = @course.assignments.create(:title => "some assignment")
-      get 'show', :course_id => @course.id, :id => a.id
-      GoogleDocs::Connection.unstub(:config)
-    end
-
-    it 'should force users to use google drive if available' do
+    it 'should set user_has_google_drive' do
       user_session(@student)
       a = @course.assignments.create(:title => "some assignment")
       plugin = Canvas::Plugin.find(:google_drive)
       plugin_setting = PluginSetting.find_by_name(plugin.id) || PluginSetting.new(:name => plugin.id, :settings => plugin.default_settings)
       plugin_setting.posted_settings = {}
       plugin_setting.save!
-      google_docs_mock = mock('google_docs')
-      google_docs_mock.stubs(:verify_access_token).returns(true)
-      google_docs_mock.stubs(:service_type).returns(nil)
-      google_docs_mock.stubs(:retrieve_access_token).returns(nil)
-      controller.stubs(:google_service_connection).returns(google_docs_mock)
+      google_drive_mock = mock('google_drive')
+      google_drive_mock.stubs(:authorized?).returns(true)
+      controller.stubs(:google_drive_connection).returns(google_drive_mock)
       get 'show', :course_id => @course.id, :id => a.id
 
       expect(response).to be_success
-      expect(assigns(:google_drive_upgrade)).to be_truthy
+      expect(assigns(:user_has_google_drive)).to be true
+    end
+
+    context "page views enabled" do
+      before do
+        Setting.set('enable_page_views', 'db')
+        @old_thread_context = Thread.current[:context]
+        Thread.current[:context] = { request_id: SecureRandom.uuid }
+      end
+
+      after do
+        Thread.current[:context] = @old_thread_context
+      end
+
+      it "should log an AUA as an assignment view for an external tool assignment" do
+        user_session(@student)
+        @course.context_external_tools.create!(
+          :shared_secret => 'test_secret',
+          :consumer_key => 'test_key',
+          :name => 'test tool',
+          :domain => 'example.com'
+        )
+        @assignment.submission_types = 'external_tool'
+        @assignment.build_external_tool_tag(:url => "http://example.com/test")
+        @assignment.save!
+
+        get 'show', :course_id => @course.id, :id => @assignment.id
+        expect(response).to be_success
+        aua = AssetUserAccess.where(user_id: @student, context_type: 'Course', context_id: @course).first
+        expect(aua.asset_category).to eq 'assignments'
+        expect(aua.asset_code).to eq @assignment.asset_string
+      end
     end
 
   end
@@ -368,7 +393,7 @@ describe AssignmentsController do
       user_session(@teacher)
       connection = stub()
       connection.stubs(:list_with_extension_filter).raises(ArgumentError)
-      controller.stubs(:google_service_connection).returns(connection)
+      controller.stubs(:google_drive_connection).returns(connection)
       Assignment.any_instance.stubs(:allow_google_docs_submission?).returns(true)
       Canvas::Errors.expects(:capture_exception)
       params = {course_id: @course.id, id: @assignment.id, format: 'json' }

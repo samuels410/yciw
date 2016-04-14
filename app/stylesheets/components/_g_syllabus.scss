@@ -53,7 +53,7 @@
       text-align: left;
       @if $use_new_styles {
         padding: $ic-sp/2;
-        line-height: 1.3;  
+        line-height: 1.3;
       }
       @else {
         font-size: 1.1em;
@@ -75,7 +75,7 @@
         }
       }
       .dates {
-        font-size: 10px;
+        @include fontSize(12px);
         text-align: right;
         @if $use_high_contrast {
           color: #333;
@@ -132,7 +132,7 @@
   }
   .special_date_title {
     color: #999;
-    font-size: 11px;
+    @include fontSize(11px);
     font-weight: normal;
   }
 }

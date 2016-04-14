@@ -39,7 +39,8 @@ describe "discussions" do
           assign_group_2 = course.assignment_groups.create!(:name => "Group 2")
 
           get url
-
+          wait = Selenium::WebDriver::Wait.new(timeout: 5)
+          wait.until { f("#assignment_group_id").present? }
           click_option("#assignment_group_id", assign_group_2.name)
 
           expect_new_page_load { f('.form-actions button[type=submit]').click }
@@ -48,7 +49,8 @@ describe "discussions" do
 
         it "should allow editing the grading type", priority: "1", test_id: 270914 do
           get url
-
+          wait = Selenium::WebDriver::Wait.new(timeout: 5)
+          wait.until { f("#assignment_grading_type").present? }
           click_option("#assignment_grading_type", "Letter Grade")
 
           expect_new_page_load { f('.form-actions button[type=submit]').click }
@@ -107,12 +109,21 @@ describe "discussions" do
           expect(assignment.points_possible).to eq 123
         end
 
+        it "should return focus to add attachment when removed" do
+          get url
+          add_attachment_and_validate
+          get url
+          f('.removeAttachment').click
+          wait_for_ajaximations
+          check_element_has_focus(f('input[name=attachment]'))
+        end
+
         it "should warn user when leaving page unsaved", priority: "1", test_id: 270919 do
           title = 'new title'
           get url
 
           replace_content(f('input[name=title]'), title)
-          f('.home').click
+          fln('Home').click
 
           expect(alert_present?).to be_truthy
 
@@ -176,6 +187,19 @@ describe "discussions" do
         confirm(:on)
         toggle(:off)
         confirm(:off)
+      end
+
+      it "should show correct date when saving" do
+        Timecop.freeze do
+          topic.lock_at = Time.zone.now - 5.days
+          topic.save!
+          teacher.time_zone = "Hawaii"
+          teacher.save!
+          get url
+          f('.form-actions button[type=submit]').click
+          get url
+          expect(topic.reload.lock_at).to eq (Time.zone.now - 5.days).beginning_of_minute
+        end
       end
 
       it "should toggle checkboxes when clicking their labels", priority: "1", test_id: 270924 do

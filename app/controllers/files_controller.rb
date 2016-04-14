@@ -119,7 +119,7 @@ class FilesController < ApplicationController
 
   def quota
     get_quota
-    if authorized_action(@context.attachments.scoped.new, @current_user, :create)
+    if authorized_action(@context.attachments.temp_record, @current_user, :create)
       h = ActionView::Base.new
       h.extend ActionView::Helpers::NumberHelper
       result = {
@@ -305,7 +305,7 @@ class FilesController < ApplicationController
   end
 
   def images
-    if authorized_action(@context.attachments.scoped.new, @current_user, :read)
+    if authorized_action(@context.attachments.temp_record, @current_user, :read)
       if Folder.root_folders(@context).first.grants_right?(@current_user, session, :read_contents)
         if @context.grants_right?(@current_user, session, :manage_files)
           @images = @context.active_images.paginate :page => params[:page]
@@ -386,7 +386,7 @@ class FilesController < ApplicationController
     show
   end
 
-  # @API Get quota information
+  # @API Get public inline preview url
   # Determine the URL that should be used for inline preview of the file.
   #
   # @example_request
@@ -721,7 +721,7 @@ class FilesController < ApplicationController
       @context = @group || @current_user
       @check_quota = false
     elsif @context && intent == 'attach_discussion_file'
-      permission_object = @context.discussion_topics.scoped.new
+      permission_object = @context.discussion_topics.temp_record
       permission = :attach
     elsif @context && intent == 'message'
       permission_object = @context
@@ -743,7 +743,7 @@ class FilesController < ApplicationController
     if authorized_action(permission_object, @current_user, permission)
       if @context.respond_to?(:is_a_context?) && @check_quota
         get_quota
-        return if quota_exceeded(named_context_url(@context, :context_files_url))
+        return if quota_exceeded(@context, named_context_url(@context, :context_files_url))
       end
       @attachment.filename = params[:attachment][:filename]
       @attachment.file_state = 'deleted'
@@ -868,7 +868,7 @@ class FilesController < ApplicationController
     if authorized_action(@attachment, @current_user, :create)
       get_quota
       return if (params[:check_quota_after].nil? || params[:check_quota_after] == '1') &&
-                  quota_exceeded(named_context_url(@context, :context_files_url))
+                  quota_exceeded(@context, named_context_url(@context, :context_files_url))
 
       respond_to do |format|
         @attachment.folder_id ||= @folder.id
@@ -887,18 +887,24 @@ class FilesController < ApplicationController
           end
         end
         if params[:attachment][:uploaded_data]
-          success = @attachment.update_attributes(params[:attachment])
-          @attachment.errors.add(:base, t('errors.server_error', "Upload failed, server error, please try again.")) unless success
+          if Attachment.over_quota?(@context, params[:attachment][:uploaded_data].size)
+            @attachment.errors.add(:base, t('Upload failed, quota exceeded'))
+          else
+            success = @attachment.update_attributes(params[:attachment])
+            @attachment.errors.add(:base, t('errors.server_error', "Upload failed, server error, please try again.")) unless success
+          end
         else
           @attachment.errors.add(:base, t('errors.missing_field', "Upload failed, expected form field missing"))
         end
-        deleted_attachments = @attachment.handle_duplicates(duplicate_handling)
+        deleted_attachments = @attachment.handle_duplicates(duplicate_handling) if success
         unless @attachment.downloadable?
           success = false
-          if (params[:attachment][:uploaded_data].size == 0 rescue false)
-            @attachment.errors.add(:base, t('errors.empty_file', "That file is empty.  Please upload a different file."))
-          else
-            @attachment.errors.add(:base, t('errors.upload_failed', "Upload failed, please try again."))
+          unless @attachment.errors.any?
+            if (params[:attachment][:uploaded_data].size == 0 rescue false)
+              @attachment.errors.add(:base, t('errors.empty_file', "That file is empty.  Please upload a different file."))
+            else
+              @attachment.errors.add(:base, t('errors.upload_failed', "Upload failed, please try again."))
+            end
           end
           unless @attachment.new_record?
             @attachment.destroy rescue @attachment.delete
@@ -915,8 +921,8 @@ class FilesController < ApplicationController
           end
         else
           format.html { render :new }
-          format.json { render :json => @attachment.errors }
-          format.text { render :json => @attachment.errors }
+          format.json { render :json => @attachment.errors, :status => :bad_request }
+          format.text { render :json => @attachment.errors, :status => :bad_request }
         end
       end
     end

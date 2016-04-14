@@ -33,13 +33,6 @@ class CommunicationChannel < ActiveRecord::Base
   has_many :delayed_messages, :dependent => :destroy
   has_many :messages
 
-  EXPORTABLE_ATTRIBUTES = [
-    :id, :path, :path_type, :position, :user_id, :pseudonym_id, :bounce_count, :workflow_state, :confirmation_code,
-    :created_at, :updated_at, :build_pseudonym_on_confirm
-  ]
-
-  EXPORTABLE_ASSOCIATIONS = [:pseudonyms, :pseudonym, :user]
-
   before_save :assert_path_type, :set_confirmation_code
   before_save :consider_building_pseudonym
   validates_presence_of :path, :path_type, :user, :workflow_state
@@ -251,7 +244,7 @@ class CommunicationChannel < ActiveRecord::Base
   end
 
   def send_otp!(code)
-    m = self.messages.scoped.new
+    m = self.messages.temp_record
     m.to = self.path
     m.body = t :body, "Your Canvas verification code is %{verification_code}", :verification_code => code
     Mailer.create_message(m).deliver rescue nil # omg! just ignore delivery failures
@@ -278,7 +271,7 @@ class CommunicationChannel < ActiveRecord::Base
     when Notification
       eager_load(:notification_policies).where(:notification_policies => { :notification_id => context })
     else
-      scoped
+      all
     end
   }
 
@@ -357,7 +350,7 @@ class CommunicationChannel < ActiveRecord::Base
     true
   end
 
-  alias_method :destroy!, :destroy
+  alias_method :destroy_permanently!, :destroy
   def destroy
     self.workflow_state = 'retired'
     self.save

@@ -55,7 +55,9 @@ Webpack's output goes to "public/webpack-dist" for development js and
 
 The environment variable USE_WEBPACK is useful for trying out the assets
 that webpack builds locally.  If set to 'true', when you start your server
-you'll load JS from your webpack-dist directory rather than public/js.
+you'll load JS from your webpack-dist directory rather than public/js.  You
+can do the same thing by touching the file "config/WEBPACK" (if present, it's
+like having the USE_WEBPACK env var set).
 
 At any time you can use the url parameter "require_js=1" to get the requirejs
 version of the js instead so you can compare them side by side.
@@ -87,6 +89,20 @@ to run it headless in a container, so I run it with:
 
 which spools up the "js-tests" container specified in docker-compose.yml, which
 has an entry point that knows how to kick off karma with a headless runner.
+
+### FAQ!
+
+*I got some errors that look like "Cannot resolve module", but the module is totally there. What gives?*
+We do a lot of path rewriting to find things that are buried in extensible areas
+in canvas.  If you're working with a plugin, look at frontend_build/CompiledReferencePlugin.js
+for an example of how we look at some require statements and rewrite them to find
+the right file; see if you can apply those ideas to your own loader if need be.
+
+*Webpack says it can't find some "translations/" modules.  What should I do?*
+Run `rake i18n:generate_js`.  Webpack doesn't know how to generate the
+translations files yet, though we may tackle that in the future.  For now
+that extract task needs to run before the first webpack build.  When in doubt,
+just run `rake canvas:compile_assets` for a fully up to date build.
 
 ## TODO List (update as needed):
 
@@ -328,26 +344,25 @@ used from "app/coffeescripts/ember/shared/components"
 
 [X] get _all_ qunit tests running in the webpack bundle (just spiked on a few)
 
+[X] on building for production, fails with ProximityLoader ("ERROR in 232.bundle.js from UglifyJs
+Unexpected token: operator (!) [./frontend_build/jsHandlebarsHelpers.js!./frontend_build/pluginsJstLoader.js!./frontend_build/nonAmdLoader.js!./app/coffeescripts/util/ProximityLoader.coffee:111,6]")
 
-[ ] Migrate requires that are in views to application js (check plugins like mra)
+[X] Migrate requires that are in views to application js (check plugins like mra)
 
 
-[ ] Delay returning tz in "timezone_plugin.js" until after promises have been run,
+[X] Delay returning tz in "timezone_plugin.js" until after promises have been run,
 or change how the rest of the app interacts with timezone_plugin so that we can
 return a promise, since async return is just not going to happen, and we need to have
 those promises done before using it.
 
 [ ] sort out scopes for .app.app.coffeescripts.ember.shared.templates.components.ic_submission-download-dialog so that we don't need an awful exception in 18n.js
 
-[ ] sniff test files automatically rather than configuring them manually in webpack_spec_index.js
+[X] sniff test files automatically rather than configuring them manually in webpack_spec_index.js
 
 [ ] could get a nice performance boost out of reimplementing BrandableCSS.all_fingerprints_for(bundle)
 in node rather than shelling out to ruby for it
 
 [ ] extract duplicated loader code from i18nLinerHandlebars and emberHandlebars
-
-[ ] on building for production, fails with ProximityLoader ("ERROR in 232.bundle.js from UglifyJs
-Unexpected token: operator (!) [./frontend_build/jsHandlebarsHelpers.js!./frontend_build/pluginsJstLoader.js!./frontend_build/nonAmdLoader.js!./app/coffeescripts/util/ProximityLoader.coffee:111,6]")
 
 [ ] in a seperate commit extract i18nLinerHandlebars loader function and what
 it duplicates from prepare_hbs to a function both can use.

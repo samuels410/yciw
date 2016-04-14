@@ -28,23 +28,17 @@ class ContentTag < ActiveRecord::Base
   include SearchTermHelper
   belongs_to :content, :polymorphic => true
   validates_inclusion_of :content_type, :allow_nil => true, :in => CONTENT_TYPES
-  belongs_to :context, :polymorphic => true
-  validates_inclusion_of :context_type, :allow_nil => true, :in => ['Course', 'LearningOutcomeGroup',
-    'Assignment', 'Account', 'Quizzes::Quiz']
-  belongs_to :associated_asset, :polymorphic => true
-  validates_inclusion_of :associated_asset_type, :allow_nil => true, :in => ['LearningOutcomeGroup']
+  belongs_to :context, polymorphic:
+      [:course, :learning_outcome_group, :assignment, :account,
+       { quiz: 'Quizzes::Quiz' }]
+  belongs_to :associated_asset, polymorphic: [:learning_outcome_group],
+             polymorphic_prefix: true
   belongs_to :context_module
   belongs_to :learning_outcome
   # This allows doing a has_many_through relationship on ContentTags for linked LearningOutcomes. (see LearningOutcomeContext)
   belongs_to :learning_outcome_content, :class_name => 'LearningOutcome', :foreign_key => :content_id
   has_many :learning_outcome_results
 
-  EXPORTABLE_ATTRIBUTES = [
-    :id, :content_id, :content_type, :context_id, :context_type, :title, :tag, :url, :created_at, :updated_at, :comments, :tag_type, :context_module_id, :position,
-    :indent, :learning_outcome_id, :context_code, :mastery_score, :rubric_association_id, :workflow_state, :cloned_item_id, :associated_asset_id, :associated_asset_type, :new_tab
-  ]
-
-  EXPORTABLE_ASSOCIATIONS = [:content, :context, :associated_asset, :context_module, :learning_outcome, :learning_outcome_results, :learning_outcome_content]
   # This allows bypassing loading context for validation if we have
   # context_id and context_type set, but still allows validating when
   # context is not yet saved.
@@ -57,9 +51,6 @@ class ContentTag < ActiveRecord::Base
   after_save :touch_context_if_learning_outcome
   include CustomValidations
   validates_as_url :url
-
-  include PolymorphicTypeOverride
-  override_polymorphic_types content_type: {'Quiz' => 'Quizzes::Quiz'}
 
   acts_as_list :scope => :context_module
 
@@ -92,7 +83,7 @@ class ContentTag < ActiveRecord::Base
   end
 
   def touch_context_module_after_transaction
-    connection.after_transaction_commit {
+    self.class.connection.after_transaction_commit {
       touch_context_module
     }
   end
@@ -146,6 +137,8 @@ class ContentTag < ActiveRecord::Base
     end
     content_ids.each do |type, ids|
       klass = type.constantize
+      next unless klass < ActiveRecord::Base
+      next if klass.respond_to?(:tableless?) && klass.tableless?
       if klass.new.respond_to?(:could_be_locked=)
         klass.where(:id => ids).update_all(:could_be_locked => true)
       end
@@ -315,7 +308,7 @@ class ContentTag < ActiveRecord::Base
     true
   end
 
-  alias_method :destroy!, :destroy
+  alias_method :destroy_permanently!, :destroy
   def destroy
     unless can_destroy?
       raise LastLinkToOutcomeNotDestroyed.new('Link is the last link to an aligned outcome. Remove the alignment and then try again')
@@ -505,8 +498,9 @@ class ContentTag < ActiveRecord::Base
 
     opts ||= self.context_module.visibility_for_user(user)
     return false unless opts[:can_read]
-    return false unless self.published? || opts[:can_read_as_admin]
-    return true unless opts[:differentiated_assignments]
+
+    return true if opts[:can_read_as_admin]
+    return false unless self.published?
 
     if self.assignment
       self.assignment.visible_to_user?(user, opts)

@@ -304,7 +304,7 @@ describe Attachment do
 
       it "should delay upload until the #save transaction is committed" do
         @attachment.uploaded_data = default_uploaded_data
-        @attachment.connection.expects(:after_transaction_commit).once
+        Attachment.connection.expects(:after_transaction_commit).once
         @attachment.expects(:touch_context_if_appropriate).never
         @attachment.expects(:ensure_media_object).never
         @attachment.save
@@ -412,7 +412,7 @@ describe Attachment do
       a.destroy
       expect(a).not_to be_frozen
       expect(a).to be_deleted
-      a.destroy!
+      a.destroy_permanently!
       expect(a).to be_frozen
     end
 
@@ -447,13 +447,13 @@ describe Attachment do
     end
   end
 
-  context "destroy!" do
+  context "destroy_permanently!" do
     it "should not delete the s3 object, even here" do
       s3_storage!
       a = attachment_model
       s3object = a.s3object
       s3object.expects(:delete).never
-      a.destroy!
+      a.destroy_permanently!
     end
   end
 
@@ -1109,9 +1109,7 @@ describe Attachment do
       attachment_model(:uploaded_data => stub_file_data('file.txt', nil, 'text/html'), :content_type => 'text/html')
       expect(@attachment.need_notify).to be_truthy
 
-      new_time = Time.now + 10.minutes
-      Time.stubs(:now).returns(new_time)
-      Attachment.do_notifications
+      Timecop.freeze(10.minutes.from_now) { Attachment.do_notifications }
 
       @attachment.reload
       expect(@attachment.need_notify).not_to be_truthy
@@ -1124,9 +1122,7 @@ describe Attachment do
       att3 = attachment_model(:uploaded_data => stub_file_data('file3.txt', nil, 'text/html'), :content_type => 'text/html')
       [att1, att2, att3].each {|att| expect(att.need_notify).to be_truthy}
 
-      new_time = Time.now + 10.minutes
-      Time.stubs(:now).returns(new_time)
-      Attachment.do_notifications
+      Timecop.freeze(10.minutes.from_now) { Attachment.do_notifications }
 
       [att1, att2, att3].each {|att| expect(att.reload.need_notify).not_to be_truthy}
       expect(Message.where(user_id: @student, notification_name: 'New Files Added').first).not_to be_nil
@@ -1144,15 +1140,11 @@ describe Attachment do
       att3 = attachment_model(:uploaded_data => stub_file_data('file3.txt', nil, 'text/html'), :content_type => 'text/html')
       [att1, att2, att3].each {|att| expect(att.need_notify).to be_truthy}
 
-      new_time = Time.now + 2.minutes
-      Time.stubs(:now).returns(new_time)
-      Attachment.do_notifications
+      Timecop.freeze(2.minutes.from_now) { Attachment.do_notifications }
       [att1, att2, att3].each {|att| expect(att.reload.need_notify).to be_truthy}
       expect(Message.where(user_id: @student, notification_name: 'New File Added').first).to be_nil
 
-      new_time = Time.now + 4.minutes
-      Time.stubs(:now).returns(new_time)
-      Attachment.do_notifications
+      Timecop.freeze(6.minutes.from_now) { Attachment.do_notifications }
       [att1, att2, att3].each {|att| expect(att.reload.need_notify).not_to be_truthy}
       expect(Message.where(user_id: @student, notification_name: 'New Files Added').first).not_to be_nil
     end
@@ -1161,9 +1153,7 @@ describe Attachment do
       attachment_model(:uploaded_data => stub_file_data('file.txt', nil, 'text/html'), :content_type => 'text/html')
       expect(@attachment.need_notify).to be_truthy
 
-      new_time = Time.now + 1.week
-      Time.stubs(:now).returns(new_time)
-      Attachment.do_notifications
+      Timecop.freeze(1.week.from_now) { Attachment.do_notifications }
 
       @attachment.reload
       expect(@attachment.need_notify).to be_falsey
@@ -1203,9 +1193,7 @@ describe Attachment do
       @attachment.folder.locked = true
       @attachment.folder.save!
 
-      new_time = Time.now + 10.minutes
-      Time.stubs(:now).returns(new_time)
-      Attachment.do_notifications
+      Timecop.freeze(10.minutes.from_now) { Attachment.do_notifications }
 
       @attachment.reload
       expect(@attachment.need_notify).not_to be_truthy
@@ -1224,9 +1212,7 @@ describe Attachment do
       @course.tab_configuration = [{:id => Course::TAB_FILES, :hidden => true}]
       @course.save!
 
-      new_time = Time.now + 10.minutes
-      Time.stubs(:now).returns(new_time)
-      Attachment.do_notifications
+      Timecop.freeze(10.minutes.from_now) { Attachment.do_notifications }
 
       @attachment.reload
       expect(@attachment.need_notify).not_to be_truthy
@@ -1240,9 +1226,15 @@ describe Attachment do
 
       Attachment.where(:id => @attachment).update_all(:need_notify => true)
 
-      new_time = Time.now + 10.minutes
-      Time.stubs(:now).returns(new_time)
-      Attachment.do_notifications
+      Timecop.freeze(10.minutes.from_now) { Attachment.do_notifications }
+    end
+
+    it "doesn't send notifications for a concluded course" do
+      attachment_model(:uploaded_data => stub_file_data('file.txt', nil, 'text/html'), :content_type => 'text/html')
+      @course.soft_conclude!
+      @course.save!
+      Timecop.freeze(10.minutes.from_now) { Attachment.do_notifications }
+      expect(Message.where(user_id: @student, notification_name: 'New File Added').first).to be_nil
     end
   end
 
@@ -1259,6 +1251,9 @@ describe Attachment do
       attachment_model(:context => @user, :uploaded_data => stub_png_data, :filename => "homework.png")
       @attachment.update_attribute(:size, 1.megabyte)
 
+      quota = Attachment.get_quota(@user)
+      expect(quota[:quota_used]).to eq 1.megabyte
+
       @assignment = @course.assignments.create!
       sub = @assignment.submit_homework(@user, attachments: [@attachment])
 
@@ -1268,6 +1263,28 @@ describe Attachment do
       quota = Attachment.get_quota(@user)
       expect(quota[:quota_used]).to eq 1.megabyte
     end
+
+    it "should not count attachments a student has used for graded discussion replies towards the quota" do
+      course_with_student(:active_all => true)
+      attachment_model(:context => @user, :uploaded_data => stub_png_data, :filename => "homework.png")
+      @attachment.update_attribute(:size, 1.megabyte)
+
+      quota = Attachment.get_quota(@user)
+      expect(quota[:quota_used]).to eq 1.megabyte
+
+      assignment = @course.assignments.create!(:title => "asmt")
+      topic = @course.discussion_topics.create!(:title => 'topic', :assignment => assignment)
+      entry = topic.reply_from(:user => @student, :text => "entry")
+      entry.attachment = @attachment
+      entry.save!
+
+      attachment_model(:context => @user, :uploaded_data => stub_png_data, :filename => "otherfile.png")
+      @attachment.update_attribute(:size, 1.megabyte)
+
+      quota = Attachment.get_quota(@user)
+      expect(quota[:quota_used]).to eq 1.megabyte
+    end
+
   end
 
   context "#open" do
@@ -1401,20 +1418,6 @@ describe Attachment do
     end
   end
 
-  describe '.context_type' do
-    it 'returns the correct representation of a quiz statistics relation' do
-      stats = Quizzes::QuizStatistics.create!(report_type: 'student_analysis')
-      attachment = attachment_obj_with_context(Account.default.default_enrollment_term)
-      attachment.context = stats
-      attachment.save
-      expect(attachment.context_type).to eq "Quizzes::QuizStatistics"
-
-      Attachment.where(id: attachment).update_all(context_type: 'QuizStatistics')
-
-      expect(Attachment.find(attachment.id).context_type).to eq 'Quizzes::QuizStatistics'
-    end
-  end
-
   describe ".clone_url_as_attachment" do
     it "should reject invalid urls" do
       expect { Attachment.clone_url_as_attachment("ftp://some/stuff") }.to raise_error(ArgumentError)
@@ -1480,6 +1483,19 @@ describe Attachment do
         expect(Attachment.find(@attachment).grants_right?(@student, :download)).to eq true
       end
     end
+  end
+
+  it "should not be locked_for soft-concluded admin users" do
+    term = Account.default.enrollment_terms.create!
+    term.set_overrides(Account.default, 'TeacherEnrollment' => {:end_at => 3.days.ago})
+    course_with_teacher(:active_all => true)
+    @course.enrollment_term = term
+    @course.save!
+
+    attachment_model uploaded_data: default_uploaded_data
+    @attachment.update_attribute(:locked, true)
+    @attachment.reload
+    expect(@attachment.locked_for?(@teacher, :check_policies => true)).to be_falsey
   end
 
   describe 'local storage' do

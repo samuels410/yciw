@@ -18,7 +18,7 @@
 
 class ContentExport < ActiveRecord::Base
   include Workflow
-  belongs_to :context, :polymorphic => true
+  belongs_to :context, polymorphic: [:course, :group, { context_user: 'User' }]
   belongs_to :user
   belongs_to :attachment
   belongs_to :content_migration
@@ -28,7 +28,6 @@ class ContentExport < ActiveRecord::Base
   serialize :settings
   attr_accessible :context, :export_type, :user, :selected_content, :progress
   validates_presence_of :context_id, :workflow_state
-  validates_inclusion_of :context_type, :in => ['Course', 'Group', 'User']
 
   has_one :job_progress, :class_name => 'Progress', :as => :context
 
@@ -85,10 +84,6 @@ class ContentExport < ActiveRecord::Base
     # non-admins can create zip or user-data exports, but not other types
     given { |user, session| [ZIP, USER_DATA].include?(self.export_type) && self.context.grants_right?(user, session, :read) }
     can :create
-  end
-
-  def course
-    raise "Use context instead"
   end
 
   def export(opts={})
@@ -289,21 +284,24 @@ class ContentExport < ActiveRecord::Base
     ['created', 'exporting'].member? self.workflow_state
   end
 
-  alias_method :destroy!, :destroy
+  alias_method :destroy_permanently!, :destroy
   def destroy
     self.workflow_state = 'deleted'
-    self.attachment.destroy! if self.attachment
+    self.attachment.destroy_permanently! if self.attachment
     save!
   end
 
   def settings
-    read_attribute(:settings) || write_attribute(:settings,{}.with_indifferent_access)
+    read_or_initialize_attribute(:settings, {}.with_indifferent_access)
   end
 
   def fast_update_progress(val)
     content_migration.update_conversion_progress(val) if content_migration
     self.progress = val
     ContentExport.where(:id => self).update_all(:progress=>val)
+    if EpubExport.exists?(content_export_id: self.id)
+      self.epub_export.update_progress_from_content_export!(val)
+    end
     self.job_progress.try(:update_completion!, val)
   end
 

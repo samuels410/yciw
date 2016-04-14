@@ -1,6 +1,8 @@
 define([
   'i18n!account_settings',
   'jquery', // $
+  'jsx/shared/rce/RichContentEditor',
+  'tinymce.config',
   'jquery.ajaxJSON', // ajaxJSON
   'jquery.instructure_date_and_time', // date_field, time_field, datetime_field, /\$\.datetime/
   'jquery.instructure_forms', // formSubmit, getFormData, validateForm
@@ -13,19 +15,60 @@ define([
   'vendor/date', // Date.parse
   'vendor/jquery.scrollTo', // /\.scrollTo/
   'jqueryui/tabs' // /\.tabs/
-], function(I18n, $) {
+], function(I18n, $, RichContentEditor, EditorConfig) {
+
+  // optimization so user isn't waiting on RCS to
+  // respond when they hit announcements
+  richContentEditor = new RichContentEditor({riskLevel: "basic"})
+  richContentEditor.preloadRemoteModule()
+
+  EditorConfig.prototype.balanceButtonsOverride = function(instructure_buttons) {
+    var instBtnGroup = "table,instructure_links,unlink" + instructure_buttons;
+    var top_row_buttons = "";
+    var bottom_row_buttons = "";
+
+    top_row_buttons = this.formatBtnGroup + "," + this.positionBtnGroup;
+    bottom_row_buttons = instBtnGroup + "," + this.fontBtnGroup;
+
+    return [top_row_buttons, bottom_row_buttons];
+  };
+
+  EditorConfig.prototype.toolbar = function() {
+    var instructure_buttons = this.buildInstructureButtons();
+    return this.balanceButtonsOverride(instructure_buttons);
+  }
 
   $(document).ready(function() {
+    checkFutureListingSetting = function() {
+
+      if ($('#account_settings_restrict_student_future_view_value').is(':checked')) {
+        $('.future_listing').show();
+      } else {
+        $('.future_listing').hide();
+      }
+    };
+    checkFutureListingSetting();
+    $('#account_settings_restrict_student_future_view_value').change(checkFutureListingSetting);
+
     $("#account_settings").submit(function() {
       var $this = $(this);
+      var remove_ip_filters = true;
       $(".ip_filter .value").each(function() {
         $(this).removeAttr('name');
       }).filter(":not(.blank)").each(function() {
         var name = $.trim($(this).parents(".ip_filter").find(".name").val().replace(/\[|\]/g, '_'));
         if(name) {
+          remove_ip_filters = false;
           $(this).attr('name', 'account[ip_filters][' + name + ']');
         }
       });
+
+      if (remove_ip_filters) {
+        $this.append("<input class='remove_ip_filters' type='hidden' name='account[remove_ip_filters]' value='1'/>");
+      } else {
+        $this.find('.remove_ip_filters').remove(); // just in case it's left over after a failed validation
+      }
+
       var validations = {
         object_name: 'account',
         required: ['name'],
@@ -41,8 +84,39 @@ define([
       }
     });
     $(".datetime_field").datetime_field();
-    $("#add_notification_form textarea").editorBox().width('100%');
-    $("#add_notification_form").submit(function(event) {
+
+    $(".add_notification_toggle_focus").click(function() {
+      var aria_expanded = $('add_notification_form').attr('aria-expanded') === "true";
+      if(!aria_expanded) {
+        setTimeout(function() {$('#account_notification_subject').focus()}, 100);
+      }
+    });
+
+    $(".edit_notification_toggle_focus").click(function() {
+      var id = $(this).attr('data-edit-toggle-id');
+      var form_id = '#edit_notification_form_' + id;
+      var aria_expanded = $(form_id).attr('aria-expanded') === "true";
+      if(!aria_expanded) {
+        setTimeout(function() {$('#account_notification_subject_' + id).focus()}, 100);
+      }
+    });
+
+    $(".add_notification_cancel_focus").click(function() {
+      $("#add_announcement_button").focus();
+    });
+
+    $(".edit_cancel_focus").click(function() {
+      var id = $(this).attr('data-cancel-focus-id');
+      $("#notification_edit_" + id).focus();
+    });
+
+    $("#add_notification_form textarea").width('100%');
+    $("textarea.edit_notification_form, #add_notification_form textarea").each(function(idx, textarea){
+      richContentEditor.loadNewEditor($(textarea))
+    })
+
+
+    $("#add_notification_form, .edit_notification_form").submit(function(event) {
       var $this = $(this);
       var $confirmation = $this.find('#confirm_global_announcement:visible:not(:checked)');
       if ($confirmation.length > 0) {
@@ -55,7 +129,7 @@ define([
         date_fields: ['start_at', 'end_at'],
         numbers: []
       };
-      if ($('#account_notification_months_in_display_cycle').length > 0) {
+      if ($this[0].id == 'add_notification_form' && $('#account_notification_months_in_display_cycle').length > 0) {
         validations.numbers.push('months_in_display_cycle');
       }
       var result = $this.validateForm(validations);

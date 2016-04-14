@@ -25,9 +25,6 @@ class GroupMembership < ActiveRecord::Base
 
   attr_accessible :group, :user, :workflow_state, :moderator
 
-  EXPORTABLE_ATTRIBUTES = [:id, :group_id, :workflow_state, :created_at, :updated_at, :user_id, :uuid, :sis_batch_id, :moderator]
-  EXPORTABLE_ASSOCIATIONS = [:group, :user]
-
   before_save :assign_uuid
   before_save :auto_join
   before_save :capture_old_group_id
@@ -84,7 +81,7 @@ class GroupMembership < ActiveRecord::Base
     p.whenever {|record| record.changed_state(:rejected, :requested) }
 
     p.dispatch :new_student_organized_group
-    p.to { self.group.context.admins }
+    p.to { self.group.context.participating_admins }
     p.whenever {|record|
       record.group.context &&
       record.group.context.is_a?(Course) &&
@@ -191,7 +188,7 @@ class GroupMembership < ActiveRecord::Base
     Rails.cache.delete(self.user.group_membership_key)
   end
 
-  alias_method :destroy!, :destroy
+  alias_method :destroy_permanently!, :destroy
   def destroy
     self.workflow_state = 'deleted'
     self.save!
@@ -200,7 +197,7 @@ class GroupMembership < ActiveRecord::Base
   set_policy do
     # for non-communities, people can be put into groups by users who can manage groups at the context level,
     # but not moderators (hence :manage_groups)
-    given { |user, session| user && self.user && self.group && !self.group.group_category.try(:communities?) && ((user == self.user && self.group.grants_right?(user, session, :join)) || (self.group.grants_right?(self.user, session, :participate) && self.group.context && self.group.context.grants_right?(user, session, :manage_groups))) }
+    given { |user, session| user && self.user && self.group && !self.group.group_category.try(:communities?) && ((user == self.user && self.group.grants_right?(user, session, :join)) || (self.group.can_join?(self.user) && self.group.context && self.group.context.grants_right?(user, session, :manage_groups))) }
     can :create
 
     # for communities, users must initiate in order to be added to a group

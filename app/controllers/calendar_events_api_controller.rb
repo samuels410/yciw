@@ -328,20 +328,42 @@ class CalendarEventsApiController < ApplicationController
   def render_events_for_user(user, route_url)
     scope = @type == :assignment ? assignment_scope(user) : calendar_event_scope(user)
     events = Api.paginate(scope, self, route_url)
-    ActiveRecord::Associations::Preloader.new(events, :child_events).run if @type == :event
+    ActiveRecord::Associations::Preloader.new.preload(events, :child_events) if @type == :event
     if @type == :assignment
       events = apply_assignment_overrides(events, user)
       mark_submitted_assignments(user, events)
       includes = Array(params[:include])
-      if includes.include?("submissions")
+      if includes.include?("submission")
         submissions = Submission.where(assignment_id: events, user_id: user)
-        subs_by_assg = submissions.group_by(&:assignment_id)
+          .group_by(&:assignment_id)
+      end
+      # preload data used by assignment_json
+      ActiveRecord::Associations::Preloader.new.preload(events, :discussion_topic)
+      Shard.partition_by_shard(events) do |shard_events|
+        having_submission = Submission.having_submission.
+            where(assignment_id: shard_events).
+            uniq.
+            pluck(:assignment_id).to_set
+        shard_events.each do |event|
+          event.has_submitted_submissions = having_submission.include?(event.id)
+        end
+
+        having_student_submission = Submission.having_submission.
+            where(assignment_id: shard_events).
+            where.not(user_id: nil).
+            uniq.
+            pluck(:assignment_id).to_set
+        shard_events.each do |event|
+          event.has_student_submissions = having_student_submission.include?(event.id)
+        end
       end
     end
+
     if @errors.empty?
       json = events.map do |event|
-        subs = subs_by_assg[event.id] if subs_by_assg
-        event_json(event, user, session, {excludes: params[:excludes], submissions: subs})
+        subs = submissions[event.id] if submissions
+        sub = subs.sort_by(&:submitted_at).last if subs
+        event_json(event, user, session, {excludes: params[:excludes], submission: sub})
       end
       render :json => json
     else
@@ -642,7 +664,7 @@ class CalendarEventsApiController < ApplicationController
     @contexts.each do |context|
       log_asset_access([ "calendar_feed", context ], "calendar", 'other')
     end
-    ActiveRecord::Associations::Preloader.new(@events, :context)
+    ActiveRecord::Associations::Preloader.new.preload(@events, :context)
 
     respond_to do |format|
       format.ics do
@@ -843,7 +865,6 @@ class CalendarEventsApiController < ApplicationController
       # context can sometimes be a user, so must filter those out
       select{|context| context.is_a? Course }.
       reject{|course|
-       !course.feature_enabled?(:differentiated_assignments) ||
        courses_to_not_filter.include?(course.id)
       }
 
@@ -869,7 +890,7 @@ class CalendarEventsApiController < ApplicationController
   end
 
   def apply_assignment_overrides(events, user)
-    ActiveRecord::Associations::Preloader.new(events, [:context, :assignment_overrides]).run
+    ActiveRecord::Associations::Preloader.new.preload(events, [:context, :assignment_overrides])
     events.each { |e| e.has_no_overrides = true if e.assignment_overrides.size == 0 }
 
     if AssignmentOverrideApplicator.should_preload_override_students?(events, user, "calendar_events_api")
@@ -877,21 +898,23 @@ class CalendarEventsApiController < ApplicationController
     end
 
     unless (params[:excludes] || []).include?('assignments')
-      ActiveRecord::Associations::Preloader.new(events, [:rubric, :rubric_association]).run
+      ActiveRecord::Associations::Preloader.new.preload(events, [:rubric, :rubric_association])
       # improves locked_json performance
 
       student_events = events.select{|e| !e.context.grants_right?(user, session, :read_as_admin)}
       Assignment.preload_context_module_tags(student_events) if student_events.any?
     end
 
+    courses_user_has_been_enrolled_in = DatesOverridable.precache_enrollments_for_multiple_assignments(events, user)
     events = events.inject([]) do |assignments, assignment|
 
-      if assignment.context.user_has_been_student?(user)
+      if courses_user_has_been_enrolled_in[:student].include?(assignment.context_id)
         assignment = assignment.overridden_for(user)
         assignment.infer_all_day
         assignments << assignment
       else
-        dates_list = assignment.all_dates_visible_to(user)
+        dates_list = assignment.all_dates_visible_to(user,
+          courses_user_has_been_enrolled_in: courses_user_has_been_enrolled_in)
 
         if dates_list.empty?
           assignments << assignment
@@ -906,7 +929,8 @@ class CalendarEventsApiController < ApplicationController
         if original_dates.present?
           section_override_count = dates_list.count{|d| d[:set_type] == 'CourseSection'}
           all_sections_overridden = section_override_count > 0 && section_override_count == assignment.context.active_section_count
-          if (assignment.context.user_has_been_observer?(user) && assignments.empty?) || !all_sections_overridden
+          if !all_sections_overridden ||
+              (assignments.empty? && courses_user_has_been_enrolled_in[:observer].include?(assignment.context_id))
             assignments << assignment
           end
         end

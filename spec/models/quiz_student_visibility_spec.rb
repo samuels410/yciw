@@ -1,20 +1,11 @@
 require File.expand_path(File.dirname(__FILE__) + '/../spec_helper')
 
 describe "differentiated_assignments" do
-  def course_with_da_flag(feature_method=:enable_feature!)
+  def course_with_differentiated_assignments_enabled
     @course = Course.create!
-    @course.send(feature_method, :differentiated_assignments)
     @user = user_model
     @course.enroll_user(@user)
     @course.save!
-  end
-
-  def course_with_differentiated_assignments_enabled
-    course_with_da_flag :enable_feature!
-  end
-
-  def course_without_differentiated_assignments_enabled
-    course_with_da_flag :disable_feature!
   end
 
   def make_quiz(opts={})
@@ -181,7 +172,7 @@ describe "differentiated_assignments" do
         before{enroller_user_in_section(@section_foo)}
         it "should keep the quiz visible if there is a grade" do
           @quiz.assignment.grade_student(@user, {grade: 10})
-          @user.enrollments.each(&:destroy!)
+          @user.enrollments.each(&:destroy_permanently!)
           enroller_user_in_section(@section_bar, {user: @user})
           ensure_user_sees_quiz
         end
@@ -190,14 +181,14 @@ describe "differentiated_assignments" do
           @quiz.assignment.grade_student(@user, {grade: 10})
           @quiz.assignment.submissions.last.update_attribute("score", nil)
           @quiz.assignment.submissions.last.update_attribute("grade", 10)
-          @user.enrollments.each(&:destroy!)
+          @user.enrollments.each(&:destroy_permanently!)
           enroller_user_in_section(@section_bar, {user: @user})
           ensure_user_does_not_see_quiz
         end
 
         it "should keep the quiz visible if the grade is zero" do
           @quiz.assignment.grade_student(@user, {grade: 0})
-          @user.enrollments.each(&:destroy!)
+          @user.enrollments.each(&:destroy_permanently!)
           enroller_user_in_section(@section_bar, {user: @user})
           ensure_user_sees_quiz
         end
@@ -216,12 +207,12 @@ describe "differentiated_assignments" do
         it "should update when enrollments change" do
           ensure_user_sees_quiz
           enrollments = StudentEnrollment.where(:user_id => @user.id, :course_id => @course.id, :course_section_id => @section_foo.id)
-          enrollments.each(&:destroy!)
+          enrollments.each(&:destroy_permanently!)
           ensure_user_does_not_see_quiz
         end
         it "should update when the override is deleted" do
           ensure_user_sees_quiz
-          @quiz.assignment_overrides.to_a.each(&:destroy!)
+          @quiz.assignment_overrides.to_a.each(&:destroy_permanently!)
           ensure_user_does_not_see_quiz
         end
       end

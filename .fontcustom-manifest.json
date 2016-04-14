@@ -1,7 +1,7 @@
 {
   "checksum": {
-    "previous": "45d9b0691da78ff556bf10aeec96c955cfe96404dc5a5e5c34a63cdda6b647a5",
-    "current": "45d9b0691da78ff556bf10aeec96c955cfe96404dc5a5e5c34a63cdda6b647a5"
+    "previous": "7cce59b4ad868e5482f0e727ad9ee095c5c4d5898601ce890d194f0e092cc9f1",
+    "current": "7cce59b4ad868e5482f0e727ad9ee095c5c4d5898601ce890d194f0e092cc9f1"
   },
   "fonts": [
     "public/fonts/canvas/canvas-icons.ttf",
@@ -374,6 +374,10 @@
       "codepoint": 61781,
       "source": "public/fonts/icons/mark-as-read.svg"
     },
+    "masquerade": {
+      "codepoint": 61881,
+      "source": "public/fonts/icons/masquerade.svg"
+    },
     "materials-required": {
       "codepoint": 61782,
       "source": "public/fonts/icons/materials-required.svg"
@@ -629,6 +633,10 @@
     "syllabus": {
       "codepoint": 61844,
       "source": "public/fonts/icons/syllabus.svg"
+    },
+    "table": {
+      "codepoint": 61882,
+      "source": "public/fonts/icons/table.svg"
     },
     "tag": {
       "codepoint": 61845,

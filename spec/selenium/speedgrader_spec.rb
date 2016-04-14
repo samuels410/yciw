@@ -38,6 +38,11 @@ describe 'Speedgrader' do
     ]
   end
 
+  def let_speedgrader_load
+    wait = Selenium::WebDriver::Wait.new(timeout: 5)
+    wait.until { f("#grading-box-extended").attribute('value') != "" }
+  end
+
   context 'grading' do
     it 'complete/incomplete', priority: "1", test_id: 164014 do
       init_course_with_students 2
@@ -50,6 +55,7 @@ describe 'Speedgrader' do
       @assignment.grade_student @students[1], {grade: 'incomplete'}
 
       get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}#"
+      let_speedgrader_load
       expect(f('#grading-box-extended').attribute 'value').to eq 'complete'
       f('a.next').click
       expect(f('#grading-box-extended').attribute 'value').to eq 'incomplete'
@@ -63,6 +69,7 @@ describe 'Speedgrader' do
       @assignment.grade_student @students[1], {grade: 'C'}
 
       get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}#"
+      let_speedgrader_load
       expect(f('#grading-box-extended').attribute 'value').to eq 'A'
       f('a.next').click
       expect(f('#grading-box-extended').attribute 'value').to eq 'C'
@@ -78,6 +85,7 @@ describe 'Speedgrader' do
       @assignment.grade_student @students[1], {grade: 10}
 
       get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}#"
+      let_speedgrader_load
       expect(f('#grading-box-extended').attribute 'value').to eq '75'
       f('a.next').click
       expect(f('#grading-box-extended').attribute 'value').to eq '50'
@@ -93,7 +101,7 @@ describe 'Speedgrader' do
       @assignment.grade_student @students[1], {grade: 10}
 
       get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}#"
-      sleep 5
+      let_speedgrader_load
       expect(f('#grading-box-extended').attribute 'value').to eq '15'
       f('a.next').click
       expect(f('#grading-box-extended').attribute 'value').to eq '10'
@@ -109,6 +117,7 @@ describe 'Speedgrader' do
       @assignment.grade_student @students[1], {grade: 'D'}
 
       get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}#"
+      let_speedgrader_load
       expect(f('#grading-box-extended').attribute 'value').to eq 'A'
       f('a.next').click
       expect(f('#grading-box-extended').attribute 'value').to eq 'D'
@@ -150,6 +159,7 @@ describe 'Speedgrader' do
 
       it 'should allow pass grade on assignments worth 0 points', priority: "1", test_id: 400127 do
         get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}#"
+        let_speedgrader_load
         expect(f('#grading-box-extended')['value']).to eq('complete')
         expect(fj('#grade_container label').text()).to include_text('(0 / 0)')
       end
@@ -157,6 +167,7 @@ describe 'Speedgrader' do
       it 'should display pass/fail correctly when total points possible is changed', priority: "1", test_id: 419289 do
         @assignment.update_attributes(points_possible: 1)
         get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}#"
+        let_speedgrader_load
         expect(f('#grading-box-extended')['value']).to eq('complete')
         expect(fj('#grade_container label').text()).to include_text('(1 / 1)')
       end
@@ -346,10 +357,8 @@ describe 'Speedgrader' do
   end
 
   it 'updates scores', priority: "1", test_id: 164021 do
-    skip "Skipped because this spec fails if not run in foreground\nThis is believed to be the issue: https://code.google.com/p/selenium/issues/detail?id=7346"
-
     init_course_with_students
-    quiz = seed_quiz 10
+    quiz = seed_quiz_with_submission(10)
 
     @teacher.preferences[:enable_speedgrader_grade_by_question] = true
     @teacher.save!
@@ -357,20 +366,17 @@ describe 'Speedgrader' do
     get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{quiz.assignment_id}"
 
     driver.switch_to.frame f('#speedgrader_iframe')
-      list = ff('#questions .user_points input')
-      [9, 17, 25].each do |index|
-        driver.execute_script("$('#questions .user_points input').focus()")
-        replace_content list[index], "1\t"
-      end
-      expect(f('#after_fudge_points_total').text).to eq '3'
-
-    # For whatever reason, this spec fails occasionally.
-    # Expected "3"
-    # Got "2"
-
-    replace_content f('#fudge_points_entry'), "7\t"
+    list = ff('#questions .user_points input')
+    [9, 17, 25].each do |index|
+      driver.execute_script("$('#questions .user_points input').focus()")
+      replace_content list[index], "1", :tab_out => true
+    end
     expect_new_page_load {f('button.update-scores').click}
-    expect(f('#after_fudge_points_total').text). to eq '10'
+    expect(f('#after_fudge_points_total').text).to eq '3'
+
+    replace_content f('#fudge_points_entry'), "7", :tab_out => true
+    expect_new_page_load {f('button.update-scores').click}
+    expect(f('#after_fudge_points_total').text).to eq '10'
   end
 
   it 'should have working student drop-down arrows ', priority: "1", test_id: 164018 do
@@ -460,10 +466,37 @@ describe 'Speedgrader' do
       user_session(teacher)
 
       get "/courses/#{test_course.id}/gradebook/speed_grader?assignment_id=#{assignment.id}"
-      fj('#submission_to_view').click
+      f('#submission_to_view').click
       click_option('#submission_to_view', '0', :value)
       wait_for_ajaximations
-      expect(fj('#submission_files_list .submission-file .display_name')).to include_text('unknown.loser')
+      expect(f('#submission_files_list .submission-file .display_name')).to include_text('unknown.loser')
+    end
+  end
+
+  context 'speedgrader nav bar' do
+    # set up course, users and assignment
+    let(:test_course) { course() }
+    let(:teacher)     { user(active_all: true) }
+    let(:student)     { user(active_all: true) }
+    let!(:enroll_teacher_and_students) do
+      test_course.enroll_user(teacher, 'TeacherEnrollment', enrollment_state: 'active')
+      test_course.enroll_user(student, 'StudentEnrollment', enrollment_state: 'active')
+    end
+    let!(:assignment) do
+      test_course.assignments.create!(
+        title: 'Assignment A',
+        submission_types: 'online_text_entry,online_upload'
+      )
+    end
+
+    it 'displays keyboard shortcut modal when clicking blue info icon', priority: "2", test_id: 759319 do
+      user_session(teacher)
+      get "/courses/#{test_course.id}/gradebook/speed_grader?assignment_id=#{assignment.id}"
+
+      shortcut_modal = f('#keyboard_navigation')
+      f('#keyboard-shortcut-info-icon').click
+
+      expect(shortcut_modal).to be_displayed
     end
   end
 end

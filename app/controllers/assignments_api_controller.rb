@@ -303,7 +303,7 @@
 #         },
 #         "allowed_extensions": {
 #           "description": "Allowed file extensions, which take effect if submission_types includes 'online_upload'.",
-#           "example": "[\"docx\", \"ppt\"]",
+#           "example": ["docx", "ppt"],
 #           "type": "array",
 #           "items": {"type": "string"}
 #         },
@@ -395,7 +395,7 @@
 #         },
 #         "submission_types": {
 #           "description": "the types of submissions allowed for this assignment list containing one or more of the following: 'discussion_topic', 'online_quiz', 'on_paper', 'none', 'external_tool', 'online_text_entry', 'online_url', 'online_upload' 'media_recording'",
-#           "example": "[\"online_text_entry\"]",
+#           "example": ["online_text_entry"],
 #           "type": "array",
 #           "items": {"type": "string"},
 #           "allowableValues": {
@@ -485,13 +485,12 @@
 #         },
 #         "frozen_attributes": {
 #           "description": "(Optional) Array of frozen attributes for the assignment. Only account administrators currently have permission to change an attribute in this list. Will be empty if no attributes are frozen for this assignment. Possible frozen attributes are: title, description, lock_at, points_possible, grading_type, submission_types, assignment_group_id, allowed_extensions, group_category_id, notify_of_update, peer_reviews NOTE: This field will only be present if the AssignmentFreezer plugin is available for your account.",
-#           "example": "[\"title\"]",
+#           "example": ["title"],
 #           "type": "array",
 #           "items": {"type": "string"}
 #         },
 #         "submission": {
 #           "description": "(Optional) If 'submission' is included in the 'include' parameter, includes a Submission object that represents the current user's (user who is requesting information from the api) current submission for the assignment. See the Submissions API for an example response. If the user does not have a submission, this key will be absent.",
-#           "example": "{}",
 #           "$ref": "Submission"
 #         },
 #         "use_rubric_for_grading": {
@@ -511,7 +510,7 @@
 #         },
 #         "assignment_visibility": {
 #           "description": "(Optional) If 'assignment_visibility' is included in the 'include' parameter, includes an array of student IDs who can see this assignment.",
-#           "example": "[137,381,572]",
+#           "example": [137,381,572],
 #           "type": "array",
 #           "items": {"type": "integer"}
 #         },
@@ -541,9 +540,8 @@ class AssignmentsApiController < ApplicationController
   #   Apply assignment overrides for each assignment, defaults to true.
   # @argument needs_grading_count_by_section [Boolean]
   #   Split up "needs_grading_count" by sections into the "needs_grading_count_by_section" key, defaults to false
-  # @argument bucket [String]
+  # @argument bucket [String, "past"|"overdue"|"undated"|"ungraded"|"upcoming"|"future"]
   #   If included, only return certain assignments depending on due date and submission status.
-  #   Valid buckets are "past", "overdue", "undated", "ungraded", "upcoming", and "future".
   # @returns [Assignment]
   def index
     error_or_array= get_assignments(@current_user)
@@ -567,7 +565,6 @@ class AssignmentsApiController < ApplicationController
           preload(:rubric_association, :rubric).
           reorder("assignment_groups.position, assignments.position")
       scope = Assignment.search_by_attribute(scope, :title, params[:search_term])
-      da_enabled = @context.feature_enabled?(:differentiated_assignments)
 
       include_params = Array(params[:include])
 
@@ -591,7 +588,7 @@ class AssignmentsApiController < ApplicationController
       override_param = params[:override_assignment_dates] || true
       override_dates = value_to_boolean(override_param)
       if override_dates || include_all_dates || include_override_objects
-        ActiveRecord::Associations::Preloader.new(assignments, :assignment_overrides).run
+        ActiveRecord::Associations::Preloader.new.preload(assignments, :assignment_overrides)
         assignments.select{ |a| a.assignment_overrides.size == 0 }.
           each { |a| a.has_no_overrides = true }
 
@@ -602,7 +599,7 @@ class AssignmentsApiController < ApplicationController
 
       include_visibility = include_params.include?('assignment_visibility') && @context.grants_any_right?(user, :read_as_admin, :manage_grades, :manage_assignments)
 
-      if include_visibility && da_enabled
+      if include_visibility
         assignment_visibilities = AssignmentStudentVisibility.users_with_visibility_by_assignment(course_id: @context.id, assignment_id: assignments.map(&:id))
       end
 
@@ -787,15 +784,15 @@ class AssignmentsApiController < ApplicationController
   #  The strategy used for grading the assignment.
   #  The assignment is ungraded if this field is omitted.
   #
-  # @argument assignment[due_at] [Timestamp]
+  # @argument assignment[due_at] [DateTime]
   #   The day/time the assignment is due.
   #   Accepts times in ISO 8601 format, e.g. 2014-10-21T18:48:00Z.
   #
-  # @argument assignment[lock_at] [Timestamp]
+  # @argument assignment[lock_at] [DateTime]
   #   The day/time the assignment is locked after.
   #   Accepts times in ISO 8601 format, e.g. 2014-10-21T18:48:00Z.
   #
-  # @argument assignment[unlock_at] [Timestamp]
+  # @argument assignment[unlock_at] [DateTime]
   #   The day/time the assignment is unlocked.
   #   Accepts times in ISO 8601 format, e.g. 2014-10-21T18:48:00Z.
   #
@@ -931,15 +928,15 @@ class AssignmentsApiController < ApplicationController
   #  The strategy used for grading the assignment.
   #  The assignment is ungraded if this field is omitted.
   #
-  # @argument assignment[due_at] [Timestamp]
+  # @argument assignment[due_at] [DateTime]
   #   The day/time the assignment is due.
   #   Accepts times in ISO 8601 format, e.g. 2014-10-21T18:48:00Z.
   #
-  # @argument assignment[lock_at] [Timestamp]
+  # @argument assignment[lock_at] [DateTime]
   #   The day/time the assignment is locked after.
   #   Accepts times in ISO 8601 format, e.g. 2014-10-21T18:48:00Z.
   #
-  # @argument assignment[unlock_at] [Timestamp]
+  # @argument assignment[unlock_at] [DateTime]
   #   The day/time the assignment is unlocked.
   #   Accepts times in ISO 8601 format, e.g. 2014-10-21T18:48:00Z.
   #

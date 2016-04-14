@@ -31,9 +31,8 @@ include I18nUtilities
 $selenium_config = ConfigFile.load("selenium") || {}
 SERVER_IP = $selenium_config[:server_ip] || UDPSocket.open { |s| s.connect('8.8.8.8', 1); s.addr.last }
 BIND_ADDRESS = $selenium_config[:bind_address] || '0.0.0.0'
-SECONDS_UNTIL_COUNTDOWN = 5
 SECONDS_UNTIL_GIVING_UP = 20
-MAX_SERVER_START_TIME = 60
+MAX_SERVER_START_TIME = 15
 
 #NEED BETTER variable handling
 THIS_ENV = ENV['TEST_ENV_NUMBER'].present? ? ENV['TEST_ENV_NUMBER'].to_i : 1
@@ -43,13 +42,9 @@ $server_port = nil
 $app_host_and_port = nil
 
 at_exit do
-  [1, 2, 3].each do
-    begin
-      $selenium_driver.try(:quit)
-      break
-    rescue Timeout::Error => te
-      puts "rescued timeout error from selenium_driver quit : #{te}"
-    end
+  begin
+    $selenium_driver.try(:quit)
+  rescue Errno::ECONNREFUSED
   end
 end
 
@@ -63,13 +58,38 @@ shared_context "in-process server selenium tests" do
   include CustomScreenActions
   include CustomValidators
   include CustomWaitMethods
+  include CustomDateHelpers
   include LoginAndSessionMethods
 
   # set up so you can use rails urls helpers in your selenium tests
   include Rails.application.routes.url_helpers
 
-  prepend_before :all do
-    SeleniumDriverSetup.allow_requests!
+  def maybe_recover_from_exception(exception)
+    case exception
+    when Errno::ENOMEM
+      # no sense trying anymore, give up and hope that other nodes pick up the slack
+      puts "Error: got `#{exception}`, aborting"
+      RSpec.world.wants_to_quit = true
+    when EOFError, Errno::ECONNREFUSED, Net::ReadTimeout
+      if $selenium_driver && !RSpec.world.wants_to_quit && exception.backtrace.grep(/selenium-webdriver/).present?
+        puts "SELENIUM: webdriver is misbehaving.  Will try to re-initialize."
+        # this will cause the selenium driver to get re-initialized if it
+        # crashes for some reason
+        $selenium_driver = nil
+        return true
+      end
+    end
+    false
+  end
+
+  around do |example|
+    begin
+      example.run
+    rescue # before/after/around ... always re-raise so the example fails
+      maybe_recover_from_exception $ERROR_INFO
+      raise
+    end
+    maybe_recover_from_exception example.example.exception
   end
 
   prepend_before :each do
@@ -81,32 +101,24 @@ shared_context "in-process server selenium tests" do
   end
 
   append_before :all do
-    $selenium_driver ||= setup_selenium
-    default_url_options[:host] = $app_host_and_port
-    close_modal_if_present
-    resize_screen_to_normal
+    retry_count = 0
+    begin
+      $selenium_driver ||= setup_selenium
+      default_url_options[:host] = $app_host_and_port
+      close_modal_if_present
+      resize_screen_to_normal
+    rescue
+      if maybe_recover_from_exception($ERROR_INFO) && (retry_count += 1) < 3
+        retry
+      else
+        raise
+      end
+    end
   end
 
   append_before :each do
-    #the driver sometimes gets in a hung state and this if almost always the first line of code to catch it
-    begin
-      tries ||= 3
-      driver.manage.timeouts.implicit_wait = 3
-      driver.manage.timeouts.script_timeout = 60
-      EncryptedCookieStore.test_secret = SecureRandom.hex(64)
-      enable_forgery_protection
-    rescue
-      if ENV['PARALLEL_EXECS'] != nil
-        #cleans up and provisions a new driver
-        puts "ERROR: thread: #{THIS_ENV} selenium server hung, attempting to recover the node"
-        $selenium_driver = nil
-        $selenium_driver ||= setup_selenium
-        default_url_options[:host] = $app_host_and_port
-        retry unless (tries -= 1).zero?
-      else
-        raise # preserve original error
-      end
-    end
+    EncryptedCookieStore.test_secret = SecureRandom.hex(64)
+    enable_forgery_protection
   end
 
   before do
@@ -123,14 +135,15 @@ shared_context "in-process server selenium tests" do
       @dj_connection = Delayed::Backend::ActiveRecord::Job.connection
 
       # synchronize db connection methods for a modicum of thread safety
-      methods_to_sync = %w{execute exec_cache exec_no_cache query}
+      methods_to_sync = %w{execute exec_cache exec_no_cache query transaction}
       [@db_connection, @dj_connection].each do |conn|
         methods_to_sync.each do |method_name|
           if conn.respond_to?(method_name, true) && !conn.respond_to?("#{method_name}_with_synchronization", true)
-            conn.class.class_eval <<-RUBY
+            arg_list = "*args"
+            arg_list << ", &Proc.new" if method_name == "transaction"
+            conn.class.class_eval <<-RUBY, __FILE__, __LINE__ + 1
               def #{method_name}_with_synchronization(*args)
-                @mutex ||= Mutex.new
-                @mutex.synchronize { #{method_name}_without_synchronization(*args) }
+                SeleniumDriverSetup.request_mutex.synchronize { #{method_name}_without_synchronization(#{arg_list}) }
               end
               alias_method_chain :#{method_name}, :synchronization
             RUBY
@@ -144,6 +157,12 @@ shared_context "in-process server selenium tests" do
     end
   end
 
+  around do |example|
+    Rails.logger.capture_messages do
+      example.run
+    end
+  end
+
   after(:each) do |example|
     clear_timers!
     # while disallow_requests! would generally get these, there's a small window
@@ -154,7 +173,8 @@ shared_context "in-process server selenium tests" do
       # we want to ignore selenium errors when attempting to wait here
       nil
     end
-    record_errors(example)
+    SeleniumDriverSetup.note_recent_spec_run(example)
+    record_errors(example, Rails.logger.captured_messages)
     SeleniumDriverSetup.disallow_requests!
     truncate_all_tables unless self.use_transactional_fixtures
   end

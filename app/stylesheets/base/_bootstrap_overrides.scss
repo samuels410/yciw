@@ -2,7 +2,7 @@
 @import "base/environment";
 
 body {
-  font-size: 13px;
+  @include fontSize(13px);
 }
 
 //*********** BEGIN HEADER OVERRIDES **************
@@ -171,11 +171,6 @@ input[type=file] {
   }
 }
 
-// gets rid of ugly border
-iframe#tool_content {
-  border: none;
-}
-
 // "ui.dialog you are so dumb. you are really dumb, for real"
 // ui.dialog cancels input events for any positioned element w/ a lower
 // z-index, even if the element is inside the dialog (in which case the
@@ -229,7 +224,7 @@ Here's an accessible way to do it for popovers without a header.
 
 .ui-widget.ui-tooltip.popover {
   padding: 1px;
-  font-size: 14px;
+  @include fontSize($ic-font-size--small);
   max-width: 236px;
   width: 236px;
   color: $gray;

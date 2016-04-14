@@ -23,11 +23,7 @@ class Conversation < ActiveRecord::Base
   has_many :conversation_messages, -> { order("created_at DESC, id DESC") }, dependent: :delete_all
   has_many :conversation_message_participants, :through => :conversation_messages
   has_one :stream_item, :as => :asset
-  belongs_to :context, :polymorphic => true
-  validates_inclusion_of :context_type, :allow_nil => true, :in => ['Account', 'Course', 'Group']
-
-  EXPORTABLE_ATTRIBUTES = [:id, :has_attachments, :has_media_objects, :tags, :root_account_ids, :subject, :context_type, :context_id]
-  EXPORTABLE_ASSOCATIONS = [:context]
+  belongs_to :context, polymorphic: [:account, :course, :group]
 
   validates_length_of :subject, :maximum => maximum_string_length, :allow_nil => true
 
@@ -124,6 +120,7 @@ class Conversation < ActiveRecord::Base
   end
 
   def add_participants(current_user, users, options={})
+    message = nil
     self.shard.activate do
       user_ids = users.map(&:id).uniq
       raise "can't add participants to a private conversation" if private?
@@ -163,7 +160,7 @@ class Conversation < ActiveRecord::Base
         unless options[:no_messages]
           # give them all messages
           # NOTE: individual messages in group conversations don't have tags
-          connection.execute(sanitize_sql([<<-SQL, self.id, current_user.id, user_ids]))
+          self.class.connection.execute(sanitize_sql([<<-SQL, self.id, current_user.id, user_ids]))
             INSERT INTO #{ConversationMessageParticipant.quoted_table_name}(conversation_message_id, conversation_participant_id, user_id, workflow_state)
             SELECT conversation_messages.id, conversation_participants.id, conversation_participants.user_id, 'active'
             FROM #{ConversationMessage.quoted_table_name}, #{ConversationParticipant.quoted_table_name}, #{ConversationMessageParticipant.quoted_table_name}
@@ -175,10 +172,12 @@ class Conversation < ActiveRecord::Base
           SQL
 
           # announce their arrival
-          add_event_message(current_user, {:event_type => :users_added, :user_ids => user_ids}, options)
+          message = add_event_message(current_user, {:event_type => :users_added, :user_ids => user_ids}, options)
         end
       end
+      self.touch
     end
+    message
   end
 
   def add_event_message(current_user, event_data={}, options={})
@@ -378,10 +377,12 @@ class Conversation < ActiveRecord::Base
         # so we'll hard-delete them before reinserting. It would probably be better
         # to update them instead, but meh.
         inserting_user_ids = message_participant_data.map { |d| d[:user_id] }
-        ConversationMessageParticipant.where(
-          :conversation_message_id => message.id, :user_id => inserting_user_ids
-          ).delete_all
-        ConversationMessageParticipant.bulk_insert message_participant_data
+        ConversationMessageParticipant.unique_constraint_retry do
+          ConversationMessageParticipant.where(
+            :conversation_message_id => message.id, :user_id => inserting_user_ids
+            ).delete_all
+          ConversationMessageParticipant.bulk_insert message_participant_data
+        end
       end
     end
   end
@@ -474,7 +475,7 @@ class Conversation < ActiveRecord::Base
   end
 
   def subscribed_participants
-    ActiveRecord::Associations::Preloader.new(conversation_participants, :user).run unless ModelCache[:users]
+    ActiveRecord::Associations::Preloader.new.preload(conversation_participants, :user) unless ModelCache[:users]
     conversation_participants.select(&:subscribed?).map(&:user).compact
   end
 
@@ -698,7 +699,7 @@ class Conversation < ActiveRecord::Base
   def delete_for_all
     stream_item.try(:destroy_stream_item_instances)
     shard.activate do
-      conversation_message_participants.scoped.delete_all
+      conversation_message_participants.scope.delete_all
     end
     conversation_participants.shard(self).delete_all
   end

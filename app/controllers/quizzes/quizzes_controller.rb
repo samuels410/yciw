@@ -20,7 +20,7 @@ class Quizzes::QuizzesController < ApplicationController
   include Api::V1::Quiz
   include Api::V1::AssignmentOverride
   include KalturaHelper
-  include Filters::Quizzes
+  include ::Filters::Quizzes
 
   # If Quiz#one_time_results is on, this flag must be set whenever we've
   # rendered the submission results to the student so that the results can be
@@ -28,6 +28,8 @@ class Quizzes::QuizzesController < ApplicationController
   attr_reader :lock_results_if_needed
 
   before_filter :require_context
+  before_filter :rich_content_service_config, only: [:show]
+
   add_crumb(proc { t('#crumbs.quizzes', "Quizzes") }) { |c| c.send :named_context_url, c.instance_variable_get("@context"), :context_quizzes_url }
   before_filter { |c| c.active_tab = "quizzes" }
   before_filter :require_quiz, :only => [
@@ -67,9 +69,7 @@ class Quizzes::QuizzesController < ApplicationController
     # overrides later using the API:
     scope = scope.available unless can_manage
 
-    if @context.feature_enabled?(:differentiated_assignments)
-      scope = DifferentiableAssignment.scope_filter(scope, @current_user, @context)
-    end
+    scope = DifferentiableAssignment.scope_filter(scope, @current_user, @context)
 
     quizzes = scope.sort_by do |quiz|
       due_date = quiz.assignment ? quiz.assignment.due_at : quiz.lock_at
@@ -117,7 +117,7 @@ class Quizzes::QuizzesController < ApplicationController
         assignment_overrides: api_v1_course_quiz_assignment_overrides_url(@context)
       },
       :PERMISSIONS => {
-        create: can_do(@context.quizzes.scoped.new, @current_user, :create),
+        create: can_do(@context.quizzes.temp_record, @current_user, :create),
         manage: can_manage,
         read_question_banks: can_manage || can_do(@context, @current_user, :read_question_banks)
       },
@@ -240,7 +240,7 @@ class Quizzes::QuizzesController < ApplicationController
   end
 
   def new
-    if authorized_action(@context.quizzes.scoped.new, @current_user, :create)
+    if authorized_action(@context.quizzes.temp_record, @current_user, :create)
       @assignment = nil
       @assignment = @context.assignments.active.find(params[:assignment_id]) if params[:assignment_id]
       @quiz = @context.quizzes.build
@@ -278,9 +278,10 @@ class Quizzes::QuizzesController < ApplicationController
       sections = @context.course_sections.active
 
       hash = {
-        :ASSIGNMENT_ID => @assigment.present? ? @assignment.id : nil,
-        :ASSIGNMENT_OVERRIDES => assignment_overrides_json(@quiz.overrides_for(@current_user)),
-        :DIFFERENTIATED_ASSIGNMENTS_ENABLED => @context.feature_enabled?(:differentiated_assignments),
+        :ASSIGNMENT_ID => @assignment.present? ? @assignment.id : nil,
+        :ASSIGNMENT_OVERRIDES => assignment_overrides_json(@quiz.overrides_for(@current_user,
+                                                           ensure_set_not_empty: true),
+                                                           @current_user),
         :QUIZ => quiz_json(@quiz, @context, @current_user, session),
         :SECTION_LIST => sections.map { |section|
           {
@@ -307,7 +308,7 @@ class Quizzes::QuizzesController < ApplicationController
   end
 
   def create
-    if authorized_action(@context.quizzes.scoped.new, @current_user, :create)
+    if authorized_action(@context.quizzes.temp_record, @current_user, :create)
       params[:quiz][:title] = nil if params[:quiz][:title] == "undefined"
       params[:quiz][:title] ||= t(:default_title, "New Quiz")
       params[:quiz].delete(:points_possible) unless params[:quiz][:quiz_type] == 'graded_survey'
@@ -328,18 +329,20 @@ class Quizzes::QuizzesController < ApplicationController
         params[:quiz][:assignment_id] = nil unless @assignment
         params[:quiz][:title] = @assignment.title if @assignment
       end
-      if params[:assignment].present? && Assignment.sis_grade_export_enabled?(@context) && @quiz.assignment
-        @quiz.assignment.post_to_sis = params[:assignment][:post_to_sis]
-        @quiz.assignment.save
-      end
       @quiz = @context.quizzes.build
       @quiz.content_being_saved_by(@current_user)
       @quiz.infer_times
       overrides = delete_override_params
-      params[:quiz].delete(:only_visible_to_overrides) unless @context.feature_enabled?(:differentiated_assignments)
       @quiz.transaction do
         @quiz.update_attributes!(params[:quiz])
-        batch_update_assignment_overrides(@quiz,overrides) unless overrides.nil?
+        batch_update_assignment_overrides(@quiz, overrides, @current_user) unless overrides.nil?
+      end
+      if Assignment.sis_grade_export_enabled?(@context) && @quiz.assignment
+        post_to_sis = nil
+        post_to_sis = params[:assignment][:post_to_sis] if params[:assignment].present?
+        post_to_sis = @context.account.sis_default_grade_export[:value] if post_to_sis.nil?
+        @quiz.assignment.post_to_sis = post_to_sis
+        @quiz.assignment.save
       end
       @quiz.did_edit if @quiz.created?
       @quiz.reload
@@ -391,7 +394,6 @@ class Quizzes::QuizzesController < ApplicationController
 
           auto_publish = @quiz.published?
           @quiz.with_versioning(auto_publish) do
-            params[:quiz].delete(:only_visible_to_overrides) unless @context.feature_enabled?(:differentiated_assignments)
             # using attributes= here so we don't need to make an extra
             # database call to get the times right after save!
             @quiz.attributes = params[:quiz]
@@ -409,7 +411,7 @@ class Quizzes::QuizzesController < ApplicationController
             @quiz.assignment.save
           end
 
-          batch_update_assignment_overrides(@quiz,overrides) unless overrides.nil?
+          batch_update_assignment_overrides(@quiz, overrides, @current_user) unless overrides.nil?
 
           # quiz.rb restricts all assignment broadcasts if notify_of_update is
           # false, so we do the same here
@@ -499,46 +501,6 @@ class Quizzes::QuizzesController < ApplicationController
 
   # student_analysis report
   def statistics
-    if @context.feature_enabled?(:quiz_stats)
-      return statistics_cqs
-    end
-
-    if authorized_action(@quiz, @current_user, :read_statistics)
-      respond_to do |format|
-        format.html {
-          all_versions = params[:all_versions] == '1'
-          add_crumb(@quiz.title, named_context_url(@context, :context_quiz_url, @quiz))
-          add_crumb(t(:statistics_crumb, "Statistics"), named_context_url(@context, :context_quiz_statistics_url, @quiz))
-
-          if !@context.large_roster?
-            @statistics = @quiz.statistics(all_versions)
-            user_ids = @statistics[:submission_user_ids]
-            @submitted_users = User.where(:id => user_ids.to_a).order_by_sortable_name
-            #include logged out users
-            @submitted_users += @statistics[:submission_logged_out_users]
-            @users = Hash[
-              @submitted_users.map { |u| [u.id, u] }
-            ]
-          end
-
-          js_env quiz_reports: Quizzes::QuizStatistics::REPORTS.map { |report_type|
-            report = @quiz.current_statistics_for(report_type, {
-              includes_all_versions: all_versions
-            })
-
-            Quizzes::QuizReportSerializer.new(report, {
-              controller: self,
-              scope: @current_user,
-              root: false,
-              includes: %w[ file progress ]
-            }).as_json
-          }
-        }
-      end
-    end
-  end
-
-  def statistics_cqs
     if authorized_action(@quiz, @current_user, :read_statistics)
       respond_to do |format|
         format.html {
@@ -561,7 +523,7 @@ class Quizzes::QuizzesController < ApplicationController
   def managed_quiz_data
     extend Api::V1::User
     if authorized_action(@quiz, @current_user, [:grade, :read_statistics])
-      student_scope = @context.students_visible_to(@current_user)
+      student_scope = @context.students_visible_to(@current_user, include: :inactive)
       if @quiz.differentiated_assignments_applies?
         student_scope = student_scope.able_to_see_quiz_in_course_with_da(@quiz.id, @context.id)
       end
@@ -679,7 +641,7 @@ class Quizzes::QuizzesController < ApplicationController
 
   def moderate
     if authorized_action(@quiz, @current_user, :grade)
-      @students = @context.students_visible_to(@current_user).uniq.order_by_sortable_name
+      @students = @context.students_visible_to(@current_user, include: :inactive).uniq.order_by_sortable_name
       @students = @students.order(:uuid) if @quiz.survey? && @quiz.anonymous_submissions
       last_updated_at = Time.parse(params[:last_updated_at]) rescue nil
       respond_to do |format|
@@ -733,6 +695,10 @@ class Quizzes::QuizzesController < ApplicationController
 
   private
 
+  def rich_content_service_config
+    js_env(Services::RichContent.env_for(@domain_root_account, risk_level: :highrisk))
+  end
+
   def get_banks(quiz)
     banks_hash = {}
     bank_ids = quiz.quiz_groups.map(&:assessment_question_bank_id)
@@ -778,7 +744,6 @@ class Quizzes::QuizzesController < ApplicationController
   def delete_override_params
     # nil represents the fact that we don't want to update the overrides
     return nil unless params[:quiz].has_key?(:assignment_overrides)
-
     overrides = params[:quiz].delete(:assignment_overrides)
     overrides = deserialize_overrides(overrides)
 
@@ -906,7 +871,7 @@ class Quizzes::QuizzesController < ApplicationController
 
   # counts of submissions queried in #managed_quiz_data
   def submission_counts
-    submitted_with_submissions = @context.students_visible_to(@current_user).
+    submitted_with_submissions = @context.students_visible_to(@current_user, include: :inactive).
         joins(:quiz_submissions).
         where("quiz_submissions.quiz_id=? AND quiz_submissions.workflow_state<>'settings_only'", @quiz)
     @submitted_student_count = submitted_with_submissions.count(:id, :distinct => true)

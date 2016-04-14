@@ -1,10 +1,12 @@
 var webpack = require("webpack");
+var child_process = require('child_process');
 var I18nPlugin = require("./i18nPlugin");
 var ClientAppsPlugin = require("./clientAppPlugin");
 var CompiledReferencePlugin = require("./CompiledReferencePlugin");
 var bundleEntries = require("./bundles");
 var ShimmedAmdPlugin = require("./shimmedAmdPlugin");
 var BundleExtensionsPlugin = require("./BundleExtensionsPlugin");
+var WebpackOnBuildPlugin = require('on-build-webpack');
 var path = require('path');
 
 module.exports = {
@@ -22,10 +24,13 @@ module.exports = {
   resolve: {
     alias: {
       qtip: "jquery.qtip",
+      'backbone': 'Backbone',
+      'React': 'react',
       realTinymce: "bower/tinymce/tinymce",
       'ic-ajax': "bower/ic-ajax/dist/amd/main",
       'ic-tabs': "bower/ic-tabs/dist/amd/main",
-      'bower/axios/dist/axios': 'bower/axios/dist/axios.amd'
+      'bower/axios/dist/axios': 'bower/axios/dist/axios.amd',
+      'timezone': 'timezone_webpack_shim'
     },
     root: [
       __dirname + "/../public/javascripts",
@@ -50,6 +55,7 @@ module.exports = {
   },
   module: {
     preLoaders: [],
+    noParse: [],
     loaders: [
       {
         test: /\.js$/,
@@ -64,13 +70,25 @@ module.exports = {
         test: /\.jsx$/,
         include: [
           path.resolve(__dirname, "../app/jsx"),
-          /app\/client_apps\/canvas_quizzes\/apps\//
+          path.resolve(__dirname, "../spec/javascripts/jsx"),
+          /gems\/plugins\/.*\/app\/jsx\//
         ],
-        exclude: [/(node_modules|bower)/, /public\/javascripts\/vendor/, /public\/javascripts\/translations/],
+        exclude: [
+          /(node_modules|bower)/,
+          /public\/javascripts\/vendor/,
+          /public\/javascripts\/translations/,
+          /client_apps\/canvas_quizzes\/apps\//
+        ],
         loaders: [
           'babel?cacheDirectory=tmp',
           'jsxYankPragma'
         ]
+      },
+      {
+        test: /\.jsx$/,
+        include: [/client_apps\/canvas_quizzes\/apps\//],
+        exclude: [/(node_modules|bower)/, /public\/javascripts\/vendor/, /public\/javascripts\/translations/, path.resolve(__dirname, "../app/jsx")],
+        loaders: ["jsx"]
       },
       {
         test: /\.coffee$/,
@@ -143,6 +161,13 @@ module.exports = {
     new webpack.IgnorePlugin(/\.md$/),
     new webpack.IgnorePlugin(/(CHANGELOG|LICENSE|README)$/),
     new webpack.IgnorePlugin(/package.json/),
+    new WebpackOnBuildPlugin(function(stats){
+      if(process.env.SKIP_JS_REV){
+        console.log("skipping rev...");
+      }else{
+        child_process.spawn("gulp", ["rev"]);
+      }
+    }),
     new webpack.PrefetchPlugin("./app/coffeescripts/calendar/ContextSelector.coffee"),
     new webpack.PrefetchPlugin("./app/coffeescripts/calendar/TimeBlockRow.coffee"),
     new webpack.PrefetchPlugin("./app/coffeescripts/react_files/components/FolderTree.coffee"),

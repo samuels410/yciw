@@ -36,5 +36,24 @@ describe ConsulInitializer do
       message = "INITIALIZATION: can't reach consul, attempts to load DynamicSettings will fail"
       expect(logger.messages).to include(message)
     end
+
+    it "logs nothing if there's no config file" do
+      logger = FakeLogger.new
+      ConsulInitializer.configure_with(nil, logger)
+      expect(logger.messages).to eq([])
+    end
+  end
+
+  describe "just from loading" do
+    it "clears the DynamicSettings cache on reload" do
+      Canvas::DynamicSettings.reset_cache!
+      Canvas::DynamicSettings.cache["key"] = {
+        value: "value",
+        timestamp: Time.zone.now.to_i
+      }
+      expect(Canvas::DynamicSettings.from_cache("key")).to eq("value")
+      Canvas::Reloader.reload!
+      expect(Canvas::DynamicSettings.cache).to eq({})
+    end
   end
 end

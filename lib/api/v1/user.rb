@@ -22,20 +22,23 @@ module Api::V1::User
   include AvatarHelper
 
   API_USER_JSON_OPTS = {
-    :only => %w(id name),
-    :methods => %w(sortable_name short_name display_name)
-  }
+    :only => %w(id name).freeze,
+    :methods => %w(sortable_name short_name display_name).freeze
+  }.freeze
 
-  def user_json_preloads(users, preload_email=false)
+  def user_json_preloads(users, preload_email=false, opts={})
     # for User#account
-    ActiveRecord::Associations::Preloader.new(users, :pseudonym => :account).run
+    ActiveRecord::Associations::Preloader.new.preload(users, :pseudonym => :account)
 
     # pseudonyms for User#sis_pseudoym_for and User#find_pseudonym_for_account
     # pseudonyms account for Pseudonym#works_for_account?
-    ActiveRecord::Associations::Preloader.new(users, pseudonyms: :account).run if user_json_is_admin?
+    ActiveRecord::Associations::Preloader.new.preload(users, pseudonyms: :account) if user_json_is_admin?
     if preload_email && (no_email_users = users.reject(&:email_cached?)).present?
       # communication_channels for User#email if it is not cached
-      ActiveRecord::Associations::Preloader.new(no_email_users, :communication_channels).run
+      ActiveRecord::Associations::Preloader.new.preload(no_email_users, :communication_channels)
+    end
+    if opts[:group_memberships]
+      ActiveRecord::Associations::Preloader.new(users, :group_memberships).run
     end
   end
 
@@ -82,6 +85,16 @@ module Api::V1::User
           map(&:name).join(", ")
       end
 
+      # make sure this only runs if user_json_preloads has
+      # been called with {group_memberships: true} in opts
+      if includes.include?('group_ids')
+        context_group_ids = get_context_groups(context)
+        user_group_ids = user.group_memberships.loaded ?
+          user.group_memberships.map(&:group_id) :
+          user.group_memberships.pluck(:group_id)
+        json[:group_ids] = context_group_ids & user_group_ids
+      end
+
       json[:locale] = user.locale if includes.include?('locale')
       json[:confirmation_url] = user.communication_channels.email.first.try(:confirmation_url) if includes.include?('confirmation_url')
 
@@ -103,13 +116,21 @@ module Api::V1::User
       if includes.include?('terms_of_use')
         json[:terms_of_use] = !!user.preferences[:accepted_terms]
       end
+
+      if includes.include?('custom_links')
+        json[:custom_links] = roster_user_custom_links(user)
+      end
     end
   end
 
   def users_json(users, current_user, session, includes = [], context = @context, enrollments = nil, excludes = [])
 
     if includes.include?('sections')
-      ActiveRecord::Associations::Preloader.new(users, enrollments: :course_section).run
+      ActiveRecord::Associations::Preloader.new.preload(users, enrollments: :course_section)
+    end
+
+    if includes.include?('group_ids') && !context.is_a?(Groups)
+      ActiveRecord::Associations::Preloader.new.preload(context, :groups)
     end
 
     users.map{ |user| user_json(user, current_user, session, includes, context, enrollments, excludes) }
@@ -228,7 +249,9 @@ module Api::V1::User
       end
       json[:html_url] = course_user_url(enrollment.course_id, enrollment.user_id)
       user_includes = includes.include?('avatar_url') ? ['avatar_url'] : []
-      json[:user] = user_json(enrollment.user, user, session, user_includes) if includes.include?(:user)
+      user_includes << 'group_ids' if includes.include?('group_ids')
+
+      json[:user] = user_json(enrollment.user, user, session, user_includes, @context, nil, []) if includes.include?(:user)
       if includes.include?('locked')
         lockedbysis = enrollment.defined_by_sis?
         lockedbysis &&= !enrollment.course.account.grants_right?(@current_user, session, :manage_account_settings)
@@ -251,5 +274,12 @@ module Api::V1::User
     (user.id == enrollment.user_id && !course.hide_final_grades?) ||
      course.grants_any_right?(user, :manage_grades, :view_all_grades) ||
      enrollment.user.grants_right?(user, :read_as_parent)
+  end
+
+  def get_context_groups(context)
+    # make sure to preload groups if using this
+    context.is_a?(Group) ?
+      [context.id] :
+      context.groups.map(&:id)
   end
 end

@@ -90,6 +90,7 @@ end
 
 describe DiscussionTopicsController, type: :request do
   include Api::V1::User
+  include AvatarHelper
 
   context 'locked api item' do
     include_examples 'a locked api item'
@@ -114,11 +115,7 @@ describe DiscussionTopicsController, type: :request do
     course_with_teacher(:active_all => true, :user => user_with_pseudonym)
   end
 
-  # needed for user_display_json
-  def avatar_url_for_user(user, *a)
-    User.avatar_fallback_url
-  end
-
+  # need for user_display_json
   def blank_fallback
     nil
   end
@@ -264,8 +261,7 @@ describe DiscussionTopicsController, type: :request do
       @sub = create_subtopic(@topic, :title => "Sub topic", :message => "<p>i'm subversive</p>")
     end
 
-    before :each do
-      @response_json =
+    let(:response_json) do
                  {"read_state"=>"read",
                   "unread_count"=>0,
                   "podcast_url"=>"/feeds/topics/#{@topic.id}/enrollment_randomness.rss",
@@ -331,7 +327,7 @@ describe DiscussionTopicsController, type: :request do
         expect(json.size).to eq 2
         # get rid of random characters in podcast url
         json.last["podcast_url"].gsub!(/_[^.]*/, '_randomness')
-        expect(json.last).to eq @response_json.merge("subscribed" => @sub.subscribed?(@user))
+        expect(json.last).to eq response_json.merge("subscribed" => @sub.subscribed?(@user))
       end
 
       it "should search discussion topics by title" do
@@ -450,7 +446,7 @@ describe DiscussionTopicsController, type: :request do
 
         # get rid of random characters in podcast url
         json["podcast_url"].gsub!(/_[^.]*/, '_randomness')
-        expect(json).to eq @response_json.merge("subscribed" => @topic.subscribed?(@user))
+        expect(json).to eq response_json.merge("subscribed" => @topic.subscribed?(@user))
       end
 
       it "should require course to be published for students" do
@@ -982,70 +978,49 @@ describe DiscussionTopicsController, type: :request do
       @observer_enrollment.update_attribute(:associated_user_id, @student_with_override.id)
     end
 
-    context "feature flag on" do
-      before {@course.enable_feature!(:differentiated_assignments)}
-      it "lets the teacher see all topics" do
-        @user = @teacher
-        [@topic_with_restricted_access,@topic_visible_to_all].each{|t| calls_display_topic(t) }
-      end
-
-      it "lets students with visibility see topics" do
-        @user = @student_with_override
-        [@topic_with_restricted_access,@topic_visible_to_all].each{|t| calls_display_topic(t) }
-      end
-
-      it 'gives observers the same visibility as their student' do
-        @user = @observer
-        [@topic_with_restricted_access,@topic_visible_to_all].each{|t| calls_display_topic(t, except: [:add_entry, :add_reply] ) }
-      end
-
-      it 'observers without students see all' do
-        @observer_enrollment.update_attribute(:associated_user_id, nil)
-        @user = @observer
-        [@topic_with_restricted_access,@topic_visible_to_all].each{|t| calls_display_topic(t, except: [:add_entry, :add_reply] ) }
-      end
-
-      it "restricts access to students without visibility" do
-        @user = @student_without_override
-        calls_do_not_show_topic(@topic_with_restricted_access)
-        calls_display_topic(@topic_visible_to_all)
-      end
-
-      it "doesnt show extra assignments with overrides in the index" do
-        @assignment_3, @topic_assigned_to_empty_section = create_graded_discussion_for_da(title: "assigned to none", only_visible_to_overrides: true)
-        @unassigned_section = @course.course_sections.create!(name: "unassigned section")
-        create_section_override_for_assignment(@assignment_3, {course_section: @unassigned_section})
-
-        @user = @student_with_override
-        get_index(@course)
-        expect(JSON.parse(response.body).to_s).not_to include("#{@assignment_3.title}")
-      end
-
-      it "doesnt hide topics without assignment" do
-        @non_graded_topic = @course.discussion_topics.create!(:user => @teacher, :title => "non_graded_topic", :message => "hi")
-
-        @user = @student_without_override
-        get_index(@course)
-        expect(JSON.parse(response.body).to_s).to include("#{@non_graded_topic.title}")
-      end
+    it "lets the teacher see all topics" do
+      @user = @teacher
+      [@topic_with_restricted_access,@topic_visible_to_all].each{|t| calls_display_topic(t) }
     end
 
-    context "feature flag off" do
-      before {@course.disable_feature!(:differentiated_assignments)}
-      it "lets the teacher see all topics" do
-        @user = @teacher
-        [@topic_with_restricted_access,@topic_visible_to_all].each{|t| calls_display_topic(t) }
-      end
+    it "lets students with visibility see topics" do
+      @user = @student_with_override
+      [@topic_with_restricted_access,@topic_visible_to_all].each{|t| calls_display_topic(t) }
+    end
 
-      it "lets students with visibility see topics" do
-        @user = @student_with_override
-        [@topic_with_restricted_access,@topic_visible_to_all].each{|t| calls_display_topic(t) }
-      end
+    it 'gives observers the same visibility as their student' do
+      @user = @observer
+      [@topic_with_restricted_access,@topic_visible_to_all].each{|t| calls_display_topic(t, except: [:add_entry, :add_reply] ) }
+    end
 
-      it "lets students without visibility see all topics" do
-        @user = @student_without_override
-        [@topic_with_restricted_access,@topic_visible_to_all].each{|t| calls_display_topic(t) }
-      end
+    it 'observers without students see all' do
+      @observer_enrollment.update_attribute(:associated_user_id, nil)
+      @user = @observer
+      [@topic_with_restricted_access,@topic_visible_to_all].each{|t| calls_display_topic(t, except: [:add_entry, :add_reply] ) }
+    end
+
+    it "restricts access to students without visibility" do
+      @user = @student_without_override
+      calls_do_not_show_topic(@topic_with_restricted_access)
+      calls_display_topic(@topic_visible_to_all)
+    end
+
+    it "doesnt show extra assignments with overrides in the index" do
+      @assignment_3, @topic_assigned_to_empty_section = create_graded_discussion_for_da(title: "assigned to none", only_visible_to_overrides: true)
+      @unassigned_section = @course.course_sections.create!(name: "unassigned section")
+      create_section_override_for_assignment(@assignment_3, {course_section: @unassigned_section})
+
+      @user = @student_with_override
+      get_index(@course)
+      expect(JSON.parse(response.body).to_s).not_to include("#{@assignment_3.title}")
+    end
+
+    it "doesnt hide topics without assignment" do
+      @non_graded_topic = @course.discussion_topics.create!(:user => @teacher, :title => "non_graded_topic", :message => "hi")
+
+      @user = @student_without_override
+      get_index(@course)
+      expect(JSON.parse(response.body).to_s).to include("#{@non_graded_topic.title}")
     end
   end
 
@@ -1185,7 +1160,7 @@ describe DiscussionTopicsController, type: :request do
     tag = @module.add_item(:id => @topic.id, :type => 'discussion_topic')
     @module.completion_requirements = { tag.id => {:type => 'must_view'} }
     @module.save!
-    course_with_student(:course => @course)
+    course_with_student(:course => @course, :active_all => true)
 
     expect(@module.evaluate_for(@user)).to be_unlocked
     raw_api_call(:put, "/api/v1/courses/#{@course.id}/discussion_topics/#{@topic.id}/read",
@@ -1197,7 +1172,7 @@ describe DiscussionTopicsController, type: :request do
   it "should fulfill module viewed requirements when re-marking a topic read" do
     @module = @course.context_modules.create!(:name => "some module")
     @topic = create_topic(@course, :title => "Topic 1", :message => "<p>content here</p>")
-    course_with_student(:course => @course)
+    course_with_student(:course => @course, :active_all => true)
     raw_api_call(:put, "/api/v1/courses/#{@course.id}/discussion_topics/#{@topic.id}/read",
                  { :controller => 'discussion_topics_api', :action => 'mark_topic_read', :format => 'json',
                    :course_id => @course.id.to_s, :topic_id => @topic.id.to_s })
@@ -1219,7 +1194,7 @@ describe DiscussionTopicsController, type: :request do
     tag = @module.add_item(:id => @topic.id, :type => 'discussion_topic')
     @module.completion_requirements = { tag.id => {:type => 'must_view'} }
     @module.save!
-    course_with_student(:course => @course)
+    course_with_student(:course => @course, :active_all => true)
 
     expect(@module.evaluate_for(@user)).to be_unlocked
     raw_api_call(:put, "/api/v1/courses/#{@course.id}/discussion_topics/#{@topic.id}/read_all",
@@ -2180,8 +2155,8 @@ describe DiscussionTopicsController, type: :request do
         expect(json['unread_entries'].sort).to eq (@topic.discussion_entries - [@root2, @reply3] - @topic.discussion_entries.select { |e| e.user == @user }).map(&:id).sort
 
         expect(json['participants'].sort_by { |h| h['id'] }).to eq [
-          { 'id' => @student.id, 'display_name' => @student.short_name, 'avatar_image_url' => User.avatar_fallback_url, "html_url" => "http://www.example.com/courses/#{@course.id}/users/#{@student.id}" },
-          { 'id' => @teacher.id, 'display_name' => @teacher.short_name, 'avatar_image_url' => User.avatar_fallback_url, "html_url" => "http://www.example.com/courses/#{@course.id}/users/#{@teacher.id}" },
+          { 'id' => @student.id, 'display_name' => @student.short_name, 'avatar_image_url' => User.avatar_fallback_url(nil, request), "html_url" => "http://www.example.com/courses/#{@course.id}/users/#{@student.id}" },
+          { 'id' => @teacher.id, 'display_name' => @teacher.short_name, 'avatar_image_url' => User.avatar_fallback_url(nil, request), "html_url" => "http://www.example.com/courses/#{@course.id}/users/#{@teacher.id}" },
         ].sort_by { |h| h['id'] }
 
         reply_reply1_attachment_json = {
@@ -2350,7 +2325,7 @@ describe DiscussionTopicsController, type: :request do
   it "returns due dates as they apply to the user" do
     course_with_student(:active_all => true)
     @user = @student
-    @student.enrollments.map(&:destroy!)
+    @student.enrollments.map(&:destroy_permanently!)
     @section = @course.course_sections.create! :name => "afternoon delight"
     @course.enroll_user(@student,'StudentEnrollment',
                         :section => @section,

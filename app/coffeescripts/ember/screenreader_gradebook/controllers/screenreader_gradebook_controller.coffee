@@ -25,7 +25,6 @@ define [
   # http://emberjs.com/api/classes/Ember.ArrayController.html
   # http://emberjs.com/api/classes/Ember.ObjectController.html
 
-
   studentsUniqByEnrollments = (args...)->
     hiddenNameCounter = 1
     options =
@@ -160,9 +159,8 @@ define [
       whitelist                   = ['online_upload','online_text_entry', 'online_url']
       submissionTypes             = @get('selectedAssignment.submission_types')
       submissionTypesOnWhitelist  = _.intersection(submissionTypes, whitelist)
-      hasWhitelistedSubmissions   = submissionTypesOnWhitelist.length == submissionTypes.length
 
-      hasSubmittedSubmissions and hasWhitelistedSubmissions
+      hasSubmittedSubmissions and submissionTypesOnWhitelist != []
     ).property('selectedAssignment')
 
     hideStudentNames: false
@@ -305,7 +303,7 @@ define [
             set(submissionData.submission, 'drop', submissionData.drop)
         result = result[finalOrCurrent]
 
-        percent = round (result.score / result.possible * 100), 1
+        percent = round (result.score / result.possible * 100), 2
         percent = 0 if isNaN(percent)
         setProperties student,
           total_grade: result
@@ -355,8 +353,12 @@ define [
           student
 
         return unless notYetLoaded.length
-        student_ids = notYetLoaded.mapBy('id')
-        fetchAllPages(ENV.GRADEBOOK_OPTIONS.submissions_url, records: @get('submissions'), data: student_ids: student_ids)
+        studentIds = notYetLoaded.mapBy('id')
+
+        while (studentIds.length)
+          chunk = studentIds.splice(0, ENV.GRADEBOOK_OPTIONS.chunk_size || 20)
+          fetchAllPages(ENV.GRADEBOOK_OPTIONS.submissions_url, records: @get('submissions'), data: student_ids: chunk)
+
     ).observes('students.@each', 'selectedGradingPeriod').on('init')
 
     showNotesColumn: (->

@@ -1,4 +1,5 @@
 require File.expand_path(File.dirname(__FILE__) + '/helpers/gradebook2_common')
+require File.expand_path(File.dirname(__FILE__) + '/gradebook_student_common')
 
 describe 'Student Gradebook' do
   include_context "in-process server selenium tests"
@@ -134,6 +135,137 @@ describe 'Student Gradebook' do
 
     f('#only_consider_graded_assignments').click
     expect(f('.final_grade .grade').text).to eq '66.67%'
+  end
+
+  context 'Comments' do
+    # create a course, publish and enroll teacher and student
+    let(:test_course) { course() }
+    let(:teacher) { user(active_all: true) }
+    let(:student) { user(active_all: true) }
+    let!(:published_course) do
+      test_course.workflow_state = 'available'
+      test_course.save!
+      test_course
+    end
+    let!(:enroll_teacher_and_students) do
+      published_course.enroll_teacher(teacher).accept!
+      published_course.enroll_student(student, enrollment_state: 'active')
+    end
+    # create an assignment and submit as a student
+    let(:assignment) do
+      published_course.assignments.create!(
+        title: 'Assignment Yay',
+        grading_type: 'points',
+        points_possible: 10,
+        submission_types: 'online_upload'
+      )
+    end
+    let(:file_attachment) { attachment_model(:content_type => 'application/pdf', :context => student) }
+    let!(:student_submission) do
+      assignment.submit_homework(
+        student,
+        submission_type: 'online_upload',
+        attachments: [file_attachment]
+      )
+    end
+    # leave a comment as a teacher
+    let!(:teacher_comment) { student_submission.submission_comments.create!(comment: 'good job')}
+
+    it 'should display comments from a teacher on student grades page', priority: "1", test_id: 537621 do
+      user_session(student)
+
+      get "/courses/#{published_course.id}/grades"
+      fj('.toggle_comments_link .icon-discussion:first').click
+      expect(fj('.score_details_table span:first')).to include_text('good job')
+    end
+
+    it 'should not display comments from a teacher on student grades page if assignment is muted', priority: "1", test_id: 537620 do
+      assignment.muted = true
+      assignment.save!
+      user_session(student)
+
+      get "/courses/#{published_course.id}/grades"
+      expect(fj('.score_details_table span:first')).not_to include_text('good job')
+    end
+
+    it 'should display comments from a teacher on assignment show page if assignment is muted', priority: "1", test_id: 537868 do
+      user_session(student)
+
+      get "/courses/#{published_course.id}/assignments/#{assignment.id}"
+      expect(fj('.comments.module .comment:first')).to include_text('good job')
+    end
+
+    it 'should not display comments from a teacher on assignment show page if assignment is muted', priority: "1", test_id: 537867 do
+      assignment.muted = true
+      assignment.save!
+      user_session(student)
+
+      get "/courses/#{published_course.id}/assignments/#{assignment.id}"
+      expect(fj('.comments.module p')).to include_text('You may not see all comments right now because the assignment is currently being graded.')
+    end
+  end
+
+  describe "Arrange By dropdown" do
+    before :once do
+      course_with_student(name: "Student", active_all: true)
+
+      # create multiple assignments in different modules and assignment groups
+      group0 = @course.assignment_groups.create!(name: "Physics Group")
+      group1 = @course.assignment_groups.create!(name: "Chem Group")
+
+      @assignment0 = @course.assignments.create!(
+        name: "Physics Alpha Assign",
+        due_at: Time.now.utc + 3.days,
+        assignment_group: group0,
+      )
+
+      @quiz = @course.quizzes.create!(
+        title: "Chem Alpha Quiz",
+        due_at: Time.now.utc + 5.days,
+        assignment_group_id: group1.id
+      )
+      @quiz.publish!
+
+      assignment = @course.assignments.create!(
+        due_at: Time.now.utc + 5.days,
+        assignment_group: group0
+      )
+
+      @discussion = @course.discussion_topics.create!(
+        assignment: assignment,
+        title: "Physics Beta Discussion"
+      )
+
+      @assignment1 = @course.assignments.create!(
+        name: "Chem Beta Assign",
+        due_at: Time.now.utc + 6.days,
+        assignment_group: group1
+      )
+
+      module0 = ContextModule.create!(name: "Beta Mod", context: @course)
+      module1 = ContextModule.create!(name: "Alpha Mod", context: @course)
+
+      module0.content_tags.create!(context: @course, content: @quiz, tag_type: 'context_module')
+      module0.content_tags.create!(context: @course, content: @assignment0, tag_type: 'context_module')
+      module1.content_tags.create!(context: @course, content: @assignment1, tag_type: 'context_module')
+      module1.content_tags.create!(context: @course, content: @discussion, tag_type: 'context_module')
+    end
+
+    context "as a student" do
+      it_behaves_like 'Arrange By dropdown', 'student'
+    end
+
+    context "as a teacher" do
+      it_behaves_like 'Arrange By dropdown', 'teacher'
+    end
+
+    context "as an admin" do
+      it_behaves_like 'Arrange By dropdown', 'admin'
+    end
+
+    context "as a ta" do
+      it_behaves_like 'Arrange By dropdown', 'ta'
+    end
   end
 end
 

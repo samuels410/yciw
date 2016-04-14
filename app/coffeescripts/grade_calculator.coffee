@@ -35,20 +35,14 @@ define [
       result
 
     @create_group_sum: (group, submissions, ignoreUngraded) ->
-      arrayToObj = (arr, property) ->
-        obj = {}
-        for e in arr
-          obj[e[property]] = e
-        obj
-
       # remove assignments without visibility from gradeableAssignments
-      hidden_assignment_ids = _.chain(submissions).
-                                filter( (s)-> s.hidden).
-                                map( (s)-> s.assignment_id).value()
+      hiddenAssignments = _.chain(submissions).
+                            filter('hidden').
+                            indexBy('assignment_id').value()
 
-      gradeableAssignments = _(group.assignments).filter (a) ->
-        not _.isEqual(a.submission_types, ['not_graded']) and not _(hidden_assignment_ids).contains(a.id)
-      assignments = arrayToObj gradeableAssignments, "id"
+      gradeableAssignments = _(group.assignments).reject (a) ->
+        hiddenAssignments[a.id] || _.isEqual(a.submission_types, ['not_graded'])
+      assignments = _.indexBy gradeableAssignments, "id"
 
       # filter out submissions from other assignment groups
       submissions = _(submissions).filter (s) -> assignments[s.assignment_id]?
@@ -66,7 +60,7 @@ define [
       # filter out excused assignments
       submissions = _(submissions).filter (s) -> not s.excused
 
-      submissionsByAssignment = arrayToObj submissions, "assignment_id"
+      submissionsByAssignment = _.indexBy submissions, "assignment_id"
 
       submissionData = _(submissions).map (s) =>
         sub =
@@ -246,9 +240,14 @@ define [
           finalGrade = null
         else if fullWeight < 100
           finalGrade *= 100 / fullWeight
-        ret =
-          score: finalGrade && round(finalGrade, round.DEFAULT)
-          possible: 100
+
+        submissionCount = _.reduce relevantGroupSums, (count, gs) ->
+          count + gs.submission_count
+        , 0
+        possible = if submissionCount > 0 || !ignoreUngraded then 100 else 0
+        score = finalGrade && round(finalGrade, round.DEFAULT)
+        score = null if isNaN(score)
+        ret = { score: score, possible: possible }
       else
         [score, possible] = _.reduce groupSums
         , ([m,n],{score,possible}) ->

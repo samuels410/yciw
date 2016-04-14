@@ -37,6 +37,12 @@
       </div>
     </div>
     <div class="right">
+      <div class="left">
+        <button id="keyboard-shortcut-info-icon" class="Button Button--icon-action-rev" type="button">
+          <span class="screenreader-only"><%= t('Keyboard Shortcuts') %></span>
+          <i class="icon-info"></i>
+        </button>
+      </div>
       <a data-muted="<%= @assignment.muted? ? "true" : "false" %>" id="mute_link" href="#"><span class="ui-icon ui-icon-volume-<%= @assignment.muted? ? "on" : "off" %>"></span><span class=mute_label><%= @assignment.muted? ? t("gradebook.unmute_assignment", "Unmute Assignment") : t("gradebook.mute_assignment", "Mute Assignment") %></span></a>
       <a id="settings_link" href="#"><span class="ui-icon ui-icon-wrench"></span><%= t('links.settings', "Settings") %></a>
       <% if help_link %>
@@ -143,6 +149,7 @@
           <div id="multiple_submissions"></div>
           <div id="submission_late_notice"><%= t(:late_notice, "Note: This submission was LATE") %></div>
           <div id="submission_not_newest_notice" title='<%= t('titles.not_newest', "use the dropdown above to change which submission to look at") %>'><%= t(:not_newest_notice, "Note: This is not the most recent submission") %></div>
+          <div id="submission_attachment_viewed_at_container"></div>
           <div id="submission_files_container">
             <label><%= t(:submitted_files, "Submitted Files: (click to load)") %></label>
             <div id="submission_files_list">

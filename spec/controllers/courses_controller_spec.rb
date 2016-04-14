@@ -65,6 +65,8 @@ describe CoursesController do
         ens << @course.enroll_teacher(@user, :section => sec2, :allow_multiple_enrollments => true)
         ens.each(&:accept!)
 
+        ens[1].conclude # the current enrollment should take precedence over the concluded one
+
         user_session(@user)
         get 'index'
         expect(response).to be_success
@@ -195,7 +197,6 @@ describe CoursesController do
         expect(assigns[:current_enrollments]).to be_empty
         expect(assigns[:future_enrollments]).to be_empty
 
-        $bloo = true
         user_session(teacher)
         get 'index'
         expect(response).to be_success
@@ -1116,7 +1117,7 @@ describe CoursesController do
       expect(@course.students).to be_empty
       expect(@course.observers.map{|s| s.name}).to be_include("Sam")
       expect(@course.observers.map{|s| s.name}).to be_include("Fred")
-      expect(@course.observer_enrollments.map(&:workflow_state)).to eql(['active', 'active'])
+      expect(@course.observer_enrollments.map(&:workflow_state)).to eql(['invited', 'invited'])
     end
 
     it "will use json for limit_privileges_to_course_section param" do

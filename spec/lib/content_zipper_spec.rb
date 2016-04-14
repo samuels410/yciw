@@ -51,6 +51,33 @@ describe ContentZipper do
       expect(expected_file_patterns).to be_empty
     end
 
+    it "should ignore undownloadable submissions" do
+      course_with_student(active_all: true)
+      @user.update_attributes!(sortable_name: 'some_999_, _1234_guy')
+      assignment_model(course: @course)
+      @assignment.submission_types="online_text_entry,media_recording"
+      @assignment.save
+      my_media_object = media_object(context: @course, user: @user)
+      submission = @assignment.submit_homework(@user, {
+                                                 submission_type: "media_recording",
+                                                 media_comment_id: my_media_object.media_id,
+                                                 media_comment_type: my_media_object.media_type
+                                               })
+      submission.save
+
+      attachment = Attachment.new(display_name: 'my_download.zip')
+      attachment.user = @teacher
+      attachment.workflow_state = 'to_be_zipped'
+      attachment.context = @assignment
+      attachment.save!
+      ContentZipper.process_attachment(attachment, @teacher)
+      attachment.reload
+
+      zip_file = Zip::File.open(attachment.full_filename)
+      expect(zip_file.entries).to be_empty
+      zip_file.close
+    end
+
     it "should zip up online_url submissions" do
       course_with_student(active_all: true)
       @user.update_attributes!(sortable_name: 'some_999_, _1234_guy')
@@ -182,6 +209,35 @@ describe ContentZipper do
     end
   end
 
+  describe "hard concluded course submissions" do
+    it "should still download the content" do
+      course_with_teacher
+      @assignment = assignment_model(course: @course)
+      submissions = 5.times.map.with_index do |i|
+        attachment = attachment_model(uploaded_data: stub_png_data("file_#{i}.png"), content_type: 'image/png')
+        submission_model(course: @course, assignment: @assignment, submission_type: 'online_upload', attachments: [attachment] )
+      end
+      @course.complete
+      @course.save!
+
+      @course.reload
+      @assignment.reload
+
+      zipper = ContentZipper.new
+      attachment = Attachment.new(display_name: 'my_download.zip')
+      attachment.user_id = @user.id
+      attachment.workflow_state = 'to_be_zipped'
+      attachment.context = @assignment
+      attachment.save!
+      zipper.process_attachment(attachment, @user)
+
+      attachment.reload
+      expect(attachment.workflow_state).to eq 'zipped'
+      f = File.new(attachment.full_filename)
+      expect(f.size).to be > 22 # the characteristic size of an empty zip file
+    end
+  end
+
   describe "zip_folder" do
     context "checking permissions" do
       before(:each) do
@@ -218,6 +274,24 @@ describe ContentZipper do
         @attachment.reload
         Zip::File.foreach(@attachment.full_filename) {|f| names << f.name if f.file? }
         names.sort
+      end
+
+      context "in course with files tab hidden" do
+        before do
+          @course.tab_configuration = [{
+            id: Course::TAB_FILES,
+            hidden: true
+          }]
+          @course.save
+        end
+
+        it "should give logged in students some files" do
+          expect(zipped_files_for_user(@user)).to eq ['visible.png', 'visible/sub-vis.png'].sort
+        end
+
+        it "should give logged in teachers all files" do
+          expect(zipped_files_for_user(@teacher)).to eq ["locked/sub-locked-vis.png", "hidden/sub-hidden.png", "hidden.png", "visible.png", "visible/sub-locked.png", "visible/sub-vis.png", "locked.png"].sort
+        end
       end
 
       context "in a private course" do
@@ -385,7 +459,7 @@ describe ContentZipper do
       attachment = Attachment.new display_name: "donuts.jpg"
       attachment.expects(:save!).once
       ContentZipper.new.update_progress(attachment,5,10)
-      expect(attachment.file_state).to eq 60 # accounts for zero-indexed arrays
+      expect(attachment.file_state.to_s).to eq '60' # accounts for zero-indexed arrays
     end
   end
 

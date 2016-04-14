@@ -23,20 +23,13 @@ class AssignmentOverride < ActiveRecord::Base
   simply_versioned :keep => 10
 
   attr_accessible
-  EXPORTABLE_ATTRIBUTES = [
-    :id, :created_at, :updated_at, :assignment_id, :assignment_version, :set_type, :set_id, :title, :workflow_state, :due_at_overridden, :due_at, :all_day,
-    :all_day_date, :unlock_at_overridden, :unlock_at, :lock_at_overridden, :lock_at, :quiz_id, :quiz_version
-  ]
-
-  EXPORTABLE_ASSOCIATIONS = [:assignment, :quiz, :assignment_override_students]
 
   attr_accessor :dont_touch_assignment
 
   belongs_to :assignment
   belongs_to :quiz, class_name: 'Quizzes::Quiz'
   belongs_to :set, :polymorphic => true
-  has_many :assignment_override_students, :dependent => :destroy
-
+  has_many :assignment_override_students, :dependent => :destroy, :validate => false
   validates_presence_of :assignment_version, :if => :assignment
   validates_presence_of :title, :workflow_state
   validates_inclusion_of :set_type, :in => %w(CourseSection Group ADHOC)
@@ -49,13 +42,15 @@ class AssignmentOverride < ActiveRecord::Base
     :if => lambda{ |override| override.assignment? && override.active? && concrete_set.call(override) }
   validates_uniqueness_of :set_id, :scope => [:quiz_id, :set_type, :workflow_state],
     :if => lambda{ |override| override.quiz? && override.active? && concrete_set.call(override) }
+
   validate :if => concrete_set do |record|
     if record.set && record.assignment && record.active?
       case record.set
       when CourseSection
         record.errors.add :set, "not from assignment's course" unless record.set.course_id == record.assignment.context_id
       when Group
-        record.errors.add :set, "not from assignment's group category" unless record.set.group_category_id == record.assignment.group_category_id
+        valid_group_category_id = record.assignment.group_category_id || record.assignment.discussion_topic.try(:group_category_id)
+        record.errors.add :set, "not from assignment's group category" unless record.set.group_category_id == valid_group_category_id
       end
     end
   end
@@ -72,8 +67,24 @@ class AssignmentOverride < ActiveRecord::Base
     end
   end
 
+  validate do |record|
+    record.assignment_override_students.each do |s|
+      next if s.valid?
+      s.errors.each do |_, error|
+        record.errors.add(:assignment_override_students, error.type,
+          message: error.message)
+      end
+    end
+  end
+
   after_save :update_cached_due_dates
   after_save :touch_assignment, :if => :assignment
+
+  def set_not_empty?
+    overridable = assignment? ? assignment : quiz
+    ['CourseSection', 'Group'].include?(self.set_type) ||
+    (set.any? && overridable.context.current_enrollments.where(user_id: set).exists?)
+  end
 
   def update_cached_due_dates
     return unless assignment?
@@ -99,7 +110,7 @@ class AssignmentOverride < ActiveRecord::Base
     state :deleted
   end
 
-  alias_method :destroy!, :destroy
+  alias_method :destroy_permanently!, :destroy
   def destroy
     transaction do
       self.assignment_override_students.destroy_all
@@ -109,6 +120,14 @@ class AssignmentOverride < ActiveRecord::Base
   end
 
   scope :active, -> { where(:workflow_state => 'active') }
+
+  scope :visible_students_only, -> (visible_ids) do
+    select("assignment_overrides.*").
+    joins(:assignment_override_students).
+    where(
+      assignment_override_students: { user_id: visible_ids },
+    )
+  end
 
   before_validation :default_values
   def default_values
@@ -170,6 +189,12 @@ class AssignmentOverride < ActiveRecord::Base
     end
 
     scope "overriding_#{field}", -> { where("#{field}_overridden" => true) }
+  end
+
+  def visible_student_overrides(visible_student_ids)
+    assignment_override_students.any? do |aos|
+      visible_student_ids.include?(aos.user_id)
+    end
   end
 
   override :due_at
@@ -240,7 +265,6 @@ class AssignmentOverride < ActiveRecord::Base
   end
 
   def set_title_if_needed
-
     if set_type != 'ADHOC' && set
       self.title = set.name
     elsif set_type == 'ADHOC' && set.any?
@@ -259,6 +283,11 @@ class AssignmentOverride < ActiveRecord::Base
       },
       count: students.count
      )
+  end
+
+  def destroy_if_empty_set
+    return unless set_type == 'ADHOC'
+    self.destroy if set.empty?
   end
 
   has_a_broadcast_policy

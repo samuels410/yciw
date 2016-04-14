@@ -132,11 +132,13 @@ describe AccountsController do
     end
 
     it "should remove users with managed passwords with json" do
-      user_with_managed_pseudonym :account => @account, :name => "John Doe"
-      post 'remove_user', :account_id => @account.id, :user_id => @user.id, :format => "json"
-      expect(flash[:notice]).to match /successfully deleted/
-      expect(json_parse(response.body)).to eq json_parse(@user.reload.to_json)
-      expect(@user.associated_accounts.map(&:id)).to_not include(@account.id)
+      Timecop.freeze do
+        user_with_managed_pseudonym :account => @account, :name => "John Doe"
+        post 'remove_user', :account_id => @account.id, :user_id => @user.id, :format => "json"
+        expect(flash[:notice]).to match /successfully deleted/
+        expect(json_parse(response.body)).to eq json_parse(@user.reload.to_json)
+        expect(@user.associated_accounts.map(&:id)).to_not include(@account.id)
+      end
     end
   end
 
@@ -596,6 +598,17 @@ describe AccountsController do
       @account = Account.create!
       @c1 = course(account: @account, name: "foo")
       @c2 = course(account: @account, name: "bar")
+    end
+
+    it "should not allow get a list of courses with no permissions" do
+      role = custom_account_role 'non_course_reader', account: @account
+      u = User.create(name: 'billy bob')
+      user_session(u)
+      @account.role_overrides.create! permission: 'read_course_list',
+                                      enabled: false, role: role
+      @account.account_users.create!(user: u, role: role)
+      get 'courses_api', account_id: @account.id
+      assert_unauthorized
     end
 
     it "should get a list of courses" do

@@ -9,9 +9,7 @@ describe "speed grader" do
   before(:once) do
     stub_kaltura
 
-    Account.default.allow_feature!(:moderated_grading)
     course(:active_all => true)
-    @course.enable_feature!(:moderated_grading)
     outcome_with_rubric
     @assignment = @course.assignments.new(:name => 'assignment with rubric', :points_possible => 10)
     @assignment.moderated_grading = true
@@ -45,8 +43,7 @@ describe "speed grader" do
 
       time = 5.minutes.from_now
       Timecop.freeze(time) do
-        replace_content f('#grading-box-extended'), "8"
-        driver.execute_script '$("#grading-box-extended").change()'
+        replace_content f('#grading-box-extended'), "8", tab_out: true
         wait_for_ajaximations
       end
       @submission.reload
@@ -193,8 +190,7 @@ describe "speed grader" do
       expect(f('#grading-box-extended')['disabled']).to be_nil
       expect(f('#add_a_comment')).to be_displayed
 
-      replace_content f('#grading-box-extended'), "8"
-      driver.execute_script '$("#grading-box-extended").change()'
+      replace_content f('#grading-box-extended'), "8", tab_out: true
 
       wait_for_ajax_requests(500)
       f('#speedgrader_comment_textarea').send_keys('srsly')
@@ -283,8 +279,7 @@ describe "speed grader" do
       expect(grade['disabled']).to be_nil
       expect(grade['value']).to eq "3"
 
-      replace_content f('#grading-box-extended'), "8"
-      driver.execute_script '$("#grading-box-extended").change()'
+      replace_content f('#grading-box-extended'), "8", tab_out: true
 
       wait_for_ajax_requests(500)
       f('#speedgrader_comment_textarea').send_keys('srsly')
@@ -644,8 +639,7 @@ describe "speed grader" do
         mark_tab2_button = mark_tab2.find('button')
         expect(mark_tab2_button).to_not be_displayed
 
-        replace_content f('#grading-box-extended'), "8"
-        driver.execute_script '$("#grading-box-extended").change()'
+        replace_content f('#grading-box-extended'), "8", tab_out: true
         wait_for_ajaximations
 
         expect(mark_tab2_button).to be_displayed

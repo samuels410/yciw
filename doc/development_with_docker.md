@@ -18,8 +18,11 @@ pretty close, about 90% of VMWare fusion in basic testing)
 
 ##### Dinghy
 
+You'll want to walk through https://github.com/codekitchen/dinghy#install, but
+when you run create, you may want to increase the system resources you give the
+VM, like so:
+
 ```
-$ brew install https://github.com/codekitchen/dinghy/raw/latest/dinghy.rb
 $ dinghy create --memory=4096 --cpus=4 --provider=vmware_fusion
 ```
 
@@ -133,6 +136,15 @@ $ pip install docker-compose
 
 ### Bootstrapping
 
+#### In a hurry?
+These commands should get you going?
+
+```bash
+cp docker-compose/config/* config/
+docker-compose run --rm web script/docker_first_time_setup.sh
+```
+
+#### Not in a hurry. Or I want to see whats happening
 With those dependencies installed, go to your Canvas directory and run
 the following:
 
@@ -179,6 +191,12 @@ $ docker-compose run --rm web bundle exec rake canvas:compile_assets
 Changes you're making are not showing up? See the Caveats section below.
 Ctrl-C your `docker-compose up` window and restart.
 
+## Cassandra
+
+If you're using the analytics package, you'll also need Cassandra. The
+Cassandra configuration is commented out in the docker-compose file; uncomment
+it and also uncomment the Cassandra configuration in cassandra.yml. Also follow
+the directions in cassandra.yml.example.
 
 ## Running tests
 
@@ -199,7 +217,7 @@ $ open vnc://secret:secret@selenium.docker/
 
 ## Troubleshooting
 
-If you are having trouble running the `web` or `kinesis` containers, make sure that permissions on the directory are permissive.  You can try the owner change (less disruptive):
+If you are having trouble running the `web` container, make sure that permissions on the directory are permissive.  You can try the owner change (less disruptive):
 
 ```
 chown -R 1000:1000 canvas-lms

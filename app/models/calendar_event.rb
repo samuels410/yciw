@@ -32,22 +32,14 @@ class CalendarEvent < ActiveRecord::Base
       :remove_child_events, :all_day, :comments
   attr_accessor :cancel_reason, :imported
 
-  EXPORTABLE_ATTRIBUTES = [
-    :id, :title, :description, :location_name, :location_address, :start_at, :end_at, :context_id, :context_type, :workflow_state, :created_at, :updated_at,
-    :user_id, :all_day, :all_day_date, :deleted_at, :cloned_item_id, :context_code, :time_zone_edited, :parent_calendar_event_id, :effective_context_code,
-    :participants_per_appointment, :override_participants_per_appointment, :comments
-  ]
-
-  EXPORTABLE_ASSOCIATIONS = [:context, :user, :child_events]
-
   sanitize_field :description, CanvasSanitize::SANITIZE
   copy_authorized_links(:description) { [self.effective_context, nil] }
 
   include Workflow
 
 
-  belongs_to :context, :polymorphic => true
-  validates_inclusion_of :context_type, :allow_nil => true, :in => ['Course', 'User', 'Group', 'AppointmentGroup', 'CourseSection']
+  belongs_to :context, polymorphic: [:course, :user, :group, :appointment_group, :course_section],
+             polymorphic_prefix: true
   belongs_to :user
   belongs_to :parent_event, :class_name => 'CalendarEvent', :foreign_key => :parent_calendar_event_id, :inverse_of => :child_events
   has_many :child_events, -> { where("calendar_events.workflow_state <> 'deleted'") }, class_name: 'CalendarEvent', foreign_key: :parent_calendar_event_id, inverse_of: :parent_event
@@ -174,7 +166,7 @@ class CalendarEvent < ActiveRecord::Base
     if args.first
       where("calendar_events.updated_at IS NULL OR calendar_events.updated_at>?", args.first)
     else
-      scoped
+      all
     end
   }
 
@@ -309,7 +301,7 @@ class CalendarEvent < ActiveRecord::Base
     state :deleted
   end
 
-  alias_method :destroy!, :destroy
+  alias_method :destroy_permanently!, :destroy
   def destroy(update_context_or_parent=true)
     transaction do
       self.workflow_state = 'deleted'
@@ -361,9 +353,9 @@ class CalendarEvent < ActiveRecord::Base
     dispatch :appointment_reserved_by_user
     to { appointment_group.instructors }
     whenever {
-      user && appointment_group && parent_event &&
+      @updating_user && appointment_group && parent_event &&
       just_created &&
-      context == appointment_group.participant_for(user)
+      context == appointment_group.participant_for(@updating_user)
     }
     data { {:updating_user => @updating_user} }
 

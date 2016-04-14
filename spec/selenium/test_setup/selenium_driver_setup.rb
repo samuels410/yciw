@@ -1,6 +1,8 @@
 require "fileutils"
 
 module SeleniumDriverSetup
+  RECENT_SPEC_RUNS_LIMIT = 10
+
   def setup_selenium
 
     browser = $selenium_config[:browser].try(:to_sym) || :firefox
@@ -11,6 +13,9 @@ module SeleniumDriverSetup
       Selenium::WebDriver.const_get(browser.to_s.capitalize).path = path
     end
 
+    run_headless = ENV.key?("TEST_ENV_NUMBER")
+    set_up_display_buffer if run_headless
+
     driver = if browser == :firefox
                firefox_driver
              elsif browser == :chrome
@@ -19,8 +24,34 @@ module SeleniumDriverSetup
                ie_driver
              end
 
-    driver.manage.timeouts.implicit_wait = 3
+    focus_viewport driver if run_headless
+
+    driver.manage.timeouts.implicit_wait = 10
+    driver.manage.timeouts.script_timeout = 60
+
     driver
+  end
+
+  def set_up_display_buffer
+    require "headless"
+
+    test_number = ENV["TEST_ENV_NUMBER"]
+    # it'll be '', '2', '3', '4'...
+    test_number = test_number.blank? ? 1 : test_number.to_i
+    # start at 21 to avoid conflicts with other test runner Xvfb stuff
+
+    display = 20 + test_number
+    Headless.new(display: display, dimensions: "2000x2000x24").start
+    puts "Setting up DISPLAY=#{ENV['DISPLAY']}"
+  end
+
+  def focus_viewport(driver)
+    # force the viewport to have focus right away; otherwise certain specs
+    # will fail unless they follow another dialog accepting/dismissing spec,
+    # since they rely on focus/blur events, which don't fire if the window
+    # doesn't have focus
+    driver.execute_script "alert('yolo')"
+    driver.switch_to.alert.accept
   end
 
   def ie_driver
@@ -150,8 +181,6 @@ module SeleniumDriverSetup
 
   def firefox_profile
     profile = Selenium::WebDriver::Firefox::Profile.new
-    profile.load_no_focus_lib=(true)
-    profile.native_events = true
     profile.add_extension Rails.root.join("spec/selenium/test_setup/JSErrorCollector.xpi")
 
     if $selenium_config[:firefox_profile].present?
@@ -174,6 +203,20 @@ module SeleniumDriverSetup
     "http://#{$app_host_and_port}"
   end
 
+  def self.note_recent_spec_run(example)
+    @recent_spec_runs ||= []
+    @recent_spec_runs << { location: example.metadata[:location], exception: example.exception }
+    @recent_spec_runs = @recent_spec_runs.last(RECENT_SPEC_RUNS_LIMIT)
+
+    if ENV["ABORT_ON_CONSISTENT_BADNESS"]
+      recent_errors = @recent_spec_runs.map { |run| run[:exception] && run[:exception].to_s }.compact
+      if recent_errors.size >= RECENT_SPEC_RUNS_LIMIT && recent_errors.uniq.size == 1
+        $stderr.puts "ERROR: got the same failure #{RECENT_SPEC_RUNS_LIMIT} times in a row, aborting"
+        RSpec.world.wants_to_quit = true
+      end
+    end
+  end
+
   def self.error_template
     @error_template ||= begin
       layout_path = Rails.root.join("spec/selenium/test_setup/selenium_error.html.erb")
@@ -181,7 +224,7 @@ module SeleniumDriverSetup
     end
   end
 
-  def record_errors(example)
+  def record_errors(example, log_messages)
     js_errors = driver.execute_script("return window.JSErrorCollector_errors && window.JSErrorCollector_errors.pump()") || []
     return unless js_errors.present? || example.exception
 
@@ -201,6 +244,10 @@ module SeleniumDriverSetup
     summary_name = meta[:location].sub(/\A[.\/]+/, "").gsub(/\//, ":")
     screenshot_name = summary_name + ".png"
     driver.save_screenshot(errors_path.join(screenshot_name))
+
+    recent_spec_runs = SeleniumDriverSetup.recent_spec_runs.map { |r| r[:location] }
+
+    log_message_formatter = EscapeCode::HtmlFormatter.new(log_messages.join("\n"))
 
     # make a nice little html file for jenkins
     File.open(errors_path.join(summary_name + ".html"), "w") do |file|
@@ -244,7 +291,10 @@ module SeleniumDriverSetup
     s.close() if s
   end
 
+  class ServerStartupError < RuntimeError; end
+
   def self.start_webserver(webserver)
+    attempts ||= 0
     setup_host_and_port
     case webserver
     when 'thin'
@@ -255,6 +305,11 @@ module SeleniumDriverSetup
       puts "no web server specified, defaulting to WEBrick"
       self.start_in_process_webrick_server
     end
+  rescue ServerStartupError
+    attempts += 1
+    retry if attempts <= 3
+    $stderr.puts "unable to start server, giving up :'("
+    exit! 1
   end
 
   def self.shutdown_webserver(server)
@@ -278,7 +333,10 @@ module SeleniumDriverSetup
       return nope unless allow_requests?
 
       # wrap request in a mutex so we can ensure it doesn't span spec
-      # boundaries (see clear_requests!)
+      # boundaries (see clear_requests!). we also use this mutex to
+      # synchronize db access (so both threads see stuff in the overall
+      # spec transaction, while ensuring savepoints in one don't mess
+      # up the other)
       result = request_mutex.synchronize { app.call(env) }
 
       # check if the spec just finished while we ran, and if so prevent
@@ -304,6 +362,8 @@ module SeleniumDriverSetup
   end
 
   class << self
+    attr_reader :recent_spec_runs
+
     def disallow_requests!
       # ensure the current in-flight request (if any, AJAX or otherwise)
       # finishes up its work, and prevent any subsequent requests before the
@@ -323,7 +383,7 @@ module SeleniumDriverSetup
     end
 
     def request_mutex
-      @request_mutex ||= Mutex.new
+      @request_mutex ||= Monitor.new
     end
   end
 

@@ -1,5 +1,5 @@
-require File.expand_path(File.dirname(__FILE__) + '/common')
-require File.expand_path(File.dirname(__FILE__) + '/helpers/notifications_common')
+require_relative 'common'
+require_relative 'helpers/notifications_common'
 include NotificationsCommon
 
 
@@ -39,41 +39,6 @@ describe "dashboard" do
       end
     end
 
-    it "should be able to ignore an assignment to grade permanently", priority: "1", test_id: 216398 do
-      assignment = assignment_model({:submission_types => 'online_text_entry', :course => @course})
-      student = user_with_pseudonym(:active_user => true, :username => 'student@example.com', :password => 'qwerty')
-      student2 = user_with_pseudonym(:active_user => true, :username => 'student2@example.com', :password => 'qwerty')
-      @course.enroll_user(student, "StudentEnrollment", :enrollment_state => 'active')
-      @course.enroll_user(student2, "StudentEnrollment", :enrollment_state => 'active')
-      assignment.reload
-      assignment.submit_homework(student, {:submission_type => 'online_text_entry', :body => 'ABC'})
-      assignment.reload
-      enable_cache do
-        get "/"
-
-        f('.to-do-list .disable_item_link').click
-        wait_for_ajaximations
-        f('#ignore_forever').click
-        wait_for_ajaximations
-        expect(f('.to-do-list > li')).to be_nil
-
-        get "/"
-
-        expect(f('.to-do-list')).to be_nil
-      end
-
-      assignment.reload
-      assignment.submit_homework(student2, {:submission_type => 'online_text_entry', :body => 'ABC'})
-      assignment.reload
-      enable_cache do
-        get "/"
-
-        expect(f('.to-do-list')).to be_nil
-
-      end
-
-    end
-
     it "should be able to ignore an assignment until the next submission", priority: "1", test_id: 216399 do
       assignment = assignment_model({:submission_types => 'online_text_entry', :course => @course})
       student = user_with_pseudonym(:active_user => true, :username => 'student@example.com', :password => 'qwerty')
@@ -86,10 +51,8 @@ describe "dashboard" do
       enable_cache do
         get "/"
 
-        f('.to-do-list .disable_item_link').click
-        wait_for_ajaximations
-        ignore_link = f('#ignore_until_submission')
-        expect(ignore_link).to include_text("Ignore Until New Submission")
+        ignore_link = f('.to-do-list .disable_item_link')
+        expect(ignore_link['title']).to include_text("Ignore until new submission")
         ignore_link.click
         wait_for_ajaximations
         expect(f('.to-do-list > li')).to be_nil
@@ -111,19 +74,41 @@ describe "dashboard" do
 
     end
 
-    it "shows a stream item under the assignments in dashboard", priority: "1", test_id: 108723 do
-      NotificationsCommon.setup_notification(@teacher, name: 'Assignment Created')
-      assignment_model({:submission_types => ['online_text_entry'], :course => @course})
-      get "/"
-      find('.toggle-details').click
-      expect(element_exists(fj('.fake-link:contains("Unnamed")'))).to be true
+    context 'stream items' do
+      before :once do
+        NotificationsCommon.setup_notification(@teacher, name: 'Assignment Created')
+      end
+
+      it 'shows an assignment stream item under Recent Activity in dashboard', priority: "1", test_id: 108723 do
+        assignment_model({:submission_types => ['online_text_entry'], :course => @course})
+        get "/"
+        find('.toggle-details').click
+        expect(element_exists(fj('.fake-link:contains("Unnamed")'))).to be true
+      end
+
+      it 'does not show an unpublished assignment under recent activity under dashboard', priority: "2", test_id: 108722 do
+        # manually creating assignment as assignment created through backend are published by default
+        get "/courses/#{@course.id}/assignments"
+        wait_for_ajaximations
+
+        # create assignment
+        f('.new_assignment').click
+        wait_for_ajaximations
+        f('#assignment_name').send_keys('unpublished assignment')
+        f("input[type=checkbox][id=assignment_text_entry]").click
+        f(".datePickerDateField[data-date-type='due_at']").send_keys(Time.zone.now + 1.day)
+
+        expect_new_page_load { f('.btn-primary[type=submit]').click }
+        wait_for_ajaximations
+
+        get "/"
+        expect(f('.no_recent_messages')).to be_truthy
+      end
     end
 
     context "moderation to do" do
       before do
         @teacher = @user
-        @course.account.allow_feature!(:moderated_grading)
-        @course.enable_feature!(:moderated_grading)
         @student = student_in_course(:course => @course, :active_all => true).user
         @assignment = @course.assignments.create!(:title => "some assignment", :submission_types => ['online_text_entry'], :moderated_grading => true)
         @assignment.submit_homework(@student, :body => "submission")
@@ -164,11 +149,8 @@ describe "dashboard" do
           get "/"
 
           ff('.to-do-list .disable_item_link').each do |link|
+            expect(link['title']).to include_text("Ignore until new mark")
             link.click
-            wait_for_ajaximations
-            ignore_link = f('#ignore_until_submission')
-            expect(ignore_link).to include_text("Ignore Until New Mark")
-            ignore_link.click
             wait_for_ajaximations
           end
 
@@ -205,23 +187,19 @@ describe "dashboard" do
           all_todo_links = ff('.to-do-list .disable_item_link')
           all_todo_links.last.click
           wait_for_ajaximations
-          ff('#ignore_forever').last.click
-          wait_for_ajaximations
 
           check_element_has_focus(all_todo_links.first)
         end
       end
 
-      it "should focus on the 'View Calendar' link if there are no other todo items", priority: "1", test_id: 216401 do
+      it "should focus on the 'To Do' header if there are no other todo items", priority: "1", test_id: 216401 do
         enable_cache do
           get "/"
 
           f('.to-do-list .disable_item_link').click
           wait_for_ajaximations
-          f('#ignore_forever').click
-          wait_for_ajaximations
 
-          check_element_has_focus(f('.event-list-view-calendar'))
+          check_element_has_focus(f('.todo-list-header'))
         end
       end
     end

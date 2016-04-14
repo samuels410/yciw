@@ -20,19 +20,11 @@
 # asset_group_code is for the group
 # so, for example, the asset could be an assignment, the group would be the assignment_group
 class AssetUserAccess < ActiveRecord::Base
-  belongs_to :context, :polymorphic => true
-  validates_inclusion_of :context_type, :allow_nil => true, :in => ['User', 'Group', 'Course']
+  belongs_to :context, polymorphic: [:user, :group, :course], polymorphic_prefix: true
   belongs_to :user
   has_many :page_views
   before_save :infer_defaults
   attr_accessible :user, :asset_code
-
-  EXPORTABLE_ATTRIBUTES = [
-    :id, :asset_code, :asset_group_code, :user_id, :context_id, :context_type, :count, :last_access, :created_at, :updated_at, :asset_category, :view_score,
-    :participate_score, :action_level, :summarized_at, :interaction_seconds, :display_name, :membership_type
-  ]
-
-  EXPORTABLE_ASSOCIATIONS = [:context, :user, :page_views]
 
   scope :for_context, lambda { |context| where(:context_id => context, :context_type => context.class.to_s) }
   scope :for_user, lambda { |user| where(:user_id => user) }

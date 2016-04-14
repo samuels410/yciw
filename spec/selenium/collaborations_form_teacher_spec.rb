@@ -16,7 +16,7 @@ describe "collaborations" do
     context "#{title} collaboration" do
       before(:each) do
         course_with_teacher_logged_in
-        set_up_google_docs
+        setup_google_drive
       end
 
       it 'should display the new collaboration form if there are no existing collaborations', priority: "1", test_id: 132521 do
@@ -42,6 +42,22 @@ describe "collaborations" do
 
       it 'should select collaborators', priority: "1", test_id: 159848 do
         select_collaborators(type)
+      end
+
+      it "should not show inactive students in list" do
+        ensure_plugin(type)
+
+        student_in_course(:course => @course)
+        @student.update_attribute(:name, 'real user')
+
+        enrollment = student_in_course(:course => @course)
+        @student.update_attribute(:name, 'inactive user')
+        enrollment.deactivate
+
+        get "/courses/#{@course.id}/collaborations"
+
+        expect(ff('.available-users li').length).to eq 1
+        expect(f('.available-users')).to_not include_text("inactive")
       end
 
       it 'should select from all course groups', priority: "1", test_id: 162352 do

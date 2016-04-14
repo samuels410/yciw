@@ -78,17 +78,7 @@ describe "API Authentication", type: :request do
         post "/api/v1/courses/#{@course.id}/assignments.json",
              { :assignment => { :name => 'test assignment', :points_possible => '5.3', :grading_type => 'points' },
                :authenticity_token => 'asdf' }
-          expect(response.response_code).to eq 401
-      end
-
-      it "should allow post with old authenticity token in application session" do
-        session[:_csrf_token] = SecureRandom.base64(32)
-        CanvasBreachMitigation::MaskingSecrets.stubs(:valid_authenticity_token?).returns(true)
-        post "/api/v1/courses/#{@course.id}/assignments.json",
-             { :assignment => { :name => 'test assignment', :points_possible => '5.3', :grading_type => 'points' },
-               :authenticity_token => 'mock csrf token' }
-        expect(response).to be_success
-        expect(@course.assignments.count).to eq 1
+          expect(response.response_code).to eq 422
       end
 
       it "should allow post with cookie authenticity token in application session" do
@@ -103,7 +93,7 @@ describe "API Authentication", type: :request do
       it "should not allow replacing the authenticity token with api_key without basic auth" do
         post "/api/v1/courses/#{@course.id}/assignments.json?api_key=#{@key.api_key}",
              { :assignment => { :name => 'test assignment', :points_possible => '5.3', :grading_type => 'points' } }
-        expect(response.response_code).to eq 401
+        expect(response.response_code).to eq 422
       end
     end
 
@@ -212,7 +202,7 @@ describe "API Authentication", type: :request do
           Onelogin::Saml::Response.any_instance.stubs(:issuer).returns("saml_entity")
           Onelogin::Saml::Response.any_instance.stubs(:trusted_roots).returns([])
 
-          post 'saml_consume', :SAMLResponse => "foo"
+          post '/saml_consume', :SAMLResponse => "foo"
         end
       end
 
@@ -522,12 +512,12 @@ describe "API Authentication", type: :request do
     end
 
     def wrapped_jwt_from_service
-      services_jwt = Canvas::Security::ServicesJwt.generate(@user.global_id, false)
+      services_jwt = Canvas::Security::ServicesJwt.generate({sub: @user.global_id}, false)
       payload = {
         iss: "some other service",
         user_token: services_jwt
       }
-      wrapped_jwt = Canvas::Security.create_jwt(payload, nil, signing_secret)
+      wrapped_jwt = Canvas::Security.create_jwt(payload, nil, fake_signing_secret)
       Canvas::Security.base64_encode(wrapped_jwt)
     end
 
@@ -535,6 +525,7 @@ describe "API Authentication", type: :request do
       get "/api/v1/courses", nil, {
         'HTTP_AUTHORIZATION' => "Bearer #{wrapped_jwt_from_service}"
       }
+      assert_status(200)
       expect(JSON.parse(response.body).size).to eq 1
     end
 
@@ -599,6 +590,12 @@ describe "API Authentication", type: :request do
     it "should allow passing the access token in the authorization header" do
       check_used { get "/api/v1/courses", nil, { 'HTTP_AUTHORIZATION' => "Bearer #{@token.full_token}" } }
       expect(JSON.parse(response.body).size).to eq 1
+    end
+
+    it "recovers gracefully if consul is missing encryption data" do
+      Diplomat::Kv.stubs(:get).raises(Diplomat::KeyNotFound, "cannot find some secret")
+      check_used { get "/api/v1/courses", nil, { 'HTTP_AUTHORIZATION' => "Bearer #{@token.full_token}" } }
+      assert_status(200)
     end
 
     it "should allow passing the access token in the post body" do

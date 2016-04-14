@@ -1,5 +1,4 @@
 require File.expand_path(File.dirname(__FILE__) + '/../common')
-require File.expand_path(File.dirname(__FILE__) + '/../helpers/external_tools_common')
 require File.expand_path(File.dirname(__FILE__) + '/../helpers/testrail_report')
 
 
@@ -60,6 +59,10 @@ describe "account admin question bank" do
     (1..3).each do |i|
       expect(answers[i][:weight]).to eq 0
     end
+    assessment_question_id = driver.execute_script(
+      "return $('#question_#{question.id} .assessment_question_id').text()"
+    )
+    expect(assessment_question_id).to be_present
     expect(f("#question_#{question.id}")).to include_text name
     expect(f("#question_#{question.id}")).to include_text question_text
     question

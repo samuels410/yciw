@@ -23,7 +23,7 @@ ul.instTree {
     &.separator {
       min-height: 2px;
       line-height: 2px;
-      font-size: 2px;
+      @include fontSize(12px);
     }
     &.node {
       background-image: url("/images/mimeClassIcons/folder.svg");
@@ -33,8 +33,6 @@ ul.instTree {
       &.groups {
         background-image: url("/images/groups_folder.png");
       }
-      // &.open
-
     }
     &.leaf {
       background-image: url("/images/mimeClassIcons/file.svg");
