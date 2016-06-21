@@ -16132,12 +16132,8 @@ en-AU:
                   those courses are available, you will see information about them here
                   and in the top navigation. In the meantime, feel free to sign up for
                   more courses or set up your profile.
-<<<<<<< HEAD
       welcome_to_happiness: "Welcome to Young Composers & Improvisors Workshop!"
-=======
-      welcome_to_happiness: "Welcome to Canvas!"
   users_of_screen_readers_may_need_to_turn_off_the_v_98811cd: "Users of screen readers may need to turn off the virtual cursor in order to use these keyboard shortcuts"
->>>>>>> bba2161afa7259f9a8707579f43d86abc49439ac
   validate: 
     is_required: "This field is required"
   validate_links_in_content_b1630fba: "Validate Links in Content"
