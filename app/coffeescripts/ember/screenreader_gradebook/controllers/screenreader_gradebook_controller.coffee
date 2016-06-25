@@ -75,16 +75,6 @@ define [
         @pollGradebookCsvProgress(attachmentProgress)
     ).on('init')
 
-    errors: (->
-      # this is a sad, sad hack
-      # until we can get flash notifications working app-wide for screenreaders
-      if Ember.$('#flash_message_holder li').size() > 0
-        close = Ember.$('#flash_message_holder li a').text().trim()
-        message = Ember.$('#flash_message_holder li').text().replace(close,'').trim()
-        node = Ember.$("<span role='alert'>#{htmlEscape(message)}</span>")
-        Ember.$(node).appendTo(Ember.$('#flash_screenreader_holder'))
-    ).on('init')
-
     contextUrl: contextUrl
     uploadCsvUrl: "#{contextUrl}/gradebook_upload/new"
 
@@ -810,9 +800,9 @@ define [
     fetchCorrectEnrollments: (->
       return if (@get('enrollments.isLoading'))
       if @get('showConcludedEnrollments')
-        url = ENV.GRADEBOOK_OPTIONS.students_url_with_concluded_enrollments
+        url = ENV.GRADEBOOK_OPTIONS.enrollments_with_concluded_url
       else
-        url = ENV.GRADEBOOK_OPTIONS.students_url
+        url = ENV.GRADEBOOK_OPTIONS.enrollments_url
 
       enrollments = @get('enrollments')
       enrollments.clear()

@@ -159,6 +159,7 @@ module ApplicationHelper
     if @context.respond_to?(:wiki)
       limit = Setting.get('wiki_sidebar_item_limit', 1000000).to_i
       @wiki_sidebar_data[:wiki_pages] = @context.wiki.wiki_pages.active.order(:title).select('title, url, workflow_state').limit(limit)
+      @wiki_sidebar_data[:wiki] = @context.wiki
     end
     @wiki_sidebar_data[:wiki_pages] ||= []
     if can_do(@context, @current_user, :manage_files, :read_as_admin)
@@ -225,7 +226,7 @@ module ApplicationHelper
   def use_optimized_js?
     if ENV['USE_OPTIMIZED_JS'] == 'true' || ENV['USE_OPTIMIZED_JS'] == 'True'
       # allows overriding by adding ?debug_assets=1 or ?debug_js=1 to the url
-      !(params[:debug_assets] || params[:debug_js])
+      use_webpack? || !(params[:debug_assets] || params[:debug_js])
     else
       # allows overriding by adding ?optimized_js=1 to the url
       params[:optimized_js] || false
@@ -277,9 +278,14 @@ module ApplicationHelper
       bundles = css_bundles.map do |(bundle,plugin)|
         css_url_for(bundle, plugin)
       end
+      bundles << css_url_for("disable_transitions") if disable_css_transitions?
       bundles << {:media => 'all'}
       stylesheet_link_tag(*bundles)
     end
+  end
+
+  def disable_css_transitions?
+    Rails.env.test? && ENV.fetch("DISABLE_CSS_TRANSITIONS", "1") == "1"
   end
 
   def css_variant
@@ -408,7 +414,7 @@ module ApplicationHelper
   #
   # Returns an HTML string.
   def sidebar_button(url, label, img = nil)
-    link_to(url, :class => 'btn button-sidebar-wide') do
+    link_to(url) do
       img ? ("<i class='icon-" + img + "'></i> ").html_safe + label : label
     end
   end
@@ -674,6 +680,12 @@ module ApplicationHelper
         brand_config_for_account(opts)
       end
     end
+  end
+
+  def active_brand_config_json_url(opts={})
+    path = active_brand_config(opts).try(:public_json_path)
+    path ||= BrandableCSS.public_default_json_path
+    "/#{path}"
   end
 
   def brand_config_for_account(opts={})

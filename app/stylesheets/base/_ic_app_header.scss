@@ -7,6 +7,7 @@
   // ic-brand-global-nav-menu-item__text-color
   // ic-brand-global-nav-avatar-border
   // ic-brand-global-nav-menu-item__badge-bgd
+  // ic-brand-global-nav-menu-item__badge-text
   // ic-brand-global-nav-ic-icon-svg-fill--active
   // ic-brand-global-nav-logo-bgd
 
@@ -84,12 +85,10 @@
         text-decoration: none;
         outline: none;
       }
-      .ic-icon-svg, .ic-avatar { transform: scale(1.075); }
       .ic-avatar {
         border-color: $ic-brand-global-nav-avatar-border;
         &.ic-avatar--fake-student { border-color: $ic-masquerade-color; }
       }
-      &:active { .ic-icon-svg, .ic-avatar { transform: scale(1); } }
       .menu-item__badge {
         @include primary-nav-badge-border($ic-global-nav-menu-item__badge-border);
       }
@@ -101,8 +100,6 @@
     }
 
     .ic-icon-svg {
-      transition: all 0.2s ease-out;
-      transform: translate3d(0,0,0);
       width: 26px;
       display: inline-block;
       vertical-align: middle;
@@ -120,8 +117,9 @@
     .ic-icon-svg--arrow-right { width: 24px; height: 24px; }
     .ic-icon-svg--groups { width: 32px; height: 21.6px; }
     .ic-icon-svg--accounts { width: 26px; height: 29px; }
-    .ic-icon-svg--login {width: 26px; height: 29px;}
-    .ic-icon-svg--lti {width: 26px; height: 29px;}
+    .ic-icon-svg--login { width: 26px; height: 29px; }
+    .ic-icon-svg--lti { width: 26px; height: 29px; }
+    .ic-icon-svg--help { height: 26px; }
   }
 
   .ic-app-header__primary {
@@ -134,6 +132,7 @@
     display: flex;
     flex-direction: column;
     overflow-y: auto;
+    -ms-overflow-style: none; // IE11 and below was throwing on scrollbars no matter if needed or not
     width: $ic-header-primary-width;
   }
 
@@ -142,7 +141,7 @@
     overflow: hidden;
     border-radius: 100%;
     border: 2px solid $ic-brand-global-nav-avatar-border;
-    width: $ic-sp*4; height: $ic-sp*4;
+    width: 50px; height: 50px;
     box-sizing: border-box;
     display: inline-block;
     vertical-align: middle;
@@ -175,8 +174,12 @@
     position: absolute;
     top: -0.5em; right: 0;
     background: $ic-brand-global-nav-menu-item__badge-bgd;
-    color: $ic-brand-global-nav-menu-item__text-color;
+    color: $ic-brand-global-nav-menu-item__badge-text;
     @include primary-nav-badge-border($ic-brand-global-nav-bgd);
+
+    @if $use_high_contrast {
+      box-shadow: 0 0 0 2px $ic-color-light;
+    }
   }
 
   .ic-app-header__logomark-container {
@@ -195,7 +198,7 @@
     display: block;
     width: 100%;
     overflow: hidden;
-    margin: 0 auto $ic-sp auto;
+    margin: 0 auto;
     background-image: $ic-brand-header-image;
     background-position: 50%;
     background-repeat: no-repeat;
@@ -296,18 +299,49 @@
   }
 
   .ReactTray__header {
-    display: flex;
-    align-items: center;
     border-bottom: 1px solid $ic-border-light;
-    padding-bottom: $ic-sp;
     margin-bottom: $ic-sp;
+
+    &:not(.ReactTray__header--is-profile) {
+      padding-bottom: $ic-sp;
+      display: flex;
+      align-items: flex-start;
+
+      .ReactTray__headline {
+        flex: 1;
+        min-width: 1px;
+      }
+
+    }
+
+    &.ReactTray__header--is-profile {
+      text-align: center;
+      padding-bottom: $ic-sp*2;
+
+      .ic-avatar {
+        border: none;
+        background-color: $ic-bg-light-neutral;
+        width: 72px; height: 72px;
+      }
+    }
+
+  }
+
+  .ReactTray-profile-header-avatar-image {
+    min-width: 72px; min-height: 72px;
+  }
+
+  .ReactTray-profile-header-close { text-align: right; }
+
+  .ReactTray-profile-header-logout-form {
+    margin-top: $ic-sp;
+    margin-bottom: 0;
   }
 
   .ReactTray__headline {
+    @include fontSize(21px);
     box-sizing: border-box;
     margin: 0;
-    line-height: 1.1;
-    flex: 1;
   }
 
   .ReactTray-list-item__helper-text {

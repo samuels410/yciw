@@ -150,18 +150,6 @@ YAML
     expect(YAML.load(psych_yaml)).to eq old_result
   end
 
-  it "should seamlessly dump yaml into a psych-compatible format (and be cross-compatible)" do
-    yaml = "--- \nsadness: \"\\xF0\\x9F\\x98\\x82\"\n"
-    hash = YAML.load(yaml)
-
-    psych_dump = "---\nsadness: \"\\U0001F602\"\n#{Syckness::TAG}"
-    expect(hash.to_yaml).to eq psych_dump
-    expect(YAML.dump(hash)).to eq psych_dump
-
-    expect(YAML.load(psych_dump)).to eq hash
-    expect(YAML.unsafe_load(psych_dump)).to eq hash
-  end
-
   it "should work with aliases" do
     hash = {:a => 1}.with_indifferent_access
     obj = {:blah => hash, :bloop => hash}.with_indifferent_access
@@ -176,5 +164,31 @@ YAML
   it "should dump freaky floaty-looking strings" do
     str = "1.E+01"
     expect(YAML.load(YAML.dump(str))).to eq str
+  end
+
+  it "should dump html-safe strings correctly" do
+    hash = {:blah => "42".html_safe}
+    expect(YAML.load(YAML.dump(hash))).to eq hash
+  end
+
+  it "should dump strings with underscores followed by an integer" do
+    # the ride never ends -_-
+    hash = {:blah => "_42"}
+    expect(YAML.load(YAML.dump(hash))).to eq hash
+  end
+
+  it "should also dump floaat looking strings followed by an underscore" do
+    hash = {:blah => "42._"}
+    expect(YAML.load(YAML.dump(hash))).to eq hash
+  end
+
+  it "should dump whatever this is too" do
+    hash = {:blah => "4,2:0."}
+    expect(YAML.load(YAML.dump(hash))).to eq hash
+  end
+
+  it "should be able to dump and load Canvas:Plugin classes" do
+    plugin = Canvas::Plugin.find('canvas_cartridge_importer')
+    expect(YAML.unsafe_load(YAML.dump(plugin))).to eq plugin
   end
 end

@@ -22,10 +22,13 @@ rescue LoadError
 end
 
 require 'securerandom'
+require 'tmpdir'
+require 'lti_spec_helper.rb'
 
 RSpec.configure do |c|
   c.raise_errors_for_deprecations!
   c.color = true
+  c.include LtiSpecHelper, :include_lti_spec_helpers
 
   c.around(:each) do |example|
     Timeout::timeout(180) do
@@ -242,52 +245,59 @@ def truncate_table(model)
   end
 end
 
+def get_table_names(connection)
+  # use custom SQL to exclude tables from extensions
+  schema = connection.shard.name if connection.instance_variable_get(:@config)[:use_qualified_names]
+  table_names = connection.query(<<-SQL, 'SCHEMA').map(&:first)
+     SELECT relname
+     FROM pg_class INNER JOIN pg_namespace ON relnamespace=pg_namespace.oid
+     WHERE nspname = #{schema ? "'#{schema}'" : 'ANY (current_schemas(false))'}
+       AND relkind='r'
+       AND NOT EXISTS (
+         SELECT 1 FROM pg_depend WHERE deptype='e' AND objid=pg_class.oid
+       )
+  SQL
+  table_names.delete('schema_migrations')
+  table_names
+end
+
 def truncate_all_tables
   raise "don't use truncate_all_tables with transactional fixtures. this kills the postgres" if ActiveRecord::Base.connection.open_transactions > 0
 
   Shard.with_each_shard do
     model_connections = ActiveRecord::Base.descendants.map(&:connection).uniq
     model_connections.each do |connection|
-      if connection.adapter_name == "PostgreSQL"
-        # use custom SQL to exclude tables from extensions
-        schema = connection.shard.name if connection.instance_variable_get(:@config)[:use_qualified_names]
-        table_names = connection.query(<<-SQL, 'SCHEMA').map(&:first)
-           SELECT relname
-           FROM pg_class INNER JOIN pg_namespace ON relnamespace=pg_namespace.oid
-           WHERE nspname = #{schema ? "'#{schema}'" : 'ANY (current_schemas(false))'}
-             AND relkind='r'
-             AND NOT EXISTS (
-               SELECT 1 FROM pg_depend WHERE deptype='e' AND objid=pg_class.oid
-             )
-        SQL
-        table_names.delete('schema_migrations')
-        next if table_names.empty?
-        connection.execute("TRUNCATE TABLE #{table_names.map { |t| connection.quote_table_name(t) }.join(',')}")
-      else
-        connection.tables.each { |model| truncate_table(model) }
-      end
+      table_names = get_table_names(connection)
+      next if table_names.empty?
+      connection.execute("TRUNCATE TABLE #{table_names.map { |t| connection.quote_table_name(t) }.join(',')}")
     end
 
     Role.ensure_built_in_roles!
   end
 end
 
-# Make AR not puke if MySQL auto-commits the transaction
-module MysqlOutsideTransaction
-  def outside_transaction?
-    # MySQL ignores creation of savepoints outside of a transaction; so if we can create one
-    # and then can't release it because it doesn't exist, we're not in a transaction
-    execute('SAVEPOINT outside_transaction')
-    !!execute('RELEASE SAVEPOINT outside_transaction') rescue true
+def ensure_group_cleanup!(group)
+  connection = ActiveRecord::Base.connection
+  table_names = get_table_names(connection) - ['roles']
+  table_names.each do |table|
+    next if connection.select_one("SELECT COUNT(*) FROM #{table}")["count"].to_i == 0
+    $stderr.puts
+    $stderr.puts "\e[31mERROR: Garbage data left over in `#{table}` table\e[0m"
+    $stderr.puts "Context: #{group.class.location}"
+    $stderr.puts
+    $stderr.puts "You should clean up any records you create so they don't affect subsequent specs."
+    $stderr.puts "Ideally you should just use \e[33mtransactional fixtures\e[0m, and it will \e[32mJust Work™\e[0m"
+    $stderr.puts
+    exit! 1
   end
 end
 
-module ActiveRecord::ConnectionAdapters
-  if defined?(MysqlAdapter)
-    MysqlAdapter.send(:include, MysqlOutsideTransaction)
-  end
-  if defined?(Mysql2Adapter)
-    Mysql2Adapter.send(:include, MysqlOutsideTransaction)
+def cleanup_temp_dirs!
+  if $temp_dirs
+    $temp_dirs.each do |dir|
+      FileUtils::rm_rf(dir) if File.exist?(dir)
+    end
+    $temp_dirs = []
   end
 end
 
@@ -406,6 +416,11 @@ RSpec.configure do |config|
     ActiveRecord::Migration.verbose = false
   end
 
+  config.after :all do |group|
+    cleanup_temp_dirs!
+    ensure_group_cleanup!(group) if ENV['ENSURE_GROUP_CLEANUP']
+  end
+
   def delete_fixtures!
     # noop for now, needed for plugin spec tweaks. implementation coming
     # in g/24755
@@ -465,8 +480,18 @@ RSpec.configure do |config|
       Selinimum::Capture.install!
     end
 
-    config.before do |example|
-      Selinimum::Capture.current_example = example
+    config.prepend_before :all do |group|
+      # ensure these constants get reloaded, otherwise you get the dreaded
+      # `A copy of #{from_mod} has been removed from the module tree but is still active!`
+      BroadcastPolicy.reset_notifiers!
+
+      Selinimum::Capture.current_group = group.class
+    end
+
+    config.around :each do |example|
+      Selinimum::Capture.with_example(example) do
+        example.run
+      end
     end
 
     config.after :suite do
@@ -489,7 +514,8 @@ RSpec.configure do |config|
   end
   config.before :each do
     if Canvas.redis_enabled? && Canvas.redis_used
-      Canvas.redis.flushdb
+      # yes, we really mean to run this dangerous redis command
+      Shackles.activate(:deploy) { Canvas.redis.flushdb }
     end
     Canvas.redis_used = false
   end
@@ -584,6 +610,13 @@ RSpec.configure do |config|
 
   def update_with_protected_attributes(ar_instance, attrs)
     update_with_protected_attributes!(ar_instance, attrs) rescue false
+  end
+
+  def create_temp_dir!
+    dir = Dir.mktmpdir
+    $temp_dirs ||= []
+    $temp_dirs << dir
+    dir
   end
 
   def process_csv_data(*lines)

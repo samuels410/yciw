@@ -24,6 +24,13 @@ require 'coffee-script'
 require File.expand_path(File.dirname(__FILE__) + '/test_setup/custom_selenium_rspec_matchers')
 require File.expand_path(File.dirname(__FILE__) + '/test_setup/selenium_driver_setup')
 
+if ENV["TESTRAIL_RUN_ID"] || ENV["TESTRAIL_ENTRY_RUN_ID"]
+  require 'testrailtagging'
+  RSpec.configure do |config|
+    TestRailRSpecIntegration.register_rspec_integration(config,:canvas, add_formatter: false)
+  end
+end
+
 Dir[File.dirname(__FILE__) + '/test_setup/common_helper_methods/*.rb'].each {|file| require file }
 
 include I18nUtilities
@@ -163,19 +170,25 @@ shared_context "in-process server selenium tests" do
     end
   end
 
+  before do |example|
+    start_capturing_video
+    move_mouse_to_known_position
+  end
+
   after(:each) do |example|
-    clear_timers!
-    # while disallow_requests! would generally get these, there's a small window
-    # between the ajax request starting up and the middleware actually processing it
     begin
+      clear_timers!
+      # while disallow_requests! would generally get these, there's a small window
+      # between the ajax request starting up and the middleware actually processing it
       wait_for_ajax_requests
     rescue Selenium::WebDriver::Error::WebDriverError
       # we want to ignore selenium errors when attempting to wait here
-      nil
+    ensure
+      exception = $ERROR_INFO || example.exception
+      SeleniumDriverSetup.note_recent_spec_run(example, exception)
+      record_errors(example, exception, Rails.logger.captured_messages)
+      SeleniumDriverSetup.disallow_requests!
+      truncate_all_tables unless self.use_transactional_fixtures
     end
-    SeleniumDriverSetup.note_recent_spec_run(example)
-    record_errors(example, Rails.logger.captured_messages)
-    SeleniumDriverSetup.disallow_requests!
-    truncate_all_tables unless self.use_transactional_fixtures
   end
 end

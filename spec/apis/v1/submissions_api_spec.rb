@@ -20,6 +20,9 @@ require File.expand_path(File.dirname(__FILE__) + '/../api_spec_helper')
 require File.expand_path(File.dirname(__FILE__) + '/../file_uploads_spec_helper')
 
 describe 'Submissions API', type: :request do
+  include Api::V1::User
+
+  let(:params) { {} }
 
   before :each do
     HostUrl.stubs(:file_host_with_shard).returns(["www.example.com", Shard.default])
@@ -379,6 +382,7 @@ describe 'Submissions API', type: :request do
         'created_at' => se1.created_at.as_json,
         'updated_at' => se1.updated_at.as_json,
         'user_name' => 'User',
+        'user' => user_display_json(@student, @course).stringify_keys!,
         'rating_sum' => nil,
         'rating_count' => nil,
       },
@@ -392,6 +396,7 @@ describe 'Submissions API', type: :request do
         'created_at' => se2.created_at.as_json,
         'updated_at' => se2.updated_at.as_json,
         'user_name' => 'User',
+        'user' => user_display_json(@student, @course).stringify_keys!,
         'rating_sum' => nil,
         'rating_count' => nil,
       }].sort_by { |h| h['user_id'] }
@@ -446,6 +451,7 @@ describe 'Submissions API', type: :request do
         'message' => 'sub 1',
         'user_id' => @student.id,
         'user_name' => 'User',
+        'user' => user_display_json(@student, @course).stringify_keys!,
         'read_state' => 'unread',
         'forced_read_state' => false,
         'parent_id' => e1.id,
@@ -459,6 +465,7 @@ describe 'Submissions API', type: :request do
         'message' => 'student 1',
         'user_id' => @student.id,
         'user_name' => 'User',
+        'user' => user_display_json(@student, @course).stringify_keys!,
         'read_state' => 'unread',
         'forced_read_state' => false,
         'parent_id' => nil,
@@ -2087,6 +2094,24 @@ describe 'Submissions API', type: :request do
 
       expect(json['provisional_grades'].first['score']).to eq 0
     end
+
+    it "should return an error trying to grade a student not enrolled in the course" do
+      @student.enrollments.first.conclude
+      a1 = @course.assignments.create!(
+        title: 'assignment1',
+        grading_type: 'points',
+        points_possible: 15
+      )
+      json = api_call(:put,
+            "/api/v1/courses/#{@course.id}/assignments/#{a1.id}/submissions/#{@student.id}.json",
+            { :controller => 'submissions_api', :action => 'update',
+              :format => 'json', :course_id => @course.id.to_s,
+              :assignment_id => a1.id.to_s, :user_id => @student.id.to_s },
+            { :submission => { :posted_grade => 10 } },
+            {},
+            { expected_status: 400 })
+      expect(json["error"]).not_to be_nil
+    end
   end
 
   it "should allow posting grade by sis id" do
@@ -2808,6 +2833,20 @@ describe 'Submissions API', type: :request do
           'media_type' => 'audio',
         })
       end
+
+      it "should copy files to the submissions folder if they're not there already" do
+        @course.root_account.enable_feature! :submissions_folder
+        @assignment.update_attributes(:submission_types => 'online_upload')
+        a1 = attachment_model(:context => @user, :folder => @user.submissions_folder)
+        a2 = attachment_model(:context => @user)
+        json = do_submit(:submission_type => 'online_upload', :file_ids => [a1.id, a2.id])
+        submission_attachment_ids = json['attachments'].map { |a| a['id'] }
+        expect(submission_attachment_ids.size).to eq 2
+        expect(submission_attachment_ids.delete(a1.id)).not_to be_nil
+        copy = Attachment.find(submission_attachment_ids.last)
+        expect(copy.folder).to eq @user.submissions_folder(@course)
+        expect(copy.root_attachment).to eq a2
+      end
     end
 
     context "submission file uploads" do
@@ -2837,6 +2876,18 @@ describe 'Submissions API', type: :request do
       it "should reject uploading files to other students' submissions" do
         json = api_call(:post, "/api/v1/courses/#{@course.id}/assignments/#{@assignment.id}/submissions/#{@student2.id}/files",
                         { :controller => "submissions_api", :action => "create_file", :format => "json", :course_id => @course.to_param, :assignment_id => @assignment.to_param, :user_id => @student2.to_param }, {}, {}, { :expected_status => 401 })
+      end
+
+      it "should upload to a student's Submissions folder if the feature is enabled" do
+        @course.root_account.enable_feature! :submissions_folder
+        preflight(name: 'test.txt', size: 12345, content_type: 'text/plain')
+        f = Attachment.last.folder
+        expect(f.submission_context_code).to eq @course.asset_string
+      end
+
+      it "should not do so otherwise" do
+        preflight(name: 'test.txt', size: 12345, content_type: 'text/plain')
+        expect(Attachment.last.folder).not_to be_for_submissions
       end
     end
 

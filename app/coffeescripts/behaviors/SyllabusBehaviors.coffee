@@ -19,7 +19,6 @@
 define [
   'jquery' # jQuery, $ #
   'calendar_move' # calendarMonths #
-  'wikiSidebar'
   'jsx/shared/rce/RichContentEditor'
   'compiled/views/editor/KeyboardShortcuts'
   'jquery.instructure_date_and_time' # dateString, datepicker #
@@ -27,16 +26,13 @@ define [
   'jquery.instructure_misc_helpers' # scrollSidebar #
   'jquery.instructure_misc_plugins' # ifExists, showIf #
   'jquery.loadingImg' # loadingImage #
-  'compiled/tinymce'
-  'tinymce.editor_box' # editorBox #
   'vendor/jquery.scrollTo' # /\.scrollTo/ #
   'jqueryui/datepicker' # /\.datepicker/ #
-], ($, calendarMonths, wikiSidebar, RichContentEditor, KeyboardShortcuts) ->
+], ($, calendarMonths, RichContentEditor, KeyboardShortcuts) ->
 
   specialDatesAreHidden = false
 
-  richContentEditor = new RichContentEditor({riskLevel: "sidebar", sidebar: wikiSidebar})
-  richContentEditor.preloadRemoteModule()
+  RichContentEditor.preloadRemoteModule()
 
 
   # Highlight mini calendar days matching syllabus events
@@ -177,44 +173,51 @@ define [
   # Binds to edit syllabus dom events
   bindToEditSyllabus = ->
 
+    $course_syllabus = $('#course_syllabus')
+    $course_syllabus.data('syllabus_body', ENV.SYLLABUS_BODY)
+    $edit_syllabus_link = $('.edit_syllabus_link')
+
+    # if there's no edit link, don't need to (and shouldn't) do the rest of
+    # this. the edit link is included on the page if and only if the user has
+    # :manage_content permission on the course (see assignments'
+    # syllabus_right_side view)
+    return unless $edit_syllabus_link.length > 0
+
     # Add the backbone view for keyboardshortup help here
     $('.toggle_views_link').first().before((new KeyboardShortcuts()).render().$el)
 
     $edit_course_syllabus_form = $('#edit_course_syllabus_form')
     $course_syllabus_body = $('#course_syllabus_body')
-    $course_syllabus = $('#course_syllabus')
     $course_syllabus_details = $('#course_syllabus_details')
 
-    $course_syllabus.data('syllabus_body', ENV.SYLLABUS_BODY)
+    RichContentEditor.initSidebar({
+      show: -> $('#sidebar_content').hide(),
+      hide: -> $('#sidebar_content').show()
+    })
 
-    richContentEditor.initSidebar()
     $edit_course_syllabus_form.on 'edit', ->
       $edit_course_syllabus_form.show()
       $course_syllabus.hide()
       $course_syllabus_details.hide()
       $course_syllabus_body.val($course_syllabus.data('syllabus_body'))
-      richContentEditor.loadNewEditor($course_syllabus_body, { manageParent: true })
+      RichContentEditor.loadNewEditor($course_syllabus_body, { focus: true, manageParent: true })
 
       $('.jump_to_today_link').focus() # a11y: Set focus so it doesn't get lost.
-      richContentEditor.attachSidebarTo $course_syllabus_body, ->
-        $('#sidebar_content').hide()
 
     $edit_course_syllabus_form.on 'hide_edit', ->
       $edit_course_syllabus_form.hide()
       $course_syllabus.show()
       text = $.trim $course_syllabus.html()
       $course_syllabus_details.showIf not text
-      richContentEditor.callOnRCE($course_syllabus_body, 'destroy')
-      $('#sidebar_content').show()
-      richContentEditor.hideSidebar()
+      RichContentEditor.destroyRCE($course_syllabus_body)
 
-    $('.edit_syllabus_link').on 'click', (ev) ->
+    $edit_syllabus_link.on 'click', (ev) ->
       ev.preventDefault()
       $edit_course_syllabus_form.triggerHandler 'edit'
 
     $edit_course_syllabus_form.on 'click', '.toggle_views_link', (ev) ->
       ev.preventDefault()
-      richContentEditor.callOnRCE($course_syllabus_body, 'toggle')
+      RichContentEditor.callOnRCE($course_syllabus_body, 'toggle')
       # hide the clicked link, and show the other toggle link.
       # todo: replace .andSelf with .addBack when JQuery is upgraded.
       $(ev.currentTarget).siblings('.toggle_views_link').andSelf().toggle()
@@ -227,7 +230,7 @@ define [
       object_name: 'course'
 
       processData: (data) ->
-        syllabus_body = richContentEditor.callOnRCE($course_syllabus_body, 'get_code')
+        syllabus_body = RichContentEditor.callOnRCE($course_syllabus_body, 'get_code')
         data['course[syllabus_body]'] = syllabus_body
         data
 

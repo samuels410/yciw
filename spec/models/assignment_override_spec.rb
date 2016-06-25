@@ -24,12 +24,15 @@ describe AssignmentOverride do
   end
 
   it "should soft-delete" do
-    @override = assignment_override_model
-    @override.stubs(:assignment_override_students).once.returns stub(:destroy_all)
-    @override.expects(:save!).once
+    @override = assignment_override_model(:course => @course)
+    @override_student = @override.assignment_override_students.build
+    @override_student.user = @student
+    @override_student.save!
+    
     @override.destroy
     expect(AssignmentOverride.where(id: @override).first).not_to be_nil
     expect(@override.workflow_state).to eq 'deleted'
+    expect(AssignmentOverrideStudent.where(:id => @override_student).first).to be_nil
   end
 
   it "should default set_type to adhoc" do
@@ -742,6 +745,75 @@ describe AssignmentOverride do
       # but the query executes on a different shard, but it should still be
       # well-formed (especially with qualified names)
       AssignmentOverride.visible_students_only([1, 2]).shard(@shard1).to_a
+    end
+  end
+
+  describe '.visible_users_for' do
+    before do
+      @override = assignment_override_model
+      @overrides = [@override]
+    end
+    subject(:visible_users) do
+      AssignmentOverride.visible_users_for(@overrides, @student)
+    end
+
+    it 'returns empty if provided an empty collection' do
+      @overrides = []
+      expect(visible_users).to be_empty
+    end
+
+    it 'returns empty if not provided a user' do
+      @student = nil
+      expect(visible_users).to be_empty
+    end
+
+    it 'delegates to #visible_users_for when collection & user are present' do
+      @override.expects(:visible_users_for).once
+      visible_users
+    end
+  end
+
+  describe '#visible_users_for' do
+    before do
+      @options = {}
+    end
+    let(:override) do
+      assignment_override_model(@options)
+    end
+    subject(:visible_users) do
+      override.visible_users_for(@student)
+    end
+
+    context 'when associated with an assignment' do
+      before do
+        assignment_model
+        @options = {
+          assignment: @assignment
+        }
+      end
+
+      it 'delegates to UserSearch' do
+        UserSearch.expects(:scope_for).with(@assignment.context, @student,
+          force_users_visible_to: true
+        )
+        subject
+      end
+    end
+
+    context 'when associated with a quiz' do
+      before do
+        quiz_model
+        @options = {
+          quiz: @quiz
+        }
+      end
+
+      it 'delegates to UserSearch' do
+        UserSearch.expects(:scope_for).with(@quiz.context, @student,
+          force_users_visible_to: true
+        )
+        subject
+      end
     end
   end
 end

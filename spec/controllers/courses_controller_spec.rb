@@ -488,8 +488,8 @@ describe CoursesController do
       post 'enrollment_invitation', :course_id => @course.id, :accept => '1', :invitation => @enrollment.uuid
       expect(response).to be_redirect
       expect(response).to redirect_to(course_url(@course.id))
-      expect(assigns[:pending_enrollment]).to eql(@enrollment)
-      expect(assigns[:pending_enrollment]).to be_active
+      expect(assigns[:context_enrollment]).to eql(@enrollment)
+      expect(assigns[:context_enrollment]).to be_active
     end
 
     it "should ask user to login for registered not-logged-in user" do
@@ -846,6 +846,25 @@ describe CoursesController do
         expect(assigns[:context_enrollment]).to eq @enrollment
         @enrollment.reload
         expect(@enrollment).to be_active
+      end
+
+      it "should not error when previewing an unpublished course as an invited admin" do
+        @account = Account.create!
+        @account.settings[:allow_invitation_previews] = false
+        @account.save!
+
+        course(:account => @account)
+        user(:active_all => true)
+        enrollment = @course.enroll_teacher(@user, :enrollment_state => 'invited')
+        user_session(@user)
+
+        get 'show', :id => @course.id
+
+        expect(response).to be_success
+        expect(response).to render_template('show')
+        expect(assigns[:context_enrollment]).to eq enrollment
+        enrollment.reload
+        expect(enrollment).to be_invited
       end
 
       it "should ignore invitations that have been accepted (not logged in)" do
@@ -1367,6 +1386,14 @@ describe CoursesController do
       expect(@course.name).to_not eq name
       expect(@course.syllabus_body).to eq body
     end
+
+    it "should render the show page with a flash on error" do
+      user_session(@teacher)
+      # cause the course to be invalid
+      Course.where(id: @course).update_all(start_at: Time.now.utc, conclude_at: 1.day.ago)
+      put 'update', :id => @course.id, :course => { :name => "name change" }
+      expect(flash[:error]).to match(/There was an error saving the changes to the course/)
+    end
   end
 
   describe "POST 'unconclude'" do
@@ -1798,6 +1825,18 @@ describe CoursesController do
       test_student = @course.student_view_student
       assignment = @course.assignments.create!(:workflow_state => 'published')
       assignment.grade_student test_student, { :grade => 1, :grader => @teacher }
+      expect(test_student.submissions.size).not_to be_zero
+      delete 'reset_test_student', course_id: @course.id
+      test_student.reload
+      expect(test_student.submissions.size).to be_zero
+    end
+
+    it "removes provisional grades for by the test student" do
+      user_session(@teacher)
+      post 'student_view', course_id: @course.id
+      test_student = @course.student_view_student
+      assignment = @course.assignments.create!(:workflow_state => 'published', :moderated_grading => true)
+      assignment.grade_student test_student, { :grade => 1, :grader => @teacher, :provisional => true }
       expect(test_student.submissions.size).not_to be_zero
       delete 'reset_test_student', course_id: @course.id
       test_student.reload

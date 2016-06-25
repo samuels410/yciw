@@ -933,12 +933,16 @@ define([
         $group.append($option);
       });
       $pre.find(".option").empty().append($option);
-      $option.slideDown();
       $option.find(".id").change();
+      $option.slideDown(function() {
+        if (event.originalEvent) { // don't do this when populating the dialog :P
+          $("select:first", $(this)).focus();
+        }
+      });
       $form.find(".completion_entry .criteria_list").append($pre).show();
       $pre.slideDown();
       $(".requirement-count-radio").show();
-      $('#context_module_requirement_count_').change().focus();
+      $('#context_module_requirement_count_').change()
     });
     $("#completion_criterion_option .id").change(function() {
       var $option = $(this).parents(".completion_criterion_option");
@@ -1836,6 +1840,9 @@ define([
     var collapsedModules = ENV.COLLAPSED_MODULES;
     for(var idx in collapsedModules) {
       $("#context_module_" + collapsedModules[idx]).addClass('collapsed_module');
+    }
+    if (window.location.hash) {
+      $.scrollTo($(window.location.hash));
     }
     var foundModules = [];
     var $contextModules = $("#context_modules .context_module");

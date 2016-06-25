@@ -52,7 +52,6 @@ class Course < ActiveRecord::Base
                   :allow_student_organized_groups,
                   :course_code,
                   :default_view,
-                  :show_all_discussion_entries,
                   :open_enrollment,
                   :allow_wiki_comments,
                   :turnitin_comments,
@@ -200,7 +199,6 @@ class Course < ActiveRecord::Base
   has_many :appointment_groups, :through => :appointment_group_contexts
   has_many :appointment_participants, -> { where("workflow_state = 'locked' AND parent_calendar_event_id IS NOT NULL") }, class_name: 'CalendarEvent', foreign_key: :effective_context_code, primary_key: :asset_string
   attr_accessor :import_source
-  has_many :zip_file_imports, :as => :context
   has_many :content_participation_counts, :as => :context, :dependent => :destroy
   has_many :poll_sessions, class_name: 'Polling::PollSession', dependent: :destroy
   has_many :grading_period_groups, dependent: :destroy
@@ -566,7 +564,7 @@ class Course < ActiveRecord::Base
 
   set_broadcast_policy do |p|
     p.dispatch :grade_weight_changed
-    p.to { participating_students }
+    p.to { participating_students + participating_observers }
     p.whenever { |record|
       (record.available? && @grade_weight_changed) ||
       (
@@ -1226,11 +1224,12 @@ class Course < ActiveRecord::Base
   end
 
   def active_enrollment_allows(user, permission, allow_future=true)
-    return false unless user && permission
+    return false unless user && permission && !self.deleted?
 
+    is_unpublished = self.created? || self.claimed?
     @enrollment_lookup ||= {}
     @enrollment_lookup[user.id] ||= shard.activate do
-      self.enrollments.active_or_pending.for_user(user).reject { |e| [:inactive, :completed].include?(e.state_based_on_date)}
+      self.enrollments.active_or_pending.for_user(user).reject { |e| (is_unpublished && !e.admin?) || [:inactive, :completed].include?(e.state_based_on_date)}
     end
 
     @enrollment_lookup[user.id].any? {|e| (allow_future || e.state_based_on_date == :active) && e.has_permission_to?(permission) }
@@ -1984,7 +1983,7 @@ class Course < ActiveRecord::Base
       :syllabus_body, :allow_student_forum_attachments, :lock_all_announcements,
       :default_wiki_editing_roles, :allow_student_organized_groups,
       :default_view, :show_total_grade_as_points,
-      :show_all_discussion_entries, :open_enrollment,
+      :open_enrollment,
       :storage_quota, :tab_configuration, :allow_wiki_comments,
       :turnitin_comments, :self_enrollment, :license, :indexed, :locale,
       :hide_final_grade, :hide_distribution_graphs,
@@ -2026,29 +2025,29 @@ class Course < ActiveRecord::Base
 
   def section_visibilities_for(user, opts={})
     RequestCache.cache('section_visibilities_for', user, self) do
-    shard.activate do
-      Rails.cache.fetch(['section_visibilities_for', user, self].cache_key) do
-        workflow_not = opts[:excluded_workflows] || 'deleted'
+      shard.activate do
+        Rails.cache.fetch(['section_visibilities_for', user, self].cache_key) do
+          workflow_not = opts[:excluded_workflows] || 'deleted'
 
-        enrollments = Enrollment.select([
-          :course_section_id,
-          :limit_privileges_to_course_section,
-          :type,
-          :associated_user_id])
-          .where("user_id=? AND course_id=?", user, self)
-          .where.not(workflow_state: workflow_not)
+          enrollments = Enrollment.select([
+            :course_section_id,
+            :limit_privileges_to_course_section,
+            :type,
+            :associated_user_id])
+            .where("user_id=? AND course_id=?", user, self)
+            .where.not(workflow_state: workflow_not)
 
-        enrollments.map do |e|
-          {
-            :course_section_id => e.course_section_id,
-            :limit_privileges_to_course_section => e.limit_privileges_to_course_section,
-            :type => e.type,
-            :associated_user_id => e.associated_user_id,
-            :admin => e.admin?
-          }
+          enrollments.map do |e|
+            {
+              :course_section_id => e.course_section_id,
+              :limit_privileges_to_course_section => e.limit_privileges_to_course_section,
+              :type => e.type,
+              :associated_user_id => e.associated_user_id,
+              :admin => e.admin?
+            }
+          end
         end
       end
-    end
     end
   end
 
@@ -2077,9 +2076,9 @@ class Course < ActiveRecord::Base
 
     visibilities = section_visibilities_for(user)
     visibility_level = enrollment_visibility_level_for(user, visibilities)
-    account_admin = visibility_level == :full && visibilities.empty?
+
     # teachers, account admins, and student view students can see student view students
-    if !visibilities.any?{|v|v[:admin] || v[:type] == 'StudentViewEnrollment' } && !account_admin
+    unless visibility_level == :full || visibilities.any?{|v| v[:admin] || v[:type] == 'StudentViewEnrollment' }
       scope = scope.where("enrollments.type<>'StudentViewEnrollment'")
     end
 
@@ -2419,14 +2418,14 @@ class Course < ActiveRecord::Base
         tabs.detect { |t| t[:id] == TAB_DISCUSSIONS }[:manageable] = true if self.grants_right?(user, opts[:session], :moderate_forum)
         tabs.delete_if { |t| t[:id] == TAB_SETTINGS } unless self.grants_right?(user, opts[:session], :read_as_admin)
 
+        unless announcements.temp_record.grants_right?(user, :read)
+          tabs.delete_if { |t| t[:id] == TAB_ANNOUNCEMENTS }
+        end
+
         if !user || !self.grants_right?(user, :manage_content)
           # remove some tabs for logged-out users or non-students
           unless grants_any_right?(user, :read_as_admin, :participate_as_student)
             tabs.delete_if {|t| [TAB_PEOPLE, TAB_OUTCOMES].include?(t[:id]) }
-          end
-
-          unless announcements.temp_record.grants_right?(user, :read)
-            tabs.delete_if { |t| t[:id] == TAB_ANNOUNCEMENTS }
           end
 
           # remove hidden tabs from students
@@ -2466,28 +2465,6 @@ class Course < ActiveRecord::Base
       account = account.parent_account
     end
   end
-
-  # This will move the course to be in the specified account.
-  # All enrollments, sections, and other objects attached to the course will also be updated.
-  def move_to_account(new_root_account, new_sub_account=nil)
-    self.account = new_sub_account || new_root_account
-    self.save if new_sub_account
-    self.root_account = new_root_account
-    user_ids = []
-
-    CourseSection.where(:course_id => self).each do |cs|
-      cs.update_attribute(:root_account_id, new_root_account.id)
-    end
-
-    Enrollment.where(:course_id => self).each do |e|
-      e.update_attribute(:root_account_id, new_root_account.id)
-      user_ids << e.user_id
-    end
-
-    self.save
-    User.update_account_associations(user_ids)
-  end
-
 
   cattr_accessor :settings_options
   self.settings_options = {}

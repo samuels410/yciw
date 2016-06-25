@@ -101,6 +101,9 @@
     </div>
   </div>
 </div>
+<div id="enrollment_inactive_notice" class="alert alert-info" style="display: none;">
+  <span><%= t "Notice: Inactive Student" %></span>
+</div>
 <div id="full_width_container" style="display:none">
   <div id="left_side" class="full_height">
     <div id="left_side_inner">
@@ -225,7 +228,7 @@
                 <a href="javascript:void 0;" class="delete_comment_link icon-x">
                   <span class="screenreader-only"><%= t('icons.delete_comment', 'Delete comment') %></span>
                 </a>
-                <img src="#" class="avatar" alt="" style="display: none;"/>
+                <img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" class="avatar" alt="" style="display: none;"/>
                 <span class="comment"></span>
                 <a href="#" class="play_comment_link media-comment" style="display:none;"><%= t('links.click_to_view', "click here to view") %></a>
                 <div class="media_comment_content" style="display:none"></div>

@@ -22,7 +22,6 @@ define [
   'jquery'
   'jst/profiles/addLinkRow'
   'compiled/util/AvatarWidget'
-  'compiled/tinymce'
   'jquery.instructure_forms'
 ], (I18n, Backbone, $, addLinkRow, AvatarWidget) ->
 
@@ -65,7 +64,6 @@ define [
 
     showEditForm: ->
       @$el.addClass('editing').removeClass('not-editing')
-      @$('.profile_links').removeClass('span6')
 
     initEdit: ->
       if @options.links?.length
@@ -78,7 +76,6 @@ define [
 
     cancelEditProfile: ->
       @$el.addClass('not-editing').removeClass('editing')
-      @$('.profile_links').addClass('span6')
 
     ##
     # Event handler that can also be called manually.

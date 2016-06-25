@@ -405,8 +405,8 @@ describe CoursesController, type: :request do
     it "should return courses from observed user's shard if different than observer" do
       parent = nil
       @shard2.activate do
-        parent = User.create
-        parent.account.id = (@me.account.id + 1)
+        a = Account.create
+        parent = user_with_pseudonym(name: 'Zombo', username: 'nobody2@example.com', account: a)
         parent.user_observees.create! do |uo|
           uo.user_id = @me.id
         end
@@ -1334,7 +1334,6 @@ describe CoursesController, type: :request do
     expect(courses[0]['term']).to include(
       'id' => @course1.enrollment_term_id,
       'name' => @course1.enrollment_term.name,
-      'sis_term_id' => nil,
       'workflow_state' => 'active',
     )
 
@@ -1345,7 +1344,6 @@ describe CoursesController, type: :request do
     expect(courses[0]['term']).to include(
       'id' => @course2.enrollment_term_id,
       'name' => @course2.enrollment_term.name,
-      'sis_term_id' => nil,
       'workflow_state' => 'active',
     )
   end
@@ -1899,6 +1897,8 @@ describe CoursesController, type: :request do
       @student2 = user(:name => 'SSS2')
       @student1_enroll = @course1.enroll_user(@student1, 'StudentEnrollment', :section => @section1)
       @student2_enroll = @course1.enroll_user(@student2, 'StudentEnrollment', :section => @section2)
+
+      @test_student = @course1.student_view_student
     end
 
     describe "search users" do
@@ -2063,12 +2063,13 @@ describe CoursesController, type: :request do
       it "returns a list of users" do
         json = api_call(:get, "/api/v1/courses/#{@course1.id}/users.json",
                         { :controller => 'courses', :action => 'users', :course_id => @course1.id.to_s, :format => 'json' })
-        expect(json.sort_by{|x| x["id"]}).to eq api_json_response(@course1.users.uniq,
+        expected_users = @course1.users.uniq - [@test_student]
+        expect(json.sort_by{|x| x["id"]}).to eq api_json_response(expected_users,
                                                               :only => USER_API_FIELDS).sort_by{|x| x["id"]}
       end
 
       it "returns a list of users filtered by id if user_ids is given" do
-        expected_users = [@course1.users.first, @course1.users.last]
+        expected_users = [@student1, @student2]
         json = api_call(:get, "/api/v1/courses/#{@course1.id}/users.json", {
           :controller => 'courses',
           :action => 'users',
@@ -2169,9 +2170,9 @@ describe CoursesController, type: :request do
       it "should accept an array of enrollment_types" do
         json = api_call(:get, "/api/v1/courses/#{@course1.id}/users",
                         {:controller => 'courses', :action => 'users', :course_id => @course1.to_param, :format => 'json' },
-                        :enrollment_type => ['student', 'teacher'], :include => ['enrollments'])
+                        :enrollment_type => ['student', 'student_view', 'teacher'], :include => ['enrollments'])
 
-        expect(json.map { |u| u['enrollments'].map { |e| e['type'] } }.flatten.uniq.sort).to eq %w{StudentEnrollment TeacherEnrollment}
+        expect(json.map { |u| u['enrollments'].map { |e| e['type'] } }.flatten.uniq.sort).to eq %w{StudentEnrollment StudentViewEnrollment TeacherEnrollment}
       end
 
       describe "enrollment_role" do
@@ -2516,6 +2517,7 @@ describe CoursesController, type: :request do
         'id' => @course1.id,
         'name' => @course1.name,
         'account_id' => @course1.account_id,
+        'root_account_id' => @course1.root_account_id,
         'course_code' => @course1.course_code,
         'enrollments' => [{'type' => 'teacher', 'role' => 'TeacherEnrollment', 'role_id' => teacher_role.id, 'user_id' => @me.id, 'enrollment_state' => 'active'}],
         'grading_standard_id' => nil,

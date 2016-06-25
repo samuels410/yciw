@@ -31,16 +31,17 @@ describe 'publishing a quiz' do
         end
 
         it 'changes the button text on hover to |Unpublish|', priority: "1", test_id: 398936 do
+          driver.mouse.move_to f('#quiz-publish-link')
           expect(f('#quiz-publish-link').text.strip!.split("\n")[0]).to eq 'Unpublish'
         end
 
         it 'removes the \'This quiz is unpublished\' message', priority: "1", test_id: 398937 do
-          expect(fj('.unpublished_warning', '.alert')).to be_nil
+          expect(f("#content")).not_to contain_css('.alert .unpublished_warning')
         end
 
         it 'adds links to the right sidebar', priority: "1", test_id: 398938 do
           links_text = []
-          ffj('li', 'ul.page-action-list').each do |link|
+          ff('ul.page-action-list li').each do |link|
             # also remove the trademark (TM) unicode character
             links_text << link.text.split("\n")[0].delete("^\u{0000}-\u{007F}")
           end

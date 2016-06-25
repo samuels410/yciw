@@ -329,7 +329,7 @@ class SubmissionsApiController < ApplicationController
 
     if params[:grouped].present?
       scope = (@section || @context).all_student_enrollments.
-          eager_load(:user).
+          eager_load(:user => :pseudonyms).
           where("users.id" => student_ids)
 
       submissions = if requested_assignment_ids.present?
@@ -457,7 +457,7 @@ class SubmissionsApiController < ApplicationController
     permission = :nothing if @user != @current_user
     # we don't check quota when uploading a file for assignment submission
     if authorized_action(@assignment, @current_user, permission)
-      api_attachment_preflight(@user, request, :check_quota => false)
+      api_attachment_preflight(@user, request, :check_quota => false, :submission_context => @context)
     end
   end
 
@@ -601,7 +601,12 @@ class SubmissionsApiController < ApplicationController
         submission[:final] = value_to_boolean(params[:submission][:final]) && @context.grants_right?(@current_user, :moderate_grades)
       end
       if submission[:grade] || submission[:excuse]
-        @submissions = @assignment.grade_student(@user, submission)
+        begin
+          @submissions = @assignment.grade_student(@user, submission)
+        rescue Assignment::GradeError => e
+          logger.info "GRADES: grade_student failed because '#{e.message}'"
+          return render json: { error: e.to_s }, status: 400
+        end
         @submission = @submissions.first
       else
         @submission = @assignment.find_or_create_submission(@user) if @submission.new_record?

@@ -78,7 +78,7 @@ module Importers
     def self.flatten_item(item, indent)
       if item['type'] == 'submodule'
         sub_items = []
-        sub_items << {:type => 'heading', :title => item['title'], :indent => indent}.with_indifferent_access
+        sub_items << {:type => 'heading', :title => item['title'], :indent => indent, :migration_id => item['migration_id']}.with_indifferent_access
         sub_items += (item['items'] || []).map{|item| self.flatten_item(item, indent + 1)}
         sub_items
       else
@@ -97,7 +97,7 @@ module Importers
       migration.add_imported_item(item)
       item.name = hash[:title] || hash[:description]
       if hash[:workflow_state] == 'unpublished'
-        item.workflow_state = 'unpublished' if item.new_record? # otherwise leave it alone
+        item.workflow_state = 'unpublished' if item.new_record? || item.deleted? # otherwise leave it alone
       else
         item.workflow_state = 'active'
       end

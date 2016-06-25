@@ -1609,6 +1609,12 @@ describe User do
       expect(@user.communication_channels.map(&:path)).to eq ['john@example.com']
       expect(@user.email).to eq 'john@example.com'
     end
+
+    it "doesn't create channels with empty paths" do
+      @user = User.create!
+      expect(-> {@user.email = ''}).to raise_error("Validation failed: Path can't be blank")
+      expect(@user.communication_channels.any?).to be_falsey
+    end
   end
 
   describe "event methods" do
@@ -2864,6 +2870,17 @@ describe User do
       expect(@student.visible_groups.size).to eq 0
     end
 
+    it 'excludes groups in courses with concluded enrollments' do
+      course_with_student
+      @course.conclude_at = Time.zone.now - 2.days
+      @course.restrict_enrollments_to_course_dates = true
+      @course.save!
+      @group = Group.create! context: @course, name: 'GroupOne'
+      @group.users << @student
+      @group.save!
+      expect(@student.visible_groups.size).to eq 0
+    end
+
     it "should include account groups" do
       account = account_model(:parent_account => Account.default)
       student = user active_all: true
@@ -2935,5 +2952,39 @@ describe User do
     @user.report_avatar_image!
     @user.reload
     expect(@user.avatar_state).to eq :reported
+  end
+
+  describe "submissions_folder" do
+    before(:once) do
+      student_in_course
+    end
+
+    it "creates the root submissions folder on demand" do
+      f = @user.submissions_folder
+      expect(@user.submissions_folders.where(parent_folder_id: Folder.root_folders(@user).first, name: 'Submissions').first).to eq f
+    end
+
+    it "finds the existing root submissions folder" do
+      f = @user.folders.build
+      f.parent_folder_id = Folder.root_folders(@user).first
+      f.name = 'blah'
+      f.submission_context_code = 'root'
+      f.save!
+      expect(@user.submissions_folder).to eq f
+    end
+
+    it "creates a submissions folder for a course" do
+      f = @user.submissions_folder(@course)
+      expect(@user.submissions_folders.where(submission_context_code: @course.asset_string, parent_folder_id: @user.submissions_folder, name: @course.name).first).to eq f
+    end
+
+    it "finds an existing submissions folder for a course" do
+      f = @user.folders.build
+      f.parent_folder_id = @user.submissions_folder
+      f.name = 'bleh'
+      f.submission_context_code = @course.asset_string
+      f.save!
+      expect(@user.submissions_folder(@course)).to eq f
+    end
   end
 end

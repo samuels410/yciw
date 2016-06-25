@@ -63,8 +63,6 @@ class ApplicationController < ActionController::Base
   before_filter :init_body_classes
   after_filter :set_response_headers
   after_filter :update_enrollment_last_activity_at
-  after_filter :teardown_live_events_context
-  include Tour
 
   add_crumb(proc {
     title = I18n.t('links.dashboard', 'My Dashboard')
@@ -109,6 +107,7 @@ class ApplicationController < ActionController::Base
       @js_env = {
         ASSET_HOST: Canvas::Cdn.config.host,
         active_brand_config: active_brand_config.try(:md5),
+        active_brand_config_json_url: active_brand_config_json_url,
         url_to_what_gets_loaded_inside_the_tinymce_editor_css: editor_css,
         current_user_id: @current_user.try(:id),
         current_user: user_display_json(@current_user, :profile),
@@ -119,7 +118,8 @@ class ApplicationController < ActionController::Base
         k12: k12?,
         use_high_contrast: @current_user.try(:prefers_high_contrast?),
         SETTINGS: {
-          open_registration: @domain_root_account.try(:open_registration?)
+          open_registration: @domain_root_account.try(:open_registration?),
+          eportfolios_enabled: @current_user.try(:eportfolios_enabled?)
         }
       }
       @js_env[:page_view_update_url] = page_view_path(@page_view.id, page_view_token: @page_view.token) if @page_view
@@ -128,8 +128,12 @@ class ApplicationController < ActionController::Base
       @js_env[:ping_url] = polymorphic_url([:api_v1, @context, :ping]) if @context.is_a?(Course)
       @js_env[:TIMEZONE] = Time.zone.tzinfo.identifier if !@js_env[:TIMEZONE]
       @js_env[:CONTEXT_TIMEZONE] = @context.time_zone.tzinfo.identifier if !@js_env[:CONTEXT_TIMEZONE] && @context.respond_to?(:time_zone) && @context.time_zone.present?
-      @js_env[:LOCALE] = I18n.qualified_locale if !@js_env[:LOCALE]
-      @js_env[:TOURS] = tours_to_run
+      unless @js_env[:LOCALE]
+        @js_env[:LOCALE] = I18n.locale.to_s
+        @js_env[:BIGEASY_LOCALE] = I18n.bigeasy_locale
+        @js_env[:FULLCALENDAR_LOCALE] = I18n.fullcalendar_locale
+        @js_env[:MOMENT_LOCALE] = I18n.moment_locale
+      end
 
       @js_env[:lolcalize] = true if ENV['LOLCALIZE']
     end
@@ -146,12 +150,40 @@ class ApplicationController < ActionController::Base
   end
   helper_method :js_env
 
+  # add keys to JS environment necessary for the RCE at the given risk level
+  def rce_js_env(risk_level, root_account: @domain_root_account, domain: request.env['HTTP_HOST'], context: @context)
+    rce_env_hash = Services::RichContent.env_for(root_account,
+                                            risk_level: risk_level,
+                                            user: @current_user,
+                                            domain: domain,
+                                            real_user: @real_current_user,
+                                            context: context)
+    js_env(rce_env_hash)
+  end
+  helper_method :rce_js_env
+
+  def conditional_release_js_env(assignment = nil)
+    return unless ConditionalRelease::Service.enabled_in_context?(@context)
+    cr_env = ConditionalRelease::Service.env_for(
+      @context,
+      @current_user,
+      session: session,
+      assignment: assignment,
+      domain: request.env['HTTP_HOST'],
+      real_user: @real_current_user
+    )
+    js_env(cr_env)
+  end
+  helper_method :conditional_release_js_env
+
   def external_tools_display_hashes(type, context=@context, custom_settings=[])
     return [] if context.is_a?(Group)
 
     context = context.account if context.is_a?(User)
     tools = ContextExternalTool.all_tools_for(context, {:placements => type,
-      :root_account => @domain_root_account, :current_user => @current_user})
+      :root_account => @domain_root_account, :current_user => @current_user}).to_a
+
+    tools.select!{|tool| ContextExternalTool.visible?(tool.extension_setting(type)['visibility'], @current_user, context, session)}
 
     tools.map do |tool|
       external_tool_display_hash(tool, type, {}, context, custom_settings)
@@ -550,7 +582,8 @@ class ApplicationController < ActionController::Base
         params[:context_id] = params[:course_section_id]
         params[:context_type] = "CourseSection"
         @context = api_find(CourseSection, params[:course_section_id])
-      elsif request.path.match(/\A\/profile/) || request.path == '/' || request.path.match(/\A\/dashboard\/files/) || request.path.match(/\A\/calendar/) || request.path.match(/\A\/assignments/) || request.path.match(/\A\/files/)
+      elsif request.path.match(/\A\/profile/) || request.path == '/' || request.path.match(/\A\/dashboard\/files/) || request.path.match(/\A\/calendar/) || request.path.match(/\A\/assignments/) || request.path.match(/\A\/files/) || request.path == '/api/v1/calendar_events/visible_contexts'
+        # ^ this should be split out into things on the individual controllers
         @context = @current_user
         @context_membership = @context
       end
@@ -1029,8 +1062,7 @@ class ApplicationController < ActionController::Base
       if @accessed_asset && (@accessed_asset[:level] == 'participate' || !@page_view_update)
         @access = AssetUserAccess.where(user_id: user.id, asset_code: @accessed_asset[:code]).first_or_initialize
         @accessed_asset[:level] ||= 'view'
-        access_context = @context.is_a?(UserProfile) ? @context.user : @context
-        @access.log access_context, @accessed_asset
+        @access.log @context, @accessed_asset
 
         if @page_view.nil? && page_views_enabled? && %w{participate submit}.include?(@accessed_asset[:level])
           generate_page_view(user)
@@ -1050,6 +1082,7 @@ class ApplicationController < ActionController::Base
       if @page_view && @page_view_update
         @page_view.context = @context if !@page_view.context_id
         @page_view.account_id = @domain_root_account.id
+        @page_view.developer_key_id = @access_token.try(:developer_key_id)
         @page_view.store
         RequestContextGenerator.store_page_view_meta(@page_view)
       end
@@ -1057,6 +1090,7 @@ class ApplicationController < ActionController::Base
       @page_view.destroy if @page_view && !@page_view.new_record?
     end
   rescue StandardError, CassandraCQL::Error::InvalidRequestException => e
+    Canvas::Errors.capture_exception(:page_view, e)
     logger.error "Pageview error!"
     raise e if Rails.env.development?
     true
@@ -1174,7 +1208,8 @@ class ApplicationController < ActionController::Base
       message = exception.is_a?(RequestError) ? exception.message : nil
       render template: template,
         layout: 'application',
-        status: status,
+        status: status_code,
+        formats: [:html],
         locals: {
           error: error,
           exception: exception,
@@ -1302,6 +1337,7 @@ class ApplicationController < ActionController::Base
     elsif tag.content_type == 'Rubric'
       redirect_to named_context_url(context, :context_rubric_url, tag.content_id, url_params)
     elsif tag.content_type == 'Lti::MessageHandler'
+      url_params[:module_item_id] = params[:module_item_id] if params[:module_item_id]
       url_params[:resource_link_fragment] = "ContentTag:#{tag.id}"
       redirect_to named_context_url(context, :context_basic_lti_launch_request_url, tag.content_id, url_params)
     elsif tag.content_type == 'ExternalUrl'
@@ -2027,6 +2063,7 @@ class ApplicationController < ActionController::Base
   def setup_live_events_context
     ctx = {}
     ctx[:root_account_id] = @domain_root_account.global_id if @domain_root_account
+    ctx[:root_account_lti_guid] = @domain_root_account.lti_guid if @domain_root_account
     ctx[:user_id] = @current_user.global_id if @current_user
     ctx[:real_user_id] = @real_current_user.global_id if @real_current_user
     ctx[:user_login] = @current_pseudonym.unique_id if @current_pseudonym
