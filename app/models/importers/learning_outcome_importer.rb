@@ -61,7 +61,7 @@ module Importers
           end
         else
           item ||= LearningOutcome.where(context_id: context, context_type: context.class.to_s, migration_id: hash[:migration_id]).first if hash[:migration_id]
-          item ||= context.created_learning_outcomes.new
+          item ||= context.created_learning_outcomes.temp_record
           item.context = context
         end
         item.migration_id = hash[:migration_id]
@@ -71,6 +71,8 @@ module Importers
         item.workflow_state = 'active' if item.deleted?
         item.short_description = hash[:title]
         item.description = hash[:description]
+        item.calculation_method = hash[:calculation_method]
+        item.calculation_int = hash[:calculation_int]
 
         if hash[:ratings]
           item.data = {:rubric_criterion=>{}}

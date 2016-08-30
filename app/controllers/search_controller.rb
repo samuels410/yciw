@@ -187,7 +187,7 @@ class SearchController < ApplicationController
       .order('created_at')
     @search = params[:search]
     if @search.present?
-      @courses = @courses.where(@courses.wildcard('name', @search))
+      @courses = @courses.where(@courses.wildcard('name', @search.to_s))
     end
     @public_only = params[:public_only]
     if @public_only
@@ -211,6 +211,7 @@ class SearchController < ApplicationController
     @contentHTML = render_to_string(partial: "all_courses_inner")
 
     if request.xhr?
+      set_no_cache_headers
       return render :text => @contentHTML
     end
   end

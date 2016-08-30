@@ -95,9 +95,9 @@ class SectionsController < ApplicationController
   #     available if you have permission to view users or grades in the course
   #   - "avatar_url": Include the avatar URLs for students returned.
   #   - "enrollments": If 'students' is also included, return the section
-  #      enrollment for each student
+  #     enrollment for each student
   #   - "total_students": Returns the total amount of active and invited students
-  #      for the course section
+  #     for the course section
   #   - "passback_status": Include the grade passback status.
   #
   # @returns [Section]
@@ -108,9 +108,10 @@ class SectionsController < ApplicationController
       end
 
       includes = Array(params[:include])
-      result = @context.active_course_sections.map { |section| section_json(section, @current_user, session, includes) }
 
-      render :json => result
+      sections = Api.paginate(@context.active_course_sections, self, api_v1_course_sections_url)
+
+      render :json => sections_json(sections, @current_user, session, includes)
     end
   end
 
@@ -228,7 +229,22 @@ class SectionsController < ApplicationController
   end
 
   # @API Edit a section
-  # Modify an existing section.  See the documentation for {api:SectionsController#create create API action}.
+  # Modify an existing section.
+  #
+  # @argument course_section[name] [String]
+  #   The name of the section
+  #
+  # @argument course_section[sis_section_id] [String]
+  #   The sis ID of the section
+  #
+  # @argument course_section[start_at] [DateTime]
+  #   Section start date in ISO8601 format, e.g. 2011-01-01T01:00Z
+  #
+  # @argument course_section[end_at] [DateTime]
+  #   Section end date in ISO8601 format. e.g. 2011-01-01T01:00Z
+  #
+  # @argument course_section[restrict_enrollments_to_section_dates] [Boolean]
+  #   Set to true to restrict user enrollments to the start and end dates of the section.
   #
   # @returns Section
   def update

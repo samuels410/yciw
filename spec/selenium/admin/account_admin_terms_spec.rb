@@ -11,7 +11,9 @@ describe "account admin terms" do
     term_header = ff('.term .header')[term_div_index]
     expect(term_header).to include_text(title)
     expect(term_header).to include_text("#{course_count} Course")
-    expect(term_header).to include_text("#{user_count} User")
+
+    # TODO: pend until a better solution is found to calculate user counts
+    #expect(term_header).to include_text("#{user_count} User")
   end
 
   before (:each) do
@@ -98,6 +100,30 @@ describe "account admin terms" do
       }.to change(EnrollmentTerm, :count).by(0)
       validate_term_display
       check_element_has_focus f(".add_term_link")
+    end
+  end
+
+  context "with mgp enabled" do
+    let(:account) { Account.default }
+
+    before(:each) do
+      admin_logged_in
+      account.enable_feature!(:multiple_grading_periods)
+    end
+
+    context "with grading period set associated to a new term" do
+      let(:term) { account.enrollment_terms.create! }
+      let(:group) { Factories::GradingPeriodGroupHelper.new.create_for_account(account) }
+
+      before(:each) do
+        group.enrollment_terms = [ term ]
+      end
+
+      it "should display link to grading standards page", test_id: 2528663, priority: "1" do
+        get "/accounts/#{account.id}/terms"
+        standards_url = "/accounts/#{account.id}/grading_standards"
+        expect(fln(group.title).attribute('href')).to include(standards_url)
+      end
     end
   end
 end

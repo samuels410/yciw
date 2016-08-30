@@ -25,7 +25,8 @@ define ['compiled/grade_calculator', 'underscore'], (GradeCalculator, _) ->
       assignments = grades.map ([z,possible], i) =>
         assignment =
           points_possible: possible,
-          id: @assignment_id + i
+          id: @assignment_id + i,
+          omit_from_final_grade: false
       @submissions ||= []
       submissions = grades.map ([score,z], i) =>
         submission =
@@ -288,4 +289,65 @@ define ['compiled/grade_calculator', 'underscore'], (GradeCalculator, _) ->
 
     @submissions[1].excused = 1
     result = GradeCalculator.calculate @submissions, [@group]
+    assertGrade result, 'final', 10, 10
+
+  test "pending_review submissions", ->
+    @submissions = []
+    @setup_grades @group, [[25, 50], [50, 50]]
+    @submissions[0].workflow_state = "pending_review"
+    result = GradeCalculator.calculate @submissions, [@group]
+
+    assertGrade result, 'current', 50, 50
+    assertGrade result, 'final', 75, 100
+
+  test "letter grades are free of float rounding errors", ->
+    # This spec is as close to identical to the GradeCalculator ruby specs to ensure they both do the same thing
+    grading_scheme = [['A', 0.90], ['B+', 0.886], ['B', 0.80], ['C', 0.695], ['D', 0.555], ['E', 0.545], ['M', 0.00]]
+
+    equal(GradeCalculator.letter_grade(grading_scheme, 1005), 'A')
+    equal(GradeCalculator.letter_grade(grading_scheme, 105), 'A')
+    equal(GradeCalculator.letter_grade(grading_scheme, 100), 'A')
+    equal(GradeCalculator.letter_grade(grading_scheme, 99), 'A')
+    equal(GradeCalculator.letter_grade(grading_scheme, 90), 'A')
+    equal(GradeCalculator.letter_grade(grading_scheme, 89.999), 'B+')
+    equal(GradeCalculator.letter_grade(grading_scheme, 88.601), 'B+')
+    equal(GradeCalculator.letter_grade(grading_scheme, 88.6), 'B+')
+    equal(GradeCalculator.letter_grade(grading_scheme, 88.599), 'B')
+    equal(GradeCalculator.letter_grade(grading_scheme, 80), 'B')
+    equal(GradeCalculator.letter_grade(grading_scheme, 79.999), 'C')
+    equal(GradeCalculator.letter_grade(grading_scheme, 79), 'C')
+    equal(GradeCalculator.letter_grade(grading_scheme, 69.501), 'C')
+    equal(GradeCalculator.letter_grade(grading_scheme, 69.5), 'C')
+    equal(GradeCalculator.letter_grade(grading_scheme, 69.499), 'D')
+    equal(GradeCalculator.letter_grade(grading_scheme, 60), 'D')
+    equal(GradeCalculator.letter_grade(grading_scheme, 55.5), 'D')
+    equal(GradeCalculator.letter_grade(grading_scheme, 54.5), 'E')
+    equal(GradeCalculator.letter_grade(grading_scheme, 50), 'M')
+    equal(GradeCalculator.letter_grade(grading_scheme, 0), 'M')
+    equal(GradeCalculator.letter_grade(grading_scheme, -100), 'M')
+
+  test "letter grades return the lowest grade to below-scale scores", ->
+    grading_scheme = [['A', 0.90], ['B', 0.80], ['C', 0.70], ['D', 0.60], ['E', 0.50]]
+
+    equal(GradeCalculator.letter_grade(grading_scheme, 40), 'E')
+
+  test "omit from final grade assignments", ->
+    @setup_grades @group, [[10, 10], [10, 10]]
+    @group.assignments[0].omit_from_final_grade = true
+    result = GradeCalculator.calculate @submissions, [@group]
+    assertGrade result, 'current', 10, 10
+    assertGrade result, 'final', 10, 10
+
+  test "omit from final grade assignments with ungraded assignments", ->
+    @setup_grades @group, [[10, 10], [null, 10]]
+    @group.assignments[0].omit_from_final_grade = true
+    result = GradeCalculator.calculate @submissions, [@group]
+    assertGrade result, 'current', 0, 0
+    assertGrade result, 'final', 0, 10
+
+  test "omit from final grade takes precedence over ungraded", ->
+    @setup_grades @group, [[10, 10], [null, 10]]
+    @group.assignments[1].omit_from_final_grade = true
+    result = GradeCalculator.calculate @submissions, [@group]
+    assertGrade result, 'current', 10, 10
     assertGrade result, 'final', 10, 10

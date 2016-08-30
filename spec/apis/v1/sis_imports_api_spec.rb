@@ -137,6 +137,7 @@ describe SisImportsApiController, type: :request do
                                     "enrollments" => 0,
                                     "grade_publishing_results" => 0,
                                     "users" => 1,
+                                    "user_observers" => 0,
                                     "xlists" => 0,
                                     "groups" => 0,
                                     "group_memberships" => 0,
@@ -481,7 +482,7 @@ describe SisImportsApiController, type: :request do
           "/api/v1/accounts/#{@account.id}/sis_imports.json?import_type=instructure_csv",
           { :controller => 'sis_imports_api', :action => 'create',
             :format => 'json', :account_id => @account.id.to_s,
-            :import_type => 'instructure_csv' },
+            :import_type => 'instructure_csv', :attachment => 'blah' },
           {},
           { 'CONTENT_TYPE' => 'text/csv' })
     batch = SisBatch.last
@@ -494,7 +495,7 @@ describe SisImportsApiController, type: :request do
           "/api/v1/accounts/#{@account.id}/sis_imports.json?import_type=instructure_csv",
           { :controller => 'sis_imports_api', :action => 'create',
             :format => 'json', :account_id => @account.id.to_s,
-            :import_type => 'instructure_csv' },
+            :import_type => 'instructure_csv', :attachment => 'blah' },
           {},
           { 'CONTENT_TYPE' => 'text/csv; charset=utf-8' })
     batch = SisBatch.last
@@ -540,6 +541,7 @@ describe SisImportsApiController, type: :request do
                                                 "enrollments" => 0,
                                                 "grade_publishing_results" => 0,
                                                 "users" => 0,
+                                                "user_observers" => 0,
                                                 "xlists" => 0,
                                                 "groups" => 0,
                                                 "group_memberships" => 0,

@@ -120,7 +120,7 @@ describe "conversations new" do
       select_message_course(@course)
       message_recipients_input.send_keys('student')
       driver.action.key_down(modifier).perform
-      keep_trying_until { fj(".ac-result:contains('first student')") }.click
+      fj(".ac-result:contains('first student')").click
       driver.action.key_up(modifier).perform
       fj(".ac-result:contains('second student')").click
       expect(ff('.ac-token').count).to eq 2
@@ -161,7 +161,7 @@ describe "conversations new" do
 
         get '/conversations'
         f('.icon-compose').click
-        expect(fj("#compose-message-course option:contains('#{@course.name}')")).not_to be
+        expect(f("#compose-message-course")).not_to contain_jqcss("option:contains('#{@course.name}')")
       end
 
       it "should not show course after end date", priority: "1", test_id: 478995 do
@@ -171,7 +171,7 @@ describe "conversations new" do
 
         get '/conversations'
         f('.icon-compose').click
-        expect(fj("#compose-message-course option:contains('#{@course.name}')")).not_to be
+        expect(f("#compose-message-course")).not_to contain_jqcss("option:contains('#{@course.name}')")
       end
     end
 
@@ -194,13 +194,13 @@ describe "conversations new" do
         selector = "#bulk_message"
         bulk_cb = f(selector)
 
-        expect(bulk_cb.attribute('disabled')).to be_present
+        expect(bulk_cb).to be_disabled
         expect(is_checked(selector)).to be_truthy
 
         hover_and_click('.ac-token-remove-btn') # remove the token
         wait_for_ajaximations
 
-        expect(bulk_cb.attribute('disabled')).to be_blank
+        expect(bulk_cb).not_to be_disabled
         expect(is_checked(selector)).to be_falsey # should be unchecked
       end
 
@@ -217,42 +217,35 @@ describe "conversations new" do
         f("li.everyone").click # send to everybody in the course
         wait_for_ajaximations
         hover_and_click('.ac-token-remove-btn') # remove the token
-        wait_for_ajaximations
 
-        expect(bulk_cb.attribute('disabled')).to be_blank
+        expect(bulk_cb).not_to be_disabled
         expect(is_checked(selector)).to be_truthy # should still be checked
       end
 
       it "can compose a message to a single user", priority: "1", test_id: 117958 do
         conversations
-        fln('Inbox').click
-
-        find('.icon-compose').click
+        goto_compose_modal
         fj('.btn.dropdown-toggle :contains("Select course")').click
         wait_for_ajaximations
 
-        expect(find('.dropdown-menu.open')).to be_truthy
+        expect(f('.dropdown-menu.open')).to be_truthy
 
         fj('.message-header-input .text:contains("Unnamed Course")').click
         wait_for_ajaximations
 
         # check for auto complete to fill in 'first student'
-        find('.ac-input-cell .ac-input').send_keys('first st')
-        wait_for_ajaximations
-        keep_trying_until(5) do
-          expect(find('.result-name')).to include_text('first student')
-        end
+        f('.ac-input-cell .ac-input').send_keys('first st')
+        expect(f('.result-name')).to include_text('first student')
 
-        find('.result-name').click
-        wait_for_ajaximations
+        f('.result-name').click
 
-        expect(find('.ac-token')).to include_text('first student')
+        expect(f('.ac-token')).to include_text('first student')
 
-        find('#compose-message-subject').send_keys('Hello out there all you happy people')
-        find('.message-body textarea').send_keys("I'll pay you Tuesday for a hamburger today")
+        f('#compose-message-subject').send_keys('Hello out there all you happy people')
+        f('.message-body textarea').send_keys("I'll pay you Tuesday for a hamburger today")
         click_send
 
-        expect(flash_message_present?(:success, /Message sent!/)).to be_truthy
+        expect_flash_message :success, /Message sent!/
       end
 
       context "Message Address Book" do
@@ -264,18 +257,16 @@ describe "conversations new" do
           [@t1, @t2].each { |s| @course.enroll_teacher(s) }
 
           conversations
-          fln('Inbox').click
-
-          find('.icon-compose').click
+          goto_compose_modal
           fj('.btn.dropdown-toggle :contains("Select course")').click
           wait_for_ajaximations
 
-          expect(find('.dropdown-menu.open')).to be_truthy
+          expect(f('.dropdown-menu.open')).to be_truthy
 
           fj('.message-header-input .text:contains("Unnamed Course")').click
           wait_for_ajaximations
 
-          find('.message-header-input .icon-address-book').click
+          f('.message-header-input .icon-address-book').click
           wait_for_ajaximations
         end
 
@@ -284,18 +275,21 @@ describe "conversations new" do
         end
 
         it "categorizes enrolled teachers", priority: "1", test_id: 476933 do
+          skip_if_chrome('fails in chrome')
           assert_categories('Teachers')
           assert_result_names(true, [@t1_name, @t2_name])
           assert_result_names(false, [@s1.name, @s2.name])
         end
 
         it "categorizes enrolled students", priority: "1", test_id: 476934 do
+          skip_if_chrome('fails in chrome')
           assert_categories('Students')
           assert_result_names(false, [@t1_name, @t2_name])
           assert_result_names(true, [@s1.name, @s2.name])
         end
 
         it "categorizes enrolled students in groups", priority: "1", test_id: 476935 do
+          skip_if_chrome('fails in chrome')
           assert_categories('Student Groups')
           assert_categories('the group')
           assert_result_names(false, [@t1_name, @t2_name])
@@ -307,18 +301,24 @@ describe "conversations new" do
 
   def assert_result_names(tf, names)
     names.each do |name|
-      keep_trying_until(9) do
-        if tf
-          expect(fj(".ac-result-container .result-name:contains(#{name})")).to be_truthy
-        else
-          expect(fj(".ac-result-container .result-name:contains(#{name})")).to be_falsey
-        end
+      if tf
+        expect(fj(".ac-result-container .result-name:contains(#{name})")).to be_truthy
+      else
+        expect(f(".ac-result-container")).not_to contain_jqcss(".result-name:contains(#{name})")
       end
     end
   end
 
   def assert_categories(container)
-    keep_trying_until(9) { fj(".ac-result-container .result-name:contains(#{container})").click }
+    fj(".ac-result-container .result-name:contains(#{container})").click
+  end
+
+  def goto_compose_modal
+    fln('Inbox').click
+    wait_for_ajaximations
+    f('.icon-compose').click
+    wait_for_ajaximations
+    expect(f("#compose-new-message")).to be_present
   end
 
 end

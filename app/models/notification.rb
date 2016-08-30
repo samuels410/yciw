@@ -181,7 +181,10 @@ class Notification < ActiveRecord::Base
       {
         name: :send_scores_in_emails,
         value: user.preferences[:send_scores_in_emails],
-        label: t('Include scores when alerting about grade changes.'),
+        label: t(<<-EOS),
+          Include scores when alerting about grades.
+          If your email is not an institution email this means sensitive content will be sent outside of the institution.
+          EOS
         id: "cat_#{self.id}_option",
       }
     end
@@ -454,11 +457,6 @@ Includes:
 * Assignment/submission grade entered/changed
 * Un-muted assignment grade
 * Grade weight changed
-
-\u{200B}
-
-Check 'Include scores when alerting about grade changes' if you want to see your grades in the notifications.
-If your email is not an institution email this means sensitive content will be sent outside of the institution.
 EOS
     when 'Late Grading'
       mt(:late_grading_description, <<-EOS)
@@ -506,11 +504,7 @@ EOS
 Student appointment sign-up
 EOS
     when 'Appointment Availability'
-      mt(:appointment_availability_description,  <<-EOS)
-*Instructor and Admin only:*
-
-Change to appointment time slots
-EOS
+      t('New appointment timeslots are available for signup')
     when 'Appointment Signups'
       t(:appointment_signups_description, 'New appointment on your calendar')
     when 'Appointment Cancelations'

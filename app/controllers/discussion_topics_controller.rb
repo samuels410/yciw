@@ -117,7 +117,7 @@ require 'atom'
 #           "type": "boolean"
 #         },
 #         "subscription_hold": {
-#           "description": "(Optional) Why the user cannot subscribe to this topic. Only one reason will be returned even if multiple apply. Can be one of: 'initial_post_required': The user must post a reply first 'not_in_group_set': The user is not in the group set for this graded group discussion 'not_in_group': The user is not in this topic's group 'topic_is_announcement': This topic is an announcement",
+#           "description": "(Optional) Why the user cannot subscribe to this topic. Only one reason will be returned even if multiple apply. Can be one of: 'initial_post_required': The user must post a reply first; 'not_in_group_set': The user is not in the group set for this graded group discussion; 'not_in_group': The user is not in this topic's group; 'topic_is_announcement': This topic is an announcement",
 #           "example": "not_in_group_set",
 #           "type": "string",
 #           "allowableValues": {
@@ -243,6 +243,7 @@ class DiscussionTopicsController < ApplicationController
   include Api::V1::Assignment
   include Api::V1::AssignmentOverride
   include KalturaHelper
+  include SubmittableHelper
 
   # @API List discussion topics
   #
@@ -331,8 +332,10 @@ class DiscussionTopicsController < ApplicationController
                   named_context_url(@context, :context_discussion_topics_url))
 
         locked_topics, open_topics = @topics.partition do |topic|
-          topic.locked? || topic.locked_for?(@current_user)
+          locked = topic.locked? || topic.locked_for?(@current_user)
+          locked.is_a?(Hash) ? locked[:can_view] : locked
         end
+
         hash = {USER_SETTINGS_URL: api_v1_user_settings_url(@current_user),
                 openTopics: open_topics,
                 lockedTopics: locked_topics,
@@ -443,6 +446,9 @@ class DiscussionTopicsController < ApplicationController
       js_hash[:CANCEL_REDIRECT_URL] = cancel_redirect_url
       append_sis_data(js_hash)
       js_env(js_hash)
+
+      conditional_release_js_env(@topic.assignment)
+
       render :edit
     end
   end
@@ -465,20 +471,31 @@ class DiscussionTopicsController < ApplicationController
       return
     end
 
-    if authorized_action(@topic, @current_user, :read)
-      if @current_user && @topic.for_assignment? && !@topic.assignment.visible_to_user?(@current_user)
-        respond_to do |format|
-          flash[:error] = t "You do not have access to the requested discussion."
-          format.html { redirect_to named_context_url(@context, :context_discussion_topics_url) }
-        end
-        return
+    unless @topic.grants_right?(@current_user, session, :read)
+      respond_to do |format|
+        flash[:error] = t 'You do not have access to the requested discussion.'
+        format.html { redirect_to named_context_url(@context, :context_discussion_topics_url) }
       end
+    else
       @headers = !params[:headless]
-      @locked = @topic.locked_for?(@current_user, :check_policies => true, :deep_check_if_needed => true) || @topic.locked?
+      # we still need the lock info even if the current user policies unlock the topic. check the policies manually later if you need to override the lockout.
+      @locked = @topic.locked_for?(@current_user, :check_policies => false, :deep_check_if_needed => true)
       @unlock_at = @topic.available_from_for(@current_user)
-      @topic.change_read_state('read', @current_user) if @topic.visible_for?(@current_user)
+      @topic.change_read_state('read', @current_user) unless @locked.is_a?(Hash) && !@locked[:can_view]
       if @topic.for_group_discussion?
-        @groups = @topic.group_category.groups.active.select{ |g| g.grants_right?(@current_user, session, :post_to_forum) }.sort! {|a, b| a.id <=> b.id}
+
+        group_scope = @topic.group_category.groups.active
+        if @topic.for_assignment? && @topic.assignment.only_visible_to_overrides?
+          @groups = group_scope.where(:id => @topic.assignment.assignment_overrides.active.where(:set_type => "Group").pluck(:set_id)).to_a
+          if @groups.empty?
+            @groups = group_scope.to_a # revert to default if we're not using Group overrides
+          end
+        else
+          @groups = group_scope.to_a
+        end
+        @groups.select!{ |g| g.grants_any_right?(@current_user, session, :post_to_forum, :read_as_admin) }
+        @groups.sort_by!(&:id)
+
         topics = @topic.child_topics.to_a
         topics = topics.select{|t| @groups.include?(t.context) } unless @topic.grants_right?(@current_user, session, :update)
         @group_topics = @groups.map do |group|
@@ -492,10 +509,7 @@ class DiscussionTopicsController < ApplicationController
 
       log_asset_access(@topic, 'topics', 'topics')
       respond_to do |format|
-        if @topic.deleted?
-          flash[:notice] = t :deleted_topic_notice, "That topic has been deleted"
-          format.html { redirect_to named_context_url(@context, :discussion_topics_url) }
-        elsif topics && topics.length == 1 && !@topic.grants_right?(@current_user, session, :update)
+        if topics && topics.length == 1 && !@topic.grants_right?(@current_user, session, :update)
           format.html { redirect_to named_context_url(topics[0].context, :context_discussion_topics_url, :root_discussion_topic_id => @topic.id) }
         else
           format.html do
@@ -819,7 +833,7 @@ class DiscussionTopicsController < ApplicationController
   protected
 
   def rich_content_service_config
-    js_env(Services::RichContent.env_for(@domain_root_account, risk_level: :highrisk))
+    rce_js_env(:highrisk)
   end
 
   def cancel_redirect_url
@@ -864,7 +878,11 @@ class DiscussionTopicsController < ApplicationController
 
     process_podcast_parameters(discussion_topic_hash)
 
-    @topic.send(is_new ? :user= : :editor=, @current_user)
+    if is_new
+      @topic.user = @current_user
+    elsif discussion_topic_hash.except(*%w{pinned}).present? # don't update editor if the only thing that changed was the pinned status
+      @topic.editor = @current_user
+    end
     @topic.current_user = @current_user
     @topic.content_being_saved_by(@current_user)
 
@@ -898,7 +916,9 @@ class DiscussionTopicsController < ApplicationController
 
         apply_positioning_parameters
         apply_attachment_parameters
-        apply_assignment_parameters
+        unless @topic.root_topic_id?
+          apply_assignment_parameters(params[:assignment], @topic)
+        end
         if publish_later
           @topic.publish!
           @topic.root_topic.try(:publish!)
@@ -1005,8 +1025,10 @@ class DiscussionTopicsController < ApplicationController
   # TODO: upgrade acts_as_list after rails3
   # check_scope will probably handle this
   def process_pin_parameters(discussion_topic_hash)
-    return unless params.has_key?(:pinned) && params[:pinned] != @topic.pinned?
-    @topic.pinned = params[:pinned]
+    return unless params.key?(:pinned)
+    pinned = value_to_boolean(params[:pinned])
+    return unless pinned != @topic.pinned?
+    @topic.pinned = pinned
     @topic.position = nil
     @topic.add_to_list_bottom
   end
@@ -1045,38 +1067,6 @@ class DiscussionTopicsController < ApplicationController
         @attachment = @context.attachments.create!(:uploaded_data => attachment)
         @topic.attachment = @attachment
         @topic.save
-      end
-    end
-  end
-
-  def apply_assignment_parameters
-    # handle creating/deleting assignment
-    if params[:assignment] && !@topic.root_topic_id?
-      if params[:assignment].has_key?(:set_assignment) && !value_to_boolean(params[:assignment][:set_assignment])
-        if @topic.assignment && @topic.assignment.grants_right?(@current_user, session, :update)
-          assignment = @topic.assignment
-          @topic.assignment = nil
-          @topic.save!
-          assignment.discussion_topic = nil
-          assignment.destroy
-        end
-
-      elsif (@assignment = @topic.assignment || @topic.restore_old_assignment || (@topic.assignment = @context.assignments.build)) &&
-             @assignment.grants_right?(@current_user, session, :update)
-        params[:assignment][:group_category_id] = nil unless @topic.group_category_id || @assignment.has_submitted_submissions?
-        params[:assignment][:published] = @topic.published?
-        params[:assignment][:name] = @topic.title
-
-        @assignment.submission_types = 'discussion_topic'
-        @assignment.saved_by = :discussion_topic
-        @assignment.workflow_state = @topic.published? ? "published" : "unpublished"
-        @topic.assignment = @assignment
-        @topic.save_without_broadcasting!
-
-        assignment_params = params[:assignment].except('anonymous_peer_reviews')
-        update_api_assignment(@assignment.reload, assignment_params, @current_user)
-
-        @topic.save!
       end
     end
   end

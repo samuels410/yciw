@@ -4,7 +4,6 @@ define [
   'compiled/views/ValidatedFormView'
   'underscore'
   'jquery'
-  'wikiSidebar'
   'jsx/shared/rce/RichContentEditor'
   'jst/assignments/EditView'
   'compiled/userSettings'
@@ -16,17 +15,16 @@ define [
   'compiled/views/assignments/GroupCategorySelector'
   'compiled/jquery/toggleAccessibly'
   'compiled/views/editor/KeyboardShortcuts'
-  'compiled/tinymce'
-  'tinymce.editor_box'
+  'jsx/shared/conditional_release/ConditionalRelease'
   'jqueryui/dialog'
   'jquery.toJSON'
   'compiled/jquery.rails_flash_notifications'
-], (INST, I18n, ValidatedFormView, _, $, wikiSidebar, RichContentEditor, template,
+], (INST, I18n, ValidatedFormView, _, $, RichContentEditor, template,
 userSettings, TurnitinSettings, TurnitinSettingsDialog, preventDefault, MissingDateDialog,
-AssignmentGroupSelector, GroupCategorySelector, toggleAccessibly, RCEKeyboardShortcuts) ->
+AssignmentGroupSelector, GroupCategorySelector, toggleAccessibly, RCEKeyboardShortcuts,
+ConditionalRelease) ->
 
-  richContentEditor = new RichContentEditor({riskLevel: "highrisk", sidebar: wikiSidebar})
-  richContentEditor.preloadRemoteModule()
+  RichContentEditor.preloadRemoteModule()
 
   class EditView extends ValidatedFormView
 
@@ -60,6 +58,7 @@ AssignmentGroupSelector, GroupCategorySelector, toggleAccessibly, RCEKeyboardSho
     PEER_REVIEWS_BOX = '#assignment_peer_reviews'
     GROUP_CATEGORY_BOX = '#has_group_category'
     MODERATED_GRADING_BOX = '#assignment_moderated_grading'
+    CONDITIONAL_RELEASE_TARGET = '#conditional_release_target'
 
     els: _.extend({}, @::els, do ->
       els = {}
@@ -86,6 +85,7 @@ AssignmentGroupSelector, GroupCategorySelector, toggleAccessibly, RCEKeyboardSho
       els["#{ASSIGNMENT_POINTS_POSSIBLE}"] = '$assignmentPointsPossible'
       els["#{ASSIGNMENT_POINTS_CHANGE_WARN}"] = '$pointsChangeWarning'
       els["#{MODERATED_GRADING_BOX}"] = '$moderatedGradingBox'
+      els["#{CONDITIONAL_RELEASE_TARGET}"] = '$conditionalReleaseTarget'
       els
     )
 
@@ -103,6 +103,8 @@ AssignmentGroupSelector, GroupCategorySelector, toggleAccessibly, RCEKeyboardSho
       events["change #{PEER_REVIEWS_BOX}"] = 'handleModeratedGradingChange'
       events["change #{GROUP_CATEGORY_BOX}"] = 'handleModeratedGradingChange'
       events["change #{MODERATED_GRADING_BOX}"] = 'handleModeratedGradingChange'
+      if ENV.CONDITIONAL_RELEASE_SERVICE_ENABLED
+        events["change"] = 'onChange'
       events
     )
 
@@ -116,8 +118,10 @@ AssignmentGroupSelector, GroupCategorySelector, toggleAccessibly, RCEKeyboardSho
       @assignment = @model
       @setDefaultsIfNew()
       @dueDateOverrideView = options.views['js-assignment-overrides']
-      @model.on 'sync', -> window.location = @get 'html_url'
+      @on 'success', => window.location = @model.get 'html_url'
       @gradingTypeSelector.on 'change:gradingType', @handleGradingTypeChange
+      if ENV.CONDITIONAL_RELEASE_SERVICE_ENABLED
+        @gradingTypeSelector.on 'change:gradingType', @onChange
 
     handleCancel: (ev) =>
       ev.preventDefault()
@@ -236,11 +240,15 @@ AssignmentGroupSelector, GroupCategorySelector, toggleAccessibly, RCEKeyboardSho
       @$groupCategoryBox = $("#{GROUP_CATEGORY_BOX}")
 
       @_attachEditorToDescription()
-      $ @_initializeWikiSidebar
       @addTinyMCEKeyboardShortcuts()
       @handleModeratedGradingChange()
       if ENV?.HAS_GRADED_SUBMISSIONS
         @disableCheckbox(@$moderatedGradingBox, I18n.t("Moderated grading setting cannot be changed if graded submissions exist"))
+      if ENV.CONDITIONAL_RELEASE_SERVICE_ENABLED
+        @conditionalReleaseEditor = ConditionalRelease.attach(
+          @$conditionalReleaseTarget.get(0),
+          I18n.t('assignment'),
+          ENV.CONDITIONAL_RELEASE_ENV)
       this
 
     toJSON: =>
@@ -250,19 +258,20 @@ AssignmentGroupSelector, GroupCategorySelector, toggleAccessibly, RCEKeyboardSho
         postToSISEnabled: ENV?.POST_TO_SIS or false
         isLargeRoster: ENV?.IS_LARGE_ROSTER or false
         submissionTypesFrozen: _.include(data.frozenAttributes, 'submission_types')
+        conditionalReleaseServiceEnabled: ENV?.CONDITIONAL_RELEASE_SERVICE_ENABLED or false
+
+    # separated out so we can easily stub it
+    scrollSidebar: $.scrollSidebar
 
     _attachEditorToDescription: =>
-      richContentEditor.loadNewEditor(@$description)
+      RichContentEditor.initSidebar(show: @scrollSidebar)
+      RichContentEditor.loadNewEditor(@$description, { focus: true, manageParent: true })
+
       $('.rte_switch_views_link').click (e) =>
         e.preventDefault()
-        richContentEditor.callOnRCE(@$description, 'toggle')
+        RichContentEditor.callOnRCE(@$description, 'toggle')
         # hide the clicked link, and show the other toggle link.
         $(e.currentTarget).siblings('.rte_switch_views_link').andSelf().toggle()
-
-    _initializeWikiSidebar: =>
-      richContentEditor.initSidebar()
-      $.scrollSidebar()
-      richContentEditor.attachSidebarTo(@$description)
 
     addTinyMCEKeyboardShortcuts: =>
       keyboardShortcutsView = new RCEKeyboardShortcuts()
@@ -287,6 +296,17 @@ AssignmentGroupSelector, GroupCategorySelector, toggleAccessibly, RCEKeyboardSho
       data.assignment_overrides = @dueDateOverrideView.getOverrides()
       data.published = true if @shouldPublish
       return data
+
+    saveFormData: =>
+      if ENV.CONDITIONAL_RELEASE_SERVICE_ENABLED
+        super.pipe (data, status, xhr) =>
+          @conditionalReleaseEditor.updateAssignment(data)
+          # Restore expected promise values
+          @conditionalReleaseEditor.save().pipe(
+            => new $.Deferred().resolve(data, status, xhr).promise()
+            (err) => new $.Deferred().reject(xhr, err).promise())
+      else
+        super
 
     submit: (event) =>
       event.preventDefault()
@@ -360,6 +380,7 @@ AssignmentGroupSelector, GroupCategorySelector, toggleAccessibly, RCEKeyboardSho
       # see getFormValues in DueDateView.coffee
       delete errors.assignmentOverrides
       super(errors)
+      @trigger 'show-errors', errors
 
     validateBeforeSave: (data, errors) =>
       errors = @_validateTitle data, errors
@@ -374,6 +395,9 @@ AssignmentGroupSelector, GroupCategorySelector, toggleAccessibly, RCEKeyboardSho
       data2 =
         assignment_overrides: @dueDateOverrideView.getAllDates()
       errors = @dueDateOverrideView.validateBeforeSave(data2,errors)
+      if ENV.CONDITIONAL_RELEASE_SERVICE_ENABLED
+        crErrors = @conditionalReleaseEditor.validateBeforeSave()
+        errors['conditional_release'] = crErrors if crErrors
       errors
 
     _validateTitle: (data, errors) =>
@@ -429,3 +453,13 @@ AssignmentGroupSelector, GroupCategorySelector, toggleAccessibly, RCEKeyboardSho
           message: I18n.t 'External Tool URL cannot be left blank'
         ]
       errors
+
+    onChange: ->
+      if ENV.CONDITIONAL_RELEASE_SERVICE_ENABLED && !@assignmentDirty
+        @assignmentDirty = true
+
+    updateConditionalRelease: ->
+      if ENV.CONDITIONAL_RELEASE_SERVICE_ENABLED && @assignmentDirty
+        assignmentData = @getFormData()
+        @conditionalReleaseEditor.updateAssignment(assignmentData)
+        @assignmentDirty = false

@@ -29,13 +29,11 @@ class Login::OauthController < Login::OauthBaseController
       }
       opts = {}
       opts[oauth_callback: callback_uri] unless request_token.callback_confirmed?
-      redirect_to request_token.authorize_url(opts)
+      redirect_to delegated_auth_redirect_uri(request_token.authorize_url(opts))
     end
   end
 
   def create
-    reset_session_for_login
-
     @aac = @domain_root_account.authentication_providers.active.find(params[:id])
     raise ActiveRecord::RecordNotFound unless @aac.is_a?(AccountAuthorizationConfig::Oauth)
 
@@ -55,6 +53,8 @@ class Login::OauthController < Login::OauthBaseController
       token = request_token.get_access_token(opts)
       unique_id = @aac.unique_id(token)
     end
+
+    reset_session_for_login
 
     find_pseudonym(unique_id)
   end

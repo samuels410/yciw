@@ -2,12 +2,12 @@ module Api::V1
   class CourseJson
 
     BASE_ATTRIBUTES = %w(id name course_code account_id start_at default_view enrollment_term_id is_public
-                         grading_standard_id)
+                         grading_standard_id root_account_id).freeze
 
-    INCLUDE_CHECKERS = { :grading => 'needs_grading_count', :syllabus => 'syllabus_body',
-                         :url => 'html_url', :description => 'public_description', :permissions => "permissions" }
+    INCLUDE_CHECKERS = {grading: 'needs_grading_count', syllabus: 'syllabus_body',
+                        url: 'html_url', description: 'public_description', permissions: 'permissions'}.freeze
 
-    OPTIONAL_FIELDS = %w(needs_grading_count public_description enrollments)
+    OPTIONAL_FIELDS = %w(needs_grading_count public_description enrollments).freeze
 
     attr_reader :course, :user, :includes, :enrollments, :hash
 
@@ -44,6 +44,9 @@ module Api::V1
       @hash['workflow_state'] = @course.api_state
       @hash['course_format'] = @course.course_format if @course.course_format.present?
       @hash['restrict_enrollments_to_course_dates'] = !!@course.restrict_enrollments_to_course_dates
+      if @includes.include?(:current_grading_period_scores)
+        @hash['multiple_grading_periods_enabled'] = @course.feature_enabled?(:multiple_grading_periods)
+      end
       clear_unneeded_fields(@hash)
     end
 
@@ -183,8 +186,8 @@ module Api::V1
 
     def mgp_scores_from_calculator(grade_calculator)
       grade_calculator.compute_scores.map do |scores|
-        current_score = scores.first.first[:grade]
-        final_score = scores.second.first[:grade]
+        current_score = scores[:current][:grade]
+        final_score = scores[:final][:grade]
         {
           current_period_computed_current_score: current_score,
           current_period_computed_final_score: final_score,

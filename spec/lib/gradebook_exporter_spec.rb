@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015 Instructure, Inc.
+# Copyright (C) 2015-2016 Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -16,7 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-require File.expand_path(File.dirname(__FILE__) + '/../spec_helper.rb')
+require_relative '../spec_helper'
 
 require 'csv'
 
@@ -26,7 +26,8 @@ describe GradebookExporter do
   end
 
   describe "#to_csv" do
-    let(:course)    { @course }
+    let(:course) { @course }
+    let(:teacher) { @teacher }
 
     def exporter(opts = {})
       GradebookExporter.new(course, @teacher, opts)
@@ -88,9 +89,7 @@ describe GradebookExporter do
 
       let(:assignments) { course.assignments }
 
-      let!(:group) do
-        course.grading_period_groups.create!
-      end
+      let!(:group) { Factories::GradingPeriodGroupHelper.new.legacy_create_for_course(course) }
 
       let!(:first_period) do
         args = {
@@ -196,10 +195,27 @@ describe GradebookExporter do
       student1_enrollment.deactivate
       student2_enrollment.deactivate
 
+      teacher.preferences[:gradebook_settings] =
+      { course.id =>
+        {
+          'show_inactive_enrollments' => 'true',
+          'show_concluded_enrollments' => 'false'
+        }
+      }
+      teacher.save!
+
       csv = exporter.to_csv
       rows = CSV.parse(csv, headers: true)
 
       expect([rows[1]["ID"], rows[2]["ID"]]).to match_array([student1.id.to_s, student2.id.to_s])
+    end
+
+    it 'handles gracefully any assignments with nil position' do
+      course.assignments.create! title: 'assignment #1'
+      assignment = course.assignments.create! title: 'assignment #2'
+      assignment.update_attribute(:position, nil)
+
+      expect { exporter.to_csv }.not_to raise_error
     end
   end
 

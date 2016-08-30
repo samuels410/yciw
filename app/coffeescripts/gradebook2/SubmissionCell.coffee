@@ -1,5 +1,5 @@
 define [
-  'compiled/gradebook2/GRADEBOOK_TRANSLATIONS'
+  'compiled/gradebook2/GradebookTranslations'
   'str/htmlEscape'
   'jquery'
   'underscore'
@@ -16,7 +16,7 @@ define [
 
     init: () ->
       submission = @opts.item[@opts.column.field]
-      @$wrapper = $(@cellWrapper("<input #{htmlEscape @ariaLabel(submission.submission_type)} class='grade'/>")).appendTo(@opts.container)
+      @$wrapper = $(@cellWrapper("<input #{@ariaLabelTemplate(submission.submission_type)} class='grade'/>")).appendTo(@opts.container)
       @$input = @$wrapper.find('input').focus().select()
 
     destroy: () ->
@@ -69,7 +69,7 @@ define [
     validate: () ->
       { valid: true, msg: null }
 
-    @formatter: (row, col, submission, assignment) ->
+    @formatter: (row, col, submission, assignment, student) ->
       if submission.excused
         grade = "EX"
       else
@@ -82,20 +82,27 @@ define [
         if grade && assignment?.grading_type == "percent"
           grade = grade.toString() + "%"
 
-      this.prototype.cellWrapper(grade, {submission: submission, assignment: assignment, editable: false})
+      this.prototype.cellWrapper(grade, {submission: submission, assignment: assignment, editable: false, student: student})
 
     cellWrapper: (innerContents, options = {}) ->
       opts = $.extend({}, {
         classes: '',
-        editable: true
+        editable: true,
+        student: {
+          isInactive: false,
+          isConcluded: false,
+        }
       }, options)
       opts.submission ||= @opts.item[@opts.column.field]
       opts.assignment ||= @opts.column.object
       submission_type = opts.submission.submission_type if opts.submission?.submission_type || null
       specialClasses = SubmissionCell.classesBasedOnSubmission(opts.submission, opts.assignment)
+      specialClasses.push("grayed-out") if opts.student.isInactive || opts.student.isConcluded
+      specialClasses.push("cannot_edit") if opts.student.isConcluded
+      opts.editable = false if opts.student.isConcluded
 
       opts.classes += ' no_grade_yet ' unless opts.submission.grade && opts.submission.workflow_state != 'pending_review'
-      innerContents = null if opts.submission.workflow_state == 'pending_review' && !isNaN(innerContents);
+      innerContents = null if opts.submission.workflow_state == 'pending_review' && !isNaN(innerContents)
       innerContents ?= if submission_type then SubmissionCell.submissionIcon(submission_type) else '-'
 
       if turnitin = extractData(opts.submission)
@@ -104,15 +111,22 @@ define [
 
       tooltipText = $.map(specialClasses, (c)-> GRADEBOOK_TRANSLATIONS["submission_tooltip_#{c}"]).join ', '
 
+      cellCommentHTML = if !opts.student.isConcluded
+        """
+        <a href="#" data-user-id=#{opts.submission.user_id} data-assignment-id=#{opts.assignment.id} class="gradebook-cell-comment"><span class="gradebook-cell-comment-label">submission comments</span></a>
+        """
+      else
+        ''
+
       """
       #{$.raw if tooltipText then '<div class="gradebook-tooltip">'+ htmlEscape(tooltipText) + '</div>' else ''}
       <div class="gradebook-cell #{htmlEscape if opts.editable then 'gradebook-cell-editable focus' else ''} #{htmlEscape opts.classes} #{htmlEscape specialClasses.join(' ')}">
-        <a href="#" data-user-id=#{opts.submission.user_id} data-assignment-id=#{opts.assignment.id} class="gradebook-cell-comment"><span class="gradebook-cell-comment-label">submission comments</span></a>
+        #{$.raw cellCommentHTML}
         #{$.raw innerContents}
       </div>
       """
 
-    ariaLabel: (submission_type) ->
+    ariaLabelTemplate: (submission_type) ->
       label = GRADEBOOK_TRANSLATIONS["submission_tooltip_#{submission_type}"]
       if label?
         "aria-label='#{label}'"
@@ -153,31 +167,31 @@ define [
       @$wrapper = $(@cellWrapper("""
         <div class="overflow-wrapper">
           <div class="grade-and-outof-wrapper">
-            <input type="text" #{htmlEscape @ariaLabel(submission.submission_type)} class="grade"/><span class="outof"><span class="divider">/</span>#{htmlEscape @opts.column.object.points_possible}</span>
+            <input type="text" #{@ariaLabelTemplate(submission.submission_type)} class="grade"/><span class="outof"><span class="divider">/</span>#{htmlEscape @opts.column.object.points_possible}</span>
           </div>
         </div>
       """, { classes: 'gradebook-cell-out-of-formatter' })).appendTo(@opts.container)
       @$input = @$wrapper.find('input').focus().select()
 
   class SubmissionCell.letter_grade extends SubmissionCell
-    @formatter: (row, col, submission, assignment) ->
+    @formatter: (row, col, submission, assignment, student) ->
       innerContents = if submission.excused
         "EX"
-      else if submission.score
+      else if submission.score?
         "#{htmlEscape submission.grade}<span class='letter-grade-points'>#{htmlEscape submission.score}</span>"
       else
         submission.grade
 
-      SubmissionCell.prototype.cellWrapper(innerContents, {submission: submission, assignment: assignment, editable: false})
+      SubmissionCell.prototype.cellWrapper(innerContents, {submission: submission, assignment: assignment, editable: false, student: student})
 
   class SubmissionCell.gpa_scale extends SubmissionCell
-    @formatter: (row, col, submission, assignment) ->
+    @formatter: (row, col, submission, assignment, student) ->
       innerContents = if submission.excused
         "EX"
       else
         submission.grade
 
-      SubmissionCell.prototype.cellWrapper(innerContents, {submission: submission, assignment: assignment, editable: false, classes: "gpa_scale_cell"})
+      SubmissionCell.prototype.cellWrapper(innerContents, {submission: submission, assignment: assignment, editable: false, student: student, classes: "gpa_scale_cell"})
 
   class SubmissionCell.pass_fail extends SubmissionCell
 
@@ -188,24 +202,33 @@ define [
       else
         { pass: 'pass', complete: 'pass', fail: 'fail', incomplete: 'fail' }[submission.grade] || ''
 
+    iconClassFromSubmission = (submission) ->
+      { pass: 'icon-check', complete: 'icon-check', fail: 'icon-x', incomplete: 'icon-x' }[submission.grade] || ''
+
+    checkboxButtonTemplate = (iconClass) ->
+      if _.isEmpty(iconClass)
+        '-'
+      else
+        """
+        <i class="#{htmlEscape iconClass}" role="presentation"></i>
+        """
+
     htmlFromSubmission: (options={}) ->
       cssClass = classFromSubmission(options.submission)
+      iconClass = iconClassFromSubmission(options.submission)
+      editable = if options.editable
+        'editable'
+      else
+        ''
       SubmissionCell::cellWrapper("""
-        <a data-value="#{htmlEscape cssClass}"
-           class="gradebook-checkbox gradebook-checkbox-#{htmlEscape cssClass}
-           #{htmlEscape('editable' if options.editable)}" href="#"
-        >#{htmlEscape cssClass}</a>
-      """, options)
+        <button
+          data-value="#{htmlEscape cssClass}"
+          class="Button Button--icon-action gradebook-checkbox gradebook-checkbox-#{htmlEscape cssClass} #{htmlEscape(editable)}"
+          type="button"
+          aria-label="#{htmlEscape cssClass}"><span class="screenreader-only">#{htmlEscape cssClass}</span>#{checkboxButtonTemplate(iconClass)}</button>
+        """, options)
 
-    # htmlFromSubmission = (submission, editable = false) ->
-    #   cssClass = classFromSubmission(submission)
-    #   """
-    #   <div class="gradebook-cell #{SubmissionCell.classesBasedOnSubmission(submission).join(' ')}">
-    #     <a href="#" class="gradebook-cell-comment"><span class="gradebook-cell-comment-label">submission comments</span></a>
-    #     <a data-value="#{cssClass}" class="gradebook-checkbox gradebook-checkbox-#{cssClass} #{'editable' if editable}" href="#">#{cssClass}</a>
-    #   </div>
-    #   """
-    @formatter: (row, col, submission, assignment) ->
+    @formatter: (row, col, submission, assignment, student) ->
       return SubmissionCell.formatter.apply(this, arguments) unless submission.grade?
       pass_fail::htmlFromSubmission({ submission, assignment, editable: false})
 

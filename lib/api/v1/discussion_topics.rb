@@ -68,18 +68,18 @@ module Api::V1::DiscussionTopics
     )
 
     opts[:user_can_moderate] = context.grants_right?(user, session, :moderate_forum) if opts[:user_can_moderate].nil?
-    json = api_json(topic, user, session, { only: ALLOWED_TOPIC_FIELDS, methods: ALLOWED_TOPIC_METHODS }, [:attach, :update, :delete])
+    json = api_json(topic, user, session, { only: ALLOWED_TOPIC_FIELDS, methods: ALLOWED_TOPIC_METHODS }, [:attach, :update, :reply, :delete])
     json.merge!(serialize_additional_topic_fields(topic, context, user, opts))
 
     if hold = topic.subscription_hold(user, @context_enrollment, session)
       json[:subscription_hold] = hold
     end
 
-    locked_json(json, topic, user, session)
     if opts[:include_assignment] && topic.assignment
+      excludes = opts[:exclude_assignment_description] ? ['description'] : []
       json[:assignment] = assignment_json(topic.assignment, user, session,
         include_discussion_topic: false, override_dates: opts[:override_dates],
-        exclude_description: opts[:exclude_assignment_description])
+        exclude_response_fields: excludes)
     end
 
     json
@@ -113,11 +113,15 @@ module Api::V1::DiscussionTopics
       author: user_display_json(topic.user, topic.context),
       html_url: html_url, url: html_url, pinned: !!topic.pinned,
       group_category_id: topic.group_category_id, can_group: topic.can_group?(opts) }
+    fields.merge!({context_code: topic.context_code}) if opts[:include_context_code]
+
+    locked_json(fields, topic, user, 'topic', check_policies: true, deep_check_if_needed: true)
+    can_view = !fields[:lock_info].is_a?(Hash) || fields[:lock_info][:can_view]
     unless opts[:exclude_messages]
       if opts[:plain_messages]
-        fields[:message] = topic.message # used for searching by body on index
+        fields[:message] = can_view ? topic.message : lock_explanation(fields[:lock_info], 'topic', context) # used for searching by body on index
       else
-        fields[:message] = api_user_content(topic.message, context)
+        fields[:message] = can_view ? api_user_content(topic.message, context) : lock_explanation(fields[:lock_info], 'topic', context)
       end
     end
 
@@ -137,7 +141,7 @@ module Api::V1::DiscussionTopics
   #   Recognized fields: user_name, subentries.
   #
   # Returns an array of hashes ready to be serialized.
-  def discussion_entry_api_json(entries, context, user, session, includes = [:user_name, :subentries])
+  def discussion_entry_api_json(entries, context, user, session, includes = [:user_name, :subentries, :display_user])
     entries.map do |entry|
       serialize_entry(entry, user, context, session, includes)
     end
@@ -166,6 +170,8 @@ module Api::V1::DiscussionTopics
     else
       json[:message] = api_user_content(entry.message, context, user)
     end
+
+    json[:user] = user_display_json(entry.user, context) if includes.include?(:display_user)
 
     json.merge!(discussion_entry_attachment(entry, user, context))
     json.merge!(discussion_entry_read_state(entry, user))

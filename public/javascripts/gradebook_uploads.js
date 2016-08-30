@@ -27,7 +27,7 @@ define([
   'jquery.instructure_forms' /* errorBox */,
   'jquery.instructure_misc_helpers' /* /\.detect/ */,
   'jquery.templateData' /* fillTemplateData */
-], function(I18n, $, _, htmlEscape, waitForProcessing, processGradebookUpload, SlickGrid) {
+], function(I18n, $, _, htmlEscape, waitForProcessing, ProcessGradebookUpload, SlickGrid) {
 
   var GradebookUploader = {
     createGeneralFormatter: function(attribute) {
@@ -149,7 +149,7 @@ define([
           $gradebookGridForm.submit(function(e){
             e.preventDefault();
             $gradebookGridForm.disableWhileLoading(
-              processGradebookUpload(uploadedGradebook)
+              ProcessGradebookUpload.upload(uploadedGradebook)
             );
           }).show();
 
@@ -341,7 +341,8 @@ define([
             $.each(uploadedGradebook.assignments, function(index){
               if(uploadedGradebook.assignments[index].previous_id && _.all(uploadedGradebook.students, function(student){
                 var submission = student.submissions[index];
-                return submission.original_grade == submission.grade || (!submission.original_grade && !submission.grade);
+
+                return parseFloat(submission.original_grade) == parseFloat(submission.grade) || (!submission.original_grade && !submission.grade);
               })) {
                 indexes_to_delete.push(index);
               }

@@ -85,6 +85,80 @@ describe Auditors::GradeChange do
     end
   end
 
+  it "reports excused submissions" do
+    @excused = @assignment.grade_student(@student, grader: @teacher, excused: true).first
+    @event = Auditors::GradeChange.record(@excused)
+
+    for_assignment = Auditors::GradeChange.for_assignment(@assignment)
+    for_course = Auditors::GradeChange.for_course(@course)
+    for_root_account_student = Auditors::GradeChange.for_root_account_student(@account, @student)
+
+    expect(for_assignment.paginate(per_page: 5)).to include(@event)
+    expect(for_course.paginate(per_page: 5)).to include(@event)
+    expect(for_root_account_student.paginate(per_page: 5)).to include(@event)
+  end
+
+  it "reports formerly excused submissions" do
+    @excused = @assignment.grade_student(@student, grader: @teacher, excused: true).first
+    Auditors::GradeChange.record(@excused)
+    @unexcused = @assignment.grade_student(@student, grader: @teacher, excused: false).first
+    @event = Auditors::GradeChange.record(@unexcused)
+
+    for_assignment = Auditors::GradeChange.for_assignment(@assignment)
+    for_course = Auditors::GradeChange.for_course(@course)
+    for_root_account_student = Auditors::GradeChange.for_root_account_student(@account, @student)
+
+    expect(for_assignment.paginate(per_page: 5)).to include(@event)
+    expect(for_course.paginate(per_page: 5)).to include(@event)
+    expect(for_root_account_student.paginate(per_page: 5)).to include(@event)
+  end
+
+  it "records excused_before and excused_after as booleans on initial grading" do
+    expect(@event.excused_before).to eql(false)
+    expect(@event.excused_after).to eql(false)
+  end
+
+  it "records excused submissions" do
+    @excused = @assignment.grade_student(@student, grader: @teacher, excused: true).first
+    @event = Auditors::GradeChange.record(@excused)
+
+    expect(@event.grade_before).to eql(@submission.grade)
+    expect(@event.grade_after).to be_nil
+    expect(@event.excused_before).to eql(false)
+    expect(@event.excused_after).to eql(true)
+  end
+
+  it "records formerly excused submissions" do
+    @excused = @assignment.grade_student(@student, grader: @teacher, excused: true).first
+    Auditors::GradeChange.record(@excused)
+    @unexcused = @assignment.grade_student(@student, grader: @teacher, excused: false).first
+    @event = Auditors::GradeChange.record(@unexcused)
+
+    expect(@event.grade_before).to be_nil
+    expect(@event.grade_after).to be_nil
+    expect(@event.excused_before).to eql(true)
+    expect(@event.excused_after).to eql(false)
+  end
+
+  it "records regraded submissions" do
+    @submission.score = 5
+    @submission.with_versioning(:explicit => true, &:save!)
+    @event = Auditors::GradeChange.record(@submission)
+
+    expect(@event.score_before).to eq 8
+    expect(@event.score_after).to eq 5
+  end
+
+  it "records grades affected by assignment update" do
+    @assignment.points_possible = 15
+    @assignment.save!
+    @submission.assignment_changed_not_sub = true
+    @event = Auditors::GradeChange.record(@submission)
+
+    expect(@event.points_possible_before).to eq 10
+    expect(@event.points_possible_after).to eq 15
+  end
+
   describe "options forwarding" do
     before do
       record = Auditors::GradeChange::Record.new(

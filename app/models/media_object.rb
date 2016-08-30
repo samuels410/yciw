@@ -23,7 +23,7 @@ class MediaObject < ActiveRecord::Base
   belongs_to :user
   belongs_to :context, polymorphic:
     [:course, :group, :conversation_message, :account, :assignment,
-     :assessment_question, :zip_file_import, { context_user: 'User' }], exhaustive: false
+     :assessment_question, { context_user: 'User' }], exhaustive: false
   belongs_to :attachment
   belongs_to :root_account, :class_name => 'Account'
 
@@ -103,12 +103,7 @@ class MediaObject < ActiveRecord::Base
       if entry[:originalId].present? && (Integer(entry[:originalId]).is_a?(Integer) rescue false)
         attachment_id = entry[:originalId]
       elsif entry[:originalId].present? && entry[:originalId].length >= 2
-        partner_data = begin
-          JSON.parse(entry[:originalId]).with_indifferent_access
-        rescue JSON::ParserError
-          Rails.logger.error("Failed to parse kaltura partner info: #{entry[:originalId]}")
-          {}
-        end
+        partner_data = Rack::Utils.parse_nested_query(entry[:originalId]).with_indifferent_access
         attachment_id = partner_data[:attachment_id] if partner_data[:attachment_id].present?
       end
       attachment = Attachment.where(id: attachment_id).first if attachment_id

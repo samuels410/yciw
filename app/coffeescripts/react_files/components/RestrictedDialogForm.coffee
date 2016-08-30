@@ -1,6 +1,7 @@
 define [
   'jquery'
   'react'
+  'react-dom'
   'i18n!restrict_student_access'
   'compiled/models/Folder'
   '../modules/customPropTypes'
@@ -8,7 +9,7 @@ define [
   '../utils/updateModelsUsageRights'
   'jquery.instructure_date_and_time'
   'jquery.instructure_forms'
-], ($, React, I18n, Folder, customPropTypes, setUsageRights, updateModelsUsageRights) ->
+], ($, React, ReactDOM, I18n, Folder, customPropTypes, setUsageRights, updateModelsUsageRights) ->
 
   RestrictedDialogForm =
 
@@ -45,7 +46,7 @@ define [
         values = @refs.usageSelection.getValues()
         # They didn't choose a use justification
         if (values.use_justification == 'choose')
-          $(@refs.usageSelection.refs.usageRightSelection.getDOMNode()).errorBox(I18n.t('You must specify a usage right.'))
+          $(ReactDOM.findDOMNode(@refs.usageSelection.refs.usageRightSelection)).errorBox(I18n.t('You must specify a usage right.'))
           return false
 
         # We need to first set usage rights before handling the setting of
@@ -63,6 +64,9 @@ define [
 
     setRestrictedAccess: ->
       attributes = @refs.restrictedSelection.extractFormValues()
+      if attributes.unlock_at and attributes.lock_at and attributes.unlock_at > attributes.lock_at
+        $(ReactDOM.findDOMNode(@refs.restrictedSelection.refs.unlock_at)).errorBox(I18n.t('"Available From" date must precede "Available Until"'))
+        return false
       promises = @props.models.map (item) ->
         # Calling .save like this (passing data as the 'attrs' property on
         # the 'options' argument instead of as the first argument) is so that we just send
@@ -75,7 +79,7 @@ define [
 
       dfd = $.when(promises...)
       dfd.done => @props.closeDialog()
-      $(@refs.dialogForm.getDOMNode()).disableWhileLoading dfd
+      $(ReactDOM.findDOMNode(@refs.dialogForm)).disableWhileLoading dfd
 
 
     ###

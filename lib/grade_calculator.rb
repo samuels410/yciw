@@ -53,11 +53,11 @@ class GradeCalculator
     @submissions = @course.submissions.
         except(:order, :select).
         for_user(@user_ids).
-        where(assignment_id: @assignments.map(&:id)).
-        select("submissions.id, user_id, assignment_id, score, excused")
+        where(assignment_id: @assignments).
+        select("submissions.id, user_id, assignment_id, score, excused, submissions.workflow_state")
     submissions_by_user = @submissions.group_by(&:user_id)
 
-    scores = []
+    result = []
     @user_ids.each_slice(100) do |batched_ids|
       load_assignment_visibilities_for_users(batched_ids)
       batched_ids.each do |user_id|
@@ -65,11 +65,19 @@ class GradeCalculator
         user_submissions.select!{|s| assignment_ids_visible_to_user(user_id).include?(s.assignment_id)}
         current, current_groups = calculate_current_score(user_id, user_submissions)
         final, final_groups = calculate_final_score(user_id, user_submissions)
-        scores << [[current, current_groups], [final, final_groups]]
+
+        scores = {
+          current: current,
+          current_groups: current_groups,
+          final: final,
+          final_groups: final_groups
+        }
+
+        result << scores
       end
       clear_assignment_visibilities_cache
     end
-    scores
+    result
   end
 
   def compute_and_save_scores
@@ -142,6 +150,9 @@ class GradeCalculator
         # ignore submissions for muted assignments
         s = nil if @ignore_muted && a.muted?
 
+        # ignore pending_review quiz submissions
+        s = nil if ignore_ungraded && s.try(:pending_review?)
+
         {
           assignment: a,
           submission: s,
@@ -153,6 +164,7 @@ class GradeCalculator
 
       group_submissions.reject! { |s| s[:score].nil? } if ignore_ungraded
       group_submissions.reject! { |s| s[:excused] }
+      group_submissions.reject! { |s| s[:assignment].omit_from_final_grade? }
       group_submissions.each { |s| s[:score] ||= 0 }
 
       logged_submissions = group_submissions.map { |s| loggable_submission(s) }

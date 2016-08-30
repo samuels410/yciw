@@ -20,7 +20,7 @@
 # asset_group_code is for the group
 # so, for example, the asset could be an assignment, the group would be the assignment_group
 class AssetUserAccess < ActiveRecord::Base
-  belongs_to :context, polymorphic: [:user, :group, :course], polymorphic_prefix: true
+  belongs_to :context, polymorphic: [:account, :course, :group, :user], polymorphic_prefix: true
   belongs_to :user
   has_many :page_views
   before_save :infer_defaults
@@ -205,11 +205,13 @@ class AssetUserAccess < ActiveRecord::Base
   end
 
   def asset
-    return nil unless asset_code
-    asset_code, general = self.asset_code.split(":").reverse
-    asset = Context.find_asset_by_asset_string(asset_code, context)
-    asset ||= (match = asset_code.match(/enrollment_(\d+)/)) && Enrollment.where(:id => match[1]).first
-    asset
+    unless @asset
+      return nil unless asset_code
+      asset_code, general = self.asset_code.split(":").reverse
+      @asset = Context.find_asset_by_asset_string(asset_code, context)
+      @asset ||= (match = asset_code.match(/enrollment_(\d+)/)) && Enrollment.where(:id => match[1]).first
+    end
+    @asset
   end
 
   def asset_class_name
@@ -218,12 +220,21 @@ class AssetUserAccess < ActiveRecord::Base
     name
   end
 
+  def get_correct_context(context)
+    if context.is_a?(UserProfile)
+      context.user
+    elsif context.is_a?(AssessmentQuestion)
+      context.context
+    else
+      context
+    end
+  end
+
   def log( kontext, accessed )
     self.asset_category ||= accessed[:category]
     self.asset_group_code ||= accessed[:group_code]
     self.membership_type ||= accessed[:membership_type]
-    self.context = kontext
-    self.summarized_at = nil
+    self.context = get_correct_context(kontext)
     self.last_access = Time.now.utc
     self.display_name = self.asset_display_name
     log_action(accessed[:level])

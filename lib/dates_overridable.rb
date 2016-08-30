@@ -57,7 +57,6 @@ module DatesOverridable
   end
 
   def multiple_due_dates_apply_to?(user)
-    return false if !context.multiple_sections?
     return false if context.user_has_been_student?(user)
 
     if context.user_has_been_observer?(user)
@@ -234,9 +233,15 @@ module DatesOverridable
     if tag_info[:due_date]
       if tag_info[:due_date] < Time.now
         if self.is_a?(Quizzes::Quiz) || (self.is_a?(Assignment) && expects_submission?)
-          has_submission = self.is_a?(Assignment) && Rails.cache.fetch([self, user, "user_has_submission"]) do
-            submission_for_student(user).has_submission?
-          end
+          has_submission =
+            Rails.cache.fetch([self, user, "user_has_submission"]) do
+              case self
+              when Assignment
+                submission_for_student(user).has_submission?
+              when Quizzes::Quiz
+                self.quiz_submissions.completed.where(:user_id => user).exists?
+              end
+            end
           tag_info[:past_due] = true unless has_submission
         end
       end

@@ -47,6 +47,9 @@ module CC
             end
             next
           end
+
+          add_exported_asset(cm)
+
           mod_migration_id = CCHelper.create_key(cm)
           # context modules are in order and a pre-req can only reference
           # a previous module, so just adding as we go is okay
@@ -57,8 +60,6 @@ module CC
             m_node.workflow_state cm.workflow_state
             m_node.position cm.position
             m_node.unlock_at CCHelper::ims_datetime(cm.unlock_at) if cm.unlock_at
-            m_node.start_at CCHelper::ims_datetime(cm.start_at) if cm.start_at
-            m_node.end_at CCHelper::ims_datetime(cm.end_at) if cm.end_at
             m_node.require_sequential_progress cm.require_sequential_progress.to_s unless cm.require_sequential_progress.nil?
             m_node.requirement_count cm.requirement_count if cm.requirement_count
             m_node.locked cm.locked_for?(@user).present?

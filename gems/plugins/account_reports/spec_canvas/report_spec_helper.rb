@@ -48,19 +48,23 @@ module ReportSpecHelper
         end
       end
     else
-      parsed = parse_csv(a.open,options)
+      parsed = parse_csv(a.open, options)
     end
     parsed
   end
 
   def parse_csv(csv, options = {})
-    col_sep = options[:col_sep] || ','
+    csv_parse_opts = {
+      col_sep: options[:col_sep] || ',',
+      headers: options[:parse_header] || false,
+      return_headers: true,
+    }
     skip_order = true if options[:order] == 'skip'
     order = Array(options[:order]).presence || [0, 1]
-    all_parsed = CSV.parse(csv, {:col_sep => col_sep}).to_a
-    header = all_parsed[0]
-    all_parsed = all_parsed[1..-1]
-    all_parsed = all_parsed.sort_by { |r| r.values_at(*order).join } unless skip_order
+    all_parsed = CSV.parse(csv, csv_parse_opts).map.to_a
+    raise 'Must order report results to avoid brittle specs' unless options[:order].present? || all_parsed.count < 3
+    header = all_parsed.shift
+    all_parsed.sort_by! { |r| r.values_at(*order).join } unless skip_order
     all_parsed.unshift(header) if options[:header]
     all_parsed
   end

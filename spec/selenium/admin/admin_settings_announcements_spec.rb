@@ -5,6 +5,7 @@ describe "settings tabs" do
     include_context "in-process server selenium tests"
 
     def add_announcement
+      wait_for_ajaximations
       f("#tab-announcements-link").click
       fj(".element_toggler:visible").click
       subject = "This is a date change"
@@ -23,12 +24,21 @@ describe "settings tabs" do
       submit_form("#add_notification_form")
       wait_for_ajax_requests
       notification = AccountNotification.first
-      expect(notification.message).to include_text("this is a message")
-      expect(notification.subject).to include_text(subject)
+      expect(notification.message).to include("this is a message")
+      expect(notification.subject).to include(subject)
       expect(notification.start_at.day).to eq 1
       expect(notification.end_at.day).to eq 15
-      login_text = f("#header .user_name").text
-      expect(f("#tab-announcements .announcement-details").text).to include_text(login_text)
+      expect(f("#tab-announcements .announcement-details")).to include_text(displayed_username)
+      dismiss_flash_messages
+
+      if ENV['CANVAS_FORCE_USE_NEW_STYLES']
+        # close the "user account" reactTray that opened so we could read the displayed username
+        if tray_close = f('.ic-NavMenu__closeButton')
+         tray_close.click
+        end
+        expect(f('body')).not_to contain_css('.ReactTray__Overlay')
+      end
+
       expect(f("#tab-announcements .notification_subject").text).to eq subject
       expect(f("#tab-announcements .notification_message").text).to eq "this is a message"
     end
@@ -37,8 +47,12 @@ describe "settings tabs" do
       f("#notification_edit_#{notification.id}").click
       replace_content f("#account_notification_subject_#{notification.id}"), "edited subject"
       f("#account_notification_icon .warning").click
-      type_in_tiny("textarea", "edited message", clear: true)
-      f(".account_notification_role_cbx").click
+      textarea_selector = "textarea#account_notification_message_#{notification.id}"
+      type_in_tiny(textarea_selector, "edited message", clear: true)
+
+      cb = f(".account_notification_role_cbx")
+      f("label[for=#{cb['id']}]").click
+
       ff(".edit_notification_form .ui-datepicker-trigger")[0].click
       fln("2").click
       ff(".edit_notification_form .ui-datepicker-trigger")[1].click
@@ -48,6 +62,7 @@ describe "settings tabs" do
 
     before do
       course_with_admin_logged_in
+      driver.manage.window.maximize
     end
 
     it "should add and delete an announcement" do
@@ -60,6 +75,7 @@ describe "settings tabs" do
     end
 
     it "should edit an announcement" do
+      skip_if_chrome('issue with edit_announcement method')
       notification = account_notification(user: @user)
       get "/accounts/#{Account.default.id}/settings"
       f("#tab-announcements-link").click

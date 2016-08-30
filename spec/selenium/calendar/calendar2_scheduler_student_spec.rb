@@ -22,6 +22,10 @@ describe "scheduler" do
     def reserve_appointment_manual(n, comment = nil)
       ffj('.agenda-event .ig-row')[n].click
       if comment
+        # compiled/util/Popover sets focus on the close button twice
+        # within the first 100ms, which can cause it to hijack
+        # keypresses, making a " " close the modal
+        sleep 0.1
         replace_content(f('#appointment-comment'), comment)
       end
       f('.event-details .reserve_event_link').click
@@ -39,7 +43,7 @@ describe "scheduler" do
       click_scheduler_link
       wait_for_ajaximations
       click_appointment_link
-
+      wait_for_ajaximations
       reserve_appointment_manual(0, "my comments")
       expect(f('.agenda-event .ig-row')).to include_text "Reserved"
       f('.agenda-event .ig-row').click
@@ -153,8 +157,8 @@ describe "scheduler" do
       click_scheduler_link
       click_appointment_link
 
-      fj('.agenda-event .ig-row').click
-      expect(ff('#reservations').size).to be_zero
+      f('.agenda-event .ig-row').click
+      expect(f("#content")).not_to contain_css('#reservations')
     end
 
     it "should check index page for correct element", priority: "1", test_id: 140217 do
@@ -166,9 +170,9 @@ describe "scheduler" do
       click_scheduler_link
 
       # Index page should show correct elements for appointment groups
-      expect(f(".view_calendar_link").text).to include_text(title)
-      expect(f(".ag-context").text).to include @course.name.to_s #include context
-      expect(f(".ag-location").text).to include_text(location)
+      expect(f(".view_calendar_link")).to include_text(title)
+      expect(f(".ag-context")).to include_text @course.name.to_s
+      expect(f(".ag-location")).to include_text(location)
     end
 
     context "when un-reserving appointments" do
@@ -190,25 +194,25 @@ describe "scheduler" do
       it "should let me do so from the month view", priority: "1", test_id: 140200 do
         load_month_view
 
-        fj('.fc-event.scheduler-event').click
-        fj('.unreserve_event_link').click
-        fj('#delete_event_dialog~.ui-dialog-buttonpane .btn-primary').click
+        f('.fc-event.scheduler-event').click
+        f('.unreserve_event_link').click
+        f('#delete_event_dialog~.ui-dialog-buttonpane .btn-primary').click
 
         wait_for_ajaximations
 
-        expect(fj('.fc-event.scheduler-event')).to be_nil
+        expect(f("#content")).not_to contain_css('.fc-event.scheduler-event')
       end
 
       it "should let me do so from the week view", priority: "1", test_id: 502483 do
         load_week_view
 
-        fj('.fc-event.scheduler-event').click
-        fj('.unreserve_event_link').click
-        fj('#delete_event_dialog~.ui-dialog-buttonpane .btn-primary').click
+        f('.fc-event.scheduler-event').click
+        f('.unreserve_event_link').click
+        f('#delete_event_dialog~.ui-dialog-buttonpane .btn-primary').click
 
         wait_for_ajaximations
 
-        expect(fj('.fc-event.scheduler-event')).to be_nil
+        expect(f("#content")).not_to contain_css('.fc-event.scheduler-event')
       end
 
       it "should let me do so from the agenda view", priority: "1", test_id: 502484 do
@@ -216,18 +220,16 @@ describe "scheduler" do
 
         f('.ig-row').click
         wait_for_ajaximations
-        fj('.unreserve_event_link').click
-        fj('#delete_event_dialog~.ui-dialog-buttonpane .btn-primary').click
+        f('.unreserve_event_link').click
+        f('#delete_event_dialog~.ui-dialog-buttonpane .btn-primary').click
 
-        wait_for_ajaximations
-
-        expect(ffj('.ig-row').length).to eq 0
+        expect(f("#content")).not_to contain_css('.ig-row')
       end
 
       it "should let me do so from the scheduler", priority: "1", test_id: 502485 do
-        fj('.agenda-event .ig-row').click
-        fj('.unreserve_event_link').click
-        fj('#delete_event_dialog~.ui-dialog-buttonpane .btn-primary').click
+        f('.agenda-event .ig-row').click
+        f('.unreserve_event_link').click
+        f('#delete_event_dialog~.ui-dialog-buttonpane .btn-primary').click
 
         wait_for_ajaximations
 

@@ -172,6 +172,7 @@ describe User do
     expect(@user.recent_stream_items.size).to eq 1
     @enrollment.end_at = @enrollment.start_at = Time.now - 1.day
     @enrollment.save!
+    @user = User.find(@user.id)
     expect(@user.recent_stream_items.size).to eq 0
   end
 
@@ -1609,6 +1610,12 @@ describe User do
       expect(@user.communication_channels.map(&:path)).to eq ['john@example.com']
       expect(@user.email).to eq 'john@example.com'
     end
+
+    it "doesn't create channels with empty paths" do
+      @user = User.create!
+      expect(-> {@user.email = ''}).to raise_error("Validation failed: Path can't be blank")
+      expect(@user.communication_channels.any?).to be_falsey
+    end
   end
 
   describe "event methods" do
@@ -1962,6 +1969,16 @@ describe User do
         expect(@student.assignments_needing_submitting(contexts: Course.all).include?(assignment)).to be_falsey
       end
     end
+
+    context "sharding" do
+      specs_require_sharding
+
+      it "includes assignments from other shards" do
+        student = @shard1.activate { user }
+        assignment = create_course_with_assignment_needing_submitting(student: student, override: true)
+        expect(student.assignments_needing_submitting).to eq [assignment]
+      end
+    end
   end
 
   describe "submissions_needing_peer_review" do
@@ -2105,27 +2122,42 @@ describe User do
       expect(@user.reload.common_account_chain(root_acct)).to eql [root_acct]
     end
 
-    it "should work for two levels of sub accounts" do
-      root_acct = root_acct1
-      sub_acct1 = Account.create!(:parent_account => root_acct)
-      sub_sub_acct1 = Account.create!(:parent_account => sub_acct1)
-      sub_sub_acct2 = Account.create!(:parent_account => sub_acct1)
-      sub_acct2 = Account.create!(:parent_account => root_acct)
+    context "two levels of sub accounts" do
+      let_once(:root_acct) { root_acct1 }
+      let_once(:sub_acct1) { Account.create!(:parent_account => root_acct) }
+      let_once(:sub_sub_acct1) { Account.create!(:parent_account => sub_acct1) }
+      let_once(:sub_sub_acct2) { Account.create!(:parent_account => sub_acct1) }
+      let_once(:sub_acct2) { Account.create!(:parent_account => root_acct) }
 
-      @user.user_account_associations.create!(:account_id => root_acct.id)
-      expect(@user.reload.common_account_chain(root_acct)).to eql [root_acct]
+      it "finds the correct branch point" do
+        @user.user_account_associations.create!(:account_id => root_acct.id)
+        expect(@user.reload.common_account_chain(root_acct)).to eql [root_acct]
 
-      @user.user_account_associations.create!(:account_id => sub_acct1.id)
-      expect(@user.reload.common_account_chain(root_acct)).to eql [root_acct, sub_acct1]
+        @user.user_account_associations.create!(:account_id => sub_acct1.id)
+        expect(@user.reload.common_account_chain(root_acct)).to eql [root_acct, sub_acct1]
 
-      @user.user_account_associations.create!(:account_id => sub_sub_acct1.id)
-      expect(@user.reload.common_account_chain(root_acct)).to eql [root_acct, sub_acct1, sub_sub_acct1]
+        @user.user_account_associations.create!(:account_id => sub_sub_acct1.id)
+        expect(@user.reload.common_account_chain(root_acct)).to eql [root_acct, sub_acct1, sub_sub_acct1]
 
-      @user.user_account_associations.create!(:account_id => sub_sub_acct2.id)
-      expect(@user.reload.common_account_chain(root_acct)).to eql [root_acct, sub_acct1]
+        @user.user_account_associations.create!(:account_id => sub_sub_acct2.id)
+        expect(@user.reload.common_account_chain(root_acct)).to eql [root_acct, sub_acct1]
 
-      @user.user_account_associations.create!(:account_id => sub_acct2.id)
-      expect(@user.reload.common_account_chain(root_acct)).to eql [root_acct]
+        @user.user_account_associations.create!(:account_id => sub_acct2.id)
+        expect(@user.reload.common_account_chain(root_acct)).to eql [root_acct]
+      end
+
+      it "breaks early if a user has an enrollment partway down the chain" do
+        course_with_student(user: @user, account: sub_acct1, active_all: true)
+        @user.user_account_associations.create!(:account_id => sub_sub_acct1.id)
+        @user.reload
+
+        full_chain = [root_acct, sub_acct1, sub_sub_acct1]
+        overlap = @user.user_account_associations.map(&:account_id) & full_chain.map(&:id)
+        expect(overlap.sort).to eql full_chain.map(&:id)
+        expect(@user.common_account_chain(root_acct)).to(
+          eql([root_acct, sub_acct1])
+        )
+      end
     end
   end
 
@@ -2696,6 +2728,19 @@ describe User do
         # ensure seeking user gets permissions it should on target user
         expect(target.grants_right?(seeker, :view_statistics)).to be_truthy
       end
+
+      it 'checks all shards, even if not actually associated' do
+        target = user()
+        # create account on another shard
+        account = @shard1.activate{ Account.create! }
+        # associate target user with that account
+        account_admin_user(user: target, account: account, role: Role.get_built_in_role('AccountMembership'))
+        # create seeking user as admin on that account
+        seeker = account_admin_user(account: account, role: Role.get_built_in_role('AccountAdmin'))
+        seeker.stubs(:associated_shards).returns([])
+        # ensure seeking user gets permissions it should on target user
+        expect(target.grants_right?(seeker, :view_statistics)).to eq true
+      end
     end
   end
 
@@ -2864,6 +2909,17 @@ describe User do
       expect(@student.visible_groups.size).to eq 0
     end
 
+    it 'excludes groups in courses with concluded enrollments' do
+      course_with_student
+      @course.conclude_at = Time.zone.now - 2.days
+      @course.restrict_enrollments_to_course_dates = true
+      @course.save!
+      @group = Group.create! context: @course, name: 'GroupOne'
+      @group.users << @student
+      @group.save!
+      expect(@student.visible_groups.size).to eq 0
+    end
+
     it "should include account groups" do
       account = account_model(:parent_account => Account.default)
       student = user active_all: true
@@ -2935,5 +2991,46 @@ describe User do
     @user.report_avatar_image!
     @user.reload
     expect(@user.avatar_state).to eq :reported
+  end
+
+  describe "submissions_folder" do
+    before(:once) do
+      student_in_course
+    end
+
+    it "creates the root submissions folder on demand" do
+      f = @user.submissions_folder
+      expect(@user.submissions_folders.where(parent_folder_id: Folder.root_folders(@user).first, name: 'Submissions').first).to eq f
+    end
+
+    it "finds the existing root submissions folder" do
+      f = @user.folders.build
+      f.parent_folder_id = Folder.root_folders(@user).first
+      f.name = 'blah'
+      f.submission_context_code = 'root'
+      f.save!
+      expect(@user.submissions_folder).to eq f
+    end
+
+    it "creates a submissions folder for a course" do
+      f = @user.submissions_folder(@course)
+      expect(@user.submissions_folders.where(submission_context_code: @course.asset_string, parent_folder_id: @user.submissions_folder, name: @course.name).first).to eq f
+    end
+
+    it "finds an existing submissions folder for a course" do
+      f = @user.folders.build
+      f.parent_folder_id = @user.submissions_folder
+      f.name = 'bleh'
+      f.submission_context_code = @course.asset_string
+      f.save!
+      expect(@user.submissions_folder(@course)).to eq f
+    end
+  end
+
+  it { is_expected.to have_many(:submission_comment_participants) }
+  it do
+    is_expected.to have_many(:submission_comments).
+      conditions(-> { published }).
+        through(:submission_comment_participants)
   end
 end

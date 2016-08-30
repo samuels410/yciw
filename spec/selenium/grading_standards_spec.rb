@@ -54,7 +54,8 @@ describe "grading standards" do
       expect(dialog.find_elements(:css, ".grading_standard_row").select(&:displayed?).map { |e| e.find_element(:css, ".name").text }).to eq ["A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+", "D", "D-", "F"]
 
       dialog.find_element(:css, ".find_grading_standard_link").click
-      keep_trying_until { expect(f(".find_grading_standard")).to have_class("loaded") }
+      find_grading_standard = f(".find_grading_standard")
+      expect(find_grading_standard).to have_class("loaded")
       expect(dialog.find_element(:css, ".find_grading_standard")).to be_displayed
       expect(dialog.find_element(:css, ".display_grading_standard")).not_to be_displayed
       dialog.find_element(:css, ".cancel_find_grading_standard_link").click
@@ -94,7 +95,8 @@ describe "grading standards" do
       expect(dialog.find_elements(:css, ".grading_standard_row").select(&:displayed?).map { |e| e.find_element(:css, ".name").text }).to eq ["A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+", "D", "D-", "F"]
 
       dialog.find_element(:css, ".find_grading_standard_link").click
-      keep_trying_until { expect(f(".find_grading_standard")).to have_class("loaded") }
+      find_grading_standard = f(".find_grading_standard")
+      expect(find_grading_standard).to have_class("loaded")
       expect(dialog.find_elements(:css, ".grading_standard_select .title")[-1].text).to eq @standard.title
       dialog.find_elements(:css, ".grading_standard_select")[-1].click
       expect(standard_brief = dialog.find_element(:css, "#grading_standard_brief_#{@standard.id}")).to be_displayed
@@ -103,8 +105,8 @@ describe "grading standards" do
       expect(rows.length).to eq @standard.data.length
       rows.each_with_index do |r, idx|
         expect(r.find_element(:css, '.name').text).to eq @standard.data[idx].first
-        expect(r.find_element(:css, '.value').text).to eq(idx == 0 ? "100" : "< #{@standard.data[idx - 1].last * 100}")
-        expect(r.find_element(:css, '.next_value').text).to eq "#{@standard.data[idx].last * 100}"
+        expect(r.find_element(:css, '.value').text).to eq(idx == 0 ? "100" : "< #{round_if_whole(@standard.data[idx - 1].last * 100)}")
+        expect(r.find_element(:css, '.next_value').text).to eq "#{round_if_whole(@standard.data[idx].last * 100)}"
       end
       dialog.find_element(:css, "#grading_standard_brief_#{@standard.id} .select_grading_standard_link").click
       expect(dialog.find_element(:css, "#grading_standard_brief_#{@standard.id}")).not_to be_displayed
@@ -115,7 +117,7 @@ describe "grading standards" do
       dialog.find_element(:css, ".remove_grading_standard_link").click
       driver.switch_to.alert.accept
       driver.switch_to.default_content
-      keep_trying_until { !dialog.displayed? }
+      expect(dialog).not_to be_displayed
 
       expect(is_checked('#course_form #course_grading_standard_enabled')).to be_falsey
     end
@@ -139,23 +141,40 @@ describe "grading standards" do
       user_session(account_admin_user)
       @standard = simple_grading_standard(Account.default)
       get("/accounts/#{Account.default.id}/grading_standards")
-      std = keep_trying_until { f("#grading_standard_#{@standard.id}") }
+      std = f("#grading_standard_#{@standard.id}")
       std.find_element(:css, ".edit_grading_standard_button").click
       std.find_element(:css, "button.save_button").click
       wait_for_ajax_requests
-      std = keep_trying_until { f("#grading_standard_#{@standard.id}") }
+      std = f("#grading_standard_#{@standard.id}")
       std.find_element(:css, ".edit_grading_standard_button").click
       std.find_element(:css, "button.save_button")
       wait_for_ajax_requests
       expect(@standard.reload.data.length).to eq 3
     end
-  end
 
-  context "with Multiple Grading Periods enabled" do
+    context 'course settings' do
+      before :each do
+        course_with_teacher_logged_in
+        get "/courses/#{@course.id}/settings"
+        f('.grading_standard_checkbox').click
+        f('.edit_letter_grades_link').click
+      end
 
-    it "should contain a tab for grading schemes and grading periods", priority: "1", test_id: 217602 do
-      course_with_teacher_logged_in
-      should_contain_a_tab_for_grading_schemes_and_periods("/courses/#{@course.id}/grading_standards")
+      it "set default grading scheme", priority: "2", test_id: 164234 do
+        expect(f('#edit_letter_grades_form')).to be_displayed
+      end
+
+      it "manage default grading scheme", priority: "2", test_id: 164235 do
+        element = ff('.displaying a').select { |a| a.text == 'manage grading schemes' }
+        element[0].click
+        expect(f('.icon-add')).to be_displayed
+      end
+
+      it "edit current grading scheme", priority: "2", test_id: 164237 do
+        element = ff('.displaying a').select { |a| a.text == '' }
+        element[0].click
+        expect(f('.ui-dialog-titlebar').text).to eq("View/Edit Grading Scheme\nclose")
+      end
     end
   end
 end

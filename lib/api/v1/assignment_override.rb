@@ -27,7 +27,7 @@ module Api::V1::AssignmentOverride
     api_json(override, @current_user, session, :only => fields).tap do |json|
       case override.set_type
       when 'ADHOC'
-        students = if visible_users
+        students = if visible_users.present?
                      override.assignment_override_students.where(user_id: visible_users)
                    else
                      override.assignment_override_students
@@ -42,13 +42,8 @@ module Api::V1::AssignmentOverride
   end
 
   def assignment_overrides_json(overrides, user = nil)
-    visible_users = if user && !overrides.empty?
-                      override = overrides.first
-                      assignment_or_quiz = override.assignment || override.quiz
-                      context = assignment_or_quiz.context
-                      UserSearch.scope_for(context, user, { force_users_visible_to: true }).map(&:id)
-                    end
-    overrides.map{ |override| assignment_override_json(override, visible_users) }
+    visible_users_ids = ::AssignmentOverride.visible_users_for(overrides, user).map(&:id)
+    overrides.map{ |override| assignment_override_json(override, visible_users_ids) }
   end
 
   def assignment_override_collection(assignment, include_students=false)
@@ -121,6 +116,7 @@ module Api::V1::AssignmentOverride
         # make sure they were all valid
         found_ids = students.map{ |s| [
           s.id.to_s,
+          s.global_id.to_s,
           ("sis_login_id:#{s.pseudonym.unique_id}" if s.pseudonym),
           ("hex:sis_login_id:#{s.pseudonym.unique_id.to_s.unpack('H*')}" if s.pseudonym),
           ("sis_user_id:#{s.pseudonym.sis_user_id}" if s.pseudonym && s.pseudonym.sis_user_id),
@@ -240,7 +236,7 @@ module Api::V1::AssignmentOverride
       update_assignment_override_without_save(override, override_data)
       override.save!
     end
-    override.assignment.send_later_if_production(:run_if_overrides_changed!)
+    override.assignment.run_if_overrides_changed_later!
     return true
   rescue ActiveRecord::RecordInvalid
     return false
@@ -306,7 +302,7 @@ module Api::V1::AssignmentOverride
     raise ActiveRecord::RecordInvalid.new(assignment) unless assignment.valid?
     overrides.each(&:save!)
 
-    assignment.send_later_if_production(:run_if_overrides_changed!)
+    assignment.run_if_overrides_changed_later!
   end
 
   def destroy_defunct_overrides(assignment, override_param_ids, existing_overrides)

@@ -95,7 +95,8 @@ module.exports = {
         include: [
           path.resolve(__dirname, "../app/coffeescript"),
           path.resolve(__dirname, "../spec/coffeescripts"),
-          /gems\/plugins\/.*\/app\/coffeescripts\//
+          /gems\/plugins\/.*\/app\/coffeescripts\//,
+          /gems\/plugins\/.*\/spec_canvas\/coffeescripts\//
         ],
         loaders: [
           "coffee-loader",
@@ -230,6 +231,5 @@ module.exports = {
     new webpack.PrefetchPlugin("./public/javascripts/axios.js"),
     new webpack.PrefetchPlugin("./public/javascripts/bower/k5uploader/lib/ui_config_from_node.js"),
     new webpack.PrefetchPlugin("./public/javascripts/bower/reflux/dist/reflux.min.js")
-
   ]
 };

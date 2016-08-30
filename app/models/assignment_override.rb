@@ -113,7 +113,7 @@ class AssignmentOverride < ActiveRecord::Base
   alias_method :destroy_permanently!, :destroy
   def destroy
     transaction do
-      self.assignment_override_students.destroy_all
+      self.assignment_override_students.reload.destroy_all
       self.workflow_state = 'deleted'
       self.save!
     end
@@ -126,7 +126,8 @@ class AssignmentOverride < ActiveRecord::Base
     joins(:assignment_override_students).
     where(
       assignment_override_students: { user_id: visible_ids },
-    )
+    ).
+    distinct
   end
 
   before_validation :default_values
@@ -197,6 +198,19 @@ class AssignmentOverride < ActiveRecord::Base
     end
   end
 
+  def self.visible_users_for(overrides, user=nil)
+    return [] if overrides.empty? || user.nil?
+    override = overrides.first
+    override.visible_users_for(user)
+  end
+
+  def visible_users_for(user)
+    assignment_or_quiz = self.assignment || self.quiz
+    UserSearch.scope_for(assignment_or_quiz.context, user, {
+      force_users_visible_to: true
+    })
+  end
+
   override :due_at
   override :unlock_at
   override :lock_at
@@ -216,6 +230,12 @@ class AssignmentOverride < ActiveRecord::Base
 
   def lock_at=(new_lock_at)
     write_attribute(:lock_at, CanvasTime.fancy_midnight(new_lock_at))
+  end
+
+  def availability_expired?
+    lock_at_overridden &&
+      lock_at.present? &&
+      lock_at <= Time.zone.now
   end
 
   def as_hash
@@ -287,6 +307,7 @@ class AssignmentOverride < ActiveRecord::Base
 
   def destroy_if_empty_set
     return unless set_type == 'ADHOC'
+    self.assignment_override_students.reload if self.id_was.nil? # fixes a problem with rails 4.2 caching an empty association scope
     self.destroy if set.empty?
   end
 

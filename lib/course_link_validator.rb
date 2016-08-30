@@ -273,7 +273,10 @@ class CourseLinkValidator
   # ping the url and make sure we get a 200
   def reachable_url?(url)
     begin
-      response = CanvasHttp.get(url, {}, 9)
+      response = CanvasHttp.head(url, { "Accept-Encoding" => "gzip" }, redirect_limit: 9)
+      if %w{404 405}.include?(response.code)
+        response = CanvasHttp.get(url, { "Accept-Encoding" => "gzip" }, redirect_limit: 9)
+      end
 
       case response.code
       when /^2/ # 2xx code

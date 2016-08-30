@@ -55,6 +55,7 @@ class AssignmentsController < ApplicationController
   end
 
   def show
+    rce_js_env(:highrisk)
     @assignment ||= @context.assignments.find(params[:id])
     if @assignment.deleted?
       respond_to do |format|
@@ -94,10 +95,14 @@ class AssignmentsController < ApplicationController
       log_asset_access(@assignment, "assignments", @assignment.assignment_group)
 
       if request.format.html?
-        if @assignment.submission_types == 'online_quiz' && @assignment.quiz
+        if @assignment.quiz?
           return redirect_to named_context_url(@context, :context_quiz_url, @assignment.quiz.id)
-        elsif @assignment.submission_types == 'discussion_topic' && @assignment.discussion_topic && @assignment.discussion_topic.grants_right?(@current_user, session, :read)
+        elsif @assignment.discussion_topic? &&
+          @assignment.discussion_topic.grants_right?(@current_user, session, :read)
           return redirect_to named_context_url(@context, :context_discussion_topic_url, @assignment.discussion_topic.id)
+        elsif @context.feature_enabled?(:conditional_release) && @assignment.wiki_page? &&
+          @assignment.wiki_page.grants_right?(@current_user, session, :read)
+          return redirect_to named_context_url(@context, :context_wiki_page_url, @assignment.wiki_page.id)
         elsif @assignment.submission_types == 'attendance'
           return redirect_to named_context_url(@context, :context_attendance_url, :anchor => "assignment/#{@assignment.id}")
         elsif @assignment.submission_types == 'external_tool' && @assignment.external_tool_tag && @unlocked
@@ -133,7 +138,7 @@ class AssignmentsController < ApplicationController
 
       @assignment_menu_tools = external_tools_display_hashes(:assignment_menu)
 
-      @mark_done = MarkDonePresenter.new(self, @context, params["module_item_id"], @current_user)
+      @mark_done = MarkDonePresenter.new(self, @context, params["module_item_id"], @current_user, @assignment)
 
       respond_to do |format|
         format.html { render }
@@ -284,7 +289,7 @@ class AssignmentsController < ApplicationController
   end
 
   def syllabus
-    js_env(Services::RichContent.env_for(@domain_root_account, risk_level: :sidebar))
+    rce_js_env(:sidebar)
     add_crumb t '#crumbs.syllabus', "Syllabus"
     active_tab = "Syllabus"
     if authorized_action(@context, @current_user, [:read, :read_syllabus])
@@ -295,12 +300,12 @@ class AssignmentsController < ApplicationController
       @undated_events = @events.select {|e| e.start_at == nil}
       @dates = (@events.select {|e| e.start_at != nil}).map {|e| e.start_at.to_date}.uniq.sort.sort
       if @context.grants_right?(@current_user, session, :read)
-        @syllabus_body = api_user_content(@context.syllabus_body, @context)
+        @syllabus_body = public_user_content(@context.syllabus_body, @context)
       else
         # the requesting user may not have :read if the course syllabus is public, in which
         # case, we pass nil as the user so verifiers are added to links in the syllabus body
         # (ability for the user to read the syllabus was checked above as :read_syllabus)
-        @syllabus_body = api_user_content(@context.syllabus_body, @context, nil, {}, true)
+        @syllabus_body = public_user_content(@context.syllabus_body, @context, nil, true)
       end
 
       hash = { :CONTEXT_ACTION_SOURCE => :syllabus }
@@ -365,13 +370,16 @@ class AssignmentsController < ApplicationController
       redirect_to new_course_quiz_url(@context, index_edit_params)
     elsif params[:submission_types] == 'discussion_topic'
       redirect_to new_polymorphic_url([@context, :discussion_topic], index_edit_params)
+    elsif @context.feature_enabled?(:conditional_release) && params[:submission_types] == 'wiki_page'
+      redirect_to new_polymorphic_url([@context, :wiki_page], index_edit_params)
     else
       edit
     end
   end
 
   def edit
-    js_env(Services::RichContent.env_for(@domain_root_account, risk_level: :highrisk))
+    rce_js_env(:highrisk)
+
     @assignment ||= @context.assignments.active.find(params[:id])
     if authorized_action(@assignment, @current_user, @assignment.new_record? ? :create : :update)
       @assignment.title = params[:title] if params[:title]
@@ -385,6 +393,9 @@ class AssignmentsController < ApplicationController
         return redirect_to edit_course_quiz_url(@context, @assignment.quiz, index_edit_params)
       elsif @assignment.submission_types == 'discussion_topic' && @assignment.discussion_topic
         return redirect_to edit_polymorphic_url([@context, @assignment.discussion_topic], index_edit_params)
+      elsif @context.feature_enabled?(:conditional_release) &&
+        @assignment.submission_types == 'wiki_page' && @assignment.wiki_page
+        return redirect_to edit_polymorphic_url([@context, @assignment.wiki_page], index_edit_params)
       end
 
       assignment_groups = @context.assignment_groups.active
@@ -438,7 +449,7 @@ class AssignmentsController < ApplicationController
       hash[:CONTEXT_ACTION_SOURCE] = :assignments
       append_sis_data(hash)
       js_env(hash)
-      @padless = true
+      conditional_release_js_env(@assignment)
       render :edit
     end
   end
@@ -461,14 +472,8 @@ class AssignmentsController < ApplicationController
       if params[:publish]
         @assignment.workflow_state = 'published'
       end
-      if params[:assignment_type] == "quiz"
-        params[:assignment][:submission_types] = "online_quiz"
-      elsif params[:assignment_type] == "attendance"
-        params[:assignment][:submission_types] = "attendance"
-      elsif params[:assignment_type] == "discussion_topic"
-        params[:assignment][:submission_types] = "discussion_topic"
-      elsif params[:assignment_type] == "external_tool"
-        params[:assignment][:submission_types] = "external_tool"
+      if Assignment.assignment_type?(params[:assignment_type])
+        params[:assignment][:submission_types] = Assignment.get_submission_type(params[:assignment_type])
       end
       respond_to do |format|
         @assignment.content_being_saved_by(@current_user)
@@ -480,7 +485,12 @@ class AssignmentsController < ApplicationController
           @assignment.reload
           flash[:notice] = t 'notices.updated', "Assignment was successfully updated."
           format.html { redirect_to named_context_url(@context, :context_assignment_url, @assignment) }
-          format.json { render :json => @assignment.as_json(:permissions => {:user => @current_user, :session => session}, :include => [:quiz, :discussion_topic]), :status => :ok }
+          format.json do
+            render json: @assignment.as_json(
+              permissions: { user: @current_user, session: session },
+              include: [:quiz, :discussion_topic, :wiki_page]
+            ), status: :ok
+          end
         else
           format.html { render :edit }
           format.json { render :json => @assignment.errors, :status => :bad_request }

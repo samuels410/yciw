@@ -16,6 +16,11 @@
   js_bundle :assignment_show
 %>
 
+<% if @assignment.omit_from_final_grade %>
+  <div class="alert alert-info omit-from-final-warning">
+    <%= t("This assignment does not count toward the final grade.") %>
+  </div>
+<% end %>
 <div id="assignment_show" class="assignment content_underline_links">
   <% if can_do(@context, @current_user, :read_as_admin) %>
     <div class='assignment-title'>
@@ -93,7 +98,7 @@
       </li>
       <li>
         <span class='title'><%= t :points, 'Points' %></span>
-        <span class='value'><%= @assignment.points_possible || t(:no_points, 'None') %></span>
+        <span class='value'><%= round_if_whole(@assignment.points_possible) || t(:no_points, 'None') %></span>
       </li>
       <% if @assignment.expects_submission? || @assignment.expects_external_submission? %>
         <% turnitin_text = turnitin_active? ? ' ' + t(:turnitin_enabled_short, '(Turnitin enabled)') : '' %>
@@ -132,7 +137,7 @@
         <div class="control-group">
           <div class="control-label"><%= t(:points, 'Points') %></div>
           <div class="controls">
-            <span class="value points_possible"><%= @assignment.points_possible || t(:no_points, 'None') %></span>
+            <span class="value points_possible"><%= round_if_whole(@assignment.points_possible) || t(:no_points, 'None') %></span>
           </div>
         </div>
         <div class="control-group">
@@ -179,10 +184,13 @@
       <div class="content-box">
         <a
           href="<%= context_url(@context, :context_rubrics_url) %>"
-          class="add_rubric_link btn button-sidebar-wide icon-add"
+          class="add_rubric_link Button icon-plus"
           style="<%= hidden if @assignment.rubric_association %>"
           role="button"
-        ><%= t 'links.add_rubric', "Add Rubric" %></a>
+        >
+          <span aria-hidden="true"><%= t 'links.add_rubric', "Rubric" %></span>
+          <span class="screenreader-only"><%= t('Add Rubric') %></span>
+        </a>
       </div>
     <% end %>
 

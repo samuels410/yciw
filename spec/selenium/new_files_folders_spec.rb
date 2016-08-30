@@ -35,49 +35,45 @@ describe "better_file_browsing, folders" do
       folder_rename_to = "test folder"
       edit_name_from_cog_icon(folder_rename_to)
       wait_for_ajaximations
-      expect(fln("new test folder")).not_to be_present
+      expect(f("#content")).not_to contain_link("new test folder")
       expect(fln("test folder")).to be_present
     end
 
     it "should validate xss on folder text", priority: "1", test_id: 133113 do
      add_folder('<script>alert("Hi");</script>')
-     expect(ff('.media-body')[0].text).to eq '<script>alert("Hi");<_script>'
+     expect(ff('.ef-name-col__text')[0].text).to eq '<script>alert("Hi");<_script>'
     end
 
     it "should move a folder", priority: "1", test_id: 133125 do
-      ff('.media-body')[0].click
+      ff('.ef-name-col__text')[0].click
       wait_for_ajaximations
       add_folder("test folder")
       move("test folder", 0, :cog_icon)
       wait_for_ajaximations
-      expect(f("#flash_message_holder").text).to eq "test folder moved to course files\nClose"
+      expect(f("#flash_message_holder").text).to eq "test folder moved to course files"
       expect(ff(".treeLabel span")[2].text).to eq "test folder"
     end
 
     it "should delete a folder from cog icon", priority: "1", test_id: 223502 do
       delete(0, :cog_icon)
-      expect(fln("new test folder")).not_to be_present
+      expect(f("#content")).not_to contain_link("new test folder")
     end
 
     it "should unpublish and publish a folder from cloud icon", priority: "1", test_id: 220354 do
       set_item_permissions(:unpublish, :cloud_icon)
       expect(f('.btn-link.published-status.unpublished')).to be_displayed
-      expect(driver.find_element(:class => 'unpublished')).to be_displayed
       set_item_permissions(:publish, :cloud_icon)
       expect(f('.btn-link.published-status.published')).to be_displayed
-      expect(driver.find_element(:class => 'published')).to be_displayed
     end
 
     it "should make folder available to student with link", priority: "1", test_id: 133110 do
       set_item_permissions(:restricted_access, :available_with_link, :cloud_icon)
       expect(f('.btn-link.published-status.hiddenState')).to be_displayed
-      expect(driver.find_element(:class => 'hiddenState')).to be_displayed
     end
 
     it "should make folder available to student within given timeframe", priority: "1", test_id: 193160 do
       set_item_permissions(:restricted_access, :available_with_timeline, :cloud_icon)
       expect(f('.btn-link.published-status.restricted')).to be_displayed
-      expect(driver.find_element(:class => 'restricted')).to be_displayed
     end
 
     it "should delete folder from toolbar", priority: "1", test_id: 133105 do
@@ -126,19 +122,19 @@ describe "better_file_browsing, folders" do
        get "/courses/#{@course.id}/files"
        create_new_folder
        add_folder("New Folder")
-       ff('.media-body')[1].click
+       ff('.ef-name-col__text')[1].click
        wait_for_ajaximations
        add_folder("New Folder 1.1")
        ff(".icon-folder")[1].click
-       expect(ff('.media-body')[0].text).to eq "New Folder 1.1"
+       expect(ff('.ef-name-col__text')[0].text).to eq "New Folder 1.1"
        get "/courses/#{@course.id}/files"
-       expect(ff('.media-body')[0].text).to eq "example.pdf"
+       expect(ff('.ef-name-col__text')[0].text).to eq "example.pdf"
        expect(f('.ef-folder-content')).to be_displayed
      end
 
      it "should create 15 new child folders and show them in the FolderTree when expanded", priority: "2", test_id: 121886 do
        create_new_folder
-       f('.ef-name-col > a.media').click
+       f('.ef-name-col > a.ef-name-col__link').click
        wait_for_ajaximations
        1.upto(15) do |number_of_folders|
         folder_regex = number_of_folders > 1 ? Regexp.new("New Folder\\s#{number_of_folders}") : "New Folder"
@@ -149,7 +145,7 @@ describe "better_file_browsing, folders" do
        get "/courses/#{@course.id}/files"
        f('ul.collectionViewItems > li > a > i.icon-mini-arrow-right').click
        wait_for_ajaximations
-       keep_trying_until { expect(driver.find_elements(:css, 'ul.collectionViewItems > li > ul.treeContents > li.subtrees > ul.collectionViewItems li').count).to eq 15 }
+       expect(ff('ul.collectionViewItems > li > ul.treeContents > li.subtrees > ul.collectionViewItems li')).to have_size(15)
      end
   end
 end

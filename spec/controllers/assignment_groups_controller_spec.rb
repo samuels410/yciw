@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011-2016 Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -17,7 +17,7 @@
 #
 
 require_relative '../spec_helper'
-require File.expand_path(File.dirname(__FILE__) + '/../apis/api_spec_helper')
+require_relative '../apis/api_spec_helper'
 
 describe AssignmentGroupsController do
   def course_group
@@ -25,6 +25,11 @@ describe AssignmentGroupsController do
   end
 
   describe 'GET index' do
+    let(:assignments_ids) do
+      json_response = json_parse(response.body)
+      json_response.first['assignments'].map { |assignment| assignment['id'] }
+    end
+
     describe 'filtering by grading period and overrides' do
       let!(:assignment) { course.assignments.create!(name: "Assignment without overrides", due_at: Date.new(2015, 1, 15)) }
       let!(:assignment_with_override) do
@@ -62,7 +67,7 @@ describe AssignmentGroupsController do
         )
       end
 
-      let(:grading_period_group) { course.grading_period_groups.create! }
+      let(:grading_period_group) { Factories::GradingPeriodGroupHelper.new.legacy_create_for_course(course) }
       let(:course) do
         course = sub_account.courses.create!
         course.offer!
@@ -79,13 +84,12 @@ describe AssignmentGroupsController do
         end
 
         let(:index_params) do
-          { course_id: course.id, exclude_descriptions: true, format: :json,
-            include: ['assignments', 'assignment_visibility', 'overrides'] }
-        end
-
-        let(:assignments_ids) do
-          json_response = json_parse(response.body)
-          json_response.first['assignments'].map { |assignment| assignment['id'] }
+          {
+            course_id: course.id,
+            exclude_response_fields: ['description'],
+            format: :json,
+            include: ['assignments', 'assignment_visibility', 'overrides']
+          }
         end
 
         it 'when there is an assignment with overrides, filter grading periods by the override\'s due_at' do
@@ -131,6 +135,29 @@ describe AssignmentGroupsController do
           expect(assignments_ids).to include assignment_with_override.id
           expect(assignments_ids).to include assignment.id
         end
+      end
+    end
+
+    describe 'filtering assignments by submission type' do
+      before(:once) do
+        course_with_teacher(active_all: true)
+        @vanilla_assignment = @course.assignments.create!(name: "Boring assignment")
+        @discussion_assignment = @course.assignments.create!(
+          name: "Discussable assignment",
+          submission_types: "discussion_topic"
+        )
+      end
+
+      it 'should filter assignments by the submission_type' do
+        user_session(@teacher)
+        get :index, {
+          course_id: @course.id,
+          format: :json,
+          include: ['assignments'],
+          exclude_assignment_submission_types: ['discussion_topic']
+        }
+        expect(assignments_ids).to include @vanilla_assignment.id
+        expect(assignments_ids).not_to include @discussion_assignment.id
       end
     end
 

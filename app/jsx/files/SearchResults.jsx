@@ -8,8 +8,10 @@ define([
   'compiled/models/Folder',
   'jsx/files/FolderChild',
   'jsx/files/LoadingIndicator',
-  'jsx/files/FilePreview'
-  ], function(I18n, _, React, SearchResults, NoResults, ColumnHeaders, Folder, FolderChild, LoadingIndicator, FilePreview) {
+  'jsx/files/FilePreview',
+  'page',
+  'compiled/react_files/modules/FocusStore'
+], function(I18n, _, React, SearchResults, NoResults, ColumnHeaders, Folder, FolderChild, LoadingIndicator, FilePreview, Page, FocusStore) {
 
   SearchResults.displayErrors =  function (errors) {
     var error_message= null
@@ -36,8 +38,13 @@ define([
     );
   }
 
+  SearchResults.closeFilePreview = function (url) {
+    page(url);
+    FocusStore.setFocusToItem();
+  }
+
   SearchResults.renderFilePreview = function () {
-    if (this.getQuery().preview != null && this.state.collection.length) {
+    if (this.props.query.preview != null && this.state.collection.length) {
       return (
         /*
          * Prepare and render the FilePreview if needed.
@@ -45,10 +52,12 @@ define([
          */
         <FilePreview
           isOpen={true}
-          params={this.getParams()}
-          query={this.getQuery()}
+          params={this.props.params}
+          query={this.props.query}
           collection={this.state.collection}
           usageRightsRequiredForContext={this.props.usageRightsRequiredForContext}
+          splat={this.props.splat}
+          closePreview={this.closeFilePreview}
         />
       )
     }
@@ -58,7 +67,7 @@ define([
     if (this.state.errors) {
       return (this.displayErrors(this.state.errors))
     } else if (this.state.collection.loadedAll && (this.state.collection.length == 0)) {
-      return (<NoResults search_term={this.getQuery().search_term } />)
+      return (<NoResults search_term={this.props.query.search_term } />)
     } else {
       return (
         <div role='grid'>
@@ -67,14 +76,15 @@ define([
           </div>
           <ColumnHeaders
             to='search'
-            query= {this.getQuery()}
-            params={this.getParams()}
+            query= {this.props.query}
+            params={this.props.params}
+            pathname={this.props.pathname}
             toggleAllSelected={this.props.toggleAllSelected}
             areAllItemsSelected={this.props.areAllItemsSelected}
             usageRightsRequiredForContext={this.props.usageRightsRequiredForContext}
           />
           {
-            this.state.collection.models.sort(Folder.prototype.childrenSorter.bind(this.state.collection, this.getQuery().sort, this.getQuery().order)).map((child) => {
+            this.state.collection.models.sort(Folder.prototype.childrenSorter.bind(this.state.collection, this.props.query.sort, this.props.query.order)).map((child) => {
               return (
                 <FolderChild
                   key={child.cid}

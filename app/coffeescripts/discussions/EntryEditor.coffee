@@ -4,7 +4,12 @@ define [
   'compiled/editor/EditorToggle'
   'compiled/str/apiUserContent'
   'vendor/jquery.ba-tinypubsub'
-], (I18n, $, EditorToggle, apiUserContent, {publish}) ->
+  'jsx/shared/rce/RichContentEditor'
+], (I18n, $, EditorToggle, apiUserContent, {publish}, RichContentEditor) ->
+
+  ###
+  xsslint safeString.property content
+  ###
 
   ##
   # Makes an EntryView's model message editable with TinyMCE
@@ -19,7 +24,8 @@ define [
     ##
     # @param {EntryView} view
     constructor: (@view) ->
-      super @getEditingElement(), switchViews: true
+      super @getEditingElement(),
+        switchViews: true
       @cancelButton = @createCancelButton()
       @done.addClass 'btn-small'
 
@@ -29,7 +35,7 @@ define [
     # @param {Bool} opts.cancel - doesn't submit
     # @api public
     display: (opts) ->
-      super
+      super opts
       @cancelButton.detach()
       if opts?.cancel isnt true
         @view.model.set('updated_at', (new Date).toISOString())
@@ -85,4 +91,3 @@ define [
       @view.model.set
         messageNotification: I18n.t('save_failed', 'Failed to save, please try again later')
       @edit()
-

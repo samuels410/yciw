@@ -20,7 +20,7 @@ require File.expand_path(File.dirname(__FILE__) + '/../api_spec_helper')
 require File.expand_path(File.dirname(__FILE__) + '/../locked_spec')
 require File.expand_path(File.dirname(__FILE__) + '/../../sharding_spec_helper')
 
-describe AssignmentsApiController, type: :request do
+describe AssignmentsApiController, :include_lti_spec_helpers, type: :request do
   include Api
   include Api::V1::Assignment
   include Api::V1::Submission
@@ -304,7 +304,7 @@ describe AssignmentsApiController, type: :request do
 
         expect(response).not_to be_success
         json = JSON.parse response.body
-        expect(json["errors"]["bucket"].first["message"]).to eq "bucket name must be one of the following: past, overdue, undated, ungraded, upcoming, future"
+        expect(json["errors"]["bucket"].first["message"]).to eq "bucket name must be one of the following: past, overdue, undated, ungraded, unsubmitted, upcoming, future"
       end
 
       def assignment_index_bucketed_api_call(bucket)
@@ -773,6 +773,20 @@ describe AssignmentsApiController, type: :request do
 
     before :once do
       course_with_teacher(:active_all => true)
+    end
+
+    it 'should respect post_to_sis default' do
+      a = @course.account
+      a.settings[:sis_default_grade_export] = {locked: false, value: true}
+      a.save!
+      group = @course.assignment_groups.create!({name: "first group"})
+      group_category = @course.group_categories.create!(name: "foo")
+      json = api_create_assignment_in_course(@course, create_assignment_json(group, group_category))
+      expect(json['post_to_sis']).to eq true
+      a.settings[:sis_default_grade_export] = {locked: false, value: false}
+      a.save!
+      json = api_create_assignment_in_course(@course, create_assignment_json(group, group_category))
+      expect(json['post_to_sis']).to eq false
     end
 
     it "returns unauthorized for users who do not have permission" do
@@ -2109,7 +2123,7 @@ describe AssignmentsApiController, type: :request do
           'html_url' =>
             "http://www.example.com/courses/#{@course.id}/discussion_topics/#{@topic.id}",
           'attachments' => [],
-          'permissions' => {'delete' => true, 'attach' => true, 'update' => true},
+          'permissions' => {'delete' => true, 'attach' => true, 'update' => true, 'reply' => true},
           'discussion_type' => 'side_comment',
           'group_category_id' => nil,
           'can_group' => true,
@@ -2556,6 +2570,49 @@ describe AssignmentsApiController, type: :request do
       @assignment = @course.assignments.create!(:title => "some assignment")
     end
 
+    it 'updates the external tool content_id' do
+      mh = create_message_handler(create_resource_handler(create_tool_proxy))
+      tool_tag = ContentTag.new(url: 'http://www.example.com', new_tab: false, tag_type: 'context_module')
+      tool_tag.context = @assignment
+      tool_tag.save!
+      params = {
+        "submission_types" => ["external_tool"],
+        "external_tool_tag_attributes" => {
+          "url" => "https://testvmserver.test.com/canvas/test/",
+          "content_type" => "lti/message_handler",
+          "content_id" => mh.id,
+          "new_tab" => "0"
+        }
+      }
+      assignment = update_from_params(@assignment, params, @user)
+      tag = assignment.external_tool_tag
+      expect(tag.content_id).to eq mh.id
+      expect(tag.content_type).to eq "Lti::MessageHandler"
+    end
+
+    it 'sets the context external tool type' do
+      tool = ContextExternalTool.new( name: 'test tool', consumer_key:'test',
+        shared_secret: 'shh', url: 'http://www.example.com')
+      tool.context = @course
+      tool.save!
+      tool_tag = ContentTag.new(url: 'http://www.example.com', new_tab: false, tag_type: 'context_module')
+      tool_tag.context = @assignment
+      tool_tag.save!
+      params = {
+        "submission_types" => ["external_tool"],
+        "external_tool_tag_attributes" => {
+          "url" => "https://testvmserver.test.com/canvas/test/",
+          "content_type" => "context_external_tool",
+          "content_id" => tool.id,
+          "new_tab" => "0"
+        }
+      }
+      assignment = update_from_params(@assignment, params, @user)
+      tag = assignment.external_tool_tag
+      expect(tag.content_id).to eq tool.id
+      expect(tag.content_type).to eq "ContextExternalTool"
+    end
+
     it "does not update integration_data when lacking permission" do
       json = %{{"key": "value"}}
       params = {"integration_data" => json}
@@ -2575,7 +2632,7 @@ describe AssignmentsApiController, type: :request do
 
     it "unmuting publishes hidden comments" do
       @assignment.mute!
-      @assignment.grade_student @student, comment: "blah blah blah"
+      @assignment.update_submission @student, comment: "blah blah blah", author: @teacher
       sub = @assignment.submission_for_student(@student)
       comment = sub.submission_comments.first
       expect(comment.hidden?).to eql true

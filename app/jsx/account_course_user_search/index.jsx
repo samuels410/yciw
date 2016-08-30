@@ -1,22 +1,20 @@
 define([
   "react",
-  "i18n!account_course_user_search",
   "bower/react-tabs/dist/react-tabs",
   "underscore",
-  "./CoursesPane",
-  "./UsersPane",
+  "jsx/shared/helpers/permissionFilter",
   "./CoursesStore",
   "./TermsStore",
   "./AccountsTreeStore",
   "./UsersStore"
-], function(React, I18n, ReactTabs, _, CoursesPane, UsersPane, CoursesStore, TermsStore, AccountsTreeStore, UsersStore) {
+], function(React, ReactTabs, _, permissionFilter, CoursesStore, TermsStore, AccountsTreeStore, UsersStore) {
 
-  var { Tab, Tabs, TabList, TabPanel } = ReactTabs;
-  var { string, bool, shape } = React.PropTypes;
+  const { Tab, Tabs, TabList, TabPanel } = ReactTabs;
+  const { string, bool, shape } = React.PropTypes;
 
-  var stores = [CoursesStore, TermsStore, AccountsTreeStore, UsersStore];
+  const stores = [CoursesStore, TermsStore, AccountsTreeStore, UsersStore];
 
-  var App = React.createClass({
+  const AccountCourseUserSearch = React.createClass({
     propTypes: {
       accountId: string.isRequired,
       permissions: shape({
@@ -25,75 +23,45 @@ define([
       }).isRequired
     },
 
-    getInitialState() {
-      return {
-        selectedTab: 0
-      }
-    },
-
     componentWillMount() {
-      stores.forEach((s) => s.reset({accountId: this.props.accountId}));
-    },
-
-    handleSelected(selectedTab) {
-      this.setState({selectedTab});
+      stores.forEach((s) => {
+        s.reset({ accountId: this.props.accountId });
+      });
     },
 
     render() {
-      var { permissions, accountId } = this.props;
+      const { timezones, permissions, accountId, store } = this.props;
 
-      var tabs = [];
-      var panels = [];
-      if (permissions.can_read_course_list) {
-        tabs.push(<Tab>{I18n.t("Courses")}</Tab>);
-        panels.push(
-          <TabPanel>
-            <CoursesPane />
+      const tabList = store.getState().tabList;
+      const tabs = permissionFilter(tabList.tabs, permissions);
+
+      const headers = tabs.map((tab, index) => {
+        return (
+          <Tab key={index}>
+            <a href={tabList.basePath + tab.path} title={tab.title}>{tab.title}</a>
+          </Tab>
+        );
+      });
+
+      const panels = tabs.map((tab, index) => {
+        const Pane = tab.pane;
+        return (
+          <TabPanel key={index}>
+            <Pane {...this.props} />
           </TabPanel>
         );
-      }
-      if (permissions.can_read_roster) {
-        tabs.push(<Tab>{I18n.t("People")}</Tab>);
-        panels.push(
-          <TabPanel>
-            <UsersPane accountId={accountId}/>
-          </TabPanel>
-        );
-      }
+      });
 
       return (
-        <div>
-          <div className="pad-box-mini no-sides grid-row middle-xs margin-none">
-            <div className="col-xs-8 padding-none">
-              <h1>{I18n.t("Search")}</h1>
-            </div>
-            <div className="col-xs-4 padding-none align-right">
-              <div>
-                {
-                  permissions.analytics &&
-                  <a href={`/accounts/${accountId}/analytics`} className="btn button-group">{I18n.t("Analytics")}</a>
-                }
-                {
-                  permissions.theme_editor &&
-                  <a href={`/accounts/${accountId}/theme_editor`} className="btn button-group">{I18n.t("Theme Editor")}</a>
-                }
-              </div>
-            </div>
-          </div>
-
-          <Tabs
-            onSelect={this.handleSelected}
-            selectedIndex={this.state.selectedTab}
-          >
-            <TabList>
-              {tabs}
-            </TabList>
-            {panels}
-          </Tabs>
-        </div>
+        <Tabs selectedIndex={tabList.selected}>
+          <TabList>
+            {headers}
+          </TabList>
+          {panels}
+        </Tabs>
       );
     }
   });
 
-  return App;
+  return AccountCourseUserSearch;
 });

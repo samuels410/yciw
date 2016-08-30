@@ -8,12 +8,11 @@ if (typeof ENV != 'undefined'){
   }
   if (ENV && ENV.CONTEXT_TIMEZONE) {
     var contextTimezoneData = reqTz("./" + ENV.CONTEXT_TIMEZONE + ".js");
-    tz.preload(contextTimezoneData, ENV.CONTEXT_TIMEZONE);
+    tz.preload(ENV.CONTEXT_TIMEZONE, contextTimezoneData);
   }
-  if (ENV && ENV.LOCALE) {
-    var localeName = ENV.LOCALE.replace('-', '_');
-    var localeData = reqTz("./" + localeName + ".js");
-    tz.applyFeature(localeData, localeName);
+  if (ENV && ENV.BIGEASY_LOCALE) {
+    var localeData = reqTz("./" + ENV.BIGEASY_LOCALE + ".js");
+    tz.applyFeature(localeData, ENV.BIGEASY_LOCALE);
   }
 }
 module.exports = tz;

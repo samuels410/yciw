@@ -26,6 +26,8 @@ module CC
       WikiPages::ScopedToUser.new(@course, @user, scope).scope.each do |page|
         next unless export_object?(page)
         begin
+          add_exported_asset(page)
+
           migration_id = CCHelper.create_key(page)
           file_name = "#{page.url}.html"
           relative_path = File.join(CCHelper::WIKI_FOLDER, file_name)
@@ -36,6 +38,8 @@ module CC
           meta_fields[:workflow_state] = page.workflow_state
           meta_fields[:front_page] = page.is_front_page?
           meta_fields[:module_locked] = page.locked_by_module_item?(@user, true).present?
+          meta_fields[:assignment_identifier] =
+            page.for_assignment? ? CCHelper.create_key(page.assignment) : nil
 
           File.open(path, 'w') do |file|
             file << @html_exporter.html_page(page.body, page.title, meta_fields)

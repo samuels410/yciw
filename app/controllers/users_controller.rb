@@ -175,7 +175,7 @@ class UsersController < ApplicationController
       add_crumb(@current_user.short_name, crumb_url)
       add_crumb(t('crumbs.grades', 'Grades'), grades_path)
 
-      current_active_enrollments = @user.enrollments.current.preload(:course).shard(@user).to_a
+      current_active_enrollments = @user.enrollments.current.preload(:course, :enrollment_state).shard(@user).to_a
 
       @presenter = GradesPresenter.new(current_active_enrollments)
 
@@ -199,7 +199,7 @@ class UsersController < ApplicationController
 
     course = enrollment.course
     grading_period_id = params[:grading_period_id].to_i
-    grading_period = GradingPeriod.context_find(course, grading_period_id)
+    grading_period = GradingPeriod.for(course).find_by(id: grading_period_id)
     grading_periods = {
       course.id => {
         :periods => [grading_period],
@@ -207,7 +207,7 @@ class UsersController < ApplicationController
       }
     }
     calculator = grade_calculator([enrollment.user_id], course, grading_periods)
-    totals = calculator.compute_scores.first.first.first
+    totals = calculator.compute_scores.first[:current]
     totals[:hide_final_grades] = course.hide_final_grades?
     render json: totals
   end
@@ -422,7 +422,7 @@ class UsersController < ApplicationController
             users = UserSearch.scope_for(@context, @current_user)
           end
 
-          includes = (params[:include] || []) & %w{avatar_url email last_login}
+          includes = (params[:include] || []) & %w{avatar_url email last_login time_zone}
           users = users.with_last_login if includes.include?('last_login')
           users = Api.paginate(users, self, api_v1_account_users_url, page_opts)
           user_json_preloads(users, includes.include?('email'))
@@ -1009,7 +1009,7 @@ class UsersController < ApplicationController
         shard(@user).
         where("enrollments.workflow_state<>'deleted' AND courses.workflow_state<>'deleted'").
         eager_load(:course).
-        preload(:associated_user, :course_section, course: { enrollment_term: :enrollment_dates_overrides }).to_a
+        preload(:associated_user, :course_section, :enrollment_state, course: { enrollment_term: :enrollment_dates_overrides }).to_a
 
       # restrict view for other users
       if @user != @current_user
@@ -1048,7 +1048,7 @@ class UsersController < ApplicationController
   #
   # @returns User
   def api_show
-    @user = params[:id] && params[:id] != 'self' ? api_find(User, params[:id]) : @current_user
+    @user = api_find(User, params[:id])
     if @user.grants_any_right?(@current_user, session, :manage, :manage_user_details)
       render :json => user_json(@user, @current_user, session, %w{locale avatar_url permissions}, @current_user.pseudonym.account)
     else
@@ -1532,7 +1532,7 @@ class UsersController < ApplicationController
           end
           format.html { redirect_to user_url(@user) }
           format.json {
-            render :json => user_json(@user, @current_user, session, %w{locale avatar_url email},
+            render :json => user_json(@user, @current_user, session, %w{locale avatar_url email time_zone},
               @current_user.pseudonym.account) }
         else
           format.html { render :edit }
@@ -1803,7 +1803,9 @@ class UsersController < ApplicationController
   # @API Merge user into another user
   #
   # Merge a user into another user.
-  # To merge users, the caller must have permissions to manage both users.
+  # To merge users, the caller must have permissions to manage both users. This
+  # should be considered irreversible. This will delete the user and move all
+  # the data into the destination user.
   #
   # When finding users by SIS ids in different accounts the
   # destination_account_id is required.
@@ -1842,6 +1844,39 @@ class UsersController < ApplicationController
                                   %w{locale},
                                   destination_account))
       end
+    end
+  end
+
+  # @API Split merged users into separate users
+  #
+  # Merged users cannot be fully restored to their previous state, but this will
+  # attempt to split as much as possible to the previous state.
+  # To split a merged user, the caller must have permissions to manage all of
+  # the users logins. If there are multiple users that have been merged into one
+  # user it will split each merge into a separate user.
+  # A split can only happen within 90 days of a user merge. A user merge deletes
+  # the previous user and may be permanently deleted. In this scenario we create
+  # a new user object and proceed to move as much as possible to the new user.
+  # The user object will not have preserved the name or settings from the
+  # previous user. Some items may have been deleted during a user_merge that
+  # cannot be restored, and/or the data has become stale because of other
+  # changes to the objects since the time of the user_merge.
+  #
+  # @example_request
+  #     curl https://<canvas>/api/v1/users/<user_id>/split \
+  #          -X POST \
+  #          -H 'Authorization: Bearer <token>'
+  #
+  # @returns [User]
+  def split
+    user = api_find(User, params[:id])
+    unless UserMergeData.active.where(user_id: user).where('created_at > ?', 90.days.ago).exists?
+      return render json: {message: t('Nothing to split off of this user')}, status: :bad_request
+    end
+
+    if authorized_action(user, @current_user, :merge)
+      users = SplitUsers.split_db_users(user)
+      render :json => users.map { |u| user_json(u, @current_user, session) }
     end
   end
 
@@ -1961,9 +1996,9 @@ class UsersController < ApplicationController
     calculator = grade_calculator(user_ids, course, grading_periods)
     grades = {}
     calculator.compute_scores.each_with_index do |score, index|
-     computed_score = score.first.first[:grade]
-     user_id = user_ids[index]
-     grades[user_id] = computed_score
+      computed_score = score[:current][:grade]
+      user_id = user_ids[index]
+      grades[user_id] = computed_score
     end
     grades
   end
@@ -2180,7 +2215,7 @@ class UsersController < ApplicationController
       end
       @user.save!
       if @observee && !@user.user_observees.where(user_id: @observee).exists?
-        @user.user_observees << @user.user_observees.create!{ |uo| uo.user_id = @observee.id }
+        @user.user_observees << @user.user_observees.create_or_restore(user_id: @observee)
       end
 
       if notify_policy.is_self_registration?

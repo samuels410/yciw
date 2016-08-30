@@ -397,6 +397,7 @@ describe Course do
     end
 
     def make_date_completed
+      @enrollment.reload
       @enrollment.start_at = 4.days.ago
       @enrollment.end_at = 2.days.ago
       @enrollment.save!
@@ -446,6 +447,15 @@ describe Course do
         expect(c.grants_right?(@designer, :update)).to be_truthy
       end
 
+      it "should grant permissions for unpublished courses" do
+        c.claim!
+        expect(c.grants_right?(@designer, :read_as_admin)).to be_truthy
+        expect(c.grants_right?(@designer, :read)).to be_truthy
+        expect(c.grants_right?(@designer, :manage)).to be_truthy
+        expect(c.grants_right?(@designer, :update)).to be_truthy
+        expect(c.grants_right?(@designer, :read_roster)).to be_truthy
+      end
+
       it "should grant read_as_admin, read_roster, and read_prior_roster to date-completed designer" do
         @enrollment.start_at = 4.days.ago
         @enrollment.end_at = 2.days.ago
@@ -483,6 +493,17 @@ describe Course do
       end
     end
 
+    context "as a 'student view' student" do
+      it "should grant read rights for unpublished courses" do
+        course
+        test_student = @course.student_view_student
+
+        expect(@course.grants_right?(test_student, :read)).to be_truthy
+        expect(@course.grants_right?(test_student, :read_grades)).to be_truthy
+        expect(@course.grants_right?(test_student, :read_forum)).to be_truthy
+      end
+    end
+
     context "as a student" do
       let_once :c do
         course_with_student(:active_user => 1)
@@ -505,11 +526,21 @@ describe Course do
         expect(c.grants_right?(@student, :read_forum)).to be_falsey
       end
 
+      it "should not grant permissions to active students of an unpublished course" do
+        expect(c).to be_created
+
+        @enrollment.update_attribute(:workflow_state, 'active')
+
+        expect(c.grants_right?(@student, :read)).to be_falsey
+        expect(c.grants_right?(@student, :read_grades)).to be_falsey
+        expect(c.grants_right?(@student, :read_forum)).to be_falsey
+      end
+
       it "should not grant read to completed students of an unpublished course" do
         expect(c).to be_created
         @enrollment.update_attribute(:workflow_state, 'completed')
         expect(@enrollment).to be_completed
-        expect(c.grants_right?(:read, @student)).to be_falsey
+        expect(c.grants_right?(@student, :read)).to be_falsey
       end
 
       it "should not grant read to soft-completed students of an unpublished course" do
@@ -520,7 +551,7 @@ describe Course do
         expect(c).to be_created
         @enrollment.update_attribute(:workflow_state, 'active')
         expect(@enrollment.state_based_on_date).to eq :completed
-        expect(c.grants_right?(:read, @student)).to be_falsey
+        expect(c.grants_right?(@student, :read)).to be_falsey
       end
 
       it "should grant :read_outcomes to students in the course" do
@@ -680,6 +711,14 @@ describe Course do
       category1.destroy
       course.reload
       expect(course.all_group_categories.count).to eq 2
+    end
+  end
+
+  context "turnitin" do
+    it "should return turnitin_originality" do
+      @course.account.turnitin_originality = "after_grading"
+      @course.account.save!
+      expect(@course.turnitin_originality).to eq("after_grading")
     end
   end
 end
@@ -964,10 +1003,10 @@ describe Course, "gradebook_to_csv" do
     expect(rows.length).to equal(3)
     expect(rows[0][-1]).to eq "Final Score"
     expect(rows[1][-1]).to eq "(read only)"
-    expect(rows[2][-1]).to eq "50"
+    expect(rows[2][-1]).to eq "50.0"
     expect(rows[0][-2]).to eq "Current Score"
     expect(rows[1][-2]).to eq "(read only)"
-    expect(rows[2][-2]).to eq "100"
+    expect(rows[2][-2]).to eq "100.0"
   end
 
   it "should order assignments and groups by position" do
@@ -1016,10 +1055,10 @@ describe Course, "gradebook_to_csv" do
                       "Some Assignment Group 2 Current Score",
                       "Some Assignment Group 2 Final Score"]
 
-    expect(rows[2][-10]).to eq "100"    # ag1 current score
-    expect(rows[2][-9]).to  eq "50"     # ag1 final score
-    expect(rows[2][-6]).to  eq "50"     # ag2 current score
-    expect(rows[2][-5]).to  eq "25"     # ag2 final score
+    expect(rows[2][-10]).to eq "100.0"    # ag1 current score
+    expect(rows[2][-9]).to  eq "50.0"     # ag1 final score
+    expect(rows[2][-6]).to  eq "50.0"     # ag2 current score
+    expect(rows[2][-5]).to  eq "25.0"     # ag2 final score
   end
 
   it "handles nil assignment due_dates if the group and position are the same" do
@@ -1137,10 +1176,10 @@ describe Course, "gradebook_to_csv" do
     expect(rows[2][-2]).to eq "A-"
     expect(rows[0][-3]).to eq "Final Score"
     expect(rows[1][-3]).to eq "(read only)"
-    expect(rows[2][-3]).to eq "90"
+    expect(rows[2][-3]).to eq "90.0"
     expect(rows[0][-4]).to eq "Current Score"
     expect(rows[1][-4]).to eq "(read only)"
-    expect(rows[2][-4]).to eq "90"
+    expect(rows[2][-4]).to eq "90.0"
   end
 
   it "should include sis ids if enabled" do
@@ -1236,7 +1275,16 @@ describe Course, "gradebook_to_csv" do
     e.update_attribute :workflow_state, 'completed'
 
     expect(GradebookExporter.new(@course, @teacher).to_csv).not_to include @student.name
-    expect(GradebookExporter.new(@course, @teacher, include_priors: true).to_csv).to include @student.name
+
+    @teacher.preferences[:gradebook_settings] =
+      { @course.id =>
+        {
+          'show_inactive_enrollments' => 'false',
+          'show_concluded_enrollments' => 'true'
+        }
+      }
+    @teacher.save!
+    expect(GradebookExporter.new(@course, @teacher).to_csv).to include @student.name
   end
 
   context "accumulated points" do
@@ -1251,14 +1299,14 @@ describe Course, "gradebook_to_csv" do
       expect(csv[0][-7]).to eq "Assignments Final Points"
       expect(csv[1][-8]).to eq "(read only)"
       expect(csv[1][-7]).to eq "(read only)"
-      expect(csv[2][-8]).to eq "8"
-      expect(csv[2][-7]).to eq "8"
+      expect(csv[2][-8]).to eq "8.0"
+      expect(csv[2][-7]).to eq "8.0"
       expect(csv[0][-4]).to eq "Current Points"
       expect(csv[0][-3]).to eq "Final Points"
       expect(csv[1][-4]).to eq "(read only)"
       expect(csv[1][-3]).to eq "(read only)"
-      expect(csv[2][-4]).to eq "8"
-      expect(csv[2][-3]).to eq "8"
+      expect(csv[2][-4]).to eq "8.0"
+      expect(csv[2][-3]).to eq "8.0"
     end
 
     it "doesn't include points for weighted courses" do
@@ -1389,11 +1437,11 @@ describe Course, "gradebook_to_csv" do
       csv = GradebookExporter.new(@course, @teacher).to_csv
       expect(csv).not_to be_nil
       rows = CSV.parse(csv)
-      expect(rows[2][4]).to eq "3"
+      expect(rows[2][4]).to eq "3.0"
       expect(rows[2][5]).to eq "N/A"
 
       expect(rows[3][4]).to eq "N/A"
-      expect(rows[3][5]).to eq "3"
+      expect(rows[3][5]).to eq "3.0"
 
       expect(rows[4][4]).to eq "N/A"
       expect(rows[4][5]).to eq "N/A"
@@ -1486,6 +1534,12 @@ describe Course, "tabs_available" do
       tab_ids = @course.tabs_available(@user).map{|t| t[:id] }
       expect(tab_ids).to eql(Course.default_tabs.map{|t| t[:id] })
     end
+
+    it "should not include Announcements without read_announcements rights" do
+      @course.account.role_overrides.create!(:role => teacher_role, :permission => 'read_announcements', :enabled => false)
+      tab_ids = @course.uncached_tabs_available(@teacher, {}).map{|t| t[:id] }
+      expect(tab_ids).to_not include(Course::TAB_ANNOUNCEMENTS)
+    end
   end
 
   context "students" do
@@ -1530,6 +1584,63 @@ describe Course, "tabs_available" do
       expect(tabs).not_to be_include(t2.asset_string)
     end
 
+    it 'sets the target value on the tab if the external tool has a windowTarget' do
+      tool = @course.context_external_tools.create!(
+        :url => "http://example.com/ims/lti",
+        :consumer_key => "asdf",
+        :shared_secret => "hjkl",
+        :name => "external tools",
+        :course_navigation => {
+          :text => "blah",
+          :url =>  "http://example.com/ims/lti",
+          :default => false,
+        }
+      )
+      tool.settings[:windowTarget] = "_blank"
+      tool.save!
+      tabs = @course.tabs_available
+      tab = tabs.find {|tab| tab[:id] == tool.asset_string}
+      expect(tab[:target]).to eq '_blank'
+    end
+
+    it 'includes in the args "display: borderless" if a target is set' do
+      tool = @course.context_external_tools.create!(
+        :url => "http://example.com/ims/lti",
+        :consumer_key => "asdf",
+        :shared_secret => "hjkl",
+        :name => "external tools",
+        :course_navigation => {
+          :text => "blah",
+          :url =>  "http://example.com/ims/lti",
+          :default => false,
+        }
+      )
+      tool.settings[:windowTarget] = "_blank"
+      tool.save!
+      tabs = @course.tabs_available
+      tab = tabs.find {|tab| tab[:id] == tool.asset_string}
+      expect(tab[:args]).to include({display: 'borderless'})
+    end
+
+    it 'does not let value other than "_blank" be set for target' do
+      tool = @course.context_external_tools.create!(
+        :url => "http://example.com/ims/lti",
+        :consumer_key => "asdf",
+        :shared_secret => "hjkl",
+        :name => "external tools",
+        :course_navigation => {
+          :text => "blah",
+          :url =>  "http://example.com/ims/lti",
+          :default => false,
+        }
+      )
+      tool.settings[:windowTarget] = "parent"
+      tool.save!
+      tabs = @course.tabs_available
+      tab = tabs.find {|tab| tab[:id] == tool.asset_string}
+      expect(tab.keys).not_to include :target
+    end
+
     it "should not include tabs for external tools if opt[:include_external] is false" do
       t1 = @course.context_external_tools.create!(
              :url => "http://example.com/ims/lti",
@@ -1562,7 +1673,6 @@ describe Course, "tabs_available" do
       Lti::MessageHandler.stubs(:lti_apps_tabs).returns([mock_tab])
       expect(@course.tabs_available(nil, :include_external => true)).to include(mock_tab)
     end
-
   end
 
   context "observers" do
@@ -2438,16 +2548,16 @@ describe Course, 'grade_publishing' do
                ("publisher_id,publisher_sis_id,course_id,course_sis_id,section_id,section_sis_id," +
                 "student_id,student_sis_id,enrollment_id,enrollment_status," +
                 "score\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[0].course_section_id},,#{@ase[0].user.id},,#{@ase[0].id},active,95\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[1].course_section_id},,#{@ase[1].user.id},,#{@ase[1].id},active,65\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[2].course_section_id},,#{@ase[2].user.id},,#{@ase[2].id},active,0\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[3].course_section_id},,#{@ase[3].user.id},student3,#{@ase[3].id},active,0\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[4].course_section_id},,#{@ase[4].user.id},student4a,#{@ase[4].id},active,0\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[4].course_section_id},,#{@ase[4].user.id},student4b,#{@ase[4].id},active,0\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[5].course_section_id},,#{@ase[5].user.id},,#{@ase[5].id},active,0\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[6].course_section_id},,#{@ase[6].user.id},,#{@ase[6].id},active,0\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[7].course_section_id},,#{@ase[7].user.id},student7a,#{@ase[7].id},active,85\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[7].course_section_id},,#{@ase[7].user.id},student7b,#{@ase[7].id},active,85\n"),
+                "#{@user.id},U1,#{@course.id},,#{@ase[0].course_section_id},,#{@ase[0].user.id},,#{@ase[0].id},active,95.0\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[1].course_section_id},,#{@ase[1].user.id},,#{@ase[1].id},active,65.0\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[2].course_section_id},,#{@ase[2].user.id},,#{@ase[2].id},active,0.0\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[3].course_section_id},,#{@ase[3].user.id},student3,#{@ase[3].id},active,0.0\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[4].course_section_id},,#{@ase[4].user.id},student4a,#{@ase[4].id},active,0.0\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[4].course_section_id},,#{@ase[4].user.id},student4b,#{@ase[4].id},active,0.0\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[5].course_section_id},,#{@ase[5].user.id},,#{@ase[5].id},active,0.0\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[6].course_section_id},,#{@ase[6].user.id},,#{@ase[6].id},active,0.0\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[7].course_section_id},,#{@ase[7].user.id},student7a,#{@ase[7].id},active,85.0\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[7].course_section_id},,#{@ase[7].user.id},student7b,#{@ase[7].id},active,85.0\n"),
            "text/csv"]
         ]
       end
@@ -2459,16 +2569,16 @@ describe Course, 'grade_publishing' do
                ("publisher_id,publisher_sis_id,course_id,course_sis_id,section_id,section_sis_id," +
                 "student_id,student_sis_id,enrollment_id,enrollment_status," +
                 "score\n" +
-                "#{@user.id},,#{@course.id},,#{@ase[0].course_section_id},,#{@ase[0].user.id},,#{@ase[0].id},active,95\n" +
-                "#{@user.id},,#{@course.id},,#{@ase[1].course_section_id},,#{@ase[1].user.id},,#{@ase[1].id},active,65\n" +
-                "#{@user.id},,#{@course.id},,#{@ase[2].course_section_id},,#{@ase[2].user.id},,#{@ase[2].id},active,0\n" +
-                "#{@user.id},,#{@course.id},,#{@ase[3].course_section_id},,#{@ase[3].user.id},student3,#{@ase[3].id},active,0\n" +
-                "#{@user.id},,#{@course.id},,#{@ase[4].course_section_id},,#{@ase[4].user.id},student4a,#{@ase[4].id},active,0\n" +
-                "#{@user.id},,#{@course.id},,#{@ase[4].course_section_id},,#{@ase[4].user.id},student4b,#{@ase[4].id},active,0\n" +
-                "#{@user.id},,#{@course.id},,#{@ase[5].course_section_id},,#{@ase[5].user.id},,#{@ase[5].id},active,0\n" +
-                "#{@user.id},,#{@course.id},,#{@ase[6].course_section_id},,#{@ase[6].user.id},,#{@ase[6].id},active,0\n" +
-                "#{@user.id},,#{@course.id},,#{@ase[7].course_section_id},,#{@ase[7].user.id},student7a,#{@ase[7].id},active,85\n" +
-                "#{@user.id},,#{@course.id},,#{@ase[7].course_section_id},,#{@ase[7].user.id},student7b,#{@ase[7].id},active,85\n"),
+                "#{@user.id},,#{@course.id},,#{@ase[0].course_section_id},,#{@ase[0].user.id},,#{@ase[0].id},active,95.0\n" +
+                "#{@user.id},,#{@course.id},,#{@ase[1].course_section_id},,#{@ase[1].user.id},,#{@ase[1].id},active,65.0\n" +
+                "#{@user.id},,#{@course.id},,#{@ase[2].course_section_id},,#{@ase[2].user.id},,#{@ase[2].id},active,0.0\n" +
+                "#{@user.id},,#{@course.id},,#{@ase[3].course_section_id},,#{@ase[3].user.id},student3,#{@ase[3].id},active,0.0\n" +
+                "#{@user.id},,#{@course.id},,#{@ase[4].course_section_id},,#{@ase[4].user.id},student4a,#{@ase[4].id},active,0.0\n" +
+                "#{@user.id},,#{@course.id},,#{@ase[4].course_section_id},,#{@ase[4].user.id},student4b,#{@ase[4].id},active,0.0\n" +
+                "#{@user.id},,#{@course.id},,#{@ase[5].course_section_id},,#{@ase[5].user.id},,#{@ase[5].id},active,0.0\n" +
+                "#{@user.id},,#{@course.id},,#{@ase[6].course_section_id},,#{@ase[6].user.id},,#{@ase[6].id},active,0.0\n" +
+                "#{@user.id},,#{@course.id},,#{@ase[7].course_section_id},,#{@ase[7].user.id},student7a,#{@ase[7].id},active,85.0\n" +
+                "#{@user.id},,#{@course.id},,#{@ase[7].course_section_id},,#{@ase[7].user.id},student7b,#{@ase[7].id},active,85.0\n"),
            "text/csv"]
         ]
       end
@@ -2482,16 +2592,16 @@ describe Course, 'grade_publishing' do
                ("publisher_id,publisher_sis_id,course_id,course_sis_id,section_id,section_sis_id," +
                 "student_id,student_sis_id,enrollment_id,enrollment_status," +
                 "score\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[0].course_section_id},section1,#{@ase[0].user.id},,#{@ase[0].id},active,95\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[1].course_section_id},section1,#{@ase[1].user.id},,#{@ase[1].id},active,65\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[2].course_section_id},section1,#{@ase[2].user.id},,#{@ase[2].id},active,0\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[3].course_section_id},section1,#{@ase[3].user.id},student3,#{@ase[3].id},active,0\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[4].course_section_id},section1,#{@ase[4].user.id},student4a,#{@ase[4].id},active,0\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[4].course_section_id},section1,#{@ase[4].user.id},student4b,#{@ase[4].id},active,0\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[5].course_section_id},section1,#{@ase[5].user.id},,#{@ase[5].id},active,0\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[6].course_section_id},section1,#{@ase[6].user.id},,#{@ase[6].id},active,0\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[7].course_section_id},section1,#{@ase[7].user.id},student7a,#{@ase[7].id},active,85\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[7].course_section_id},section1,#{@ase[7].user.id},student7b,#{@ase[7].id},active,85\n"),
+                "#{@user.id},U1,#{@course.id},,#{@ase[0].course_section_id},section1,#{@ase[0].user.id},,#{@ase[0].id},active,95.0\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[1].course_section_id},section1,#{@ase[1].user.id},,#{@ase[1].id},active,65.0\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[2].course_section_id},section1,#{@ase[2].user.id},,#{@ase[2].id},active,0.0\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[3].course_section_id},section1,#{@ase[3].user.id},student3,#{@ase[3].id},active,0.0\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[4].course_section_id},section1,#{@ase[4].user.id},student4a,#{@ase[4].id},active,0.0\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[4].course_section_id},section1,#{@ase[4].user.id},student4b,#{@ase[4].id},active,0.0\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[5].course_section_id},section1,#{@ase[5].user.id},,#{@ase[5].id},active,0.0\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[6].course_section_id},section1,#{@ase[6].user.id},,#{@ase[6].id},active,0.0\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[7].course_section_id},section1,#{@ase[7].user.id},student7a,#{@ase[7].id},active,85.0\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[7].course_section_id},section1,#{@ase[7].user.id},student7b,#{@ase[7].id},active,85.0\n"),
            "text/csv"]
         ]
       end
@@ -2505,16 +2615,16 @@ describe Course, 'grade_publishing' do
                ("publisher_id,publisher_sis_id,course_id,course_sis_id,section_id,section_sis_id," +
                 "student_id,student_sis_id,enrollment_id,enrollment_status," +
                 "score,grade\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[0].course_section_id},,#{@ase[0].user.id},,#{@ase[0].id},active,95,A\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[1].course_section_id},,#{@ase[1].user.id},,#{@ase[1].id},active,65,D\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[2].course_section_id},,#{@ase[2].user.id},,#{@ase[2].id},active,0,F\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[3].course_section_id},,#{@ase[3].user.id},student3,#{@ase[3].id},active,0,F\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[4].course_section_id},,#{@ase[4].user.id},student4a,#{@ase[4].id},active,0,F\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[4].course_section_id},,#{@ase[4].user.id},student4b,#{@ase[4].id},active,0,F\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[5].course_section_id},,#{@ase[5].user.id},,#{@ase[5].id},active,0,F\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[6].course_section_id},,#{@ase[6].user.id},,#{@ase[6].id},active,0,F\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[7].course_section_id},,#{@ase[7].user.id},student7a,#{@ase[7].id},active,85,B\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[7].course_section_id},,#{@ase[7].user.id},student7b,#{@ase[7].id},active,85,B\n"),
+                "#{@user.id},U1,#{@course.id},,#{@ase[0].course_section_id},,#{@ase[0].user.id},,#{@ase[0].id},active,95.0,A\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[1].course_section_id},,#{@ase[1].user.id},,#{@ase[1].id},active,65.0,D\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[2].course_section_id},,#{@ase[2].user.id},,#{@ase[2].id},active,0.0,F\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[3].course_section_id},,#{@ase[3].user.id},student3,#{@ase[3].id},active,0.0,F\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[4].course_section_id},,#{@ase[4].user.id},student4a,#{@ase[4].id},active,0.0,F\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[4].course_section_id},,#{@ase[4].user.id},student4b,#{@ase[4].id},active,0.0,F\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[5].course_section_id},,#{@ase[5].user.id},,#{@ase[5].id},active,0.0,F\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[6].course_section_id},,#{@ase[6].user.id},,#{@ase[6].id},active,0.0,F\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[7].course_section_id},,#{@ase[7].user.id},student7a,#{@ase[7].id},active,85.0,B\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[7].course_section_id},,#{@ase[7].user.id},student7b,#{@ase[7].id},active,85.0,B\n"),
            "text/csv"]
         ]
       end
@@ -2534,12 +2644,12 @@ describe Course, 'grade_publishing' do
                ("publisher_id,publisher_sis_id,course_id,course_sis_id,section_id,section_sis_id," +
                 "student_id,student_sis_id,enrollment_id,enrollment_status," +
                 "score,grade\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[0].course_section_id},,#{@ase[0].user.id},,#{@ase[0].id},active,95,A\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[2].course_section_id},,#{@ase[2].user.id},,#{@ase[2].id},active,0,F\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[5].course_section_id},,#{@ase[5].user.id},,#{@ase[5].id},active,0,F\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[6].course_section_id},,#{@ase[6].user.id},,#{@ase[6].id},active,0,F\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[7].course_section_id},,#{@ase[7].user.id},student7a,#{@ase[7].id},active,85,B\n" +
-                "#{@user.id},U1,#{@course.id},,#{@ase[7].course_section_id},,#{@ase[7].user.id},student7b,#{@ase[7].id},active,85,B\n"),
+                "#{@user.id},U1,#{@course.id},,#{@ase[0].course_section_id},,#{@ase[0].user.id},,#{@ase[0].id},active,95.0,A\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[2].course_section_id},,#{@ase[2].user.id},,#{@ase[2].id},active,0.0,F\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[5].course_section_id},,#{@ase[5].user.id},,#{@ase[5].id},active,0.0,F\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[6].course_section_id},,#{@ase[6].user.id},,#{@ase[6].id},active,0.0,F\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[7].course_section_id},,#{@ase[7].user.id},student7a,#{@ase[7].id},active,85.0,B\n" +
+                "#{@user.id},U1,#{@course.id},,#{@ase[7].course_section_id},,#{@ase[7].user.id},student7b,#{@ase[7].id},active,85.0,B\n"),
            "text/csv"]
         ]
       end
@@ -2774,12 +2884,12 @@ describe Course, 'grade_publishing' do
       csv =
           "publisher_id,publisher_sis_id,course_id,course_sis_id,section_id,section_sis_id,student_id," +
           "student_sis_id,enrollment_id,enrollment_status,score\n" +
-          "#{teacher.user.id},T1,#{@course.id},C1,#{getsection("S1").id},S1,#{getpseudonym("S1").user.id},S1,#{getenroll("S1", "S1").id},active,70\n" +
-          "#{teacher.user.id},T1,#{@course.id},C1,#{getsection("S2").id},S2,#{getpseudonym("S2").user.id},S2,#{getenroll("S2", "S2").id},active,75\n" +
-          "#{teacher.user.id},T1,#{@course.id},C1,#{getsection("S2").id},S2,#{getpseudonym("S3").user.id},S3,#{getenroll("S3", "S2").id},active,80\n" +
-          "#{teacher.user.id},T1,#{@course.id},C1,#{getsection("S1").id},S1,#{getpseudonym("S4").user.id},S4,#{getenroll("S4", "S1").id},active,0\n" +
-          "#{teacher.user.id},T1,#{@course.id},C1,#{getsection("S3").id},S3,#{stud5.user.id},,#{Enrollment.where(user_id: stud5.user, course_section_id: getsection("S3")).first.id},active,85\n" +
-          "#{teacher.user.id},T1,#{@course.id},C1,#{sec4.id},S4,#{stud6.user.id},,#{Enrollment.where(user_id: stud6.user, course_section_id: sec4.id).first.id},active,90\n"
+          "#{teacher.user.id},T1,#{@course.id},C1,#{getsection("S1").id},S1,#{getpseudonym("S1").user.id},S1,#{getenroll("S1", "S1").id},active,70.0\n" +
+          "#{teacher.user.id},T1,#{@course.id},C1,#{getsection("S2").id},S2,#{getpseudonym("S2").user.id},S2,#{getenroll("S2", "S2").id},active,75.0\n" +
+          "#{teacher.user.id},T1,#{@course.id},C1,#{getsection("S2").id},S2,#{getpseudonym("S3").user.id},S3,#{getenroll("S3", "S2").id},active,80.0\n" +
+          "#{teacher.user.id},T1,#{@course.id},C1,#{getsection("S1").id},S1,#{getpseudonym("S4").user.id},S4,#{getenroll("S4", "S1").id},active,0.0\n" +
+          "#{teacher.user.id},T1,#{@course.id},C1,#{getsection("S3").id},S3,#{stud5.user.id},,#{Enrollment.where(user_id: stud5.user, course_section_id: getsection("S3")).first.id},active,85.0\n" +
+          "#{teacher.user.id},T1,#{@course.id},C1,#{sec4.id},S4,#{stud6.user.id},,#{Enrollment.where(user_id: stud6.user, course_section_id: sec4.id).first.id},active,90.0\n"
       SSLCommon.expects(:post_data).with("http://localhost/endpoint", csv, "text/csv", {})
       @course.publish_final_grades(teacher.user)
 
@@ -2789,12 +2899,12 @@ describe Course, 'grade_publishing' do
       csv =
           "publisher_id,publisher_sis_id,course_id,course_sis_id,section_id,section_sis_id,student_id," +
           "student_sis_id,enrollment_id,enrollment_status,score,grade\n" +
-          "#{teacher.user.id},T1,#{@course.id},C1,#{getsection("S1").id},S1,#{getpseudonym("S1").user.id},S1,#{getenroll("S1", "S1").id},active,70,C-\n" +
-          "#{teacher.user.id},T1,#{@course.id},C1,#{getsection("S2").id},S2,#{getpseudonym("S2").user.id},S2,#{getenroll("S2", "S2").id},active,75,C\n" +
-          "#{teacher.user.id},T1,#{@course.id},C1,#{getsection("S2").id},S2,#{getpseudonym("S3").user.id},S3,#{getenroll("S3", "S2").id},active,80,B-\n" +
-          "#{teacher.user.id},T1,#{@course.id},C1,#{getsection("S1").id},S1,#{getpseudonym("S4").user.id},S4,#{getenroll("S4", "S1").id},active,0,F\n" +
-          "#{teacher.user.id},T1,#{@course.id},C1,#{getsection("S3").id},S3,#{stud5.user.id},,#{Enrollment.where(user_id: stud5.user, course_section_id: getsection("S3")).first.id},active,85,B\n" +
-          "#{teacher.user.id},T1,#{@course.id},C1,#{sec4.id},S4,#{stud6.user.id},,#{Enrollment.where(user_id: stud6.user, course_section_id: sec4.id).first.id},active,90,A-\n"
+          "#{teacher.user.id},T1,#{@course.id},C1,#{getsection("S1").id},S1,#{getpseudonym("S1").user.id},S1,#{getenroll("S1", "S1").id},active,70.0,C-\n" +
+          "#{teacher.user.id},T1,#{@course.id},C1,#{getsection("S2").id},S2,#{getpseudonym("S2").user.id},S2,#{getenroll("S2", "S2").id},active,75.0,C\n" +
+          "#{teacher.user.id},T1,#{@course.id},C1,#{getsection("S2").id},S2,#{getpseudonym("S3").user.id},S3,#{getenroll("S3", "S2").id},active,80.0,B-\n" +
+          "#{teacher.user.id},T1,#{@course.id},C1,#{getsection("S1").id},S1,#{getpseudonym("S4").user.id},S4,#{getenroll("S4", "S1").id},active,0.0,F\n" +
+          "#{teacher.user.id},T1,#{@course.id},C1,#{getsection("S3").id},S3,#{stud5.user.id},,#{Enrollment.where(user_id: stud5.user, course_section_id: getsection("S3")).first.id},active,85.0,B\n" +
+          "#{teacher.user.id},T1,#{@course.id},C1,#{sec4.id},S4,#{stud6.user.id},,#{Enrollment.where(user_id: stud6.user, course_section_id: sec4.id).first.id},active,90.0,A-\n"
       SSLCommon.expects(:post_data).with("http://localhost/endpoint", csv, "text/csv", {})
       @course.publish_final_grades(teacher.user)
 
@@ -2803,12 +2913,12 @@ describe Course, 'grade_publishing' do
       csv =
           "publisher_id,publisher_sis_id,course_id,course_sis_id,section_id,section_sis_id,student_id," +
           "student_sis_id,enrollment_id,enrollment_status,score,grade\n" +
-          "#{admin.id},,#{@course.id},C1,#{getsection("S1").id},S1,#{getpseudonym("S1").user.id},S1,#{getenroll("S1", "S1").id},active,70,C-\n" +
-          "#{admin.id},,#{@course.id},C1,#{getsection("S2").id},S2,#{getpseudonym("S2").user.id},S2,#{getenroll("S2", "S2").id},active,75,C\n" +
-          "#{admin.id},,#{@course.id},C1,#{getsection("S2").id},S2,#{getpseudonym("S3").user.id},S3,#{getenroll("S3", "S2").id},active,80,B-\n" +
-          "#{admin.id},,#{@course.id},C1,#{getsection("S1").id},S1,#{getpseudonym("S4").user.id},S4,#{getenroll("S4", "S1").id},active,0,F\n" +
-          "#{admin.id},,#{@course.id},C1,#{getsection("S3").id},S3,#{stud5.user.id},,#{Enrollment.where(user_id: stud5.user, course_section_id: getsection("S3")).first.id},active,85,B\n" +
-          "#{admin.id},,#{@course.id},C1,#{sec4.id},S4,#{stud6.user.id},,#{Enrollment.where(user_id: stud6.user, course_section_id: sec4.id).first.id},active,90,A-\n"
+          "#{admin.id},,#{@course.id},C1,#{getsection("S1").id},S1,#{getpseudonym("S1").user.id},S1,#{getenroll("S1", "S1").id},active,70.0,C-\n" +
+          "#{admin.id},,#{@course.id},C1,#{getsection("S2").id},S2,#{getpseudonym("S2").user.id},S2,#{getenroll("S2", "S2").id},active,75.0,C\n" +
+          "#{admin.id},,#{@course.id},C1,#{getsection("S2").id},S2,#{getpseudonym("S3").user.id},S3,#{getenroll("S3", "S2").id},active,80.0,B-\n" +
+          "#{admin.id},,#{@course.id},C1,#{getsection("S1").id},S1,#{getpseudonym("S4").user.id},S4,#{getenroll("S4", "S1").id},active,0.0,F\n" +
+          "#{admin.id},,#{@course.id},C1,#{getsection("S3").id},S3,#{stud5.user.id},,#{Enrollment.where(user_id: stud5.user, course_section_id: getsection("S3")).first.id},active,85.0,B\n" +
+          "#{admin.id},,#{@course.id},C1,#{sec4.id},S4,#{stud6.user.id},,#{Enrollment.where(user_id: stud6.user, course_section_id: sec4.id).first.id},active,90.0,A-\n"
       SSLCommon.expects(:post_data).with("http://localhost/endpoint", csv, "text/csv", {})
       @course.publish_final_grades(admin)
     end
@@ -2854,7 +2964,8 @@ describe Course, 'tabs_available' do
 
   it "should include external tools if configured on the account" do
     @account = @course.root_account.sub_accounts.create!(:name => "sub-account")
-    @course.move_to_account(@account.root_account, @account)
+    @course.account = @account
+    @course.save!
     tool = new_external_tool @account
     tool.course_navigation = {:url => "http://www.example.com", :text => "Example URL"}
     tool.save!
@@ -2871,7 +2982,8 @@ describe Course, 'tabs_available' do
 
   it "should include external tools if configured on the root account" do
     @account = @course.root_account.sub_accounts.create!(:name => "sub-account")
-    @course.move_to_account(@account.root_account, @account)
+    @course.account = @account
+    @course.save!
     tool = new_external_tool @account.root_account
     tool.course_navigation = {:url => "http://www.example.com", :text => "Example URL"}
     tool.save!
@@ -3152,6 +3264,12 @@ describe Course, "conclusions" do
       expect(@ag.appointments_participants.current.size).to eql 0
     end
 
+    it "should cancel all future appointments when deleting an enrollment" do
+      @enrollment.destroy
+      expect(@ag.appointments_participants.size).to eql 1
+      expect(@ag.appointments_participants.current.size).to eql 0
+    end
+
     it "should cancel all future appointments when concluding all enrollments" do
       @course.complete!
       expect(@ag.appointments_participants.size).to eql 1
@@ -3265,9 +3383,47 @@ describe Course, "section_visibility" do
       expect(@course.users_visible_to(@ta).sort_by(&:id)).to      eql [@teacher, @ta, @student1, @observer]
     end
 
+    it "should return users including inactive when included from all sections" do
+      enrollment = @course.enrollments.where(user: @student2).first
+      enrollment.deactivate
+
+      expect(@course.users_visible_to(@teacher, include: [:inactive])).to include(@student2)
+    end
+
+    it "should not return inactive users when not included from all sections" do
+      enrollment = @course.enrollments.where(user: @student2).first
+      enrollment.deactivate
+
+      expect(@course.users_visible_to(@teacher)).not_to include(@student2)
+    end
+
+    it "should return users including concluded when included from all sections" do
+      enrollment = @course.enrollments.where(user: @student2).first
+      enrollment.conclude
+
+      expect(@course.users_visible_to(@teacher, include: [:completed])).to include(@student2)
+    end
+
+    it "should not return concluded users when not included from all sections" do
+      enrollment = @course.enrollments.where(user: @student2).first
+      enrollment.conclude
+
+      expect(@course.users_visible_to(@teacher)).not_to include(@student2)
+    end
+
     it "should return student view students to account admins" do
       @course.student_view_student
       @admin = account_admin_user
+      visible_enrollments = @course.apply_enrollment_visibility(@course.student_enrollments, @admin)
+      expect(visible_enrollments.map(&:user)).to be_include(@course.student_view_student)
+    end
+
+    it "should return student view students to account admins who are also observers for some reason" do
+      @course.student_view_student
+      @admin = account_admin_user
+
+      @course.enroll_user(@admin, "ObserverEnrollment")
+
       visible_enrollments = @course.apply_enrollment_visibility(@course.student_enrollments, @admin)
       expect(visible_enrollments.map(&:user)).to be_include(@course.student_view_student)
     end
@@ -3974,21 +4130,18 @@ describe Course do
         # Both of these need to be defined, as they're both involved in SIS imports
         # and expected manual enrollment behavior
         @enrollment.sis_batch_id = batch.id
-        @enrollment.sis_source_id = 'abc:1234'
         @enrollment.save
       end
 
       it 'should retain SIS attributes if re-enrolled, but the SIS enrollment is still active' do
         e2 = @course.enroll_student @user
         expect(e2.sis_batch_id).not_to eql nil
-        expect(e2.sis_source_id).not_to eql nil
       end
 
       it 'should remove SIS attributes from enrollments when re-created manually' do
         @enrollment.destroy
         @enrollment = @course.enroll_student @user
         expect(@enrollment.sis_batch_id).to eql nil
-        expect(@enrollment.sis_source_id).to eql nil
       end
     end
 
@@ -4285,6 +4438,8 @@ describe Course, 'touch_root_folder_if_necessary' do
       expect { course.broadcast_notifications }.to_not raise_error
     end
   end
+
+  it { is_expected.to have_many(:submission_comments).conditions(-> { published }) }
 end
 
 describe Course, 'invited_count_visible_to' do
@@ -4389,5 +4544,28 @@ describe Course, "#apply_nickname_for!" do
     @course.apply_nickname_for!(@user)
     @course.apply_nickname_for!(nil)
     expect(@course.name).to eq 'some terrible name'
+  end
+end
+
+describe Course, "#image" do
+  before(:once) do
+    course_with_teacher(active_all: true)
+    attachment_with_context(@course)
+  end
+
+  it "returns the image_url when image_url is set" do
+    @course.image_url = "http://example.com"
+    @course.save!
+    expect(@course.image).to eq "http://example.com"
+  end
+
+  it "returns the download_url for a course file if image_id is set" do
+    @course.image_id = @attachment.id
+    @course.save!
+    expect(@course.image).to eq @attachment.download_url
+  end
+
+  it "returns nil if image_id and image_url are not set" do
+    expect(@course.image).to be_nil
   end
 end

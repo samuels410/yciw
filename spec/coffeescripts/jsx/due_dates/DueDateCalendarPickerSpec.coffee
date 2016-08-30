@@ -1,5 +1,6 @@
 define [
   'react'
+  'react-dom'
   'underscore'
   'jquery'
   'jsx/due_dates/DueDateCalendarPicker'
@@ -7,7 +8,7 @@ define [
   'vendor/timezone/fr_FR'
   'helpers/I18nStubber'
   'helpers/fakeENV'
-], (React, _, $, DueDateCalendarPicker, tz, french, I18nStubber, fakeENV) ->
+], (React, ReactDOM, _, $, DueDateCalendarPicker, tz, french, I18nStubber, fakeENV) ->
 
   Simulate = React.addons.TestUtils.Simulate
   SimulateNative = React.addons.TestUtils.SimulateNative
@@ -17,37 +18,38 @@ define [
       fakeENV.setup()
       ENV.context_asset_string = "course_1"
       @clock = sinon.useFakeTimers()
-      props =
+      @props =
         handleUpdate: ->
-        dateValue: new Date(Date.UTC(2012, 1, 1, 7, 0, 0))
+        dateValue: new Date(Date.UTC(2012, 1, 1, 7, 1, 0))
         dateType: "unlock_at"
         rowKey: "nullnullnull"
         labelledBy: "foo"
 
-      DueDateCalendarPickerElement = React.createElement(DueDateCalendarPicker, props)
-      @dueDateCalendarPicker = React.render(DueDateCalendarPickerElement, $('<div>').appendTo('body')[0])
+      @mountPoint = $('<div>').appendTo('body')[0]
+      DueDateCalendarPickerElement = React.createElement(DueDateCalendarPicker, @props)
+      @dueDateCalendarPicker = React.render(DueDateCalendarPickerElement, @mountPoint)
 
     teardown: ->
       fakeENV.teardown()
-      React.unmountComponentAtNode(@dueDateCalendarPicker.getDOMNode().parentNode)
+      ReactDOM.unmountComponentAtNode(@mountPoint)
       @clock.restore()
 
   test 'renders', ->
     ok @dueDateCalendarPicker.isMounted()
 
   test 'formattedDate returns a nicely formatted Date', ->
-    equal "Feb 1, 2012 at 7:00am", @dueDateCalendarPicker.formattedDate()
+    equal "Feb 1, 2012 at 7:01am", @dueDateCalendarPicker.formattedDate()
 
   test 'formattedDate returns a localized Date', ->
     snapshot = tz.snapshot()
-    tz.changeLocale(french, 'fr_FR')
+    tz.changeLocale(french, 'fr_FR', 'fr')
     I18nStubber.pushFrame()
     I18nStubber.setLocale 'fr_FR'
     I18nStubber.stub 'fr_FR',
       'date.formats.medium': "%-d %b %Y"
       'time.formats.tiny': "%-k:%M"
       'time.event': "%{date} à %{time}"
-    equal "1 févr. 2012 à 7:00", @dueDateCalendarPicker.formattedDate()
+    equal "1 févr. 2012 à 7:01", @dueDateCalendarPicker.formattedDate()
     I18nStubber.popFrame()
     tz.restore(snapshot)
 
@@ -56,18 +58,24 @@ define [
     equal "DueDateRow__LockUnlockInput", classes
 
   test 'call the update prop when changed', ->
-    dateInput = $(@dueDateCalendarPicker.getDOMNode()).find('.date_field').datetime_field()[0]
-    update = @spy(@dueDateCalendarPicker.props, "handleUpdate")
+    update = @spy(@props, "handleUpdate")
+    DueDateCalendarPickerElement = React.createElement(DueDateCalendarPicker, @props)
+    @dueDateCalendarPicker = ReactDOM.render(DueDateCalendarPickerElement, @mountPoint)
+    dateInput = $(ReactDOM.findDOMNode(@dueDateCalendarPicker)).find('.date_field').datetime_field()[0]
     $(dateInput).val("tomorrow")
     $(dateInput).trigger("change")
     ok update.calledOnce
+    update.restore()
 
   test 'deals with empty inputs properly', ->
-    dateInput = $(@dueDateCalendarPicker.getDOMNode()).find('.date_field').datetime_field()[0]
-    update = @spy(@dueDateCalendarPicker.props, "handleUpdate")
+    update = @spy(@props, "handleUpdate")
+    DueDateCalendarPickerElement = React.createElement(DueDateCalendarPicker, @props)
+    @dueDateCalendarPicker = ReactDOM.render(DueDateCalendarPickerElement, @mountPoint)
+    dateInput = $(ReactDOM.findDOMNode(@dueDateCalendarPicker)).find('.date_field').datetime_field()[0]
     $(dateInput).val("")
     $(dateInput).trigger("change")
     ok update.calledWith(null)
+    update.restore()
 
   test 'does not convert to fancy midnight (because it is unlock_at)', ->
     # This date will be set to midnight in the time zone of the app.

@@ -3,16 +3,15 @@ define [
   'jquery'
   'underscore'
   'react'
-  'react-router'
+  'react-dom'
   'jsx/files/BreadcrumbCollapsedContainer'
   'compiled/react/shared/utils/withReactElement'
   '../modules/customPropTypes'
-], (I18n, $, _, React, ReactRouter, BreadcrumbCollapsedContainerComponent, withReactElement, customPropTypes) ->
+], (I18n, $, _, React, ReactDOM, BreadcrumbCollapsedContainerComponent, withReactElement, customPropTypes) ->
 
   MAX_CRUMB_WIDTH = 500
   MIN_CRUMB_WIDTH = if window.ENV.use_new_styles then 80 else 40
 
-  Link =   ReactRouter.Link
   BreadcrumbCollapsedContainer =   BreadcrumbCollapsedContainerComponent
 
   Breadcrumbs =
@@ -20,8 +19,7 @@ define [
 
     propTypes:
       rootTillCurrentFolder: React.PropTypes.arrayOf(customPropTypes.folder)
-
-    mixins: [ReactRouter.State]
+      contextAssetString: React.PropTypes.string.isRequired
 
     getInitialState: ->
       {
@@ -69,7 +67,7 @@ define [
 
     checkIfCrumbsFit: ->
       return unless @state.heightOfOneBreadcrumb
-      breadcrumbHeight = $(@refs.breadcrumbs.getDOMNode()).height()
+      breadcrumbHeight = $(ReactDOM.findDOMNode(@refs.breadcrumbs)).height()
       if (breadcrumbHeight > @state.heightOfOneBreadcrumb) and (@state.maxCrumbWidth > MIN_CRUMB_WIDTH)
         maxCrumbWidth = Math.max(MIN_CRUMB_WIDTH, @state.maxCrumbWidth - 20)
         @setState({maxCrumbWidth}, @checkIfCrumbsFit)

@@ -163,6 +163,54 @@ module QuizzesCommon
     @quiz
   end
 
+  def quiz_with_essay_questions(goto_edit=true)
+    # TODO: DRY this up
+    @context = @course
+    bank = @context.assessment_question_banks.create!(:title => 'Test Bank')
+    @quiz = quiz_model
+    a = bank.assessment_questions.create!
+    b = bank.assessment_questions.create!
+    c = bank.assessment_questions.create!
+    answers = [ {'id' => 1}, {'id' => 2}, {'id' => 3} ]
+
+    @quest1 = @quiz.quiz_questions.create!(
+      question_data: {
+        name: 'first question',
+        question_type: 'essay_question',
+        answers: [],
+        points_possible: 1
+      },
+      assessment_question: a
+    )
+
+    @quest2 = @quiz.quiz_questions.create!(
+      question_data: {
+        name: 'second question',
+        question_type: 'essay_question',
+        answers: [],
+        points_possible: 1
+      },
+      assessment_question: b
+    )
+
+    @quest3 = @quiz.quiz_questions.create!(
+      question_data: {
+        name: 'third question',
+        question_type: 'essay_question',
+        answers: [],
+        points_possible: 1
+      },
+      assessment_question: c
+    )
+
+    yield bank, @quiz if block_given?
+
+    @quiz.generate_quiz_data
+    @quiz.save!
+    open_quiz_edit_form if goto_edit
+    @quiz
+  end
+
   def quiz_with_new_questions(goto_edit=true)
     @context = @course
     bank = @context.assessment_question_banks.create!(title: 'Test Bank')
@@ -201,10 +249,12 @@ module QuizzesCommon
   end
 
   def click_settings_tab
+    wait_for_ajaximations
     fj('#quiz_tabs ul:first a:eq(0)').click
   end
 
   def click_questions_tab
+    wait_for_ajaximations
     fj('#quiz_tabs ul:first a:eq(1)').click
   end
 
@@ -320,9 +370,7 @@ module QuizzesCommon
   def submit_quiz
     expect_new_page_load(true) { f('#submit_quiz_button').click }
 
-    keep_trying_until do
-      expect(f('.quiz-submission .quiz_score .score_value')).to be_truthy
-    end
+    expect(f('.quiz-submission .quiz_score .score_value')).to be_truthy
   end
 
   def preview_quiz(submit=true)
@@ -335,12 +383,8 @@ module QuizzesCommon
   end
 
   def wait_for_quiz_publish_button_to_populate
-    wait = Selenium::WebDriver::Wait.new(timeout: 5)
-    wait.until do
-      f('#quiz-publish-link').present? &&
-      f('#quiz-publish-link').text.present? &&
-      f('#quiz-publish-link').text.strip!.split("\n") != []
-    end
+    link = f('#quiz-publish-link')
+    keep_trying_until { link.text.present? }
   end
 
   # @argument answer_chooser [#call]
@@ -404,6 +448,9 @@ module QuizzesCommon
   end
 
   def select_different_correct_answer(index_of_new_correct_answer)
+    # wait for success flash_message to go away
+    expect_no_flash_message :success
+
     new_correct_answer = fj('.select_answer_link', question_answers[index_of_new_correct_answer])
     hover(new_correct_answer)
     new_correct_answer.click
@@ -423,12 +470,6 @@ module QuizzesCommon
 
   def visible_regrade_options
     ffj('label.checkbox:visible', '.regrade_enabled')
-  end
-
-  # clicks |Okay, got it|
-  def close_regrade_tooltip
-    fj('.btn.usher-close').click
-    wait_for_ajaximations
   end
 
   # clicks |Okay, fine|
@@ -719,7 +760,7 @@ module QuizzesCommon
   end
 
   def verify_quiz_show_page_due_date(due_date)
-    open_quiz_show_page unless driver.current_url == quiz_show_page_url
+    open_quiz_show_page
     expect(f('#quiz_show')).to include_text due_date
   end
 

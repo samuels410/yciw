@@ -29,7 +29,6 @@ describe 'Grading quizzes' do
 
         edit_first_question
         select_different_correct_answer(1)
-        close_regrade_tooltip
       end
 
       it 'shows the regrade options', priority: "1", test_id: 140622 do
@@ -58,7 +57,9 @@ describe 'Grading quizzes' do
 
     context 'after deleting an answer to a quiz question' do
       it 'doesn\'t offer regrade options', priority: "1", test_id: 140626 do
+        driver.manage.window.maximize
         get "/courses/#{@course.id}/quizzes/#{@quiz.id}/edit"
+        dismiss_flash_messages # can interfere w/ our hovering
         click_questions_tab
         edit_first_question
 
@@ -70,14 +71,13 @@ describe 'Grading quizzes' do
         accept_alert
 
         select_different_correct_answer(1)
-        close_regrade_tooltip
 
         # verify explanation message
         expect(fj('.ui-dialog:visible .regrade_option_text')).to include_text 'Regrading is not allowed on this question' \
           ' because either an answer was removed or the question type was changed after a student' \
           ' completed a submission.'
 
-        expect(visible_regrade_options.count).to eq 0
+        expect(f("#content")).not_to contain_jqcss(".regrade_enabled label.checkbox:visible")
       end
     end
   end

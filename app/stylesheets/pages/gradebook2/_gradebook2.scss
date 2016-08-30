@@ -274,8 +274,35 @@ $cell_height: 33px;
   }
 }
 
+// We need both visibility and opacity because visibility is binary but opacity will allow fading in/out
+@keyframes fade-in-and-out {
+  0%   { opacity: 0; visibility: hidden; }
+  1%   { opacity: 0; visibility: visible; }
+  75%  { opacity: 1; visibility: visible; }
+  100% { opacity: 0; visibility: hidden; }
+}
+@-o-keyframes fade-in-and-out {
+  0%   { opacity: 0; visibility: hidden; }
+  1%   { opacity: 0; visibility: visible; }
+  75%  { opacity: 1; visibility: visible; }
+  100% { opacity: 0; visibility: hidden; }
+}
+@-moz-keyframes fade-in-and-out {
+  0%   { opacity: 0; visibility: hidden; }
+  1%   { opacity: 0; visibility: visible; }
+  75%  { opacity: 1; visibility: visible; }
+  100% { opacity: 0; visibility: hidden; }
+}
+@-webkit-keyframes fade-in-and-out {
+  0%   { opacity: 0; visibility: hidden; }
+  1%   { opacity: 0; visibility: visible; }
+  75%  { opacity: 1; visibility: visible; }
+  100% { opacity: 0; visibility: hidden; }
+}
+
 .gradebook-tooltip {
-  display: none;
+  visibility: hidden;
+  opacity: 0;
   background-color: #444444;
   color: white;
   border-radius: 3px;
@@ -295,8 +322,17 @@ $cell_height: 33px;
     left: 15px;
     content: "";
   }
-  .slick-cell.hover &, .slick-cell.focus &, .slick-cell.selected &, .slick-cell.active & {
-    display: block;
+  .slick-cell.hover &, .slick-cell.focus &, .slick-cell.selected & {
+    visibility: visible;
+    opacity: 1;
+  }
+  .slick-cell.active &, .slick-cell.editable & {
+    visibility: visible;
+    opacity: 1;
+    -webkit-animation: fade-in-and-out 2s 1 forwards;
+    -moz-animation: fade-in-and-out 2s 1 forwards;
+    -o-animation: fade-in-and-out 2s 1 forwards;
+    animation: fade-in-and-out 2s 1 forwards;
   }
   &.first-row {
     @include first-row-tooltip();
@@ -332,9 +368,11 @@ $cell_height: 33px;
   }
 }
 
+$gradebook_cell_padding_top: 8px;
+
 .gradebook-cell {
-  padding-top: 8px;
-  height: $cell_height - 8px;
+  padding-top: $gradebook_cell_padding_top;
+  height: $cell_height - $gradebook_cell_padding_top;
   position: relative;
   text-align: center;
   background-repeat: repeat;
@@ -532,33 +570,15 @@ $cell_height: 33px;
   }
 }
 
-$gradebook_checkbox_width: 16px;
+$gradebook_checkbox_size: 16px;
 
 .gradebook-checkbox {
-  @include hide-text;
   display: block;
   position: absolute;
   left: 50%;
   top: 50%;
-  width: $gradebook_checkbox_width;
-  height: $gradebook_checkbox_width;
-  margin-top: -$gradebook_checkbox_width / 2;
-  margin-left: -$gradebook_checkbox_width / 2;
-  background: url("/images/checkbox_sprite3.png") no-repeat 0 0;
-  &.gradebook-checkbox-pass {
-    background-position: -48px 0;
-  }
-  &.gradebook-checkbox-fail {
-    background-position: -64px 0;
-  }
-  &.editable {
-    &.gradebook-checkbox-pass {
-      background-position: -16px 0;
-    }
-    &.gradebook-checkbox-fail {
-      background-position: -32px 0;
-    }
-  }
+  margin-top: -($gradebook_checkbox_size / 2) - ( $gradebook_cell_padding_top / 2 );
+  margin-left: -$gradebook_checkbox_size / 2;
 }
 
 #hide_warning {
@@ -705,6 +725,17 @@ $gradebook_checkbox_width: 16px;
     @include gradebook_menu_label(13px);
     cursor:pointer;
   }
+}
+
+.ui-menu .ui-menu-item.ui-state-disabled {
+  padding: 0;
+  margin: 0;
+  line-height: 1;
+}
+
+.ui-menu-item.ui-state-disabled label {
+  margin-bottom: 0;
+  vertical-align: 0;
 }
 
 .post-grades-menu {

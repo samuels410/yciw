@@ -20,16 +20,17 @@
 class DiscussionTopicsApiController < ApplicationController
   include Api::V1::DiscussionTopics
   include Api::V1::User
+  include SubmittableHelper
 
   before_filter :require_context_and_read_access
   before_filter :require_topic
   before_filter :require_initial_post, except: [:add_entry, :mark_topic_read,
                                                 :mark_topic_unread, :show,
                                                 :unsubscribe_topic]
-  before_filter :check_differentiated_assignments, only: [:replies, :entries,
-                                                          :add_entry, :add_reply,
-                                                          :show, :view, :entry_list,
-                                                          :subscribe_topic]
+  before_filter only: [:replies, :entries, :add_entry, :add_reply, :show,
+                       :view, :entry_list, :subscribe_topic] do
+    check_differentiated_assignments(@topic)
+  end
 
   # @API Get a single topic
   #
@@ -110,16 +111,35 @@ class DiscussionTopicsApiController < ApplicationController
       # we assume that json_structure will typically be served to users requesting string IDs
       unless stringify_json_ids?
         entries = JSON.parse(structure)
-        Api.recursively_stringify_json_ids(entries, reverse: true)
+        StringifyIds.recursively_stringify_ids(entries, reverse: true)
         structure = entries.to_json
       end
 
       participants = Shard.partition_by_shard(participant_ids) do |shard_ids|
-        User.find(shard_ids)
+        # Preload accounts because they're needed to figure out if a user's avatar should be shown in
+        # AvatarHelper#avatar_url_for_user, which is used by user_display_json. We get an N+1 on the
+        # number of discussion participants if we don't do this.
+        User.where(id: shard_ids).preload({pseudonym: :account}).to_a
+      end
+
+      include_enrollment_state = params[:include_enrollment_state] && (@context.is_a?(Course) || @context.is_a?(Group)) &&
+        @context.grants_right?(@current_user, session, :read_as_admin)
+      enrollments = nil
+      if include_enrollment_state
+        enrollment_context = @context.is_a?(Course) ? @context : @context.context
+        all_enrollments = enrollment_context.enrollments.where(:user_id => participants).to_a
+        Canvas::Builders::EnrollmentDateBuilder.preload_state(all_enrollments)
+        all_enrollments = all_enrollments.group_by(&:user_id)
       end
 
       participant_info = participants.map do |participant|
-        user_display_json(participant, @context.is_a_context? && @context)
+        json = user_display_json(participant, @context.is_a_context? && @context)
+        if include_enrollment_state
+          enrolls = all_enrollments[participant.id] || []
+          json[:isInactive] = enrolls.any? && enrolls.all?(&:inactive?)
+        end
+
+        json
       end
 
       unread_entries = entry_ids - DiscussionEntryParticipant.read_entry_ids(entry_ids, @current_user)
@@ -381,7 +401,7 @@ class DiscussionTopicsApiController < ApplicationController
     ids = Array(params[:ids])
     entries = @topic.discussion_entries.order(:id).find(ids)
     @entries = Api.paginate(entries, self, entry_pagination_url(@topic))
-    render :json => discussion_entry_api_json(@entries, @context, @current_user, session, [])
+    render :json => discussion_entry_api_json(@entries, @context, @current_user, session, [:display_user])
   end
 
   # @API Mark topic as read
@@ -589,7 +609,7 @@ class DiscussionTopicsApiController < ApplicationController
         @entry.attachment = @attachment
         @entry.save
       end
-      render :json => discussion_entry_api_json([@entry], @context, @current_user, session, [:user_name]).first, :status => :created
+      render :json => discussion_entry_api_json([@entry], @context, @current_user, session, [:user_name, :display_user]).first, :status => :created
     else
       render :json => @entry.errors, :status => :bad_request
     end
@@ -643,10 +663,6 @@ class DiscussionTopicsApiController < ApplicationController
     if authorized_action(@entry, @current_user, :read)
       render_state_change_result @entry.change_read_state(new_state, @current_user, opts)
     end
-  end
-
-  def check_differentiated_assignments
-    return render_unauthorized_action if @topic.for_assignment? && !@topic.assignment.visible_to_user?(@current_user)
   end
 
   # the result of several state change functions are the following:

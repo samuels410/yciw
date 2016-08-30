@@ -9,13 +9,24 @@
 # Periodic jobs default to low priority. You can override this in the arguments
 # passed to Delayed::Periodic.cron
 
-def with_each_shard_by_database(klass, method, *args)
-  Shard.with_each_shard do
-    klass.send_later_enqueue_args(method, {
-      strand: "#{klass}.#{method}:#{Shard.current.database_server.id}",
-      max_attempts: 1
-    }, *args)
+class PeriodicJobs
+  def self.with_each_shard_by_database_in_region(klass, method, *args)
+    Shard.with_each_shard(Shard.in_current_region) do
+      klass.send_later_enqueue_args(method, {
+          strand: "#{klass}.#{method}:#{Shard.current.database_server.id}",
+          max_attempts: 1
+      }, *args)
+    end
   end
+end
+
+def with_each_shard_by_database(klass, method, *args)
+  DatabaseServer.send_in_each_region(PeriodicJobs,
+                                     :with_each_shard_by_database_in_region,
+                                     {
+                                       singleton: "periodic:region: #{klass}.#{method}",
+                                       max_attempts: 1,
+                                     }, klass, method, *args)
 end
 
 Rails.configuration.after_initialize do
@@ -51,8 +62,12 @@ Rails.configuration.after_initialize do
     end
   end
 
-  Delayed::Periodic.cron 'Reporting::CountsReport.process', '0 11 * * *' do
+  Delayed::Periodic.cron 'Reporting::CountsReport.process', '0 11 * * 0' do
     Reporting::CountsReport.process
+  end
+
+  Delayed::Periodic.cron 'Account.update_all_update_account_associations', '0 10 * * 0' do
+    with_each_shard_by_database(Account, :update_all_update_account_associations)
   end
 
   Delayed::Periodic.cron 'StreamItem.destroy_stream_items', '45 11 * * *' do
@@ -125,5 +140,26 @@ Rails.configuration.after_initialize do
 
   Delayed::Periodic.cron 'Quizzes::QuizSubmissionEventPartitioner.process', '0 0 * * *' do
     with_each_shard_by_database(Quizzes::QuizSubmissionEventPartitioner, :process)
+  end
+
+  Delayed::Periodic.cron 'Version::Partitioner.process', '0 0 * * *' do
+    with_each_shard_by_database(Version::Partitioner, :process)
+  end
+
+  if AccountAuthorizationConfig::SAML.enabled?
+    Delayed::Periodic.cron 'AccountAuthorizationConfig::SAML::MetadataRefresher.refresh_providers', '15 0 * * *' do
+      with_each_shard_by_database(AccountAuthorizationConfig::SAML::MetadataRefresher,
+                                  :refresh_providers)
+    end
+
+    Delayed::Periodic.cron 'AccountAuthorizationConfig::SAML::InCommon.refresh_providers', '45 0 * * *' do
+      DatabaseServer.send_in_each_region(AccountAuthorizationConfig::SAML::InCommon,
+                                  :refresh_providers,
+                                  singleton: 'AccountAuthorizationConfig::SAML::InCommon.refresh_providers')
+    end
+  end
+
+  Delayed::Periodic.cron 'EnrollmentState.recalculate_expired_states', '*/5 * * * *', :priority => Delayed::LOW_PRIORITY do
+    with_each_shard_by_database(EnrollmentState, :recalculate_expired_states)
   end
 end

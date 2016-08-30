@@ -54,9 +54,6 @@ class SplitUsers
      scope: -> { joins(:submission_comment) },
      context_id: 'submission_comments.context_id'}.freeze,
     {table: 'submission_comments', foreign_key: :author_id}.freeze,
-    {table: 'submissions',
-     scope: -> { joins(:assignment) },
-     context_id: 'assignments.context_id'}.freeze,
     {table: 'web_conference_participants',
      scope: -> { joins(:web_conference).where(web_conferences: {context_type: 'Course'}) },
      context_id: 'web_conferences.context_id'}.freeze,
@@ -78,7 +75,7 @@ class SplitUsers
       users = split_users(user, merge_data)
     else
       users = []
-      UserMergeData.active.where(user_id: user).find_each do |data|
+      UserMergeData.active.splitable.where(user_id: user).find_each do |data|
         splitters = split_users(user, data)
         users = splitters | users
       end
@@ -108,6 +105,8 @@ class SplitUsers
     end
 
     def move_records_to_old_user(source_user, user, records)
+      move_user_observers(source_user, user, records.where(context_type: 'UserObserver', previous_user_id: user))
+      move_attachments(source_user, user, records.where(context_type: 'Attachment'))
       enrollment_ids = records.where(context_type: 'Enrollment', previous_user_id: user).pluck(:context_id)
       enrollments = Enrollment.where(id: enrollment_ids)
       enrollments.update_all(user_id: user)
@@ -115,6 +114,17 @@ class SplitUsers
 
       account_users_ids = records.where(context_type: 'AccountUser').pluck(:context_id)
       AccountUser.where(id: account_users_ids).update_all(user_id: user)
+      restore_worklow_states_from_records(records)
+    end
+
+    def move_user_observers(source_user, user, records)
+      source_user.user_observers.where(id: records.pluck(:context_id)).update_all(user_id: user)
+      source_user.user_observees.where(id: records.pluck(:context_id)).update_all(observer_id: user)
+    end
+
+    def move_attachments(source_user, user, records)
+      attachments = source_user.attachments.where(id: records.pluck(:context_id))
+      Attachment.migrate_attachments(source_user, user, attachments)
     end
 
     def update_grades(users, records)
@@ -161,6 +171,20 @@ class SplitUsers
                   (update[:foreign_key] || :user_id) => source_user_id).
             update_all((update[:foreign_key] || :user_id) => target_user_id)
         end
+        # avoid conflicting submissions for the unique index on user and assignment
+        source_user.submissions.where(assignment_id: Assignment.where(context_id: courses)).
+          where.not(assignment_id: target_user.submissions.select(:assignment_id)).
+          update_all(user_id: target_user_id)
+      end
+    end
+
+    def restore_worklow_states_from_records(records)
+      records.each do |r|
+        c = r.context
+        next unless c && c.class.columns_hash.key?('workflow_state')
+        c.workflow_state = r.previous_workflow_state unless c.class == Attachment
+        c.file_state = r.previous_workflow_state if c.class == Attachment
+        c.save! if c.changed?
       end
     end
   end

@@ -44,6 +44,17 @@ module AccountReports
             }
           }
         },
+        'mgp_grade_export_csv' => {
+          :title => proc { I18n.t('MGP Grade Export') },
+          :description_partial => true,
+          :parameters_partial => true,
+          :parameters => {
+            :enrollment_term_id => {
+              :required => true,
+              :description => 'The canvas id of the term to get grades from'
+            },
+          },
+        },
         'last_user_access_csv' => {
           :title => proc { I18n.t(:last_user_access_title, 'Last User Access') },
           :description_partial => true,
@@ -133,6 +144,9 @@ module AccountReports
             :xlist => {
               :description => 'Get the Provisioning file for cross listed courses'
             },
+            :created_by_sis => {
+              :description => 'Only include objects that were created by sis'
+            },
             :include_deleted => {
               :description => 'Include deleted objects'
             }
@@ -184,6 +198,9 @@ module AccountReports
             },
             :xlist => {
               :description => 'Get the SIS file for cross listed courses'
+            },
+            :created_by_sis => {
+              :description => 'Only include objects that were created by sis'
             },
             :include_deleted => {
               :description => 'Include deleted objects'

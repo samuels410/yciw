@@ -91,6 +91,25 @@ class AccountNotificationsController < ApplicationController
     render :json => account_notifications_json(notifications, @current_user, session)
   end
 
+  # @API Show a global notification
+  # Returns a global notification
+  # A notification that has been closed by the user will not be returned
+  #
+  # @example_request
+  #   curl -H 'Authorization: Bearer <token>' \
+  #   https://<canvas>/api/v1/accounts/2/users/4/account_notifications/4
+  #
+  # @returns [AccountNotification]
+  def show
+    notifications = AccountNotification.for_user_and_account(@current_user, @domain_root_account)
+    notification = AccountNotification.find(params[:id])
+    if notifications.include? notification
+      render json: account_notification_json(notification, @current_user, session)
+    else
+      render_unauthorized_action
+    end
+  end
+
   # @API Close notification for user
   # If the user no long wants to see this notification it can be excused with this call
   #
@@ -223,7 +242,6 @@ class AccountNotificationsController < ApplicationController
   #     "end_at": "2014-02-01T00:00:00Z",
   #     "message": "This is a global notification"
   #   }
-
   def update
     account_notification = @account.announcements.find(params[:id])
     if account_notification
@@ -269,12 +287,7 @@ class AccountNotificationsController < ApplicationController
 
   protected
   def require_account_admin
-    get_context
-    if !@account || @account.parent_account_id
-      flash[:notice] = t(:permission_denied_notice, "You cannot create announcements for that account")
-      redirect_to account_settings_path(params[:account_id])
-      return false
-    end
+    require_account_context
     return false unless authorized_action(@account, @current_user, :manage_alerts)
   end
 

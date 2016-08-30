@@ -230,6 +230,7 @@ $.widget("ui.dialog", {
 		}
 
 		this._isOpen = false;
+		this.uiDialog.attr('aria-hidden', true);
 
 		if ( this.overlay ) {
 			this.overlay.destroy();
@@ -374,7 +375,12 @@ $.widget("ui.dialog", {
 
 		this.uiDialog.attr('aria-hidden', false);
 		if ($.browser && $.browser.safari) {
-			hasFocus.eq( 0 ).focus();
+      var titleClose = this.uiDialog.find('.ui-dialog-titlebar-close');
+      if (titleClose.length) {
+        titleClose.focus();
+      } else {
+        hasFocus.eq( 0 ).focus();
+      }
 		}
 
 		this._isOpen = true;

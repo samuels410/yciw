@@ -22,6 +22,7 @@ module Api::V1::Course
   include Api::V1::SectionEnrollments
   include Api::V1::PostGradesStatus
   include Api::V1::User
+  include Api::V1::Tab
 
   def course_settings_json(course)
     settings = {}
@@ -36,6 +37,9 @@ module Api::V1::Course
     settings[:lock_all_announcements] = course.lock_all_announcements?
     settings[:restrict_student_past_view] = course.restrict_student_past_view?
     settings[:restrict_student_future_view] = course.restrict_student_future_view?
+    settings[:image_url] = course.image_url
+    settings[:image_id] = course.image_id
+    settings[:image] = course.image
 
     settings
   end
@@ -86,6 +90,7 @@ module Api::V1::Course
       hash['passback_status'] = post_grades_status_json(course) if includes.include?('passback_status')
       hash['is_favorite'] = course.favorite_for_user?(user) if includes.include?('favorites')
       hash['teachers'] = course.teachers.map { |teacher| user_display_json(teacher) } if includes.include?('teachers')
+      hash['tabs'] = tabs_available_json(course, user, session, ['external']) if includes.include?('tabs')
       add_helper_dependant_entries(hash, course, builder)
       apply_nickname(hash, course, user) if user
 
@@ -114,6 +119,7 @@ module Api::V1::Course
     hash['calendar'] = { 'ics' => "#{feeds_calendar_url(course.feed_code)}.ics" }
     hash['syllabus_body'] = api_user_content(course.syllabus_body, course) if builder.include_syllabus
     hash['html_url'] = course_url(course, :host => HostUrl.context_host(course, request.try(:host_with_port))) if builder.include_url
+    hash['time_zone'] = course.time_zone && course.time_zone.tzinfo.name
     hash
   end
 

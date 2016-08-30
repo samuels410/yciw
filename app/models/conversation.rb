@@ -93,6 +93,7 @@ class Conversation < ActiveRecord::Base
         conversation.has_media_objects = false
         conversation.context_type = options[:context_type]
         conversation.context_id = options[:context_id]
+        conversation.root_account_ids |= [conversation.context.root_account_id] if conversation.context
         conversation.tags = [conversation.context_string].compact
         conversation.tags += [conversation.context.context.asset_string] if conversation.context_type == "Group"
         conversation.subject = options[:subject]
@@ -149,7 +150,12 @@ class Conversation < ActiveRecord::Base
         end
 
         Shard.partition_by_shard(user_ids) do |shard_user_ids|
-          User.where(:id => shard_user_ids).update_all(["unread_conversations_count = unread_conversations_count + 1, updated_at = ?", Time.now.utc]) unless shard_user_ids.empty?
+          unless shard_user_ids.empty?
+            shard_user_ids.sort!
+            shard_user_ids.each_slice(1000) do |sliced_user_ids|
+              User.where(:id => sliced_user_ids).update_all(["unread_conversations_count = unread_conversations_count + 1, updated_at = ?", Time.now.utc])
+            end
+          end
 
           next if Shard.current == self.shard
           bulk_insert_participants(shard_user_ids, bulk_insert_options)
@@ -534,7 +540,7 @@ class Conversation < ActiveRecord::Base
   end
 
   def self.batch_regenerate_private_hashes!(ids)
-    select("conversations.*, (SELECT #{connection.func(:group_concat, :user_id, ',')} FROM conversation_participants WHERE conversation_id = conversations.id) AS user_ids").
+    select("conversations.*, (SELECT #{connection.func(:group_concat, :user_id, ',')} FROM #{ConversationParticipant.quoted_table_name} WHERE conversation_id = conversations.id) AS user_ids").
       where(:id =>ids).
       each do |c|
       c.regenerate_private_hash!(c.user_ids.split(',').map(&:to_i)) # group_concat order is arbitrary in sqlite, so we just let ruby do the sorting

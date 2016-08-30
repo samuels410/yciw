@@ -33,12 +33,12 @@ module ThemeEditorCommon
     wait_for_ajaximations
   end
 
-  def single_warning_message
-    f('.ic-Form-message--error')
+  def warning_message_css
+    '.ic-Form-message--error'
   end
 
   def all_warning_messages
-    ff('.ic-Form-message--error')
+    ff(warning_message_css)
   end
 
   def click_global_branding
@@ -153,19 +153,21 @@ module ThemeEditorCommon
 
   def all_colors(array, color = 'random')
     array.each do |x|
-      x.send_keys(color) if color != 'random'
-      x.send_keys(random_hex_color) if color == 'random'
+      x.send_keys(color == 'random' ? random_hex_color : color)
     end
   end
 
   def create_theme(color = 'random')
     click_global_branding
+    wait_for_ajaximations
     all_colors(all_global_branding, color)
 
     click_global_navigation
+    wait_for_ajaximations
     all_colors(all_global_navigation, color)
 
     click_watermarks_and_other_images
+    wait_for_ajaximations
     all_colors(all_watermarks, color)
   end
 end

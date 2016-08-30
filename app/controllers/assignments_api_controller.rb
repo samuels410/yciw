@@ -322,7 +322,7 @@
 #           "type": "boolean"
 #         },
 #         "external_tool_tag_attributes": {
-#           "description": "(Optional) assignment's settings for external tools if submission_types include 'external_tool'. Only url and new_tab are included. Use the 'External Tools' API if you need more information about an external tool.",
+#           "description": "(Optional) assignment's settings for external tools if submission_types include 'external_tool'. Only url and new_tab are included (new_tab defaults to false).  Use the 'External Tools' API if you need more information about an external tool.",
 #           "$ref": "ExternalToolTagAttributes"
 #         },
 #         "peer_reviews": {
@@ -403,6 +403,7 @@
 #               "discussion_topic",
 #               "online_quiz",
 #               "on_paper",
+#               "not_graded",
 #               "none",
 #               "external_tool",
 #               "online_text_entry",
@@ -518,6 +519,11 @@
 #           "description": "(Optional) If 'overrides' is included in the 'include' parameter, includes an array of assignment override objects.",
 #           "type": "array",
 #           "items": { "$ref": "AssignmentOverride" }
+#         },
+#         "omit_from_final_grade": {
+#           "description": "(Optional) If true, the assignment will be ommitted from the student's final grade",
+#           "example": true,
+#           "type": "boolean"
 #         }
 #       }
 #     }
@@ -540,7 +546,7 @@ class AssignmentsApiController < ApplicationController
   #   Apply assignment overrides for each assignment, defaults to true.
   # @argument needs_grading_count_by_section [Boolean]
   #   Split up "needs_grading_count" by sections into the "needs_grading_count_by_section" key, defaults to false
-  # @argument bucket [String, "past"|"overdue"|"undated"|"ungraded"|"upcoming"|"future"]
+  # @argument bucket [String, "past"|"overdue"|"undated"|"ungraded"|"unsubmitted"|"upcoming"|"future"]
   #   If included, only return certain assignments depending on due date and submission status.
   # @returns [Assignment]
   def index
@@ -574,11 +580,10 @@ class AssignmentsApiController < ApplicationController
         users = current_user_and_observed(
                     include_observed: include_params.include?("observed_users"))
         submissions_for_user = scope.with_submissions_for_user(users).flat_map(&:submissions)
-        scope = SortsAssignments.bucket_filter(scope, params[:bucket], session, user, @context, submissions_for_user)
+        scope = SortsAssignments.bucket_filter(scope, params[:bucket], session, user, @current_user, @context, submissions_for_user)
       end
 
       assignments = Api.paginate(scope, self, api_v1_course_assignments_url(@context))
-
 
       submissions = submissions_hash(include_params, assignments, submissions_for_user)
 
@@ -768,14 +773,8 @@ class AssignmentsApiController < ApplicationController
   #   assign scores to each member of the group.
   #
   # @argument assignment[external_tool_tag_attributes]
-  #   Hash of attributes if submission_types is ["external_tool"]
-  #   Example:
-  #     external_tool_tag_attributes: {
-  #       // url to the external tool
-  #       url: "http://instructure.com",
-  #       // create a new tab for the module, defaults to false.
-  #       new_tab: false
-  #     }
+  #   Hash of external tool parameters if submission_types is ["external_tool"].
+  #   See Assignment object definition for format.
   #
   # @argument assignment[points_possible] [Float]
   #   The maximum points possible on the assignment.
@@ -825,6 +824,9 @@ class AssignmentsApiController < ApplicationController
   # @argument assignment[grading_standard_id] [Integer]
   #   The grading standard id to set for the course.  If no value is provided for this argument the current grading_standard will be un-set from this course.
   #   This will update the grading_type for the course to 'letter_grade' unless it is already 'gpa_scale'.
+  #
+  # @argument assignment[omit_from_final_grade] [Boolean]
+  #   Whether this assignment is counted towards a student's final grade.
   #
   # @returns Assignment
   def create
@@ -912,14 +914,8 @@ class AssignmentsApiController < ApplicationController
   #   assign scores to each member of the group.
   #
   # @argument assignment[external_tool_tag_attributes]
-  #   Hash of attributes if submission_types is ["external_tool"]
-  #   Example:
-  #     external_tool_tag_attributes: {
-  #       // url to the external tool
-  #       url: "http://instructure.com",
-  #       // create a new tab for the module, defaults to false.
-  #       new_tab: false
-  #     }
+  #   Hash of external tool parameters if submission_types is ["external_tool"].
+  #   See Assignment object definition for format.
   #
   # @argument assignment[points_possible] [Float]
   #   The maximum points possible on the assignment.
@@ -977,6 +973,9 @@ class AssignmentsApiController < ApplicationController
   #
   # NOTE: The assignment overrides feature is in beta.
   #
+  # @argument assignment[omit_from_final_grade] [Boolean]
+  #   Whether this assignment is counted towards a student's final grade.
+  #
   # @returns Assignment
   def update
     @assignment = @context.active_assignments.find(params[:id])
@@ -989,7 +988,7 @@ class AssignmentsApiController < ApplicationController
 
   def save_and_render_response
     @assignment.content_being_saved_by(@current_user)
-    if update_api_assignment(@assignment, params[:assignment], @current_user)
+    if update_api_assignment(@assignment, params[:assignment], @current_user, @context)
       render :json => assignment_json(@assignment, @current_user, session), :status => 201
     else
       errors = @assignment.errors.as_json[:errors]
@@ -1007,6 +1006,6 @@ class AssignmentsApiController < ApplicationController
   def require_user_or_observer
     return render_unauthorized_action unless @current_user.present?
     @user = params[:user_id]=="self" ? @current_user : api_find(User, params[:user_id])
-    authorized_action(@user,@current_user, :read_as_parent)
+    authorized_action(@user,@current_user, [:read_as_parent, :read])
   end
 end

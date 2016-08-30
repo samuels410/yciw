@@ -439,7 +439,6 @@ describe CoursesController do
       assigned_tool = assigns[:course_settings_sub_navigation_tools].first
       expect(assigned_tool.id).to eq active_tool.id
     end
-
   end
 
   describe "GET 'enrollment_invitation'" do
@@ -488,8 +487,8 @@ describe CoursesController do
       post 'enrollment_invitation', :course_id => @course.id, :accept => '1', :invitation => @enrollment.uuid
       expect(response).to be_redirect
       expect(response).to redirect_to(course_url(@course.id))
-      expect(assigns[:pending_enrollment]).to eql(@enrollment)
-      expect(assigns[:pending_enrollment]).to be_active
+      expect(assigns[:context_enrollment]).to eql(@enrollment)
+      expect(assigns[:context_enrollment]).to be_active
     end
 
     it "should ask user to login for registered not-logged-in user" do
@@ -848,6 +847,25 @@ describe CoursesController do
         expect(@enrollment).to be_active
       end
 
+      it "should not error when previewing an unpublished course as an invited admin" do
+        @account = Account.create!
+        @account.settings[:allow_invitation_previews] = false
+        @account.save!
+
+        course(:account => @account)
+        user(:active_all => true)
+        enrollment = @course.enroll_teacher(@user, :enrollment_state => 'invited')
+        user_session(@user)
+
+        get 'show', :id => @course.id
+
+        expect(response).to be_success
+        expect(response).to render_template('show')
+        expect(assigns[:context_enrollment]).to eq enrollment
+        enrollment.reload
+        expect(enrollment).to be_invited
+      end
+
       it "should ignore invitations that have been accepted (not logged in)" do
         @enrollment.accept!
         get 'show', :id => @course.id, :invitation => @enrollment.uuid
@@ -991,6 +1009,48 @@ describe CoursesController do
       expect(response.status).to eq 401
     end
 
+    context "page views enabled" do
+      before do
+        Setting.set('enable_page_views', 'db')
+        @old_thread_context = Thread.current[:context]
+        Thread.current[:context] = { request_id: SecureRandom.uuid }
+      end
+
+      after do
+        Thread.current[:context] = @old_thread_context
+      end
+
+      it "should log an AUA with membership_type" do
+        user_session(@student)
+        get 'show', :id => @course.id
+        expect(response).to be_success
+        aua = AssetUserAccess.where(user_id: @student, context_type: 'Course', context_id: @course).first
+        expect(aua.asset_category).to eq 'home'
+        expect(aua.membership_type).to eq 'StudentEnrollment'
+      end
+    end
+
+    context "course_home_sub_navigation" do
+      before :once do
+        @course.root_account.enable_feature!(:lor_for_account)
+        @tool = @course.context_external_tools.create(consumer_key: 'test', shared_secret: 'secret', url: 'http://example.com/lti',
+          name: 'tool', course_home_sub_navigation: {enabled: true, visibility: 'admins'})
+      end
+
+      it "should show admin-level course_home_sub_navigation external tools for teachers" do
+        user_session(@teacher)
+
+        get 'show', :id => @course.id
+        expect(assigns[:course_home_sub_navigation_tools].size).to eq 1
+      end
+
+      it "should reject admin-level course_home_sub_navigation external tools for students" do
+        user_session(@student)
+
+        get 'show', :id => @course.id
+        expect(assigns[:course_home_sub_navigation_tools].size).to eq 0
+      end
+    end
   end
 
   describe "POST 'unenroll_user'" do
@@ -1366,6 +1426,91 @@ describe CoursesController do
       @course.reload
       expect(@course.name).to_not eq name
       expect(@course.syllabus_body).to eq body
+    end
+
+    it "should render the show page with a flash on error" do
+      user_session(@teacher)
+      # cause the course to be invalid
+      Course.where(id: @course).update_all(start_at: Time.now.utc, conclude_at: 1.day.ago)
+      put 'update', :id => @course.id, :course => { :name => "name change" }
+      expect(flash[:error]).to match(/There was an error saving the changes to the course/)
+    end
+
+    describe "course images" do
+      before :each do
+        user_session(@teacher)
+      end
+
+      it "should allow valid course file ids" do
+        attachment_with_context(@course)
+        put 'update', :id => @course.id, :course => { :image_id => @attachment.id }
+        @course.reload
+        expect(@course.settings[:image_id]).to eq @attachment.id.to_s
+      end
+
+      it "should allow valid urls" do
+        put 'update', :id => @course.id, :course => { :image_url => 'http://farm3.static.flickr.com/image.jpg' }
+        @course.reload
+        expect(@course.settings[:image_url]).to eq 'http://farm3.static.flickr.com/image.jpg'
+      end
+
+      it "should reject invalid urls" do
+        put 'update', :id => @course.id, :course => { :image_url => 'exam ple.com' }
+        @course.reload
+        expect(@course.settings[:image_url]).to be_nil
+      end
+
+      it "should reject random letters and numbers" do
+        put 'update', :id => @course.id, :course => { :image_id => '123a456b78c' }
+        @course.reload
+        expect(@course.settings[:image_id]).to be_nil
+      end
+
+      it "should reject setting both a url and an id at the same time" do
+        put 'update', :id => @course.id, :course => { :image_id => '123a456b78c', :image_url => 'http://example.com' }
+        @course.reload
+        expect(@course.settings[:image_id]).to be_nil
+        expect(@course.settings[:image_url]).to be_nil
+      end
+
+      it "should reject non-course ids" do
+        put 'update', :id => @course.id, :course => { :image_id => 1234134123 }
+        @course.reload
+        expect(@course.settings[:image_id]).to be_nil
+      end
+
+      it "should clear the image_url when setting an image_id" do
+        attachment_with_context(@course)
+        put 'update', :id => @course.id, :course => { :image_url => 'http://farm3.static.flickr.com/image.jpg' }
+        put 'update', :id => @course.id, :course => { :image_id => @attachment.id }
+        @course.reload
+        expect(@course.settings[:image_id]).to eq @attachment.id.to_s
+        expect(@course.settings[:image_url]).to eq ''
+      end
+
+      it "should clear the image_id when setting an image_url" do
+        put 'update', :id => @course.id, :course => { :image_id => '12345678' }
+        put 'update', :id => @course.id, :course => { :image_url => 'http://farm3.static.flickr.com/image.jpg' }
+        @course.reload
+        expect(@course.settings[:image_id]).to eq ''
+        expect(@course.settings[:image_url]).to eq 'http://farm3.static.flickr.com/image.jpg'
+      end
+
+      it "should clear image id after setting remove_image" do
+        put 'update', :id => @course.id, :course => { :image_id => '12345678' }
+        put 'update', :id => @course.id, :course => { :remove_image => true }
+        @course.reload
+        expect(@course.settings[:image_id]).to eq ''
+        expect(@course.settings[:image_url]).to eq ''
+      end
+
+      it "should clear image url after setting remove_image" do
+        put 'update', :id => @course.id, :course => { :image_url => 'http://farm3.static.flickr.com/image.jpg' }
+        put 'update', :id => @course.id, :course => { :remove_image => true }
+        @course.reload
+        expect(@course.settings[:image_id]).to eq ''
+        expect(@course.settings[:image_url]).to eq ''
+      end
     end
   end
 
@@ -1798,6 +1943,18 @@ describe CoursesController do
       test_student = @course.student_view_student
       assignment = @course.assignments.create!(:workflow_state => 'published')
       assignment.grade_student test_student, { :grade => 1, :grader => @teacher }
+      expect(test_student.submissions.size).not_to be_zero
+      delete 'reset_test_student', course_id: @course.id
+      test_student.reload
+      expect(test_student.submissions.size).to be_zero
+    end
+
+    it "removes provisional grades for by the test student" do
+      user_session(@teacher)
+      post 'student_view', course_id: @course.id
+      test_student = @course.student_view_student
+      assignment = @course.assignments.create!(:workflow_state => 'published', :moderated_grading => true)
+      assignment.grade_student test_student, { :grade => 1, :grader => @teacher, :provisional => true }
       expect(test_student.submissions.size).not_to be_zero
       delete 'reset_test_student', course_id: @course.id
       test_student.reload

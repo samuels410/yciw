@@ -35,10 +35,12 @@ define [
       @$editor = $("##{@editor.id}")
       @prevSelection = @editor.selection.getBookmark()
       @$selectedNode = $(selectedNode)
-      @rceShim = new RceCommandShim()
       super
       @render()
       @show()
+      @dialog.parent().find('.ui-dialog-titlebar-close').click =>
+        @restoreCaret()
+
       if @$selectedNode.prop('nodeName') is 'IMG'
         @setSelectedImage
           src: @$selectedNode.attr('src')
@@ -135,6 +137,13 @@ define [
       @flickr_link = null
       @setSelectedImage src: $(event.currentTarget).val()
 
+    close: ->
+      super
+      @restoreCaret()
+
+    restoreCaret: ->
+      @editor.selection.moveToBookmark(@prevSelection)
+
     generateImageHtml: ->
       imgHtml = @editor.dom.createHTML("img", @getAttributes())
       if @flickr_link
@@ -142,7 +151,7 @@ define [
       imgHtml
 
     update: =>
-      @editor.selection.moveToBookmark(@prevSelection)
-      @rceShim.send(@$editor, 'insert_code', @generateImageHtml())
+      @restoreCaret()
+      RceCommandShim.send(@$editor, 'insert_code', @generateImageHtml())
       @editor.focus()
       @close()

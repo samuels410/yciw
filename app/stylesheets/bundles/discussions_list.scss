@@ -55,9 +55,13 @@ $announcements_disscussion-summary-color: $ic-color-dark;
     @media screen and (max-width: 1100px) { max-width: 520px; }
   }
 
+  .discussion-actions-container {
+    float: right;
+    margin-top: -50px;
+  }
   .discussion-info-icons { float: right; }
   .discussion-unread-container, .discussion-last-reply, .discussion-info-icons {
-    float: right;
+    display: inline-block;
     padding: 11px 10px 0;
     // 'not-important' styles
     color: $announcements_disscussion-summary-color;
@@ -172,8 +176,11 @@ $announcements_disscussion-summary-color: $ic-color-dark;
   }
 
   &.droppable-hover {
-    > * {
-      opacity: 0.5;
+    @if $use_high_contrast {
+      box-shadow: inset 0 0 0 2px $ic-link-color;
+    }
+    @else {
+      > * { opacity: 0.5; }
     }
   }
 
@@ -198,6 +205,15 @@ $announcements_disscussion-summary-color: $ic-color-dark;
 
   .loader {
     height: 40px;
+  }
+
+  .element_toggler {
+    background: none;
+    border: none;
+
+    .icon-mini-arrow-down {
+      vertical-align: initial;
+    }
   }
 }
 
@@ -381,4 +397,3 @@ $announcements_disscussion-summary-color: $ic-color-dark;
   @include accessibility-prompt;
   @include fontSize(14px);
 }
-

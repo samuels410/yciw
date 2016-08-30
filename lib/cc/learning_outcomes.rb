@@ -37,7 +37,18 @@ module CC
           "xmlns:xsi"=>"http://www.w3.org/2001/XMLSchema-instance",
           "xsi:schemaLocation"=> "#{CCHelper::CANVAS_NAMESPACE} #{CCHelper::XSD_URI}"
       ) do |outs_node|
+        @exported_outcome_ids = []
+
         process_outcome_group_content(outs_node, root_group)
+
+        unless export_object?(LearningOutcome.new, 'learning_outcomes')
+          # copy straggler outcomes that should be brought in implicitly
+          @course.learning_outcomes.where.not(:id => @exported_outcome_ids).each do |item|
+            if export_object?(item, 'learning_outcomes')
+              process_learning_outcome(outs_node, item)
+            end
+          end
+        end
       end
 
       outcomes_file.close if outcomes_file
@@ -63,15 +74,22 @@ module CC
       group.child_outcome_links.active.each do |item|
         item = item.content
         next unless export_object?(item, 'learning_outcomes')
-        process_learning_outcome(node, item, group)
+        process_learning_outcome(node, item)
       end
     end
-    
-    def process_learning_outcome(node, item, group)
+
+    def process_learning_outcome(node, item)
+      @exported_outcome_ids << item.id
+
+      add_exported_asset(item)
+
       migration_id = CCHelper.create_key(item)
       node.learningOutcome(:identifier=>migration_id) do |out_node|
-        out_node.title item.short_description unless item.short_description.blank?
-        out_node.description @html_exporter.html_content(item.description) unless item.description.blank?
+        out_node.title item.short_description if item.short_description.present?
+        out_node.description @html_exporter.html_content(item.description) if item.description.present?
+        out_node.calculation_method item.calculation_method if item.calculation_method.present?
+        out_node.calculation_int item.calculation_int if item.calculation_int.present?
+
         if item.context != @course
           out_node.is_global_outcome !item.context
           out_node.external_identifier item.id
@@ -107,6 +125,5 @@ module CC
         end
       end
     end
-
   end
 end

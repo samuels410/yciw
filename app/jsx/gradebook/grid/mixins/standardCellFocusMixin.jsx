@@ -11,8 +11,8 @@ define([], function () {
         }
       }
 
-      if(isActiveCell && !gradeHasChanged) {
-        var gradeInput = this.refs.gradeInput.getDOMNode();
+      if(isActiveCell && !gradeHasChanged && !this.isConcluded()) {
+        var gradeInput = this.refs.gradeInput;
         gradeInput.select();
       }
     },

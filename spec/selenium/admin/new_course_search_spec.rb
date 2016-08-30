@@ -34,8 +34,9 @@ describe "new account course search" do
 
     expect(get_rows.count).to eq 2
 
-    f('.course_search_bar input[type=checkbox]').click # hide anymore
-    f('.course_search_bar button').click
+    cb = f('.course_search_bar input[type=checkbox]')
+    move_to_click("label[for=#{cb['id']}]")
+    move_to_click('.course_search_bar button')
     wait_for_ajaximations
 
     rows = get_rows
@@ -57,7 +58,7 @@ describe "new account course search" do
     wait_for_ajaximations
 
     expect(get_rows.count).to eq 11
-    expect(f(".load_more")).to be_nil
+    expect(f("#content")).not_to contain_css(".load_more")
   end
 
   it "should search by term" do
@@ -105,5 +106,21 @@ describe "new account course search" do
     user_link = get_rows.first.find("a.user_link")
     expect(user_link).to include_text(@user.name)
     expect(user_link['href']).to eq user_url(@user)
+  end
+
+  it "should show manageable roles in new enrollment dialog" do
+    custom_name = 'Custom Student role'
+    role = custom_student_role(custom_name, :account => @account)
+
+    @account.role_overrides.create!(:permission => "manage_admin_users", :enabled => false, :role => admin_role)
+    course(:account => @account)
+
+    get "/accounts/#{@account.id}"
+
+    f('.courses-list [role=row] .addUserButton').click
+    dialog = fj('.ui-dialog:visible')
+    expect(dialog).to be_displayed
+    role_options = dialog.find_elements(:css, '#role_id option')
+    expect(role_options.map{|r| r.text}).to match_array(["Student", "Observer", custom_name])
   end
 end

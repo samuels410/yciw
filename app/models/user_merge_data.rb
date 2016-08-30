@@ -23,11 +23,18 @@ class UserMergeData < ActiveRecord::Base
   strong_params
 
   scope :active, -> { where.not(workflow_state: 'deleted') }
+  scope :splitable, -> { where('created_at > ?', split_time) }
 
-  def add_more_data(objects)
+  def self.split_time
+    Time.zone.now - Setting.get('user_merge_to_split_time', 90.days.to_i).to_i
+  end
+
+  def add_more_data(objects, user=nil)
     objects.each do |o|
-      r = self.user_merge_data_records.new(context: o, previous_user_id: o.user_id)
+      user ||= o.user_id
+      r = self.user_merge_data_records.new(context: o, previous_user_id: user)
       r.previous_workflow_state = o.workflow_state if o.class.columns_hash.key?('workflow_state')
+      r.previous_workflow_state = o.file_state if o.class == Attachment
       r.save!
     end
   end

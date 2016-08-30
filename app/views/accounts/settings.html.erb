@@ -45,9 +45,7 @@
     <li><a href="#tab-notifications" id="tab-notifications-link"><%= t(:tab_notifications, "Notifications") %></a></li>
     <% end %>
     <li><a href="#tab-users" id="tab-users-link"><%= t(:tab_admins, "Admins") %></a></li>
-    <% if @account.root_account? %>
-      <li><a href="#tab-announcements" id="tab-announcements-link"><%= t(:tab_announcements, "Announcements") %></a></li>
-    <% end %>
+    <li><a href="#tab-announcements" id="tab-announcements-link"><%= t(:tab_announcements, "Announcements") %></a></li>
     <% if !@available_reports.blank? %>
       <li><a href="#tab-reports" id="tab-reports-link"><%= t(:tab_reports, "Reports") %></a></li>
     <% end %>
@@ -291,7 +289,10 @@ TEXT
                 <% end %>
               </tbody>
             </table>
-            <a href="#" class="icon-add add_ip_filter_link" style="font-size: 0.9em;"><%= t(:add_ip_filter_link, "Add another filter") %></a>
+            <a href="#" class="icon-add add_ip_filter_link">
+              <span aria-hidden="true"><%= t(:add_ip_filter_link, "Filter") %></span>
+              <span class="screenreader-only"><%= t("Add Quiz IP Filter") %></span>
+            </a>
           </fieldset>
         <% end %>
 
@@ -307,6 +308,10 @@ TEXT
                 <div>
                   <%= settings.check_box :admins_can_view_notifications, :checked => @account.settings[:admins_can_view_notifications] %>
                   <%= settings.label :admins_can_view_notifications, :en => "Admins can view notifications" %>
+                </div>
+                <div>
+                  <%= settings.check_box :canvadocs_prefer_office_online, :checked => @account.settings[:canvadocs_prefer_office_online] %>
+                  <%= settings.label :canvadocs_prefer_office_online, :en => "Prefer Office 365 file viewer" %>
                 </div>
                 <% unless @account.site_admin? %>
                   <div>
@@ -329,7 +334,7 @@ TEXT
                     <%= settings.check_box :enable_alerts, :checked => @account.settings[:enable_alerts] %>
                     <%= settings.label :enable_alerts, :en => "Alerts (beta)" %>
                   </div>
-                <% end %>
+                <% end %><%# end of site_admin? %>
                 <div id="global_includes_warning_message_wrapper">
                   <%= settings.check_box :global_includes, :checked => @account.settings[:global_includes] %>
                   <%= settings.label :global_includes, :en => "Custom CSS/JavaScript overrides" %>
@@ -344,14 +349,7 @@ TEXT
                         <% end %>
                       </p>
                     </div>
-                  </div>
-                    <div>
-                      <%= settings.check_box :sub_account_includes,
-                        id: :account_settings_new_sub_account_includes,
-                        checked: @account.settings[:sub_account_includes]
-                      %>
-                      <%= settings.label :new_sub_account_includes, :en => "Let sub-accounts use the Theme Editor to customize their own branding" %>
-                  <% end %>
+                  <% end %><%# end of use_new_styles? %>
                 </div>
                 <div id="show_scheduler_checkbox">
                   <%= settings.check_box :show_scheduler, :checked => @account.settings[:show_scheduler] %>
@@ -361,7 +359,11 @@ TEXT
                   <%= settings.check_box :enable_profiles, :checked => @account.settings[:enable_profiles] %>
                   <%= settings.label :enable_profiles, :en => "Enable Profiles" %>
                 </div>
-              <% end %>
+              <% end %><%# end of :manage_site_settings %>
+              <div>
+                <%= settings.check_box :sub_account_includes, checked: @account.settings[:sub_account_includes] %>
+                <%= settings.label :new_sub_account_includes, :en => "Let sub-accounts use the Theme Editor to customize their own branding" %>
+              </div>
               <% if @account.canvas_authentication? %>
                 <div>
                   <%= settings.check_box :open_registration, :checked => @account.open_registration? %>
@@ -498,15 +500,27 @@ TEXT
           </fieldset>
         <% end %>
 
-        <% if @account.root_account? && !@account.site_admin? && Setting.get("show_feedback_link", "false") == "true"  %>
+
+        <% if @account.root_account? && !@account.site_admin? && show_feedback_link? %>
+
+          <% if use_new_styles? %>
+            <div id="custom_help_link_settings"></div>
+          <% else %>
           <fieldset>
-            <legend><%= t(:custom_links_to_include_in_the_help_dialog_popup, "Custom Links to include in the help dialog popup") %></legend>
-            <p style="font-size: 0.9em;"><%= t(:if_you_would_like_to_link_to_your_own_campus_support_website_in_the_help_dialog_you_can_do_that_here, "If you would like to link to your own campus support website in the help dialog you can do that here") %></p>
+            <legend><%= t("Custom Links to include in the help dialog popup") %></legend>
+
+            <p style="font-size: 0.9em;">
+              <%= t("If you would like to link to your own campus support website in the help dialog you can do that here.") %>
+            </p>
+
             <%= f.fields_for :custom_help_links do |custom_help_links, i| %>
               <div id="custom_help_links">
                 <% ((@account.settings[:custom_help_links] || []) << {}).each_with_index do |help_link, i| %>
                   <div class="custom_help_link <%= raw ' blank" style="display: none;' if help_link.empty? %>">
-                    <a href="#" class="delete" title="<%= t(:delete, "delete") %>">&nbsp;</a>
+                    <button type="button" class="Button Button--link delete">
+                      <i class="icon-end" aria-hidden="true"></i>
+                      <span class="screenreader-only"><%= t("Delete custom help link") %></span>
+                    </button>
                     <input type="hidden" name="account[custom_help_links][<%= i %>][state]" value="<%= help_link[:state] || 'active' %>" id="custom_help_links_<%= i %>_state" class="custom_help_link_state"/>
                     <table class="formtable">
                       <tr>
@@ -542,8 +556,17 @@ TEXT
                 <% end %>
               </div>
             <% end %>
-            <a href="#" class="add-small add_custom_help_link" style="font-size: 0.9em;"><%= t(:add_a_custom_help_link, "Add a custom help link") %></a>
+            <button
+              type="button"
+              class="Button Button--link add_custom_help_link"
+              title="<%= t('Add a custom help link') %>"
+              aria-label="<%= t('Add a custom help link') %>"
+            >
+              <i class="icon-add" aria-hidden="true"></i>
+              <%= t("Add a custom help link") %>
+            </button>
           </fieldset>
+          <% end %>
         <% end %>
 
         <% unless @account.site_admin? %>
@@ -584,7 +607,7 @@ TEXT
               <tr>
                 <td>&nbsp;</td>
                 <td>
-                  <a href="<%= account_turnitin_confirmation_path(@account) %>" class="confirm_turnitin_settings_link btn">
+                  <a href="<%= account_turnitin_confirmation_path(@account) %>" class="confirm_turnitin_settings_link Button">
                     <%= t(:confirm_turnitin_settings_link, "confirm Turnitin settings") %>
                   </a>
                 </td>
@@ -601,6 +624,12 @@ TEXT
                 <td>
                   <span style="font-size: 0.9em;"><%= t(:turnitin_pledge_help, "students must check a box acknowledging that they agree with this pledge") %></span>
                   <%= f.text_area :turnitin_pledge, :style => "width: 90%; height: 50px;" %>
+                </td>
+              </tr>
+              <tr>
+                <td><%= f.blabel :originality_report_visibility, :en => "Students can see the originality report" %></td>
+                <td>
+                  <%= f.select :turnitin_originality, options_for_select(turnitin_originality_options, @account.turnitin_originality)%>
                 </td>
               </tr>
             </table>
@@ -664,7 +693,7 @@ acknowledge that you have read and agreed to the
         <%= render partial: 'external_integration_keys', locals: { f: f } %>
 
         <div class="button-container">
-          <button type="submit" class="btn btn-primary"><%= t(:update_settings_button, "Update Settings") %></button>
+          <button type="submit" class="Button Button--primary"><%= t(:update_settings_button, "Update Settings") %></button>
         </div>
       <% end %>
     </div>
@@ -779,7 +808,7 @@ acknowledge that you have read and agreed to the
         <% end %>
 
         <div class="button-container">
-          <button type="submit" class="btn btn-primary"><%= t(:update_settings_button, "Update Settings") %></button>
+          <button type="submit" class="Button Button--primary"><%= t(:update_settings_button, "Update Settings") %></button>
         </div>
       <% end %>
     </div>
@@ -796,7 +825,7 @@ acknowledge that you have read and agreed to the
     </ul>
     <% unless available_roles.empty? %>
       <% js_bundle :user_lists %>
-      <a href="#" class="add_users_link btn btn-primary"><i class="icon-add"></i> <%= t('links.add_admins', %{Add Account Admins}) %></a>
+      <a href="#" class="add_users_link Button Button--primary" title="<%= t('Add Account Admins') %>" aria-label="<%= t('Add Account Admins') %>"><i class="icon-plus"></i> <%= t('links.add_admins', %{Account Admins}) %></a>
       <%= form_tag account_add_account_user_url(@account), {:id => "enroll_users_form", :style => "display: none;"} do  %>
         <h2><%= t(:add_admin_title, "Add Account Admins") %></h2>
         <div style="margin-top: 5px;">
@@ -811,30 +840,32 @@ acknowledge that you have read and agreed to the
           <%= render :partial => 'shared/user_lists' %>
         </div>
         <div class="form-actions">
-          <button type="button" class="btn go_back_button"><%= t('buttons.modify_users', %{Go back and edit the list of users}) %></button>
-          <button type="button" class="btn cancel_button"><%= t('#buttons.cancel', %{Cancel}) %></button>
-          <button type="button" class="btn btn-primary verify_syntax_button"><%= t('buttons.continue', %{Continue...}) %></button>
-          <button type="submit" class="btn btn-primary add_users_button"><%= t('buttons.add_users', %{OK Looks Good, Add These Users}) %></button>
+          <button type="button" class="Button go_back_button"><%= t('buttons.modify_users', %{Go back and edit the list of users}) %></button>
+          <button type="button" class="Button cancel_button"><%= t('#buttons.cancel', %{Cancel}) %></button>
+          <button type="button" class="Button Button---primary verify_syntax_button"><%= t('buttons.continue', %{Continue...}) %></button>
+          <button type="submit" class="Button Button--primary add_users_button"><%= t('buttons.add_users', %{OK Looks Good, Add These Users}) %></button>
 
         </div>
       <% end %>
     <% end %>
   </div>
-  <% if @account.root_account? %>
-    <div id="tab-announcements">
-      <h2><%= t(:global_announcements_title, "Global Announcements") %></h2>
-      <ul class="announcements_list unstyled_list">
-        <%= will_paginate(@announcements, params: {anchor: "tab-announcements"}) %>
-        <% @announcements.each do |announcement| %>
 
-          <li class="announcements_list_item">
-            <div class="ic-notification ic-notification--admin-created ic-notification--<%= notification_container_classname(announcement) %>">
-              <div class="ic-notification__icon" role="presentation">
-                <i class="<%= notification_icon_classname(announcement) %>"></i>
-                <span class="screenreader-only">
-                  <%= accessible_message_icon_text(notification_icon_type(announcement)) %>
-                </span>
-              </div>
+  <div id="tab-announcements">
+    <h2><%= t(:global_announcements_title, "Global Announcements") %></h2>
+    <ul class="announcements_list unstyled_list">
+      <%= will_paginate(@announcements, params: {anchor: "tab-announcements"}) %>
+      <% @announcements.each do |announcement| %>
+
+        <li class="announcements_list_item">
+          <div class="ic-notification ic-notification--admin-created ic-notification--<%= notification_container_classname(announcement) %>">
+            <div class="ic-notification__icon" role="presentation">
+              <i class="<%= notification_icon_classname(announcement) %>"></i>
+              <span class="screenreader-only">
+                <%= accessible_message_icon_text(notification_icon_type(announcement)) %>
+              </span>
+            </div>
+
+            <div class="notification_account_content">
               <div class="ic-notification__content">
                 <div class="ic-notification__message">
                   <% if can_do(@account, @current_user, :manage_alerts) %>
@@ -862,142 +893,148 @@ acknowledge that you have read and agreed to the
                   </span>
                 </div>
               </div>
-            </div>
-
-            <div class="announcement-details">
-              <div class="announcement-details-post-info">
-                <div class="announcement-details-post-info__datetime">
-                  <%= t(:alert_timespan, "from %{start_at} to %{end_at}",
-                        :start_at => datetime_string(announcement.start_at),
-                        :end_at => datetime_string(announcement.end_at)) %>
-                </div>
-                <div class="announcement-details-post-info__sender">
-                  <%= link_to(context_user_name(@account, announcement.user_id), user_path(announcement.user_id)) %>
-                </div>
-              </div>
-              <% if announcement.required_account_service %>
-                <div>
-                  <%= AccountServices.allowable_services[announcement.required_account_service.to_sym].try(:[], :name) %>
-                </div>
-              <% end %>
-              <% unless announcement.account_notification_roles.empty? %>
-                <div class="announcement-details-roles">
-                  <%= t :announcement_sent_to_roles, "Send only to the following types of users:" %>
-                  <ul>
-                    <% announcement.account_notification_roles.each do |r| %>
-                      <% @course_roles.select {|rt| rt[:id] == r.role_id }.each do |rt| %>
-                        <li><%= rt[:label] %></li>
-                      <% end %>
-                      <% # NilEnrollment is a special case %>
-                      <% if r.role_id.nil? %>
-                        <li><%= t :no_enrollment_roles, "Unenrolled users" %></li>
-                      <% end %>
-                      <% @account_roles.select {|rt| rt[:id] == r.role_id }.each do |rt| %>
-                        <li><%= rt[:label]  %></li>
-                      <% end %>
-                    <% end %>
-                  </ul>
-                </div>
-              <% end %>
-              <% if announcement.months_in_display_cycle %>
-                <div>
-                  <%= t :announcement_sent_to_subset, "Sent to 1 / %{denominator} users each month", denominator: announcement.months_in_display_cycle %>
-                </div>
-              <% end %>
-              <% if can_do(@account, @current_user, :manage_alerts) %>
-                <%= render(:partial => "edit_account_notification", :locals => {:announcement => announcement}) %>
-              <% end %>
-            </div>
-          </li>
-        <% end %>
-      </ul>
-      <% if can_do(@account, @current_user, :manage_alerts) %>
-        <button id="add_announcement_button" class="btn btn-primary element_toggler add_notification_toggle_focus" aria-controls="add_notification_form">
-          <i class="icon-plus"></i> <%= t("Add a New Announcement") %>
-        </button>
-        <%= form_for :account_notification,
-         url: account_account_notifications_url(@account),
-         html: {
-           id: "add_notification_form",
-           class: "hidden_form",
-           role: "region" } do |f| %>
-
-          <div class="grid-row">
-
-            <div class="col-xs-12 col-lg-6">
-              <div class="ic-Form-control">
-                <label for="account_notification_subject" class="ic-Label">
-                  <%= t("Title") %>
-                </label>
-                <%= f.text_field :subject, :class => 'ic-Input', :id => 'account_notification_subject' %>
-              </div>
-            </div>
-
-            <div class="col-xs-12 col-lg-6">
-              <div class="ic-Form-control">
-                <label for="account_notification_icon" class="ic-Label">
-                  <%= t("Announcement type") %>
-                </label>
-                <select
-                  id="account_notification_icon"
-                  class="ic-Input"
-                  name="account_notification[icon]"
-                >
-                  <%= options_for_select([[t("warning"), "warning", {:class=>"error"}],
-                    [t("error"), "error", {:class=>"error"}],
-                    [t("information"), "information", {:class=>"information"}],
-                    [t("question"), "question", {:class=>"question"}],
-                    [t("calendar"), "calendar", {:class=>"calendar"}]]) %>
-                </select>
-              </div>
+              <span class="notification_account_content_text">
+                <%= t("This is a message for *%{name}*", name: announcement.account.name, wrapper: '<b>\1</b>') %>
+              </span>
             </div>
 
           </div>
-
-          <div class="ic-Form-control">
-            <label class="ic-Label"><%= t("Message") %></label>
-            <%= f.text_area :message, :class => 'alert_message' %>
-            <% if @account.site_admin? %>
-              <p>
-                <%= t(:interpolate_account_domain, "Enter \"{{ACCOUNT_DOMAIN}}\" to substitute the user's root account domain") %>
-              </p>
-              <p>
-                <%= t(:interpolate_user_id, "Enter \"{{CANVAS_USER_ID}}\" to substitute the user's unique Canvas ID") %>
-              </p>
+          <div class="announcement-details">
+            <div class="announcement-details-post-info">
+              <div class="announcement-details-post-info__datetime">
+                <%= t(:alert_timespan, "from %{start_at} to %{end_at}",
+                      :start_at => datetime_string(announcement.start_at),
+                      :end_at => datetime_string(announcement.end_at)) %>
+              </div>
+              <div class="announcement-details-post-info__sender">
+                <%= link_to(context_user_name(@account, announcement.user_id), user_path(announcement.user_id)) %>
+              </div>
+            </div>
+            <% if announcement.required_account_service %>
+              <div>
+                <%= AccountServices.allowable_services[announcement.required_account_service.to_sym].try(:[], :name) %>
+              </div>
+            <% end %>
+            <% unless announcement.account_notification_roles.empty? %>
+              <div class="announcement-details-roles">
+                <%= t "Send only to the following types of users:" %>
+                <%= roles_message(@account) %>
+                <ul>
+                  <% announcement.account_notification_roles.each do |r| %>
+                    <% @course_roles.select {|rt| rt[:id] == r.role_id }.each do |rt| %>
+                      <li><%= rt[:label] %></li>
+                    <% end %>
+                    <% # NilEnrollment is a special case %>
+                    <% if r.role_id.nil? %>
+                      <li><%= t :no_enrollment_roles, "Unenrolled users" %></li>
+                    <% end %>
+                    <% @account_roles.select {|rt| rt[:id] == r.role_id }.each do |rt| %>
+                      <li><%= rt[:label]  %></li>
+                    <% end %>
+                  <% end %>
+                </ul>
+              </div>
+            <% end %>
+            <% if announcement.months_in_display_cycle %>
+              <div>
+                <%= t :announcement_sent_to_subset, "Sent to 1 / %{denominator} users each month", denominator: announcement.months_in_display_cycle %>
+              </div>
+            <% end %>
+            <% if can_do(@account, @current_user, :manage_alerts) %>
+              <%= render(:partial => "edit_account_notification", :locals => {:announcement => announcement}) %>
             <% end %>
           </div>
+        </li>
+      <% end %>
+    </ul>
+    <% if can_do(@account, @current_user, :manage_alerts) %>
+      <button id="add_announcement_button" class="Button Button--primary element_toggler add_notification_toggle_focus" aria-controls="add_notification_form" title="<%= t('Add New Announcement') %>" aria-label="<%= t('Add New Announcement') %>">
+        <i class="icon-plus"></i> <%= t("New Announcement") %>
+      </button>
+      <%= form_for :account_notification,
+       url: account_account_notifications_url(@account),
+       html: {
+         id: "add_notification_form",
+         class: "hidden_form",
+         role: "region" } do |f| %>
+
+        <div class="grid-row">
+
+          <div class="col-xs-12 col-lg-6">
+            <div class="ic-Form-control">
+              <label for="account_notification_subject" class="ic-Label">
+                <%= t("Title") %>
+              </label>
+              <%= f.text_field :subject, :class => 'ic-Input', :id => 'account_notification_subject' %>
+            </div>
+          </div>
+
+          <div class="col-xs-12 col-lg-6">
+            <div class="ic-Form-control">
+              <label for="account_notification_icon" class="ic-Label">
+                <%= t("Announcement type") %>
+              </label>
+              <select
+                id="account_notification_icon"
+                class="ic-Input"
+                name="account_notification[icon]"
+              >
+                <%= options_for_select([[t("warning"), "warning", {:class=>"error"}],
+                  [t("error"), "error", {:class=>"error"}],
+                  [t("information"), "information", {:class=>"information"}],
+                  [t("question"), "question", {:class=>"question"}],
+                  [t("calendar"), "calendar", {:class=>"calendar"}]]) %>
+              </select>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="ic-Form-control">
+          <label class="ic-Label"><%= t("Message") %></label>
+          <%= f.text_area :message, :class => 'alert_message' %>
           <% if @account.site_admin? %>
-            <div class="ic-Checkbox-group">
-              <div class="ic-Form-control ic-Form-control--checkbox">
-                <div id="survey_announcement_field">
-                  <input type="checkbox" name="account_notification[required_account_service]" id="account_notification_required_account_service" value="account_survey_notifications" />
-                  <label class="ic-Label" for="account_notification_required_account_service">
-                    <%= t "Site Admin Only. Send to 1 / %{denominator} users in enabled accounts each month.", denominator: f.text_field(:months_in_display_cycle, value: AccountNotification.default_months_in_display_cycle, disabled: true) %>
-                  </label>
-                </div>
+            <p>
+              <%= t(:interpolate_account_domain, "Enter \"{{ACCOUNT_DOMAIN}}\" to substitute the user's root account domain") %>
+            </p>
+            <p>
+              <%= t(:interpolate_user_id, "Enter \"{{CANVAS_USER_ID}}\" to substitute the user's unique Canvas ID") %>
+            </p>
+          <% end %>
+        </div>
+        <% if @account.site_admin? %>
+          <div class="ic-Checkbox-group">
+            <div class="ic-Form-control ic-Form-control--checkbox">
+              <div id="survey_announcement_field">
+                <input type="checkbox" name="account_notification[required_account_service]" id="account_notification_required_account_service" value="account_survey_notifications" />
+                <label class="ic-Label" for="account_notification_required_account_service">
+                  <%= t "Site Admin Only. Send to 1 / %{denominator} users in enabled accounts each month.", denominator: f.text_field(:months_in_display_cycle, value: AccountNotification.default_months_in_display_cycle, disabled: true) %>
+                </label>
               </div>
             </div>
-          <% end %>
-          <div class="ic-Form-control">
-            <div class="ic-Label" id="aria-announcements-send-to-group">
-              <%= t "Send to" %>
-              <span><%= t "(will send to everyone if no selections are made)" %></span>
-            </div>
-            <div class="grid-row">
-              <div class="col-xs-12 col-lg-4">
-                <i><%= t "Course roles" %></i>
-                <div class="ic-Checkbox-group" role="group" aria-labelledby="aria-announcements-send-to-group">
-                  <% @course_roles.each do |r| %>
-                    <div class="ic-Form-control ic-Form-control--checkbox">
-                      <%= check_box_tag "account_notification_roles[]", r[:id], false, { :class => "account_notification_role_cbx", :id => "account_notification_role_#{r[:id]}_cbx" } %>
-                      <label class="ic-Label" for="<%= "account_notification_role_#{r[:id]}_cbx" %>">
-                        <%= r[:label] %>
-                        <span class="screenreader-only">
-                          <%=t "Send this announcement to users with the course role of %{role}", :role => r[:label] %>
-                        </span>
-                      </label>
-                    </div>
-                  <% end %>
+          </div>
+        <% end %>
+        <div class="ic-Form-control">
+          <div class="ic-Label" id="aria-announcements-send-to-group">
+            <%= t "Send to" %>
+            <%= roles_message(@account) %>
+          </div>
+          <div class="grid-row">
+            <div class="col-xs-12 col-lg-4">
+              <i><%= t "Course roles" %></i>
+              <div class="ic-Checkbox-group" role="group" aria-labelledby="aria-announcements-send-to-group">
+                <% @course_roles.each do |r| %>
+                  <div class="ic-Form-control ic-Form-control--checkbox">
+                    <%= check_box_tag "account_notification_roles[]", r[:id], false, { :class => "account_notification_role_cbx", :id => "account_notification_role_#{r[:id]}_cbx" } %>
+                    <label class="ic-Label" for="<%= "account_notification_role_#{r[:id]}_cbx" %>">
+                      <%= r[:label] %>
+                      <span class="screenreader-only">
+                        <%=t "Send this announcement to users with the course role of %{role}", :role => r[:label] %>
+                      </span>
+                    </label>
+                  </div>
+                <% end %>
+                <% if @account.root_account? %>
                   <div class="ic-Form-control ic-Form-control--checkbox">
                     <%= check_box_tag "account_notification_roles[]", "NilEnrollment", false, { :class => "account_notification_role_cbx", :id => "account_notification_role_NilEnrollment_cbx" } %>
                     <label class="ic-Label" for="<%= "account_notification_role_NilEnrollment_cbx" %>">
@@ -1007,76 +1044,77 @@ acknowledge that you have read and agreed to the
                       </span>
                     </label>
                   </div>
-                </div>
+                <% end %>
               </div>
-              <div class="col-xs-12 col-lg-4">
-                <i><%= t "Account roles" %></i>
-                <div class="ic-Checkbox-group" role="group" aria-labelledby="aria-announcements-send-to-group">
-                  <% @account_roles.each do |r| %>
-                    <div class="ic-Form-control ic-Form-control--checkbox">
-                      <%= check_box_tag "account_notification_roles[]", r[:id], false, { :class => "account_notification_role_cbx", :id => "account_notification_role_#{r[:id]}_cbx" } %>
-                      <label class="ic-Label" for="<%= "account_notification_role_#{r[:id]}_cbx" %>">
-                        <%= r[:label] %>
-                        <span class="screenreader-only">
-                          <%=t "Send this announcement to users with the account role of %{role}", :role => r[:label] %>
-                        </span>
-                      </label>
-                    </div>
-                  <% end %>
-                </div>
+            </div>
+            <div class="col-xs-12 col-lg-4">
+              <i><%= t "Account roles" %></i>
+              <div class="ic-Checkbox-group" role="group" aria-labelledby="aria-announcements-send-to-group">
+                <% @account_roles.each do |r| %>
+                  <div class="ic-Form-control ic-Form-control--checkbox">
+                    <%= check_box_tag "account_notification_roles[]", r[:id], false, { :class => "account_notification_role_cbx", :id => "account_notification_role_#{r[:id]}_cbx" } %>
+                    <label class="ic-Label" for="<%= "account_notification_role_#{r[:id]}_cbx" %>">
+                      <%= r[:label] %>
+                      <span class="screenreader-only">
+                        <%=t "Send this announcement to users with the account role of %{role}", :role => r[:label] %>
+                      </span>
+                    </label>
+                  </div>
+                <% end %>
               </div>
             </div>
           </div>
+        </div>
 
-          <div class="grid-row">
+        <div class="grid-row">
 
-            <div class="col-xs-12 col-lg-6">
+          <div class="col-xs-12 col-lg-6">
 
-              <div class="ic-Form-control">
-                <label class="ic-Label" id="announcement_starts_at_label">
-                  <%= t("Announcement starts at") %>
-                  <span class="screenreader-only">
-                    <%= datepicker_screenreader_prompt %>
-                  </span>
-                </label>
-                <%= f.text_field :start_at,
-                                 :class => 'datetime_field',
-                                 "aria-labelledby" => "announcement_starts_at_label",
-                                 "data-tooltip" => "",
-                                 :title => accessible_date_format %>
-              </div>
+            <div class="ic-Form-control">
+              <label class="ic-Label" id="announcement_starts_at_label">
+                <%= t("Announcement starts at") %>
+                <span class="screenreader-only">
+                  <%= datepicker_screenreader_prompt %>
+                </span>
+              </label>
+              <%= f.text_field :start_at,
+                               :class => 'datetime_field',
+                               "aria-labelledby" => "announcement_starts_at_label",
+                               "data-tooltip" => "",
+                               :title => accessible_date_format %>
             </div>
-
-            <div class="col-xs-12 col-lg-6">
-              <div class="ic-Form-control">
-                <label class="ic-Label" id="announcement_ends_at_label">
-                  <%= t("Announcement ends at") %>
-                  <span class="screenreader-only">
-                    <%= datepicker_screenreader_prompt %>
-                  </span>
-                </label>
-                <%= f.text_field :end_at,
-                                 :class => 'datetime_field',
-                                 "aria-labelledby" => "announcement_ends_at_label",
-                                 "data-tooltip" => "",
-                                 :title => accessible_date_format %>
-              </div>
-            </div>
-
           </div>
 
-          <div class="ic-Form-actions">
-            <button type="Button" class="element_toggler btn button-secondary add_notification_cancel_focus" aria-controls="add_notification_form">
-              <%= t('#buttons.cancel', %{Cancel}) %>
-            </button>
-            <button type="submit" class="Button Button--primary">
-              <%= t("Publish announcement") %>
-            </button>
+          <div class="col-xs-12 col-lg-6">
+            <div class="ic-Form-control">
+              <label class="ic-Label" id="announcement_ends_at_label">
+                <%= t("Announcement ends at") %>
+                <span class="screenreader-only">
+                  <%= datepicker_screenreader_prompt %>
+                </span>
+              </label>
+              <%= f.text_field :end_at,
+                               :class => 'datetime_field',
+                               "aria-labelledby" => "announcement_ends_at_label",
+                               "data-tooltip" => "",
+                               :title => accessible_date_format %>
+            </div>
           </div>
-        <% end %>
+
+        </div>
+
+        <div class="ic-Form-actions">
+          <button type="Button" class="element_toggler Button Button--secondary add_notification_cancel_focus" aria-controls="add_notification_form">
+            <%= t('#buttons.cancel', %{Cancel}) %>
+          </button>
+          <button type="submit" class="Button Button--primary">
+            <%= t("Publish announcement") %>
+          </button>
+        </div>
       <% end %>
-    </div>
-  <% end %>
+    <% end %>
+  </div>
+
   <% if !@available_reports.blank? %>
     <div id="tab-reports">
       <h2 class="screenreader-only"><%= t('headings.sections', "Reports") %></h2>
@@ -1134,20 +1172,20 @@ acknowledge that you have read and agreed to the
                         <%= render :partial => parameters_partial if parameters_partial %>
                       </div>
                       <br />
-                      <a href="#" id="run_<%= report %>" class="btn btn-primary btn-small run_report_link"><%= t 'links.run_report', 'Run Report' %></a>
+                      <a href="#" id="run_<%= report %>" class="Button Button--primary Button--small run_report_link"><%= t 'links.run_report', 'Run Report' %></a>
                     </form>
                   </div>
                 </div>
                 <span class="running_report_message" style="<%= hidden unless in_progress %>">
                   <%= t('report_running', 'The report is running.*You\'ll receive an email when it is done.*', :wrapper => '<div>\1</div>') %>
                 </span>
-                <a href="#" id="configure_<%= report %>" style="<%= hidden if in_progress %>" class="btn btn-small configure_report_link"><%= t 'links.configure_report', 'Configure...' %></a>
+                <a href="#" id="configure_<%= report %>" style="<%= hidden if in_progress %>" class="Button Button--small configure_report_link"><%= t 'links.configure_report', 'Configure...' %></a>
               <% else %>
                 <form id="<%= report %>_form" class="run_report_form" action="<%= api_v1_account_create_report_path(@account, report) %>">
                   <span class="running_report_message" style="<%= hidden unless in_progress %>">
                     <%= t('report_running', 'The report is running.*You\'ll receive an email when it is done.*', :wrapper => '<div>\1</div>') %>
                   </span>
-                  <a href="#" id="run_<%= report %>" style="<%= hidden if in_progress %>" class="btn btn-small btn-primary run_report_link"><%= t 'links.run_report', 'Run Report' %></a>
+                  <a href="#" id="run_<%= report %>" style="<%= hidden if in_progress %>" class="Button Button--small Button--primary run_report_link"><%= t 'links.run_report', 'Run Report' %></a>
                 </form>
               <% end %>
             </td>

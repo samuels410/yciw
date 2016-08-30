@@ -63,8 +63,35 @@ module SpeedGraderCommon
     @assignment.grade_student @students[1], {grade: ''}
 
     refresh_page
-    expect(f('#grading-box-extended').attribute 'value').to eq ''
-    f('a.next').click
-    expect(f('#grading-box-extended').attribute 'value').to eq ''
+    expect(f('#grading-box-extended')).to have_value ''
+    f('#next-student-button').click
+    expect(f('#grading-box-extended')).to have_value ''
+  end
+
+  def cycle_students_correctly(direction_string)
+    current_index = @students.index(@students.find { |l| l.name == f(selectedStudent).text })
+
+    f(direction_string).click
+
+    direction = direction_string.include?(next_) ? 1 : -1
+    new_index = (current_index + direction) % @students.length
+    student_X_of_X_string = "Student #{new_index + 1} of #{@students.length}"
+
+    f(selectedStudent).text.include?(@students[new_index].name) &&
+        f(studentXofXlabel).text.include?(student_X_of_X_string)
+  end
+
+  def expand_right_pane
+    # attempting to click things that were on the very edge of the page
+    # was causing certain specs to flicker. this fixes that issue by
+    # increasing the width of the right pane
+    driver.execute_script("$('#right_side').width('500px')")
+  end
+
+  def submit_comment(text)
+    f('#speedgrader_comment_textarea').send_keys(text)
+    scroll_into_view('#add_a_comment button[type="submit"]')
+    f('#add_a_comment button[type="submit"]').click
+    wait_for_ajaximations
   end
 end

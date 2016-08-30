@@ -136,6 +136,18 @@ describe "Files API", type: :request do
       expect(@attachment.reload.file_state).to eq 'available'
     end
 
+    it "includes usage rights if overwriting a file that has them already" do
+      usage_rights = @course.usage_rights.create! use_justification: 'creative_commons', legal_copyright: '(C) 2014 XYZ Corp', license: 'cc_by_nd'
+      @attachment.usage_rights = usage_rights
+      @attachment.save!
+      upload_data
+      json = call_create_success
+      expect(json['usage_rights']).to eq({"use_justification"=>"creative_commons",
+                                          "license"=>"cc_by_nd",
+                                          "legal_copyright"=>"(C) 2014 XYZ Corp",
+                                          "license_name"=>"CC Attribution No Derivatives"})
+    end
+
     it "should store long-ish non-ASCII filenames (local storage)" do
       local_storage!
       @attachment.update_attribute(:filename, "Качество образования-1.txt")
@@ -862,6 +874,30 @@ describe "Files API", type: :request do
         expect(@existing_file.reload).not_to be_deleted
         expect(@att.reload.folder).to eq @sub
         expect(@att.display_name).not_to eq @existing_file.display_name
+      end
+    end
+
+    describe "submissions folder" do
+      before(:once) do
+        @student = user_model
+        @root_folder = Folder.root_folders(@student).first
+        @file = Attachment.create! filename: 'file.txt', display_name: 'file.txt', uploaded_data: StringIO.new('blah'), folder: @root_folder, context: @student
+        @sub_folder = @student.submissions_folder
+        @sub_file = Attachment.create! filename: 'sub.txt', display_name: 'sub.txt', uploaded_data: StringIO.new('bleh'), folder: @sub_folder, context: @student
+      end
+
+      it "should not move a file into a submissions folder" do
+        api_call_as_user(@student, :put, "/api/v1/files/#{@file.id}",
+                         { :controller => "files", :action => "api_update", :format => "json", :id => @file.to_param },
+                         { :parent_folder_id => @sub_folder.to_param },
+                         {}, { :expected_status => 401 })
+      end
+
+      it "should not move a file out of a submissions folder" do
+        api_call_as_user(@student, :put, "/api/v1/files/#{@sub_file.id}",
+                         { :controller => "files", :action => "api_update", :format => "json", :id => @sub_file.to_param },
+                         { :parent_folder_id => @root_folder.to_param },
+                         {}, { :expected_status => 401 })
       end
     end
 

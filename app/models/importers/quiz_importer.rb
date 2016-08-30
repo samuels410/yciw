@@ -170,11 +170,13 @@ module Importers
         if item.deleted?
           item.workflow_state = (hash[:available] || !item.can_unpublish?) ? 'available' : 'unpublished'
           item.saved_by = :migration
+          item.quiz_groups.destroy_all
+          item.quiz_questions.destroy_all
           item.save
         end
       end
-      item ||= context.quizzes.new
-      new_record = item.new_record?
+      item ||= context.quizzes.temp_record
+      new_record = item.new_record? || item.deleted?
 
       hash[:due_at] ||= hash[:due_date]
       hash[:due_at] ||= hash[:grading][:due_date] if hash[:grading]
@@ -253,7 +255,7 @@ module Importers
           item.assignment ||= Quizzes::Quiz.where(context_type: context.class.to_s, context_id: context, migration_id: hash[:assignment][:migration_id]).first
         end
         item.assignment = nil if item.assignment && item.assignment.quiz && item.assignment.quiz.id != item.id
-        item.assignment ||= context.assignments.new
+        item.assignment ||= context.assignments.temp_record
 
         item.assignment = ::Importers::AssignmentImporter.import_from_migration(hash[:assignment], context, migration, item.assignment, item)
 

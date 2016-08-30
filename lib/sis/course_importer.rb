@@ -57,7 +57,7 @@ module SIS
         @success_count = 0
       end
 
-      def add_course(course_id, term_id, account_id, fallback_account_id, status, start_date, end_date, abstract_course_id, short_name, long_name, integration_id)
+      def add_course(course_id, term_id, account_id, fallback_account_id, status, start_date, end_date, abstract_course_id, short_name, long_name, integration_id, course_format)
         state_changes = []
         @logger.debug("Processing Course #{[course_id, term_id, account_id, fallback_account_id, status, start_date, end_date, abstract_course_id, short_name, long_name].inspect}")
 
@@ -65,8 +65,9 @@ module SIS
         raise ImportError, "No short_name given for course #{course_id}" if short_name.blank? && abstract_course_id.blank?
         raise ImportError, "No long_name given for course #{course_id}" if long_name.blank? && abstract_course_id.blank?
         raise ImportError, "Improper status \"#{status}\" for course #{course_id}" unless status =~ /\A(active|deleted|completed)/i
+        raise ImportError, "Invalid course_format \"#{course_format}\" for course #{course_id}" unless course_format.blank? || course_format =~ /\A(online|on_campus|blended)/i
 
-        course = @root_account.all_courses.where(sis_source_id: course_id).first
+        course = @root_account.all_courses.where(sis_source_id: course_id).take
         if course.nil?
           course = Course.new
           state_changes << :created
@@ -75,14 +76,14 @@ module SIS
         end
         course_enrollment_term_id_stuck = course.stuck_sis_fields.include?(:enrollment_term_id)
         if !course_enrollment_term_id_stuck && term_id
-          term = @root_account.enrollment_terms.active.where(sis_source_id: term_id).first
+          term = @root_account.enrollment_terms.active.where(sis_source_id: term_id).take
         end
         course.enrollment_term = term if term
         course.root_account = @root_account
 
         account = nil
-        account = @root_account.all_accounts.where(sis_source_id: account_id).first if account_id.present?
-        account ||= @root_account.all_accounts.where(sis_source_id: fallback_account_id).first if fallback_account_id.present?
+        account = @root_account.all_accounts.where(sis_source_id: account_id).take if account_id.present?
+        account ||= @root_account.all_accounts.where(sis_source_id: fallback_account_id).take if fallback_account_id.present?
         course.account = account if account
         course.account ||= @root_account
 
@@ -122,7 +123,7 @@ module SIS
 
         abstract_course = nil
         if abstract_course_id.present?
-          abstract_course = @root_account.root_abstract_courses.where(sis_source_id: abstract_course_id).first
+          abstract_course = @root_account.root_abstract_courses.where(sis_source_id: abstract_course_id).take
           @messages << "unknown abstract course id #{abstract_course_id}, ignoring abstract course reference" unless abstract_course
         end
 
@@ -158,6 +159,11 @@ module SIS
         end
 
         update_enrollments = !course.new_record? && !(course.changes.keys & ['workflow_state', 'name', 'course_code']).empty?
+
+        if course_format != course.course_format
+          course.settings_will_change!
+          course.course_format = course_format
+        end
 
         if course.changed?
           course.templated_courses.each do |templated_course|

@@ -36,9 +36,10 @@ require [
   peerReviewsSelector = new PeerReviewsSelector
     parentModel: assignment
 
-  editHeaderView = new EditHeaderView
-    el: '#edit_assignment_header'
-    model: assignment
+  headerEl = if ENV.CONDITIONAL_RELEASE_SERVICE_ENABLED
+      '#edit_assignment_header-cr'
+    else
+      '#edit_assignment_header'
 
   editView = new EditView
     el: '#edit_assignment_form'
@@ -52,5 +53,10 @@ require [
         model: dueDateList
         views: {}
 
+  editHeaderView = new EditHeaderView
+    el: headerEl
+    model: assignment
+    views:
+      'edit_assignment_form': editView
+
   editHeaderView.render()
-  editView.render()

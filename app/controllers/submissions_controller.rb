@@ -141,6 +141,7 @@ class SubmissionsController < ApplicationController
     "online_url" => ["url"].freeze,
     "online_upload" => ["file_ids"].freeze,
     "media_recording" => ["media_comment_id", "media_comment_type"].freeze,
+    "basic_lti_launch" => ["url"].freeze
   }.freeze
 
   # @API Submit an assignment
@@ -158,7 +159,7 @@ class SubmissionsController < ApplicationController
   # @argument comment[text_comment] [String]
   #   Include a textual comment with the submission.
   #
-  # @argument submission[submission_type] [Required, String, "online_text_entry"|"online_url"|"online_upload"|"media_recording"]
+  # @argument submission[submission_type] [Required, String, "online_text_entry"|"online_url"|"online_upload"|"media_recording"|"basic_lti_launch"]
   #   The type of submission being made. The assignment submission_types must
   #   include this submission type as an allowed option, or the submission will be rejected with a 400 error.
   #
@@ -177,7 +178,7 @@ class SubmissionsController < ApplicationController
   #   Submit the assignment as a URL. The URL scheme must be "http" or "https",
   #   no "ftp" or other URL schemes are allowed. If no scheme is given (e.g.
   #   "www.example.com") then "http" will be assumed. Requires a submission_type
-  #   of "online_url".
+  #   of "online_url" or "basic_lti_launch".
   #
   # @argument submission[file_ids][] [Integer]
   #   Submit the assignment as a set of one or more previously uploaded files
@@ -208,7 +209,7 @@ class SubmissionsController < ApplicationController
 
     if @assignment.locked_for?(@current_user) && !@assignment.grants_right?(@current_user, :update)
       flash[:notice] = t('errors.can_not_submit_locked_assignment', "You can't submit an assignment when it is locked")
-      redirect_to named_context_url(@context, :context_assignment_user, @assignment.id)
+      redirect_to named_context_url(@context, :context_assignment_url, @assignment.id)
       return
     end
 
@@ -225,10 +226,6 @@ class SubmissionsController < ApplicationController
       if online_upload?
         return unless extensions_allowed?
         return unless has_file_attached?
-
-        # Create and save Attachment objects, and store them in our params data structure for later processing
-        create_and_save_uploaded_attachments
-
       elsif is_google_doc?
         params[:submission][:submission_type] = 'online_upload'
         attachment = submit_google_doc(params[:google_doc][:document_id])
@@ -244,6 +241,9 @@ class SubmissionsController < ApplicationController
     end
 
     params[:submission][:attachments] = params[:submission][:attachments].compact.uniq
+    if @context.root_account.feature_enabled?(:submissions_folder)
+      params[:submission][:attachments] = self.class.copy_attachments_to_submissions_folder(@context, params[:submission][:attachments])
+    end
 
     begin
       @submission = @assignment.submit_homework(@current_user, params[:submission])
@@ -302,6 +302,18 @@ class SubmissionsController < ApplicationController
   end
   private :lookup_existing_attachments
 
+  def self.copy_attachments_to_submissions_folder(assignment_context, attachments)
+    attachments.map do |attachment|
+      if attachment.folder && attachment.folder.for_submissions?
+        attachment # already in a submissions folder
+      elsif attachment.context.respond_to?(:submissions_folder)
+        attachment.copy_to_folder!(attachment.context.submissions_folder(assignment_context))
+      else
+        attachment # in a weird context; leave it alone
+      end
+    end
+  end
+
   def is_media_recording?
     return params[:submission][:submission_type] == 'media_recording'
   end
@@ -321,12 +333,20 @@ class SubmissionsController < ApplicationController
   end
   private :verify_api_call_has_attachment
 
+  def allowed_api_submission_type?(submission_type)
+    valid_for_api = API_SUBMISSION_TYPES.key?(submission_type)
+    allowed_for_assignment = @assignment.submission_types_array.include?(submission_type)
+    basic_lti_launch = (@assignment.submission_types.include?('online') && submission_type == 'basic_lti_launch')
+    valid_for_api && (allowed_for_assignment || basic_lti_launch)
+  end
+  private :allowed_api_submission_type?
+
   def process_api_submission_params
     # Verify submission_type is valid, and allowed by the assignment.
     # This should probably happen for non-api submissions as well, but
     # that'll take some further investigation/testing.
     submission_type = params[:submission][:submission_type]
-    unless API_SUBMISSION_TYPES.key?(submission_type) && @assignment.submission_types_array.include?(submission_type)
+    unless allowed_api_submission_type?(submission_type)
       render(:json => { :message => "Invalid submission[submission_type] given" }, :status => 400)
       return false
     end
@@ -349,22 +369,6 @@ class SubmissionsController < ApplicationController
     return true
   end
   private :process_api_submission_params
-
-  def create_and_save_uploaded_attachments
-    params[:attachments].each do |idx, attachment|
-      if attachment[:uploaded_data] && !attachment[:uploaded_data].is_a?(String)
-        attachment[:user] = @current_user
-        if @group
-          attachment = @group.attachments.new(attachment)
-        else
-          attachment = @current_user.attachments.new(attachment)
-        end
-        attachment.save
-        params[:submission][:attachments] << attachment
-      end
-    end
-  end
-  private :create_and_save_uploaded_attachments
 
   def online_upload?
     return params[:attachments] && params[:submission][:submission_type] == 'online_upload'
@@ -530,7 +534,8 @@ class SubmissionsController < ApplicationController
           :group_comment => params[:submission][:group_comment],
           :hidden => @assignment.muted? && admin_in_context,
           :provisional => provisional,
-          :final => params[:submission][:final]
+          :final => params[:submission][:final],
+          :draft_comment => Canvas::Plugin.value_to_boolean(params[:submission][:draft_comment])
         }
       end
       begin

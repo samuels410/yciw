@@ -10,12 +10,20 @@ define [
 
   fixtures = $('#fixtures')
 
-  createView = (quiz) ->
+  createView = (quiz, options={}) ->
     quiz ?= new Quiz(id: 1, title: 'Foo')
 
     icon = new PublishIconView(model: quiz)
-    view = new QuizItemView(model: quiz, publishIconView: icon)
 
+    ENV.PERMISSIONS = {
+      manage: options.canManage
+    }
+
+    ENV.FLAGS = {
+      post_to_sis_enabled: options.post_to_sis
+    }
+
+    view = new QuizItemView(model: quiz, publishIconView: icon)
     view.$el.appendTo $('#fixtures')
     view.render()
 
@@ -33,6 +41,20 @@ define [
     view = createView(quiz)
     equal view.$('.ig-admin').length, 0
 
+  test "initializes sis toggle if post to sis enabled", ->
+    quiz = new Quiz(id: 1, title: 'Foo', can_update: true)
+    view = createView(quiz, canManage: true, post_to_sis: true)
+    ok view.sisButtonView
+
+  test "does not initialize sis toggle if post to sis disabled", ->
+    quiz = new Quiz(id: 1, title: 'Foo', can_update: true)
+    view = createView(quiz, canManage: true, post_to_sis: false)
+    ok !view.sisButtonView
+
+  test "does not initialize sis toggle if sis enabled but can't manage", ->
+    quiz = new Quiz(id: 1, title: 'Foo', can_update: false)
+    view = createView(quiz, canManage: false, post_to_sis: false)
+    ok !view.sisButtonView
 
   test 'udpates publish status when model changes', ->
     quiz = new Quiz(id: 1, title: 'Foo', published: false)
@@ -42,7 +64,6 @@ define [
 
     quiz.set("published", true)
     ok view.$el.find(".ig-row").hasClass("ig-published")
-
 
   test 'prompts confirm for delete', ->
     quiz = new Quiz(id: 1, title: 'Foo', can_update: true)
@@ -83,3 +104,42 @@ define [
 
     view.$('.ig-details').simulate 'click'
     ok redirected
+
+  test 'renders lockAt/unlockAt for multiple due dates', ->
+    quiz = new Quiz(id: 1, title: 'mdd', all_dates: [
+      { due_at: new Date() },
+      { due_at: new Date() }
+    ])
+    view = createView(quiz)
+    json = view.toJSON()
+    equal json.showAvailability, true
+
+  test 'renders lockAt/unlockAt when locked', ->
+    future = new Date()
+    future.setDate(future.getDate() + 10)
+    quiz = new Quiz(id: 1, title: 'mdd', unlock_at: future.toISOString())
+    view = createView(quiz)
+    json = view.toJSON()
+    equal json.showAvailability, true
+
+  test 'renders lockAt/unlockAt when locking in future', ->
+    past = new Date()
+    past.setDate(past.getDate() - 10)
+    future = new Date()
+    future.setDate(future.getDate() + 10)
+    quiz = new Quiz(
+      id: 1,
+      title: 'unlock later',
+      unlock_at: past.toISOString(),
+      lock_at: future.toISOString())
+    view = createView(quiz)
+    json = view.toJSON()
+    equal json.showAvailability, true
+
+  test 'does not render lockAt/unlockAt when not locking in future', ->
+    past = new Date()
+    past.setDate(past.getDate() - 10)
+    quiz = new Quiz(id: 1, title: 'unlocked for good', unlock_at: past.toISOString())
+    view = createView(quiz)
+    json = view.toJSON()
+    equal json.showAvailability, false

@@ -1,7 +1,7 @@
 {
   "checksum": {
-    "previous": "7cce59b4ad868e5482f0e727ad9ee095c5c4d5898601ce890d194f0e092cc9f1",
-    "current": "7cce59b4ad868e5482f0e727ad9ee095c5c4d5898601ce890d194f0e092cc9f1"
+    "previous": "7f2a69615c29c0381ac9f641bb58f24f753d87d7b0feb9dde9148cf4f180abb4",
+    "current": "7f2a69615c29c0381ac9f641bb58f24f753d87d7b0feb9dde9148cf4f180abb4"
   },
   "fonts": [
     "public/fonts/canvas/canvas-icons.ttf",
@@ -270,6 +270,10 @@
       "codepoint": 61756,
       "source": "public/fonts/icons/folder.svg"
     },
+    "folder-locked": {
+      "codepoint": 61884,
+      "source": "public/fonts/icons/folder-locked.svg"
+    },
     "forward": {
       "codepoint": 61757,
       "source": "public/fonts/icons/forward.svg"
@@ -349,6 +353,10 @@
     "invitation": {
       "codepoint": 61775,
       "source": "public/fonts/icons/invitation.svg"
+    },
+    "keyboard-shortcuts": {
+      "codepoint": 61885,
+      "source": "public/fonts/icons/keyboard-shortcuts.svg"
     },
     "like": {
       "codepoint": 61776,
@@ -622,6 +630,10 @@
       "codepoint": 61841,
       "source": "public/fonts/icons/star.svg"
     },
+    "star-light": {
+      "codepoint": 61883,
+      "source": "public/fonts/icons/star-light.svg"
+    },
     "stats": {
       "codepoint": 61842,
       "source": "public/fonts/icons/stats.svg"
@@ -673,14 +685,6 @@
     "toggle-right": {
       "codepoint": 61853,
       "source": "public/fonts/icons/toggle-right.svg"
-    },
-    "tour-info": {
-      "codepoint": 61854,
-      "source": "public/fonts/icons/tour-info.svg"
-    },
-    "tour-step-counter": {
-      "codepoint": 61855,
-      "source": "public/fonts/icons/tour-step-counter.svg"
     },
     "trash": {
       "codepoint": 61856,

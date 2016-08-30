@@ -56,42 +56,54 @@ class CommunicationChannel < ActiveRecord::Base
 
   RETIRE_THRESHOLD = 1
 
-  # TODO: Will need to be internationalized. Also, do we want to allow this to be specified in a config file?
   def self.country_codes
     # [country code, name, true if email should be used instead of Twilio]
-    @country_codes ||= [
-      ['54', 'Argentina', false],
-      ['61', 'Australia', false],
-      ['32', 'Belgium', false],
-      ['55', 'Brazil', false],
-      ['1', 'Canada', false],
-      ['56', 'Chile', false],
-      ['57', 'Colombia', false],
-      ['45', 'Denmark', false],
-      ['358', 'Finland', false],
-      ['49', 'Germany', false],
-      ['504', 'Honduras', false],
-      ['852', 'Hong Kong', false],
-      ['353', 'Ireland', false],
-      ['352', 'Luxembourg', false],
-      ['60', 'Malaysia', false],
-      ['52', 'Mexico', false],
-      ['31', 'Netherlands', false],
-      ['64', 'New Zealand', false],
-      ['47', 'Norway', false],
-      ['507', 'Panama', false],
-      ['51', 'Peru', false],
-      ['63', 'Philippines', false],
-      ['974', 'Qatar', false],
-      ['966', 'Saudi Arabia', false],
-      ['65', 'Singapore', false],
-      ['34', 'Spain', false],
-      ['46', 'Sweden', false],
-      ['41', 'Switzerland', false],
-      ['971', 'United Arab Emirates', false],
-      ['44', 'United Kingdom', false],
-      ['1', 'United States', true]
-    ]
+    [
+      ['54',   I18n.t('Argentina (+54)'),              false],
+      ['61',   I18n.t('Australia (+61)'),              false],
+      ['43',   I18n.t('Austria (+43)'),                false],
+      ['32',   I18n.t('Belgium (+32)'),                false],
+      ['591',  I18n.t('Bolivia (+591)'),               false],
+      ['55',   I18n.t('Brazil (+55)'),                 false],
+      ['1',    I18n.t('Canada (+1)'),                  false],
+      ['56',   I18n.t('Chile (+56)'),                  false],
+      ['57',   I18n.t('Colombia (+57)'),               false],
+      ['506',  I18n.t('Costa Rica (+506)'),            false],
+      ['45',   I18n.t('Denmark (+45)'),                false],
+      ['593',  I18n.t('Ecuador (+593)'),               false],
+      ['358',  I18n.t('Finland (+358)'),               false],
+      ['33',   I18n.t('France (+33)'),                 false],
+      ['49',   I18n.t('Germany (+49)'),                false],
+      ['504',  I18n.t('Honduras (+504)'),              false],
+      ['852',  I18n.t('Hong Kong (+852)'),             false],
+      ['91',   I18n.t('India (+91)'),                  false],
+      ['353',  I18n.t('Ireland (+353)'),               false],
+      ['972',  I18n.t('Israel (+972)'),                false],
+      ['39',   I18n.t('Italy (+39)'),                  false],
+      ['81',   I18n.t('Japan (+81)'),                  false],
+      ['352',  I18n.t('Luxembourg (+352)'),            false],
+      ['60',   I18n.t('Malaysia (+60)'),               false],
+      ['52',   I18n.t('Mexico (+52)'),                 false],
+      ['31',   I18n.t('Netherlands (+31)'),            false],
+      ['64',   I18n.t('New Zealand (+64)'),            false],
+      ['47',   I18n.t('Norway (+47)'),                 false],
+      ['507',  I18n.t('Panama (+507)'),                false],
+      ['595',  I18n.t('Paraguay (+595)'),              false],
+      ['51',   I18n.t('Peru (+51)'),                   false],
+      ['63',   I18n.t('Philippines (+63)'),            false],
+      ['48',   I18n.t('Poland (+48)'),                 false],
+      ['974',  I18n.t('Qatar (+974)'),                 false],
+      ['966',  I18n.t('Saudi Arabia (+966)'),          false],
+      ['65',   I18n.t('Singapore (+65)'),              false],
+      ['82',   I18n.t('South Korea (+82)'),            false],
+      ['34',   I18n.t('Spain (+34)'),                  false],
+      ['46',   I18n.t('Sweden (+46)'),                 false],
+      ['41',   I18n.t('Switzerland (+41)'),            false],
+      ['971',  I18n.t('United Arab Emirates (+971)'),  false],
+      ['44',   I18n.t('United Kingdom (+44)'),         false],
+      ['1',    I18n.t('United States (+1)'),           true ],
+      ['598',  I18n.t('Uruguay (+598)'),               false]
+    ].sort_by{ |a| Canvas::ICU.collation_key(a[1]) }
   end
 
   def self.sms_carriers
@@ -276,21 +288,17 @@ class CommunicationChannel < ActiveRecord::Base
   }
 
   def self.by_path_condition(path)
-    if %{mysql mysql2}.include?(connection_pool.spec.config[:adapter])
-      path
-    else
-      "LOWER(#{path})"
-    end
+    Arel::Nodes::NamedFunction.new('lower', [CANVAS_RAILS4_0 ? path : Arel::Nodes.build_quoted(path)])
   end
-  scope :by_path, lambda { |path|
-    where("#{by_path_condition("communication_channels.path")}=#{by_path_condition("?")}", path)
-  }
 
-  scope :email, -> { where(:path_type => TYPE_EMAIL) }
-  scope :sms, -> { where(:path_type => TYPE_SMS) }
+  scope :by_path, ->(path) { where(by_path_condition(arel_table[:path]).eq(by_path_condition(path))) }
+  scope :path_like, ->(path) { where(by_path_condition(arel_table[:path]).matches(by_path_condition(path))) }
 
-  scope :active, -> { where(:workflow_state => 'active') }
-  scope :unretired, -> { where("communication_channels.workflow_state<>'retired'") }
+  scope :email, -> { where(path_type: TYPE_EMAIL) }
+  scope :sms, -> { where(path_type: TYPE_SMS) }
+
+  scope :active, -> { where(workflow_state: 'active') }
+  scope :unretired, -> { where.not(workflow_state: 'retired') }
 
   scope :for_notification_frequency, lambda { |notification, frequency|
     joins(:notification_policies).where(:notification_policies => { :notification_id => notification, :frequency => frequency })

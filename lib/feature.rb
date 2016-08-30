@@ -18,7 +18,7 @@
 
 class Feature
   ATTRS = [:feature, :display_name, :description, :applies_to, :state, :root_opt_in, :enable_at, :beta, :development,
-    :release_notes_url, :custom_transition_proc, :after_state_change_proc, :autoexpand]
+    :release_notes_url, :custom_transition_proc, :after_state_change_proc, :autoexpand, :touch_context]
   attr_reader *ATTRS
 
   def initialize(opts = {})
@@ -126,7 +126,7 @@ END
 This enables an updated navigation, new dashboard and a simpler, more modern look and feel.
 END
       applies_to: 'RootAccount',
-      state: 'allowed',
+      state: ENV['CANVAS_FORCE_USE_NEW_STYLES'] ? 'on' : 'allowed',
       root_opt_in: true
     },
     'epub_export' =>
@@ -149,8 +149,20 @@ distinct and easier to identify. Note: Institution branding will be disabled.
 END
       applies_to: 'User',
       state: 'allowed',
-      beta: true,
       autoexpand: true
+    },
+    'underline_all_links' =>
+    {
+      display_name: -> { I18n.t('Underline Links') },
+      description: -> { I18n.t('Display all text links in Canvas as *underlined text*.',
+        wrapper: {
+          '*' => '<span class="feature-detail-underline">\1</span>'
+        }
+      )
+    },
+      applies_to: 'User',
+      state: 'allowed',
+      beta: true
     },
     'outcome_gradebook' =>
     {
@@ -335,6 +347,15 @@ END
       development: true,
       root_opt_in: true
     },
+    'course_card_images' =>
+    {
+      display_name: -> { I18n.t('Enable Dashboard Images for Courses')},
+      description: -> {I18n.t('Allow course images to be assigned to a course and used on the dashboard cards.')},
+      applies_to: 'Course',
+      state: 'allowed',
+      root_opt_in: true,
+      beta: true
+    },
     'gradebook_performance' => {
       display_name: -> { I18n.t('Gradebook Performance') },
       description: -> { I18n.t('Performance enhancements for the Gradebook') },
@@ -365,10 +386,11 @@ END
       root_opt_in: true
     },
     'course_user_search' => {
-      display_name: -> { I18n.t('Course and User Search') },
+      display_name: -> { I18n.t('Account Course and User Search') },
       description: -> { I18n.t('Updated UI for searching and displaying users and courses within an account.') },
       applies_to: 'Account',
       state: 'hidden',
+      beta: true,
       development: true,
       root_opt_in: true
     },
@@ -377,7 +399,7 @@ END
       display_name: -> { I18n.t('Use remote version of Rich Content Editor') },
       description: -> { I18n.t('In cases where it is available, load the RCE from a canvas rich content service') },
       applies_to: 'RootAccount',
-      state: 'hidden',
+      state: 'allowed',
       beta: true,
       development: false,
       root_opt_in: false
@@ -389,7 +411,7 @@ END
       applies_to: 'RootAccount',
       state: 'hidden',
       beta: true,
-      development: true,
+      development: false,
       root_opt_in: false
     },
     'rich_content_service_high_risk' =>
@@ -399,19 +421,45 @@ END
       applies_to: 'RootAccount',
       state: 'hidden',
       beta: true,
-      development: true,
+      development: false,
       root_opt_in: false
     },
     'conditional_release' =>
     {
-      display_name: -> { I18n.t('Conditional Release') },
+      display_name: -> { I18n.t('Mastery Paths') },
       description: -> { I18n.t('Configure individual learning paths for students based on assessment results.') },
       applies_to: 'Course',
       state: 'hidden',
       beta: true,
-      development: true,
+      development: false,
       root_opt_in: false,
     },
+    'wrap_calendar_event_titles' =>
+    {
+      display_name: -> { I18n.t('Wrap event titles in Calendar month view') },
+      description: -> { I18n.t("Show calendar events in the month view on multiple lines if the title doesn't fit on a single line") },
+      applies_to: 'RootAccount',
+      state: 'allowed',
+      root_opt_in: true
+    },
+    'new_collaborations' =>
+    {
+      display_name: -> { I18n.t("External Collaborations Tool") },
+      description: -> { I18n.t("Use the new Collaborations external tool enabling more options for tools to use to collaborate") },
+      applies_to: 'Course',
+      state: 'hidden',
+      development: false,
+      root_opt_in: true
+    },
+    'new_annotations' =>
+    {
+      display_name: -> { I18n.t('New Annotations') },
+      description: -> { I18n.t('Use the new document annotation tool') },
+      applies_to: 'Course',
+      state: 'hidden',
+      beta: true,
+      root_opt_in: true
+    }
   )
 
   def self.definitions

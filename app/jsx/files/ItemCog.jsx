@@ -1,6 +1,7 @@
 define([
   'i18n!react_files',
   'react',
+  'react-dom',
   'compiled/fn/preventDefault',
   'compiled/react_files/modules/customPropTypes',
   'compiled/react_files/modules/filesEnv',
@@ -12,7 +13,7 @@ define([
   'compiled/react_files/utils/downloadStuffAsAZip',
   'compiled/react_files/utils/deleteStuff',
   'jquery'
-], function (I18n, React, preventDefault, customPropTypes, filesEnv, File, Folder, UsageRightsDialog, RestrictedDialogForm, openMoveDialog, downloadStuffAsAZip, deleteStuff, $) {
+], function (I18n, React, ReactDOM, preventDefault, customPropTypes, filesEnv, File, Folder, UsageRightsDialog, RestrictedDialogForm, openMoveDialog, downloadStuffAsAZip, deleteStuff, $) {
 
   var ItemCog = React.createClass({
     displayName: 'ItemCog',
@@ -25,6 +26,31 @@ define([
       usageRightsRequiredForContext: React.PropTypes.bool
     },
 
+    downloadFile (file, args) {
+      window.location = file[0].get('url');
+      $(args.returnFocusTo).focus();
+    },
+
+    downloadZip (folder, args) {
+      downloadStuffAsAZip(folder, args);
+      $(args.returnFocusTo).focus();
+    },
+
+    deleteItem (item, args) {
+      // Unfortunately, ars.returnFocusTo isn't really the one we want to focus,
+      // because we want the previous one or the +Folder button
+      // Also unfortunately, our state management in this app is a bit terrible
+      // so we'll just handle all that via jQuery right here for now.
+      // TODO: Make this less terrible when we have sane state management
+      const allTriggers = $('.al-trigger').toArray();
+      const hasMoreTriggers = allTriggers.length - 1 > 0;
+      const toFocus = (hasMoreTriggers) ?
+                      allTriggers[allTriggers.indexOf(args.returnFocusTo) - 1] :
+                      $('.ef-name-col a').first();
+      args.returnFocusTo = toFocus;
+      deleteStuff(item, args);
+    },
+
     openUsageRightsDialog (event) {
       var contents = (
         <UsageRightsDialog
@@ -34,7 +60,7 @@ define([
       );
 
       this.props.modalOptions.openModal(contents, () => {
-        this.refs.settingsCogBtn.getDOMNode().focus();
+        ReactDOM.findDOMNode(this.refs.settingsCogBtn).focus();
       });
     },
 
@@ -45,13 +71,13 @@ define([
           if (this.props.model.externalToolEnabled(tool)) {
             return (
               <li key={tool.title} role='presentation'>
-                <a href={`${tool.base_url}&files[]=${this.props.model.id}`} role='menuitem' tabindex='-1'>
+                <a href={`${tool.base_url}&files[]=${this.props.model.id}`} role='menuitem' tabIndex='-1'>
                   {tool.title}
                 </a>
               </li>
             );
           } else {
-            return (<li key={tool.title} role='presentation'><a href='#' className='disabled' role='menuitem' tabindex='-1' aria-disabled='true'>{tool.title}</a></li>);
+            return (<li key={tool.title} role='presentation'><a href='#' className='disabled' role='menuitem' tabIndex='-1' aria-disabled='true'>{tool.title}</a></li>);
           }
         });
       } else {
@@ -69,7 +95,7 @@ define([
           var args = {
             contextType,
             contextId,
-            returnFocusTo: this.refs.settingsCogBtn.getDOMNode()
+            returnFocusTo: ReactDOM.findDOMNode(this.refs.settingsCogBtn)
           };
 
           args = $.extend(args, params);
@@ -82,28 +108,28 @@ define([
 
       // Download Link
       if (this.props.model instanceof Folder) {
-        menuItems.push(<li key='folderDownload' role='presentation'><a href='#' onClick={wrap(downloadStuffAsAZip)} ref='download' role='menuitem' tabindex='-1'>{I18n.t('Download')}</a></li>);
+        menuItems.push(<li key='folderDownload' role='presentation'><a href='#' onClick={wrap(this.downloadZip)} ref='download' role='menuitem' tabIndex='-1'>{I18n.t('Download')}</a></li>);
       } else {
-        menuItems.push(<li key='download' role='presentation'><a href={this.props.model.get('url')} ref='download' role='menuitem' tabindex='-1'>{I18n.t('Download')}</a></li>);
+        menuItems.push(<li key='download' role='presentation'><a onClick={wrap(this.downloadFile)} href={this.props.model.get('url')} ref='download' role='menuitem' tabIndex='-1'>{I18n.t('Download')}</a></li>);
       }
 
       if (this.props.userCanManageFilesForContext) {
         // Rename Link
-        menuItems.push(<li key='rename' role='presentation'><a href='#' onClick={preventDefault(this.props.startEditingName)} ref='editName' role='menuitem' tabindex='-1'>{I18n.t('Rename')}</a></li>);
+        menuItems.push(<li key='rename' role='presentation'><a href='#' onClick={preventDefault(this.props.startEditingName)} ref='editName' role='menuitem' tabIndex='-1'>{I18n.t('Rename')}</a></li>);
         // Move Link
-        menuItems.push(<li key='move' role='presentation'><a href='#' onClick={wrap(openMoveDialog, {clearSelectedItems: this.props.clearSelectedItems, onMove: this.props.onMove})} ref='move' role='menuitem' tabindex='-1'>{I18n.t('Move')}</a></li>);
+        menuItems.push(<li key='move' role='presentation'><a href='#' onClick={wrap(openMoveDialog, {clearSelectedItems: this.props.clearSelectedItems, onMove: this.props.onMove})} ref='move' role='menuitem' tabIndex='-1'>{I18n.t('Move')}</a></li>);
 
         if (this.props.usageRightsRequiredForContext) {
           // Manage Usage Rights Link
-          menuItems.push(<li key='manageUsageRights' className='ItemCog__OpenUsageRights' role='presentation'><a href='#' onClick={preventDefault(this.openUsageRightsDialog)} ref='usageRights' role='menuitem' tabindex='-1'>{I18n.t('Manage Usage Rights')}</a></li>);
+          menuItems.push(<li key='manageUsageRights' className='ItemCog__OpenUsageRights' role='presentation'><a href='#' onClick={preventDefault(this.openUsageRightsDialog)} ref='usageRights' role='menuitem' tabIndex='-1'>{I18n.t('Manage Usage Rights')}</a></li>);
         }
 
         // Delete Link
-        menuItems.push(<li key='delete' role='presentation'><a href='#' onClick={wrap(deleteStuff)} ref='deleteLink' role='menuitem' tabindex='-1'>{I18n.t('Delete')}</a></li>);
+        menuItems.push(<li key='delete' role='presentation'><a href='#' onClick={wrap(this.deleteItem)} ref='deleteLink' role='menuitem' tabIndex='-1'>{I18n.t('Delete')}</a></li>);
       }
 
       return (
-        <div class='al-dropdown__container' style={{minWidth: '45px', display: 'inline-block'}}>
+        <div className='al-dropdown__container' style={{minWidth: '45px', display: 'inline-block'}}>
           <button
             type='button'
             ref='settingsCogBtn'
@@ -115,7 +141,7 @@ define([
             <i className='icon-settings' />
             <i className='icon-mini-arrow-down' />
           </button>
-          <ul className='al-options' role='menu' aria-hidden='true' aria-expanded='false' tabindex='0'>
+          <ul className='al-options' role='menu' aria-hidden='true' aria-expanded='false' tabIndex='0'>
             {menuItems.concat(externalToolMenuItems)}
           </ul>
         </div>

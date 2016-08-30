@@ -1,15 +1,14 @@
 define [
   'underscore'
   'i18n!react_files'
-  'react'
-  'react-router'
+  'react',
   'compiled/collections/FilesCollection'
   'compiled/react/shared/utils/withReactElement'
   '../modules/customPropTypes'
   '../utils/updateAPIQuerySortParams'
   '../utils/getAllPages'
   '../utils/locationOrigin'
-], (_, I18n, React, ReactRouter, FilesCollection, withReactElement, customPropTypes, updateAPIQuerySortParams, getAllPages) ->
+], (_, I18n, React, FilesCollection, withReactElement, customPropTypes, updateAPIQuerySortParams, getAllPages) ->
 
   SearchResults =
     displayName: 'SearchResults'
@@ -17,8 +16,6 @@ define [
     propTypes:
       contextType: customPropTypes.contextType
       contextId: customPropTypes.contextId
-
-    mixins: [ReactRouter.State]
 
     name: 'search'
 
@@ -37,23 +34,32 @@ define [
         responseText =
           errors: [{message}]
 
-      @setState errors: if _.isArray(responseText.errors)
-                          responseText.errors
-                        else if responseText.errors?.base?
-                          [{message: "#{responseText.errors.base}, #{responseText.status}"}]
-                        else
-                          [{message}]
+      errors = if _.isArray(responseText.errors)
+                 @translateErrors(responseText.errors)
+               else if responseText.errors?.base?
+                 [{message: "#{responseText.errors.base}, #{responseText.status}"}]
+               else
+                 [{message}]
+      @setState errors: errors
+      $.screenReaderFlashMessageExclusive (_.map errors, (error) -> error.message).join ' '
+
+    translateErrors: (errors) ->
+      _.map errors, (error) ->
+        if error.message is "3 or more characters is required"
+          { message: I18n.t('Please enter a search term with three or more characters') }
+        else
+          error
 
     updateResults: (props) ->
       oldUrl = @state.collection.url
       @state.collection.url = "#{window.location.origin}/api/v1/#{@props.contextType}/#{@props.contextId}/files"
-      updateAPIQuerySortParams(@state.collection, @getQuery())
+      updateAPIQuerySortParams(@state.collection, @props.query)
 
       return if @state.collection.url is oldUrl and @state.collection.models.length > 0 # doesn't search for the same thing twice
       @setState({collection: @state.collection})
 
       # Refactor this when given time. Maybe even use setState instead of forceUpdate
-      unless @state.collection.loadedAll and _.isEqual(@getQuery().search_term, props.query?.search_term?)
+      unless @state.collection.loadedAll and _.isEqual(@props.query.search_term, props.query?.search_term?)
         forceUpdate = =>
           if @isMounted()
             @setState({errors: null})

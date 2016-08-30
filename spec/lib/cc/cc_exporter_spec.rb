@@ -30,8 +30,7 @@ describe "Common Cartridge exporting" do
     include WebMock::API
 
     before do
-      course_with_teacher
-      @course.offer!
+      course_with_teacher(:active_all => true)
       @ce = @course.content_exports.build
       @ce.export_type = ContentExport::COURSE_COPY
       @ce.user = @user
@@ -45,6 +44,7 @@ describe "Common Cartridge exporting" do
 
     def run_export(opts = {})
       @ce.export_without_send_later(opts)
+      debugger if @ce.error_messages.any?
       expect(@ce.error_messages).to eq []
       @file_handle = @ce.attachment.open :need_local_file => true
       @zip_file = Zip::File.open(@file_handle.path)
@@ -468,7 +468,7 @@ describe "Common Cartridge exporting" do
       expect(assignment_xml_doc.at_css('text').text).to eq '<a href="%24IMS-CC-FILEBASE%24/unfiled/test.txt">what?</a>'
       expect(assignment_xml_doc.at_css('text').attribute('texttype').value).to eq 'text/html'
       expect(assignment_xml_doc.at_css('gradable').text).to eq 'true'
-      expect(assignment_xml_doc.at_css('gradable').attribute('points_possible').value).to eq '11'
+      expect(assignment_xml_doc.at_css('gradable').attribute('points_possible').value).to eq '11.0'
       expect(assignment_xml_doc.css('submission_formats format').map{ |fmt| fmt.attribute('type').value }).to match_array %w(html file url)
 
       # validate presence of canvas extension node

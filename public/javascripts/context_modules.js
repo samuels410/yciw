@@ -187,8 +187,16 @@ define([
             } else if (info["vdd_tooltip"] != null) {
               info['vdd_tooltip']['link_href'] = $context_module_item.find('a.title').attr('href');
               $context_module_item.find('.due_date_display').html(vddTooltipView(info["vdd_tooltip"]));
+            } else {
+              $context_module_item.find('.due_date_display').remove();
             }
-            $context_module_item.fillTemplateData({data: data, htmlValues: ['points_possible_display']})
+            $context_module_item.fillTemplateData({data: data, htmlValues: ['points_possible_display']});
+
+            // clean up empty elements so they don't show borders in updated item group design
+            if (info["points_possible"] === null) {
+              $context_module_item.find('.points_possible_display').remove();
+            }
+
           });
           vddTooltip();
           if (callback) { callback(); }
@@ -933,12 +941,16 @@ define([
         $group.append($option);
       });
       $pre.find(".option").empty().append($option);
-      $option.slideDown();
       $option.find(".id").change();
+      $option.slideDown(function() {
+        if (event.originalEvent) { // don't do this when populating the dialog :P
+          $("select:first", $(this)).focus();
+        }
+      });
       $form.find(".completion_entry .criteria_list").append($pre).show();
       $pre.slideDown();
       $(".requirement-count-radio").show();
-      $('#context_module_requirement_count_').change().focus();
+      $('#context_module_requirement_count_').change()
     });
     $("#completion_criterion_option .id").change(function() {
       var $option = $(this).parents(".completion_criterion_option");
@@ -1836,6 +1848,9 @@ define([
     var collapsedModules = ENV.COLLAPSED_MODULES;
     for(var idx in collapsedModules) {
       $("#context_module_" + collapsedModules[idx]).addClass('collapsed_module');
+    }
+    if (window.location.hash) {
+      $.scrollTo($(window.location.hash));
     }
     var foundModules = [];
     var $contextModules = $("#context_modules .context_module");

@@ -41,6 +41,7 @@ describe DiscussionTopicsController do
     end
 
     @topic.save
+    @topic.reload
     @topic
   end
 
@@ -198,6 +199,14 @@ describe DiscussionTopicsController do
                                   :set => @section)
       end
 
+      it "doesn't show the topic to unassigned students" do
+        @topic.assignment.update_attribute(:only_visible_to_overrides, true)
+        user_session(@student)
+        get 'show', :course_id => @course.id, :id => @topic.id
+        expect(response).to be_redirect
+        expect(response.location).to eq course_discussion_topics_url @course
+      end
+
       it "doesn't show overrides to students" do
         user_session(@student)
         get 'show', :course_id => @course.id, :id => @topic.id
@@ -339,6 +348,45 @@ describe DiscussionTopicsController do
         expect(assigns[:groups].size).to eql(2)
       end
 
+      it "should only show applicable groups if DA applies" do
+        user_session(@teacher)
+
+        course_topic(user: @teacher, with_assignment: true)
+        @topic.group_category = @group_category
+        @topic.save!
+
+        asmt = @topic.assignment
+        asmt.only_visible_to_overrides = true
+        override = asmt.assignment_overrides.build
+        override.set = @group2
+        override.save!
+        asmt.save!
+
+        get 'show', :course_id => @course.id, :id => @topic.id
+        expect(response).to be_success
+        expect(assigns[:groups]).to eq([@group2])
+      end
+
+      it "should redirect to group for student if DA applies to section" do
+        user_session(@student)
+        @group1.add_user(@student)
+
+        course_topic(user: @teacher, with_assignment: true)
+        @topic.group_category = @group_category
+        @topic.save!
+
+        asmt = @topic.assignment
+        asmt.only_visible_to_overrides = true
+        override = asmt.assignment_overrides.build
+        override.set = @course.default_section
+        override.save!
+        asmt.save!
+
+        get 'show', :course_id => @course.id, :id => @topic.id
+        redirect_path = "/groups/#{@group1.id}/discussion_topics?root_discussion_topic_id=#{@topic.id}"
+        expect(response).to redirect_to redirect_path
+      end
+
       it "should redirect to the student's group" do
         user_session(@student)
         @group1.add_user(@student)
@@ -462,6 +510,34 @@ describe DiscussionTopicsController do
     end
   end
 
+  describe "GET 'edit'" do
+    before(:once) do
+      course_topic
+    end
+
+    before do
+      user_session(@teacher)
+    end
+
+    context 'conditional-release' do
+      it 'should include environment variables if enabled' do
+        ConditionalRelease::Service.stubs(:enabled_in_context?).returns(true)
+        ConditionalRelease::Service.stubs(:env_for).returns({ dummy: 'value' })
+        get :edit, course_id: @course.id, id: @topic.id
+        expect(response).to have_http_status :success
+        expect(controller.js_env[:dummy]).to eq 'value'
+      end
+
+      it 'should not include environment variables when disabled' do
+        ConditionalRelease::Service.stubs(:enabled_in_context?).returns(false)
+        ConditionalRelease::Service.stubs(:env_for).returns({ dummy: 'value' })
+        get :edit, course_id: @course.id, id: @topic.id
+        expect(response).to have_http_status :success
+        expect(controller.js_env).not_to have_key :dummy
+      end
+    end
+  end
+
   describe "GET 'public_feed.atom'" do
     before(:once) do
       course_topic
@@ -480,8 +556,15 @@ describe DiscussionTopicsController do
       expect(feed.links.first.href).to match(/http:\/\//)
     end
 
-    it "should include an author for each entry" do
+    it "should not include entries in an anonymous feed" do
       get 'public_feed', :format => 'atom', :feed_code => @course.feed_code
+      feed = Atom::Feed.load_feed(response.body) rescue nil
+      expect(feed).not_to be_nil
+      expect(feed.entries).to be_empty
+    end
+
+    it "should include an author for each entry with an enrollment feed" do
+      get 'public_feed', :format => 'atom', :feed_code => @course.teacher_enrollments.first.feed_code
       feed = Atom::Feed.load_feed(response.body) rescue nil
       expect(feed).not_to be_nil
       expect(feed.entries).not_to be_empty
@@ -629,6 +712,14 @@ describe DiscussionTopicsController do
           locked: false)
       expect(@topic.reload).not_to be_locked
       expect(@topic.lock_at).not_to be_nil
+    end
+
+    it "should not change the editor if only pinned was changed" do
+      put('update', course_id: @course.id, topic_id: @topic.id,
+        format: 'json', pinned: '1')
+      @topic.reload
+      expect(@topic.pinned).to be_truthy
+      expect(@topic.editor).to_not eq @teacher
     end
 
     it "should not clear delayed_post_at if published is not changed" do

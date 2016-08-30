@@ -10,33 +10,35 @@
   {{/if}}
 >
   <div class="ig-row__layout">
-    <a href="{{url}}" class="ig-title ellipses">
-      <i class="icon-quiz"></i> {{title_label}}
-    </a>
 
-    <div class="ig-details">
-      <div class="ellipses date-available" data-view="date-available"></div>
-      <div class="ellipses date-due" data-view="date-due"></div>
-      <div class="ellipses">{{possible_points_label}}</div>
-      <div class="ellipses">{{question_count_label}}</div>
+    <div class="ig-type-icon">
+      <i class="icon-quiz" aria-hidden="true"></i>
+    </div>
+
+    <div class="ig-info">
+      <a href="{{url}}" class="ig-title">
+        {{title_label}}
+      </a>
+      <div class="ig-details">
+        {{#if showAvailability }}
+        <div class="ig-details__item date-available" data-view="date-available"></div>
+        {{/if}}
+        {{#if showDueDate }}
+        <div class="ig-details__item date-due" data-view="date-due"></div>
+        {{/if}}
+        {{#if possible_points_label}}
+          <div class="ig-details__item">{{possible_points_label}}</div>
+        {{/if}}
+        {{#if question_count_label}}
+          <div class="ig-details__item">{{question_count_label}}</div>
+        {{/if}}
+      </div>
     </div>
 
     {{#if can_update}}
     <div class="ig-admin">
 
-      {{#if post_to_sis_enabled}}
-        {{#if post_to_sis}}
-        <span class="post-to-sis-status enabled">
-          <i class="icon-post-to-sis" title='{{#t}}Post grade to SIS enabled. Click to toggle.{{/t}}' data-tooltip></i>
-          <span class="screenreader-only">{{#t}}The grade for this assignment will sync to the student information system. Click here to toggle this setting.{{/t}}</span>
-        </span>
-        {{else}}
-        <span class="post-to-sis-status disabled">
-          <i class="icon-post-to-sis" title='{{#t}}Post grade to SIS disabled. Click to toggle.{{/t}}' data-tooltip></i>
-          <span class="screenreader-only">{{#t}}The grade for this assignment will not sync to the student information system. Click here to toggle this setting.{{/t}}</span>
-        </span>
-        {{/if}}
-      {{/if}}
+      <span class="sis-button" data-view="sis-button"></span>
       <span data-view="publish-icon" class="publish-icon"></span>
 
       <div class="inline-block">
@@ -58,5 +60,6 @@
       </div>
     </div>
     {{/if}}
+
   </div>
 </div>

@@ -48,6 +48,13 @@ describe DeveloperKey do
     end
   end
 
+  it "allows non-http redirect URIs" do
+    key = DeveloperKey.new
+    key.redirect_uri = 'tealpass://somewhere.edu/authentication'
+    key.redirect_uris = ['tealpass://somewhere.edu/authentication']
+    expect(key).to be_valid
+  end
+
   describe "#redirect_domain_matches?" do
     it "should match domains exactly, and sub-domains" do
       key = DeveloperKey.create!(:redirect_uri => "http://example.com/a/b")
@@ -65,6 +72,17 @@ describe DeveloperKey do
       expect(key.redirect_domain_matches?("http://a.b.example.com/a/b")).to be_truthy
       expect(key.redirect_domain_matches?("http://a.b.example.com/other")).to be_truthy
     end
+
+    it "does not allow subdomains when it matches in redirect_uris" do
+      key = DeveloperKey.create!(redirect_uris: "http://example.com/a/b")
+      expect(key.redirect_domain_matches?("http://example.com/a/b")).to eq true
+      # other paths on the same domain are NOT ok
+      expect(key.redirect_domain_matches?("http://example.com/other")).to eq false
+      # sub-domains are not ok either
+      expect(key.redirect_domain_matches?("http://www.example.com/a/b")).to eq false
+      expect(key.redirect_domain_matches?("http://a.b.example.com/a/b")).to eq false
+      expect(key.redirect_domain_matches?("http://a.b.example.com/other")).to eq false
+    end
   end
 
   context "Account scoped keys" do
@@ -75,10 +93,6 @@ describe DeveloperKey do
         expect(@key.authorized_for_account?(Account.find(@account.id))).to be true
       end
 
-      it "should allow allow access to ita accounts sub accounts" do
-        expect(@key.authorized_for_account?(@sub_account1)).to be true
-        expect(@key.authorized_for_account?(@sub_account2)).to be true
-      end
       it "shouldn't allow allow access to a foreign account" do
         expect(@key.authorized_for_account?(@not_sub_account)).to be false
       end
@@ -90,11 +104,6 @@ describe DeveloperKey do
       before :once do
         @account = Account.create!
 
-        @shard1.activate do
-          @sub_account1 = @account.sub_accounts.create!
-          @sub_account2 = @account.sub_accounts.create!
-        end
-
         @not_sub_account = Account.create!
         @key = DeveloperKey.create!(:redirect_uri => "http://example.com/a/b", account: @account)
       end
@@ -105,8 +114,6 @@ describe DeveloperKey do
     context 'without sharding' do
       before :once do
         @account = Account.create!
-        @sub_account1 = @account.sub_accounts.create!
-        @sub_account2 = @account.sub_accounts.create!
 
         @not_sub_account = Account.create!
         @key = DeveloperKey.create!(:redirect_uri => "http://example.com/a/b", account: @account)

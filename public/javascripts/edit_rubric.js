@@ -30,6 +30,7 @@ define([
   'jquery.instructure_misc_plugins' /* confirmDelete, showIf */,
   'jquery.loadingImg' /* loadingImage */,
   'jquery.templateData' /* fillTemplateData, getTemplateData */,
+  'compiled/jquery.rails_flash_notifications',
   'vendor/jquery.ba-tinypubsub',
   'vendor/jquery.scrollTo' /* /\.scrollTo/ */,
   'compiled/jquery/fixDialogButtons'
@@ -86,7 +87,9 @@ define([
         rubricEditing.hideCriterionAdd($rubric);
         rubricEditing.updateCriterionPoints($criterion);
         rubricEditing.sizeRatings($criterion);
-        $td.focus();
+        setTimeout(function() {
+          $.screenReaderFlashMessageExclusive(I18n.t("New Rating Created"));
+        }), 100
       }
       return false;
     },
@@ -852,13 +855,17 @@ define([
       if ($prevCriterion.length == 0) {
         $target = $criterion.parents('.rubric_container').find('.rubric_title input');
       }
+
+      // focusing before the fadeOut so safari
+      // screenreader can handle focus properly
+      $target.focus();
+
       $criterion.fadeOut(function() {
         var $rubric = $criterion.parents(".rubric");
         $criterion.remove();
         rubricEditing.updateCriteria($rubric);
         rubricEditing.updateRubricPoints($rubric);
       });
-      $target.focus();
       return false;
     }).delegate('.rating_description_value,.edit_rating_link', 'click', function(event) {
       rubricEditing.editRating($(this).parents(".rating"));

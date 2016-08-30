@@ -5,10 +5,47 @@ describe "gradebook2 - concluded courses and enrollments" do
   include Gradebook2Common
 
   let!(:setup) { gradebook_data_setup }
+  let(:conclude_student_1) { @student_1.enrollments.where(course_id: @course).first.conclude }
+  let(:deactivate_student_1) { @student_1.enrollments.where(course_id: @course).first.deactivate }
 
   context "active course" do
-    it "should not show concluded enrollments in active courses by default", priority: "1", test_id: 210020 do
-      @student_1.enrollments.where(course_id: @course).first.conclude
+    let(:gradebook_settings_for_course) do
+      -> (teacher, course) do
+        teacher.reload
+          .preferences.fetch(:gradebook_settings, {})[course.id]
+      end
+    end
+
+    it "persists settings for displaying inactive enrollments", priority: "2", test_id: 1372593 do
+      get course_gradebook2_path(@course)
+      wait_for_ajaximations
+      f('#gradebook_settings').click
+
+      expect { f('label[for="show_inactive_enrollments"]').click }
+        .to change { gradebook_settings_for_course.call(@teacher, @course)}
+        .from(nil)
+        .to({
+          "show_inactive_enrollments" => "true",
+          "show_concluded_enrollments" => "false",
+        })
+    end
+
+    it "persists settings for displaying concluded enrollments", priority: "2", test_id: 1372592 do
+      get course_gradebook2_path(@course)
+      wait_for_ajaximations
+      f('#gradebook_settings').click
+
+      expect { f('label[for="show_concluded_enrollments"]').click }
+        .to change { gradebook_settings_for_course.call(@teacher, @course) }
+        .from(nil)
+        .to({
+          "show_inactive_enrollments" => "false",
+          "show_concluded_enrollments" => "true",
+        })
+    end
+
+    it "does not show concluded enrollments by default", priority: "1", test_id: 210020 do
+      conclude_student_1
 
       expect(@course.students.count).to eq @all_students.size - 1
       expect(@course.all_students.count).to eq @all_students.size
@@ -16,66 +53,77 @@ describe "gradebook2 - concluded courses and enrollments" do
       get "/courses/#{@course.id}/gradebook2"
 
       expect(ff('.student-name').count).to eq @course.students.count
+    end
 
-      f('#gradebook_settings').click
+    it "shows/hides concluded enrollments when checked/unchecked in settings cog", priority: "1", test_id: 164223 do
+      conclude_student_1
 
-      # select the option and we'll now show concluded
+      get "/courses/#{@course.id}/gradebook2"
+
+      # show concluded
       expect_new_page_load do
+        f('#gradebook_settings').click
         f('label[for="show_concluded_enrollments"]').click
       end
       wait_for_ajaximations
 
-      expect(driver.find_elements(:css, '.student-name').count).to eq @course.all_students.count
+      expect(ff('.student-name').count).to eq @course.all_students.count
+
+      # hide concluded
+      expect_new_page_load do
+        f('#gradebook_settings').click
+        f('label[for="show_concluded_enrollments"]').click
+      end
+      wait_for_ajaximations
+
+      expect(ff('.student-name').count).to eq @course.students.count
     end
 
-    it "should not throw an error when setting the default grade when concluded enrollments exist" do
-      skip("bug 7413 - Error assigning default grade when one student's enrollment has been concluded.")
-      conclude_and_unconclude_course
-      3.times { student_in_course }
+    it "does not show inactive enrollments by default", priority: "1", test_id: 1102065 do
+      deactivate_student_1
+
+      expect(@course.students.count).to eq @all_students.size - 1
+      expect(@course.all_students.count).to eq @all_students.size
 
       get "/courses/#{@course.id}/gradebook2"
 
+      expect(ff('.student-name').count).to eq @course.students.count
+    end
 
-      # TODO: when show concluded enrollments fix goes in we probably have to add that code right here
-      # for the test to work correctly
+    it "shows/hides inactive enrollments when checked/unchecked in settings cog", priority: "1", test_id: 1102066 do
+      deactivate_student_1
 
-      set_default_grade(2, 5)
-      grade_grid = f('#gradebook_grid')
-      @course.student_enrollments.each_with_index do |e, n|
-        next if e.completed?
-        expect(find_slick_cells(n, grade_grid)[2].text).to eq 5
+      get "/courses/#{@course.id}/gradebook2"
+
+      # show deactivated
+      expect_new_page_load do
+        f('#gradebook_settings').click
+        f('label[for="show_inactive_enrollments"]').click
       end
+      wait_for_ajaximations
+
+      expect(ff('.student-name').count).to eq @course.all_students.count
+
+      # hide deactivated
+      expect_new_page_load do
+        f('#gradebook_settings').click
+        f('label[for="show_inactive_enrollments"]').click
+      end
+      wait_for_ajaximations
+
+      expect(ff('.student-name').count).to eq @course.students.count
     end
   end
 
   context "concluded course" do
-    before do
+    it "does not allow editing grades", priority: "1", test_id: 210027 do
       @course.complete!
       get "/courses/#{@course.id}/gradebook2"
-    end
 
-    it "should show concluded enrollments in concluded courses by default", priority: "1", test_id: 210021 do
-      expect(driver.find_elements(:css, '.student-name').count).to eq @course.all_students.count
-
-      # the checkbox should fire an alert rather than changing to not showing concluded
-      expect_fired_alert do
-        f('#gradebook_settings').click
-        f('label[for="show_concluded_enrollments"]').click
-      end
-      expect(driver.find_elements(:css, '.student-name').count).to eq @course.all_students.count
-    end
-
-    it "should not allow editing grades", priority: "1", test_id: 210027 do
       cell = f('#gradebook_grid .container_1 .slick-row:nth-child(1) .l2')
-      expect(f('.gradebook-cell', cell).text).to eq '10'
+      expect(cell.text).to eq '10'
       cell.click
-      expect(ff('.grade', cell)).to be_blank
-    end
-
-    it "should hide gradebook upload link and set group weight actions from the menu", priority: "1", test_id: 210028 do
-      f('#gradebook_settings').click
-      expect(f("a.gradebook_upload_link")).to_not be_present
-      expect(f("a.set_group_weights")).to_not be_present
+      expect(cell).not_to contain_css('.grade') # no input box for entry
     end
   end
 end

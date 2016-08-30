@@ -1,42 +1,46 @@
 define [
   'jquery'
   'compiled/views/tinymce/InsertUpdateImageView'
-  'helpers/fakeENV'
-], ($, InsertUpdateImageView, fakeENV) ->
+  'jsx/shared/rce/RceCommandShim'
+], ($, InsertUpdateImageView, RceCommandShim) ->
   fakeEditor = undefined
-  $fakeEditor = undefined
+  moveToBookmarkSpy = undefined
 
   module "InsertUpdateImageView#update",
     setup: ->
-      fakeENV.setup()
-
+      moveToBookmarkSpy = sinon.spy()
       fakeEditor = {
-        id: "someId",
-        bookmarkMoved: false,
-        focus: (()=>),
+        id: "someId"
+        focus: ()->
         dom: {
           createHTML: (()=> return "<a href='#'>stub link html</a>")
-        },
+        }
         selection: {
-          getBookmark: (()=> {})
-          moveToBookmark: (prevSelect)=>
-            fakeEditor.bookmarkMoved = true
+          getBookmark: ()->
+          moveToBookmark: moveToBookmarkSpy
         }
       }
 
-      $fakeEditor = {
-        editorBoxCalled: false,
-        editorBox: ()=>
-          $fakeEditor.editorBoxCalled = true
-      }
+      sinon.stub(RceCommandShim, 'send')
 
     teardown: ->
-      fakeENV.teardown()
       $("#fixtures").html("")
+      RceCommandShim.send.restore()
 
-  test "it uses editorBox when feature flag disabled", ->
-    window.ENV.RICH_CONTENT_SERVICE_ENABLED = false
+  test "it uses RceCommandShim to call insert_code", ->
     view = new InsertUpdateImageView(fakeEditor, "<div></div>")
-    view.$editor = $fakeEditor
+    view.$editor = '$fakeEditor'
     view.update()
-    equal($fakeEditor.editorBoxCalled, true)
+    ok RceCommandShim.send.calledWith('$fakeEditor', 'insert_code', view.generateImageHtml())
+
+  test "it restores caret on update", ->
+    view = new InsertUpdateImageView(fakeEditor, "<div></div>")
+    view.$editor = '$fakeEditor'
+    view.update()
+    ok moveToBookmarkSpy.called
+
+  test "it restores caret on close", ->
+    view = new InsertUpdateImageView(fakeEditor, "<div></div>")
+    view.$editor = '$fakeEditor'
+    view.close()
+    ok moveToBookmarkSpy.called

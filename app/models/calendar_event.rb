@@ -173,6 +173,9 @@ class CalendarEvent < ActiveRecord::Base
   scope :events_without_child_events, -> { where("NOT EXISTS (SELECT 1 FROM #{CalendarEvent.quoted_table_name} children WHERE children.parent_calendar_event_id = calendar_events.id AND children.workflow_state<>'deleted')") }
   scope :events_with_child_events, -> { where("EXISTS (SELECT 1 FROM #{CalendarEvent.quoted_table_name} children WHERE children.parent_calendar_event_id = calendar_events.id AND children.workflow_state<>'deleted')") }
 
+  scope :user_created, -> { where(:timetable_code => nil) }
+  scope :for_timetable, -> { where.not(:timetable_code => nil) }
+
   def validate_context!
     @validate_context = true
     context.validation_event_override = self
@@ -335,13 +338,13 @@ class CalendarEvent < ActiveRecord::Base
 
   set_broadcast_policy do
     dispatch :new_event_created
-    to { participants - [@updating_user] }
+    to { participants(include_observers: true) - [@updating_user] }
     whenever {
       !appointment_group && context.available? && just_created && !hidden?
     }
 
     dispatch :event_date_changed
-    to { participants - [@updating_user] }
+    to { participants(include_observers: true) - [@updating_user] }
     whenever {
       !appointment_group &&
       context.available? && (
@@ -351,7 +354,8 @@ class CalendarEvent < ActiveRecord::Base
     }
 
     dispatch :appointment_reserved_by_user
-    to { appointment_group.instructors }
+    to { appointment_group.instructors +
+         User.observing_students_in_course(@updating_user.id, appointment_group.active_contexts.select{ |c| c.is_a?(Course) }) }
     whenever {
       @updating_user && appointment_group && parent_event &&
       just_created &&
@@ -360,7 +364,8 @@ class CalendarEvent < ActiveRecord::Base
     data { {:updating_user => @updating_user} }
 
     dispatch :appointment_canceled_by_user
-    to { appointment_group.instructors }
+    to { appointment_group.instructors +
+         User.observing_students_in_course(@updating_user.id, appointment_group.active_contexts.select{ |c| c.is_a?(Course) }) }
     whenever {
       appointment_group && parent_event &&
       deleted? &&
@@ -394,10 +399,17 @@ class CalendarEvent < ActiveRecord::Base
     } }
   end
 
-  def participants
-    # TODO: User#participants should probably be fixed to return [self],
-    # then we can simplify this again
-    context_type == 'User' ? [context] : context.participants
+  def participants(include_observers: false)
+    if context_type == 'User'
+      if appointment_group? && include_observers
+        course_ids = appointment_group.appointment_group_contexts.where(context_type: 'Course').pluck(:context_id)
+        [context] + User.observing_students_in_course(context, course_ids)
+      else
+        [context]
+      end
+    else
+      context.participants(include_observers: include_observers)
+    end
   end
 
   attr_reader :updating_user
@@ -523,7 +535,13 @@ class CalendarEvent < ActiveRecord::Base
     given { |user, session| self.context.grants_right?(user, session, :read) }#students.include?(user) }
     can :read
 
-    given { |user, session| !appointment_group? ^ context.grants_right?(user, session, :read_appointment_participants) }
+    given do |user, session|
+      if appointment_group?
+        context.grants_right?(user, session, :read_appointment_participants)
+      else
+        !hidden? || context.grants_right?(user, session, :manage_calendar)
+      end
+    end
     can :read_child_events
 
     given { |user, session| parent_event && appointment_group? && parent_event.grants_right?(user, session, :manage) }
@@ -603,7 +621,7 @@ class CalendarEvent < ActiveRecord::Base
         loc_string << @event.location_name + ", " if @event.location_name.present?
         loc_string << @event.location_address if @event.location_address.present?
       else
-        loc_string = @event.location
+        loc_string = nil
       end
 
       event.location = loc_string

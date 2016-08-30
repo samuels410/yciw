@@ -58,7 +58,9 @@ class SisApiController < ApplicationController
   #       },
   #       "assignment_group": {
   #         "id": 12,
-  #         "name": "Assignments Group"
+  #         "name": "Assignments Group",
+  #         "group_weight": 0.0,
+  #         "sis_source_id": "abc123"
   #       }
   #       "sections": [
   #         {
@@ -132,12 +134,12 @@ class SisApiController < ApplicationController
   end
 
   def published_assignments
-    Assignment.published
-      .where(post_to_sis: true)
-      .where(context_type: 'Course', context_id: published_course_ids)
-      .preload(:assignment_group) # preload assignment group
-      .preload(:active_assignment_overrides) # preload *active* overrides
-      .preload(context: { active_course_sections: [:nonxlist_course] }) # preload courses and *active* sections
+    Assignment.published.
+      where(post_to_sis: true).
+      where(context_type: 'Course', context_id: published_course_ids).
+      preload(:assignment_group).
+      preload(:active_assignment_overrides).
+      preload(context: { active_course_sections: [:nonxlist_course] })
   end
 
   def paginated_assignments

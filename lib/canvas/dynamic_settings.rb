@@ -6,10 +6,11 @@ module Canvas
     class ConsulError < StandardError
     end
 
-    KV_NAMESPACE = "/config/canvas".freeze
+    KV_NAMESPACE = "config/canvas".freeze
+    TIMEOUT_INTERVAL = 3.freeze
 
     class << self
-      attr_accessor :config, :cache
+      attr_accessor :config, :cache, :fallback_data
 
       def config=(conf_hash)
         @config = conf_hash
@@ -27,10 +28,14 @@ module Canvas
       end
 
       def find(key)
-        raise(ConsulError, "Unable to contact consul without config") if config.nil?
-        config_records = store_get(key)
-        config_records.each_with_object({}) do |node, hash|
-          hash[node[:key].split("/").last] = node[:value]
+        if config.nil?
+          return fallback_data.fetch(key) if fallback_data.present?
+          raise(ConsulError, "Unable to contact consul without config")
+        else
+          config_records = store_get(key)
+          config_records.each_with_object({}) do |node, hash|
+            hash[node[:key].split("/").last] = node[:value]
+          end
         end
       end
 
@@ -73,6 +78,8 @@ module Canvas
             store_put("#{parent_key}/#{child_key}", value)
           end
         end
+      rescue Timeout::Error
+        return false
       end
 
       def store_get(key)
@@ -80,9 +87,10 @@ module Canvas
           # store all values that we get here to
           # kind-of recover in case of big failure
           @strategic_reserve ||= {}
-          consul_value = Canvas.timeout_protection('consul', {raise_on_timeout: true}) do
-            Diplomat::Kv.get("#{KV_NAMESPACE}/#{key}", {recurse: true, consistency: 'stale'})
+          consul_value = Timeout.timeout(TIMEOUT_INTERVAL) do
+            diplomat_get(key)
           end
+
           @strategic_reserve[key] = consul_value
           consul_value
         rescue Faraday::ConnectionFailed,
@@ -101,9 +109,25 @@ module Canvas
       end
 
       def store_put(key, value)
-        Canvas.timeout_protection('consul') do
+        Timeout.timeout(TIMEOUT_INTERVAL) do
           Diplomat::Kv.put("#{KV_NAMESPACE}/#{key}", value)
         end
+      end
+
+      def diplomat_get(key)
+        parent_key = "#{KV_NAMESPACE}/#{key}"
+        read_options = {recurse: true, consistency: 'stale'}
+        diplomat_val = Diplomat::Kv.get(parent_key, read_options)
+        if diplomat_val && !diplomat_val.is_a?(Array)
+          diplomat_val = []
+          Diplomat::Kv.get(parent_key, read_options.merge({keys: true})).each do |full_key|
+            diplomat_val << {
+              key: full_key,
+              value: Diplomat::Kv.get(full_key, read_options)
+            }
+          end
+        end
+        diplomat_val
       end
     end
 

@@ -17,12 +17,11 @@
 #
 
 require File.expand_path(File.dirname(__FILE__) + '/../api_spec_helper')
-require File.expand_path(File.dirname(__FILE__) + '/../../lti_spec_helper.rb')
 
 module Lti
-  describe LtiAppsController, type: :request do
+  describe LtiAppsController, :include_lti_spec_helpers, type: :request do
 
-    let (:account) { Account.create }
+    let(:account) { Account.create }
     describe '#launch_definitions' do
 
       before do
@@ -49,7 +48,12 @@ module Lti
                         {controller: 'lti/lti_apps', action: 'launch_definitions', format: 'json',
                          placements: Lti::ResourcePlacement::DEFAULT_PLACEMENTS, course_id: @course.id.to_s, per_page: '3'})
 
-        json_next = follow_pagination_link('next', :controller => 'lti/lti_apps', :action => 'launch_definitions')
+        json_next = follow_pagination_link('next', {
+          controller: 'lti/lti_apps',
+          action: 'launch_definitions',
+          format: 'json',
+          course_id: @course.id.to_s
+        })
         expect(json.count).to eq 3
         expect(json_next.count).to eq 3
         json
@@ -82,7 +86,12 @@ module Lti
                         {controller: 'lti/lti_apps', action: 'index', format: 'json',
                          course_id: @course.id.to_s, per_page: '3'})
 
-        json_next = follow_pagination_link('next', :controller => 'lti/lti_apps', :action => 'index')
+        json_next = follow_pagination_link('next', {
+          controller: 'lti/lti_apps',
+          action: 'index',
+          format: 'json',
+          course_id: @course.id.to_s
+        })
         expect(json.count).to eq 3
         expect(json_next.count).to eq 3
         json

@@ -440,6 +440,18 @@ define [
     deepEqual assignment.singleSectionDueDate(), assignment.dueAt()
     ENV.PERMISSIONS = {}
 
+  module "Assignment#omitFromFinalGrade"
+
+  test "gets the record's omit_from_final_grade boolean", ->
+    assignment = new Assignment name: 'foo'
+    assignment.set 'omit_from_final_grade', true
+    ok assignment.omitFromFinalGrade()
+
+  test "sets the record's omit_from_final_grade boolean if args passed", ->
+    assignment = new Assignment name: 'foo'
+    assignment.omitFromFinalGrade( true )
+    ok assignment.omitFromFinalGrade()
+
   module "Assignment#toView"
 
   test "returns the assignment's name", ->
@@ -577,7 +589,20 @@ define [
     json = assignment.toView()
     equal json.singleSectionDueDate, dueAt.toISOString()
 
-  test "includes isQuiz", ->
+  test "includes fields for isPage", ->
+    assignment = new Assignment("submission_types":["wiki_page"])
+    json = assignment.toView()
+    notOk json.hasDueDate
+    notOk json.hasPointsPossible
+
+  test "includes fields for isQuiz", ->
     assignment = new Assignment("submission_types":["online_quiz"])
     json = assignment.toView()
-    ok json.isQuiz
+    ok json.hasDueDate
+    notOk json.hasPointsPossible
+
+  test "returns omitFromFinalGrade", ->
+    assignment = new Assignment name: 'foo'
+    assignment.omitFromFinalGrade true
+    json = assignment.toView()
+    ok json.omitFromFinalGrade

@@ -35,7 +35,8 @@ class FeatureFlag < ActiveRecord::Base
   def unhides_feature?
     return false unless Feature.definitions[feature].hidden?
     return true if context.is_a?(Account) && context.site_admin?
-    Account.find(context.feature_flag_account_ids.last).lookup_feature_flag(feature, true).hidden?
+    parent_setting = Account.find(context.feature_flag_account_ids.last).lookup_feature_flag(feature, true)
+    parent_setting.nil? || parent_setting.hidden?
   end
 
   def enabled?
@@ -51,7 +52,10 @@ class FeatureFlag < ActiveRecord::Base
   end
 
   def clear_cache
-    self.class.connection.after_transaction_commit { MultiCache.delete(self.context.feature_flag_cache_key(feature)) } if self.context
+    if self.context
+      self.class.connection.after_transaction_commit { MultiCache.delete(self.context.feature_flag_cache_key(feature)) }
+      self.context.touch if Feature.definitions[feature].touch_context
+    end
   end
 
 private

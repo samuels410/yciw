@@ -64,6 +64,22 @@ module Services
         expect{@message.deliver}.not_to raise_error
       end
 
+      it "expects email sms message type to go through mailer" do
+        @queue.expects(:send_message).once
+        Mailer.expects(:create_message).once
+        @message.path_type = "sms"
+        @message.to = "18015550100@vtext.com"
+        expect{@message.deliver}.not_to raise_error
+      end
+
+      it "expects twilio to not call mailer create_message" do
+        @queue.expects(:send_message).once
+        Mailer.expects(:create_message).never
+        @message.path_type = "sms"
+        @message.to = "+18015550100"
+        expect{@message.deliver}.not_to raise_error
+      end
+
       it "processes push notification message type" do
         @queue.expects(:send_message).once
         sns_client = mock()
@@ -87,21 +103,6 @@ module Services
         expect{@message.deliver}.to raise_error(AWS::SQS::Errors::NonExistentQueue)
         expect(@message.transmission_errors).to include("AWS::SQS::Errors::NonExistentQueue")
         expect(@message.workflow_state).to eql("staged")
-      end
-
-      it "will send to both services" do
-        Setting.set("notification_service_traffic", "true")
-        @queue.expects(:send_message).once
-        @message.path_type = "email"
-        @message.expects(:deliver_via_email).once
-        expect{@message.deliver}.not_to raise_error
-      end
-
-      it "does not restage if sending with both methods" do
-        Setting.set("notification_service_traffic", "true")
-        @queue.stubs(:send_message).raises(AWS::SQS::Errors::ServiceError)
-
-        expect{@message.deliver}.not_to raise_error
       end
 
       context 'payload contents' do

@@ -51,6 +51,21 @@ describe SubmissionsController do
       expect(assigns[:submission][:submission_type]).to eql("online_upload")
     end
 
+    it "should copy attachments to the submissions folder if that feature is enabled" do
+      course_with_student_logged_in(:active_all => true)
+      @course.root_account.enable_feature! :submissions_folder
+      @assignment = @course.assignments.create!(:title => "some assignment", :submission_types => "online_upload")
+      att = attachment_model(:context => @user, :uploaded_data => stub_file_data('test.txt', 'asdf', 'text/plain'))
+      post 'create', :course_id => @course.id, :assignment_id => @assignment.id, :submission => {:submission_type => "online_upload", :attachment_ids => att.id}, :attachments => { "0" => { :uploaded_data => "" }, "-1" => { :uploaded_data => "" } }
+      expect(response).to be_redirect
+      expect(assigns[:submission]).not_to be_nil
+      att_copy = Attachment.find(assigns[:submission].attachment_ids.to_i)
+      expect(att_copy).not_to eq att
+      expect(att_copy.root_attachment).to eq att
+      expect(att).not_to be_associated_with_submission
+      expect(att_copy).to be_associated_with_submission
+    end
+
     it "should reject illegal file extensions from submission" do
       course_with_student_logged_in(:active_all => true)
       @assignment = @course.assignments.create!(:title => "an additional assignment", :submission_types => "online_upload", :allowed_extensions => ['txt'])
@@ -90,9 +105,11 @@ describe SubmissionsController do
     it "should allow attaching multiple files to the submission" do
       course_with_student_logged_in(:active_all => true)
       @assignment = @course.assignments.create!(:title => "some assignment", :submission_types => "online_url,online_upload")
-      data1 = fixture_file_upload("scribd_docs/doc.doc", "application/msword", true)
-      data2 = fixture_file_upload("scribd_docs/txt.txt", "application/vnd.ms-excel", true)
-      post 'create', :course_id => @course.id, :assignment_id => @assignment.id, :submission => {:submission_type => "online_upload"}, :attachments => {"0" => {:uploaded_data => data1}, "1" => {:uploaded_data => data2}}
+      att1 = attachment_model(:context => @user, :uploaded_data => fixture_file_upload("scribd_docs/doc.doc", "application/msword", true))
+      att2 = attachment_model(:context => @user, :uploaded_data => fixture_file_upload("scribd_docs/txt.txt", "application/vnd.ms-excel", true))
+      post 'create', :course_id => @course.id, :assignment_id => @assignment.id,
+           :submission => {:submission_type => "online_upload", :attachment_ids => [att1.id, att2.id].join(',')},
+           :attachments => {"0" => {:uploaded_data => "doc.doc"}, "1" => {:uploaded_data => "txt.txt"}}
       expect(response).to be_redirect
       expect(assigns[:submission]).not_to be_nil
       expect(assigns[:submission].user_id).to eql(@user.id)
@@ -120,6 +137,47 @@ describe SubmissionsController do
       expect(response).to be_redirect
       expect(assigns[:submission]).not_to be_nil
       expect(assigns[:submission].url).to eql("http://www.google.com")
+    end
+
+    it 'must accept a basic_lti_launch url when any online submission type is allowed' do
+      course_with_student_logged_in(:active_all => true)
+      @assignment = @course.assignments.create!(:title => 'some assignment', :submission_types => 'online_url')
+      request.path = "/api/v1/courses/#{@course.id}/assignments/#{@assignment.id}/submissions"
+      post 'create', :course_id => @course.id, :assignment_id => @assignment.id, :submission => {:submission_type => 'basic_lti_launch', :url => 'http://www.google.com'}
+      expect(response).to be_redirect
+      expect(assigns[:submission]).not_to be_nil
+      expect(assigns[:submission].submission_type).to eq 'basic_lti_launch'
+      expect(assigns[:submission].url).to eq 'http://www.google.com'
+    end
+
+    it "should redirect to the assignment when locked in submit-at-deadline situation" do
+      enable_cache do
+        now = Time.now.utc
+        Timecop.freeze(now) do
+          course_with_student_logged_in(:active_all => true)
+          @assignment = @course.assignments.create!(
+            :title => "some assignment",
+            :submission_types => "online_url",
+            :lock_at => now + 5.seconds
+          )
+
+          # cache permission as true (for 5 minutes)
+          expect(@assignment.grants_right?(@student, :submit)).to be_truthy
+        end
+
+        # travel past due date (which resets the Assignment#locked_for? cache)
+        Timecop.freeze(now + 10.seconds) do
+          # now it's locked, but permission is cached, locked_for? is not
+          post 'create',
+            :course_id => @course.id,
+            :assignment_id => @assignment.id,
+            :submission => {
+              :submission_type => "online_url",
+              :url => " http://www.google.com "
+            }
+          expect(response).to be_redirect
+        end
+      end
     end
 
     describe 'when submitting a text response for the answer' do
@@ -358,6 +416,47 @@ describe SubmissionsController do
       expect(assigns[:submission].submission_comments[0].attachments.map{|a| a.display_name}).to be_include("txt.txt")
     end
 
+    describe 'allows a teacher to add draft comments to a submission' do
+      before(:each) do
+        course_with_teacher(active_all: true)
+        student_in_course
+        assignment = @course.assignments.create!(title: 'Assignment #1', submission_types: 'online_url,online_upload')
+
+        user_session(@teacher)
+        @test_params = {
+          course_id: @course.id,
+          assignment_id: assignment.id,
+          id: @student.id,
+          submission: {
+            comment: 'Comment #1',
+          }
+        }
+      end
+
+      it 'when draft_comment is true' do
+        test_params = @test_params
+        test_params[:submission][:draft_comment] = true
+
+        expect { put 'update', test_params }.to change { SubmissionComment.draft.count }.by(1)
+      end
+
+      it 'except when draft_comment is nil' do
+        test_params = @test_params
+        test_params[:submission].delete(:draft_comment)
+
+        expect { put 'update', test_params }.to change { SubmissionComment.count }.by(1)
+        expect { put 'update', test_params }.not_to change { SubmissionComment.draft.count }
+      end
+
+      it 'except when draft_comment is false' do
+        test_params = @test_params
+        test_params[:submission][:draft_comment] = false
+
+        expect { put 'update', test_params }.to change { SubmissionComment.count }.by(1)
+        expect { put 'update', test_params }.not_to change { SubmissionComment.draft.count }
+      end
+    end
+
     it "should allow setting 'student_entered_grade'" do
       course_with_student_logged_in(:active_all => true)
       @assignment = @course.assignments.create!(:title => "some assignment",
@@ -415,7 +514,7 @@ describe SubmissionsController do
       end
 
       it "should create a final provisional comment" do
-        @submission.find_or_create_provisional_grade!(scorer: @teacher)
+        @submission.find_or_create_provisional_grade!(@teacher)
         put 'update', :format => :json, :course_id => @course.id, :assignment_id => @assignment.id, :id => @user.id,
           :submission => {:comment => "provisional!", :provisional => true, :final => true}
 
@@ -572,5 +671,42 @@ describe SubmissionsController do
       expect(response.response_code).to eq 400
     end
 
+  end
+
+  describe "copy_attachments_to_submissions_folder" do
+    before(:once) do
+      course_with_student
+      attachment_model(context: @student)
+    end
+
+    it "copies a user attachment into the user's submissions folder" do
+      atts = SubmissionsController.copy_attachments_to_submissions_folder(@course, [@attachment])
+      expect(atts.length).to eq 1
+      expect(atts[0]).not_to eq @attachment
+      expect(atts[0].folder).to eq @student.submissions_folder(@course)
+    end
+
+    it "leaves files already in submissions folders alone" do
+      @attachment.folder = @student.submissions_folder(@course)
+      @attachment.save!
+      atts = SubmissionsController.copy_attachments_to_submissions_folder(@course, [@attachment])
+      expect(atts).to eq [@attachment]
+    end
+
+    it "copies a group attachment into the group submission folder" do
+      group_model(context: @course)
+      attachment_model(context: @group)
+      atts = SubmissionsController.copy_attachments_to_submissions_folder(@course, [@attachment])
+      expect(atts.length).to eq 1
+      expect(atts[0]).not_to eq @attachment
+      expect(atts[0].folder).to eq @group.submissions_folder
+    end
+
+    it "leaves files in non user/group context alone" do
+      assignment_model(context: @course)
+      weird_file = @assignment.attachments.create! name: 'blah', uploaded_data: default_uploaded_data
+      atts = SubmissionsController.copy_attachments_to_submissions_folder(@course, [weird_file])
+      expect(atts).to eq [weird_file]
+    end
   end
 end

@@ -1,8 +1,9 @@
 define [
   'compiled/gradebook2/Gradebook'
+  'jsx/gradebook2/DataLoader'
   'underscore'
   'timezone'
-], (Gradebook, _, tz) ->
+], (Gradebook, DataLoader, _, tz) ->
 
   module "Gradebook2#gradeSort"
 
@@ -38,6 +39,10 @@ define [
     , 'assignment1') < 0
     , "other fields are sorted by score"
 
+  gradebookStubs = ->
+    indexedOverrides: Gradebook.prototype.indexedOverrides
+    indexedGradingPeriods: _.indexBy(@gradingPeriods, 'id')
+
   module "Gradebook2#submissionOutsideOfGradingPeriod - assignment with no overrides",
     setupThis: (options) ->
       customOptions = options || {}
@@ -48,7 +53,7 @@ define [
         lastGradingPeriodAndDueAtNull: -> false
         dateIsInGradingPeriod: -> false
 
-      _.defaults customOptions, defaults
+      _.defaults customOptions, defaults, gradebookStubs()
 
     setup: ->
       @subOutsideOfPeriod = Gradebook.prototype.submissionOutsideOfGradingPeriod
@@ -131,14 +136,12 @@ define [
         lastGradingPeriodAndDueAtNull: -> false
         dateIsInGradingPeriod: -> false
 
-      _.defaults customOptions, defaults
+      _.defaults customOptions, defaults, gradebookStubs()
 
     generateOverrides: (dueAt) ->
-      {
-        studentOverrides: { '1': { '5': { student_ids: ['5'], due_at: dueAt } } }
-        groupOverrides: {},
-        sectionOverrides: {}
-      }
+      [
+        { student_ids: ['5'], due_at: dueAt }
+      ]
 
     setup: ->
       @subOutsideOfPeriod = Gradebook.prototype.submissionOutsideOfGradingPeriod
@@ -155,7 +158,7 @@ define [
     self = @setupThis({ dateIsInGradingPeriod: -> true }, overrides)
     dateIsInGradingPeriodSpy = @spy(self, 'dateIsInGradingPeriod')
     isOutsidePeriod = @subOutsideOfPeriod.bind(self)
-    result = isOutsidePeriod(@submission, @student, @gradingPeriods, overrides)
+    result = isOutsidePeriod(@submission, @student)
 
     ok dateIsInGradingPeriodSpy.called
     ok +dateIsInGradingPeriodSpy.args[0][1] == +tz.parse('2015-04-15T06:00:00Z')
@@ -206,14 +209,12 @@ define [
         lastGradingPeriodAndDueAtNull: -> false
         dateIsInGradingPeriod: -> false
 
-      _.defaults customOptions, defaults
+      _.defaults customOptions, defaults, gradebookStubs()
 
     generateOverrides: (dueAt) ->
-      {
-        studentOverrides: { '1': { '5': { student_ids: ['5'], due_at: dueAt } } }
-        groupOverrides: {},
-        sectionOverrides: {}
-      }
+      [
+        { student_ids: ['5'], due_at: dueAt }
+      ]
 
     setup: ->
       @subOutsideOfPeriod = Gradebook.prototype.submissionOutsideOfGradingPeriod
@@ -230,7 +231,7 @@ define [
     self = @setupThis({ dateIsInGradingPeriod: -> true }, overrides)
     dateIsInGradingPeriodSpy = @spy(self, 'dateIsInGradingPeriod')
     isOutsidePeriod = @subOutsideOfPeriod.bind(self)
-    result = isOutsidePeriod(@submission, @student, @gradingPeriods, overrides)
+    result = isOutsidePeriod(@submission, @student)
 
     ok dateIsInGradingPeriodSpy.called
     ok +dateIsInGradingPeriodSpy.args[0][1] == +tz.parse('2015-04-15T06:00:00Z')
@@ -282,14 +283,12 @@ define [
         lastGradingPeriodAndDueAtNull: -> false
         dateIsInGradingPeriod: -> false
 
-      _.defaults customOptions, defaults
+      _.defaults customOptions, defaults, gradebookStubs()
 
     generateOverrides: (dueAt) ->
-      {
-        studentOverrides: {},
-        sectionOverrides: {},
-        groupOverrides: { '1': { '202': { group_id: '202', due_at: dueAt } } }
-      }
+      [
+        { group_id: '202', due_at: dueAt }
+      ]
 
     setup: ->
       @subOutsideOfPeriod = Gradebook.prototype.submissionOutsideOfGradingPeriod
@@ -355,7 +354,7 @@ define [
         lastGradingPeriodAndDueAtNull: -> false
         dateIsInGradingPeriod: -> false
 
-      _.defaults customOptions, defaults
+      _.defaults customOptions, defaults, gradebookStubs()
 
     setup: ->
       @subOutsideOfPeriod = Gradebook.prototype.submissionOutsideOfGradingPeriod
@@ -434,14 +433,13 @@ define [
         lastGradingPeriodAndDueAtNull: -> false
         dateIsInGradingPeriod: -> false
 
-      _.defaults customOptions, defaults
+      _.defaults customOptions, defaults, gradebookStubs()
 
     generateOverrides: (date1, date2) ->
-      {
-        studentOverrides: { '1': { '5': { student_ids: ['5'], due_at: date1 } } }
-        groupOverrides: {},
-        sectionOverrides: { '1': { '101': { course_section_id: '101', assignment_id: '1', due_at: date2 } } }
-      }
+      [
+        { student_ids: ['5'], due_at: date1 }
+        { course_section_id: '101', assignment_id: '1', due_at: date2 }
+      ]
 
     setup: ->
       @subOutsideOfPeriod = Gradebook.prototype.submissionOutsideOfGradingPeriod
@@ -557,7 +555,7 @@ define [
         options:
           all_grading_periods_totals: false
 
-      _.defaults customOptions, defaults
+      _.defaults customOptions, defaults, gradebookStubs()
 
     setup: ->
       @hideAggregateColumns = Gradebook.prototype.hideAggregateColumns
@@ -634,3 +632,61 @@ define [
     @gradebookColumnOrderSettings = undefined
     @getVisibleGradeGridColumns()
     notOk @makeColumnSortFn.called
+
+  module 'Gradebook#fieldsToExcludeFromAssignments',
+    setup: ->
+      @excludedFields = Gradebook.prototype.fieldsToExcludeFromAssignments
+
+  test "includes 'description' in the response", ->
+    ok _.contains(@excludedFields, 'description')
+
+  test "includes 'needs_grading_count' in the response", ->
+    ok _.contains(@excludedFields, 'needs_grading_count')
+
+  module 'Gradebook#studentsUrl',
+    setupThis:(options) ->
+      options = options || {}
+      defaults = {
+        showConcludedEnrollments: false
+        showInactiveEnrollments: false
+      }
+      _.defaults options, defaults
+
+    setup: ->
+      @studentsUrl = Gradebook.prototype.studentsUrl
+
+  test 'enrollmentUrl returns "students_url"', ->
+    equal @studentsUrl.call(@setupThis()), 'students_url'
+
+  test 'when concluded only, enrollmentUrl returns "students_with_concluded_enrollments_url"', ->
+    self = @setupThis(showConcludedEnrollments: true)
+    equal @studentsUrl.call(self), 'students_with_concluded_enrollments_url'
+
+  test 'when inactive only, enrollmentUrl returns "students_with_inactive_enrollments_url"', ->
+    self = @setupThis(showInactiveEnrollments: true)
+    equal @studentsUrl.call(self), 'students_with_inactive_enrollments_url'
+
+  test 'when show concluded and hide inactive are true, enrollmentUrl returns "students_with_concluded_and_inactive_enrollments_url"', ->
+    self = @setupThis(showConcludedEnrollments: true, showInactiveEnrollments: true)
+    equal @studentsUrl.call(self), 'students_with_concluded_and_inactive_enrollments_url'
+
+  module 'Gradebook#showNotesColumn',
+    setup: ->
+      @loadNotes = @stub(DataLoader, "getDataForColumn")
+
+    setupShowNotesColumn: (opts) ->
+      defaultOptions =
+        options: {}
+        toggleNotesColumn: ->
+      self = _.defaults(opts || {}, defaultOptions)
+      @showNotesColumn = Gradebook.prototype.showNotesColumn.bind(self)
+
+  test 'loads the notes if they have not yet been loaded', ->
+    @setupShowNotesColumn(teacherNotesNotYetLoaded: true)
+    @showNotesColumn()
+    ok @loadNotes.calledOnce
+
+  test 'does not load the notes if they are already loaded', ->
+    @setupShowNotesColumn(teacherNotesNotYetLoaded: false)
+    @showNotesColumn()
+    ok @loadNotes.notCalled

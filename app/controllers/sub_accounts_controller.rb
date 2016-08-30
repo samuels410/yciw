@@ -78,8 +78,8 @@ class SubAccountsController < ApplicationController
     counts = Course.
         joins(:course_account_associations).
         group('course_account_associations.account_id').
-        where("course_account_associations.account_id IN (?) AND " +
-                    "course_account_associations.depth=0 AND courses.workflow_state<>'deleted'", @accounts[:all_account_ids]).
+        where("course_account_associations.account_id IN (?) AND course_account_associations.course_section_id IS NULL AND
+                 course_account_associations.depth=0 AND courses.workflow_state<>'deleted'", @accounts[:all_account_ids]).
         distinct.count(:id)
     counts.each do |account_id, count|
       @accounts[account_id][:course_count] = count
@@ -111,7 +111,7 @@ class SubAccountsController < ApplicationController
   # @argument account[default_group_storage_quota_mb] [Integer]
   #   The default group storage quota to be used, if not otherwise specified.
   #
-  # @returns [Account]
+  # @returns Account
   def create
     if params[:account][:parent_account_id]
       parent_id = params[:account].delete(:parent_account_id)

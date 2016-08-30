@@ -31,7 +31,8 @@ class PseudonymsController < ApplicationController
   #
   # @response_field account_id The ID of the login's account.
   # @response_field id The unique, numeric ID for the login.
-  # @response_field sis_user_id The login's unique SIS id.
+  # @response_field sis_user_id The login's unique SIS ID.
+  # @response_field integration_id The login's unique integration ID.
   # @response_field unique_id The unique ID for the login.
   # @response_field user_id The unique ID of the login's user.
   # @response_field authentication_provider_id The ID of the authentication
@@ -91,7 +92,7 @@ class PseudonymsController < ApplicationController
       else
         cc.pseudonym ||= cc.user.pseudonym rescue nil
         cc.save if cc.changed?
-        !cc.user.pseudonyms.active.empty? && cc.user.pseudonyms.active.any?{|p| p.account_id == @domain_root_account.id || (p.works_for_account?(@domain_root_account) && p.account && p.account.canvas_authentication?) }
+        @domain_root_account.pseudonyms.active.where(user_id: cc.user_id).exists?
       end
     end
     respond_to do |format|

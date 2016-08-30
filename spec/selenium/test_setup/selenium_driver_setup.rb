@@ -1,38 +1,74 @@
 require "fileutils"
 
 module SeleniumDriverSetup
-  RECENT_SPEC_RUNS_LIMIT = 10
+  # Number of recent specs to show in failure pages
+  RECENT_SPEC_RUNS_LIMIT = 500
+  # Number of identical failures in a row before we abort this worker
+  RECENT_SPEC_FAILURE_LIMIT = 10
+  # Number of failures to record
+  MAX_FAILURES_TO_RECORD = 20
+  IMPLICIT_WAIT_TIMEOUT = 15
+
+  def browser
+    $selenium_config[:browser].try(:to_sym) || :firefox
+  end
 
   def setup_selenium
-
-    browser = $selenium_config[:browser].try(:to_sym) || :firefox
-    host_and_port
-
     path = $selenium_config[:paths].try(:[], browser)
     if path
       Selenium::WebDriver.const_get(browser.to_s.capitalize).path = path
     end
 
-    run_headless = ENV.key?("TEST_ENV_NUMBER")
-    set_up_display_buffer if run_headless
+    SeleniumDriverSetup.set_up_display_buffer if run_headless?
 
-    driver = if browser == :firefox
-               firefox_driver
-             elsif browser == :chrome
-               chrome_driver
-             elsif browser == :ie
-               ie_driver
-             end
+    failure_proc = -> {
+      # ensure we quit frd, cuz it's not going to work (otherwise rspec
+      # would keep retrying on subsequent groups/examples)
+      RSpec.world.wants_to_quit = true
+      raise "unable to initialize webdriver"
+    }
 
-    focus_viewport driver if run_headless
+    driver = with_retries failure_proc: failure_proc do
+      case browser
+      when :firefox
+        firefox_driver
+      when :chrome
+        chrome_driver
+      when :internet_explorer
+        ie_driver
+      when :safari
+        safari_driver
+      else
+        raise "unsupported browser #{browser}"
+      end
+    end
 
-    driver.manage.timeouts.implicit_wait = 10
+    focus_viewport driver if run_headless?
+
+    driver.manage.timeouts.implicit_wait = IMPLICIT_WAIT_TIMEOUT
     driver.manage.timeouts.script_timeout = 60
 
     driver
   end
 
-  def set_up_display_buffer
+  def run_headless?
+    ENV.key?("TEST_ENV_NUMBER")
+  end
+
+  def capture_screenshots?
+    ENV["CAPTURE_SCREENSHOTS"]
+  end
+
+  def capture_video?
+    capture_screenshots? && run_headless?
+  end
+
+  # prevents subsequent specs from failing because tooltips are showing etc.
+  def move_mouse_to_known_position
+    driver.mouse.move_to(f("body"), 0, 0) if driver.ready_for_interaction
+  end
+
+  def self.set_up_display_buffer
     require "headless"
 
     test_number = ENV["TEST_ENV_NUMBER"]
@@ -41,8 +77,31 @@ module SeleniumDriverSetup
     # start at 21 to avoid conflicts with other test runner Xvfb stuff
 
     display = 20 + test_number
-    Headless.new(display: display, dimensions: "2000x2000x24").start
+    @headless = Headless.new(
+      display: display,
+      dimensions: "1920x1080x24",
+      video: {
+        provider: :ffmpeg,
+        # yay interframe compression
+        codec: 'libx264',
+        # use less CPU. doesn't actually shrink the resulting file much.
+        frame_rate: 4,
+        extra: [
+          # quicktime doesn't understand the default yuv422p
+          '-pix_fmt', 'yuv420p',
+          # limit videos to 1 minute 20 seconds in case something bad happens and we forget to stop recording
+          '-t', '80',
+          # use less CPU
+          '-preset', 'superfast'
+        ]
+      }
+    )
+    @headless.start
     puts "Setting up DISPLAY=#{ENV['DISPLAY']}"
+  end
+
+  def self.headless
+    @headless
   end
 
   def focus_viewport(driver)
@@ -55,122 +114,74 @@ module SeleniumDriverSetup
   end
 
   def ie_driver
-    require 'testingbot'
-    require 'testingbot/tunnel'
-
     puts "using IE driver"
+    selenium_remote_driver
+  end
 
-    caps = Selenium::WebDriver::Remote::Capabilities.ie
-    caps.version = "10"
-    caps.platform = :WINDOWS
-    caps[:unexpectedAlertBehaviour] = 'ignore'
-
-    Selenium::WebDriver.for(
-      :remote,
-      :url => "http://#{$selenium_config[:testingbot_key]}:" +
-                "#{$selenium_config[:testingbot_secret]}@hub.testingbot.com:4444/wd/hub",
-      :desired_capabilities => caps)
-
+  def safari_driver
+    puts "using safari driver"
+    selenium_remote_driver
   end
 
   def firefox_driver
     puts "using FIREFOX driver"
-    profile = firefox_profile
-    caps = Selenium::WebDriver::Remote::Capabilities.firefox(:unexpectedAlertBehaviour => 'ignore')
-
-    if $selenium_config[:host_and_port]
-      caps.firefox_profile = profile
-      stand_alone_server_firefox_driver(caps)
-    else
-      ruby_firefox_driver(profile: profile, desired_capabilities: caps)
-    end
+    selenium_url ? selenium_remote_driver : ruby_firefox_driver
   end
 
   def chrome_driver
     puts "using CHROME driver"
-    if $selenium_config[:host_and_port]
-      stand_alone_server_chrome_driver
-    else
-      ruby_chrome_driver
+    selenium_url ? selenium_remote_driver : ruby_chrome_driver
+  end
+
+  def with_retries(how_many: 3, delay: 1, error_class: StandardError, failure_proc: nil)
+    begin
+      tries ||= 0
+      yield
+    rescue error_class => e
+      puts "Attempt #{tries += 1} got error: #{e}"
+      if tries >= how_many
+        $stderr.puts "Giving up"
+        failure_proc ? failure_proc.call : raise
+      else
+        sleep delay
+        retry
+      end
     end
   end
+  module_function :with_retries
 
   def ruby_chrome_driver
-    driver = nil
-    begin
-      tries ||= 3
-      puts "Thread: provisioning selenium chrome ruby driver"
-      driver = Selenium::WebDriver.for :chrome
-    rescue StandardError => e
-      puts "Thread #{THIS_ENV}\n try ##{tries}\nError attempting to start remote webdriver: #{e}"
-      sleep 2
-      retry unless (tries -= 1).zero?
-    end
-    driver
+    puts "Thread: provisioning local chrome driver"
+    Selenium::WebDriver.for :chrome, switches: %w[--disable-impl-side-painting]
   end
 
-  def stand_alone_server_chrome_driver
-    driver = nil
-    3.times do |times|
-      begin
-        driver = Selenium::WebDriver.for(
-          :remote,
-          :url => 'http://' + ($selenium_config[:host_and_port] || "localhost:4444") + '/wd/hub',
-          :desired_capabilities => :chrome
-        )
-        break
-      rescue StandardError => e
-        puts "Error attempting to start remote webdriver: #{e}"
-        raise e if times == 2
-      end
-    end
-    driver
+  def selenium_remote_driver
+    puts "Thread: provisioning remote #{browser} driver"
+    Selenium::WebDriver.for(
+      :remote,
+      :url => selenium_url,
+      :desired_capabilities => desired_capabilities
+    )
   end
 
-  def ruby_firefox_driver(options)
-    try ||= 1
-    puts "Thread: provisioning selenium ruby firefox driver (#{options.inspect})"
-    # dup is necessary for retries because selenium deletes out of the options
-    # TODO: we could try a random port here instead of relying on the default for retries
-    # (or killing firefox may be the best move)
-    driver = Selenium::WebDriver.for(:firefox, options.dup)
-  rescue StandardError => e
-    puts <<-ERROR
-    Thread #{THIS_ENV}
-     try ##{try}
-    Error attempting to start remote webdriver: #{e}
-    ERROR
-
-    # according to https://code.google.com/p/selenium/issues/detail?id=6760,
-    # this could maybe be fixed by killing stale firefoxes?
-    system("ps aux")
-
-    if try <= 3
-      try += 1
-      sleep 2
-      retry
-    else
-      puts "GIVING UP"
-      raise
-    end
+  def desired_capabilities
+    caps = Selenium::WebDriver::Remote::Capabilities.send(browser)
+    caps.version = $selenium_config[:version] unless $selenium_config[:version].nil?
+    caps.platform = $selenium_config[:platform] unless $selenium_config[:platform].nil?
+    caps["tunnel-identifier"] = $selenium_config[:tunnel_id] unless $selenium_config[:tunnel_id].nil?
+    caps[:unexpectedAlertBehaviour] = 'ignore'
+    caps
   end
 
-  def stand_alone_server_firefox_driver(caps)
-    driver = nil
-    3.times do |times|
-      begin
-        driver = Selenium::WebDriver.for(
-          :remote,
-          :url => 'http://' + ($selenium_config[:host_and_port] || "localhost:4444") + '/wd/hub',
-          :desired_capabilities => caps
-        )
-        break
-      rescue StandardError => e
-        puts "Error attempting to start remote webdriver: #{e}"
-        raise e if times == 2
-      end
-    end
-    driver
+  def selenium_url
+    $selenium_config[:remote_url]
+  end
+
+  def ruby_firefox_driver
+    puts "Thread: provisioning local firefox driver"
+    Selenium::WebDriver.for(:firefox,
+                            profile: firefox_profile,
+                            desired_capabilities: desired_capabilities)
   end
 
   def selenium_driver
@@ -189,12 +200,6 @@ module SeleniumDriverSetup
     profile
   end
 
-  def host_and_port
-    if $selenium_config[:host] && $selenium_config[:port] && !$selenium_config[:host_and_port]
-      $selenium_config[:host_and_port] = "#{$selenium_config[:host]}:#{$selenium_config[:port]}"
-    end
-  end
-
   def set_native_events(setting)
     driver.instance_variable_get(:@bridge).instance_variable_get(:@capabilities).instance_variable_set(:@native_events, setting)
   end
@@ -203,15 +208,19 @@ module SeleniumDriverSetup
     "http://#{$app_host_and_port}"
   end
 
-  def self.note_recent_spec_run(example)
+  def self.note_recent_spec_run(example, exception)
     @recent_spec_runs ||= []
-    @recent_spec_runs << { location: example.metadata[:location], exception: example.exception }
+    @recent_spec_runs << {
+      location: example.metadata[:location],
+      exception: exception,
+      pending: example.pending
+    }
     @recent_spec_runs = @recent_spec_runs.last(RECENT_SPEC_RUNS_LIMIT)
 
     if ENV["ABORT_ON_CONSISTENT_BADNESS"]
-      recent_errors = @recent_spec_runs.map { |run| run[:exception] && run[:exception].to_s }.compact
-      if recent_errors.size >= RECENT_SPEC_RUNS_LIMIT && recent_errors.uniq.size == 1
-        $stderr.puts "ERROR: got the same failure #{RECENT_SPEC_RUNS_LIMIT} times in a row, aborting"
+      recent_errors = @recent_spec_runs.last(RECENT_SPEC_FAILURE_LIMIT).map { |run| run[:exception] && run[:exception].to_s }.compact
+      if recent_errors.size >= RECENT_SPEC_FAILURE_LIMIT && recent_errors.uniq.size == 1
+        $stderr.puts "ERROR: got the same failure #{RECENT_SPEC_FAILURE_LIMIT} times in a row, aborting"
         RSpec.world.wants_to_quit = true
       end
     end
@@ -224,39 +233,68 @@ module SeleniumDriverSetup
     end
   end
 
-  def record_errors(example, log_messages)
+  def start_capturing_video
+    SeleniumDriverSetup.headless.video.start_capture if capture_video?
+  end
+
+  def record_errors(example, exception, log_messages)
     js_errors = driver.execute_script("return window.JSErrorCollector_errors && window.JSErrorCollector_errors.pump()") || []
-    return unless js_errors.present? || example.exception
 
     # always send js errors to stdout, even if the spec passed. we have to
     # empty the JSErrorCollector anyway, so we might as well show it.
     meta = example.metadata
-    puts meta[:location]
+    puts meta[:location] if js_errors.present? || exception
     js_errors.each do |error|
       puts "  JS Error: #{error["errorMessage"]} (#{error["sourceName"]}:#{error["lineNumber"]})"
     end
 
-    return unless example.exception && ENV["CAPTURE_SCREENSHOTS"]
+    SeleniumDriverSetup.number_of_failures ||= 0
+    SeleniumDriverSetup.number_of_failures += 1 if exception
 
-    errors_path = Rails.root.join("log/seleniumfailures")
-    FileUtils.mkdir_p(errors_path)
+    if capture_screenshots? || capture_video?
+      if exception
+        errors_path = Rails.root.join("log/seleniumfailures")
+        FileUtils.mkdir_p(errors_path)
 
-    summary_name = meta[:location].sub(/\A[.\/]+/, "").gsub(/\//, ":")
-    screenshot_name = summary_name + ".png"
-    driver.save_screenshot(errors_path.join(screenshot_name))
+        summary_name = meta[:location].sub(/\A[.\/]+/, "").gsub(/\//, ":")
+        include_recordings = SeleniumDriverSetup.number_of_failures <= MAX_FAILURES_TO_RECORD
 
-    recent_spec_runs = SeleniumDriverSetup.recent_spec_runs.map { |r| r[:location] }
+        if capture_screenshots? && include_recordings
+          screenshot_name = summary_name + ".png"
+          driver.save_screenshot(errors_path.join(screenshot_name))
+        end
 
-    log_message_formatter = EscapeCode::HtmlFormatter.new(log_messages.join("\n"))
+        if capture_video?
+          if include_recordings
+            screen_capture_name = summary_name + ".mp4"
+            SeleniumDriverSetup.headless.video.stop_and_save(errors_path.join(screen_capture_name))
+          else
+            SeleniumDriverSetup.headless.video.stop_and_discard
+          end
+        end
 
-    # make a nice little html file for jenkins
-    File.open(errors_path.join(summary_name + ".html"), "w") do |file|
-      output_buffer = nil # Erubis wants this local var
-      file.write SeleniumDriverSetup.error_template.result(binding)
+        recent_spec_runs = SeleniumDriverSetup.recent_spec_runs
+
+        log_message_formatter = EscapeCode::HtmlFormatter.new(log_messages.join("\n"))
+
+        # make a nice little html file for jenkins
+        File.open(errors_path.join(summary_name + ".html"), "w") do |file|
+          output_buffer = nil # Erubis wants this local var
+          file.write SeleniumDriverSetup.error_template.result(binding)
+        end
+
+        puts meta[:location]
+        if include_recordings
+          puts "  Screenshot: #{errors_path.join(screenshot_name)}" if capture_screenshots?
+          puts "  Screen capture: #{errors_path.join(screen_capture_name)}" if capture_video?
+        else
+          puts "  Screenshot skipped because we had more than #{MAX_FAILURES_TO_RECORD} failures" if capture_screenshots?
+          puts "  Screen capture skipped because we had more than #{MAX_FAILURES_TO_RECORD} failures" if capture_video?
+        end
+      else
+        SeleniumDriverSetup.headless.video.stop_and_discard if capture_video?
+      end
     end
-
-    puts meta[:location]
-    puts "  Screenshot: #{errors_path.join(screenshot_name)}"
   end
 
   def self.setup_host_and_port
@@ -294,21 +332,22 @@ module SeleniumDriverSetup
   class ServerStartupError < RuntimeError; end
 
   def self.start_webserver(webserver)
-    attempts ||= 0
-    setup_host_and_port
-    case webserver
-    when 'thin'
-      self.start_in_process_thin_server
-    when 'webrick'
-      self.start_in_process_webrick_server
-    else
-      puts "no web server specified, defaulting to WEBrick"
-      self.start_in_process_webrick_server
+    with_retries(error_class: ServerStartupError) do
+      setup_host_and_port
+      case webserver
+      when 'thin'
+        self.start_in_process_thin_server
+      when 'webrick'
+        self.start_in_process_webrick_server
+      else
+        puts "no web server specified, defaulting to WEBrick"
+        self.start_in_process_webrick_server
+      end
     end
   rescue ServerStartupError
-    attempts += 1
-    retry if attempts <= 3
-    $stderr.puts "unable to start server, giving up :'("
+    # if this fails, it's before any specs run, so we can bail completely
+    # (if we don't, rspec's exit hooks will run/fail all examples in this
+    # group, meaning other workers won't pick them up)
     exit! 1
   end
 
@@ -363,6 +402,7 @@ module SeleniumDriverSetup
 
   class << self
     attr_reader :recent_spec_runs
+    attr_accessor :number_of_failures
 
     def disallow_requests!
       # ensure the current in-flight request (if any, AJAX or otherwise)

@@ -46,7 +46,7 @@ module BasicLTI
         new_encoding = [md[1], md[2], md[3], md[4]].join('-')
         raise InvalidSourceId, 'Invalid signature' unless Canvas::Security.
             verify_hmac_sha1(md[5], new_encoding, key: tool.shard.settings[:encryption_key])
-        
+
         raise InvalidSourceId, 'Tool is invalid' unless tool.id == md[1].to_i
         course = Course.active.where(id: md[2]).first
         raise InvalidSourceId, 'Course is invalid' unless course
@@ -86,6 +86,7 @@ module BasicLTI
     end
 
     class LtiResponse
+      include TextHelper
       attr_accessor :code_major, :severity, :description, :body
 
       def initialize(lti_request)
@@ -121,6 +122,10 @@ module BasicLTI
 
       def result_data_url
         @lti_request && @lti_request.at_css('imsx_POXBody > replaceResultRequest > resultRecord > result > resultData > url').try(:content)
+      end
+
+      def result_data_launch_url
+        @lti_request && @lti_request.at_css('imsx_POXBody > replaceResultRequest > resultRecord > result > resultData > ltiLaunchUrl').try(:content)
       end
 
       def to_xml
@@ -185,7 +190,7 @@ module BasicLTI
 
       protected
 
-      def handle_replaceResult(tool, course, assignment, user)
+      def handle_replaceResult(_tool, _course, assignment, user)
         text_value = self.result_score
         new_score = Float(text_value) rescue false
         raw_score = Float(self.result_total_score) rescue false
@@ -195,9 +200,12 @@ module BasicLTI
         if text = result_data_text
           submission_hash[:body] = text
           submission_hash[:submission_type] = 'online_text_entry'
-        elsif url = result_data_url
+        elsif (url = result_data_url)
           submission_hash[:url] = url
           submission_hash[:submission_type] = 'online_url'
+        elsif (launch_url = result_data_launch_url)
+          submission_hash[:url] = launch_url
+          submission_hash[:submission_type] = 'basic_lti_launch'
         end
 
         old_submission = assignment.submissions.where(user_id: user.id).first
@@ -206,11 +214,11 @@ module BasicLTI
           submission_hash[:grade] = raw_score
         elsif new_score
           if (0.0 .. 1.0).include?(new_score)
-            submission_hash[:grade] = "#{new_score * 100}%"
+            submission_hash[:grade] = "#{round_if_whole(new_score * 100)}%"
           else
             error_message = I18n.t('lib.basic_lti.bad_score', "Score is not between 0 and 1")
           end
-        elsif !text && !url
+        elsif !text && !url && !launch_url
           error_message = I18n.t('lib.basic_lti.no_score', "No score given")
         end
         if error_message
@@ -239,7 +247,6 @@ to because the assignment has no points possible.
           end
 
           if @submission
-            @submission.submission_type = old_submission.submission_type if old_submission
             @submission.save
           else
             self.code_major = 'failure'

@@ -25,6 +25,7 @@ describe ExternalToolsController, type: :request do
   describe "in a course" do
     before(:once) do
       course_with_teacher(:active_all => true, :user => user_with_pseudonym)
+      @group = group_model(:context => @course)
     end
 
     it "should show an external tool" do
@@ -37,6 +38,10 @@ describe ExternalToolsController, type: :request do
 
     it "should return external tools" do
       index_call(@course)
+    end
+
+    it "should return filtered external tools" do
+      index_call_with_placment(@course, "collaboration")
     end
 
     it "should search for external tools by name" do
@@ -63,9 +68,9 @@ describe ExternalToolsController, type: :request do
       error_call(@course)
     end
 
-    it "should give unauthorized response" do
+    it "should give authorized response" do
       course_with_student_logged_in(:active_all => true, :course => @course, :name => "student")
-      unauthorized_call(@course)
+      authorized_call(@course)
     end
 
     it "should paginate" do
@@ -196,12 +201,19 @@ describe ExternalToolsController, type: :request do
 
       end
     end
+
+    describe "in a group" do
+      it "should return course level external tools" do
+        group_index_call(@group)
+      end
+    end
   end
 
   describe "in an account" do
     before(:once) do
       account_admin_user(:active_all => true, :user => user_with_pseudonym)
       @account = @user.account
+      @group = group_model(:context => @account)
     end
 
     it "should show an external tool" do
@@ -268,6 +280,12 @@ describe ExternalToolsController, type: :request do
         end
       end
     end
+
+    describe "in a group" do
+      it "should return account level external tools" do
+        group_index_call(@group)
+      end
+    end
   end
 
 
@@ -286,6 +304,17 @@ describe ExternalToolsController, type: :request do
     assert_status(404)
   end
 
+  def group_index_call(group)
+    et = tool_with_everything(group.context)
+
+    json = api_call(:get, "/api/v1/groups/#{group.id}/external_tools?include_parents=true",
+                    {:controller => 'external_tools', :action => 'index', :format => 'json',
+                     :group_id => group.id.to_s, :include_parents => true})
+
+    expect(json.size).to eq 1
+    expect(HashDiff.diff(json.first, example_json(et))).to eq []
+  end
+
   def index_call(context, type="course")
     et = tool_with_everything(context)
 
@@ -295,6 +324,18 @@ describe ExternalToolsController, type: :request do
 
     expect(json.size).to eq 1
     expect(HashDiff.diff(json.first, example_json(et))).to eq []
+  end
+
+  def index_call_with_placment(context, placement, type="course")
+    tool_with_everything(context)
+    et_with_placement = tool_with_everything(context, {:placement => placement})
+
+    json = api_call(:get, "/api/v1/#{type}s/#{context.id}/external_tools.json",
+                    {:controller => 'external_tools', :action => 'index', :format => 'json', :placement => placement,
+                     :"#{type}_id" => context.id.to_s})
+
+    expect(json.size).to eq 1
+    expect(HashDiff.diff(json.first, example_json(et_with_placement))).to eq []
   end
 
   def search_call(context, type="course")
@@ -374,6 +415,13 @@ describe ExternalToolsController, type: :request do
     expect(response.code).to eq "401"
   end
 
+  def authorized_call(context, type="course")
+    raw_api_call(:get, "/api/v1/#{type}s/#{context.id}/external_tools.json",
+                    {:controller => 'external_tools', :action => 'index',
+                     :format => 'json', :"#{type}_id" => context.id.to_s})
+    expect(response.code).to eq "200"
+  end
+
   def paginate_call(context, type="course")
     7.times { |i| context.context_external_tools.create!(:name => "test_#{i}", :consumer_key => "fakefake", :shared_secret => "sofakefake", :url => "http://www.example.com/ims/lti") }
     expect(context.context_external_tools.count).to eq 7
@@ -424,6 +472,7 @@ describe ExternalToolsController, type: :request do
     et.module_menu = {:url=>"http://www.example.com/ims/lti/resource", :text => "module menu", display_type: 'full_width', visibility: 'admins'}
     et.quiz_menu = {:url=>"http://www.example.com/ims/lti/resource", :text => "quiz menu", display_type: 'full_width', visibility: 'admins'}
     et.wiki_page_menu = {:url=>"http://www.example.com/ims/lti/resource", :text => "wiki page menu", display_type: 'full_width', visibility: 'admins'}
+    et.context_external_tool_placements.new(:placement_type => opts[:placement]) if opts[:placement]
     et.save!
     et
   end

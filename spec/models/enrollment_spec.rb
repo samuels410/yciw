@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2015 Instructure, Inc.
+# Copyright (C) 2011 - 2016 Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -16,7 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-require File.expand_path(File.dirname(__FILE__) + '/../sharding_spec_helper')
+require_relative '../sharding_spec_helper'
 
 describe Enrollment do
   before(:once) do
@@ -271,6 +271,27 @@ describe Enrollment do
       expect(e.messages_sent).to be_include("Enrollment Registration")
     end
 
+    it "should not send out invitations immediately if the course restricts future viewing" do
+      Notification.create!(:name => "Enrollment Registration")
+      course_with_teacher(:active_all => true)
+      @course.restrict_student_future_view = true
+      @course.restrict_enrollments_to_course_dates = true
+      @course.start_at = 1.day.from_now
+      @course.conclude_at = 3.days.from_now
+      @course.save!
+
+      user_with_pseudonym
+      e = @course.enroll_student(@user)
+      expect(e).to be_inactive
+      expect(e.messages_sent).to_not include("Enrollment Registration")
+
+      Timecop.freeze(2.days.from_now) do
+        expect(e).to be_invited
+        e.any_instantiation.expects(:re_send_confirmation!).once
+        run_jobs
+      end
+    end
+
     it "should not send out invitations to an observer if the student doesn't receive an invitation (e.g. sis import)" do
       Notification.create!(:name => "Enrollment Registration", :category => "Registration")
 
@@ -499,8 +520,7 @@ describe Enrollment do
         @enrollment.workflow_state = 'invited'
         @enrollment.save!
         expect(@enrollment.state).to eql(:invited)
-        @enrollment.accept
-        expect(@enrollment.reload.state).to eql(:active)
+        @enrollment.accept if @enrollment.invited?
         expect(@enrollment.state_based_on_date).to eql(state_based_state)
 
         @course.start_at = 2.days.from_now
@@ -531,6 +551,7 @@ describe Enrollment do
         @enrollment.workflow_state = 'invited'
         @enrollment.save!
         expect(@enrollment.state).to eql(:invited)
+        expect(@enrollment.state_based_on_date).to eql(:invited)
         @enrollment.accept
         expect(@enrollment.reload.state).to eql(:active)
         expect(@enrollment.state_based_on_date).to eql(:active)
@@ -541,19 +562,17 @@ describe Enrollment do
         @enrollment.workflow_state = 'invited'
         @enrollment.save!
         expect(@enrollment.state).to eql(:invited)
-        @enrollment.accept
-        expect(@enrollment.reload.state).to eql(:active)
         expect(@enrollment.state_based_on_date).to eql(:completed)
+        expect(@enrollment.accept).to be_falsey
 
         @term.start_at = 2.days.from_now
         @term.end_at = 4.days.from_now
         @term.save!
-        @enrollment.workflow_state = 'invited'
-        @enrollment.save!
         @enrollment.reload
         expect(@enrollment.state).to eql(:invited)
         expect(@enrollment.state_based_on_date).to eql(:invited)
         expect(@enrollment.accept).to be_truthy
+        expect(@enrollment.reload.state_based_on_date).to eql(@enrollment.admin? ? :active : :accepted)
       end
 
       def enrollment_dates_override_test
@@ -577,8 +596,6 @@ describe Enrollment do
         @enrollment.workflow_state = 'invited'
         @enrollment.save!
         expect(@enrollment.state).to eql(:invited)
-        @enrollment.accept
-        expect(@enrollment.reload.state).to eql(:active)
         expect(@enrollment.state_based_on_date).to eql(:completed)
 
         @override.start_at = 2.days.from_now
@@ -1616,19 +1633,14 @@ describe Enrollment do
 
     it "should delete its grading period grades" do
       course_with_teacher
-      grading_period_group = Account.default.grading_period_groups.create!
-      grading_period = grading_period_group.grading_periods.create!(
-        title: 'a period',
-        start_date: Time.zone.now,
-        end_date: 30.days.from_now
-      )
-      grading_period_grade = @enrollment.grading_period_grades.create!(grading_period_id: grading_period.id)
-      expect(grading_period_grade.workflow_state).to eq('active')
+      period = Factories::GradingPeriodHelper.new.create_with_group_for_course(@course)
+      grade = @enrollment.grading_period_grades.create!(grading_period_id: period.id)
+      expect(grade).to be_active
       @enrollment.destroy
-      expect(grading_period_grade.workflow_state).to eq('deleted')
+      expect(grade).to be_deleted
     end
 
-    it "should remove assingment overrides if they are only linked to this enrollment" do
+    it "should remove assignment overrides if they are only linked to this enrollment" do
       course_with_student
       assignment = assignment_model(:course => @course)
       ao = AssignmentOverride.new()
@@ -1895,14 +1907,6 @@ describe Enrollment do
     end
   end
 
-  describe "#sis_user_id" do
-    it "should work when sis_source_id is nil" do
-      course_with_student(:active_all => 1)
-      expect(@enrollment.sis_source_id).to be_nil
-      expect(@enrollment.sis_user_id).to be_nil
-    end
-  end
-
   describe "updating cached due dates" do
     before :once do
       course_with_student
@@ -1916,6 +1920,12 @@ describe Enrollment do
       DueDateCacher.expects(:recompute).never
       DueDateCacher.expects(:recompute_course).with(@course)
       @course.enroll_student(user)
+    end
+
+    it "does not trigger a batch when enrollment is not student" do
+      DueDateCacher.expects(:recompute).never
+      DueDateCacher.expects(:recompute_course).never
+      @course.enroll_teacher(user)
     end
 
     it "triggers a batch when enrollment is deleted" do
@@ -2051,6 +2061,21 @@ describe Enrollment do
       @enrollment = Enrollment.find(@enrollment.id)
       expect(@enrollment.state_based_on_date).to eq :completed
       expect(@enrollment.readable_state_based_on_date).to eq :completed
+    end
+  end
+
+  describe "update user account associations if necessary" do
+    it "should create a user_account_association when restoring a deleted enrollment" do
+      sub_account = Account.default.sub_accounts.create!
+      course = Course.create!(:account => sub_account)
+      @enrollment = course.enroll_student(user)
+      expect(@user.user_account_associations.where(account: sub_account).exists?).to eq true
+
+      @enrollment.destroy
+      expect(@user.user_account_associations.where(account: sub_account).exists?).to eq false
+
+      @enrollment.restore
+      expect(@user.user_account_associations.where(account: sub_account).exists?).to eq true
     end
   end
 end

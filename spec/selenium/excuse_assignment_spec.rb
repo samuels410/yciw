@@ -23,16 +23,19 @@ describe 'Excuse an Assignment' do
 
     it 'Assignment index displays scores as excused', priority: "1", test_id: 246616 do
       get "/courses/#{@course.id}/assignments"
+      wait_for_ajaximations
       expect(f('[id^="assignment_"] span.non-screenreader').text).to eq 'Excused'
     end
 
     it 'Assignment details displays scores as excused', priority: "1", test_id: 201937 do
       get "/courses/#{@course.id}/assignments/#{@assignment.id}"
+      wait_for_ajaximations
       expect(f('#sidebar_content .details .header').text).to eq 'Excused!'
     end
 
     it 'Submission details displays scores as excused', priority: "1", test_id: 246617 do
       get "/courses/#{@course.id}/assignments/#{@assignment.id}/submissions/#{@student.id}"
+      wait_for_ajaximations
       expect(f('#content span.published_grade').text).to eq 'Excused'
     end
   end
@@ -47,6 +50,7 @@ describe 'Excuse an Assignment' do
   end
 
   it 'Gradebook import accounts for excused assignment', priority: "1", test_id: 223509 do
+    skip_if_chrome('fragile upload process')
     @course.assignments.create! title: 'Excuse Me', points_possible: 20
     rows = ['Student Name,ID,Section,Excuse Me',
             "Student,#{@student.id},,EX"]
@@ -239,8 +243,8 @@ describe 'Excuse an Assignment' do
 
       expect(grade_row).to have_class '.excused'
       expect(grade).to eq 'EX'
-      expect(grade_row.attribute 'title').to eq 'This assignment is excused ' \
-       'and will not be considered in the total calculation'
+      expect(grade_row).to have_attribute('title', 'This assignment is excused ' \
+       'and will not be considered in the total calculation')
     end
 
     ['percent', 'letter_grade', 'gpa_scale', 'points'].each do |type|
@@ -310,10 +314,11 @@ describe 'Excuse an Assignment' do
 
       get "/courses/#{@course.id}/gradebook/"
       driver.action.move_to(f('.canvas_1 .slick-cell')).perform
+      wait_for_ajaximations
       f('a.gradebook-cell-comment').click
       wait_for_ajaximations
 
-      expect(f("#student_grading_#{assignment.id}").attribute 'value').to eq 'EX'
+      expect(f("#student_grading_#{assignment.id}")).to have_value 'EX'
     end
 
     it 'assignments can be excused from grading modal', priority: "1", test_id: 217594 do

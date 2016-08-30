@@ -6,11 +6,11 @@ module UserSearch
     base_scope = scope_for(context, searcher, options.slice(:enrollment_type, :enrollment_role, :enrollment_role_id, :exclude_groups, :enrollment_state, :include_inactive_enrollments))
     if search_term.to_s =~ Api::ID_REGEX
       db_id = Shard.relative_id_for(search_term, Shard.current, Shard.current)
-      user = base_scope.where(id: db_id).first
-      if user
-        return [user]
+      scope = base_scope.where(id: db_id)
+      if scope.exists?
+        return scope
       elsif !SearchTermHelper.valid_search_term?(search_term)
-        return []
+        return User.none
       end
       # no user found by id, so lets go ahead with the regular search, maybe this person just has a ton of numbers in their name
     end
@@ -77,9 +77,12 @@ module UserSearch
       end
       users = users.where(conditions_sql, roles.map(&:id))
     elsif enrollment_types
-      enrollment_types = enrollment_types.map { |e| "#{e.capitalize}Enrollment" }
+      enrollment_types = enrollment_types.map { |e| "#{e.camelize}Enrollment" }
       if enrollment_types.any?{ |et| !Enrollment.readable_types.keys.include?(et) }
         raise ArgumentError, 'Invalid Enrollment Type'
+      end
+      if context.is_a?(Group) && context.context_type == "Course"
+        users = users.joins(:enrollments).where(:enrollments => {:course_id => context.context_id})
       end
       users = users.where(:enrollments => { :type => enrollment_types })
     end
@@ -94,7 +97,7 @@ module UserSearch
   private
 
   def self.complex_sql
-    @_complex_sql ||= <<-SQL
+    <<-SQL
       (EXISTS (SELECT 1 FROM #{Pseudonym.quoted_table_name}
          WHERE #{like_condition('pseudonyms.sis_user_id')}
            AND pseudonyms.user_id = users.id

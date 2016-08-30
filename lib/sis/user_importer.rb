@@ -89,10 +89,10 @@ module SIS
             @logger.debug("Processing User #{user_row.inspect}")
             user_id, login_id, status, first_name, last_name, email, password, ssha_password, integration_id, short_name, full_name, sortable_name, authentication_provider_id = user_row
 
-            pseudo = @root_account.pseudonyms.where(sis_user_id: user_id.to_s).first
-            pseudo_by_login = @root_account.pseudonyms.active.by_unique_id(login_id).first
+            pseudo = @root_account.pseudonyms.where(sis_user_id: user_id.to_s).take
+            pseudo_by_login = @root_account.pseudonyms.active.by_unique_id(login_id).take
             pseudo ||= pseudo_by_login
-            pseudo ||= @root_account.pseudonyms.active.by_unique_id(email).first if email.present?
+            pseudo ||= @root_account.pseudonyms.active.by_unique_id(email).take if email.present?
 
             status_is_active = !(status =~ /\Adeleted/i)
             if pseudo
@@ -140,8 +140,16 @@ module SIS
             if !status_is_active && !user.new_record?
               # if this user is deleted, we're just going to make sure the user isn't enrolled in anything in this root account and
               # delete the pseudonym.
-              d = @root_account.enrollments.active.where(user_id: user).update_all(workflow_state: 'deleted')
+              enrollment_ids = @root_account.enrollments.active.where(user_id: user).where.not(:workflow_state => 'deleted').pluck(:id)
+              if enrollment_ids.any?
+                Enrollment.where(:id => enrollment_ids).update_all(workflow_state: 'deleted')
+                EnrollmentState.where(:enrollment_id => enrollment_ids).update_all(:state => 'deleted', :state_is_current => true)
+              end
+
+              d = enrollment_ids.count
               d += @root_account.all_group_memberships.active.where(user_id: user).update_all(workflow_state: 'deleted')
+              d += user.account_users.shard(@root_account).where(account_id: @root_account.all_accounts).delete_all
+              d += user.account_users.shard(@root_account).where(account_id: @root_account).delete_all
               if 0 < d
                 should_update_account_associations = true
               end

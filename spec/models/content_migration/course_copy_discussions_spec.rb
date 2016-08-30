@@ -30,7 +30,28 @@ describe ContentMigration do
       expect(topic.attributes.slice(*attrs)).to eq new_topic.attributes.slice(*attrs)
 
       expect(new_topic.last_reply_at).to be_nil
+      expect(new_topic.allow_rating).to eq false
       expect(topic.posted_at.to_i).to eq new_topic.posted_at.to_i
+    end
+
+    it "copies rating settings" do
+      topic1 = @copy_from.discussion_topics.create!(:title => "blah", :message => "srsly",
+                                                    :allow_rating => true, :only_graders_can_rate => true,
+                                                    :sort_by_rating => false)
+      topic2 = @copy_from.discussion_topics.create!(:title => "bleh", :message => "srsly",
+                                                    :allow_rating => true, :only_graders_can_rate => false,
+                                                    :sort_by_rating => true)
+      run_course_copy
+
+      new_topic1 = @copy_to.discussion_topics.where(migration_id: mig_id(topic1)).first
+      expect(new_topic1.allow_rating).to eq true
+      expect(new_topic1.only_graders_can_rate).to eq true
+      expect(new_topic1.sort_by_rating).to eq false
+
+      new_topic2 = @copy_to.discussion_topics.where(migration_id: mig_id(topic2)).first
+      expect(new_topic2.allow_rating).to eq true
+      expect(new_topic2.only_graders_can_rate).to eq false
+      expect(new_topic2.sort_by_rating).to eq true
     end
 
     it "should copy group setting" do
@@ -42,6 +63,18 @@ describe ContentMigration do
       new_topic = @copy_to.discussion_topics.where(migration_id: mig_id(topic)).first
       expect(new_topic).to be_has_group_category
       expect(new_topic.group_category.name).to eq "Project Groups"
+    end
+
+    it "assigns group discussions to a group with a matching name in the destination course" do
+      group_category = @copy_from.group_categories.create!(name: 'blah')
+      topic = @copy_from.discussion_topics.create! group_category: group_category
+      target_group = @copy_to.group_categories.create!(name: 'blah')
+
+      run_course_copy
+
+      new_topic = @copy_to.discussion_topics.where(migration_id: mig_id(topic)).first
+      expect(new_topic).to be_has_group_category
+      expect(new_topic.group_category.name).to eq "blah"
     end
 
     it "should copy a discussion topic when assignment is selected" do
@@ -140,6 +173,25 @@ describe ContentMigration do
       run_course_copy
 
       expect(@copy_to.announcements.where(migration_id: mig_id(ann)).first).to be_nil
+    end
+
+    it "should implicitly copy files attached to topics" do
+      att = Attachment.create!(:filename => 'test.txt', :display_name => "testing.txt", :uploaded_data => StringIO.new('file'),
+        :folder => Folder.root_folders(@copy_from).first, :context => @copy_from)
+      topic = @copy_from.discussion_topics.new(:message => "howdy", :title => "title")
+      topic.attachment = att
+      topic.save!
+
+      @cm.copy_options = {:all_discussion_topics => "1"}
+      @cm.save!
+
+      run_course_copy
+
+      att_copy = @copy_to.attachments.where(migration_id: mig_id(att)).first
+      expect(att_copy).to be_present
+
+      topic_copy = @copy_to.discussion_topics.where(migration_id: mig_id(topic)).first
+      expect(topic_copy.attachment).to eq att_copy
     end
 
     it "should not copy deleted assignment attached to topic" do

@@ -137,11 +137,13 @@ module Lti
     end
 
     def current_canvas_roles
-      (course_enrollments.map(&:role).map(&:name) + account_enrollments.map(&:readable_type)).uniq.join(',')
+      roles = (course_enrollments + account_enrollments).map(&:role).map(&:name).uniq
+      roles = roles.map{|role| role == "AccountAdmin" ? "Account Admin" : role} # to maintain backwards compatibility
+      roles.join(',')
     end
 
     def enrollment_state
-      enrollments = @user ? @context.enrollments.where(user_id: @user.id) : []
+      enrollments = @user ? @context.enrollments.where(user_id: @user.id).preload(:enrollment_state) : []
       return '' if enrollments.size == 0
       enrollments.any? { |membership| membership.state_based_on_date == :active } ? LtiOutbound::LTIUser::ACTIVE_STATE : LtiOutbound::LTIUser::INACTIVE_STATE
     end

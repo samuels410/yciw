@@ -23,7 +23,9 @@ app/stylesheets/brandable_css_brands
 /config/environments/*-local.rb
 /config/locales/generated/
 /config/RAILS4_2
+/config/WEBPACK
 /coverage/
+/coverage-js/
 /db/schema.rb
 /db/*.sqlite*
 /db/*sql

@@ -8,13 +8,6 @@ describe "Wiki Pages" do
   include FilesCommon
   include WikiAndTinyCommon
 
-  def toggle_html_mode
-    keep_trying_until do
-      fj('a.switch_views:visible').present?
-    end
-    fj('a.switch_views:visible').click
-  end
-
   context "Navigation" do
     def edit_page(edit_text)
       get "/courses/#{@course.id}/pages/Page1/edit"
@@ -66,13 +59,14 @@ describe "Wiki Pages" do
       get "/courses/#{@course.id}"
       wait_for_ajaximations
       # validations
-      expect(element_exists('.al-trigger')).to be_truthy
+      expect(f('.al-trigger')).to be_present
       expect(f('.course-title')).to include_text 'Unnamed Course'
-      expect(element_exists('span.front-page.label')).to be_falsey
-      expect(element_exists('button.btn.btn-published')).to be_falsey
+      content = f("#content")
+      expect(content).not_to contain_css('span.front-page.label')
+      expect(content).not_to contain_css('button.btn.btn-published')
       f('.al-trigger').click
-      expect(element_exists('.icon-trash')).to be_falsey
-      expect(element_exists('.icon-clock')).to be_truthy
+      expect(content).not_to contain_css('.icon-trash')
+      expect(f('.icon-clock')).to be_present
     end
 
     it "navigates to the wiki pages edit page from the show page" do
@@ -87,7 +81,7 @@ describe "Wiki Pages" do
 
     it "should alert a teacher when accessing a non-existant page", priority: "1", test_id: 126842 do
       get "/courses/#{@course.id}/pages/fake"
-      expect(flash_message_present?(:info)).to be_truthy
+      expect_flash_message :info
     end
 
     it "should update the page with changes made in another window", priority: "1", test_id: 126833 do
@@ -99,8 +93,15 @@ describe "Wiki Pages" do
       driver.execute_script("window.close()")
       driver.switch_to.window(driver.window_handles.first)
       get "/courses/#{@course.id}/pages/Page1/edit"
-      toggle_html_mode
-      expect(f('textarea').text).to include_text('test')
+      switch_editor_views(wiki_page_body)
+      expect(f('textarea')).to include_text('test')
+    end
+
+    it "blocks linked page from redirecting parent page", priority: "2", test_id: 927147 do
+      @course.wiki.wiki_pages.create!(title: 'Garfield and Odie Food Preparation',
+        body: '<a href="http://example.com/poc/" target="_blank" id="click_here_now">click_here</a>')
+      get "/courses/#{@course.id}/pages/garfield-and-odie-food-preparation"
+      expect(f('#click_here_now').attribute("rel")).to eq "noreferrer"
     end
   end
 
@@ -115,12 +116,11 @@ describe "Wiki Pages" do
       get "/courses/#{@course.id}/pages"
       f('.al-trigger').click
       f('.edit-menu-item').click
-      expect(f('.edit-control-text').attribute(:value)).to include_text('B-Team')
+      expect(f('.edit-control-text').attribute(:value)).to include('B-Team')
       f('.edit-control-text').clear()
       f('.edit-control-text').send_keys('A-Team')
       fj('button:contains("Save")').click
-      wait_for_ajaximations
-      expect(f('.collectionViewItems').text).to include('A-Team')
+      expect(f('.collectionViewItems')).to include_text('A-Team')
     end
 
     it "should display a warning alert when accessing a deleted page", priority: "1", test_id: 126840 do
@@ -131,7 +131,7 @@ describe "Wiki Pages" do
       fj('button:contains("Delete")').click
       wait_for_ajaximations
       get "/courses/#{@course.id}/pages/deleted"
-      expect(flash_message_present?(:info)).to be_truthy
+      expect_flash_message :info
     end
   end
 
@@ -146,12 +146,12 @@ describe "Wiki Pages" do
       page.workflow_state = 'deleted'
       page.save!
       get "/courses/#{@course.id}/pages/delete_deux"
-      expect(flash_message_present?(:warning)).to be_truthy
+      expect_flash_message :warning
     end
 
     it "should display a warning alert when accessing a non-existant page", priority: "1", test_id: 126841 do
       get "/courses/#{@course.id}/pages/non-existant"
-      expect(flash_message_present?(:warning)).to be_truthy
+      expect_flash_message :warning
     end
   end
 
@@ -359,23 +359,14 @@ describe "Wiki Pages" do
         get "/courses/#{@course.id}/pages/#{@vpage.url}/revisions"
       end
 
-      it "should let the revisions be focused" do
+      it "should focus the revision buttons" do
         driver.execute_script("$('.close-button').focus();")
         f('.close-button').send_keys(:tab)
-        all_revisions = ff('.revision')
+        all_revisions = ff('.revision-details')
         all_revisions.each do |revision|
           check_element_has_focus(revision)
           revision.send_keys(:tab)
         end
-      end
-
-      it "should focus on the 'restore this revision link' after selecting a revision" do
-        driver.execute_script("$('.revision:nth-child(2)').focus();")
-        element = fj('.revision:nth-child(2)')
-        element.send_keys(:enter)
-        wait_for_ajaximations
-        element.send_keys(:tab)
-        check_element_has_focus(f('.restore-link'))
       end
 
       it "should validate that revision restored is displayed", priority: "1", test_id: 126832 do
@@ -396,6 +387,13 @@ describe "Wiki Pages" do
         wait_for_ajaximations
         expect(f('div.user_content.clearfix.enhanced > p').text).to include 'published by teacher'
       end
+
+      it "keeps focus on clicked revision button" do
+        driver.execute_script("$('button.revision-details')[1].focus();")
+        ff('button.revision-details')[1].click
+        wait_for_ajaximations
+        check_element_has_focus(ff('button.revision-details')[1])
+      end
     end
 
     context "Edit Page" do
@@ -412,16 +410,16 @@ describe "Wiki Pages" do
       end
 
       it "should alert user if navigating away from page with unsaved html changes", priority: "1", test_id: 126838 do
-        toggle_html_mode
-        f('textarea').send_keys("derp")
+        switch_editor_views(wiki_page_body)
+        wiki_page_body.send_keys("derp")
         fln('Home').click
         expect(driver.switch_to.alert.text).to be_present
         driver.switch_to.alert.accept
       end
 
       it "should not save changes when navigating away and not saving", priority: "1", test_id: 267613 do
-        toggle_html_mode
-        f('textarea').send_keys('derp')
+        switch_editor_views(wiki_page_body)
+        wiki_page_body.send_keys('derp')
         fln('Home').click
         expect(driver.switch_to.alert.text).to be_present
         driver.switch_to.alert.accept
@@ -430,7 +428,7 @@ describe "Wiki Pages" do
       end
 
       it "should alert user if navigating away from page after title change", priority: "1", test_id: 267832 do
-        toggle_html_mode
+        switch_editor_views(wiki_page_body)
         f('.title').clear()
         f('.title').send_keys("derpy-title")
         fln('Home').click
@@ -492,7 +490,7 @@ describe "Wiki Pages" do
       foo = @course.wiki.wiki_pages.create! title: 'foo'
       get "/courses/#{@course.id}/pages/foo"
 
-      expect(f('.view_all_pages')).to be_nil
+      expect(f("#content")).not_to contain_css('.view_all_pages')
 
     end
   end
@@ -506,6 +504,7 @@ describe "Wiki Pages" do
       Canvas::Plugin.register(:kaltura, nil, :settings => {'partner_id' => 1, 'subpartner_id' => 2, 'kaltura_sis' => '1'})
 
       @course.is_public = true
+      @course.workflow_state = 'available'
       @course.save!
 
       title = "foo"
@@ -575,8 +574,22 @@ describe "Wiki Pages" do
 
     it "should embed vimeo video in the page", priority: "1", test_id: 126835 do
       get "/courses/#{@course.id}/pages/Page1/edit"
-      fln("HTML Editor").click
-      f("#editor_box_unique_id_1").send_keys('<p><iframe style="width: 640px; height: 480px;" title="Instructure - About Us" src="https://player.vimeo.com/video/58752872" width="300" height="150" allowfullscreen="allowfullscreen" webkitallowfullscreen="webkitallowfullscreen" mozallowfullscreen="mozallowfullscreen"></iframe></p>')
+      element = f("#wiki_page_body")
+      switch_editor_views(element)
+      html_contents = %q(
+        <p>
+          <iframe style="width: 640px; height: 480px;"
+                  title="Instructure - About Us"
+                  src="https://player.vimeo.com/video/58752872"
+                  width="300"
+                  height="150"
+                  allowfullscreen="allowfullscreen"
+                  webkitallowfullscreen="webkitallowfullscreen"
+                  mozallowfullscreen="mozallowfullscreen">
+          </iframe>
+        </p>
+      )
+      element.send_keys(html_contents)
       f(".btn-primary").click
       wait_for_ajaximations
       expect(f("iframe")).to be_present

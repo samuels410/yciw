@@ -152,7 +152,9 @@ class GradebookImporter
           # expectations for the compare so it doesn't look changed
           submission['grade'] = 'EX' if submission['grade'].to_s.upcase == 'EX'
 
-          submission['original_grade'].to_s == submission['grade'].to_s ||
+
+          submission['grade'] == submission['original_grade'] ||
+            (submission['original_grade'].present? && submission['grade'].present? && submission['original_grade'].to_f == submission['grade'].to_f) ||
             (submission['original_grade'].blank? && submission['grade'].blank?)
         end
       end
@@ -168,7 +170,7 @@ class GradebookImporter
 
     # remove concluded enrollments
     prior_enrollment_ids = (
-      @all_students.keys - @context.students.pluck(:user_id).map(&:to_i)
+      @all_students.keys - @context.gradable_students.pluck(:user_id).map(&:to_i)
     ).to_set
     @students.delete_if { |s| prior_enrollment_ids.include? s.id }
 

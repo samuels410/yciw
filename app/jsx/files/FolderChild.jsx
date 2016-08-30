@@ -1,8 +1,8 @@
 define([
   'i18n!react_files',
   'react',
-  'react-router',
   'compiled/react_files/components/FolderChild',
+  'compiled/react_files/modules/filesEnv',
   'classnames',
   'jsx/files/ItemCog',
   'jsx/shared/PublishCloud',
@@ -12,15 +12,15 @@ define([
   'compiled/fn/preventDefault',
   'jsx/shared/FriendlyDatetime',
   'compiled/util/friendlyBytes'
-], function(I18n, React, ReactRouter, FolderChild, classnames, ItemCog, PublishCloud, FilesystemObjectThumbnail, UsageRightsIndicator, Folder, preventDefault, FriendlyDatetime, friendlyBytes) {
-  var Link = ReactRouter.Link
-  FolderChild.renderItemCog = function () {
+], function(I18n, React, FolderChild, filesEnv, classnames, ItemCog, PublishCloud, FilesystemObjectThumbnail, UsageRightsIndicator, Folder, preventDefault, FriendlyDatetime, friendlyBytes) {
+
+  FolderChild.renderItemCog = function (canManage) {
     if (!this.props.model.isNew() || this.props.model.get('locked_for_user')) {
       return (
         <ItemCog
           model= {this.props.model}
           startEditingName= {this.startEditingName}
-          userCanManageFilesForContext= {this.props.userCanManageFilesForContext}
+          userCanManageFilesForContext= {canManage}
           usageRightsRequiredForContext= {this.props.usageRightsRequiredForContext}
           externalToolsForContext= {this.props.externalToolsForContext}
           modalOptions= {this.props.modalOptions}
@@ -30,13 +30,13 @@ define([
       );
     }
   }
-  FolderChild.renderPublishCloud = function () {
+  FolderChild.renderPublishCloud = function (canManage) {
     if (!this.props.model.isNew()){
       return (
         <PublishCloud
           model= {this.props.model}
           ref= 'publishButton'
-          userCanManageFilesForContext= {this.props.userCanManageFilesForContext}
+          userCanManageFilesForContext= {canManage}
           usageRightsRequiredForContext= {this.props.usageRightsRequiredForContext}
         />
       );
@@ -47,55 +47,58 @@ define([
     if(this.state.editing) {
       return (
         <form className= 'ef-edit-name-form' onSubmit= {preventDefault(this.saveNameEdit)}>
-          <input
-            type='text'
-            ref='newName'
-            className= 'input-block-level'
-            placeholder= {I18n.t('name', 'Name')}
-            ariaLabel= {I18n.t('folder_name', 'Folder Name')}
-            defaultValue= {this.props.model.displayName()}
-            maxLength='255'
-            onKeyUp= {function (event){ if (event.keyCode === 27) {this.cancelEditingName()} }.bind(this)}
-          />
-          <button
-            type= 'button'
-            className= 'btn btn-link ef-edit-name-cancel'
-            ariaLabel= {I18n.t('cancel', 'Cancel')}
-            onClick= {this.cancelEditingName}
-          >
-            <i className= 'icon-x' />
-          </button>
+          <div className="ic-Input-group">
+
+            <input
+              type='text'
+              ref='newName'
+              className='ic-Input ef-edit-name-form__input'
+              placeholder={I18n.t('name', 'Name')}
+              ariaLabel={I18n.t('folder_name', 'Folder Name')}
+              defaultValue={this.props.model.displayName()}
+              maxLength='255'
+              onKeyUp={function (event){ if (event.keyCode === 27) {this.cancelEditingName()} }.bind(this)}
+            />
+            <button
+              type="button"
+              className="Button ef-edit-name-form__button ef-edit-name-cancel"
+              ariaLabel={I18n.t('cancel', 'Cancel')}
+              onClick={this.cancelEditingName}
+            >
+              <i className='icon-x' />
+            </button>
+          </div>
         </form>
       );
     }else if(this.props.model instanceof Folder) {
       return (
-        <Link
+        <a
           ref= 'nameLink'
-          to= 'folder'
-          className= 'media'
+          href={`${filesEnv.baseUrl}/folder/${this.props.model.urlPath()}`}
+          className= 'ef-name-col__link'
           onClick= {this.checkForAccess}
           params= {{splat: this.props.model.urlPath()}}
         >
-          <span className= 'pull-left'>
+          <span className='ef-big-icon-container'>
             <FilesystemObjectThumbnail model= {this.props.model} />
           </span>
-          <span className= 'media-body'>
+          <span className='ef-name-col__text'>
             {this.props.model.displayName()}
           </span>
-        </Link>
+        </a>
       );
     } else{
       return (
         <a
-          href= {this.props.model.get('url')}
-          onClick= {preventDefault(this.handleFileLinkClick)}
-          className= 'media'
-          ref= 'nameLink'
+          href={this.props.model.get('url')}
+          onClick={preventDefault(this.handleFileLinkClick)}
+          className='ef-name-col__link'
+          ref='nameLink'
         >
-          <span className= 'pull-left'>
+          <span className='ef-big-icon-container'>
             <FilesystemObjectThumbnail model= {this.props.model} />
           </span>
-          <span className= 'media-body'>
+          <span className='ef-name-col__text'>
             {this.props.model.displayName()}
           </span>
         </a>
@@ -128,6 +131,9 @@ define([
     var keyboardLabelClass = classnames({
       'screenreader-only': !this.state.hideKeyboardCheck
     })
+    var parentFolder = this.props.model.collection && this.props.model.collection.parentFolder;
+    var canManage = this.props.userCanManageFilesForContext && (!parentFolder || !parentFolder.get('for_submissions')) &&
+                    !this.props.model.get('for_submissions');
 
     return (
       <div {...this.getAttributesForRootNode()}>
@@ -146,7 +152,7 @@ define([
           </span>
         </label>
 
-        <div className='ef-name-col ellipsis' role= 'rowheader'>
+        <div className='ef-name-col' role= 'rowheader'>
           { this.renderEditingState() }
         </div>
 
@@ -173,8 +179,8 @@ define([
         { this.renderUsageRightsIndicator() }
 
         <div className= 'ef-links-col' role= 'gridcell'>
-          { this.renderPublishCloud() }
-          { this.renderItemCog() }
+          { this.renderPublishCloud(canManage) }
+          { this.renderItemCog(canManage) }
         </div>
       </div>
     );

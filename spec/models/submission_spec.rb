@@ -121,6 +121,31 @@ describe Submission do
     @submission.save!
   end
 
+  it "should log excused submissions" do
+    submission_spec_model
+
+    Auditors::GradeChange.expects(:record).once
+
+    @submission.excused = true
+    @submission.save!
+
+    @submission.grader_id = @user.id
+    @submission.save!
+  end
+
+  it "should log submissions affected by assignment update" do
+    submission_spec_model
+
+    Auditors::GradeChange.expects(:record).twice
+
+    # only graded submissions are updated by assignment
+    @submission.score = 111
+    @submission.save!
+
+    @assignment.points_possible = 999
+    @assignment.save!
+  end
+
   context "#graded_anonymously" do
     it "saves when grade changed and set explicitly" do
       submission_spec_model
@@ -248,7 +273,7 @@ describe Submission do
 
     context "Submission Graded" do
       before :once do
-        Notification.create(:name => 'Submission Graded')
+        Notification.create(:name => 'Submission Graded', :category => 'TestImmediately')
       end
 
       it "should create a message when the assignment has been graded and published" do
@@ -259,6 +284,28 @@ describe Submission do
         expect(@submission.assignment.state).to eql(:published)
         @submission.grade_it!
         expect(@submission.messages_sent).to be_include('Submission Graded')
+      end
+
+      it "should not create a message for a soft-concluded student" do
+        submission_spec_model
+        @course.start_at = 2.weeks.ago
+        @course.conclude_at = 1.weeks.ago
+        @course.restrict_enrollments_to_course_dates = true
+        @course.save!
+
+        @cc = @user.communication_channels.create(:path => "somewhere")
+        @submission.reload
+        expect(@submission.assignment).to eql(@assignment)
+        expect(@submission.assignment.state).to eql(:published)
+        @submission.grade_it!
+        expect(@submission.messages_sent).to_not be_include('Submission Graded')
+      end
+
+      it "notifies observers" do
+        submission_spec_model
+        course_with_observer(course: @course, associated_user_id: @user.id, active_all: true, active_cc: true)
+        @submission.grade_it!
+        expect(@observer.email_channel.messages.length).to eq 1
       end
 
       it "should not create a message when a muted assignment has been graded and published" do
@@ -304,6 +351,28 @@ describe Submission do
         expect(@user.stream_item_instances.last).not_to be_hidden
         @assignment.mute!
         expect(@user.stream_item_instances.last).to be_hidden
+      end
+
+      it "should not create hidden stream_item_instances for instructors when muted, graded, and published" do
+        submission_spec_model
+        @cc = @teacher.communication_channels.create :path => "somewhere"
+        @assignment.mute!
+        expect {
+          @submission.add_comment(:author => @student, :comment => "some comment")
+        }.to change StreamItemInstance, :count
+        expect(@teacher.stream_item_instances.last).to_not be_hidden
+      end
+
+      it "should not hide any existing stream_item_instances for instructors when muted" do
+        submission_spec_model
+        @cc = @teacher.communication_channels.create :path => "somewhere"
+        expect {
+          @submission.add_comment(:author => @student, :comment => "some comment")
+        }.to change StreamItemInstance, :count
+        expect(@teacher.stream_item_instances.last).to_not be_hidden
+        @assignment.mute!
+        @teacher.reload
+        expect(@teacher.stream_item_instances.last).to_not be_hidden
       end
 
       it "should not create a message for admins and teachers with quiz submissions" do
@@ -727,6 +796,22 @@ describe Submission do
     end
   end
 
+  context '#external_tool_url' do
+    let(:submission) { Submission.new }
+    let(:lti_submission) { @assignment.submit_homework @user, submission_type: 'basic_lti_launch', url: 'http://www.example.com' }
+    context 'submission_type of "basic_lti_launch"' do
+      it 'returns a url containing the submitted url' do
+        expect(lti_submission.external_tool_url).to eq(lti_submission.url)
+      end
+    end
+
+    context 'submission_type of anything other than "basic_lti_launch"' do
+      it 'returns nothing' do
+        expect(submission.external_tool_url).to be_nil
+      end
+    end
+  end
+
   it "should return the correct quiz_submission_version" do
     # see redmine #6048
 
@@ -790,10 +875,11 @@ describe Submission do
     sc2 = SubmissionComment.create!(:submission => @submission, :author => @teacher, :comment => "b", :hidden => true)
     sc3 = SubmissionComment.create!(:submission => @submission, :author => @student1, :comment => "c")
     sc4 = SubmissionComment.create!(:submission => @submission, :author => @student2, :comment => "d")
+    SubmissionComment.create!(:submission => @submission, :author => @teacher, :comment => "e", :draft => true)
     @submission.reload
 
     @submission.limit_comments(@teacher)
-    expect(@submission.submission_comments.count).to eql 4
+    expect(@submission.submission_comments.count).to eql 5
     expect(@submission.visible_submission_comments.count).to eql 3
 
     @submission.limit_comments(@student1)
@@ -825,7 +911,7 @@ describe Submission do
     it "should be unread after submission is commented on by teacher" do
       @student = @user
       course_with_teacher(:course => @context, :active_all => true)
-      @submission = @assignment.grade_student(@student, { :grader => @teacher, :comment => "good!" }).first
+      @submission = @assignment.update_submission(@student, { :commenter => @teacher, :comment => "good!" }).first
       expect(@submission.unread?(@user)).to be_truthy
     end
 
@@ -1112,29 +1198,31 @@ describe Submission do
     end
   end
 
-  describe "#bulk_load_versioned_attachments" do
-    def ensure_attachments_arent_queried
-      Attachment.expects(:where).never
+  describe "includes_attachment?" do
+    it "includes current attachments" do
+      spoiler = attachment_model(context: @student)
+      attachment_model context: @student
+      sub = @assignment.submit_homework @student, attachments: [@attachment]
+      expect(sub.attachments).to eq([@attachment])
+      expect(sub.includes_attachment?(spoiler)).to eq false
+      expect(sub.includes_attachment?(@attachment)).to eq true
     end
 
-    it "loads attachments for many submissions at once" do
-      attachments = []
+    it "includes attachments to previous versions" do
+      old_attachment_1 = attachment_model(context: @student)
+      old_attachment_2 = attachment_model(context: @student)
+      sub = @assignment.submit_homework @student, attachments: [old_attachment_1, old_attachment_2]
+      attachment_model context: @student
+      sub = @assignment.submit_homework @student, attachments: [@attachment]
+      expect(sub.attachments).to eq([@attachment])
+      expect(sub.includes_attachment?(old_attachment_1)).to eq true
+      expect(sub.includes_attachment?(old_attachment_2)).to eq true
+    end
+  end
 
-      submissions = 3.times.map { |i|
-        student_in_course(active_all: true)
-        attachments << [
-          attachment_model(filename: "submission#{i}-a.doc", :context => @student),
-          attachment_model(filename: "submission#{i}-b.doc", :context => @student)
-        ]
-
-        @assignment.submit_homework @student, attachments: attachments[i]
-      }
-
-      Submission.bulk_load_versioned_attachments(submissions)
-      ensure_attachments_arent_queried
-      submissions.each_with_index { |s, i|
-        expect(s.versioned_attachments).to eq attachments[i]
-      }
+  context "bulk loading" do
+    def ensure_attachments_arent_queried
+      Attachment.expects(:where).never
     end
 
     def submission_for_some_user
@@ -1144,21 +1232,95 @@ describe Submission do
                                   url: "http://example.com")
     end
 
-    it "includes url submission attachments" do
-      s = submission_for_some_user
-      s.attachment = attachment_model(filename: "screenshot.jpg",
-                                      context: @student)
+    describe "#bulk_load_versioned_attachments" do
+      it "loads attachments for many submissions at once" do
+        attachments = []
 
-      Submission.bulk_load_versioned_attachments([s])
-      ensure_attachments_arent_queried
-      expect(s.versioned_attachments).to eq [s.attachment]
+        submissions = 3.times.map do |i|
+          student_in_course(active_all: true)
+          attachments << [
+                          attachment_model(filename: "submission#{i}-a.doc", :context => @student),
+                          attachment_model(filename: "submission#{i}-b.doc", :context => @student)
+                         ]
+
+          @assignment.submit_homework @student, attachments: attachments[i]
+        end
+
+        Submission.bulk_load_versioned_attachments(submissions)
+        ensure_attachments_arent_queried
+        submissions.each_with_index do |s, i|
+          expect(s.versioned_attachments).to eq attachments[i]
+        end
+      end
+
+      it "includes url submission attachments" do
+        s = submission_for_some_user
+        s.attachment = attachment_model(filename: "screenshot.jpg",
+                                        context: @student)
+
+        Submission.bulk_load_versioned_attachments([s])
+        ensure_attachments_arent_queried
+        expect(s.versioned_attachments).to eq [s.attachment]
+      end
+
+      it "handles bad data" do
+        s = submission_for_some_user
+        s.update_attribute(:attachment_ids, '99999999')
+        Submission.bulk_load_versioned_attachments([s])
+        expect(s.versioned_attachments).to eq []
+      end
+
+      it "handles submission histories with different attachments" do
+        student_in_course(active_all: true)
+        attachments = [attachment_model(filename: "submission-a.doc", :context => @student)]
+        Timecop.freeze(10.second.ago) do
+          @assignment.submit_homework(@student, submission_type: 'online_upload',
+                                      attachments: [attachments[0]])
+        end
+
+        attachments << attachment_model(filename: "submission-b.doc", :context => @student)
+        Timecop.freeze(5.second.ago) do
+          @assignment.submit_homework @student, attachments: [attachments[1]]
+        end
+
+        attachments << attachment_model(filename: "submission-c.doc", :context => @student)
+        Timecop.freeze(1.second.ago) do
+          @assignment.submit_homework @student, attachments: [attachments[2]]
+        end
+
+        submission = @assignment.submission_for_student(@student)
+        Submission.bulk_load_versioned_attachments(submission.submission_history)
+
+        submission.submission_history.each_with_index do |s, index|
+          expect(s.attachment_ids.to_i).to eq attachments[index].id
+        end
+      end
     end
 
-    it "handles bad data" do
-      s = submission_for_some_user
-      s.update_attribute(:attachment_ids, '99999999')
-      Submission.bulk_load_versioned_attachments([s])
-      expect(s.versioned_attachments).to eq []
+    describe "#bulk_load_attachments_for_submissions" do
+      it "loads attachments for many submissions at once and returns a hash" do
+        expected_attachments_for_submissions = {}
+
+        submissions = 3.times.map do |i|
+          student_in_course(active_all: true)
+          attachment = [attachment_model(filename: "submission#{i}.doc", :context => @student)]
+          sub = @assignment.submit_homework @student, attachments: attachment
+          expected_attachments_for_submissions[sub] = attachment
+          sub
+        end
+
+        result = Submission.bulk_load_attachments_for_submissions(submissions)
+        ensure_attachments_arent_queried
+        expect(result).to eq(expected_attachments_for_submissions)
+      end
+
+      it "handles bad data" do
+        s = submission_for_some_user
+        s.update_attribute(:attachment_ids, '99999999')
+        expected_attachments_for_submissions = { s => [] }
+        result = Submission.bulk_load_attachments_for_submissions(s)
+        expect(result).to eq(expected_attachments_for_submissions)
+      end
     end
   end
 
@@ -1221,6 +1383,60 @@ describe Submission do
       s.save
       expect(a1.crocodoc_document(true)).to eq cd
       expect(a2.crocodoc_document).to eq a2.crocodoc_document
+    end
+
+    context "canvadocs_submissions records" do
+      before(:once) do
+        @student1, @student2 = n_students_in_course(2)
+        @attachment = crocodocable_attachment_model(context: @student1)
+        @assignment = @course.assignments.create! name: "A1",
+          submission_types: "online_upload"
+      end
+
+      before do
+        Canvadocs.stubs(:enabled?).returns true
+        Canvadocs.stubs(:annotations_supported?).returns true
+        Canvadocs.stubs(:config).returns {}
+      end
+
+      it "ties submissions to canvadocs" do
+        s = @assignment.submit_homework(@student1,
+                                        submission_type: "online_upload",
+                                        attachments: [@attachment])
+        expect(s.canvadocs).to eq [@attachment.canvadoc]
+      end
+
+      it "create records for each group submission" do
+        gc = @course.group_categories.create! name: "Project Groups"
+        group = gc.groups.create! name: "A Team", context: @course
+        group.add_user(@student1)
+        group.add_user(@student2)
+
+        @assignment.update_attribute :group_category, gc
+        @assignment.submit_homework(@student1,
+                                    submission_type: "online_upload",
+                                    attachments: [@attachment])
+
+        [@student1, @student2].each do |student|
+          submission = @assignment.submission_for_student(student)
+          expect(submission.canvadocs).to eq [@attachment.canvadoc]
+        end
+      end
+
+      context 'preferred plugin course id' do
+        let(:submit_homework) do
+          ->() do
+            @assignment.submit_homework(@student1,
+                                        submission_type: "online_upload",
+                                        attachments: [@attachment])
+          end
+        end
+
+        it 'sets preferred plugin course id to the course ID' do
+          s = submit_homework.call
+          expect(s.canvadocs.first.preferred_plugin_course_id).to eq(@course.id.to_s)
+        end
+      end
     end
 
     it "doesn't create jobs for non-previewable documents" do
@@ -1331,6 +1547,92 @@ describe Submission do
     end
   end
 
+  describe 'find_or_create_provisional_grade!' do
+    before(:once) do
+      submission_spec_model
+      @assignment.moderated_grading = true
+      @assignment.save!
+
+      @teacher2 = User.create(name: "some teacher 2")
+      @context.enroll_teacher(@teacher2)
+    end
+
+    it "properly creates a provisional grade with all default values but scorer" do
+      @submission.find_or_create_provisional_grade!(@teacher)
+
+      expect(@submission.provisional_grades.length).to eql 1
+
+      pg = @submission.provisional_grades.first
+
+      expect(pg.scorer_id).to eql @teacher.id
+      expect(pg.final).to eql false
+      expect(pg.graded_anonymously).to be_nil
+      expect(pg.grade).to be_nil
+      expect(pg.score).to be_nil
+      expect(pg.source_provisional_grade).to be_nil
+    end
+
+    it "properly amends information to an existing provisional grade" do
+      @submission.find_or_create_provisional_grade!(@teacher)
+      @submission.find_or_create_provisional_grade!(@teacher,
+        score: 15.0,
+        grade: "20",
+        graded_anonymously: true
+      )
+
+      expect(@submission.provisional_grades.length).to eql 1
+
+      pg = @submission.provisional_grades.first
+
+      expect(pg.scorer_id).to eql @teacher.id
+      expect(pg.final).to eql false
+      expect(pg.graded_anonymously).to eql true
+      expect(pg.grade).to eql "20"
+      expect(pg.score).to eql 15.0
+      expect(pg.source_provisional_grade).to be_nil
+    end
+
+    it "does not update grade or score if not given" do
+      @submission.find_or_create_provisional_grade!(@teacher, grade: "20", score: 12.0)
+
+      expect(@submission.provisional_grades.first.grade).to eql "20"
+      expect(@submission.provisional_grades.first.score).to eql 12.0
+
+      @submission.find_or_create_provisional_grade!(@teacher)
+
+      expect(@submission.provisional_grades.first.grade).to eql "20"
+      expect(@submission.provisional_grades.first.score).to eql 12.0
+    end
+
+    it "does not update graded_anonymously if not given" do
+      @submission.find_or_create_provisional_grade!(@teacher, graded_anonymously: true)
+
+      expect(@submission.provisional_grades.first.graded_anonymously).to eql true
+
+      @submission.find_or_create_provisional_grade!(@teacher)
+
+      expect(@submission.provisional_grades.first.graded_anonymously).to eql true
+    end
+
+    it "raises an exception if final is true and user is not allowed to moderate grades" do
+      expect{ @submission.find_or_create_provisional_grade!(@student, final: true) }
+        .to raise_error(Assignment::GradeError, "User not authorized to give final provisional grades")
+    end
+
+    it "raises an exception if grade is not final and student does not need a provisional grade" do
+      @submission.find_or_create_provisional_grade!(@teacher)
+
+      expect{ @submission.find_or_create_provisional_grade!(@teacher2, final: false) }
+        .to raise_error(Assignment::GradeError, "Student already has the maximum number of provisional grades")
+    end
+
+    it "raises an exception if the grade is final and no non-final provisional grades exist" do
+      expect{ @submission.find_or_create_provisional_grade!(@teacher, final: true) }
+        .to raise_error(Assignment::GradeError,
+          "Cannot give a final mark for a student with no other provisional grades")
+    end
+  end
+
   describe 'crocodoc_whitelist' do
     before(:once) do
       submission_spec_model
@@ -1347,7 +1649,7 @@ describe Submission do
         @assignment.moderated_grading = true
         @assignment.save!
         @submission.reload
-        @pg = @submission.find_or_create_provisional_grade!(scorer: @teacher, score: 1)
+        @pg = @submission.find_or_create_provisional_grade!(@teacher, score: 1)
       end
 
       context "grades not published" do
@@ -1468,6 +1770,30 @@ describe Submission do
         expect(subject).not_to include(@teacher_assessment)
         expect(subject).to include(@student_assessment)
       end
+    end
+  end
+
+  describe '#add_comment' do
+    before(:once) do
+      @submission = Submission.create!(@valid_attributes)
+    end
+
+    it 'creates a draft comment when passed true in the draft_comment option' do
+      comment = @submission.add_comment(author: @teacher, comment: '42', draft_comment: true)
+
+      expect(comment).to be_draft
+    end
+
+    it 'creates a final comment when not passed in a draft_comment option' do
+      comment = @submission.add_comment(author: @teacher, comment: '42')
+
+      expect(comment).not_to be_draft
+    end
+
+    it 'creates a final comment when passed false in the draft_comment option' do
+      comment = @submission.add_comment(author: @teacher, comment: '42', draft_comment: false)
+
+      expect(comment).not_to be_draft
     end
   end
 end

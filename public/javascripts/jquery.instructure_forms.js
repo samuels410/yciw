@@ -31,7 +31,6 @@ define([
   'jquery.instructure_misc_helpers' /* /\$\.uniq/ */,
   'jquery.instructure_misc_plugins' /* /\.log\(/ */,
   'compiled/jquery.rails_flash_notifications',
-  'tinymce.editor_box' /* editorBox */,
   'vendor/jquery.scrollTo' /* /\.scrollTo/ */
 ], function(RceCommandShim, INST, I18n, $, _, FakeXHR, authenticity_token, htmlEscape) {
 
@@ -87,7 +86,10 @@ define([
         var newData = null;
         try {
           newData = options.processData.call($form, formData);
-        } catch(e) { error = e; }
+        } catch(e) {
+          error = e;
+          if (INST && INST.environment !== 'production') throw error;
+        }
         if(newData === false) {
           return false;
         } else if(newData) {
@@ -102,7 +104,10 @@ define([
         submitParam = null;
         try {
           submitParam = options.beforeSubmit.call($form, formData);
-        } catch(e) { error = e; }
+        } catch(e) {
+          error = e;
+          if (INST && INST.environment !== 'production') throw error;
+        }
         if(submitParam === false) {
           return false;
         }
@@ -125,7 +130,7 @@ define([
       if (onSubmit) {
         var loadingPromise = $.Deferred(),
             oldHandlers = {};
-        onSubmit(loadingPromise, formData);
+        onSubmit.call(this, loadingPromise, formData);
         $.each(['success', 'error'], function(i, successOrError){
           oldHandlers[successOrError] = options[successOrError];
           options[successOrError] = function() {
@@ -151,9 +156,6 @@ define([
       }
       if(error && !options.preventDegradeToFormSubmit) {
         if (loadingPromise) loadingPromise.reject();
-        if(INST && INST.environment == 'development') {
-          $.flashError('formSubmit error, trying to gracefully degrade. See console for details');
-        }
         return;
       }
       event.preventDefault();
@@ -685,7 +687,7 @@ define([
       }
       try {
         if($input.data('rich_text')) {
-          val = new RceCommandShim().send($input, "get_code", false);
+          val = RceCommandShim.send($input, "get_code", false);
         }
       } catch(e) {}
       var attr = $input.prop('name') || '';
@@ -959,6 +961,12 @@ define([
     $('#aria_alerts').empty();
     $.each(errors, function(name, msg) {
       var $obj = $form.find(":input[name='" + name + "'],:input[name*='[" + name + "]']").filter(":visible").first();
+      if(!$obj || $obj.length === 0) {
+        var $hiddenInput = $form.find("[name='" + name + "'],[name*='[" + name + "]']").filter(":not(:visible)").first();
+        if ($hiddenInput && $hiddenInput.length > 0) {
+          $obj = $hiddenInput.prev();
+        }
+      }
       if(!$obj || $obj.length === 0 || name == "general") {
         $obj = $form;
       }
@@ -1130,7 +1138,7 @@ define([
     if (options.object_name) {
       required = $._addObjectName(required, options.object_name);
     }
-    $form = $(this);
+    var $form = $(this);
     $.each(required, function(i, name) {
       var field = $form.find('[name="'+name+'"]');
       if (!field.length) {return;}

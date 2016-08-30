@@ -3,23 +3,27 @@ require "selinimum/minimizer"
 describe Selinimum::Minimizer do
   describe "#filter" do
     class NopeDetector
-      def can_process?(_)
+      def can_process?(_, _)
         true
       end
 
       def dependents_for(file)
         raise Selinimum::TooManyDependentsError, file
       end
+
+      def commit_files=(*); end
     end
 
     class FooDetector
-      def can_process?(file)
+      def can_process?(file, _)
         file =~ /foo/
       end
 
       def dependents_for(file)
         ["file:#{file}"]
       end
+
+      def commit_files=(*); end
     end
 
     let(:spec_dependency_map) { { "spec/selenium/foo_spec.rb" => ["file:app/views/foos/show.html.erb"] } }

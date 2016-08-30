@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011-2016 Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -23,6 +23,8 @@ class EnrollmentTerm < ActiveRecord::Base
 
   attr_accessible :name, :start_at, :end_at
   belongs_to :root_account, :class_name => 'Account'
+  belongs_to :grading_period_group, inverse_of: :enrollment_terms
+  has_many :grading_periods, through: :grading_period_group
   has_many :enrollment_dates_overrides
   has_many :courses
   has_many :enrollments, :through => :courses
@@ -30,9 +32,10 @@ class EnrollmentTerm < ActiveRecord::Base
 
   validates_presence_of :root_account_id, :workflow_state
   validate :check_if_deletable
+  validate :consistent_account_associations
 
   before_validation :verify_unique_sis_source_id
-  before_save :update_courses_later_if_necessary
+  after_save :update_courses_later_if_necessary
 
   include StickySisFields
   are_sis_sticky :name, :start_at, :end_at
@@ -48,7 +51,9 @@ class EnrollmentTerm < ActiveRecord::Base
   end
 
   def update_courses_later_if_necessary
-    self.update_courses_later if !self.new_record? && (self.start_at_changed? || self.end_at_changed?)
+    if !self.new_record? && (self.start_at_changed? || self.end_at_changed?)
+      self.update_courses_and_states_later
+    end
   end
 
   # specifically for use in specs
@@ -57,13 +62,16 @@ class EnrollmentTerm < ActiveRecord::Base
   end
 
   def touch_all_courses
-    return if new_record?
     self.courses.touch_all
   end
 
-  def update_courses_later
+  def update_courses_and_states_later(enrollment_type=nil)
+    return if new_record?
+
     self.send_later_if_production(:touch_all_courses) unless @touched_courses
     @touched_courses = true
+
+    EnrollmentState.send_later_if_production(:invalidate_states_for_term, self, enrollment_type)
   end
 
   def self.i18n_default_term_name
@@ -162,6 +170,14 @@ class EnrollmentTerm < ActiveRecord::Base
   def destroy
     self.workflow_state = 'deleted'
     save!
+  end
+
+  def consistent_account_associations
+    if read_attribute(:grading_period_group_id).present?
+      if root_account_id != grading_period_group.account_id
+        errors.add(:grading_period_group, t("cannot be associated with a different account"))
+      end
+    end
   end
 
   scope :active, -> { where("enrollment_terms.workflow_state<>'deleted'") }

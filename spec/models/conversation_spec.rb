@@ -941,7 +941,6 @@ describe Conversation do
         conversation.add_message(student1, 'first message')
 
         @old_course.complete!
-        group.complete!
 
         conversation.add_message(student2, 'second message')
 
@@ -993,6 +992,12 @@ describe Conversation do
       conversation.add_message(u1, 'ohai', :root_account_id => 1)
       conversation.add_message(u2, 'ohai yourself', :root_account_id => 2)
       expect(conversation.root_account_ids).to eql [1, 2]
+    end
+
+    it "includes the context's root account when initiating" do
+      new_course = course
+      conversation = Conversation.initiate([], false, context_type: 'Course', context_id: new_course.id)
+      expect(conversation.root_account_ids).to eql [new_course.root_account_id]
     end
   end
 
@@ -1079,6 +1084,15 @@ describe Conversation do
           expect(@conversation3.associated_shards.sort_by(&:id)).to eq [Shard.default, @shard1, @shard2].sort_by(&:id)
         end
       end
+    end
+  end
+
+  describe '.batch_regenerate_private_hashes!' do
+    it "doesn't asplode with a query error" do
+      # we don't even care if the conversation exists, or that it's correctly updated
+      # we just want to form the query and make sure it has a qualified name;
+      # so for this spec to be useful you need to have qualified names enabled
+      Conversation.batch_regenerate_private_hashes!(1)
     end
   end
 end

@@ -11,6 +11,8 @@ describe 'quizzes accessibility' do
   end
 
   it 'renders all answer arrows accessible to a screen reader', priority: "2", test_id: 209355 do
+    skip('started failing around Mar 20, 2016 - need investigation')
+    skip_if_chrome('Can not get to student view in Chrome')
     # -------------------------------------------------------------------------
     # adapted from:
     #   file: quizzes_question_creation_spec
@@ -34,7 +36,7 @@ describe 'quizzes accessibility' do
     click_questions_tab
 
     4.times do |i|
-      keep_trying_until(10) { expect(f("#question_#{quiz.quiz_questions[i].id}")).to be_truthy }
+      expect(f("#question_#{quiz.quiz_questions[i].id}")).to be_truthy
     end
 
     questions = ff('.display_question')

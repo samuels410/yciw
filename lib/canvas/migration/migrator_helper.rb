@@ -299,7 +299,7 @@ module MigratorHelper
           assmnt[:error_message] = a[:error_message] if a[:error_message]
           if a[:assignment] && a[:assignment][:migration_id]
             assmnt[:assignment_migration_id] = a[:assignment][:migration_id]
-            ensure_topic_or_quiz_assignment(a[:assignment], quiz_migration_id: a[:migration_id])
+            ensure_linked_assignment(a[:assignment], quiz_migration_id: a[:migration_id])
           end
         end
       end
@@ -368,23 +368,27 @@ module MigratorHelper
         assign[:error_message] = a[:error_message] if a[:error_message]
       end
     end
+    if @course[:announcements]
+      @overview[:announcements] = []
+      @course[:announcements].each do |t|
+        ann = {}
+        @overview[:announcements] << ann
+        ann[:title] = t[:title]
+        ann[:migration_id] = t[:migration_id]
+        ann[:error_message] = t[:error_message] if t[:error_message]
+      end
+    end
     if @course[:discussion_topics]
       @overview[:discussion_topics] = []
-      @overview[:announcements] = []
       @course[:discussion_topics].each do |t|
         topic = {}
-        if t[:type] == 'announcement'
-          @overview[:announcements] << topic
-        else
-          @overview[:discussion_topics] << topic
-        end
+        @overview[:discussion_topics] << topic
         topic[:title] = t[:title]
-        topic[:topic_type] = t[:type]
         topic[:migration_id] = t[:migration_id]
         topic[:error_message] = t[:error_message] if t[:error_message]
         if t[:assignment] && a_mig_id = t[:assignment][:migration_id]
           topic[:assignment_migration_id] = a_mig_id
-          ensure_topic_or_quiz_assignment(t[:assignment], topic_migration_id: t[:migration_id])
+          ensure_linked_assignment(t[:assignment], topic_migration_id: t[:migration_id])
         end
       end
     end
@@ -414,6 +418,10 @@ module MigratorHelper
         @overview[:wikis] << wiki
         wiki[:migration_id] = w[:migration_id]
         wiki[:title] = w[:title]
+        if w[:assignment] && a_mig_id = w[:assignment][:migration_id]
+          wiki[:assignment_migration_id] = a_mig_id
+          ensure_linked_assignment(w[:assignment], page_migration_id: w[:migration_id])
+        end
       end
     end
     if @course[:external_tools]
@@ -466,7 +474,7 @@ module MigratorHelper
     mod
   end
 
-  def ensure_topic_or_quiz_assignment(topic_or_quiz_assignment_hash, related_object_link)
+  def ensure_linked_assignment(topic_or_quiz_assignment_hash, related_object_link)
     @overview[:assignments] ||= []
     ah = @overview[:assignments].detect { |a| a[:migration_id] == topic_or_quiz_assignment_hash[:migration_id] }
     unless ah

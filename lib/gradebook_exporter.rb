@@ -18,6 +18,7 @@
 
 class GradebookExporter
   include GradebookTransformer
+  include GradebookSettingsHelpers
 
   def initialize(course, user, options = {})
     @course  = course
@@ -26,9 +27,9 @@ class GradebookExporter
   end
 
   def to_csv
-    collection = @options[:include_priors] ? @course.all_student_enrollments : @course.admin_visible_student_enrollments
-    enrollments_scope = @course.apply_enrollment_visibility(collection, @user)
-    student_enrollments = enrollments_for_csv(enrollments_scope, @options)
+    enrollment_scope = @course.apply_enrollment_visibility(gradebook_enrollment_scope, @user, nil,
+                                                           include: gradebook_includes)
+    student_enrollments = enrollments_for_csv(enrollment_scope, @options)
 
     student_section_names = {}
     student_enrollments.each do |enrollment|
@@ -41,7 +42,7 @@ class GradebookExporter
 
     # grading_period_id == 0 means no grading period selected
     unless @options[:grading_period_id].try(:to_i) == 0
-      grading_period = GradingPeriod.context_find @course, @options[:grading_period_id]
+      grading_period = GradingPeriod.for(@course).find_by(id: @options[:grading_period_id])
     end
 
     calc = GradeCalculator.new(student_enrollments.map(&:user_id), @course,
@@ -55,7 +56,7 @@ class GradebookExporter
     assignments = select_in_grading_period calc.assignments, @course, grading_period
 
     assignments = assignments.sort_by do |a|
-      [a.assignment_group_id, a.position, a.due_at || CanvasSort::Last, a.title]
+      [a.assignment_group_id, a.position || 0, a.due_at || CanvasSort::Last, a.title]
     end
     groups = calc.groups
 
@@ -156,21 +157,10 @@ class GradebookExporter
           row << student_sections
           row.concat(student_submissions)
 
-
           if should_show_totals
-            (current_info, current_group_info),
-              (final_info, final_group_info) = grades.shift
-            groups.each do |g|
-              row << current_group_info[g.id][:score] << final_group_info[g.id][:score] if include_points
-              row << current_group_info[g.id][:grade] << final_group_info[g.id][:grade]
-            end
-            row << current_info[:total] << final_info[:total] if include_points
-            row << current_info[:grade] << final_info[:grade]
-            if @course.grading_standard_enabled?
-              row << @course.score_to_grade(current_info[:grade])
-              row << @course.score_to_grade(final_info[:grade])
-            end
+            row += show_totals(grades.shift, groups, include_points)
           end
+
           csv << row
         end
       end
@@ -187,6 +177,34 @@ class GradebookExporter
 
     enrollments = scope.preload(includes).eager_load(:user).order_by_sortable_name.to_a
     enrollments.partition { |e| e.type != "StudentViewEnrollment" }.flatten
+  end
+
+  def show_totals(grade, groups, include_points)
+    result = []
+
+    groups.each do |group|
+      if include_points
+        result << grade[:current_groups][group.id][:score]
+        result << grade[:final_groups][group.id][:score]
+      end
+
+      result << grade[:current_groups][group.id][:grade]
+      result << grade[:final_groups][group.id][:grade]
+    end
+
+    if include_points
+      result << grade[:current][:total]
+      result << grade[:final][:total]
+    end
+
+    result << grade[:current][:grade]
+    result << grade[:final][:grade]
+
+    if @course.grading_standard_enabled?
+      result << @course.score_to_grade(grade[:current][:grade])
+      result << @course.score_to_grade(grade[:final][:grade])
+    end
+    result
   end
 
   def show_totals?

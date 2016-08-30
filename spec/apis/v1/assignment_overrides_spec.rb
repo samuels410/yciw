@@ -17,6 +17,7 @@
 #
 
 require File.expand_path(File.dirname(__FILE__) + '/../api_spec_helper')
+require File.expand_path(File.dirname(__FILE__) + '/../../sharding_spec_helper.rb')
 
 describe AssignmentOverridesController, type: :request do
   def validate_override_json(override, json)
@@ -341,6 +342,19 @@ describe AssignmentOverridesController, type: :request do
     end
 
     context "adhoc" do
+      specs_require_sharding
+
+      def mock_sharding_data
+        @shard1.activate { @user = User.create!(name: "McShardalot")}
+        @course.enroll_student @user
+      end
+
+      def validate_global_id
+        @override = @assignment.assignment_overrides(true).first
+        expect(@override).not_to be_nil
+        expect(@override.set).to eq [@student]
+      end
+
       before :once do
         @student = student_in_course(:course => @course, :user => user_with_pseudonym).user
         @title = 'adhoc title'
@@ -353,6 +367,26 @@ describe AssignmentOverridesController, type: :request do
         @override = @assignment.assignment_overrides(true).first
         expect(@override).not_to be_nil
         expect(@override.set).to eq [@student]
+      end
+
+      it "should create an adhoc assignment override with global id for student" do
+        mock_sharding_data
+        api_create_override(@course, @assignment, :assignment_override => { :student_ids => [@student.global_id], :title => @title })
+        validate_global_id
+      end
+
+      it "should create an adhoc assignment override with global id for course" do
+        mock_sharding_data
+        @course.id = @course.global_id
+        api_create_override(@course, @assignment, :assignment_override => { :student_ids => [@student.id], :title => @title })
+        validate_global_id
+      end
+
+      it "should create an adhoc assignment override with global id for assignment" do
+        mock_sharding_data
+        @assignment.id = @assignment.global_id
+        api_create_override(@course, @assignment, :assignment_override => { :student_ids => [@student.id], :title => @title })
+        validate_global_id
       end
 
       it "should set the adhoc override title" do
@@ -739,6 +773,26 @@ describe AssignmentOverridesController, type: :request do
 
         prog.reload
         expect(prog).to be_unlocked # now they can
+      end
+
+      it "recomputes grades when changing overrides" do
+        @assignment.update_attributes! only_visible_to_overrides: true, points_possible: 10
+        other_assignment = @course.assignments.create! points_possible: 10, context: @course
+
+        student1 = @student
+        student2 = student_in_course(:course => @course).user
+        other_assignment.grade_student(student1, grade: 10)
+        other_assignment.grade_student(student2, grade: 10)
+
+        e1 = student1.enrollments.first
+        e2 = student2.enrollments.first
+        expect(e1.computed_final_score).to eq 50
+        expect(e2.computed_final_score).to eq 100
+
+        api_update_override(@course, @assignment, @override, :assignment_override => { :student_ids => [student2.id] })
+        expect(e1.reload.computed_final_score).to eq 100
+        expect(e2.reload.computed_final_score).to eq 50
+
       end
 
       it "should allow changing the title" do

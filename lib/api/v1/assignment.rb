@@ -44,6 +44,7 @@ module Api::V1::Assignment
       group_category_id
       grading_standard_id
       moderated_grading
+      omit_from_final_grade
     )
   }.freeze
 
@@ -66,7 +67,7 @@ module Api::V1::Assignment
       include_all_dates: false,
       override_dates: true,
       needs_grading_count_by_section: false,
-      exclude_description: false
+      exclude_response_fields: []
     )
 
     if opts[:override_dates] && !assignment.new_record?
@@ -74,7 +75,7 @@ module Api::V1::Assignment
     end
 
     fields = assignment.new_record? ? API_ASSIGNMENT_NEW_RECORD_FIELDS : API_ALLOWED_ASSIGNMENT_OUTPUT_FIELDS
-    if opts[:exclude_description]
+    if opts[:exclude_response_fields].include?('description')
       fields_copy = fields[:only].dup
       fields_copy.delete("description")
       fields = {only: fields_copy}
@@ -94,6 +95,8 @@ module Api::V1::Assignment
       hash['user_submitted'] = assignment.user_submitted
     end
 
+    hash['omit_from_final_grade'] = assignment.omit_from_final_grade?
+
     if assignment.context && assignment.context.turnitin_enabled?
       hash['turnitin_enabled'] = assignment.turnitin_enabled
       hash['turnitin_settings'] = turnitin_settings_json(assignment)
@@ -109,7 +112,7 @@ module Api::V1::Assignment
 
     # use already generated hash['description'] because it is filtered by
     # Assignment#filter_attributes_for_user when the assignment is locked
-    unless opts[:exclude_description]
+    unless opts[:exclude_response_fields].include?('description')
       hash['description'] = api_user_content(hash['description'],
                                              @context || assignment.context,
                                              user,
@@ -140,7 +143,8 @@ module Api::V1::Assignment
       hash['peer_reviews_assign_at'] = assignment.peer_reviews_assign_at
     end
 
-    if assignment.context.grants_right?(user, :manage_grades)
+    include_needs_grading_count = opts[:exclude_response_fields].exclude?('needs_grading_count')
+    if include_needs_grading_count && assignment.context.grants_right?(user, :manage_grades)
       query = Assignments::NeedsGradingCountQuery.new(assignment, user, opts[:needs_grading_course_proxy])
       if opts[:needs_grading_count_by_section]
         hash['needs_grading_count_by_section'] = query.count_by_section
@@ -162,7 +166,7 @@ module Api::V1::Assignment
       hash['allowed_extensions'] = assignment.allowed_extensions
     end
 
-    unless opts[:exclude_rubric]
+    unless opts[:exclude_response_fields].include?('rubric')
       if assignment.rubric_association
         hash['use_rubric_for_grading'] = !!assignment.rubric_association.use_for_grading
         if assignment.rubric_association.rubric
@@ -199,7 +203,7 @@ module Api::V1::Assignment
         assignment.discussion_topic.context,
         user,
         session,
-        include_assignment: false, exclude_messages: opts[:exclude_description])
+        include_assignment: false, exclude_messages: opts[:exclude_response_fields].include?('description'))
     end
 
     if opts[:include_all_dates] && assignment.assignment_overrides
@@ -293,6 +297,7 @@ module Api::V1::Assignment
     notify_of_update
     integration_id
     integration_data
+    omit_from_final_grade
   )
 
   API_ALLOWED_TURNITIN_SETTINGS = %w(
@@ -307,7 +312,7 @@ module Api::V1::Assignment
     submit_papers_to
   )
 
-  def update_api_assignment(assignment, assignment_params, user)
+  def update_api_assignment(assignment, assignment_params, user, context = assignment.context)
     return nil unless assignment_params.is_a?(Hash)
 
     old_assignment = assignment.new_record? ? nil : assignment.clone
@@ -322,7 +327,7 @@ module Api::V1::Assignment
     return false unless valid_assignment_dates?(assignment, assignment_params)
     return false unless valid_submission_types?(assignment, assignment_params)
 
-    assignment = update_from_params(assignment, assignment_params, user)
+    assignment = update_from_params(assignment, assignment_params, user, context)
 
     if overrides
       assignment.transaction do
@@ -341,14 +346,30 @@ module Api::V1::Assignment
     return false
   end
 
-  API_ALLOWED_SUBMISSION_TYPES = ["online_quiz", "none", "on_paper", "discussion_topic", "external_tool", "online_upload", "online_text_entry", "online_url", "media_recording", "not_graded", ""]
+  API_ALLOWED_SUBMISSION_TYPES = [
+    "online_quiz",
+    "none",
+    "on_paper",
+    "discussion_topic",
+    "external_tool",
+    "online_upload",
+    "online_text_entry",
+    "online_url",
+    "media_recording",
+    "not_graded",
+    "wiki_page",
+    ""
+  ].freeze
 
   def valid_submission_types?(assignment, assignment_params)
     return true if assignment_params['submission_types'].nil?
     assignment_params['submission_types'] = Array(assignment_params['submission_types'])
 
     if assignment_params['submission_types'].present? &&
-      !assignment_params['submission_types'].all? { |s| API_ALLOWED_SUBMISSION_TYPES.include?(s) }
+      !assignment_params['submission_types'].all? do |s|
+        return false if s == 'wiki_page' && !self.context.try(:feature_enabled?, :conditional_release)
+        API_ALLOWED_SUBMISSION_TYPES.include?(s)
+      end
         assignment.errors.add('assignment[submission_types]',
           I18n.t('assignments_api.invalid_submission_types',
             'Invalid submission types'))
@@ -382,7 +403,7 @@ module Api::V1::Assignment
     end
   end
 
-  def update_from_params(assignment, assignment_params, user)
+  def update_from_params(assignment, assignment_params, user, context = assignment.context)
     update_params = assignment_params.slice(*API_ALLOWED_ASSIGNMENT_INPUT_FIELDS)
 
     if update_params.has_key?('peer_reviews_assign_at')
@@ -474,7 +495,10 @@ module Api::V1::Assignment
     end
 
     post_to_sis = assignment_params.key?('post_to_sis') ? value_to_boolean(assignment_params['post_to_sis']) : nil
-    unless post_to_sis.nil? || !Assignment.sis_grade_export_enabled?(assignment.context)
+    if post_to_sis.nil? || !Assignment.sis_grade_export_enabled?(context)
+      # set the default setting if it is not included.
+      assignment.post_to_sis = context.account.sis_default_grade_export[:value]
+    else
       assignment.post_to_sis = post_to_sis
     end
 

@@ -41,6 +41,8 @@ module CC
     VERSION_1_3 = Gem::Version.new('1.3')
 
     def add_assignment(assignment)
+      add_exported_asset(assignment)
+
       migration_id = CCHelper.create_key(assignment)
 
       lo_folder = File.join(@export_dir, migration_id)
@@ -214,6 +216,7 @@ module CC
         node.external_tool_url assignment.external_tool_tag.url
         node.external_tool_new_tab assignment.external_tool_tag.new_tab
       end
+      node.tag!(:turnitin_settings, (assignment.send(:turnitin_settings).to_json)) if assignment.turnitin_enabled
     end
 
   end

@@ -1,18 +1,16 @@
 class BeginPsychMigration < ActiveRecord::Migration
-  tag :postdeploy
+  tag :predeploy
 
-  def self.runnable? # TODO: Remove when we're ready to run this everywhere
-    if ENV['RUN_PSYCH_MIGRATION']
-      true
-    elsif ApplicationController.respond_to?(:test_cluster?)
-      ApplicationController.test_cluster?
-    else
-      true
-    end
+  def runnable?
+    Shard.current.default?
   end
 
   def up
-    DataFixup::PsychMigration.run if CANVAS_RAILS4_0 || !Rails.env.test?
+    if User.exists? # don't raise for a fresh install
+      raise "WARNING:\n
+        This migration needs to be run with the release/2016-04-23 version of canvas-lms to
+        change all yaml columns in the database to a Psych compatible format.\n"
+    end
   end
 
   def down

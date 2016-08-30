@@ -24,17 +24,19 @@ class DeveloperKey < ActiveRecord::Base
 
   belongs_to :user
   belongs_to :account
+
   has_many :page_views
   has_many :access_tokens
-  has_many :context_external_tools, :primary_key => 'tool_id', :foreign_key => 'tool_id'
 
-  attr_accessible :api_key, :name, :user, :account, :icon_url, :redirect_uri, :tool_id, :email, :event, :auto_expire_tokens
+  attr_accessible :api_key, :name, :user, :account, :icon_url, :redirect_uri, :redirect_uris, :email, :event, :auto_expire_tokens
 
   before_create :generate_api_key
   before_create :set_auto_expire_tokens
-  before_save :nullify_empty_tool_id
+  before_save :nullify_empty_icon_url
+  after_save :clear_cache
 
-  validates_as_url :redirect_uri
+  validates_as_url :redirect_uri, allowed_schemes: nil
+  validate :validate_redirect_uris
 
   scope :nondeleted, -> { where("workflow_state<>'deleted'") }
 
@@ -48,14 +50,29 @@ class DeveloperKey < ActiveRecord::Base
     state :deleted
   end
 
+  def redirect_uris=(value)
+    value = value.split if value.is_a?(String)
+    super(value)
+  end
+
+  def validate_redirect_uris
+    uris = redirect_uris.map do |value|
+      value, _ = CanvasHttp.validate_url(value, allowed_schemes: nil)
+      value
+    end
+
+    self.redirect_uris = uris unless uris == redirect_uris
+  rescue URI::Error, ArgumentError
+    errors.add :redirect_uris, 'is not a valid URI'
+  end
+
   alias_method :destroy_permanently!, :destroy
   def destroy
     self.workflow_state = 'deleted'
     self.save
   end
 
-  def nullify_empty_tool_id
-    self.tool_id = nil if tool_id.blank?
+  def nullify_empty_icon_url
     self.icon_url = nil if icon_url.blank?
   end
 
@@ -73,12 +90,26 @@ class DeveloperKey < ActiveRecord::Base
 
   def authorized_for_account?(target_account)
     return true unless account_id
-    account_ids = target_account.account_chain.map{|acct| acct.global_id}
-    account_ids.include? account.global_id
+    target_account.id == account_id
   end
 
   def account_name
     account.try(:name)
+  end
+
+  class << self
+    def find_cached(id)
+      global_id = Shard.global_id_for(id)
+      MultiCache.fetch("developer_key/#{global_id}") do
+        Shackles.activate(:slave) do
+          DeveloperKey.find(global_id)
+        end
+      end
+    end
+  end
+
+  def clear_cache
+    MultiCache.delete("developer_key/#{global_id}")
   end
 
   def self.get_special_key(default_key_name)
@@ -105,9 +136,16 @@ class DeveloperKey < ActiveRecord::Base
   # verify that the given uri has the same domain as this key's
   # redirect_uri domain.
   def redirect_domain_matches?(redirect_uri)
+    return true if redirect_uris.include?(redirect_uri)
+
+    # legacy deprecated
     self_domain = URI.parse(self.redirect_uri).host
     other_domain = URI.parse(redirect_uri).host
-    return self_domain.present? && other_domain.present? && (self_domain == other_domain || other_domain.end_with?(".#{self_domain}"))
+    result = self_domain.present? && other_domain.present? && (self_domain == other_domain || other_domain.end_with?(".#{self_domain}"))
+    if result && redirect_uri != self.redirect_uri
+      Rails.logger.info("Allowed lenient OAuth redirect uri #{redirect_uri} on developer key #{global_id}")
+    end
+    result
   rescue URI::Error
     return false
   end

@@ -190,6 +190,10 @@ class GroupsController < ApplicationController
   # @argument context_type [String, "Account"|"Course"]
   #  Only include groups that are in this type of context.
   #
+  # @argument include[] [String, "tabs"]
+  #   - "tabs": Include the list of tabs configured for each group.  See the
+  #     {api:TabsController#index List available tabs API} for more information.
+  #
   # @example_request
   #     curl https://<canvas>/api/v1/users/self/groups?context_type=Account \
   #          -H 'Authorization: Bearer <token>'
@@ -203,9 +207,10 @@ class GroupsController < ApplicationController
       format.html do
         groups_scope = groups_scope.by_name
         groups_scope = groups_scope.where(:context_type => params[:context_type]) if params[:context_type]
-        groups_scope = groups_scope.preload(:group_category)
+        groups_scope = groups_scope.preload(:group_category, :context)
 
         groups = groups_scope.shard(@current_user).to_a
+        groups.select!{|group| group.context_type != 'Course' || group.context.grants_right?(@current_user, :read)}
 
         # Split the groups out into those in concluded courses and those not in concluded courses
         @current_groups, @previous_groups = groups.partition do |group|
@@ -216,7 +221,7 @@ class GroupsController < ApplicationController
       format.json do
         @groups = ShardedBookmarkedCollection.build(Group::Bookmarker, groups_scope) do |scope|
           scope = scope.where(:context_type => params[:context_type]) if params[:context_type]
-          scope.preload(:group_category)
+          scope.preload(:group_category, :context)
         end
         @groups = Api.paginate(@groups, self, api_v1_current_user_groups_url)
         render :json => (@groups.map { |g| group_json(g, @current_user, session,includes) })
@@ -230,6 +235,10 @@ class GroupsController < ApplicationController
   #
   # @argument only_own_groups [Boolean]
   #  Will only include groups that the user belongs to if this is set
+  #
+  # @argument include[] [String, "tabs"]
+  #   - "tabs": Include the list of tabs configured for each group.  See the
+  #     {api:TabsController#index List available tabs API} for more information.
   #
   # @example_request
   #     curl https://<canvas>/api/v1/courses/1/groups \
@@ -314,9 +323,11 @@ class GroupsController < ApplicationController
   #     curl https://<canvas>/api/v1/groups/<group_id> \
   #          -H 'Authorization: Bearer <token>'
   #
-  # @argument include[] [String, "permissions"]
+  # @argument include[] [String, "permissions", "tabs"]
   #   - "permissions": Include permissions the current user has
   #     for the group.
+  #   - "tabs": Include the list of tabs configured for each group.  See the
+  #     {api:TabsController#index List available tabs API} for more information.
   #
   # @returns Group
   def show
@@ -592,7 +603,10 @@ class GroupsController < ApplicationController
     find_group
     if authorized_action(@group, @current_user, :manage)
       root_account = @group.context.try(:root_account) || @domain_root_account
-      ul = UserList.new(params[:invitees], :root_account => root_account, :search_method => :preferred)
+      ul = UserList.new(params[:invitees],
+                        root_account: root_account,
+                        search_method: :preferred,
+                        current_user: @current_user)
       @memberships = []
       ul.users.each{ |u| @memberships << @group.invite_user(u) }
       render :json => @memberships.map{ |gm| group_membership_json(gm, @current_user, session) }

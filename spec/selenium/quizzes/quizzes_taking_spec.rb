@@ -10,6 +10,39 @@ describe "quiz taking" do
     @quiz = quiz_with_new_questions(!:goto_edit)
   end
 
+  it 'should allow toggling between RCE and HTML entry on essay questions' do
+    @quiz = quiz_with_multiple_type_questions
+    get "/courses/#{@course.id}/quizzes/#{@quiz.id}"
+    expect_new_page_load{f('#take_quiz_link').click}
+    links = ff('.toggle_question_content_views_link')
+    expect(links[0].text).to eq("HTML Editor")
+    expect(links[0]).to be_displayed
+    links[0].click
+    expect(links[1].text).to eq("Rich Content Editor")
+    expect(links[1]).to be_displayed
+  end
+
+  it 'should toggle only the essay question that was toggled leaving others on the page alone' do
+    @quiz = quiz_with_essay_questions
+    get "/courses/#{@course.id}/quizzes/#{@quiz.id}"
+    expect_new_page_load{f('#take_quiz_link').click}
+    links = ff('.toggle_question_content_views_link')
+    # first link of the first RCE
+    expect(links[0].text).to eq("HTML Editor")
+    expect(links[0]).to be_displayed
+    # first link of the second RCE
+    expect(links[2].text).to eq("HTML Editor")
+    expect(links[2]).to be_displayed
+    links[0].click
+    # first link hidden, second link now showing
+    expect(links[1].text).to eq("Rich Content Editor")
+    expect(links[0]).not_to be_displayed
+    expect(links[1]).to be_displayed
+    # first link of second RCE is unchanged
+    expect(links[2].text).to eq("HTML Editor")
+    expect(links[2]).to be_displayed
+  end
+
   it "should allow to take the quiz as long as there are attempts left", priority: "1", test_id: 140606 do
     @quiz.allowed_attempts = 2
     @quiz.save!
@@ -19,7 +52,13 @@ describe "quiz taking" do
     expect(f('#take_quiz_link')).to be_present
     expect_new_page_load{f('#take_quiz_link').click}
     answer_questions_and_submit(@quiz, 2)
-    expect(f('#take_quiz_link')).to be_nil
+    expect(f("#content")).not_to contain_css('#take_quiz_link')
+  end
+
+  it 'should show take quiz button for admins enrolled as a student' do
+    course_with_teacher(user: @student, course: @course)
+    get "/courses/#{@course.id}/quizzes/#{@quiz.id}"
+    expect(f('#take_quiz_link')).to be_present
   end
 
   it "should show a prompt when attempting to submit with unanswered questions", priority: "1", test_id: 140608 do
@@ -37,23 +76,13 @@ describe "quiz taking" do
     fj("input[type=radio][name= 'question_#{question}']").click
     wait_for_js
     expect_new_page_load { f('#submit_quiz_button').click }
-    keep_trying_until do
-      expect(f('.quiz-submission .quiz_score .score_value')).to be_displayed
-    end
+    expect(f('.quiz-submission .quiz_score .score_value')).to be_displayed
   end
 
-  it "should not restrict whitelisted ip addresses", priority: "1", test_id: 338082 do
-    skip('might fail Jenkins due to ip address conflicts')
-    @quiz.ip_filter = "10.0.9.249"
-    @quiz.save!
-    get "/courses/#{@course.id}/quizzes/#{@quiz.id}"
-    expect_new_page_load{f('#take_quiz_link').click}
-    expect(driver.current_url).to include_text("/courses/#{@course.id}/quizzes/#{@quiz.id}/take")
-    expect(f("#content .quiz-header").text).to include('Test Quiz')
-    expect(f('#submit_quiz_form')).to be_present
-  end
+  it "should not restrict whitelisted ip addresses", priority: "1", test_id: 338082
 
   it "should account for question group settings", priority: "1", test_id: 140591 do
+    skip_if_chrome('research')
     quiz = quiz_model
     bank = AssessmentQuestionBank.create!(context: @course)
     3.times do
@@ -72,15 +101,11 @@ describe "quiz taking" do
     get "/courses/#{@course.id}/quizzes/#{quiz.id}"
     expect_new_page_load{f('#take_quiz_link').click}
     2.times do |o|
-      keep_trying_until(3) do
-        expect(fj("#question_#{quiz.quiz_questions[o].id} .question_points_holder").text).to eq('15 pts')
-        click_option("#question_#{quiz.quiz_questions[o].id} .question_input:nth-of-type(1)", 'a1')
-        click_option("#question_#{quiz.quiz_questions[o].id} .question_input:nth-of-type(2)", 'a3')
-      end
+      expect(fj("#question_#{quiz.quiz_questions[o].id} .question_points_holder")).to include_text('15 pts')
+      click_option("#question_#{quiz.quiz_questions[o].id} .question_input:nth-of-type(1)", 'a1')
+      click_option("#question_#{quiz.quiz_questions[o].id} .question_input:nth-of-type(2)", 'a3')
     end
     submit_quiz
-    keep_trying_until do
-      expect(f('.quiz-submission .quiz_score .score_value').text).to eq('30')
-    end
+    expect(f('.quiz-submission .quiz_score .score_value')).to include_text('30')
   end
 end

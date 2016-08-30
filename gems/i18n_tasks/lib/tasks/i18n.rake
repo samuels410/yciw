@@ -42,8 +42,18 @@ namespace :i18n do
     yaml_dir = './config/locales/generated'
     FileUtils.mkdir_p(File.join(yaml_dir))
     yaml_file = File.join(yaml_dir, "en.yml")
+    special_keys = %w{
+      locales
+      crowdsourced
+      custom
+      deprecated_for
+      bigeasy_locale
+      fullcalendar_locale
+      moment_locale
+    }.freeze
+
     File.open(Rails.root.join(yaml_file), "w") do |file|
-      file.write({'en' => @translations.except('locales', 'qualified_locale')}.ya2yaml(:syck_compatible => true))
+      file.write({'en' => @translations.except(*special_keys)}.ya2yaml(:syck_compatible => true))
     end
     print "Wrote new #{yaml_file}\n\n"
   end
@@ -66,6 +76,7 @@ namespace :i18n do
     require 'active_record'
     require 'will_paginate'
     I18n.load_path.unshift(*WillPaginate::I18n.load_path)
+    I18n.load_path += Dir[Rails.root.join('gems', 'plugins', '*', 'config', 'locales', '*.{rb,yml}')]
     I18n.load_path += Dir[Rails.root.join('config', 'locales', '*.{rb,yml}')]
 
     require 'i18nema'
@@ -110,7 +121,7 @@ namespace :i18n do
 
     dump_translations = lambda do |translation_name, translations|
       file = "public/javascripts/translations/#{translation_name}.js"
-      content = I18nTasks::Utils.dump_js(translations, locales)
+      content = I18nTasks::Utils.dump_js(translations)
       if !File.exist?(file) || File.read(file) != content
         File.open(file, "w"){ |f| f.write content }
       end

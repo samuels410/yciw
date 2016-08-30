@@ -28,9 +28,9 @@ describe 'quiz restrictions as a teacher' do
 
     it 'should show a password field when checking the checkbox', priority: "1", test_id: 474274 do
       get "/courses/#{@course.id}/quizzes/new"
-      expect(f('#quiz_access_code').attribute('tabindex')).to include_text('-1')
+      expect(f('#quiz_access_code')).to have_attribute('tabindex', '-1')
       f('#enable_quiz_access_code').click
-      expect(f('#quiz_access_code').attribute('tabindex')).to include_text('0')
+      expect(f('#quiz_access_code')).to have_attribute('tabindex', '0')
     end
 
     it 'should not allow a blank restrict access code password', priority: "1", test_id: 474275 do
@@ -78,9 +78,9 @@ describe 'quiz restrictions as a teacher' do
 
     it 'should show a password field when checking the checkbox', priority: "1", test_id: 474279 do
       get "/courses/#{@course.id}/quizzes/new"
-      expect(f('#quiz_ip_filter').attribute('tabindex')).to include_text('-1')
+      expect(f('#quiz_ip_filter')).to have_attribute('tabindex', '-1')
       f('#enable_quiz_ip_filter').click
-      expect(f('#quiz_ip_filter').attribute('tabindex')).to include_text('0')
+      expect(f('#quiz_ip_filter')).to have_attribute('tabindex', '0')
     end
 
     it 'should not allow a blank ip address', priority: "1", test_id: 474280 do
@@ -165,5 +165,29 @@ describe 'quiz restrictions as a teacher' do
       expect(show_page).to include_text('IP Filter')
       expect(show_page).to include_text('64.233.160.0')
     end
+  end
+
+  it "should let a teacher preview a quiz even without management rights" do
+    @context = @course
+    quiz = quiz_model
+    description = "some description"
+    quiz.description = description
+    quiz.quiz_questions.create! question_data: true_false_question_data
+    quiz.generate_quiz_data
+    quiz.save!
+
+    @course.account.role_overrides.create!(:permission => :manage_assignments, :role => teacher_role, :enabled => false)
+
+    expect(@quiz.grants_right?(@user, :manage)).to be_falsey
+    expect(@course.grants_right?(@user, :read_as_admin)).to be_truthy
+
+    open_quiz_show_page
+
+    expect(f(".description")).to include_text(description)
+
+    expect_new_page_load { f('#preview_quiz_button').click }
+    wait_for_quiz_to_begin
+
+    complete_and_submit_quiz
   end
 end

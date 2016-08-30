@@ -75,7 +75,7 @@ class Quizzes::Quiz < ActiveRecord::Base
   after_save :touch_context
   after_save :regrade_if_published
 
-  serialize_utf8_safe :quiz_data
+  serialize :quiz_data
 
   simply_versioned
 
@@ -271,7 +271,7 @@ class Quizzes::Quiz < ActiveRecord::Base
     self.assignment.restore(:quiz) if self.for_assignment?
   end
 
-  def unlink_from(type)
+  def unlink!(type)
     @saved_by = type
     if self.root_entries.empty? && !self.available?
       self.assignment = nil
@@ -342,14 +342,22 @@ class Quizzes::Quiz < ActiveRecord::Base
     return true if self.one_time_results
 
     # Are we past the date the correct answers should no longer be shown after?
-    return false if hide_at.present? && Time.now > hide_at
+    return false if hide_at.present? && Time.zone.now > hide_at
 
-    show_at.present? ? Time.now > show_at : true
+    show_at.present? ? Time.zone.now > show_at : true
   end
 
-  def restrict_answers_for_concluded_course?
+  def restrict_answers_for_concluded_course?(user: nil)
     course = self.context
-    course.concluded? && course.root_account.settings[:restrict_quiz_questions]
+    return false unless course.root_account.settings[:restrict_quiz_questions]
+
+    if user.present?
+      quiz_eligibility = Quizzes::QuizEligibility.new(course: course, user: user)
+      user_in_active_section = quiz_eligibility.section_dates_currently_apply?
+      return false if user_in_active_section
+    end
+
+    !!course.concluded?
   end
 
   def update_existing_submissions
@@ -425,14 +433,7 @@ class Quizzes::Quiz < ActiveRecord::Base
   def update_quiz_submission_end_at_times
     new_end_at = time_limit * 60.0
 
-    update_sql = case ActiveRecord::Base.connection.adapter_name
-                 when 'PostgreSQL'
-                   "started_at + INTERVAL '+? seconds'"
-                 when 'MySQL', 'Mysql2'
-                   "started_at + INTERVAL ? SECOND"
-                 when /sqlite/
-                   "DATETIME(started_at, '+? seconds')"
-                 end
+    update_sql = "started_at + INTERVAL '+? seconds'"
 
     # only update quiz submissions that:
     # 1. belong to this quiz;
@@ -463,7 +464,7 @@ class Quizzes::Quiz < ActiveRecord::Base
   end
 
   def root_entries_max_position
-    question_max = self.active_quiz_questions.where(quiz_group_id: nil).maximum(:position)
+    question_max = self.quiz_questions.active.where(quiz_group_id: nil).maximum(:position)
     group_max = self.quiz_groups.maximum(:position)
     [question_max, group_max, 0].compact.max
   end
@@ -728,34 +729,37 @@ class Quizzes::Quiz < ActiveRecord::Base
 
 
   def locked_for?(user, opts={})
-    return false if opts[:check_policies] && self.grants_right?(user, :update)
     ::Rails.cache.fetch(locked_cache_key(user), :expires_in => 1.minute) do
-      locked = false
+      user_submission = user && quiz_submissions.where(user_id: user.id).first
+      return false if user_submission && user_submission.manually_unlocked
+
       quiz_for_user = self.overridden_for(user)
-      if (quiz_for_user.unlock_at && quiz_for_user.unlock_at > Time.now)
-        sub = user && quiz_submissions.where(user_id: user).first
-        if !sub || !sub.manually_unlocked
-          locked = {:asset_string => self.asset_string, :unlock_at => quiz_for_user.unlock_at}
-        end
-      elsif (quiz_for_user.lock_at && quiz_for_user.lock_at <= Time.now)
-        sub = user && quiz_submissions.where(user_id: user).first
-        if !sub || !sub.manually_unlocked
-          locked = {:asset_string => self.asset_string, :lock_at => quiz_for_user.lock_at, :can_view => true}
-        end
-      elsif !opts[:skip_assignment] && (self.for_assignment? && l = self.assignment.locked_for?(user, opts))
-        sub = user && quiz_submissions.where(user_id: user).first
-        if !sub || !sub.manually_unlocked
-          locked = l
-        end
-      elsif item = locked_by_module_item?(user, opts[:deep_check_if_needed])
-        sub = user && quiz_submissions.where(user_id: user).first
-        if !sub || !sub.manually_unlocked
-          locked = {:asset_string => self.asset_string, :context_module => item.context_module.attributes}
-        end
+
+      unlock_time_not_yet_reached = quiz_for_user.unlock_at && quiz_for_user.unlock_at > Time.zone.now
+      lock_time_already_occurred = quiz_for_user.lock_at && quiz_for_user.lock_at <= Time.zone.now
+
+      locked = false
+      lock_info = { asset_string: asset_string }
+      if unlock_time_not_yet_reached
+        locked = lock_info.merge({ unlock_at: quiz_for_user.unlock_at })
+      elsif lock_time_already_occurred
+        locked = lock_info.merge({ lock_at: quiz_for_user.lock_at, can_view: true })
+      elsif !opts[:skip_assignment] && (assignment_lock = locked_by_assignment?(user, opts))
+        locked = assignment_lock
+      elsif (module_lock = locked_by_module_item?(user, opts[:deep_check_if_needed]))
+        locked = lock_info.merge({ context_module: module_lock.context_module.attributes })
+      elsif !context.try_rescue(:is_public) && !context.grants_right?(user, :participate_as_student)
+        locked = lock_info.merge({ missing_permission: :participate_as_student.to_s })
       end
 
     locked
     end
+  end
+
+  def locked_by_assignment?(user, opts = {})
+    return false unless for_assignment?
+
+    assignment.locked_for?(user, opts)
   end
 
   def clear_locked_cache(user)
@@ -1012,13 +1016,16 @@ class Quizzes::Quiz < ActiveRecord::Base
 
   set_policy do
     given { |user, session| self.context.grants_right?(user, session, :manage_assignments) } #admins.include? user }
-    can :read_statistics and can :manage and can :read and can :update and can :delete and can :create and can :submit
+    can :read_statistics and can :manage and can :read and can :update and can :delete and can :create and can :submit and can :preview
 
     given { |user, session| self.context.grants_right?(user, session, :manage_grades) } #admins.include? user }
     can :read_statistics and can :read and can :submit and can :grade and can :review_grades
 
     given { |user| self.available? && self.context.try_rescue(:is_public) && !self.graded? && self.visible_to_user?(user) }
     can :submit
+
+    given { |user, session| context.grants_right?(user, session, :read_as_admin) }
+    can :read and can :submit and can :preview
 
     given do |user, session|
       published? && context.grants_right?(user, session, :read)
@@ -1307,5 +1314,9 @@ class Quizzes::Quiz < ActiveRecord::Base
   def run_if_overrides_changed!
     self.relock_modules!
     self.assignment.relock_modules! if self.assignment
+  end
+
+  def run_if_overrides_changed_later!
+    self.send_later_if_production_enqueue_args(:run_if_overrides_changed!, {:singleton => "quiz_overrides_changed_#{self.global_id}"})
   end
 end

@@ -47,6 +47,7 @@ describe GradebooksController do
     it "redirects to the login page if the user is logged out" do
       get 'grade_summary', :course_id => @course.id, :id => @student.id
       expect(response).to redirect_to(login_url)
+      expect(flash[:warning]).to be_present
     end
 
     it "redirects teacher to gradebook" do
@@ -201,8 +202,18 @@ describe GradebooksController do
       expect(assigns[:js_env][:submissions].sort_by { |s|
         s['assignment_id']
       }).to eq [
-        {'score' => 5, 'assignment_id' => a2.id}
+        {score: 5, assignment_id: a2.id, excused: false, workflow_state: 'graded'}
       ]
+    end
+
+    it "includes necessary attributes on the submissions" do
+      user_session(@student)
+      assignment = @course.assignments.create!(points_possible: 10)
+      assignment.grade_student(@student, grade: 10)
+      get('grade_summary', course_id: @course.id, id: @student.id)
+      submission = assigns[:js_env][:submissions].first
+      expect(submission).to include :excused
+      expect(submission).to include :workflow_state
     end
 
     context "assignment sorting" do
@@ -443,7 +454,7 @@ describe GradebooksController do
           exporter = GradebookExporter.new(
             @course,
             @teacher,
-            { include_priors: false, include_sis_id: true }
+            { include_sis_id: true }
           )
           raw_csv = exporter.to_csv
           expect(raw_csv).to include("Déjà vu")
@@ -481,6 +492,12 @@ describe GradebooksController do
         get "show", :course_id => @course.id
         expect(response).to render_template("screenreader")
       end
+
+      it "requests groups without wiki_page assignments" do
+        get "show", :course_id => @course.id
+        url = controller.js_env[:GRADEBOOK_OPTIONS][:assignment_groups_url]
+        expect(URI.unescape(url)).to include 'exclude_assignment_submission_types[]=wiki_page'
+      end
     end
 
     it "renders the unauthorized page without gradebook authorization" do
@@ -499,6 +516,15 @@ describe GradebooksController do
       # tell it to use gradebook 2
       get 'change_gradebook_version', :course_id => @course.id, :version => 2
       expect(response).to redirect_to(:action => 'show')
+    end
+  end
+
+  describe "POST 'submissions_zip_upload'" do
+    it "requires authentication" do
+      course
+      assignment_model
+      post 'submissions_zip_upload', :course_id => @course.id, :assignment_id => @assignment.id, :submissions_zip => 'dummy'
+      assert_unauthorized
     end
   end
 
@@ -616,10 +642,42 @@ describe GradebooksController do
         expect(json[0]['submission']['submission_comments'].first['submission_comment']['comment']).to eq 'provisional!'
       end
 
+      it "includes the graded anonymously flag in the provisional grade object" do
+        submission = @assignment.submit_homework(@student, body: "hello")
+        post 'update_submission',
+          format: :json,
+          course_id: @course.id,
+          submission: { score: 100,
+                           comment: "provisional!",
+                           assignment_id: @assignment.id,
+                           user_id: @student.id,
+                           provisional: true,
+                           graded_anonymously: true }
+
+        submission.reload
+        pg = submission.provisional_grade(@teacher)
+        expect(pg.graded_anonymously).to eq true
+
+        submission = @assignment.submit_homework(@student, body: "hello")
+        post 'update_submission',
+          format: :json,
+          course_id: @course.id,
+          submission: { score: 100,
+                           comment: "provisional!",
+                           assignment_id: @assignment.id,
+                           user_id: @student.id,
+                           provisional: true,
+                           graded_anonymously: false }
+
+        submission.reload
+        pg = submission.provisional_grade(@teacher)
+        expect(pg.graded_anonymously).to eq false
+      end
+
       it "doesn't create a provisional grade when the student has one already (and isn't in the moderation set)" do
         submission = @assignment.submit_homework(@student, :body => "hello")
         other_teacher = teacher_in_course(:course => @course, :active_all => true).user
-        pg = submission.find_or_create_provisional_grade!(scorer: other_teacher)
+        submission.find_or_create_provisional_grade!(other_teacher)
 
         post 'update_submission', :format => :json, :course_id => @course.id,
           :submission => { :score => 100, :comment => "provisional!", :assignment_id => @assignment.id,
@@ -631,7 +689,7 @@ describe GradebooksController do
       it "should create a provisional grade even if the student has one but is in the moderation set" do
         submission = @assignment.submit_homework(@student, :body => "hello")
         other_teacher = teacher_in_course(:course => @course, :active_all => true).user
-        pg = submission.find_or_create_provisional_grade!(scorer: other_teacher)
+        submission.find_or_create_provisional_grade!(other_teacher)
 
         @assignment.moderated_grading_selections.create!(:student => @student)
 
@@ -644,7 +702,7 @@ describe GradebooksController do
       it "creates a final provisional grade" do
         submission = @assignment.submit_homework(@student, :body => "hello")
         other_teacher = teacher_in_course(:course => @course, :active_all => true).user
-        pg = submission.find_or_create_provisional_grade!(scorer: other_teacher) # create one so we can make a final
+        submission.find_or_create_provisional_grade!(other_teacher) # create one so we can make a final
 
         post 'update_submission',
           :format => :json,
@@ -717,6 +775,14 @@ describe GradebooksController do
         expect(response).not_to be_redirect
       end
     end
+
+    it 'includes the lti_retrieve_url in the js_env' do
+      user_session(@teacher)
+      @assignment = @course.assignments.create!(title: "A Title", submission_types: 'online_url,online_file')
+
+      get 'speed_grader', course_id: @course, assignment_id: @assignment.id
+      expect(assigns[:js_env][:lti_retrieve_url]).not_to be_nil
+    end
   end
 
   describe "POST 'speed_grader_settings'" do
@@ -746,9 +812,10 @@ describe GradebooksController do
   describe '#light_weight_ags_json' do
     it 'returns the necessary JSON for GradeCalculator' do
       ag = @course.assignment_groups.create! group_weight: 100
-      a  = ag.assignments.create! :submission_types => 'online_upload',
-                                  :points_possible  => 10,
-                                  :context  => @course
+      a  = ag.assignments.create! submission_types: 'online_upload',
+                                  points_possible: 10,
+                                  context: @course,
+                                  omit_from_final_grade: true
       AssignmentGroup.add_never_drop_assignment(ag, a)
       @controller.instance_variable_set(:@context, @course)
       @controller.instance_variable_set(:@current_user, @user)
@@ -767,6 +834,7 @@ describe GradebooksController do
               id: a.id,
               points_possible: 10,
               submission_types: ['online_upload'],
+              omit_from_final_grade: true
             }
           ],
         },
@@ -798,6 +866,7 @@ describe GradebooksController do
             due_at: nil,
             points_possible: 10,
             submission_types: ['online_upload'],
+            omit_from_final_grade: false
           }
         ],
       },

@@ -1,7 +1,12 @@
 <%
   css_bundle :login_confirm
   @headers = false
-  @body_classes << "modal body--login-confirmation"
+  if use_new_styles?
+    @body_classes << "full-width modal body--login-confirmation"
+  else
+    @body_classes << "modal body--login-confirmation"
+  end
+
   content_for :page_title, t(:page_title, "Registration Confirmation Failed")
 %>
 
@@ -21,9 +26,10 @@
     your password, click the "Forgot Password" link and you should get a new link
     that you can use to log in and re-set your password.},
     :wrapper => %{<a href="#{login_url}"><b>\\1</b></a>} %></p>
-    <% if Setting.get("show_feedback_link", "false") == "true" %>
-      <p><%= t :feedback, %{If you keep having problems, click the "Help" link below to search the guides
-      or to let us know what's going on.} %>
+    <% if show_feedback_link? %>
+      <p>
+      <%= t "If you keep having problems, click the \"%{link}\" link below to search the guides
+      or to let us know what's going on.", :link => help_link_name %>
     <% end %>
     </p>
   <% if use_new_styles? %></div><% end %>

@@ -73,7 +73,7 @@ describe Api do
     it 'should find record from other root account explicitly' do
       account = Account.create(name: 'new')
       @user = user_with_pseudonym username: "sis_user_1@example.com", account: account
-      Api.expects(:sis_parse_id).with("root_account:school:sis_login_id:sis_user_1@example.com", anything, anything).
+      Api.expects(:sis_parse_id).with("root_account:school:sis_login_id:sis_user_1@example.com", anything, anything, anything).
           returns(['LOWER(pseudonyms.unique_id)', [QuotedValue.new("LOWER('sis_user_1@example.com')"), account]])
       expect(@api.api_find(User, "root_account:school:sis_login_id:sis_user_1@example.com")).to eq @user
     end
@@ -333,7 +333,8 @@ describe Api do
       pluck_result = ["thing2", "thing3"]
       relation_result = mock(eager_load_values: nil, pluck: pluck_result)
       Api.expects(:sis_find_sis_mapping_for_collection).with(collection).returns({:lookups => {"id" => "test-lookup"}})
-      Api.expects(:sis_parse_ids).with("test-ids", {"id" => "test-lookup"}, anything).returns({"test-lookup" => ["thing1", "thing2"], "other-lookup" => ["thing2", "thing3"]})
+      Api.expects(:sis_parse_ids).with("test-ids", {"id" => "test-lookup"}, anything, root_account: "test-root-account").
+          returns({"test-lookup" => ["thing1", "thing2"], "other-lookup" => ["thing2", "thing3"]})
       Api.expects(:relation_for_sis_mapping_and_columns).with(collection, {"other-lookup" => ["thing2", "thing3"]}, {:lookups => {"id" => "test-lookup"}}, "test-root-account").returns(relation_result)
       expect(Api.map_ids("test-ids", collection, "test-root-account")).to eq ["thing1", "thing2", "thing3"]
     end
@@ -343,7 +344,8 @@ describe Api do
       pluck_result = ["thing2", "thing3"]
       relation_result = mock(eager_load_values: nil, pluck: pluck_result)
       Api.expects(:sis_find_sis_mapping_for_collection).with(collection).returns({:lookups => {"id" => "test-lookup"}})
-      Api.expects(:sis_parse_ids).with("test-ids", {"id" => "test-lookup"}, anything).returns({"other-lookup" => ["thing2", "thing3"]})
+      Api.expects(:sis_parse_ids).with("test-ids", {"id" => "test-lookup"}, anything, root_account: "test-root-account").
+          returns({"other-lookup" => ["thing2", "thing3"]})
       Api.expects(:relation_for_sis_mapping_and_columns).with(collection, {"other-lookup" => ["thing2", "thing3"]}, {:lookups => {"id" => "test-lookup"}}, "test-root-account").returns(relation_result)
       expect(Api.map_ids("test-ids", collection, "test-root-account")).to eq ["thing2", "thing3"]
     end
@@ -351,7 +353,8 @@ describe Api do
     it 'should not try and make params when no non-ar_id columns have returned with ar_id columns' do
       collection = mock()
       Api.expects(:sis_find_sis_mapping_for_collection).with(collection).returns({:lookups => {"id" => "test-lookup"}})
-      Api.expects(:sis_parse_ids).with("test-ids", {"id" => "test-lookup"}, anything).returns({"test-lookup" => ["thing1", "thing2"]})
+      Api.expects(:sis_parse_ids).with("test-ids", {"id" => "test-lookup"}, anything, root_account: "test-root-account").
+          returns({"test-lookup" => ["thing1", "thing2"]})
       Api.expects(:relation_for_sis_mapping_and_columns).never
       expect(Api.map_ids("test-ids", collection, "test-root-account")).to eq ["thing1", "thing2"]
     end
@@ -361,7 +364,8 @@ describe Api do
       object1 = mock()
       object2 = mock()
       Api.expects(:sis_find_sis_mapping_for_collection).with(collection).returns({:lookups => {"id" => "test-lookup"}})
-      Api.expects(:sis_parse_ids).with("test-ids", {"id" => "test-lookup"}, anything).returns({})
+      Api.expects(:sis_parse_ids).with("test-ids", {"id" => "test-lookup"}, anything, root_account: "test-root-account").
+          returns({})
       Api.expects(:sis_make_params_for_sis_mapping_and_columns).at_most(0)
       expect(Api.map_ids("test-ids", collection, "test-root-account")).to eq []
     end
@@ -479,7 +483,7 @@ describe Api do
   context 'relation_for_sis_mapping' do
     it 'should pass along the parsed ids to sis_make_params_for_sis_mapping_and_columns' do
       root_account = account_model
-      Api.expects(:sis_parse_ids).with([1,2,3], "lookups", anything).returns({"users.id" => [4,5,6]})
+      Api.expects(:sis_parse_ids).with([1,2,3], "lookups", anything, root_account: root_account).returns({"users.id" => [4,5,6]})
       Api.expects(:relation_for_sis_mapping_and_columns).with(User, {"users.id" => [4,5,6]}, {:lookups => "lookups"}, root_account).returns("params")
       expect(Api.relation_for_sis_mapping(User, {:lookups => "lookups"}, [1,2,3], root_account)).to eq "params"
     end
@@ -655,22 +659,39 @@ describe Api do
       expect(res).to eq html
     end
 
-    it 'prepends mobile css' do
-      student_in_course
-      account = @course.root_account
-      account.enable_feature!(:use_new_styles)
-      bc = BrandConfig.create(mobile_css_overrides: 'somewhere.css')
-      account.brand_config_md5 = bc.md5
-      account.save!
+    context "mobile css/js" do
+      before(:each) do
+        student_in_course
+        account = @course.root_account
+        account.enable_feature!(:use_new_styles)
+        bc = BrandConfig.create(mobile_css_overrides: 'somewhere.css')
+        account.brand_config_md5 = bc.md5
+        account.save!
 
-      html = "<p>a</p><p>b</p>"
+        @html = "<p>a</p><p>b</p>"
 
-      k = klass.new
-      k.stubs(:mobile_device?).returns(true)
-      res = k.api_user_content(html, @course, @student)
-      expect(res).to eq <<-HTML.strip
-<link rel="stylesheet" href="somewhere.css"><p>a</p><p>b</p>
-      HTML
+        @k = klass.new
+      end
+
+      it 'prepends mobile css when not coming from a web browser' do
+        res = @k.api_user_content(@html, @course, @student)
+        expect(res).to eq <<-HTML.strip
+  <link rel="stylesheet" href="somewhere.css"><p>a</p><p>b</p>
+        HTML
+      end
+
+      it 'does not prepend mobile css when coming from a web browser' do
+        @k.stubs(:in_app?).returns(true)
+        res = @k.api_user_content(@html, @course, @student)
+        expect(res).to eq "<p>a</p><p>b</p>"
+      end
+
+      it 'does not prepend mobile css when coming from a web browser, even if it is a mobile browser' do
+        @k.stubs(:in_app?).returns(true)
+        @k.stubs(:mobile_device?).returns(true)
+        res = @k.api_user_content(@html, @course, @student)
+        expect(res).to eq "<p>a</p><p>b</p>"
+      end
     end
   end
 
@@ -774,6 +795,32 @@ describe Api do
             to eq 75
         end
       end
+    end
+  end
+
+  context ".jsonapi_paginate" do
+    let(:request) { stub('request', query_parameters: {}) }
+    let(:response) { stub('response', headers: {}) }
+    let(:controller) { stub('controller', request: request, response: response, params: {}) }
+    let(:collection) { [1, 2, 3] }
+
+    it "should return the links in the headers" do
+      Api.jsonapi_paginate(collection, controller, 'example.com', page: 1, per_page: 1)
+      link = controller.response.headers['Link']
+      expect(link).not_to be_empty
+      expect(link).to include('<example.com?page=1&per_page=1>; rel="current"')
+      expect(link).to include(',<example.com?page=2&per_page=1>; rel="next"')
+      expect(link).to include(',<example.com?page=1&per_page=1>; rel="first"')
+      expect(link).to include(',<example.com?page=3&per_page=1>; rel="last"')
+    end
+
+    it "should return the links in the meta" do
+      (data, meta) = Api.jsonapi_paginate(collection, controller, 'example.com', page: 1, per_page: 1)
+      expect(meta).not_to be_empty
+      expect(meta[:pagination][:current]).to eq('example.com?page=1&per_page=1')
+      expect(meta[:pagination][:next]).to eq('example.com?page=2&per_page=1')
+      expect(meta[:pagination][:last]).to eq('example.com?page=3&per_page=1')
+      expect(data).to eq [1]
     end
   end
 

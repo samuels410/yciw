@@ -313,7 +313,7 @@ class EnrollmentsApiController < ApplicationController
         end
 
         grading_period = @context.courses.lazy.map do |course|
-          GradingPeriod.context_find(course, params[:grading_period_id])
+          GradingPeriod.for(course).find_by(id: params[:grading_period_id])
         end.detect(&:present?)
       else
         unless multiple_grading_periods?
@@ -321,7 +321,7 @@ class EnrollmentsApiController < ApplicationController
           return false
         end
 
-        grading_period = GradingPeriod.context_find(@context, params[:grading_period_id])
+        grading_period = GradingPeriod.for(@context).find_by(id: params[:grading_period_id])
       end
 
       unless grading_period
@@ -414,6 +414,13 @@ class EnrollmentsApiController < ApplicationController
   # @argument enrollment[self_enrolled] [Boolean]
   #   If true, marks the enrollment as a self-enrollment, which gives
   #   students the ability to drop the course if desired. Defaults to false.
+  #
+  # @argument enrollment[associated_user_id] [Integer]
+  #   For an observer enrollment, the ID of a student to observe. The
+  #   caller must have +manage_students+ permission in the course.
+  #   This is a one-off operation; to automatically observe all a
+  #   student's enrollments (for example, as a parent), please use
+  #   the {api:UserObserveesController#create User Observees API}.
   #
   # @example_request
   #   curl https://<canvas>/api/v1/courses/:course_id/enrollments \
@@ -528,8 +535,9 @@ class EnrollmentsApiController < ApplicationController
     end
   end
 
-  # @API Conclude or deactivate an enrollment
-  # Delete, conclude or deactivate an enrollment.
+  # @API Conclude, deactivate, or delete an enrollment
+  # Conclude, deactivate, or delete an enrollment. If the +task+ argument isn't given, the enrollment
+  # will be concluded.
   #
   # @argument task [String, "conclude"|"delete"|"inactivate"|"deactivate"]
   #   The action to take on the enrollment.

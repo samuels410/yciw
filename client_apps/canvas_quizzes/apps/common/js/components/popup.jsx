@@ -1,6 +1,6 @@
 /** @jsx React.DOM */
 define(function(require) {
-  var React = require('react');
+  var React = require('old_version_of_react_used_by_canvas_quizzes_client_apps');
   var $ = require('canvas_packages/jquery');
   var _ = require('lodash');
   var jQuery_qTip = require('qtip');
@@ -219,18 +219,21 @@ define(function(require) {
     },
 
     render: function() {
+      var screenReaderProps = this.getContentProps(this.props)
+
       return (
-        <div tabIndex="-1" className="inline">
+        <div className="inline">
           {this.props.children}
           {this.props.screenReaderSupport &&
             <ScreenReaderContent
               ref="srContent"
-              tabIndex="0"
+              tabIndex="-1"
               aria-live="assertive"
               aria-atomic="true"
               aria-relevant="additions"
               role="note"
-              children={this.props.content(this.getContentProps(this.props))} />
+              children={this.props.content(screenReaderProps)}
+            />
           }
         </div>
       );

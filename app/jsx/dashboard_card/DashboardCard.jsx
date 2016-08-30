@@ -49,10 +49,6 @@ define([
       this.setState({ nicknameInfo: this.nicknameInfo(nickname) })
     },
 
-    hasLinks: function() {
-      return this.props.links.filter(link => !link.hidden).length > 0;
-    },
-
     getInitialState: function() {
       return _.extend({ nicknameInfo: this.nicknameInfo(this.props.shortName) },
         CourseActivitySummaryStore.getStateForCourse(this.props.id))
@@ -170,20 +166,43 @@ define([
       });
     },
 
+    renderHeaderHero: function(){
+      if (this.props.imagesEnabled && this.props.image) {
+        return (
+          <div
+            className="ic-DashboardCard__header_image"
+            style={{backgroundImage: `url(${this.props.image})`}}
+          >
+            <div
+              className="ic-DashboardCard__header_hero"
+              style={{backgroundColor: this.props.backgroundColor, opacity: 0.6}}
+              onClick={this.headerClick}
+            >
+            </div>
+          </div>
+        );
+      }
+      else {
+        return (
+          <div
+            className="ic-DashboardCard__header_hero"
+            style={{backgroundColor: this.props.backgroundColor}}
+            onClick={this.headerClick}>
+          </div>
+        );
+      }
+    },
+
     render: function () {
       return (
         <div
           className="ic-DashboardCard"
           ref="cardDiv"
           style={{borderBottomColor: this.props.backgroundColor}}
+          aria-label={this.props.originalName}
         >
-
           <div className="ic-DashboardCard__header">
-            <div
-              className="ic-DashboardCard__header_hero"
-              style={{backgroundColor: this.props.backgroundColor}}
-              onClick={this.headerClick}>
-            </div>
+            {this.renderHeaderHero()}
             <div
               className="ic-DashboardCard__header_content"
               onClick={this.headerClick}>
@@ -207,23 +226,18 @@ define([
               className="Button Button--icon-action-rev ic-DashboardCard__header-button"
               onClick={this.settingsClick}
               ref="settingsToggle">
-              <i className="icon-settings" aria-hidden="true" />
+              <i className="icon-compose" aria-hidden="true" />
                 <span className="screenreader-only">
                   { I18n.t("Choose a color or course nickname for %{course}", { course: this.state.nicknameInfo.nickname}) }
                 </span>
             </button>
           </div>
-          <div
-            className={
-              (this.hasLinks() ?
-                "ic-DashboardCard__action-container"
-                :
-                "ic-DashboardCard__action-container ic-DashboardCard__action-container--is-empty"
-              )
-            }
+          <nav
+            className="ic-DashboardCard__action-container"
+            aria-label={ I18n.t("Actions for %{course}", { course: this.state.nicknameInfo.nickname}) }
           >
             { this.linksForCard() }
-          </div>
+          </nav>
           { this.colorPickerIfEditing() }
         </div>
       );

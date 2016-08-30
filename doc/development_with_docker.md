@@ -9,14 +9,22 @@ way to get started developing Canvas.
 
 #### OS X
 
-On OS X, make sure you have the following installed:
+On OS X, you can opt for [dinghy](https://github.com/codekitchen/dinghy)
+or [Docker for Mac](https://docs.docker.com/docker-for-mac/).  They each have
+various strengths.  If you don't know which to choose, you should
+probably match your team.  We have engineers using both at Instructure
+so either one is fine.
 
-##### VMWare Fusion
+##### Dinghy
+
+Make sure you have the following installed:
+
+* VMWare Fusion
 
 Preferred over VirtualBox for performance reasons. (although Virtualbox 5 is
 pretty close, about 90% of VMWare fusion in basic testing)
 
-##### Dinghy
+* Dinghy
 
 You'll want to walk through https://github.com/codekitchen/dinghy#install, but
 when you run create, you may want to increase the system resources you give the
@@ -31,6 +39,23 @@ is happy.
 
 Dinghy currently requires OS X Yosemite. Make sure you're using the most recent
 Dinghy release, or else you'll probably have a bad time.
+
+##### Docker for Mac
+
+You can install Docker for Mac to get a very similar experience
+to the native Linux experience, but from your OS X machine.
+
+Download the [stable dmg](https://download.docker.com/mac/stable/Docker.dmg)
+from the [Docker for Mac website](https://docs.docker.com/docker-for-mac/).
+Or the [beta](https://download.docker.com/mac/beta/Docker.dmg) if you want to get cray.
+
+After installing docker for Mac, you will need
+[dory](https://github.com/FreedomBen/dory) for the reverse proxy
+portion that is provided by dinghy.  Install with:
+
+```
+gem install dory
+```
 
 #### Linux
 
@@ -100,6 +125,23 @@ NOTE: Adding non-privileged users to the docker group can be
 a security risk.  Don't add users to this group that shouldn't
 have root privileges.  Dev responsibly my friends.
 
+##### Install dory (optional)
+
+People using dinghy will have a reverse proxy that allows them to access
+canvas at `http://canvas.docker`.  On Linux and Docker for Mac, you will need
+to run your own reverse proxy (or access your containers via IP/port).
+
+Many people at Instructure are using [dory](https://github.com/FreedomBen/dory)
+for this as it uses the same
+proxy under the hood as dinghy which gives you maximum compatibility.
+Detailed instructions are available at the
+[github page](https://github.com/FreedomBen/dory), but you can
+install dory with:
+
+```
+gem install dory
+```
+
 #### Docker-Compose
 
 ##### OS X
@@ -141,7 +183,7 @@ These commands should get you going?
 
 ```bash
 cp docker-compose/config/* config/
-docker-compose run --rm web script/docker_first_time_setup.sh
+docker-compose run --rm web script/docker_first_time_build.sh
 ```
 
 #### Not in a hurry. Or I want to see whats happening
@@ -173,7 +215,11 @@ $ docker-compose up
 ```
 
 If on OS X and using dinghy, you can now open Canvas at http://canvas.docker/.
-If on Linux, canvas is listening and available on localhost port 3000 (http://localhost:3000)
+
+If on Linux or Docker for Mac, canvas is listening and available on
+localhost port 3000 (http://localhost:3000).
+[dory](https://github.com/FreedomBen/dory) can make
+http://canvas.docker/ work for you as well with minimal effort.
 
 ## Normal Usage
 
@@ -191,12 +237,60 @@ $ docker-compose run --rm web bundle exec rake canvas:compile_assets
 Changes you're making are not showing up? See the Caveats section below.
 Ctrl-C your `docker-compose up` window and restart.
 
+## Debugging
+
+A byebug server is running in development mode on the web and job containers
+to allow you to remotely control any sessions where `byebug` has yielded
+execution. To use it, you will need to enable `REMOTE_DEBUGGING_ENABLED` in your
+`docker-compose.override.yml` file in your app's root directory. If you don't have
+this file, you will need to create it and add the following:
+
+```
+web: &WEB
+  environment:
+    REMOTE_DEBUGGING_ENABLED: 'true'
+```
+
+You can attach to the byebug server once the container is started:
+
+Debugging web:
+
+```
+docker-compose exec web bin/byebug-remote
+```
+
+Debugging jobs:
+
+```
+docker-compose exec jobs bin/byebug-remote
+```
+
+### Prefer pry?
+
+Unfortunately you can't start a pry session in a remote byebug session. What
+you can do instead is use `pry-remote`.
+
+1. Add `pry-remote` to your Gemfile
+2. Run `docker-compose run --rm web bundle install` to install `pry-remote`
+3. Add `binding.remote_pry` in code where you want execution to yield a pry REPL
+4. Launch pry-remote and have it wait for execution to yield to you:
+```
+docker-compose exec web pry-remote --wait
+```
+
 ## Cassandra
 
 If you're using the analytics package, you'll also need Cassandra. The
 Cassandra configuration is commented out in the docker-compose file; uncomment
 it and also uncomment the Cassandra configuration in cassandra.yml. Also follow
 the directions in cassandra.yml.example.
+
+## Email
+
+Email is often sent through background jobs if you spin up the `jobs` container.
+If you would like to test or preview any notifications, simply trigger the email
+through it's normal actions, and it should immediately show up in the emulated
+webmail inbox available here: http://mail.canvas.docker/
 
 ## Running tests
 
@@ -206,13 +300,24 @@ $ docker-compose run --rm web bundle exec rspec spec
 
 ### Selenium
 
-The container used to run the selenium browser is commented out of the
-docker-compose file by default. To run selenium, just uncomment those lines,
-rerun `docker-compose build`, and when you run your tests you can watch
-the browser:
+The container used to run the selenium browser is only started when spinning up
+all docker-compose containers, or when specified explicitly. The selenium
+container needs to be started before running any specs that require selenium.
 
+```sh
+docker-compose up selenium
 ```
-$ open vnc://secret:secret@selenium.docker/
+
+With the container running, you should be able to open a VNC session:
+
+```sh
+open vnc://secret:secret@selenium.docker/
+```
+
+Now just run your choice of selenium specs:
+
+```sh
+docker-compose run --rm web bundle exec rspec spec/selenium/dashboard_spec.rb
 ```
 
 ## Troubleshooting
@@ -249,4 +354,27 @@ Or it can be disabled permanently by editing `/etc/selinux/config` thusly:
 
 ```
 SELINUX=disabled
+```
+
+If you are having performance or other issues with your web container
+starting up, you may try adding `DISABLE_SPRING: 1` to your
+`docker-compose.override.yml` file, like so:
+
+```
+web: &WEB
+  environment:
+    DISABLE_SPRING: 1
+```
+
+If you are getting DNS resolution errors, and you use Docker for Mac or Linux,
+make sure [dory](https://github.com/FreedomBen/dory) is running:
+
+```
+dory status
+```
+
+If dory is not running, you can start it with:
+
+```
+dory up
 ```

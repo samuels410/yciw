@@ -19,7 +19,7 @@ describe "better_file_browsing" do
     end
     it "should load correct column values on uploaded file", priority: "1", test_id: 133129 do
       time_current = @course.attachments.first.updated_at.strftime("%l:%M%P").strip
-      expect(ff('.media-body')[0].text).to eq 'example.pdf'
+      expect(ff('.ef-name-col__text')[0].text).to eq 'example.pdf'
       expect(ff('.ef-date-created-col')[1].text).to eq time_current
       expect(ff('.ef-date-modified-col')[1].text).to eq time_current
       expect(ff('.ef-size-col')[1].text).to eq '194 KB'
@@ -31,7 +31,7 @@ describe "better_file_browsing" do
         file_rename_to = "Example_edited.pdf"
         edit_name_from_cog_icon(file_rename_to)
         wait_for_ajaximations
-        expect(fln("example.pdf")).not_to be_present
+        expect(f("#content")).not_to contain_link("example.pdf")
         expect(fln(file_rename_to)).to be_present
       end
       it "should delete file", priority: "1", test_id: 133128 do
@@ -44,20 +44,16 @@ describe "better_file_browsing" do
       it "should unpublish and publish a file", priority: "1", test_id: 133096 do
         set_item_permissions(:unpublish, :cloud_icon)
         expect(f('.btn-link.published-status.unpublished')).to be_displayed
-        expect(driver.find_element(:class => 'unpublished')).to be_displayed
         set_item_permissions(:publish, :cloud_icon)
         expect(f('.btn-link.published-status.published')).to be_displayed
-        expect(driver.find_element(:class => 'published')).to be_displayed
       end
       it "should make file available to student with link", priority: "1", test_id: 223504 do
         set_item_permissions(:restricted_access, :available_with_link, :cloud_icon)
         expect(f('.btn-link.published-status.hiddenState')).to be_displayed
-        expect(driver.find_element(:class => 'hiddenState')).to be_displayed
       end
       it "should make file available to student within given timeframe", priority: "1", test_id: 223505 do
         set_item_permissions(:restricted_access, :available_with_timeline, :cloud_icon)
         expect(f('.btn-link.published-status.restricted')).to be_displayed
-        expect(driver.find_element(:class => 'restricted')).to be_displayed
       end
     end
 
@@ -69,20 +65,16 @@ describe "better_file_browsing" do
       it "should unpublish and publish a file", priority: "1", test_id: 223503 do
         set_item_permissions(:unpublish, :toolbar_menu)
         expect(f('.btn-link.published-status.unpublished')).to be_displayed
-        expect(driver.find_element(:class => 'unpublished')).to be_displayed
         set_item_permissions(:publish, :toolbar_menu)
         expect(f('.btn-link.published-status.published')).to be_displayed
-        expect(driver.find_element(:class => 'published')).to be_displayed
       end
       it "should make file available to student with link from toolbar", priority: "1", test_id: 193158 do
         set_item_permissions(:restricted_access, :available_with_link, :toolbar_menu)
         expect(f('.btn-link.published-status.hiddenState')).to be_displayed
-        expect(driver.find_element(:class => 'hiddenState')).to be_displayed
       end
       it "should make file available to student within given timeframe from toolbar", priority: "1", test_id: 193159 do
         set_item_permissions(:restricted_access, :available_with_timeline, :toolbar_menu)
         expect(f('.btn-link.published-status.restricted')).to be_displayed
-        expect(driver.find_element(:class => 'restricted')).to be_displayed
       end
 
       it "should disable the file preview button when a folder is selected" do
@@ -172,10 +164,10 @@ describe "better_file_browsing" do
       add_folder("destination_folder")
       move(file_name, 0, :cog_icon)
       wait_for_ajaximations
-      expect(f("#flash_message_holder").text).to eq "#{file_name} moved to destination_folder\nClose"
+      expect(f("#flash_message_holder").text).to eq "#{file_name} moved to destination_folder"
       wait_for_ajaximations
-      expect(ff('.media-body')[0].text).not_to eq file_name
-      ff('.media-body')[2].click
+      expect(ff('.ef-name-col__text')[0].text).not_to eq file_name
+      ff('.ef-name-col__text')[2].click
       wait_for_ajaximations
       expect(fln(file_name)).to be_displayed
     end
@@ -184,10 +176,10 @@ describe "better_file_browsing" do
       add_folder("destination_folder")
       move(file_name, 0, :toolbar_menu)
       wait_for_ajaximations
-      expect(f("#flash_message_holder").text).to eq "#{file_name} moved to destination_folder\nClose"
+      expect(f("#flash_message_holder").text).to eq "#{file_name} moved to destination_folder"
       wait_for_ajaximations
-      expect(ff('.media-body')[0].text).not_to eq file_name
-      ff('.media-body')[2].click
+      expect(ff('.ef-name-col__text')[0].text).not_to eq file_name
+      ff('.ef-name-col__text')[2].click
       wait_for_ajaximations
       expect(fln(file_name)).to be_displayed
     end
@@ -196,10 +188,10 @@ describe "better_file_browsing" do
       add_folder("destination_folder")
       move_multiple_using_toolbar(files)
       wait_for_ajaximations
-      expect(f("#flash_message_holder").text).to eq "#{files.count} items moved to destination_folder\nClose"
+      expect(f("#flash_message_holder").text).to eq "#{files.count} items moved to destination_folder"
       wait_for_ajaximations
-      expect(ff('.media-body')[0].text).not_to eq files[0]
-      ff('.media-body')[0].click
+      expect(ff('.ef-name-col__text')[0].text).not_to eq files[0]
+      ff('.ef-name-col__text')[0].click
       wait_for_ajaximations
       files.each do |file|
         expect(fln(file)).to be_displayed
@@ -216,7 +208,7 @@ describe "better_file_browsing" do
         move(file_name, 0, :cog_icon, destination)
         wait_for_ajaximations
         final_destination = destination.split('/').pop
-        expect(f("#flash_message_holder").text).to eq "#{file_name} moved to #{final_destination}\nClose"
+        expect(f("#flash_message_holder").text).to eq "#{file_name} moved to #{final_destination}"
         wait_for_ajaximations
         fj("a.treeLabel span:contains('#{final_destination}')").click
         wait_for_ajaximations
@@ -231,6 +223,7 @@ describe "better_file_browsing" do
       end
 
       it "should move a file to a destination if contexts are different" do
+        skip_if_chrome('research')
         get "/courses/#{@course.id}/files"
         folder_name = "destination_folder"
         add_folder(folder_name)
@@ -239,26 +232,12 @@ describe "better_file_browsing" do
       end
 
       it "should move a file to a destination if the contexts are the same" do
+        skip_if_chrome('research')
         get "/files"
         folder_name = "destination_folder"
         add_folder(folder_name)
         search_and_move(file_name: "a_file.txt", destination: "My Files/#{folder_name}")
       end
-    end
-  end
-
-  context "File Downloads" do
-    it "should download a file from top toolbar successfully" do
-      skip("Skipped until issue with firefox on OSX is resolved")
-      download_from_toolbar
-    end
-    it "should download a file from cog" do
-      skip("Skipped until issue with firefox on OSX is resolved")
-      download_from_cog_icon
-    end
-    it "should download a file from file preview successfully" do
-      skip("Skipped until issue with firefox on OSX is resolved")
-      download_from_preview
     end
   end
 
@@ -281,6 +260,27 @@ describe "better_file_browsing" do
     end
   end
 
+  context "File Preview" do
+    before(:each) do
+      course_with_teacher_logged_in
+      add_file(fixture_file_upload('files/a_file.txt', 'text/plain'),
+               @course, "a_file.txt")
+      add_file(fixture_file_upload('files/b_file.txt', 'text/plain'),
+               @course, "b_file.txt")
+      get "/courses/#{@course.id}/files"
+    end
+
+    it "should switch files in preview when clicking the arrows" do
+      fln("a_file.txt").click
+      ff('.ef-file-preview-container-arrow-link')[0].click
+      wait_for_ajaximations
+      expect(f('.ef-file-preview-header-filename').text).to eq('b_file.txt')
+      ff('.ef-file-preview-container-arrow-link')[1].click
+      wait_for_ajaximations
+      expect(f('.ef-file-preview-header-filename').text).to eq('a_file.txt')
+    end
+  end
+
   context "Usage Rights Dialog" do
     def set_usage_rights_in_modal(rights = 'creative_commons')
       set_value f('.UsageRightsSelectBox__select'), rights
@@ -297,7 +297,7 @@ describe "better_file_browsing" do
     end
 
     def react_modal_hidden
-      expect(f('.ReactModal__Content')).to eq(nil)
+      expect(f("body")).not_to contain_css('.ReactModal__Content')
     end
 
     before :each do
@@ -352,7 +352,7 @@ describe "better_file_browsing" do
         react_modal_hidden
         # a11y: focus should go back to the element that was clicked.
         check_element_has_focus(f('.Toolbar__ManageUsageRights'))
-        ff('.media-body')[0].click
+        ff('.ef-name-col__text')[0].click
         wait_for_ajaximations
         verify_usage_rights_ui_updates
       end
@@ -360,16 +360,14 @@ describe "better_file_browsing" do
         f('.UsageRightsIndicator__openModal').click
         wait_for_ajaximations
         set_value f('.UsageRightsSelectBox__select'), 'fair_use'
-        expect(f('.UsageRightsSelectBox__creativeCommons')).to eq(nil)
+        expect(f('.UsageRightsSelectBox__container')).not_to contain_css('.UsageRightsSelectBox__creativeCommons')
       end
       it "should publish warning when usage rights is not selected", priority: "2", test_id: 133135 do
         expect(f('.icon-warning')).to be_present
         f('.icon-publish').click
         wait_for_ajaximations
         f('.form-controls .btn-primary').click
-        keep_trying_until do
-           expect(f('.errorBox')).to be_present
-        end
+        expect(f('.errorBox')).to be_present
       end
     end
 
@@ -401,9 +399,9 @@ describe "better_file_browsing" do
         file_name = "amazing_file.txt"
         move(file_name, 1, :cog_icon)
         wait_for_ajaximations
-        expect(f("#flash_message_holder").text).to eq "#{file_name} moved to course files\nClose"
+        expect(f("#flash_message_holder").text).to eq "#{file_name} moved to course files"
         wait_for_ajaximations
-        expect(ff('.media-body')[1].text).to eq file_name
+        expect(ff('.ef-name-col__text')[1].text).to eq file_name
       end
 
       it "should show modal on how to handle duplicates when copying files", priority: "1", test_id: 194250 do
@@ -414,9 +412,9 @@ describe "better_file_browsing" do
         expect(f("#renameFileMessage").text).to eq "An item named \"#{file_name}\" already exists in this location. Do you want to replace the existing file?"
         ff(".btn-primary")[2].click
         wait_for_ajaximations
-        expect(f("#flash_message_holder").text).to eq "#{file_name} moved to course files\nClose"
+        expect(f("#flash_message_holder").text).to eq "#{file_name} moved to course files"
         wait_for_ajaximations
-        expect(ff('.media-body')[0].text).to eq file_name
+        expect(ff('.ef-name-col__text')[0].text).to eq file_name
       end
     end
   end
