@@ -66,3 +66,21 @@
   }).call(this);
   </script>
 <% end %>
+
+<script type="text/javascript" charset="utf-8">
+  $(window).load(function() {
+    console.log("load");
+    //create teacher only html on course pages
+    if (document.URL.indexOf('courses') > -1 && ENV.current_user_roles.indexOf('student') > -1) {
+
+      hide(document.querySelectorAll('.target1'));
+
+      function hide (elements) {
+        elements = elements.length ? elements : [elements];
+        for (var index = 0; index < elements.length; index++) {
+          elements[index].style.display = 'none';
+        }
+      }
+    }
+  });
+</script>
