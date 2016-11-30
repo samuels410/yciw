@@ -108,6 +108,7 @@ require 'securerandom'
 #     }
 #
 class FilesController < ApplicationController
+  protect_from_forgery except: :show
   before_filter :require_user, only: :create_pending
   before_filter :require_context, except: [
     :assessment_question_show, :image_thumbnail, :show_thumbnail, :preflight,
