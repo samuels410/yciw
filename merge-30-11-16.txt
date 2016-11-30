@@ -1,0 +1,71 @@
+Removing spec/views/users/registered.html.erb_spec.rb
+Removing spec/views/shared/_assignment_group.html.erb_spec.rb
+Removing spec/selenium/manage_old_groups_spec.rb
+Removing spec/selenium/helpers/multiple_grading_periods_common.rb
+Removing spec/selenium/grading_standards_mgp_spec.rb
+Auto-merging spec/selenium/grades/student_grades_summary/grades_spec.rb
+Auto-merging spec/selenium/grades/student_grades_summary/grades_public_spec.rb
+Auto-merging spec/selenium/grades/student_grades_page/student_grades_page_spec.rb
+Auto-merging spec/selenium/grades/student_grades_page/gradebook_student_spec.rb
+Auto-merging spec/selenium/grades/student_grades_page/gradebook_student_common.rb
+Auto-merging spec/selenium/grades/student_grades_page/grade_summary_presenter_spec.rb
+Auto-merging spec/selenium/grades/speedgrader/speedgrader_teacher_submission_spec.rb
+Auto-merging spec/selenium/grades/speedgrader/speedgrader_teacher_spec.rb
+Auto-merging spec/selenium/grades/speedgrader/speedgrader_spec.rb
+Auto-merging spec/selenium/grades/speedgrader/speedgrader_rubric_spec.rb
+Auto-merging spec/selenium/grades/speedgrader/speedgrader_quiz_submissions_spec.rb
+Auto-merging spec/selenium/grades/speedgrader/speedgrader_moderated_grading_spec.rb
+Auto-merging spec/selenium/grades/speedgrader/speedgrader_grade_display_spec.rb
+Auto-merging spec/selenium/grades/speedgrader/speedgrader_discussion_submissions_spec.rb
+Auto-merging spec/selenium/grades/speedgrader/speedgrader_comments_spec.rb
+Auto-merging spec/selenium/grades/grading_standards/grading_standards_spec.rb
+Auto-merging spec/selenium/grades/grading_standards/grading_periods_course_spec.rb
+Auto-merging spec/selenium/grades/gradebook/gradebook_uploads_spec.rb
+Auto-merging spec/selenium/grades/gradebook/gradebook_total_points_toggle_spec.rb
+Auto-merging spec/selenium/grades/gradebook/gradebook_pagination_spec.rb
+Auto-merging spec/selenium/grades/gradebook/gradebook_concluded_courses_and_enrollments_spec.rb
+Auto-merging spec/selenium/grades/gradebook/gradebook_a11y_spec.rb
+Auto-merging spec/selenium/grades/gradebook/assignments_omit_from_final_grade_spec.rb
+Removing spec/selenium/gradebook/gradebook2/gradebook2_multiple_grading_periods_spec.rb
+Removing spec/models/moderated_grading/selection_spec.rb
+Removing spec/migrations/fix_imported_question_media_comments_spec.rb
+Removing spec/factories/enrollment_term_factory.rb
+Auto-merging spec/controllers/lti_api_controllers_spec.rb
+Auto-merging public/web-app-manifest/explanation.txt
+Auto-merging public/locales/en.yml
+CONFLICT (content): Merge conflict in public/locales/en.yml
+Removing public/javascripts/bower/jquery.smartbanner/windowstest.html
+Removing public/javascripts/bower/jquery.smartbanner/jquery.smartbanner.js
+Removing public/javascripts/bower/jquery.smartbanner/jquery.smartbanner.css
+Removing public/javascripts/bower/jquery.smartbanner/dark_background_stripes.gif
+Removing public/javascripts/bower/jquery.smartbanner/README.md
+Removing public/javascripts/bower/jquery.smartbanner/LICENSE
+Removing public/javascripts/bower/jquery.smartbanner/.bower.json
+CONFLICT (modify/delete): lib/canvas/help.rb deleted in f449abc8bfd6f787355b95715c47a7fe72e152cc and modified in HEAD. Version HEAD of lib/canvas/help.rb left in tree.
+Removing gems/canvas_ext/lib/canvas_ext/date.rb
+Auto-merging config/routes.rb
+Auto-merging config/locales/generated/en.yml
+CONFLICT (content): Merge conflict in config/locales/generated/en.yml
+Auto-merging config/locales/en-GB.yml
+CONFLICT (content): Merge conflict in config/locales/en-GB.yml
+Auto-merging config/locales/en-AU.yml
+CONFLICT (content): Merge conflict in config/locales/en-AU.yml
+Removing config/canvas_rails4_2.rb
+Removing app/views/users/registered.html.erb
+Removing app/views/users/delete.html.erb
+Removing app/views/shared/_assignment_group.html.erb
+Removing app/views/shared/_assignment.html.erb
+Auto-merging app/views/layouts/application.html.erb
+CONFLICT (content): Merge conflict in app/views/layouts/application.html.erb
+Removing app/views/groups/edit.html.erb
+Removing app/views/assignments/_external_grader_sidebar.html.erb
+Removing app/stylesheets/sass-functions/_math.scss
+Removing app/stylesheets/sass-functions/_ensure-contrast.scss
+Removing app/stylesheets/bundles/smartbanner.scss
+Auto-merging app/jsx/shared/CheatDepaginator.jsx
+Auto-merging app/controllers/files_controller.rb
+Removing app/coffeescripts/react/shared/utils/withReactElement.coffee
+Removing app/coffeescripts/bundles/smartbanner.coffee
+Removing app/coffeescripts/bundles/legacy/users_registered.coffee
+Removing app/coffeescripts/bundles/group_settings.coffee
+Automatic merge failed; fix conflicts and then commit the result.
