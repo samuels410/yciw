@@ -572,7 +572,7 @@ module ApplicationHelper
     parts.join(t('#title_separator', ': '))
   end
 
-  def cache(name = {}, options = nil, &block)
+  def cache(name = {}, options = {}, &block)
     unless options && options[:no_locale]
       name = name.cache_key if name.respond_to?(:cache_key)
       name = name + "/#{I18n.locale}" if name.is_a?(String)
@@ -583,8 +583,12 @@ module ApplicationHelper
   def map_courses_for_menu(courses, opts={})
     mapped = courses.map do |course|
       tabs = opts[:include_section_tabs] && available_section_tabs(course)
-      presenter = CourseForMenuPresenter.new(course, tabs, @current_user)
+      presenter = CourseForMenuPresenter.new(course, tabs, @current_user, @domain_root_account)
       presenter.to_h
+    end
+
+    if @domain_root_account.feature_enabled?(:dashcard_reordering)
+      mapped = mapped.sort_by {|h| h[:position] || ::CanvasSort::Last}
     end
 
     mapped

@@ -9,9 +9,12 @@ define [
   'compiled/collections/AssignmentOverrideCollection'
   'compiled/collections/DateGroupCollection'
   'i18n!assignments'
-  'compiled/util/GradingPeriods'
+  'jsx/grading/helpers/GradingPeriodsHelper'
   'timezone'
-], ($, _, {Model}, DefaultUrlMixin, TurnitinSettings, VeriCiteSettings, DateGroup, AssignmentOverrideCollection, DateGroupCollection, I18n, GradingPeriods, tz) ->
+], ($, _, {Model}, DefaultUrlMixin, TurnitinSettings, VeriCiteSettings, DateGroup, AssignmentOverrideCollection, DateGroupCollection, I18n, GradingPeriodsHelper, tz) ->
+
+  isAdmin = () ->
+    _.contains(ENV.current_user_roles, 'admin')
 
   class Assignment extends Model
     @mixin DefaultUrlMixin
@@ -90,7 +93,10 @@ define [
       @get('frozen_attributes')? && !@frozen()
 
     canDelete: =>
-      !@hasDueDateInClosedGradingPeriod() && !@frozen()
+      not @inClosedGradingPeriod() and not @frozen()
+
+    canMove: =>
+      not @inClosedGradingPeriod() and not _.include(@frozenAttributes(), 'assignment_group_id')
 
     freezeOnCopy: =>
       @get('freeze_on_copy')
@@ -101,8 +107,9 @@ define [
     frozenAttributes: =>
       @get('frozen_attributes') || []
 
-    hasDueDateInClosedGradingPeriod: =>
-      @get('has_due_date_in_closed_grading_period')
+    inClosedGradingPeriod: =>
+      return false if isAdmin()
+      @get('in_closed_grading_period')
 
     gradingType: (gradingType) =>
       return @get('grading_type') || 'points' unless gradingType
@@ -342,21 +349,23 @@ define [
 
     toView: =>
       fields = [
-        'name', 'dueAt','description','pointsPossible', 'lockAt', 'unlockAt',
+        'name', 'dueAt', 'description', 'pointsPossible', 'lockAt', 'unlockAt',
         'gradingType', 'notifyOfUpdate', 'peerReviews', 'automaticPeerReviews',
         'peerReviewCount', 'peerReviewsAssignAt', 'anonymousPeerReviews',
-        'acceptsOnlineUpload','acceptsMediaRecording', 'submissionType',
+        'acceptsOnlineUpload', 'acceptsMediaRecording', 'submissionType',
         'acceptsOnlineTextEntries', 'acceptsOnlineURL', 'allowedExtensions',
         'restrictFileExtensions', 'isOnlineSubmission', 'isNotGraded',
         'isExternalTool', 'externalToolUrl', 'externalToolNewTab',
-        'turnitinAvailable','turnitinEnabled', 'vericiteAvailable','vericiteEnabled', 'hasDueDateInClosedGradingPeriod',
-        'gradeGroupStudentsIndividually', 'groupCategoryId', 'frozen',
-        'frozenAttributes', 'freezeOnCopy', 'canFreeze', 'isSimple',
-        'gradingStandardId', 'isLetterGraded', 'isGpaScaled', 'assignmentGroupId', 'iconType',
-        'published', 'htmlUrl', 'htmlEditUrl', 'labelId', 'position', 'postToSIS',
-        'multipleDueDates', 'nonBaseDates', 'allDates', 'hasDueDate', 'hasPointsPossible'
-        'singleSectionDueDate', 'moderatedGrading', 'postToSISEnabled', 'isOnlyVisibleToOverrides',
-        'omitFromFinalGrade', 'is_quiz_assignment', 'secureParams'
+        'turnitinAvailable', 'turnitinEnabled', 'vericiteAvailable',
+        'vericiteEnabled', 'gradeGroupStudentsIndividually', 'groupCategoryId',
+        'frozen', 'frozenAttributes', 'freezeOnCopy', 'canFreeze', 'isSimple',
+        'gradingStandardId', 'isLetterGraded', 'isGpaScaled',
+        'assignmentGroupId', 'iconType', 'published', 'htmlUrl', 'htmlEditUrl',
+        'labelId', 'position', 'postToSIS', 'multipleDueDates', 'nonBaseDates',
+        'allDates', 'hasDueDate', 'hasPointsPossible', 'singleSectionDueDate',
+        'moderatedGrading', 'postToSISEnabled', 'isOnlyVisibleToOverrides',
+        'omitFromFinalGrade', 'is_quiz_assignment', 'secureParams',
+        'inClosedGradingPeriod'
       ]
 
       hash = id: @get 'id'
@@ -371,11 +380,12 @@ define [
 
     inGradingPeriod: (gradingPeriod) ->
       dateGroups = @get("all_dates")
+      gradingPeriodsHelper = new GradingPeriodsHelper(gradingPeriod)
       if dateGroups
         _.any dateGroups.models, (dateGroup) =>
-          GradingPeriods.dateIsInGradingPeriod(dateGroup.dueAt(), gradingPeriod)
+          gradingPeriodsHelper.isDateInGradingPeriod(dateGroup.dueAt(), gradingPeriod.id)
       else
-        GradingPeriods.dateIsInGradingPeriod(tz.parse(@dueAt()), gradingPeriod)
+        gradingPeriodsHelper.isDateInGradingPeriod(tz.parse(@dueAt()), gradingPeriod.id)
 
     search: (regex, gradingPeriod) ->
       match = regex == "" || @get('name').match(regex)

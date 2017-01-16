@@ -5,6 +5,8 @@
 .idea
 
 docker-compose/
+!docker-compose/config/*
+docker-compose.local.*.yml
 docker-compose.override.yml
 docker-compose.yml
 
@@ -18,3 +20,5 @@ public/webpack-dist/
 public/webpack-dist-optimized/
 tmp/
 vendor/bundle/
+Dockerfile
+Gemfile.lock

@@ -623,12 +623,12 @@ describe UsersController do
     end
     let!(:assignment1) do
       assignment = assignment_model(course: test_course, due_at: Time.zone.now, points_possible: 10)
-      assignment.grade_student(student, grade: '40%')
+      assignment.grade_student(student, grade: '40%', grader: @teacher)
     end
 
     let!(:assignment2) do
       assignment = assignment_model(course: test_course, due_at: 3.months.from_now, points_possible: 100)
-      assignment.grade_student(student, grade: '100%')
+      assignment.grade_student(student, grade: '100%', grader: @teacher)
     end
 
     context "as a student" do
@@ -949,9 +949,9 @@ describe UsersController do
       @s2 = student_in_course(:active_user => true).user
       @test_student = @course.student_view_student
       @assignment = assignment_model(:course => @course, :points_possible => 5)
-      @assignment.grade_student(@s1, :grade => 3)
-      @assignment.grade_student(@s2, :grade => 4)
-      @assignment.grade_student(@test_student, :grade => 5)
+      @assignment.grade_student(@s1, grade: 3, grader: @teacher)
+      @assignment.grade_student(@s2, grade: 4, grader: @teacher)
+      @assignment.grade_student(@test_student, grade: 5, grader: @teacher)
 
       get 'grades'
       expect(assigns[:presenter].course_grade_summaries[@course.id]).to eq({ :score => 70, :students => 2 })
@@ -1321,6 +1321,75 @@ describe UsersController do
       expect(@user.reload.preferences[:recent_activity_dashboard]).to be_truthy
       expect(response).to be_success
       expect(JSON.parse(response.body)).to be_empty
+    end
+  end
+
+  describe "#invite_users" do
+    it 'does not work without ability to manage students or admins on course' do
+      Account.default.tap{|a| a.settings[:open_registration] = true; a.save!}
+      course_with_student_logged_in(:active_all => true)
+
+      post 'invite_users', :course_id => @course.id
+
+      assert_unauthorized
+    end
+
+    it 'does not work without open registration or manage_user_logins rights' do
+      course_with_teacher_logged_in(:active_all => true)
+
+      post 'invite_users', :course_id => @course.id
+
+      assert_unauthorized
+    end
+
+    it 'works with an admin with manage_login_rights' do
+      course
+      account_admin_user(:active_all => true)
+      user_session(@user)
+
+      post 'invite_users', :course_id => @course.id
+      expect(response).to be_success # yes, even though we didn't do anything
+    end
+
+    it 'works with a teacher with open_registration' do
+      Account.default.any_instantiation.stubs(:open_registration?).returns(true)
+      course_with_teacher_logged_in(:active_all => true)
+
+      post 'invite_users', :course_id => @course.id
+      expect(response).to be_success
+    end
+
+    it 'invites a bunch of users' do
+      Account.default.any_instantiation.stubs(:open_registration?).returns(true)
+      course_with_teacher_logged_in(:active_all => true)
+
+      user_list = [{'email' => 'example1@example.com'}, {'email' => 'example2@example.com', 'name' => 'Hurp Durp'}]
+
+      post 'invite_users', :course_id => @course.id, :users => user_list
+      expect(response).to be_success
+      json = JSON.parse(response.body)
+      expect(json['invited_users'].count).to eq 2
+
+      new_user1 = User.where(:name => 'example1@example.com').first
+      new_user2 = User.where(:name => 'Hurp Durp').first
+      expect(json['invited_users'].map{|u| u['id']}).to match_array([new_user1.id, new_user2.id])
+    end
+
+    it 'checks for pre-existing users' do
+      existing_user = user_with_pseudonym(:active_all => true, :username => "example1@example.com")
+
+      Account.default.any_instantiation.stubs(:open_registration?).returns(true)
+      course_with_teacher_logged_in(:active_all => true)
+
+      user_list = [{'email' => 'example1@example.com'}]
+
+      post 'invite_users', :course_id => @course.id, :users => user_list
+      expect(response).to be_success
+
+      json = JSON.parse(response.body)
+      expect(json['invited_users']).to be_empty
+      expect(json['errored_users'].count).to eq 1
+      expect(json['errored_users'].first['existing_users'].first['user_id']).to eq existing_user.id
     end
   end
 end

@@ -1,4 +1,6 @@
 require_relative '../../helpers/gradebook2_common'
+require_relative '../page_objects/gradebook_page'
+require_relative '../page_objects/grading_curve_page'
 
 describe "editing grades" do
   include_context "in-process server selenium tests"
@@ -189,9 +191,9 @@ describe "editing grades" do
 
     open_assignment_options(0)
     f('[data-action="curveGrades"]').click
-    curve_form = f('#curve_grade_dialog')
-    set_value(curve_form.find_element(:css, '#middle_score'), curved_grade_text)
-    fj('.ui-dialog-buttonset .ui-button:contains("Curve Grades")').click
+    curve_form = GradingCurvePage.new
+    curve_form.edit_grade_curve(curved_grade_text)
+    curve_form.curve_grade_submit
     accept_alert
     expect(find_slick_cells(1, f('#gradebook_grid .container_1'))[0].text).to eq curved_grade_text
   end
@@ -215,7 +217,7 @@ describe "editing grades" do
   it "should not factor non graded assignments into group total", priority: "1", test_id: 220323 do
     expected_totals = [@student_1_total_ignoring_ungraded, @student_2_total_ignoring_ungraded]
     ungraded_submission = @ungraded_assignment.submit_homework(@student_1, :body => 'student 1 submission ungraded assignment')
-    @ungraded_assignment.grade_student(@student_1, :grade => 20)
+    @ungraded_assignment.grade_student(@student_1, grade: 20, grader: @teacher)
     ungraded_submission.save!
     get "/courses/#{@course.id}/gradebook"
     wait_for_ajaximations
@@ -242,5 +244,72 @@ describe "editing grades" do
     wait_for_ajaximations
     edit_grade('#gradebook_grid .container_1 .slick-row:nth-child(1) .l2', 0)
     expect_flash_message :error, /refresh/
+  end
+
+  context 'with multiple grading periods enabled' do
+    before(:each) do
+      root_account = @course.root_account = Account.default
+      root_account.enable_feature!(:multiple_grading_periods)
+
+      group = Factories::GradingPeriodGroupHelper.new.create_for_account(root_account)
+      group.enrollment_terms << @course.enrollment_term
+      group.save!
+
+      period_helper = Factories::GradingPeriodHelper.new
+      @first_period = period_helper.create_presets_for_group(group, :past).first
+      @first_period.save!
+      @second_period = period_helper.create_presets_for_group(group, :current).first
+      @second_period.save!
+
+      @first_assignment.due_at = @first_period.close_date - 1.day
+      @first_assignment.save!
+      @first_assignment.reload
+
+      @second_assignment.due_at = @second_period.close_date - 1.day
+      @second_assignment.save!
+      @second_assignment.reload
+
+      @page = Gradebook::MultipleGradingPeriods.new
+    end
+
+    context 'for assignments with at least one due date in a closed grading period' do
+      before(:each) do
+        get "/courses/#{@course.id}/gradebook?grading_period_id=0"
+
+        @page.assignment_header_menu(@first_assignment.name).click
+      end
+
+      describe 'the Curve Grades menu item' do
+        before(:each) do
+          @curve_grades_menu_item = @page.assignment_header_menu_item('Curve Grades')
+        end
+
+        it 'is disabled' do
+          expect(@curve_grades_menu_item[:class]).to include('ui-state-disabled')
+        end
+
+        it 'gives an error when clicked' do
+          @curve_grades_menu_item.click
+
+          expect_flash_message :error, /Unable to curve grades/
+        end
+      end
+
+      describe 'the Set Default Grade menu item' do
+        before(:each) do
+          @set_default_grade_menu_item = @page.assignment_header_menu_item('Set Default Grade')
+        end
+
+        it 'is disabled' do
+          expect(@set_default_grade_menu_item[:class]).to include('ui-state-disabled')
+        end
+
+        it 'gives an error when clicked' do
+          @set_default_grade_menu_item.click
+
+          expect_flash_message :error, /Unable to set default grade/
+        end
+      end
+    end
   end
 end

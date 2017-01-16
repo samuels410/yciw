@@ -12,6 +12,7 @@
 
 .bundle/
 .byebug_history
+.env
 /.yardoc/
 /app/coffeescripts/ember/*/main.coffee
 /app/coffeescripts/ember/screenreader_gradebook/templates/**/*.js
@@ -52,12 +53,11 @@ npm-debug.log
 /public/webpack-dist/
 /spec/javascripts/webpack/
 /spec/javascripts/compiled/
+/spec/javascripts/load_tests.js
 /spec/javascripts/requirejs_config.js
-/spec/javascripts/runner.html
 /spec/javascripts/tests.js
 /tmp/
 /vendor/bundle
-docker-compose.override.yml
 
 # generated plugin stuff
 /app/coffeescripts/plugins/
@@ -78,3 +78,6 @@ docker-compose.override.yml
 /gems/*/coverage
 /gems/*/tmp
 /gems/*/node_modules
+
+# user docker compose overrides
+docker-compose.local.*

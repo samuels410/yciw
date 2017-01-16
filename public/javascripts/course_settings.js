@@ -260,16 +260,6 @@ define([
         $("#course_account_id").val(ui.item.id);
       }
     });
-    $(".move_course_link").click(function(event) {
-      event.preventDefault();
-      $("#move_course_dialog").dialog({
-        title: I18n.t('titles.move_course', "Move Course"),
-        width: 500
-      }).fixDialogButtons();
-    });
-    $("#move_course_dialog").delegate('.cancel_button', 'click', function() {
-      $("#move_course_dialog").dialog('close');
-    });
     $course_form.find(".grading_standard_checkbox").change(function() {
       $course_form.find(".grading_standard_link").showIf($(this).attr('checked'));
     }).change();
@@ -409,7 +399,7 @@ define([
     });
 
     $("#course_custom_course_visibility").ready(function(event) {
-      if($("#course_custom_course_visibility")[0].checked) {
+      if($("#course_custom_course_visibility").prop('checked')) {
         $("#customize_course_visibility").toggle(true);
       } else {
         $("#customize_course_visibility").toggle(false);
@@ -439,6 +429,10 @@ define([
         }
       });
       $('#customize_course_visibility select').val($(current).val())
+    });
+
+    $("#course_show_announcements_on_home_page").change(function(event) {
+      $("#course_home_page_announcement_limit").prop("disabled", !$(this).prop('checked'))
     });
   });
 });

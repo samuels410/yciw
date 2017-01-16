@@ -40,6 +40,9 @@ class ExternalToolsController < ApplicationController
   # @argument selectable [Boolean]
   #   If true, then only tools that are meant to be selectable are returned
   #
+  # @argument include_parents [Boolean]
+  #   If true, then include tools installed in all accounts above the current context
+  #
   # @example_response
   #     [
   #      {
@@ -243,8 +246,7 @@ class ExternalToolsController < ApplicationController
         return
       end
 
-      context_module = module_item.context_module
-      unless context_module
+      unless module_item.context_module_id.present?
         @context.errors.add(:module_item_id, 'The content tag with the specified id is not a content item')
         render :json => @context.errors, :status => :bad_request
         return
@@ -292,7 +294,7 @@ class ExternalToolsController < ApplicationController
     if launch_url && launch_type != 'module_item'
       @tool = ContextExternalTool.find_external_tool(launch_url, @context, tool_id)
     elsif launch_type == 'module_item'
-      @tool = ContextExternalTool.find_external_tool(module_item.url, context_module, module_item.content_id)
+      @tool = ContextExternalTool.find_external_tool(module_item.url, @context, module_item.content_id)
     else
       return unless find_tool(tool_id, launch_type)
     end
@@ -560,10 +562,10 @@ class ExternalToolsController < ApplicationController
       else
         basic_lti_launch_request(tool, selection_type, opts)
     end
-  rescue Lti::UnauthorizedError
+  rescue Lti::Errors::UnauthorizedError
     render_unauthorized_action
     nil
-  rescue Lti::UnsupportedExportTypeError, Lti::InvalidMediaTypeError
+  rescue Lti::Errors::UnsupportedExportTypeError, Lti::Errors::InvalidMediaTypeError
     respond_to do |format|
       err = t('There was an error generating the tool launch')
       format.html do

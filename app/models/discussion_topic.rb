@@ -438,7 +438,7 @@ class DiscussionTopic < ActiveRecord::Base
   def child_topic_for(user)
     group_ids = user.group_memberships.active.pluck(:group_id) &
       context.groups.active.pluck(:id)
-    child_topics.where(context_id: group_ids, context_type: 'Group').first
+    child_topics.active.where(context_id: group_ids, context_type: 'Group').first
   end
 
   def change_child_topic_subscribed_state(new_state, current_user)
@@ -560,6 +560,12 @@ class DiscussionTopic < ActiveRecord::Base
 
   def can_lock?
     !(self.assignment.try(:due_at) && self.assignment.due_at > Time.now)
+  end
+
+  def comments_disabled?
+    !!(self.is_a?(Announcement) &&
+      self.context.is_a?(Course) &&
+      self.context.settings[:lock_all_announcements])
   end
 
   def lock(opts = {})
@@ -766,7 +772,7 @@ class DiscussionTopic < ActiveRecord::Base
     given { |user| self.grants_right?(user, :read) }
     can :read_replies
 
-    given { |user| self.user && self.user == user && self.visible_for?(user) && !self.locked_for?(user, :check_policies => true) && !context.concluded?}
+    given { |user| self.user && self.user == user && self.visible_for?(user) && !self.locked_for?(user, :check_policies => true) && !has_concluded_contexts?}
     can :reply
 
     given { |user| self.user && self.user == user && self.available_for?(user) && context.user_can_manage_own_discussion_posts?(user) && context.grants_right?(user, :participate_as_student) }
@@ -776,7 +782,7 @@ class DiscussionTopic < ActiveRecord::Base
     can :delete
 
     given { |user, session| !self.locked_for?(user, :check_policies => true) &&
-        self.context.grants_right?(user, session, :post_to_forum) && self.visible_for?(user)}
+        self.context.grants_right?(user, session, :post_to_forum) && self.visible_for?(user) && !has_concluded_contexts?}
     can :reply and can :read
 
     given { |user, session|
@@ -914,12 +920,32 @@ class DiscussionTopic < ActiveRecord::Base
     end
   end
 
+  def active_participants_include_tas_and_teachers(include_observers=false)
+    participants = active_participants(include_observers)
+    if self.context.is_a?(Group) && !self.context.course.nil?
+      participants += self.context.course.teachers
+      participants += self.context.course.tas
+      participants = participants.compact.uniq
+    end
+    participants
+  end
+
   def users_with_permissions(users)
-    users.select{|u| self.is_announcement ? self.context.grants_right?(u, :read_announcements) : self.context.grants_right?(u, :read_forum)}
+    permission = self.is_announcement ? :read_announcements : :read_forum
+    if self.course.is_a?(Course)
+      self.course.filter_users_by_permission(users, permission)
+    else
+      # sucks to be an account-level group
+      users.select{|u| self.is_announcement ? self.context.grants_right?(u, :read_announcements) : self.context.grants_right?(u, :read_forum)}
+    end
   end
 
   def course
     @course ||= context.is_a?(Group) ? context.context : context
+  end
+
+  def group
+    @group ||= context.is_a?(Group) ? context : nil
   end
 
   def active_participants_with_visibility
@@ -1020,6 +1046,10 @@ class DiscussionTopic < ActiveRecord::Base
         next true
       end
     end
+  end
+
+  def has_concluded_contexts?
+    course.concluded? || (group && !group.available?)
   end
 
   # Public: Determine if the discussion topic is locked for a specific user. The topic is locked when the

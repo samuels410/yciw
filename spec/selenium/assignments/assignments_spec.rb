@@ -499,7 +499,7 @@ describe "assignments" do
         @assignment.update_attributes(points_possible: 15)
         @assignment.publish
         course_with_student_logged_in(active_all: true, course: @course)
-        @assignment.grade_student(@student, grade: 14)
+        @assignment.grade_student(@student, grade: 14, grader: @teacher)
         get "/courses/#{@course.id}/assignments"
         wait_for_ajaximations
         expect(f("#assignment_#{@assignment.id} .js-score .non-screenreader").
@@ -517,6 +517,15 @@ describe "assignments" do
         expect(@assignment.reload).to be_published
         expect(f("#assignment_publish_button")).to include_text("Published")
         expect(f("#assignment-speedgrader-link")).not_to have_class("hidden")
+      end
+
+      it "should have a link to speedgrader from the show page", priority: "1", test_id: 3001903 do
+        @assignment.publish
+        get "/courses/#{@course.id}/assignments/#{@assignment.id}"
+        speedgrader_link = f(".icon-speed-grader")
+        speedgrader_link_text = "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}"
+
+        expect(speedgrader_link.attribute("href")).to include(speedgrader_link_text)
       end
 
       it "should show publishing status on the edit page", priority: "2", test_id: 647852 do

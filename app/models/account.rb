@@ -151,11 +151,12 @@ class Account < ActiveRecord::Base
   # the account settings page
   add_setting :sis_app_token, :root_only => true
   add_setting :sis_app_url, :root_only => true
+  add_setting :sis_syncing, :boolean => true, :default => false, :inheritable => true
   add_setting :sis_default_grade_export, :boolean => true, :default => false, :inheritable => true
+  add_setting :sis_require_assignment_due_date, :boolean => true, :default => false, :inheritable => true
 
   add_setting :global_includes, :root_only => true, :boolean => true, :default => false
   add_setting :sub_account_includes, :boolean => true, :default => false
-  add_setting :error_reporting, :hash => true, :values => [:action, :email, :url, :subject_param, :body_param], :root_only => true
 
   # Help link settings
   add_setting :custom_help_links, :root_only => true
@@ -213,8 +214,10 @@ class Account < ActiveRecord::Base
   add_setting :include_students_in_global_survey, boolean: true, root_only: true, default: false
   add_setting :trusted_referers, root_only: true
   add_setting :app_center_access_token
+  add_setting :enable_offline_web_export, boolean: true, root_only: true, default: false
 
   add_setting :strict_sis_check, :boolean => true, :root_only => true, :default => false
+  add_setting :lock_all_announcements, default: false, boolean: true, inheritable: true
 
   def settings=(hash)
     if hash.is_a?(Hash)
@@ -283,7 +286,7 @@ class Account < ActiveRecord::Base
   def enable_canvas_authentication
     return unless root_account?
     # for migrations creating a new db
-    return unless AccountAuthorizationConfig.columns_hash.key?('workflow_state')
+    return unless AccountAuthorizationConfig::Canvas.columns_hash.key?('workflow_state')
     return if authentication_providers.active.where(auth_type: 'canvas').exists?
     authentication_providers.create!(auth_type: 'canvas')
   end
@@ -460,9 +463,10 @@ class Account < ActiveRecord::Base
     user_account_associations.where(user_id: user).exists?
   end
 
-  def fast_course_base(opts)
+  def fast_course_base(opts = {})
+    opts[:order] ||= "#{Course.best_unicode_collation_key("courses.name")} ASC"
     columns = "courses.id, courses.name, courses.workflow_state, courses.course_code, courses.sis_source_id, courses.enrollment_term_id"
-    associated_courses = self.associated_courses.active
+    associated_courses = self.associated_courses.active.order(opts[:order])
     associated_courses = associated_courses.with_enrollments if opts[:hide_enrollmentless_courses]
     associated_courses = associated_courses.for_term(opts[:term]) if opts[:term].present?
     associated_courses = yield associated_courses if block_given?

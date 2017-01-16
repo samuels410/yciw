@@ -283,6 +283,15 @@ class Group < ActiveRecord::Base
   scope :by_name, -> { order(Bookmarker.order_by) }
   scope :uncategorized, -> { where("groups.group_category_id IS NULL") }
 
+  def potential_collaborators
+    if context.is_a?(Course)
+      # >99.9% of groups have fewer than 100 members
+      User.where(id: participating_group_memberships.pluck(:user_id) + context.participating_admins.pluck(:id))
+    else
+      participating_users
+    end
+  end
+
   def full_name
     res = before_label(self.name) + " "
     res += (self.context.course_code rescue self.context.name) if self.context
@@ -481,9 +490,11 @@ class Group < ActiveRecord::Base
       can :read_forum and
       can :read_announcements and
       can :read_roster and
-      can :send_messages and
-      can :send_messages_all and
       can :view_unpublished_items
+
+      given { |user, session| user && self.has_member?(user) &&
+        (!self.context || self.context.is_a?(Account) || self.context.grants_any_right?(user, session, :send_messages, :send_messages_all)) }
+      can :send_messages and can :send_messages_all
 
       # if I am a member of this group and I can moderate_forum in the group's context
       # (makes it so group members cant edit each other's discussion entries)

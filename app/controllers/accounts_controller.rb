@@ -176,7 +176,8 @@ class AccountsController < ApplicationController
         return redirect_to account_settings_url(@account) if @account.site_admin? || !@account.grants_right?(@current_user, :read_course_list)
         js_env(:ACCOUNT_COURSES_PATH => account_courses_path(@account, :format => :json))
         load_course_right_side
-        @courses = @account.fast_all_courses(:term => @term, :limit => @maximum_courses_im_gonna_show, :hide_enrollmentless_courses => @hide_enrollmentless_courses)
+        @courses = @account.fast_all_courses(:term => @term, :limit => @maximum_courses_im_gonna_show, :hide_enrollmentless_courses => @hide_enrollmentless_courses, :order => sort_order)
+
         ActiveRecord::Associations::Preloader.new.preload(@courses, :enrollment_term)
         build_course_stats
       end
@@ -411,7 +412,7 @@ class AccountsController < ApplicationController
       unless account_settings.empty?
         if @account.grants_right?(@current_user, session, :manage_account_settings)
           if account_settings[:settings]
-            account_settings[:settings].slice!(:restrict_student_past_view, :restrict_student_future_view, :restrict_student_future_listing)
+            account_settings[:settings].slice!(:restrict_student_past_view, :restrict_student_future_view, :restrict_student_future_listing, :lock_all_announcements)
           end
           @account.errors.add(:name, t(:account_name_required, 'The account name cannot be blank')) if account_params.has_key?(:name) && account_params[:name].blank?
           @account.errors.add(:default_time_zone, t(:unrecognized_time_zone, "'%{timezone}' is not a recognized time zone", :timezone => account_params[:default_time_zone])) if account_params.has_key?(:default_time_zone) && ActiveSupport::TimeZone.new(account_params[:default_time_zone]).nil?
@@ -491,6 +492,12 @@ class AccountsController < ApplicationController
   #   Restrict students from viewing courses before start date
   #
   # @argument account[settings][restrict_student_future_view][locked] [Boolean]
+  #   Lock this setting for sub-accounts and courses
+  #
+  # @argument account[settings][lock_all_announcements][value] [Boolean]
+  #   Disable comments on announcements
+  #
+  # @argument account[settings][lock_all_announcements][locked] [Boolean]
   #   Lock this setting for sub-accounts and courses
   #
   # @argument account[settings][restrict_student_future_listing][value] [Boolean]
@@ -767,6 +774,32 @@ class AccountsController < ApplicationController
     associated_courses = associated_courses.for_term(@term) if @term
     @associated_courses_count = associated_courses.count
     @hide_enrollmentless_courses = params[:hide_enrollmentless_courses] == "1"
+    @courses_sort_orders = [
+      {
+        key: "name_asc",
+        label: -> { t("A - Z") },
+        col: Course.best_unicode_collation_key("courses.name"),
+        direction: "ASC"
+      },
+      {
+        key: "name_desc",
+        label: -> { t("Z - A") },
+        col: Course.best_unicode_collation_key("courses.name"),
+        direction: "DESC"
+      },
+      {
+        key: "created_at_desc",
+        label: -> { t("Newest - Oldest") },
+        col: "courses.created_at",
+        direction: "DESC"
+      },
+      {
+        key: "created_at_asc",
+        label: -> { t("Oldest - Newest") },
+        col: "courses.created_at",
+        direction: "ASC"
+      }
+    ].freeze
   end
   protected :load_course_right_side
 
@@ -1020,5 +1053,21 @@ class AccountsController < ApplicationController
     # i'm doing this instead of normal strong_params because we do too much hackery to the weak params, especially in plugins
     # and it breaks when we enforce inherited weak parameters (because we're not actually editing request.parameters anymore)
     ActionController::Parameters.new(params).require(:account).permit(*permitted_account_attributes)
+  end
+
+  def sort_order
+    load_course_right_side unless @courses_sort_orders.present?
+
+    if !params[:courses_sort_order].nil?
+      @current_user.preferences[:course_sort] = params[:courses_sort_order]
+      @current_user.save!
+    end
+
+    order = @courses_sort_orders.find do |ord|
+      ord[:key] == @current_user.preferences[:course_sort]
+    end
+
+
+    order && "#{order[:col]} #{order[:direction]}"
   end
 end

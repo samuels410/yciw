@@ -789,6 +789,18 @@ describe CoursesController do
         expect(controller.js_env[:COURSE_TITLE]).to eql @course1.name
       end
 
+      it "should work for wiki view with home page announcements enabled" do
+        @course1.default_view = "wiki"
+        @course1.show_announcements_on_home_page = true
+        @course1.home_page_announcement_limit = 3
+        @course1.save!
+        @course1.wiki.wiki_pages.create!(:title => 'blah').set_as_front_page!
+        get 'show', :id => @course1.id
+        expect(controller.js_env[:COURSE_HOME]).to be_truthy
+        expect(controller.js_env[:SHOW_ANNOUNCEMENTS]).to be_truthy
+        expect(controller.js_env[:ANNOUNCEMENT_LIMIT]).to eq(3)
+      end
+
       it "should work for syllabus view" do
         @course1.default_view = "syllabus"
         @course1.save
@@ -1224,6 +1236,17 @@ describe CoursesController do
       run_jobs
       enrollment = @course.reload.teachers.find { |t| t.name == 'Sam' }.enrollments.first
       expect(enrollment.limit_privileges_to_course_section).to eq true
+    end
+
+    it "should also accept a list of user ids (instead of ye old UserList)" do
+      u1 = user
+      u2 = user
+      user_session(@teacher)
+      post 'enroll_users', :course_id => @course.id, :user_ids => [u1.id, u2.id]
+      expect(response).to be_success
+      @course.reload
+      expect(@course.students).to include(u1)
+      expect(@course.students).to include(u2)
     end
   end
 

@@ -440,7 +440,7 @@ class UsersController < ApplicationController
           else
             @enrollment_terms = []
             if @root_account == @context
-              @enrollment_terms = @context.enrollment_terms.active.order(EnrollmentTerm.nulls(:first, :start_at))
+              @enrollment_terms = @context.enrollment_terms.active
             end
             format.html
           end
@@ -1443,6 +1443,83 @@ class UsersController < ApplicationController
     end
   end
 
+  # @API Get dashboard postions
+  # Returns all dashboard positions that have been saved for a user.
+  #
+  # @example_request
+  #
+  #   curl 'https://<canvas>/api/v1/users/<user_id>/dashboard_positions/ \
+  #     -X GET \
+  #     -H 'Authorization: Bearer <token>'
+  #
+  # @example_response
+  #   {
+  #     "dashboard_positions": {
+  #       "course_42": 2,
+  #       "course_88": 1
+  #     }
+  #   }
+  #
+  def get_dashboard_positions
+    user = api_find(User, params[:id])
+    return unless authorized_action(user, @current_user, :read)
+    render(json: {dashboard_positions: user.dashboard_positions})
+  end
+
+  # @API Update dashboard positions
+  # Updates the dashboard positions for a user for a given context.  This allows
+  # positions for the dashboard cards and elsewhere to be customized on a per
+  # user basis.
+  #
+  # The asset string parameter should be in the format 'context_id', for example
+  # 'course_42'
+  #
+  # @example_request
+  #
+  #   curl 'https://<canvas>/api/v1/users/<user_id>/dashboard_positions/ \
+  #     -X PUT \
+  #     -F 'dashboard_positions[course_42]=1' \
+  #     -F 'dashboard_positions[course_53]=2' \
+  #     -F 'dashboard_positions[course_10]=3' \
+  #     -H 'Authorization: Bearer <token>'
+  #
+  # @example_response
+  #   {
+  #     "dashboard_positions": {
+  #       "course_10": 3,
+  #       "course_42": 1,
+  #       "course_53": 2
+  #     }
+  #   }
+  def set_dashboard_positions
+    user = api_find(User, params[:id])
+
+    return unless authorized_action(user, @current_user, [:manage, :manage_user_details])
+    params[:dashboard_positions].each do |key, val|
+      context = Context.find_by_asset_string(key)
+      if context.nil?
+        raise(ActiveRecord::RecordNotFound, "Asset #{key} does not exist")
+      end
+      return unless authorized_action(context, @current_user, :read)
+      position = Integer(val) rescue nil
+      if position.nil?
+        return render(json: { :message => "Invalid position provided" }, status: :bad_request)
+      end
+    end
+
+    user.dashboard_positions = user.dashboard_positions.merge(params[:dashboard_positions])
+
+    respond_to do |format|
+      format.json do
+        if user.save
+          render(json: { dashboard_positions: user.dashboard_positions })
+        else
+          render(json: user.errors, status: :bad_request)
+        end
+      end
+    end
+  end
+
   # @API Edit a user
   # Modify an existing user. To modify a user's login, see the documentation for logins.
   #
@@ -1883,6 +1960,56 @@ class UsersController < ApplicationController
       users = SplitUsers.split_db_users(user)
       render :json => users.map { |u| user_json(u, @current_user, session) }
     end
+  end
+
+  # maybe I should document this
+  # maybe not
+  # basically does the same thing as UserList#users
+  def invite_users
+    # pass into "users" an array of hashes with "email"
+    # e.g. [{"email": "email@example.com"}]
+    # also can include an optional "name"
+
+    # returns the original list in :invited_users (with ids) if successfully added, or in :errored_users if not
+    get_context
+    return unless authorized_action(@context, @current_user, [:manage_students, :manage_admin_users])
+
+    root_account = context.root_account
+    unless root_account.open_registration? || root_account.grants_right?(@current_user, session, :manage_user_logins)
+      return render_unauthorized_action
+    end
+
+    invited_users = []
+    errored_users = []
+    Array(params[:users]).each do |user_hash|
+      unless user_hash[:email].present?
+        errored_users << user_hash.merge(:error => "email required")
+        next
+      end
+
+      email = user_hash[:email]
+      user = User.new(:name => user_hash[:name] || email)
+      cc = user.communication_channels.build(:path => email, :path_type => 'email')
+      cc.user = user
+      user.workflow_state = 'creation_pending'
+
+      # check just in case
+      existing_rows = Pseudonym.active.where(:account_id => @context.root_account).joins(:user => :communication_channels).joins(:account).
+        where("communication_channels.workflow_state<>'retired' AND path_type='email' AND LOWER(path) = ?", email.downcase).
+        pluck('communication_channels.path', :user_id, :account_id, 'users.name', 'accounts.name')
+
+      if existing_rows.any?
+        existing_users = existing_rows.map do |address, user_id, account_id, user_name, account_name|
+         {:address => address, :user_id => user_id, :user_name => user_name, :account_id => account_id, :account_name => account_name}
+        end
+        errored_users << user_hash.merge(:errors => [{:message => "Matching user(s) already exist"}], :existing_users => existing_users)
+      elsif user.save
+        invited_users << user_hash.merge(:id => user.id)
+      else
+        errored_users << user_hash.merge(user.errors.as_json)
+      end
+    end
+    render :json => {:invited_users => invited_users, :errored_users => errored_users}
   end
 
   protected

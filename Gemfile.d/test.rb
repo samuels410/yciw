@@ -5,8 +5,9 @@ group :test do
     gem 'rails-dom-testing', '2.0.1'
   end
 
-  gem 'gergich', '0.1.6', require: false
+  gem 'gergich', '0.1.8', require: false
   gem 'testingbot', require: false
+  gem 'brakeman', require: false
   # simplecov 0.10.0 shows significantly less coverage.
   # ensure the coverage build shows accurate data
   # before upgrading past 0.9.2. (CNVS-32826)
@@ -39,7 +40,7 @@ group :test do
     gem 'childprocess', '0.5.9', require: false
     gem 'websocket', '1.2.3', require: false
   gem 'selinimum', '0.0.1', require: false, path: 'gems/selinimum'
-  gem 'test_after_commit', '1.1.0'
+  gem 'test_after_commit', '1.1.0' if CANVAS_RAILS4_2
   gem 'testrailtagging', '0.3.7', require: false
 
   gem 'webmock', '1.22.3', require: false
@@ -48,7 +49,7 @@ group :test do
   gem 'yard', '0.8.7.6'
   gem 'yard-appendix', '>=0.1.8'
   gem 'timecop', '0.8.1'
-  gem 'jira_ref_parser', '1.0.0'
+  gem 'jira_ref_parser', '1.0.1'
   gem 'headless', '2.3.1', require: false
   gem 'escape_code', '0.2'
 end

@@ -307,14 +307,23 @@ END
         beta: true,
         root_opt_in: true
       },
-    'bulk_sis_grade_export' =>
+    'new_sis_integrations' =>
       {
-          display_name: -> { I18n.t('Allow Bulk Grade Export to SIS') },
-          description:  -> { I18n.t('Allows teachers to mark grade data to be exported in bulk to SIS integrations.') },
-          applies_to: 'RootAccount',
+          display_name: -> { I18n.t('Enable new SIS integration settings') },
+          description:  -> { I18n.t('Make new settings for SIS integrations visible and active') },
+          applies_to: 'Account',
           state: 'hidden',
           root_opt_in: true,
           beta: true
+      },
+    'bulk_sis_grade_export' =>
+      {
+        display_name: -> { I18n.t('Allow Bulk Grade Export to SIS') },
+        description:  -> { I18n.t('Allows teachers to mark grade data to be exported in bulk to SIS integrations.') },
+        applies_to: 'RootAccount',
+        state: 'hidden',
+        root_opt_in: true,
+        beta: true
       },
     'notification_service' =>
     {
@@ -333,7 +342,7 @@ END
       applies_to: 'RootAccount',
       state: 'hidden',
       beta: true,
-      development: true,
+      development: false,
       root_opt_in: false
     },
     'use_new_tree' =>
@@ -354,13 +363,15 @@ END
       root_opt_in: true,
       beta: true
     },
-    'gradebook_performance' => {
-      display_name: -> { I18n.t('Gradebook Performance') },
-      description: -> { I18n.t('Performance enhancements for the Gradebook') },
-      applies_to: 'Course',
+    'dashcard_reordering' =>
+    {
+      display_name: -> { I18n.t('Allow Reorder Dashboard Cards') },
+      description: -> { I18n.t('Allow dashboard cards to be reordered for each user.') },
+      applies_to: 'RootAccount',
       state: 'hidden',
+      beta: true,
       development: true,
-      root_opt_in: true
+      root_opt_in: false
     },
     'anonymous_grading' => {
       display_name: -> { I18n.t('Anonymous Grading') },
@@ -472,6 +483,24 @@ END
       state: 'hidden',
       beta: true,
       root_opt_in: true,
+      development: true,
+    },
+    'master_courses' =>
+    {
+      display_name: -> { I18n.t('Master Courses') },
+      description: -> { I18n.t('Enable the creation of Master Courses') },
+      applies_to: 'RootAccount',
+      state: 'hidden',
+      beta: true,
+      development: true,
+    },
+     'student_context_cards' =>
+    {
+      display_name: -> { I18n.t('Student Context Card') },
+      description: -> { I18n.t('Enable student context card links') },
+      applies_to: "RootAccount",
+      state: "hidden_in_prod",
+      beta: true,
       development: true,
     }
   )

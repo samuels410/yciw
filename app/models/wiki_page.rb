@@ -35,6 +35,10 @@ class WikiPage < ActiveRecord::Base
 
   include SearchTermHelper
 
+  include MasterCourses::Restrictor
+  restrict_columns :content, [:body, :title]
+  restrict_columns :settings, [:editing_roles]
+
   after_update :post_to_pandapub_when_revised
 
   belongs_to :wiki, :touch => true
@@ -419,8 +423,7 @@ class WikiPage < ActiveRecord::Base
     if revised_at_changed?
       CanvasPandaPub.post_update(
         "/private/wiki_page/#{self.global_id}/update", {
-          revised_at: self.revised_at,
-          revision: self.versions.current.number
+          revised_at: self.revised_at
         })
     end
   end

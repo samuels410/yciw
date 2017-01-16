@@ -59,7 +59,7 @@ describe LearningOutcome do
       @e = @course.enroll_student(@user)
       @a = @rubric.associate_with(@assignment, @course, :purpose => 'grading')
       @assignment.reload
-      @submission = @assignment.grade_student(@user, :grade => "10").first
+      @submission = @assignment.grade_student(@user, grade: "10", grader: @teacher).first
       @assessment = @a.assess({
         :user => @user,
         :assessor => @user,
@@ -260,7 +260,7 @@ describe LearningOutcome do
       @assignment.reload
       expect(@assignment.learning_outcome_alignments.count).to eql(1)
       expect(@assignment.rubric_association).not_to be_nil
-      @submission = @assignment.grade_student(@user, :grade => "10").first
+      @submission = @assignment.grade_student(@user, grade: "10", grader: @teacher).first
       @assessment = @a.assess({
         :user => @user,
         :assessor => @user,
@@ -348,7 +348,7 @@ describe LearningOutcome do
       @alignment.reload
       expect(@alignment).to have_rubric_association
 
-      @submission = @assignment.grade_student(@user, :grade => "10").first
+      @submission = @assignment.grade_student(@user, grade: "10", grader: @teacher).first
       expect(@outcome.learning_outcome_results).to be_empty
       @assessment = @a.assess({
         :user => @user,
@@ -415,7 +415,7 @@ describe LearningOutcome do
       expect(@alignment.learning_outcome).not_to be_deleted
       expect(@alignment).to have_rubric_association
       @assignment.reload
-      @submission = @assignment.grade_student(@user, :grade => "10").first
+      @submission = @assignment.grade_student(@user, grade: "10", grader: @teacher).first
       @assessment = @a.assess({
         :user => @user,
         :assessor => @user,
@@ -845,7 +845,7 @@ describe LearningOutcome do
     end
   end
 
-  context "learning outcome results" do
+  context "account level outcome" do
     let(:outcome) do
       LearningOutcome.create!(
         context: account.call,
@@ -915,9 +915,11 @@ describe LearningOutcome do
         rubric = add_or_get_rubric(outcome)
         user = user(:active_all => true)
         context.enroll_student(user)
+        teacher = user(active_all: true)
+        context.enroll_teacher(teacher)
         a = rubric.associate_with(assignment, context, :purpose => 'grading')
         assignment.reload
-        submission = assignment.grade_student(user, :grade => "10").first
+        submission = assignment.grade_student(user, grade: "10", grader: teacher).first
         a.assess({
           :user => user,
           :assessor => user,
@@ -949,16 +951,58 @@ describe LearningOutcome do
       end
     end
 
-    it "properly reports whether assessed in a course" do
-      add_student.call(c1, c2)
-      add_or_get_rubric(outcome)
-      [c1, c2].each { |c| outcome.align(nil, c, :mastery_type => "points") }
-      assess_with.call(outcome, c1)
+    context "learning outcome results" do
+      it "properly reports whether assessed in a course" do
+        add_student.call(c1, c2)
+        add_or_get_rubric(outcome)
+        [c1, c2].each { |c| outcome.align(nil, c, :mastery_type => "points") }
+        assess_with.call(outcome, c1)
 
-      expect(outcome.alignments.length).to eq(3)
-      expect(outcome).to be_assessed
-      expect(outcome).to be_assessed(c1)
-      expect(outcome).not_to be_assessed(c2)
+        expect(outcome.alignments.length).to eq(3)
+        expect(outcome).to be_assessed
+        expect(outcome).to be_assessed(c1)
+        expect(outcome).not_to be_assessed(c2)
+      end
+    end
+
+    describe '#align' do
+      let(:assignment) { assignment_model }
+
+      context 'context is course' do
+        before do
+          c1.root_outcome_group
+        end
+
+        it 'generates links to a learning outcome' do
+          expect(c1.learning_outcome_links).to be_empty
+          outcome.align(assignment, c1)
+          c1.reload
+          expect(c1.learning_outcome_links).not_to be_empty
+        end
+
+        it 'doesnt generates links when one exists' do
+          expect(c1.learning_outcome_links).to be_empty
+          outcome.align(assignment, c1)
+          c1.reload
+          expect(c1.learning_outcome_links.size).to eq 1
+
+          outcome.align(assignment, c1)
+          c1.reload
+          expect(c1.learning_outcome_links.size).to eq 1
+        end
+      end
+
+      context 'context is account' do
+        it 'doesnt generate new links' do
+          account1 = c1.account
+          account1.root_outcome_group
+
+          expect(account1.learning_outcome_links).to be_empty
+          outcome.align(assignment, account1)
+          account1.reload
+          expect(account1.learning_outcome_links).to be_empty
+        end
+      end
     end
   end
 end

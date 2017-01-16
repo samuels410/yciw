@@ -26,6 +26,7 @@ describe ConversationsController do
     users = create_users_in_course(course, user_data, account_associations: true, return_type: :record)
     @conversation = @user.initiate_conversation(users)
     @conversation.add_message(opts[:message] || 'test')
+    @conversation.conversation.update_attribute(:context, course)
     @conversation
   end
 
@@ -236,6 +237,28 @@ describe ConversationsController do
       expect(assigns[:conversation]).not_to be_nil
     end
 
+    it "should require permissions for sending to other students" do
+      user_session(@student)
+
+      new_user = User.create
+      enrollment = @course.enroll_student(new_user)
+      enrollment.workflow_state = 'active'
+      enrollment.save
+      @course.account.role_overrides.create!(:permission => :send_messages, :role => student_role, :enabled => false)
+
+      post 'create', :recipients => [new_user.id.to_s], :body => "yo", :context_code => @course.asset_string
+      expect(response).to_not be_success
+    end
+
+    it "should allow sending to instructors even if permissions are disabled" do
+      user_session(@student)
+      @course.account.role_overrides.create!(:permission => :send_messages, :role => student_role, :enabled => false)
+
+      post 'create', :recipients => [@teacher.id.to_s], :body => "yo", :context_code => @course.asset_string
+      expect(response).to be_success
+      expect(assigns[:conversation]).not_to be_nil
+    end
+
     it "should not add the wrong tags in a certain terrible cached edge case" do
       # tl;dr - not including the updated_at when we instantiate the users
       # can cause us to grab stale conversation_context_codes
@@ -359,6 +382,7 @@ describe ConversationsController do
       @course2 = course(:active_all => true)
       @course2.enroll_teacher(@user).accept
       @course3 = course(:active_all => true)
+      @course3.enroll_student(@user)
       @group1 = @course1.groups.create!
       @group2 = @course1.groups.create!
       @group3 = @course3.groups.create!
@@ -468,6 +492,15 @@ describe ConversationsController do
       expect(response).to be_success
       expect(@conversation.messages.size).to eq 2
       expect(@conversation.reload.last_message_at).to eql expected_lma
+    end
+
+    it "should require permissions" do
+      course_with_student_logged_in(:active_all => true)
+      conversation
+      @course.account.role_overrides.create!(:permission => :send_messages, :role => student_role, :enabled => false)
+
+      post 'add_message', :conversation_id => @conversation.conversation_id, :body => "hello world"
+      assert_unauthorized
     end
 
     it "should queue a job if needed" do

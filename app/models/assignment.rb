@@ -64,6 +64,10 @@ class Assignment < ActiveRecord::Base
   belongs_to :grading_standard
   belongs_to :group_category
 
+  has_many :assignment_configuration_tool_lookups, dependent: :delete_all
+  has_many :tool_settings_context_external_tools, through: :assignment_configuration_tool_lookups, source: :tool, source_type: 'ContextExternalTool'
+  has_many :tool_settings_tool_proxies, through: :assignment_configuration_tool_lookups, source: :tool, source_type: 'Lti::MessageHandler'
+
   has_one :external_tool_tag, :class_name => 'ContentTag', :as => :context, :dependent => :destroy
   validates_associated :external_tool_tag, :if => :external_tool?
   validate :group_category_changes_ok?
@@ -72,8 +76,17 @@ class Assignment < ActiveRecord::Base
   validate :moderation_setting_ok?
   validates :lti_context_id, presence: true, uniqueness: true
 
+  after_save :clear_effective_due_dates_memo
+
+  def clear_effective_due_dates_memo
+    return if @effective_due_dates.nil?
+    if due_at_changed? || active_assignment_overrides.any?(&:due_at_changed?)
+      @effective_due_dates = nil
+    end
+  end
+
   accepts_nested_attributes_for :external_tool_tag, :update_only => true, :reject_if => proc { |attrs|
-    # only accept the url, content_type, content_id, and new_tab params, the other accessible
+    # only accept the url, content_tyupe, content_id, and new_tab params, the other accessible
     # params don't apply to an content tag being used as an external_tool_tag
     content = case attrs['content_type']
               when 'Lti::MessageHandler', 'lti/message_handler'
@@ -119,7 +132,7 @@ class Assignment < ActiveRecord::Base
 
   def secure_params
     body = {}
-    body[:lti_assignment_id] = SecureRandom.uuid if new_record?
+    body[:lti_assignment_id] = self.lti_context_id || SecureRandom.uuid
     Canvas::Security.create_jwt(body)
   end
 
@@ -180,6 +193,7 @@ class Assignment < ActiveRecord::Base
     automatic_peer_reviews
     peer_reviews_due_at
     peer_review_count
+    intra_group_peer_reviews
     submission_types
     group_category_id
     grade_group_students_individually
@@ -1051,7 +1065,7 @@ class Assignment < ActiveRecord::Base
     given do |user, session|
       self.context.grants_right?(user, session, :manage_assignments) &&
         (self.context.account_membership_allows(user) ||
-         !due_for_any_student_in_closed_grading_period?)
+         !in_closed_grading_period?)
     end
     can :delete
   end
@@ -1078,12 +1092,9 @@ class Assignment < ActiveRecord::Base
   def participants_with_visibility(opts={})
     users = context.participating_admins
 
-    applicable_students = if opts[:excluded_user_ids]
-                            students_with_visibility.reject{|s| opts[:excluded_user_ids].include?(s.id)}
-                          else
-                            students_with_visibility
-                          end
-
+    student_scope = students_with_visibility(context.participating_students_by_date)
+    student_scope = student_scope.where.not(:id => opts[:excluded_user_ids]) if opts[:excluded_user_ids]
+    applicable_students = student_scope.to_a
     users += applicable_students
 
     if opts[:include_observers]
@@ -1162,7 +1173,14 @@ class Assignment < ActiveRecord::Base
     self.submissions.where(user_id: user.id).first_or_initialize
   end
 
-  class GradeError < StandardError; end
+  class GradeError < StandardError
+    attr_accessor :status_code
+
+    def initialize(message = nil, status_code = nil)
+      super(message)
+      self.status_code = status_code
+    end
+  end
 
   def compute_grade_and_score(grade, score)
     if grade
@@ -1202,7 +1220,39 @@ class Assignment < ActiveRecord::Base
     submissions.compact
   end
 
+  def tool_settings_tool
+    self.tool_settings_tools.first
+  end
+
+  def tool_settings_tool=(tool)
+    self.tool_settings_tools = [tool]
+  end
+
+  def tool_settings_tools=(tools)
+    tool_settings_context_external_tools.clear
+    tool_settings_tool_proxies.clear
+    tools.each do |t|
+      if t.instance_of? ContextExternalTool
+        tool_settings_context_external_tools << t
+      elsif t.instance_of? Lti::MessageHandler
+        tool_settings_tool_proxies << t
+      end
+    end
+    tools
+  end
+  protected :tool_settings_tools=
+
+  def tool_settings_tools
+    tool_settings_context_external_tools + tool_settings_tool_proxies
+  end
+  protected :tool_settings_tools
+
   def save_grade_to_submission(submission, original_student, group, opts)
+    unless submission.grader_can_grade?
+      error_details = submission.grading_error_message
+      raise GradeError.new("Cannot grade this submission at this time: #{error_details}", :forbidden)
+    end
+
     submission.skip_grade_calc = opts[:skip_grade_calc]
 
     previously_graded = submission.grade.present? || submission.excused?
@@ -1217,6 +1267,7 @@ class Assignment < ActiveRecord::Base
 
     unless opts[:provisional]
       submission.grader = grader
+      submission.grader_id = opts[:grader_id] if opts.key?(:grader_id)
       submission.grade = grade
       submission.score = score
       submission.graded_anonymously = opts[:graded_anonymously] if opts.key?(:graded_anonymously)
@@ -2095,8 +2146,13 @@ class Assignment < ActiveRecord::Base
     end
   end
 
-  def graded?
+  def gradeable?
     submission_types != 'not_graded' && submission_types != 'wiki_page'
+  end
+  alias graded? gradeable?
+
+  def gradeable_was?
+    submission_types_was != 'not_graded' && submission_types_was != 'wiki_page'
   end
 
   def active?
@@ -2172,17 +2228,16 @@ class Assignment < ActiveRecord::Base
     s.excused?
   end
 
-  def due_for_any_student_in_closed_grading_period?(periods = nil)
-    return false unless self.due_date || self.has_active_overrides?
+  def effective_due_dates
+    @effective_due_dates ||= EffectiveDueDates.for_course(context, id)
+  end
 
-    periods ||= GradingPeriod.for(self.course)
-    due_in_closed_period = !self.only_visible_to_overrides &&
-      GradingPeriodHelper.date_in_closed_grading_period?(self.due_date, periods)
-    due_in_closed_period ||= self.active_assignment_overrides.any? do |override|
-      GradingPeriodHelper.date_in_closed_grading_period?(override.due_at, periods)
-    end
+  def in_closed_grading_period?
+    effective_due_dates.in_closed_grading_period?(id)
+  end
 
-    due_in_closed_period
+  def in_closed_grading_period_for_student?(student)
+    effective_due_dates.in_closed_grading_period?(id, student)
   end
 
   # simply versioned models are always marked new_record, but for our purposes

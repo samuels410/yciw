@@ -4,8 +4,12 @@ define([
   'i18n!dashcards',
   './DashboardCardAction',
   './DashboardColorPicker',
-  './CourseActivitySummaryStore'
-], function(_, React, I18n, DashboardCardAction, DashboardColorPicker, CourseActivitySummaryStore) {
+  './CourseActivitySummaryStore',
+  'react-dnd',
+  './Types',
+  'jsx/shared/helpers/compose',
+  './DashboardCardMovementMenu'
+], function(_, React, I18n, DashboardCardAction, DashboardColorPicker, CourseActivitySummaryStore, ReactDnD, ItemTypes, compose, DashboardCardMovementMenu) {
 
   var DashboardCard = React.createClass({
 
@@ -23,7 +27,14 @@ define([
       assetString: React.PropTypes.string,
       term: React.PropTypes.string,
       href: React.PropTypes.string,
-      links: React.PropTypes.array
+      links: React.PropTypes.array,
+      reorderingEnabled: React.PropTypes.bool,
+      isDragging: React.PropTypes.bool,
+      connectDragSource: React.PropTypes.func,
+      connectDropTarget: React.PropTypes.func,
+      moveCard: React.PropTypes.func,
+      totalCards: React.PropTypes.number,
+      position: React.PropTypes.oneOfType([React.PropTypes.number, React.PropTypes.func])
     },
 
     getDefaultProps: function () {
@@ -125,6 +136,17 @@ define([
       return (streamItem) ? streamItem.unread_count : 0;
     },
 
+    calculateMenuOptions () {
+      const isFirstCard = this.props.position === 0;
+      const isLastCard = this.props.position === this.props.totalCards - 1;
+      return {
+        canMoveLeft: !isFirstCard,
+        canMoveRight: !isLastCard,
+        canMoveToBeginning: !isFirstCard,
+        canMoveToEnd: !isLastCard
+      }
+    },
+
     // ===============
     //    RENDERING
     // ===============
@@ -196,11 +218,21 @@ define([
     },
 
     render: function () {
-      return (
+      const cardStyles = {
+        borderBottomColor: this.props.backgroundColor
+      };
+
+      if (this.props.reorderingEnabled) {
+        if (this.props.isDragging) {
+          cardStyles.opacity = 0;
+        }
+      }
+
+      const dashboardCard = (
         <div
           className="ic-DashboardCard"
-          ref="cardDiv"
-          style={{borderBottomColor: this.props.backgroundColor}}
+          ref={(c) => this.cardDiv = c}
+          style={cardStyles}
           aria-label={this.props.originalName}
         >
           <div className="ic-DashboardCard__header">
@@ -209,7 +241,7 @@ define([
                 this.props.imagesEnabled && this.props.image ?
                   I18n.t("Course image for %{course}", {course: this.state.nicknameInfo.nickname})
                 :
-                  I18n.t("Course card color region for %{course}", {course: this.state.nicknameInfo.nickname}) 
+                  I18n.t("Course card color region for %{course}", {course: this.state.nicknameInfo.nickname})
               }
             </span>
             {this.renderHeaderHero()}
@@ -230,17 +262,28 @@ define([
                 ) : null
               }
             </div>
+            {this.props.reorderingEnabled && (
+              <DashboardCardMovementMenu
+                cardTitle={this.state.nicknameInfo.nickname}
+                handleMove={this.props.moveCard}
+                currentPosition={this.props.position}
+                lastPosition={this.props.totalCards - 1}
+                assetString={this.props.assetString}
+                menuOptions={this.calculateMenuOptions()}
+              />
+            )}
             <button
               aria-expanded = {this.state.editing}
               aria-controls = {this.colorPickerID()}
               className="Button Button--icon-action-rev ic-DashboardCard__header-button"
               onClick={this.settingsClick}
               ref="settingsToggle">
-              <i className="icon-compose" aria-hidden="true" />
+              <i className="icon-compose icon-Line" aria-hidden="true" />
                 <span className="screenreader-only">
                   { I18n.t("Choose a color or course nickname for %{course}", { course: this.state.nicknameInfo.nickname}) }
                 </span>
             </button>
+
           </div>
           <nav
             className="ic-DashboardCard__action-container"
@@ -251,6 +294,13 @@ define([
           { this.colorPickerIfEditing() }
         </div>
       );
+
+      if (this.props.reorderingEnabled) {
+        const { connectDragSource, connectDropTarget } = this.props;
+        return connectDragSource(connectDropTarget(dashboardCard));
+      }
+
+      return dashboardCard;
     }
   });
 
