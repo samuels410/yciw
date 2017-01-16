@@ -119,6 +119,554 @@
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="module-library">
+      <library name="academic_benchmark (v1.1.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/plugins/academic_benchmark) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/plugins/academic_benchmark/app" />
+          <root url="file://$MODULE_DIR$/gems/plugins/academic_benchmark/lib" />
+          <root url="file://$MODULE_DIR$/gems/plugins/academic_benchmark/spec_canvas" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/plugins/academic_benchmark/app" />
+          <root url="file://$MODULE_DIR$/gems/plugins/academic_benchmark/lib" />
+          <root url="file://$MODULE_DIR$/gems/plugins/academic_benchmark/spec_canvas" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="account_reports (v1.1.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/plugins/account_reports) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/plugins/account_reports/app" />
+          <root url="file://$MODULE_DIR$/gems/plugins/account_reports/lib" />
+          <root url="file://$MODULE_DIR$/gems/plugins/account_reports/spec_canvas" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/plugins/account_reports/app" />
+          <root url="file://$MODULE_DIR$/gems/plugins/account_reports/lib" />
+          <root url="file://$MODULE_DIR$/gems/plugins/account_reports/spec_canvas" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="activesupport-suspend_callbacks (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/activesupport-suspend_callbacks) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/activesupport-suspend_callbacks/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/activesupport-suspend_callbacks/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="acts_as_list (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/acts_as_list) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/acts_as_list/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/acts_as_list/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="adheres_to_policy (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/adheres_to_policy) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/adheres_to_policy/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/adheres_to_policy/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="attachment_fu (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/attachment_fu) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/attachment_fu/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/attachment_fu/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="autoextend (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/autoextend) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/autoextend/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/autoextend/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="bookmarked_collection (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/bookmarked_collection) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/bookmarked_collection/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/bookmarked_collection/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="broadcast_policy (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/broadcast_policy) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/broadcast_policy/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/broadcast_policy/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="canvas_breach_mitigation (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_breach_mitigation) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/canvas_breach_mitigation/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/canvas_breach_mitigation/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="canvas_cassandra (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_cassandra) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/canvas_cassandra/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/canvas_cassandra/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="canvas_color (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_color) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/canvas_color/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/canvas_color/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="canvas_crummy (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_crummy) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/canvas_crummy/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/canvas_crummy/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="canvas_ext (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_ext) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/canvas_ext/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/canvas_ext/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="canvas_http (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_http) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/canvas_http/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/canvas_http/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="canvas_kaltura (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_kaltura) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/canvas_kaltura/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/canvas_kaltura/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="canvas_mimetype_fu (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_mimetype_fu) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/canvas_mimetype_fu/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/canvas_mimetype_fu/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="canvas_panda_pub (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_panda_pub) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/canvas_panda_pub/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/canvas_panda_pub/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="canvas_partman (v2.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_partman) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/canvas_partman/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/canvas_partman/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="canvas_quiz_statistics (v0.1.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_quiz_statistics) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/canvas_quiz_statistics/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/canvas_quiz_statistics/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="canvas_sanitize (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_sanitize) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/canvas_sanitize/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/canvas_sanitize/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="canvas_slug (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_slug) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/canvas_slug/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/canvas_slug/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="canvas_sort (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_sort) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/canvas_sort/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/canvas_sort/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="canvas_stringex (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_stringex) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/canvas_stringex/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/canvas_stringex/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="canvas_text_helper (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_text_helper) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/canvas_text_helper/lib" />
+          <root url="file://$MODULE_DIR$/gems/canvas_text_helper/config" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/canvas_text_helper/lib" />
+          <root url="file://$MODULE_DIR$/gems/canvas_text_helper/config" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="canvas_time (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_time) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/canvas_time/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/canvas_time/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="canvas_unzip (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_unzip) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/canvas_unzip/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/canvas_unzip/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="csv_diff (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/csv_diff) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/csv_diff/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/csv_diff/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="diigo (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/diigo) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/diigo/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/diigo/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="event_stream (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/event_stream) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/event_stream/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/event_stream/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="google_drive (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/google_drive) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/google_drive/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/google_drive/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="handlebars_tasks (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/handlebars_tasks) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/handlebars_tasks/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/handlebars_tasks/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="html_text_helper (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/html_text_helper) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/html_text_helper/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/html_text_helper/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="i18n_extraction (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/i18n_extraction) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/i18n_extraction/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/i18n_extraction/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="i18n_tasks (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/i18n_tasks) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/i18n_tasks/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/i18n_tasks/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="incoming_mail_processor (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/incoming_mail_processor) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/incoming_mail_processor/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/incoming_mail_processor/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="json_token (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/json_token) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/json_token/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/json_token/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="linked_in (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/linked_in) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/linked_in/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/linked_in/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="live_events (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/live_events) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/live_events/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/live_events/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="lti_outbound (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/lti_outbound) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/lti_outbound/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/lti_outbound/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="moodle_importer (v[path], /Users/samuelsanthosh/dev/c/dev/yciw/gems/plugins/moodle_importer) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/plugins/moodle_importer/lib" />
+          <root url="file://$MODULE_DIR$/gems/plugins/moodle_importer/spec_canvas" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/plugins/moodle_importer/lib" />
+          <root url="file://$MODULE_DIR$/gems/plugins/moodle_importer/spec_canvas" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="multipart (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/multipart) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/multipart/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/multipart/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="paginated_collection (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/paginated_collection) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/paginated_collection/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/paginated_collection/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="qti_exporter (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/plugins/qti_exporter) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/plugins/qti_exporter/app" />
+          <root url="file://$MODULE_DIR$/gems/plugins/qti_exporter/lib" />
+          <root url="file://$MODULE_DIR$/gems/plugins/qti_exporter/spec_canvas" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/plugins/qti_exporter/app" />
+          <root url="file://$MODULE_DIR$/gems/plugins/qti_exporter/lib" />
+          <root url="file://$MODULE_DIR$/gems/plugins/qti_exporter/spec_canvas" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="respondus_soap_endpoint (v1.1.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/plugins/respondus_soap_endpoint) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/plugins/respondus_soap_endpoint/app" />
+          <root url="file://$MODULE_DIR$/gems/plugins/respondus_soap_endpoint/lib" />
+          <root url="file://$MODULE_DIR$/gems/plugins/respondus_soap_endpoint/spec_canvas" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/plugins/respondus_soap_endpoint/app" />
+          <root url="file://$MODULE_DIR$/gems/plugins/respondus_soap_endpoint/lib" />
+          <root url="file://$MODULE_DIR$/gems/plugins/respondus_soap_endpoint/spec_canvas" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="rubocop-canvas (v[path], /Users/samuelsanthosh/dev/c/dev/yciw/gems/rubocop-canvas) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/rubocop-canvas/lib" />
+          <root url="file://$MODULE_DIR$/gems/rubocop-canvas/config" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/rubocop-canvas/lib" />
+          <root url="file://$MODULE_DIR$/gems/rubocop-canvas/config" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="selinimum (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/selinimum) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/selinimum/bin" />
+          <root url="file://$MODULE_DIR$/gems/selinimum/lib" />
+          <root url="file://$MODULE_DIR$/gems/selinimum/node_modules" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/selinimum/bin" />
+          <root url="file://$MODULE_DIR$/gems/selinimum/lib" />
+          <root url="file://$MODULE_DIR$/gems/selinimum/node_modules" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="simply_versioned (v[path], /Users/samuelsanthosh/dev/c/dev/yciw/gems/plugins/simply_versioned) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/plugins/simply_versioned/lib" />
+          <root url="file://$MODULE_DIR$/gems/plugins/simply_versioned/spec_canvas" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/plugins/simply_versioned/lib" />
+          <root url="file://$MODULE_DIR$/gems/plugins/simply_versioned/spec_canvas" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="stringify_ids (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/stringify_ids) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/stringify_ids/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/stringify_ids/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="twitter (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/twitter) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/twitter/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/twitter/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="utf8_cleaner (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/utf8_cleaner) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/utf8_cleaner/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/utf8_cleaner/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+    <orderEntry type="module-library">
+      <library name="workflow (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/workflow) [path][gem]">
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/gems/workflow/lib" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file://$MODULE_DIR$/gems/workflow/lib" />
+        </SOURCES>
+      </library>
+    </orderEntry>
     <orderEntry type="library" scope="PROVIDED" name="bundler (v1.13.2, RVM: ruby-1.9.3-p551 [sathuragiri]) [gem]" level="application" />
   </component>
   <component name="RModuleSettingsStorage">
