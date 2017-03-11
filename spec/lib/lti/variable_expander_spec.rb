@@ -17,6 +17,7 @@
 #
 
 require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require_dependency "lti/variable_expander"
 module Lti
   describe VariableExpander do
     let(:root_account) { Account.new }
@@ -39,6 +40,7 @@ module Lti
       m = mock('tool')
       m.stubs(:id).returns(1)
       m.stubs(:context).returns(root_account)
+      m.stubs(:extension_setting).with(nil, :prefer_sis_email).returns(nil)
       shard_mock = mock('shard')
       shard_mock.stubs(:settings).returns({encription_key: 'abc'})
       m.stubs(:shard).returns(shard_mock)
@@ -58,7 +60,7 @@ module Lti
       m.stubs(:polymorphic_url).returns('url')
       view_context_mock = mock('view_context')
       view_context_mock.stubs(:stylesheet_path)
-                       .returns(URI.parse(request_mock.url).merge(m.css_url_for(:common)).to_s)
+        .returns(URI.parse(request_mock.url).merge(m.css_url_for(:common)).to_s)
       m.stubs(:view_context).returns(view_context_mock)
       m
     end
@@ -140,10 +142,26 @@ module Lti
         expect(exp_hash[:test]).to eq 'localhost'
       end
 
+      it 'does not expand $Canvas.api.domain when the request is unset' do
+        subject.instance_variable_set(:@controller, nil)
+        subject.instance_variable_set(:@request, nil)
+        exp_hash = {test: '$Canvas.api.domain'}
+        subject.expand_variables!(exp_hash)
+        expect(exp_hash[:test]).to eq '$Canvas.api.domain'
+      end
+
       it 'has substitution for $Canvas.css.common' do
         exp_hash = {test: '$Canvas.css.common'}
         subject.expand_variables!(exp_hash)
         expect(exp_hash[:test]).to eq 'https://localhost/path/to/common.scss'
+      end
+
+      it 'does not expand $Canvas.css.common when the controller is unset' do
+        subject.instance_variable_set(:@controller, nil)
+        subject.instance_variable_set(:@request, nil)
+        exp_hash = {test: '$Canvas.css.common'}
+        subject.expand_variables!(exp_hash)
+        expect(exp_hash[:test]).to eq '$Canvas.css.common'
       end
 
       it 'has substitution for $Canvas.api.baseUrl' do
@@ -151,6 +169,14 @@ module Lti
         HostUrl.stubs(:context_host).returns('localhost')
         subject.expand_variables!(exp_hash)
         expect(exp_hash[:test]).to eq 'https://localhost'
+      end
+
+      it 'does not expand $Canvas.api.baseUrl when the request is unset' do
+        subject.instance_variable_set(:@controller, nil)
+        subject.instance_variable_set(:@request, nil)
+        exp_hash = {test: '$Canvas.api.baseUrl'}
+        subject.expand_variables!(exp_hash)
+        expect(exp_hash[:test]).to eq '$Canvas.api.baseUrl'
       end
 
       it 'has substitution for $Canvas.account.id' do
@@ -225,6 +251,15 @@ module Lti
           subject.expand_variables!(exp_hash)
           expect(exp_hash[:test]).to eq "/api/lti/groups/1/membership_service"
         end
+
+        it 'does not substitute $ToolProxyBinding.memberships.url when the controller is unset' do
+
+          subject.instance_variable_set(:@controller, nil)
+          subject.instance_variable_set(:@request, nil)
+          exp_hash = { test: '$ToolProxyBinding.memberships.url' }
+          subject.expand_variables!(exp_hash)
+          expect(exp_hash[:test]).to eq '$ToolProxyBinding.memberships.url'
+        end
       end
 
       context 'context is a course' do
@@ -243,6 +278,13 @@ module Lti
           exp_hash = {test: '$Canvas.course.id'}
           subject.expand_variables!(exp_hash)
           expect(exp_hash[:test]).to eq 123
+        end
+
+        it 'has substitution for $Canvas.course.workflowState' do
+          course.workflow_state = 'available'
+          exp_hash = {test: '$Canvas.course.workflowState'}
+          subject.expand_variables!(exp_hash)
+          expect(exp_hash[:test]).to eq 'available'
         end
 
         it 'has substitution for $CourseSection.sourcedId' do
@@ -365,6 +407,15 @@ module Lti
           exp_hash = {test: '$Canvas.externalTool.url'}
           expander.expand_variables!(exp_hash)
           expect(exp_hash[:test]).to eq "url"
+        end
+
+        it 'does not substitute $Canvas.externalTool.url when the controller is unset' do
+
+          subject.instance_variable_set(:@controller, nil)
+          subject.instance_variable_set(:@request, nil)
+          exp_hash = {test: '$Canvas.externalTool.url'}
+          subject.expand_variables!(exp_hash)
+          expect(exp_hash[:test]).to eq '$Canvas.externalTool.url'
         end
 
         it 'returns the opaque identifiers for the active groups the user is a part of' do
@@ -521,6 +572,15 @@ module Lti
 
       end
 
+      context 'user is not logged in' do
+        let(:user) {}
+        it 'has substitution for $vnd.Canvas.Person.email.sis when user is not logged in' do
+          exp_hash = {test: '$vnd.Canvas.Person.email.sis'}
+          subject.expand_variables!(exp_hash)
+          expect(exp_hash[:test]).to eq '$vnd.Canvas.Person.email.sis'
+        end
+      end
+
       context 'user is logged in' do
 
         it 'has substitution for $Person.name.full' do
@@ -545,11 +605,35 @@ module Lti
         end
 
         it 'has substitution for $Person.email.primary' do
-          user.save
-          user.email = 'someone@somewhere'
+          substitution_helper.stubs(:email).returns('someone@somewhere')
+          SubstitutionsHelper.stubs(:new).returns(substitution_helper)
           exp_hash = {test: '$Person.email.primary'}
           subject.expand_variables!(exp_hash)
           expect(exp_hash[:test]).to eq 'someone@somewhere'
+        end
+
+        it 'has substitution for $vnd.Canvas.Person.email.sis when user is added via sis' do
+          user.save
+          user.email = 'someone@somewhere'
+          cc1 = user.communication_channels.first
+          pseudonym1 = cc1.user.pseudonyms.build(:unique_id => cc1.path, :account => Account.default)
+          pseudonym1.sis_communication_channel_id=cc1.id
+          pseudonym1.communication_channel_id=cc1.id
+          pseudonym1.sis_user_id="some_sis_id"
+          pseudonym1.save
+
+          exp_hash = {test: '$vnd.Canvas.Person.email.sis'}
+          subject.expand_variables!(exp_hash)
+          expect(exp_hash[:test]).to eq 'someone@somewhere'
+        end
+
+        it 'has substitution for $vnd.Canvas.Person.email.sis when user is NOT added via sis' do
+          user.save
+          user.email = 'someone@somewhere'
+
+          exp_hash = {test: '$vnd.Canvas.Person.email.sis'}
+          subject.expand_variables!(exp_hash)
+          expect(exp_hash[:test]).to eq '$vnd.Canvas.Person.email.sis'
         end
 
         it 'has substitution for $Person.address.timezone' do
@@ -570,6 +654,13 @@ module Lti
           exp_hash = {test: '$Canvas.user.id'}
           subject.expand_variables!(exp_hash)
           expect(exp_hash[:test]).to eq 456
+        end
+
+        it 'has substitution for $Canvas.user.isRootAccountAdmin' do
+          user.stubs(:roles).returns(["root_admin"])
+          exp_hash = {test: '$Canvas.user.isRootAccountAdmin'}
+          subject.expand_variables!(exp_hash)
+          expect(exp_hash[:test]).to eq true
         end
 
         it 'has substitution for $Canvas.xuser.allRoles' do
@@ -753,6 +844,14 @@ module Lti
           expect(exp_hash[:test]).to eq 42
         end
 
+        it 'does not expand $Canvas.masqueradingUser.id when the controller is unset' do
+          subject.instance_variable_set(:@controller, nil)
+          subject.instance_variable_set(:@request, nil)
+          exp_hash = {test: '$Canvas.masqueradingUser.id'}
+          subject.expand_variables!(exp_hash)
+          expect(exp_hash[:test]).to eq '$Canvas.masqueradingUser.id'
+        end
+
         it 'has substitution for $Canvas.masqueradingUser.userId' do
           masquerading_user = User.new
           masquerading_user.stubs(:id).returns(7878)
@@ -788,6 +887,5 @@ module Lti
         end
       end
     end
-
   end
 end

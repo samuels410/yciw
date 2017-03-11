@@ -531,7 +531,7 @@ describe ContextModulesController do
   describe "GET progressions" do
     context "unauthenticated user in public course" do
       before(:once) do
-        course(:is_public => true, :active_all => true)
+        course_factory(:is_public => true, :active_all => true)
         @user = nil
         @mod1 = @course.context_modules.create!(:name => 'unlocked')
         @mod2 = @course.context_modules.create!(:name => 'locked', :unlock_at => 1.week.from_now)
@@ -780,11 +780,15 @@ describe ContextModulesController do
     end
 
     before :once do
-      course_with_student_logged_in(:active_all => true)
+      course_with_student(:active_all => true)
       @mod = @course.context_modules.create!
       ag = @course.assignment_groups.create!
       @assg = ag.assignments.create!(:context => @course)
       @item = @mod.add_item :type => 'assignment', :id => @assg.id
+    end
+
+    before :each do
+      user_session @student
     end
 
     it "should return 404 if no rule matches item assignment" do

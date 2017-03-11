@@ -68,7 +68,6 @@
 <% end %>
 
 <script type="text/javascript" charset="utf-8">
-  $(window).load(function() {
     console.log("load");
     //create teacher only html on course pages
     if (document.URL.indexOf('courses') > -1 && ENV.current_user_roles.indexOf('student') > -1) {
@@ -82,7 +81,6 @@
         }
       }
     }
-  });
 </script>
 
 <!-- Hotjar Tracking Code for class.yciw.net -->

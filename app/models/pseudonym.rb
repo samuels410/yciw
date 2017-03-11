@@ -19,8 +19,6 @@
 class Pseudonym < ActiveRecord::Base
   include Workflow
 
-  attr_accessible :user, :account, :password, :password_confirmation, :path, :path_type, :password_auto_generated, :unique_id
-
   has_many :session_persistence_tokens
   belongs_to :account
   belongs_to :user
@@ -57,7 +55,7 @@ class Pseudonym < ActiveRecord::Base
 
   validates_each :password, {:if => :require_password?}, &Canvas::PasswordPolicy.method("validate")
   acts_as_authentic do |config|
-    config.validates_format_of_login_field_options = {:with => /\A\w[\w\.\+\-_'@ =]*\z/}
+    config.validates_format_of_login_field_options = {:with => /\A[\w\.\+\-_'@ =]+\z/}
     config.login_field :unique_id
     config.perishable_token_valid_for = 30.minutes
     config.validates_length_of_login_field_options = {:within => 1..MAX_UNIQUE_ID_LENGTH}
@@ -67,7 +65,6 @@ class Pseudonym < ActiveRecord::Base
         if: ->(p) { (p.unique_id_changed? || p.workflow_state_changed?) && p.active? }
     }
     config.crypto_provider = Authlogic::CryptoProviders::Sha512
-    config.validates_length_of_password_field_options = { minimum: 6, if: :require_password? }
   end
 
   attr_writer :require_password

@@ -32,8 +32,9 @@ module Lti
             [@context, :tool_consumer_profile],
             tool_consumer_profile_id: Lti::ToolConsumerProfileCreator::TCP_UUID
           ),
-          ->(tool_proxy_uuid) { polymorphic_url([@context, :registration_return], tool_proxy_uuid: tool_proxy_uuid) }
+          -> { polymorphic_url([@context, :registration_return]) }
         )
+
         @lti_launch.params = message.post_params
         @lti_launch.params['ext_tool_consumer_instance_guid'] = @context.root_account.lti_guid
         @lti_launch.params['ext_api_domain'] = HostUrl.context_host(@context, request.host)
@@ -69,7 +70,7 @@ module Lti
         lti_version: IMS::LTI::Models::LTIModel::LTI_VERSION_2P1,
         tc_profile_url: polymorphic_url([@context, :tool_consumer_profile],
                                         tool_consumer_profile_id: Lti::ToolConsumerProfileCreator::TCP_UUID),
-        launch_presentation_return_url: polymorphic_url([@context, :registration_return], tool_proxy_uuid: tp.guid),
+        launch_presentation_return_url: polymorphic_url([@context, :registration_return]),
         launch_presentation_document_target: IMS::LTI::Models::Messages::Message::LAUNCH_TARGET_IFRAME
       )
     end
@@ -82,7 +83,7 @@ module Lti
         tool_proxy = resource_handler.tool_proxy
         # TODO: create scope for query
         if tool_proxy.workflow_state == 'active'
-          message = IMS::LTI::Models::Messages::BasicLTILaunchRequest.new(
+          launch_params = {
             launch_url: message_handler.launch_path,
             oauth_consumer_key: tool_proxy.guid,
             lti_version: IMS::LTI::Models::LTIModel::LTI_VERSION_2P0,
@@ -92,7 +93,12 @@ module Lti
             launch_presentation_locale: I18n.locale || I18n.default_locale.to_s,
             roles: Lti::SubstitutionsHelper.new(@context, @domain_root_account, @current_user).all_roles('lis2'),
             launch_presentation_document_target: IMS::LTI::Models::Messages::Message::LAUNCH_TARGET_IFRAME
-          )
+          }
+          if params[:secure_params].present?
+            secure_params = Canvas::Security.decode_jwt(params[:secure_params])
+            launch_params.merge!({ext_lti_assignment_id: secure_params[:lti_assignment_id]}) if secure_params[:lti_assignment_id].present?
+          end
+          message = IMS::LTI::Models::Messages::BasicLTILaunchRequest.new(launch_params)
           message.user_id = Lti::Asset.opaque_identifier_for(@current_user) if @current_user
           @active_tab = message_handler.asset_string
           @lti_launch = Launch.new
@@ -115,7 +121,7 @@ module Lti
     end
 
     def registration_return
-      @tool = ToolProxy.where(guid: request.path_parameters[:tool_proxy_uuid]).first
+      @tool = ToolProxy.where(guid: params[:tool_proxy_guid]).first
       @data = {
           subject: 'lti.lti2Registration',
           status: params[:status],

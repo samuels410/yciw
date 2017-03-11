@@ -3,7 +3,7 @@ define([
   'jquery',
   'i18n!new_nav',
   'react',
-  'bower/react-tray/dist/react-tray',
+  'react-tray',
   'jsx/navigation_header/trays/CoursesTray',
   'jsx/navigation_header/trays/GroupsTray',
   'jsx/navigation_header/trays/AccountsTray',
@@ -212,6 +212,8 @@ define([
             <ProfileTray
               userDisplayName={window.ENV.current_user.display_name}
               userAvatarURL={window.ENV.current_user.avatar_image_url}
+              profileEnabled={window.ENV.SETTINGS.enable_profiles}
+              eportfoliosEnabled={window.ENV.SETTINGS.eportfolios_enabled}
               closeTray={this.closeTray}
             />
           );

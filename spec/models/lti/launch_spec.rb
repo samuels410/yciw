@@ -17,6 +17,7 @@
 #
 
 require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper.rb')
+require_dependency "lti/launch"
 
 module Lti
   describe Launch do
@@ -33,6 +34,16 @@ module Lti
         }
         launch = Launch.new(options)
         expect(launch.tool_dimensions).to eq options[:tool_dimensions]
+      end
+
+      it 'returns "about:blank" if resource_url has an unsupported protocol' do
+        launch.resource_url = 'javascript:x/x%250aalert(badstuff)'
+        expect(launch.resource_url).to eq 'about:blank'
+      end
+
+      it 'returns "about:blank" if resource_url is an invalid url' do
+        launch.resource_url = '"'
+        expect(launch.resource_url).to eq 'about:blank'
       end
     end
   end

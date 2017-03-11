@@ -76,7 +76,7 @@ describe PseudonymsController do
     describe "forgot password" do
       before :once do
         Notification.create(:name => 'Forgot Password')
-        user
+        user_factory
       end
 
       it "should send password-change email for a registered user" do
@@ -462,7 +462,7 @@ describe PseudonymsController do
 
         get 'index', :format => 'json', :user_id => @user.id
         expect(response).to be_success
-        expect(assigns['pseudonyms']).to eq [@p1, @p2]
+        expect(assigns['pseudonyms']).to match_array [@p1, @p2]
       end
     end
 

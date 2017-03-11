@@ -503,7 +503,13 @@ class ContextModuleItemsApiController < ApplicationController
     assignment = @item.assignment
     return render json: { message: 'requested item is not an assignment' }, status: :bad_request unless assignment
 
-    response = ConditionalRelease::Service.select_mastery_path(@context, @current_user, @student, assignment.id, params[:assignment_set_id], session)
+    response = ConditionalRelease::Service.select_mastery_path(
+      @context,
+      @current_user,
+      @student,
+      assignment,
+      params[:assignment_set_id],
+      session)
 
     if response[:code] != '200'
       render json: response[:body], status: response[:code]
@@ -514,8 +520,8 @@ class ContextModuleItemsApiController < ApplicationController
 
       Assignment.preload_context_module_tags(assignments)
 
-      # match cyoe order
-      assignments = assignments.index_by(&:id).values_at(*assignment_ids)
+      # match cyoe order, omit unpublished or deleted assignments
+      assignments = assignments.index_by(&:id).values_at(*assignment_ids).compact
 
       # grab locally relevant module items
       items = assignments.map(&:all_context_module_tags).flatten.select{|a| a.context_module_id == @module.id}

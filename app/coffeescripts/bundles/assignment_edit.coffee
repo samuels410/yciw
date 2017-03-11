@@ -12,7 +12,6 @@ require [
   'compiled/views/assignments/GroupCategorySelector'
   'compiled/views/assignments/PeerReviewsSelector'
   'grading_standards'
-  'manage_groups'
 ], (Section, Assignment, EditHeaderView, EditView, SectionCollection,
 
   DueDateList, OverrideView, AssignmentGroupSelector,
@@ -36,6 +35,7 @@ require [
   groupCategorySelector = new GroupCategorySelector
     parentModel: assignment
     groupCategories: ENV?.GROUP_CATEGORIES || []
+    inClosedGradingPeriod: assignment.inClosedGradingPeriod()
   peerReviewsSelector = new PeerReviewsSelector
     parentModel: assignment
 

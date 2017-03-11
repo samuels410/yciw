@@ -193,7 +193,7 @@ describe CalendarEventsApiController, type: :request do
       contexts = [@course.asset_string]
 
       # second context the user cannot access
-      course()
+      course_factory()
       @course.calendar_events.create(:title => "unauthorized_course", :start_at => '2012-01-08 12:00:00')
       contexts.push(@course.asset_string)
 
@@ -213,6 +213,36 @@ describe CalendarEventsApiController, type: :request do
                       {:start_date => 2.days.ago.strftime("%Y-%m-%d"), :end_date => 2.days.from_now.strftime("%Y-%m-%d"), :context_codes => ["course_#{unrelated_course.id}"]})
       expect(json.size).to eq 1
       expect(json.first['title']).to eq "from unrelated one"
+    end
+
+    it "should allow account admins to view section-specific events" do
+      event = @course.calendar_events.build(:title => 'event', :child_event_data =>
+        {"0" => {:start_at => "2012-01-09 12:00:00", :end_at => "2012-01-09 13:00:00", :context_code => @course.default_section.asset_string}})
+      event.updating_user = @teacher
+      event.save!
+      account_admin_user(:active_all => true)
+
+      json = api_call(:get, "/api/v1/calendar_events?start_date=2012-01-07&end_date=2012-01-19&context_codes[]=course_#{@course.id}", {
+        :controller => 'calendar_events_api', :action => 'index', :format => 'json',
+        :context_codes => ["course_#{@course.id}"], :start_date => '2012-01-07', :end_date => '2012-01-19'})
+
+      expect(json.detect{|e| e['id'] == event.child_events.first.id}).to be_present
+    end
+
+    it "doesn't allow account admins to view events for courses they don't have access to" do
+      sub_account1 = Account.default.sub_accounts.create!
+      course_with_teacher(:active_all => true, :account => sub_account1)
+      event = @course.calendar_events.build(:title => 'event', :child_event_data =>
+        {"0" => {:start_at => "2012-01-09 12:00:00", :end_at => "2012-01-09 13:00:00", :context_code => @course.default_section.asset_string}})
+      event.updating_user = @teacher
+      event.save!
+
+      sub_account2 = Account.default.sub_accounts.create!
+      account_admin_user(:active_all => true, :account => sub_account2)
+
+      api_call(:get, "/api/v1/calendar_events?start_date=2012-01-07&end_date=2012-01-19&context_codes[]=course_#{@course.id}", {
+        :controller => 'calendar_events_api', :action => 'index', :format => 'json',
+        :context_codes => ["course_#{@course.id}"], :start_date => '2012-01-07', :end_date => '2012-01-19'}, {}, {}, {:expected_status => 401})
     end
 
     def public_course_query(options = {})
@@ -237,7 +267,7 @@ describe CalendarEventsApiController, type: :request do
     end
 
     it "should not allow anonymous users to access a non-public context" do
-      course(:active_all => true)
+      course_factory(active_all: true)
       public_course_query(:opts => {:expected_status => 401})
     end
 
@@ -321,7 +351,7 @@ describe CalendarEventsApiController, type: :request do
         group_student_ids = []
         3.times {
           g = cat.groups.create(:context => @course)
-          g.users << user
+          g.users << user_factory
           event2.reserve_for(g, @me)
           group_ids << g.id
           group_student_ids << @user.id
@@ -356,7 +386,7 @@ describe CalendarEventsApiController, type: :request do
 
       context "basic scenarios" do
         before :once do
-          course(:active_all => true)
+          course_factory(active_all: true)
           @teacher = @course.admins.first
           student_in_course :course => @course, :user => @me, :active_all => true
         end
@@ -548,7 +578,7 @@ describe CalendarEventsApiController, type: :request do
           Notification.create! :name => 'Appointment Canceled By User', :category => "TestImmediately"
 
           if as_student
-            course(:active_all => true)
+            course_factory(active_all: true)
             @teacher = @course.admins.first
             student_in_course :course => @course, :user => @me, :active_all => true
 
@@ -556,7 +586,7 @@ describe CalendarEventsApiController, type: :request do
             channel.confirm
           end
 
-          student_in_course(:course => @course, :user => (@other_guy = user), :active_all => true)
+          student_in_course(:course => @course, :user => (@other_guy = user_factory), :active_all => true)
 
           @ag1 = AppointmentGroup.create!(:title => "something", :participants_per_appointment => 4, :new_appointments => [["2012-01-01 12:00:00", "2012-01-01 13:00:00", "2012-01-01 13:00:00", "2012-01-01 14:00:00"]], :contexts => [@course])
           @ag1.publish!
@@ -715,7 +745,7 @@ describe CalendarEventsApiController, type: :request do
     end
 
     it 'should enforce permissions' do
-      event = course.calendar_events.create(:title => 'event')
+      event = course_factory.calendar_events.create(:title => 'event')
       raw_api_call(:get, "/api/v1/calendar_events/#{event.id}", {
         :controller => 'calendar_events_api', :action => 'show', :id => event.id.to_s, :format => 'json'})
       expect(JSON.parse(response.body)['status']).to eq 'unauthorized'
@@ -1149,7 +1179,7 @@ describe CalendarEventsApiController, type: :request do
 
       context 'for teachers and students' do
         before do
-          @teacher_student = user(:active_all => true)
+          @teacher_student = user_factory(active_all: true)
           teacher_enrollment = @course1.enroll_teacher(@teacher_student)
           teacher_enrollment.workflow_state = 'active'
           teacher_enrollment.save!
@@ -1173,7 +1203,7 @@ describe CalendarEventsApiController, type: :request do
 
       context 'for students' do
         before do
-          @teacher_student = user(:active_all => true)
+          @teacher_student = user_factory(active_all: true)
           @course1.enroll_student(@teacher_student, :enrollment_state => 'active')
           @course2.enroll_student(@teacher_student, :enrollment_state => 'active')
         end
@@ -1327,7 +1357,7 @@ describe CalendarEventsApiController, type: :request do
     end
 
     it 'should enforce permissions' do
-      assignment = course.assignments.create(:title => 'event')
+      assignment = course_factory.assignments.create(:title => 'event')
       raw_api_call(:get, "/api/v1/calendar_events/assignment_#{assignment.id}", {
         :controller => 'calendar_events_api', :action => 'show', :id => "assignment_#{assignment.id}", :format => 'json'})
       expect(JSON.parse(response.body)['status']).to eq 'unauthorized'
@@ -1359,7 +1389,7 @@ describe CalendarEventsApiController, type: :request do
 
       context 'as student' do
         before :once do
-          @student = user :active_all => true, :active_state => 'active'
+          @student = user_factory :active_all => true, :active_state => 'active'
         end
 
         context 'when no sections' do
@@ -1600,7 +1630,7 @@ describe CalendarEventsApiController, type: :request do
 
       context 'as TA' do
         before :once do
-          @ta = user :active_all => true, :active_state => 'active'
+          @ta = user_factory :active_all => true, :active_state => 'active'
         end
 
         context 'when no sections' do
@@ -1666,8 +1696,8 @@ describe CalendarEventsApiController, type: :request do
 
       context 'as observer' do
         before :once do
-          @student = user(:active_all => true, :active_state => 'active')
-          @observer = user(:active_all => true, :active_state => 'active')
+          @student = user_factory(active_all: true, :active_state => 'active')
+          @observer = user_factory(active_all: true, :active_state => 'active')
         end
 
         context 'when not observing any students' do
@@ -1765,7 +1795,7 @@ describe CalendarEventsApiController, type: :request do
 
           context 'observing multiple students' do
             before :once do
-              @student2 = user(:active_all => true, :active_state => 'active')
+              @student2 = user_factory(active_all: true, :active_state => 'active')
             end
 
             context 'when in same course section' do
@@ -1822,7 +1852,7 @@ describe CalendarEventsApiController, type: :request do
             context 'when in different courses' do
               before(:each) do
                 @course1 = @course
-                @course2 = course(:active_all => true)
+                @course2 = course_factory(active_all: true)
 
                 @assignment1 = @default_assignment
                 @assignment2 = @course2.assignments.create!(:title => 'Override2', :due_at => '2012-01-13 12:00:00Z')
@@ -1899,9 +1929,9 @@ describe CalendarEventsApiController, type: :request do
 
   context "user index" do
     before :once do
-      @student = user(active_all: true, active_state: 'active')
+      @student = user_factory(active_all: true, active_state: 'active')
       @course.enroll_student(@student, enrollment_state: 'active')
-      @observer = user(active_all: true, active_state: 'active')
+      @observer = user_factory(active_all: true, active_state: 'active')
       @course.enroll_user(
         @observer,
         'ObserverEnrollment',
@@ -1941,9 +1971,9 @@ describe CalendarEventsApiController, type: :request do
   context "calendar feed" do
     before :once do
       time = Time.utc(Time.now.year, Time.now.month, Time.now.day, 4, 20)
-      @student = user(:active_all => true, :active_state => 'active')
+      @student = user_factory(active_all: true, :active_state => 'active')
       @course.enroll_student(@student, :enrollment_state => 'active')
-      @student2 = user(:active_all => true, :active_state => 'active')
+      @student2 = user_factory(active_all: true, :active_state => 'active')
       @course.enroll_student(@student2, :enrollment_state => 'active')
 
 

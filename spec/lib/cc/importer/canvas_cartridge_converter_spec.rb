@@ -765,7 +765,7 @@ describe "Canvas Cartridge importing" do
   end
 
   it "should import external tool assignments" do
-    course_with_teacher_logged_in
+    course_with_teacher
     assignment_model(:course => @copy_from, :points_possible => 40, :submission_types => 'external_tool', :grading_type => 'points')
     tag_from = @assignment.build_external_tool_tag(:url => "http://example.com/one", :new_tab => true)
     tag_from.content_type = 'ContextExternalTool'
@@ -1409,7 +1409,7 @@ describe "cc assignment extensions" do
     converter.export
     @course_data = converter.course.with_indifferent_access
 
-    @course = course
+    @course = course_factory
     @migration = ContentMigration.create(:context => @course)
     @migration.migration_type = "canvas_cartridge_importer"
     @migration.migration_settings[:migration_ids_to_import] = {:copy => {}}
@@ -1454,7 +1454,7 @@ describe "matching question reordering" do
     converter.export
     @course_data = converter.course.with_indifferent_access
 
-    @course = course
+    @course = course_factory
     @migration = ContentMigration.create(:context => @course)
     @migration.migration_type = "common_cartridge_importer"
     @migration.migration_settings[:migration_ids_to_import] = {:copy => {}}
@@ -1495,7 +1495,7 @@ describe "matching question reordering" do
       converter.export
       @course_data = converter.course.with_indifferent_access
 
-      @course = course
+      @course = course_factory
       @migration = ContentMigration.create(:context => @course)
       @migration.migration_type = "canvas_cartridge_importer"
     end

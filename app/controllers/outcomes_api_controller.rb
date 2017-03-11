@@ -102,6 +102,11 @@
 #           "example": true,
 #           "type": "boolean"
 #         },
+#         "can_unlink": {
+#           "description": "whether the outcome can be unlinked",
+#           "example": true,
+#           "type": "boolean"
+#         },
 #         "assessed": {
 #           "description": "whether this outcome has been used to assess a student",
 #           "example": true,
@@ -223,7 +228,7 @@ class OutcomesApiController < ApplicationController
       )
     end
 
-    @outcome.update_attributes(params.slice(*DIRECT_PARAMS))
+    @outcome.update_attributes(params.permit(*DIRECT_PARAMS))
     update_outcome_criterion(@outcome) if params[:mastery_points] || params[:ratings]
 
     if @outcome.save

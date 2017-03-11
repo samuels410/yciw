@@ -170,7 +170,7 @@ define [
     notOk view.$('[name="group_weight"]').length
 
   test 'disables group weight input when an assignment is due in a closed grading period', ->
-    closed_group = group(has_assignment_due_in_closed_grading_period: true)
+    closed_group = group(any_assignment_in_closed_grading_period: true)
     groups = new AssignmentGroupCollection([group(), closed_group])
     view = createView(group: closed_group, assignmentGroups: groups)
     view.render()
@@ -178,7 +178,7 @@ define [
     ok view.$('[name="group_weight"]').attr('readonly')
 
   test 'does not disable group weight input when userIsAdmin is true', ->
-    closed_group = group(has_assignment_due_in_closed_grading_period: true)
+    closed_group = group(any_assignment_in_closed_grading_period: true)
     groups = new AssignmentGroupCollection([group(), closed_group])
     view = createView(group: closed_group, assignmentGroups: groups, userIsAdmin: true)
     view.render()
@@ -186,7 +186,7 @@ define [
     notOk view.$('[name="group_weight"]').attr('readonly')
 
   test 'disables drop rule inputs when an assignment is due in a closed grading period', ->
-    closed_group = group(has_assignment_due_in_closed_grading_period: true)
+    closed_group = group(any_assignment_in_closed_grading_period: true)
     groups = new AssignmentGroupCollection([group(), closed_group])
     view = createView(group: closed_group, assignmentGroups: groups)
     view.render()
@@ -194,7 +194,7 @@ define [
     ok view.$('[name="rules[drop_highest]"]').attr('readonly')
 
   test 'does not disable drop rule inputs when userIsAdmin is true', ->
-    closed_group = group(has_assignment_due_in_closed_grading_period: true)
+    closed_group = group(any_assignment_in_closed_grading_period: true)
     groups = new AssignmentGroupCollection([group(), closed_group])
     view = createView(group: closed_group, assignmentGroups: groups, userIsAdmin: true)
     view.render()

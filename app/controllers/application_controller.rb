@@ -45,7 +45,6 @@ class ApplicationController < ActionController::Base
   skip_before_filter :activate_authlogic
   prepend_before_filter :activate_authlogic
 
-  before_filter ::Filters::AllowAppProfiling
   before_filter :check_pending_otp
   before_filter :set_user_id_header
   before_filter :set_time_zone
@@ -123,7 +122,8 @@ class ApplicationController < ActionController::Base
           open_registration: @domain_root_account.try(:open_registration?),
           eportfolios_enabled: (@domain_root_account && @domain_root_account.settings[:enable_eportfolios] != false), # checking all user root accounts is slow
           collapse_global_nav: @current_user.try(:collapse_global_nav?),
-          show_feedback_link: show_feedback_link?
+          show_feedback_link: show_feedback_link?,
+          enable_profiles: (@domain_root_account && @domain_root_account.settings[:enable_profiles] != false)
         }
       }
       @js_env[:page_view_update_url] = page_view_path(@page_view.id, page_view_token: @page_view.token) if @page_view
@@ -226,6 +226,17 @@ class ApplicationController < ActionController::Base
   end
   helper_method :multiple_grading_periods?
 
+  def master_courses?
+    @domain_root_account && @domain_root_account.feature_enabled?(:master_courses)
+  end
+  helper_method :master_courses?
+
+  def editing_restricted?(content, edit_type=:all)
+    return false unless master_courses? && content.respond_to?(:editing_restricted?)
+    content.editing_restricted?(edit_type)
+  end
+  helper_method :editing_restricted?
+
   def tool_dimensions
     tool_dimensions = {selection_width: '100%', selection_height: '100%'}
 
@@ -255,7 +266,7 @@ class ApplicationController < ActionController::Base
   #
   # @param [String] cause
   #   The reason the request is rejected for.
-  # @param [Optional, Fixnum|Symbol, Default :bad_request] status
+  # @param [Optional, Integer|Symbol, Default :bad_request] status
   #   HTTP status code or symbol.
   def reject!(cause, status=:bad_request)
     raise RequestError.new(cause, status)
@@ -661,8 +672,9 @@ class ApplicationController < ActionController::Base
       # we already know the user can read these courses and groups, so skip
       # the grants_right? check to avoid querying for the various memberships
       # again.
-      enrollment_scope = Enrollment.for_user(@context).active_by_date
-      group_scope = opts[:include_groups] ? @context.current_groups : nil
+      enrollment_scope = Enrollment.for_user(@context).current.active_by_date
+      include_groups = !!opts[:include_groups]
+      group_ids = nil
 
       courses = []
       if only_contexts.present?
@@ -673,20 +685,26 @@ class ApplicationController < ActionController::Base
         unless course_ids.empty?
           courses = Course.where(:id => course_ids).where(:id => enrollment_scope.select(:course_id)).to_a
         end
-        if group_scope
+        if include_groups
           group_ids = only_contexts.select { |c| c.first == "Group" }.map(&:last)
-          if group_ids.empty?
-            group_scope = group_scope.none
-          else
-            group_scope = group_scope.where(:id => group_ids)
-          end
+          include_groups = false if group_ids.empty?
         end
       else
-        courses = Course.shard(@context).where(:id => enrollment_scope.select(:course_id)).to_a
-        enrollment_scope = Enrollment.for_user(@context).active_by_date
+        courses = Course.shard(opts[:cross_shard] ? @context.in_region_associated_shards : Shard.current).
+          where(:id => enrollment_scope.select(:course_id)).to_a
       end
 
-      groups = group_scope ? group_scope.shard(@context).to_a.reject{|g| g.context_type == "Course" && g.context.concluded?} : []
+      groups = []
+      if include_groups
+        if group_ids
+          Shard.partition_by_shard(group_ids) do |shard_group_ids|
+            groups += @context.current_groups.shard(Shard.current).where(:id => shard_group_ids).to_a
+          end
+        else
+          groups = @context.current_groups.shard(opts[:cross_shard] ? @context.in_region_associated_shards : Shard.current).to_a
+        end
+      end
+      groups.reject!{|g| g.context_type == "Course" && g.context.concluded?}
 
       if opts[:favorites_first]
         favorite_course_ids = @context.favorite_context_ids("Course")
@@ -1069,8 +1087,6 @@ class ApplicationController < ActionController::Base
 
   # analogous to rescue_action_without_handler from ActionPack 2.3
   def rescue_exception(exception)
-    raise if Rails.env.development? && !ENV['DISABLE_BETTER_ERRORS']
-
     ActiveSupport::Deprecation.silence do
       message = "\n#{exception.class} (#{exception.message}):\n"
       message << exception.annoted_source_code.to_s if exception.respond_to?(:annoted_source_code)
@@ -1778,10 +1794,6 @@ class ApplicationController < ActionController::Base
   end
   helper_method :css_bundle
 
-  alias_method :jammit_css, :css_bundle
-  deprecate :jammit_css
-  helper_method :jammit_css
-
   def js_bundles; @js_bundles ||= []; end
   helper_method :js_bundles
 
@@ -1792,14 +1804,14 @@ class ApplicationController < ActionController::Base
   #
   # Bundles are defined in app/coffeescripts/bundles/<bundle>.coffee
   #
-  # usage: js_bundle :gradebook2
+  # usage: js_bundle :gradebook
   #
   # Only allows multiple arguments to support old usage of jammit_js
   #
   # Optional :plugin named parameter allows you to specify a plugin which
   # contains the bundle. Example:
   #
-  # js_bundle :gradebook2, :plugin => :my_feature
+  # js_bundle :gradebook, :plugin => :my_feature
   #
   # will look for the bundle in
   # /plugins/my_feature/(optimized|javascripts)/compiled/bundles/ rather than
@@ -1967,14 +1979,20 @@ class ApplicationController < ActionController::Base
       hash[:COURSE_TITLE] = @context.name
     end
 
+    if opts[:show_announcements]
+      hash[:SHOW_ANNOUNCEMENTS] = true
+      hash[:ANNOUNCEMENT_LIMIT] = @context.home_page_announcement_limit
+    end
+
     if @page
-      hash[:WIKI_PAGE] = wiki_page_json(@page, @current_user, session, true, :deep_check_if_needed => true)
+      check_for_restrictions = master_courses? && @context.wiki.grants_right?(@current_user, :manage)
+      hash[:WIKI_PAGE] = wiki_page_json(@page, @current_user, session, true, :deep_check_if_needed => true, :include_master_course_restrictions => check_for_restrictions)
       hash[:WIKI_PAGE_REVISION] = (current_version = @page.versions.current) ? StringifyIds.stringify_id(current_version.number) : nil
       hash[:WIKI_PAGE_SHOW_PATH] = named_context_url(@context, :context_wiki_page_path, @page)
       hash[:WIKI_PAGE_EDIT_PATH] = named_context_url(@context, :edit_context_wiki_page_path, @page)
       hash[:WIKI_PAGE_HISTORY_PATH] = named_context_url(@context, :context_wiki_page_revisions_path, @page)
 
-      if @context.is_a?(Course) && @context.grants_right?(@current_user, :read)
+      if @context.is_a?(Course) && @context.grants_right?(@current_user, session, :read)
         hash[:COURSE_ID] = @context.id
         hash[:MODULES_PATH] = polymorphic_path([@context, :context_modules])
       end
@@ -2051,15 +2069,6 @@ class ApplicationController < ActionController::Base
 
   def user_has_google_drive
     @user_has_google_drive ||= google_drive_connection.authorized?
-  end
-
-  def twitter_connection
-    if @current_user
-      service = @current_user.user_services.where(service: "twitter").first
-      return Twitter::Connection.new(service.token, service.secret)
-    else
-      return Twitter::Connection.new(session[:oauth_twitter_access_token_token], session[:oauth_twitter_access_token_secret])
-    end
   end
 
   def self.region

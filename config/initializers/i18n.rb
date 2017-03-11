@@ -1,7 +1,21 @@
 # loading all the locales has a significant (>30%) impact on the speed of initializing canvas
 # so we skip it in situations where we don't need the locales, such as in development mode and in rails console
-skip_locale_loading = (Rails.env.development? || Rails.env.test? || $PROGRAM_NAME == 'irb') &&
-    !ENV['RAILS_LOAD_ALL_LOCALES']
+skip_locale_loading = (Rails.env.development? ||
+  Rails.env.test? ||
+  $0 == 'irb' ||
+  $PROGRAM_NAME == 'rails_console' ||
+  $0 =~ /rake$/)
+if ENV['RAILS_LOAD_ALL_LOCALES']
+  skip_locale_loading = ENV['RAILS_LOAD_ALL_LOCALES'] == '0'
+end
+# always load locales for rake tasks that we know need them
+if $0 =~ /rake$/ && !($ARGV & ["i18n:generate_js",
+                               "canvas:compile_assets",
+                               "canvas:compile_assets_dev",
+                               "js:test"]).empty?
+  skip_locale_loading = false
+end
+
 load_path = Rails.application.config.i18n.railties_load_path
 if skip_locale_loading
   load_path.replace(load_path.grep(%r{/(locales|en)\.yml\z}))
@@ -9,7 +23,6 @@ else
   load_path << (Rails.root + "config/locales/locales.yml").to_s # add it at the end, to trump any weird/invalid stuff in locale-specific files
 end
 
-Rails.application.config.i18n.backend = I18nema::Backend.new
 Rails.application.config.i18n.enforce_available_locales = true
 Rails.application.config.i18n.fallbacks = true
 
@@ -20,14 +33,22 @@ module DontTrustI18nPluralizations
     Rails.logger.error("#{e.message} in locale #{locale.inspect}")
     ""
   end
+
+  # make sure count special values get formatted
+  def interpolate(locale, string, values = {})
+    if values[:count] && values[:count].is_a?(Numeric)
+      values[:count] = ActiveSupport::NumberHelper.number_to_delimited(values[:count])
+    end
+    super
+  end
 end
-I18nema::Backend.include(DontTrustI18nPluralizations)
+I18n::Backend::Simple.include(DontTrustI18nPluralizations)
 
 module CalculateDeprecatedFallbacks
   def reload!
     super
     I18n.available_locales.each do |locale|
-      if (deprecated_for = I18n.backend.direct_lookup(locale.to_s, 'deprecated_for'))
+      if (deprecated_for = I18n.backend.send(:lookup, locale.to_s, 'deprecated_for'))
         I18n.fallbacks[locale] = I18n.fallbacks[deprecated_for.to_sym]
       end
     end
@@ -77,6 +98,10 @@ module I18nUtilities
     text = before_label(text) if options.delete(:before)
     return text, options
   end
+
+  def n(*args)
+    I18n.n(*args)
+  end
 end
 
 ActionView::Base.send(:include, I18nUtilities)
@@ -97,6 +122,7 @@ ActionView::Helpers::FormHelper.module_eval do
     text, options = _label_symbol_translation(method, text, options)
     label_without_symbol_translation(object_name, method, text, options)
   end
+  # when removing this, be sure to remove it from i18nliner_extensions.rb
   alias_method_chain :label, :symbol_translation
 end
 
@@ -119,6 +145,32 @@ ActionView::Helpers::FormBuilder.class_eval do
     label(method, text, options)
   end
 end
+
+module NumberLocalizer
+  # precision (default nil): if nil, use the precision of the passed in number.
+  #   if you want to cap precision, and have less precise numbers not have trailing zeros, you should be
+  #   rounding the number before passing to this helper, and not passing precision
+  # percentage (default false): format as a percentage
+  def n(number, precision: nil, percentage: false)
+    if percentage
+      # no precision? default to the number's precision, not to some arbitrary precision
+      if precision.nil?
+        precision = 9
+        strip_insignificant_zeros = true
+      end
+      return ActiveSupport::NumberHelper.number_to_percentage(number,
+                                                              precision: precision,
+                                                              strip_insignificant_zeros: strip_insignificant_zeros)
+    end
+
+    if precision.nil?
+      return ActiveSupport::NumberHelper.number_to_delimited(number)
+    end
+
+    ActiveSupport::NumberHelper.number_to_rounded(number, precision: precision)
+  end
+end
+I18n.singleton_class.include(NumberLocalizer)
 
 I18n.send(:extend, Module.new {
   attr_accessor :localizer
@@ -153,15 +205,15 @@ I18n.send(:extend, Module.new {
   alias :t :translate
 
   def bigeasy_locale
-    backend.direct_lookup(locale.to_s, "bigeasy_locale") || locale.to_s.tr('-', '_')
+    backend.send(:lookup, locale.to_s, "bigeasy_locale") || locale.to_s.tr('-', '_')
   end
 
   def fullcalendar_locale
-    backend.direct_lookup(locale.to_s, "fullcalendar_locale") || locale.to_s.downcase
+    backend.send(:lookup, locale.to_s, "fullcalendar_locale") || locale.to_s.downcase
   end
 
   def moment_locale
-    backend.direct_lookup(locale.to_s, "moment_locale") || locale.to_s.downcase
+    backend.send(:lookup, locale.to_s, "moment_locale") || locale.to_s.downcase
   end
 })
 

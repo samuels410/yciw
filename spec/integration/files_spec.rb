@@ -340,7 +340,8 @@ describe FilesController do
   it "should return the dynamically generated thumbnail of the size given" do
     attachment_model(:uploaded_data => stub_png_data)
     sz = "640x>"
-    @attachment.any_instantiation.expects(:create_or_update_thumbnail).with(anything, sz, sz).returns { @attachment.thumbnails.create!(:thumbnail => "640x>", :uploaded_data => stub_png_data) }
+    expect(@attachment.any_instantiation).to receive(:create_or_update_thumbnail).
+      with(anything, sz, sz) { @attachment.thumbnails.create!(:thumbnail => "640x>", :uploaded_data => stub_png_data) }
     get "/images/thumbnails/#{@attachment.id}/#{@attachment.uuid}?size=640x#{URI.encode '>'}"
     thumb = @attachment.thumbnails.where(thumbnail: "640x>").first
     expect(response).to redirect_to(thumb.authenticated_s3_url)
@@ -355,5 +356,23 @@ describe FilesController do
     expect(response).to be_success
 
     expect(@folder.file_attachments.by_position_then_display_name).to eq [att2, att1]
+  end
+
+  it "should allow file previews for public-to-auth courses" do
+    course_factory(active_all: true)
+    @course.update_attribute(:is_public_to_auth_users, true)
+
+    att = attachment_model(:uploaded_data => stub_png_data, :context => @course)
+
+    user_factory(active_all: true)
+    user_session(@user)
+
+    ts, sf_verifier = @user.access_verifier
+    get "/files/#{att.id}", :user_id => @user.id, :ts => ts, :sf_verifier => sf_verifier # set the file access session tokens
+    expect(session['file_access_user_id']).to be_present
+
+    get "/courses/#{@course.id}/files/#{att.id}/file_preview"
+    expect(response.body).to_not include("This file has not been unlocked yet")
+    expect(response.body).to include("/courses/#{@course.id}/files/#{att.id}")
   end
 end

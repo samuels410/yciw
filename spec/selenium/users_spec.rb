@@ -10,7 +10,7 @@ describe "users" do
       user_session(admin)
 
       @user = User.create!
-      course.enroll_student(@user)
+      course_factory.enroll_student(@user)
 
       get "/users/#{@user.id}"
       pseudonym_form = f('#edit_pseudonym_form')
@@ -52,7 +52,7 @@ describe "users" do
     it "should validate page view with a participation" do
       page_view(:user => @student, :course => @course, :participated => true)
       get "/users/#{@student.id}"
-      expect(f("#page_view_results img")).to have_attribute(:src, '/images/checked.png')
+      expect(f("#page_view_results .icon-check")).to be_displayed
     end
 
     it "should validate a page view url" do
@@ -239,7 +239,7 @@ describe "users" do
 
     it "should register a student with a join code" do
       Account.default.allow_self_enrollment!
-      course(:active_all => true)
+      course_factory(active_all: true)
       @course.update_attribute(:self_enrollment, true)
 
       get '/register'

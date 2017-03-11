@@ -19,8 +19,7 @@
 class ContextModule < ActiveRecord::Base
   include Workflow
   include SearchTermHelper
-  attr_accessible :context, :name, :unlock_at, :require_sequential_progress,
-                  :completion_requirements, :prerequisites, :publish_final_grade, :requirement_count
+
   belongs_to :context, polymorphic: [:course]
   has_many :context_module_progressions, :dependent => :destroy
   has_many :content_tags, -> { order('content_tags.position, content_tags.title') }, dependent: :destroy
@@ -204,7 +203,15 @@ class ContextModule < ActiveRecord::Base
 
   def publish_items!
     self.content_tags.each do |tag|
-      tag.publish if tag.unpublished?
+      if tag.unpublished?
+        if tag.content_type == 'Attachment'
+          tag.content.set_publish_state_for_usage_rights
+          tag.content.save!
+          tag.publish if tag.content.published?
+        else
+          tag.publish
+        end
+      end
       tag.update_asset_workflow_state!
     end
   end

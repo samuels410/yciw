@@ -1,11 +1,11 @@
 define([
   'react',
   'react-dom',
+  'react-addons-test-utils',
   'helpers/fakeENV',
   'jsx/conditional_release_stats/index',
   'jsx/conditional_release_stats/components/breakdown-graphs'
-], (React, ReactDOM, fakeENV, CyoeStats, BreakdownGraphs) => {
-  const TestUtils = React.addons.TestUtils
+], (React, ReactDOM, TestUtils, fakeENV, CyoeStats, BreakdownGraphs) => {
 
   const defaultEnv = () => ({
     ranges: [
@@ -124,6 +124,11 @@ define([
   test('does not add for a non-teacher', () => {
     ENV.current_user_roles = []
     testRender(false)
+  })
+
+  test('does add for an admin', () => {
+    ENV.current_user_roles = ['admin']
+    testRender(true)
   })
 
   test('does not add if there is not a rule defined', () => {
