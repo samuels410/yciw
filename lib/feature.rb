@@ -334,7 +334,7 @@ END
       state: 'hidden',
       beta: true,
       development: false,
-      root_opt_in: false
+      root_opt_in: true
     },
     'better_scheduler' =>
     {
@@ -344,7 +344,7 @@ END
       state: 'hidden',
       beta: true,
       development: false,
-      root_opt_in: false
+      root_opt_in: true
     },
     'use_new_tree' =>
     {
@@ -372,7 +372,7 @@ END
       state: 'hidden',
       beta: true,
       development: true,
-      root_opt_in: false
+      root_opt_in: true
     },
     'anonymous_grading' => {
       display_name: -> { I18n.t('Anonymous Grading') },
@@ -496,6 +496,7 @@ END
       state: 'hidden',
       beta: true,
       development: true,
+      root_opt_in: true,
     },
     'student_context_cards' =>
     {
@@ -503,7 +504,8 @@ END
       description: -> { I18n.t('Enable student context card links') },
       applies_to: "RootAccount",
       state: "allowed",
-      beta: true
+      beta: true,
+      root_opt_in: true,
     },
     'gradezilla' =>
     {
@@ -513,6 +515,7 @@ END
       state: "hidden",
       beta: true,
       development: true,
+      root_opt_in: true,
     },
     'modules_home_page' =>
     {
@@ -522,6 +525,7 @@ END
       state: "hidden",
       beta: true,
       development: true,
+      root_opt_in: true,
     },
   )
 
