@@ -681,6 +681,7 @@
     <orderEntry type="library" scope="PROVIDED" name="addressable (v2.3.8, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
     <orderEntry type="library" scope="PROVIDED" name="adobe_connect (v1.0.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
     <orderEntry type="library" scope="PROVIDED" name="after_transaction_commit (v1.1.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="airbrussh (v1.0.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
     <orderEntry type="library" scope="PROVIDED" name="arel (v6.0.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
     <orderEntry type="library" scope="PROVIDED" name="aroi (v0.0.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
     <orderEntry type="library" scope="PROVIDED" name="ast (v2.3.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
@@ -700,6 +701,11 @@
     <orderEntry type="library" scope="PROVIDED" name="canvas_connect (v0.3.10, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
     <orderEntry type="library" scope="PROVIDED" name="canvas_statsd (v1.0.8, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
     <orderEntry type="library" scope="PROVIDED" name="canvas_webex (v0.17, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="capistrano (v3.6.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="capistrano-bundler (v1.2.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="capistrano-harrow (v0.5.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="capistrano-passenger (v0.2.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="capistrano-rails (v1.2.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
     <orderEntry type="library" scope="PROVIDED" name="cassandra-cql (v1.2.2@beed72, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
     <orderEntry type="library" scope="PROVIDED" name="childprocess (v0.5.9, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
     <orderEntry type="library" scope="PROVIDED" name="chunky_png (v1.3.8, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
@@ -778,6 +784,8 @@
     <orderEntry type="library" scope="PROVIDED" name="nenv (v0.3.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
     <orderEntry type="library" scope="PROVIDED" name="net-http-persistent (v3.0.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
     <orderEntry type="library" scope="PROVIDED" name="net-ldap (v0.10.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="net-scp (v1.2.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="net-ssh (v3.2.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
     <orderEntry type="library" scope="PROVIDED" name="netaddr (v1.5.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
     <orderEntry type="library" scope="PROVIDED" name="nokogiri (v1.6.6.2.20150813143452@d47e53, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
     <orderEntry type="library" scope="PROVIDED" name="nokogiri-xmlsec-me-harder (v0.9.3pre@57d071, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
@@ -866,6 +874,7 @@
     <orderEntry type="library" scope="PROVIDED" name="sprockets (v3.7.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
     <orderEntry type="library" scope="PROVIDED" name="sprockets-rails (v3.2.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
     <orderEntry type="library" scope="PROVIDED" name="sqlite3 (v1.3.13, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="sshkit (v1.11.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
     <orderEntry type="library" scope="PROVIDED" name="statsd-ruby (v1.3.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
     <orderEntry type="library" scope="PROVIDED" name="switchman (v1.9.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
     <orderEntry type="library" scope="PROVIDED" name="test-queue (v0.2.13@57d31b, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />

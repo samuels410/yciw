@@ -10,6 +10,7 @@ set :user,    'sysadmin'
 set :passenger_user, 'www-data'
 set :use_sudo,      true
 set :passenger_restart_with_sudo, true
+set :pty, true
 
 set :keep_releases, 5
 set :bundle_flags, '--without=sqlite mysql --binstubs'
