@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2013 Instructure, Inc.
+# Copyright (C) 2013 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -36,7 +36,7 @@
 #     }
 #
 class CustomGradebookColumnDataApiController < ApplicationController
-  before_filter :require_context, :require_user
+  before_action :require_context, :require_user
 
   include Api::V1::CustomGradebookColumn
 

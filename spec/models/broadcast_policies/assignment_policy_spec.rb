@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path('../../spec_helper', File.dirname(__FILE__))
 require_dependency "broadcast_policies/assignment_policy"
 
@@ -9,28 +26,32 @@ module BroadcastPolicies
       ctx.stubs(:concluded?).returns(false)
       ctx
     }
-    let(:prior_version) { stub(:due_at => 7.days.ago, :points_possible => 50, :workflow_state => 'published') }
     let(:assignment) do
-      stub(:context => context, :prior_version => prior_version,
+      stub(:context => context,
            :published? => true, :muted? => false, :created_at => 4.hours.ago,
-           :changed_in_state => true, :due_at => Time.now,
+           :changed_in_state => true, :due_at => Time.zone.now,
            :points_possible => 100, :assignment_changed => false,
-           :just_created => true, :workflow_state => 'published')
+           :just_created => false, :workflow_state => 'published',
+           :due_at_was => 7.days.ago, :points_possible_changed? => true,
+           :workflow_state_changed? => false,
+           :workflow_state_was => 'published')
     end
 
     let(:policy) { AssignmentPolicy.new(assignment) }
 
     describe "#should_dispatch_assignment_created?" do
       before do
-        assignment.stubs(:workflow_state_changed?).returns true
+        assignment.stubs(:just_created).returns true
       end
 
-      it 'is true when an assignment is published' do
+      it 'is true when an assignment is published on creation' do
         expect(policy.should_dispatch_assignment_created?).to be_truthy
       end
 
       it 'is true when the prior version was unpublished' do
-        prior_version.stubs(:workflow_state).returns 'unpublished'
+        assignment.stubs(:just_created).returns false
+        assignment.stubs(:workflow_state_was).returns 'unpublished'
+        assignment.stubs(:workflow_state_changed?).returns true
         expect(policy.should_dispatch_assignment_created?).to be_truthy
       end
 
@@ -42,6 +63,7 @@ module BroadcastPolicies
       specify {
         wont_send_when {
           assignment.stubs(:just_created).returns false
+          assignment.stubs(:workflow_state_was).returns 'published'
           assignment.stubs(:workflow_state_changed?).returns false
         }
       }
@@ -65,9 +87,9 @@ module BroadcastPolicies
 
       specify { wont_send_when { context.stubs(:available?).returns false } }
       specify { wont_send_when { context.stubs(:concluded?).returns true } }
-      specify { wont_send_when { assignment.stubs(:prior_version).returns nil } }
+      specify { wont_send_when { assignment.stubs(:just_created).returns true } }
       specify { wont_send_when { assignment.stubs(:changed_in_state).returns false } }
-      specify { wont_send_when { assignment.stubs(:due_at).returns prior_version.due_at } }
+      specify { wont_send_when { assignment.stubs(:due_at).returns assignment.due_at_was } }
       specify { wont_send_when { assignment.stubs(:created_at).returns 2.hours.ago } }
     end
 
@@ -87,11 +109,11 @@ module BroadcastPolicies
 
       specify { wont_send_when { context.stubs(:available?).returns false } }
       specify { wont_send_when { context.stubs(:concluded?).returns true } }
-      specify { wont_send_when { assignment.stubs(:prior_version).returns nil } }
+      specify { wont_send_when { assignment.stubs(:just_created).returns true } }
       specify { wont_send_when { assignment.stubs(:published?).returns false } }
       specify { wont_send_when { assignment.stubs(:muted?).returns true } }
       specify { wont_send_when { assignment.stubs(:created_at).returns 20.minutes.ago } }
-      specify { wont_send_when { assignment.stubs(:points_possible).returns prior_version.points_possible } }
+      specify { wont_send_when { assignment.stubs(:points_possible_changed?).returns false } }
     end
 
     describe '#should_dispatch_assignment_unmuted?' do

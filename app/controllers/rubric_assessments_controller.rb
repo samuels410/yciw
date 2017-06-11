@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -17,7 +17,7 @@
 #
 
 class RubricAssessmentsController < ApplicationController
-  before_filter :require_context
+  before_action :require_context
 
   def create
     update

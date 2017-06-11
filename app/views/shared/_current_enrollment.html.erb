@@ -1,3 +1,21 @@
+<%
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+%>
+
 <% dashboard ||= false %>
 <% unless dashboard %>
   <tr class="course-list-table-row">
@@ -10,7 +28,7 @@
     </div>
   </div>
 <% else %>
-  <% show_link = current_enrollment.course.grants_right?(@current_user, session, :read) %>
+  <% show_link = [:active, :invited, :accepted, :completed].include?(current_enrollment.state_based_on_date) %>
       <% if @show_star_column %>
       <td class="course-list-star-column">
       <% favorite_course = @favorite_course_ids.include?(current_enrollment.course_id) %>
@@ -66,20 +84,7 @@
       </td>
 
       <td class="course-list-no-left-border course-list-enrolled-as-column">
-        <%
-           message = t('enrolled_as_student', "Student")
-           case current_enrollment.type
-           when 'TeacherEnrollment'
-             message = t('enrolled_as_teacher', "Teacher")
-           when 'TaEnrollment'
-             message = t('enrolled_as_ta', "TA")
-           when 'ObserverEnrollment'
-             message = t('enrolled_as_observer', "Observer")
-           when 'DesignerEnrollment'
-             message = t('enrolled_as_designer', "Designer")
-           end
-        %>
-        <%= message %>
+        <%= current_enrollment.readable_role_name %>
       </td>
 
       <td class="course-list-no-left-border course-list-published-column ">

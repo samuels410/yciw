@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -26,21 +26,21 @@ describe PluginsController do
       expect(PluginSetting.find_by(name: 'account_reports')).to be_nil
       controller.stubs(:require_setting_site_admin).returns(true)
 
-      put 'update', id: 'account_reports', all: 1, plugin_setting: { disabled: false }
-      expect(response).to redirect_to(plugin_path('account_reports', all: 1))
+      put 'update', id: 'account_reports', account_id: Account.default.id, plugin_setting: { disabled: false }
+      expect(response).to be_redirect
       ps = PluginSetting.find_by!(name: 'account_reports')
       expect(ps).to be_enabled
     end
 
     context "account_reports" do
       it 'can disable reports' do
-        ps = PluginSetting.new(name: 'account_reports')
+        ps = PluginSetting.new(name: 'account_reports', account_id: Account.default.id)
         ps.settings = { course_storage_csv: true }.with_indifferent_access
         ps.save!
 
         controller.stubs(:require_setting_site_admin).returns(true)
-        put 'update', id: 'account_reports', all: 1, settings: { 'course_storage_csv' => '0' }
-        expect(response).to redirect_to(plugin_path('account_reports', all: 1))
+        put 'update', id: 'account_reports', account_id: Account.default.id, settings: { 'course_storage_csv' => '0' }
+        expect(response).to be_redirect
         ps.reload
         expect(ps.settings[:course_storage_csv]).to eq false
       end

@@ -1,4 +1,25 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+#
+
 define [
+  'jquery'
+  'react'
+  'react-dom'
   'ic-ajax'
   'compiled/util/round'
   'compiled/userSettings'
@@ -11,21 +32,25 @@ define [
   'compiled/AssignmentDetailsDialog'
   'compiled/AssignmentMuter'
   'jsx/gradebook/CourseGradeCalculator'
+  'jsx/gradebook/EffectiveDueDates'
   'compiled/gradebook/OutcomeGradebookGrid'
   '../../shared/components/ic_submission_download_dialog_component'
   'str/htmlEscape'
   'compiled/models/grade_summary/CalculationMethodContent'
   'jsx/gradebook/SubmissionStateMap'
   'compiled/api/gradingPeriodsApi'
+  'compiled/api/gradingPeriodSetsApi'
+  'jsx/gradezilla/individual-gradebook/components/GradebookSelector'
   'jquery.instructure_date_and_time'
 ], (
-  ajax, round, userSettings, fetchAllPages, parseLinkHeader, I18n, Ember, _, tz,
-  AssignmentDetailsDialog, AssignmentMuter, CourseGradeCalculator, outcomeGrid,
-  ic_submission_download_dialog, htmlEscape, CalculationMethodContent, SubmissionStateMap,
-  GradingPeriodsAPI
+  $, React, ReactDOM, 
+  ajax, round, userSettings, fetchAllPages, parseLinkHeader, I18n, Ember, _, tz, AssignmentDetailsDialog,
+  AssignmentMuter, CourseGradeCalculator, EffectiveDueDates, outcomeGrid, ic_submission_download_dialog,
+  htmlEscape, CalculationMethodContent, SubmissionStateMap, GradingPeriodsApi, GradingPeriodSetsApi,
+  GradebookSelector
 ) ->
 
-  {get, set, setProperties} = Ember
+  { get, set, setProperties } = Ember
 
   # http://emberjs.com/guides/controllers/
   # http://emberjs.com/api/classes/Ember.Controller.html
@@ -96,16 +121,31 @@ define [
 
     submissionsUrl: get(window, 'ENV.GRADEBOOK_OPTIONS.submissions_url')
 
-    mgpEnabled: get(window, 'ENV.GRADEBOOK_OPTIONS.multiple_grading_periods_enabled')
+    has_grading_periods: get(window, 'ENV.GRADEBOOK_OPTIONS.grading_period_set')?
 
     gradingPeriods:
       (->
         periods = get(window, 'ENV.GRADEBOOK_OPTIONS.active_grading_periods')
-        deserializedPeriods = GradingPeriodsAPI.deserializePeriods(periods)
+        deserializedPeriods = GradingPeriodsApi.deserializePeriods(periods)
         optionForAllPeriods =
           id: '0', title: I18n.t("all_grading_periods", "All Grading Periods")
         _.compact([optionForAllPeriods].concat(deserializedPeriods))
       )()
+
+    getGradingPeriodSet: ->
+      grading_period_set = get(window, 'ENV.GRADEBOOK_OPTIONS.grading_period_set')
+      if grading_period_set
+        GradingPeriodSetsApi.deserializeSet(grading_period_set)
+      else
+        null
+
+    gradingPeriods: (->
+      periods = get(window, 'ENV.GRADEBOOK_OPTIONS.active_grading_periods')
+      deserializedPeriods = GradingPeriodsApi.deserializePeriods(periods)
+      optionForAllPeriods =
+        id: '0', title: I18n.t("all_grading_periods", "All Grading Periods")
+      _.compact([optionForAllPeriods].concat(deserializedPeriods))
+    )()
 
     lastGeneratedCsvLabel:  do () =>
       if get(window, 'ENV.GRADEBOOK_OPTIONS.gradebook_csv_progress')
@@ -158,6 +198,14 @@ define [
 
     hideOutcomes: (->
       !get(window, 'ENV.GRADEBOOK_OPTIONS.outcome_gradebook_enabled')
+    ).property()
+
+    gradezilla: (->
+      # returning false if version is srgb or 2 is part of the feature to help
+      # developers switch back and forth between views with gradezilla enabled
+      version = get window, 'ENV.GRADEBOOK_OPTIONS.version'
+      return false if version == 'srgb' || version == '2'
+      get window, 'ENV.GRADEBOOK_OPTIONS.gradezilla'
     ).property()
 
     showDownloadSubmissionsButton: (->
@@ -262,6 +310,17 @@ define [
       @set 'weightingScheme', ENV.GRADEBOOK_OPTIONS.group_weighting_scheme
     ).on('init')
 
+    renderGradebookMenu: (->
+      return unless @get('gradezilla')
+      mountPoint = document.querySelector('[data-component="GradebookSelector"]')
+      return unless mountPoint
+      props =
+        courseUrl: ENV.GRADEBOOK_OPTIONS.context_url
+        learningMasteryEnabled: ENV.GRADEBOOK_OPTIONS.outcome_gradebook_enabled
+      component = React.createElement(GradebookSelector, props)
+      ReactDOM.render(component, mountPoint)
+    ).on('init')
+
     willDestroy: ->
       Ember.$.unsubscribe 'submissions_updated'
       @_super()
@@ -294,12 +353,30 @@ define [
         id != userId
       set(assignment, 'assignment_visibility', filteredVisibilities)
 
-    calculate: (submissionsArray) ->
-      CourseGradeCalculator.calculate submissionsArray, @assignmentGroupsHash(), @get('weightingScheme')
+    subtotalByGradingPeriod: ->
+      selectedPeriodID = @get('selectedGradingPeriod.id')
+      selectedPeriodID and selectedPeriodID == '0' and @periodsAreWeighted()
+
+    calculate: (student) ->
+      submissions = @submissionsForStudent(student)
+      assignmentGroups = @assignmentGroupsHash()
+      weightingScheme = @get('weightingScheme')
+      gradingPeriodSet = @getGradingPeriodSet()
+      effectiveDueDates = @get('effectiveDueDates.content')
+
+      hasGradingPeriods = gradingPeriodSet and effectiveDueDates
+
+      CourseGradeCalculator.calculate(
+        submissions,
+        assignmentGroups,
+        weightingScheme,
+        gradingPeriodSet if hasGradingPeriods,
+        EffectiveDueDates.scopeToUser(effectiveDueDates, student.id) if hasGradingPeriods
+      )
 
     submissionsForStudent: (student) ->
       allSubmissions = (value for key, value of student when key.match /^assignment_(?!group)/)
-      return allSubmissions unless @get('mgpEnabled')
+      return allSubmissions unless @get('has_grading_periods')
       selectedPeriodID = @get('selectedGradingPeriod.id')
       return allSubmissions if !selectedPeriodID or selectedPeriodID == '0'
 
@@ -307,25 +384,43 @@ define [
         studentPeriodInfo = @get('effectiveDueDates').get(submission.assignment_id)?[submission.user_id]
         studentPeriodInfo and studentPeriodInfo.grading_period_id == selectedPeriodID
 
+    calculateSingleGrade: (student, key, gradeFinalOrCurrent) ->
+      set(student, key, gradeFinalOrCurrent)
+      if gradeFinalOrCurrent?.submissions
+        for submissionData in gradeFinalOrCurrent.submissions
+          set(submissionData.submission, 'drop', submissionData.drop)
+
     calculateStudentGrade: (student) ->
       if student.isLoaded
-        finalOrCurrent = if @get('includeUngradedAssignments') then 'final' else 'current'
-        result = @calculate(@submissionsForStudent(student))
-        for group in result.group_sums
-          set(student, "assignment_group_#{group.group.id}", group[finalOrCurrent])
-          for submissionData in group[finalOrCurrent].submissions
-            set(submissionData.submission, 'drop', submissionData.drop)
-        result = result[finalOrCurrent]
+        grades = @calculate(student)
 
-        percent = round (result.score / result.possible * 100), 2
+        selectedPeriodID = @get('selectedGradingPeriod.id')
+        if selectedPeriodID && selectedPeriodID != '0'
+          grades = grades.gradingPeriods[selectedPeriodID]
+
+        finalOrCurrent = if @get('includeUngradedAssignments') then 'final' else 'current'
+
+        if @subtotalByGradingPeriod()
+          for gradingPeriodId, grade of grades.gradingPeriods
+            @calculateSingleGrade(student, "grading_period_#{gradingPeriodId}", grade[finalOrCurrent])
+        else
+          for assignmentGroupId, grade of grades.assignmentGroups
+            @calculateSingleGrade(student, "assignment_group_#{assignmentGroupId}", grade[finalOrCurrent])
+
+        grades = grades[finalOrCurrent]
+
+        percent = round (grades.score / grades.possible * 100), 2
         percent = 0 if isNaN(percent)
         setProperties student,
-          total_grade: result
-          total_percent: I18n.n(percent, percentage: true)
+          total_grade: grades
+          total_percent: percent
 
     calculateAllGrades: (->
       @get('students').forEach (student) => @calculateStudentGrade student
-    ).observes('includeUngradedAssignments','groupsAreWeighted', 'assignment_groups.@each.group_weight')
+    ).observes(
+      'includeUngradedAssignments','groupsAreWeighted', 'assignment_groups.@each.group_weight',
+      'effectiveDueDates.isLoaded', 'selectedGradingPeriod', 'gradingPeriods.@each.weight'
+    )
 
     sectionSelectDefaultLabel: I18n.t "all_sections", "All Sections"
     studentSelectDefaultLabel: I18n.t "no_student", "No Student Selected"
@@ -335,17 +430,49 @@ define [
     submissionStateMap: null
 
     assignment_groups: []
+    assignment_subtotals: []
+    subtotal_by_period: false
 
     fetchAssignmentGroups: (->
       params = { exclude_response_fields: ['in_closed_grading_period'] }
       gpId = @get('selectedGradingPeriod.id')
-      if @get('mgpEnabled') && gpId != '0'
+      if @get('has_grading_periods') && gpId != '0'
         params.grading_period_id = gpId
       @set('assignment_groups', [])
       @set('assignmentsFromGroups', [])
       Ember.run.once =>
         fetchAllPages(get(window, 'ENV.GRADEBOOK_OPTIONS.assignment_groups_url'), records: @get('assignment_groups'), data: params)
     ).observes('selectedGradingPeriod').on('init')
+
+    pushAssignmentGroups: (subtotals) ->
+      @set('subtotal_by_period', false)
+      weighted = @get('groupsAreWeighted')
+      for group in @get('assignment_groups')
+        subtotal =
+          name: group.name
+          key: "assignment_group_#{group.id}"
+          weight: weighted && group.group_weight
+        subtotals.push(subtotal)
+
+    pushGradingPeriods: (subtotals) ->
+      @set('subtotal_by_period', true)
+      weighted = @periodsAreWeighted()
+      for period in @get('gradingPeriods')
+        if period.id > 0
+          subtotal =
+            name: period.title
+            key: "grading_period_#{period.id}"
+            weight: weighted && period.weight
+          subtotals.push(subtotal)
+
+    assignmentSubtotals: (->
+      subtotals = []
+      if @subtotalByGradingPeriod()
+        @pushGradingPeriods(subtotals)
+      else
+        @pushAssignmentGroups(subtotals)
+      @set('assignment_subtotals', subtotals)
+    ).observes('assignment_groups', 'gradingPeriods', 'selectedGradingPeriod', 'students.@each', 'selectedStudent').on('init')
 
     students: studentsUniqByEnrollments('enrollments')
 
@@ -436,15 +563,19 @@ define [
         )
 
     displayPointTotals: (->
-      if @get("groupsAreWeighted")
-        false
-      else
-        @get("showTotalAsPoints")
-    ).property('groupsAreWeighted', 'showTotalAsPoints')
+      @get('showTotalAsPoints') and not @get('gradesAreWeighted')
+    ).property('gradesAreWeighted', 'showTotalAsPoints')
 
     groupsAreWeighted: (->
       @get("weightingScheme") == "percent"
     ).property("weightingScheme")
+
+    periodsAreWeighted: ->
+      !!@getGradingPeriodSet()?.weighted
+
+    gradesAreWeighted: (->
+      @get('groupsAreWeighted') or !!@getGradingPeriodSet()?.weighted
+    ).property('weightingScheme')
 
     updateShowTotalAs: (->
       @set "showTotalAsPoints", @get("displayPointTotals")
@@ -454,7 +585,7 @@ define [
         url: ENV.GRADEBOOK_OPTIONS.setting_update_url
         data:
           show_total_grade_as_points: @get("displayPointTotals"))
-    ).observes('showTotalAsPoints', 'groupsAreWeighted')
+    ).observes('showTotalAsPoints', 'gradesAreWeighted')
 
     studentColumnData: {}
 
@@ -666,7 +797,7 @@ define [
 
     populateSubmissionStateMap: (->
       map = new SubmissionStateMap(
-        gradingPeriodsEnabled: !!@mgpEnabled
+        hasGradingPeriods: !!@has_grading_periods
         selectedGradingPeriodID: @get('selectedGradingPeriod.id') || '0'
         isAdmin: ENV.current_user_roles && _.contains(ENV.current_user_roles, "admin")
       )
@@ -783,7 +914,7 @@ define [
       outcome = @get 'selectedOutcome'
       result = @get('outcome_rollups').find (x) ->
         x.user_id == student.id && x.outcome_id == outcome.id
-      result.mastery_points = outcome.mastery_points if result
+      result.mastery_points = round(outcome.mastery_points, 2) if result
       result or {
         user_id: student.id
         outcome_id: outcome.id
@@ -791,7 +922,7 @@ define [
     ).property('selectedStudent', 'selectedOutcome')
 
     outcomeResultIsDefined: ( ->
-      @get('selectedOutcomeResult').score?
+      @get('selectedOutcomeResult')?.score?
     ).property('selectedOutcomeResult')
 
     showAssignmentPointsWarning: (->

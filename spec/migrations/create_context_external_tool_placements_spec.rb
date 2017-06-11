@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/../spec_helper.rb')
 require 'db/migrate/20140806161233_create_context_external_tool_placements.rb'
 require 'db/migrate/20140806162559_drop_has_columns_from_context_external_tools.rb'
@@ -25,29 +42,11 @@ describe 'CreateContextExternalToolPlacements' do
       expect(tool1_old.has_course_navigation).to eq true
 
       migration1.up
-
-      # make sure the triggers work while they need to
-      # on update to false
-      ContextExternalTool.connection.execute("UPDATE #{ContextExternalTool.quoted_table_name} SET has_course_navigation = 'f' WHERE id = #{tool1.id}")
-
-      # on update to true
-      ContextExternalTool.connection.execute("UPDATE #{ContextExternalTool.quoted_table_name} SET has_account_navigation = 't' WHERE id = #{tool1.id}")
-      # and on re-update to true
-      ContextExternalTool.connection.execute("UPDATE #{ContextExternalTool.quoted_table_name} SET has_account_navigation = 't' WHERE id = #{tool1.id}")
-
-      # on insert
-      ContextExternalTool.connection.execute("INSERT INTO #{ContextExternalTool.quoted_table_name}(
-        context_id, context_type, workflow_state, name, shared_secret, consumer_key, created_at, updated_at, has_user_navigation)
-        VALUES(#{@course.id}, 'Course', 'active', '', '', '', '2014-07-07', '2014-07-07', 't')")
-
       migration2.up
       ContextExternalTool.reset_column_information
       tool1.reload
-      expect(tool1.has_placement?(:course_navigation)).to eq false
-      expect(tool1.has_placement?(:account_navigation)).to eq true
-
-      tool2 = @course.context_external_tools.detect{|t| t.id != tool1.id}
-      expect(tool2.has_placement?(:user_navigation)).to eq true
+      expect(tool1.has_placement?(:course_navigation)).to eq true
+      expect(tool1.has_placement?(:account_navigation)).to eq false
     end
   end
 end

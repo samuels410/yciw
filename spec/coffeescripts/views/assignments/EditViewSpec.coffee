@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'jquery'
   'underscore'
@@ -14,12 +31,29 @@ define [
   'helpers/fakeENV'
   'compiled/userSettings'
   'helpers/jquery.simulate'
-], ($, _, SectionCollection, Assignment, DueDateList, Section,
-  AssignmentGroupSelector, DueDateOverrideView, EditView,
-  GradingTypeSelector, GroupCategorySelector, PeerReviewsSelector, fakeENV,
+], (
+  $,
+  _,
+  SectionCollection,
+  Assignment,
+  DueDateList,
+  Section,
+  AssignmentGroupSelector,
+  DueDateOverrideView,
+  EditView,
+  GradingTypeSelector,
+  GroupCategorySelector,
+  PeerReviewsSelector,
+  fakeENV,
   userSettings) ->
 
   s_params = 'some super secure params'
+
+  nameLengthHelper = (view, length, maxNameLengthRequiredForAccount, maxNameLength, postToSis, gradingType) ->
+    name = 'a'.repeat(length)
+    ENV.MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT = maxNameLengthRequiredForAccount
+    ENV.MAX_NAME_LENGTH = maxNameLength
+    return view.validateBeforeSave({name: name, post_to_sis: postToSis, grading_type: gradingType}, [])
 
   editView = (assignmentOpts = {}) ->
     defaultAssignmentOpts =
@@ -58,7 +92,7 @@ define [
 
     app.render()
 
-  module 'EditView',
+  QUnit.module 'EditView',
     setup: ->
       fakeENV.setup({
         current_user_roles: ['teacher'],
@@ -126,17 +160,39 @@ define [
     equal errors["name"].length, 1
     equal errors["name"][0]["message"], "Name is required!"
 
-  test "requires a name < 255 chars to save assignment", ->
+  test "has an error when a name has 257 chars", ->
     view = @editView()
-    l1 = 'aaaaaaaaaa'
-    l2 = l1 + l1 + l1 + l1 + l1 + l1
-    l3 = l2 + l2 + l2 + l2 + l2 + l2
-    ok l3.length > 255
-
-    errors = view.validateBeforeSave(name: l3, [])
+    errors = nameLengthHelper(view, 257, false, 30, '1', 'points')
     ok errors["name"]
     equal errors["name"].length, 1
-    equal errors["name"][0]["message"], "Name is too long"
+    equal errors["name"][0]["message"], "Name is too long, must be under 257 characters"
+
+  test "allows assignment to save when a name has 256 chars, MAX_NAME_LENGTH is not required and post_to_sis is true", ->
+    view = @editView()
+    errors = nameLengthHelper(view, 256, false, 30, '1', 'points')
+    equal errors.length, 0
+
+  test "allows assignment to save when a name has 15 chars, MAX_NAME_LENGTH is 10 and is required, post_to_sis is true and grading_type is not_graded", ->
+    view = @editView()
+    errors = nameLengthHelper(view, 15, true, 10, '1', 'not_graded')
+    equal errors.length, 0
+
+  test "has an error when a name has 11 chars, MAX_NAME_LENGTH is 10 and required and post_to_sis is true", ->
+    view = @editView()
+    errors = nameLengthHelper(view, 11, true, 10, '1', 'points')
+    ok errors["name"]
+    equal errors["name"].length, 1
+    equal errors["name"][0]["message"], "Name is too long, must be under 11 characters"
+
+  test "allows assignment to save when name has 11 chars, MAX_NAME_LENGTH is 10 and required, but post_to_sis is false", ->
+    view = @editView()
+    errors = nameLengthHelper(view, 11, true, 10, '0', 'points')
+    equal errors.length, 0
+
+  test "allows assignment to save when name has 10 chars, MAX_NAME_LENGTH is 10 and required, and post_to_sis is true", ->
+    view = @editView()
+    errors = nameLengthHelper(view, 10, true, 10, '1', 'points')
+    equal errors.length, 0
 
   test "don't validate name if it is frozen", ->
     view = @editView()
@@ -316,7 +372,13 @@ define [
     notOk view.$el.find('#has_group_category').attr('readonly')
     notOk view.$el.find('#has_group_category').attr('aria-readonly')
 
-  module 'EditView: handleGroupCategoryChange',
+  test 'rounds points_possible', ->
+    view = @editView()
+    view.$assignmentPointsPossible.val('1.234')
+    data = view.getFormData()
+    equal data.points_possible, 1.23
+
+  QUnit.module 'EditView: handleGroupCategoryChange',
     setup: ->
       fakeENV.setup()
       ENV.COURSE_ID = 1
@@ -337,7 +399,7 @@ define [
 
     ok spy.calledOnce
 
-  module 'EditView: group category inClosedGradingPeriod',
+  QUnit.module 'EditView: group category inClosedGradingPeriod',
     setup: ->
       fakeENV.setup()
       ENV.COURSE_ID = 1
@@ -364,7 +426,7 @@ define [
     notOk view.$("#assignment_group_category_id").prop("disabled")
     notOk view.$("[type=checkbox][name=grade_group_students_individually]").prop("disabled")
 
-  module 'EditView: enableCheckbox',
+  QUnit.module 'EditView: enableCheckbox',
     setup: ->
       fakeENV.setup()
       ENV.COURSE_ID = 1
@@ -396,11 +458,10 @@ define [
 
     ok view.$('#assignment_peer_reviews').prop('disabled')
 
-  module 'EditView: setDefaultsIfNew',
+  QUnit.module 'EditView: setDefaultsIfNew',
     setup: ->
       fakeENV.setup()
       ENV.COURSE_ID = 1
-      @stub(userSettings, 'contextGet').returns {submission_types: "foo", peer_reviews: "1", assignment_group_id: 99}
       @server = sinon.fakeServer.create()
 
     teardown: ->
@@ -412,32 +473,49 @@ define [
       editView.apply(this, arguments)
 
   test 'returns values from localstorage', ->
+    @stub(userSettings, 'contextGet').returns {submission_types: ['foo']}
     view = @editView()
     view.setDefaultsIfNew()
 
-    equal view.assignment.get('submission_types'), "foo"
+    deepEqual view.assignment.get('submission_types'), ['foo']
 
   test 'returns string booleans as integers', ->
+    @stub(userSettings, 'contextGet').returns {peer_reviews: '1'}
     view = @editView()
     view.setDefaultsIfNew()
 
     equal view.assignment.get('peer_reviews'), 1
 
   test 'doesnt overwrite existing assignment settings', ->
+    @stub(userSettings, 'contextGet').returns {assignment_group_id: 99}
     view = @editView()
     view.assignment.set('assignment_group_id', 22)
     view.setDefaultsIfNew()
 
     equal view.assignment.get('assignment_group_id'), 22
 
+  test 'sets assignment submission type to online if not already set', ->
+    view = @editView()
+    view.setDefaultsIfNew()
+
+    deepEqual view.assignment.get('submission_types'), ['online']
+
+  test 'doesnt overwrite assignment submission type', ->
+    view = @editView()
+    view.assignment.set('submission_types', ['external_tool'])
+    view.setDefaultsIfNew()
+
+    deepEqual view.assignment.get('submission_types'), ['external_tool']
+
   test 'will overwrite empty arrays', ->
+    @stub(userSettings, 'contextGet').returns {submission_types: ['foo']}
     view = @editView()
     view.assignment.set('submission_types', [])
     view.setDefaultsIfNew()
 
-    equal view.assignment.get('submission_types'), "foo"
+    deepEqual view.assignment.get('submission_types'), ['foo']
 
-  module 'EditView: setDefaultsIfNew: no localStorage',
+  QUnit.module 'EditView: setDefaultsIfNew: no localStorage',
     setup: ->
       fakeENV.setup()
       ENV.COURSE_ID = 1
@@ -456,9 +534,9 @@ define [
     view = @editView()
     view.setDefaultsIfNew()
 
-    equal view.assignment.get('submission_type'), "online"
+    deepEqual view.assignment.get('submission_types'), ['online']
 
-  module 'EditView: cacheAssignmentSettings',
+  QUnit.module 'EditView: cacheAssignmentSettings',
     setup: ->
       fakeENV.setup()
       ENV.COURSE_ID = 1
@@ -488,7 +566,7 @@ define [
 
     equal null, userSettings.contextGet("new_assignment_settings")["invalid_attribute_example"]
 
-  module 'EditView: Conditional Release',
+  QUnit.module 'EditView: Conditional Release',
     setup: ->
       fakeENV.setup()
       ENV.COURSE_ID = 1
@@ -533,6 +611,7 @@ define [
 
   test 'validates conditional release', ->
     view = @editView()
+    ENV.ASSIGNMENT = view.assignment
     stub = @stub(view.conditionalReleaseEditor, 'validateBeforeSave').returns 'foo'
     errors = view.validateBeforeSave(view.getFormData(), {})
     ok errors['conditional_release'] == 'foo'
@@ -556,10 +635,10 @@ define [
   test 'focuses in conditional release editor if conditional save validation fails', ->
     view = @editView()
     focusOnError = @stub(view.conditionalReleaseEditor, 'focusOnError')
-    view.showErrors({ conditional_release: 'foo' })
+    view.showErrors({ conditional_release: {type:'foo'} })
     ok focusOnError.called
 
-  module 'Editview: Intra-Group Peer Review toggle',
+  QUnit.module 'Editview: Intra-Group Peer Review toggle',
     setup: ->
       fakeENV.setup()
       ENV.COURSE_ID = 1
@@ -595,7 +674,7 @@ define [
     view.$el.appendTo $('#fixtures')
     notOk view.$('#intra_group_peer_reviews').is(":visible")
 
-  module 'EditView: Assignment Configuration Tools',
+  QUnit.module 'EditView: Assignment Configuration Tools',
     setup: ->
       fakeENV.setup()
       ENV.COURSE_ID = 1
@@ -644,3 +723,24 @@ define [
     view.$('#assignment_online_upload').attr('checked', true)
     view.handleSubmissionTypeChange()
     equal view.$('#similarity_detection_tools').css('display'), 'none'
+
+  QUnit.module 'EditView: Quizzes 2',
+    setup: ->
+      fakeENV.setup()
+      ENV.COURSE_ID = 1
+      @server = sinon.fakeServer.create()
+      @view = editView submission_types: ['external_tool'], is_quiz_lti_assignment: true
+
+    teardown: ->
+      @server.restore()
+      fakeENV.teardown()
+      document.getElementById('fixtures').innerHTML = ''
+
+  test 'does not show the description textarea', ->
+    equal @view.$description.length, 0
+
+  test 'does not show the moderated grading checkbox', ->
+    equal @view.$moderatedGradingBox.length, 0
+
+  test 'does not show the load in new tab checkbox', ->
+    equal @view.$externalToolsNewTab.length, 0

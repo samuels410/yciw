@@ -18,6 +18,7 @@
 
 require File.expand_path(File.dirname(__FILE__) + '/api_spec_helper')
 require File.expand_path(File.dirname(__FILE__) + '/../sharding_spec_helper')
+require 'imperium/testing'
 
 describe "API Authentication", type: :request do
 
@@ -587,8 +588,7 @@ describe "API Authentication", type: :request do
     before :once do
       user_with_pseudonym(:active_user => true, :username => 'test1@example.com', :password => 'test1234')
       course_with_teacher(:user => @user)
-      @token = @user.access_tokens.create!
-      expect(@token.full_token).not_to be_nil
+      @token = @user.access_tokens.create!(developer_key: @key)
     end
 
     def check_used
@@ -609,7 +609,7 @@ describe "API Authentication", type: :request do
     end
 
     it "recovers gracefully if consul is missing encryption data" do
-      Diplomat::Kv.stubs(:get).raises(Diplomat::KeyNotFound, "cannot find some secret")
+      Imperium::KV.stubs(:get).returns(Imperium::Testing.kv_not_found_response(options: %i{recurse}))
       check_used { get "/api/v1/courses", nil, { 'HTTP_AUTHORIZATION' => "Bearer #{@token.full_token}" } }
       assert_status(200)
     end
@@ -951,7 +951,7 @@ describe "API Authentication", type: :request do
       expect(response).to be_success
       raw_json = response.body
       expect(raw_json).to match(%r{^while\(1\);})
-      expect { JSON.parse(raw_json) }.to raise_error
+      expect { JSON.parse(raw_json) }.to raise_error(JSON::ParserError)
       json = JSON.parse(raw_json.sub(%r{^while\(1\);}, ''))
       expect(json['id']).to eq @user.id
     end

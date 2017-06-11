@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/common')
 require File.expand_path(File.dirname(__FILE__) + '/helpers/wiki_and_tiny_common')
 require File.expand_path(File.dirname(__FILE__) + '/helpers/public_courses_context')
@@ -49,13 +66,7 @@ describe "Wiki Pages" do
     it "should have correct front page UI elements when set as home page", priority: "1", test_id: 126848 do
       front = @course.wiki.wiki_pages.create!(title: 'Front')
       front.set_as_front_page!
-      front.save!
-      get "/courses/#{@course.id}/wiki"
-      fln('Home').click
-      # setting front-page as home page
-      fj('.btn.button-sidebar-wide:contains("Choose Home Page")').click
-      fj('input[type=radio][value=wiki]').click
-      fj('button.btn.btn-primary.button_type_submit.ui-button.ui-widget.ui-state-default.ui-corner-all.ui-button-text-only').click
+      @course.update_attribute :default_view, "wiki"
       get "/courses/#{@course.id}"
       wait_for_ajaximations
       # validations

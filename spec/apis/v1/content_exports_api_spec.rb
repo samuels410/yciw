@@ -118,6 +118,25 @@ describe ContentExportsApiController, type: :request do
       expect(json.size).to eql 5
       expect(json.map{ |el| el['id'] }).to eql exports.map(&:id).sort.reverse
     end
+
+    it "should not return attachments for expired exports" do
+      @past = past_export
+      ContentExport.where(id: @past.id).update_all(created_at: 35.days.ago)
+
+      json = api_call_as_user(
+        t_teacher,
+        :get,
+        "/api/v1/courses/#{t_course.id}/content_exports",
+        {
+          controller: 'content_exports_api',
+          action: 'index',
+          format: 'json',
+          course_id: t_course.to_param
+        }
+      )
+
+      expect(json[0]['attachment']).to be_nil
+    end
   end
 
   describe "show" do
@@ -510,6 +529,86 @@ describe ContentExportsApiController, type: :request do
       expect(json.first["title"]).to eq @quiz.title
       expect(json.first["id"]).to eq @quiz.asset_string
       expect(json.first['linked_resource']['id']).to eq @quiz.assignment.asset_string
+    end
+  end
+
+  describe "quizzes2 exports" do
+    before do
+      t_course.account.enable_feature!(:quizzes2_exporter)
+    end
+
+    context "quiz_id param" do
+      it "should require a quiz_id param" do
+      json = api_call_as_user(t_teacher, :post,
+       "/api/v1/courses/#{t_course.id}/content_exports?export_type=quizzes2",
+       {
+        controller: 'content_exports_api',
+        action: 'create',
+        format: 'json',
+        course_id: t_course.to_param,
+        export_type: 'quizzes2'
+       })
+        expect(json["message"]).to eq "quiz_id required and must be a valid ID"
+        expect(response.status).to eq 400
+      end
+
+      it "verifies quiz_id param is a number" do
+        ce_url = "/api/v1/courses/#{t_course.id}/content_exports"
+        params = {
+          controller: 'content_exports_api',
+          format: 'json',
+          action: 'create',
+          course_id: t_course.to_param,
+          export_type: 'quizzes2',
+          quiz_id: 'lulz'
+        }
+        json = api_call_as_user(t_teacher, :post, ce_url, params)
+        expect(json["message"]).to eq "quiz_id required and must be a valid ID"
+        expect(response.status).to eq 400
+      end
+    end
+
+    context "with invalid quiz" do
+      it "verifies quiz exists in course" do
+        ce_url = "/api/v1/courses/#{t_course.id}/content_exports"
+        params = {
+          controller: 'content_exports_api',
+          format: 'json',
+          action: 'create',
+          course_id: t_course.to_param,
+          export_type: 'quizzes2',
+          quiz_id:'123'
+        }
+        json = api_call_as_user(t_teacher, :post, ce_url, params)
+        expect(json["message"]).to eq "Quiz could not be found"
+        expect(response.status).to eq 400
+      end
+    end
+
+    context "with valid quiz" do
+      before do
+        @quiz = t_course.quizzes.create!(:title => 'valid_quiz')
+      end
+
+      it "should create a quizzes2 export" do
+          ce_url = "/api/v1/courses/#{t_course.id}/content_exports"
+          params = {
+            controller: 'content_exports_api',
+            format: 'json',
+            action: 'create',
+            course_id: t_course.to_param,
+            export_type: 'quizzes2',
+            quiz_id: @quiz.id
+          }
+          json = api_call_as_user(t_teacher, :post, ce_url, params)
+          export = t_course.content_exports.where(id: json['id']).first
+          expect(export).not_to be_nil
+          expect(export.workflow_state).to eql 'created'
+          expect(export.export_type).to eql 'quizzes2'
+          expect(export.user_id).to eql t_teacher.id
+          expect(export.settings['selected_content']).to eql @quiz.id.to_s
+          expect(export.job_progress).to be_queued
+      end
     end
   end
 

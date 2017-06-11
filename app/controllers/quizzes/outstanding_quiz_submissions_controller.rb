@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2014 Instructure, Inc.
+# Copyright (C) 2014 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -23,7 +23,7 @@ class Quizzes::OutstandingQuizSubmissionsController < ApplicationController
   include Api::V1::QuizSubmission
   include ::Filters::Quizzes
 
-  before_filter :require_user, :require_context, :require_quiz
+  before_action :require_user, :require_context, :require_quiz
 
   # Index any outstanding quiz submissions
   #

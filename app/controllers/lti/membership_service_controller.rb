@@ -1,4 +1,5 @@
-# Copyright (C) 2016 Instructure, Inc.
+#
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -16,9 +17,9 @@
 #
 module Lti
   class MembershipServiceController < ApplicationController
-    before_filter :require_context
-    before_filter :require_user
-    before_filter :check_authorized_action
+    before_action :require_context
+    before_action :require_user
+    before_action :check_authorized_action
 
     def course_index
       render_page_presenter

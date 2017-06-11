@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2016 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -71,6 +71,7 @@ module Api::V1::Assignment
     due_at
     only_visible_to_overrides
     post_to_sis
+    time_zone_edited
   ].freeze
 
   def assignments_json(assignments, user, session, opts = {})
@@ -119,6 +120,7 @@ module Api::V1::Assignment
     hash['submission_types'] = assignment.submission_types_array
     hash['has_submitted_submissions'] = assignment.has_submitted_submissions?
     hash['due_date_required'] = assignment.due_date_required?
+    hash['max_name_length'] = assignment.max_name_length
 
     unless opts[:exclude_response_fields].include?('in_closed_grading_period')
       hash['in_closed_grading_period'] = assignment.in_closed_grading_period?
@@ -153,6 +155,16 @@ module Api::V1::Assignment
     end
 
     hash['is_quiz_assignment'] = assignment.quiz? && assignment.quiz.assignment?
+
+    if assignment.quiz_lti?
+      hash['is_quiz_lti_assignment'] = true
+      hash['frozen_attributes'] ||= []
+      hash['frozen_attributes'] << 'submission_types'
+    end
+
+    if assignment.external_tool? && assignment.external_tool_tag.present?
+      hash['external_tool_tag_attributes'] = { 'url' => assignment.external_tool_tag.url }
+    end
 
     return hash if assignment.new_record?
 
@@ -304,8 +316,8 @@ module Api::V1::Assignment
       hash['submissions_download_url'] = submissions_download_url(assignment.context, assignment)
     end
 
-    if opts[:include_master_course_restrictions]
-      hash.merge!(assignment.master_course_api_restriction_data)
+    if opts[:master_course_status]
+      hash.merge!(assignment.master_course_api_restriction_data(opts[:master_course_status]))
     end
 
     hash
@@ -392,6 +404,8 @@ module Api::V1::Assignment
     prepared_create = prepare_assignment_create_or_update(assignment, assignment_params, user, context)
     return false unless prepared_create[:valid]
 
+    assignment.quiz_lti! if assignment_params.key?(:quiz_lti)
+
     if prepared_create[:overrides]
       create_api_assignment_with_overrides(prepared_create, user)
     else
@@ -399,6 +413,9 @@ module Api::V1::Assignment
       :success
     end
   rescue ActiveRecord::RecordInvalid
+    false
+  rescue Lti::AssignmentSubscriptionsHelper::AssignmentSubscriptionError => e
+    assignment.errors.add('plagiarism_tool_subscription', e)
     false
   end
 
@@ -415,6 +432,9 @@ module Api::V1::Assignment
       :success
     end
   rescue ActiveRecord::RecordInvalid
+    false
+  rescue Lti::AssignmentSubscriptionsHelper::AssignmentSubscriptionError => e
+    assignment.errors.add('plagiarism_tool_subscription', e)
     false
   end
 
@@ -715,13 +735,15 @@ module Api::V1::Assignment
     assignment = prepared_update[:assignment]
     overrides = prepared_update[:overrides]
 
+    return :forbidden if overrides.any? && assignment.is_child_content? && (assignment.editing_restricted?(:due_dates) || assignment.editing_restricted?(:availability_dates))
+
     prepared_batch = prepare_assignment_overrides_for_batch_update(assignment, overrides, user)
 
     return :forbidden unless grading_periods_allow_assignment_overrides_batch_update?(assignment, prepared_batch)
 
     assignment.transaction do
-      perform_batch_update_assignment_overrides(assignment, prepared_batch)
       assignment.save_without_broadcasting!
+      perform_batch_update_assignment_overrides(assignment, prepared_batch)
     end
 
     assignment.do_notifications!(prepared_update[:old_assignment], prepared_update[:notify_of_update])
@@ -751,7 +773,7 @@ module Api::V1::Assignment
   end
 
   def assignment_configuration_tool(assignment_params)
-    tool_id = assignment_params['similarityDetectionTool'].to_i
+    tool_id = assignment_params['similarityDetectionTool'].split('_').last.to_i
     tool = nil
     if assignment_params['configuration_tool_type'] == 'ContextExternalTool'
       tool = ContextExternalTool.find_external_tool_by_id(tool_id, context)
@@ -765,6 +787,7 @@ module Api::V1::Assignment
 
   def plagiarism_capable?(assignment_params)
     assignment_params['submission_type'] == 'online' &&
+      assignment_params['submission_types'].present? &&
       assignment_params['submission_types'].include?('online_upload')
   end
 

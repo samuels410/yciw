@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -41,24 +41,28 @@ class Quizzes::QuizQuestion::NumericalQuestion < Quizzes::QuizQuestion::Base
 
     # we use BigDecimal here to avoid rounding errors at the edge of the tolerance
     # e.g. in floating point, -11.7 with margin of 0.02 isn't inclusive of the answer -11.72
-    answer_number = BigDecimal.new(answer_text.to_s)
+    begin
+      answer_number = BigDecimal.new(answer_text.to_s)
+    rescue ArgumentError
+      answer_number = BigDecimal.new('0.0')
+    end
 
     match = answers.find do |answer|
       if answer[:numerical_answer_type] == "exact_answer"
-        val = BigDecimal.new(answer[:exact].to_s)
+        val = BigDecimal.new(answer[:exact].to_s.presence || '0.0')
 
         # calculate margin value using percentage
         if answer[:margin].to_s.ends_with?("%")
           answer[:margin] = (answer[:margin].to_f / 100.0 * val).abs
         end
 
-        margin = BigDecimal.new(answer[:margin].to_s)
+        margin = BigDecimal.new(answer[:margin].to_s.presence || '0.0')
         min = val - margin
         max = val + margin
         answer_number >= min && answer_number <= max
       elsif answer[:numerical_answer_type] == "precision_answer"
         submission = answer_number.split
-        expected = BigDecimal.new(answer[:approximate].to_s).split
+        expected = BigDecimal.new(answer[:approximate].to_s.presence || '0.0').split
         precision = answer[:precision].to_i
 
         # compare sign

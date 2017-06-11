@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'react'
   'react-dom'
@@ -10,15 +27,16 @@ define [
   'compiled/jquery.rails_flash_notifications'
 ], (React, ReactDOM, TestUtils, $, _, GradingPeriodCollection, fakeENV) ->
 
-  module 'GradingPeriodCollection',
+  QUnit.module 'GradingPeriodCollection',
     setup: ->
-      @stub($, 'flashMessage', ->)
-      @stub($, 'flashError', ->)
-      @stub(window, 'confirm', -> true)
+      @stub($, 'flashMessage')
+      @stub($, 'flashError')
+      @stub(window, 'confirm').returns(true)
       @server = sinon.fakeServer.create()
       fakeENV.setup()
       ENV.current_user_roles = ["admin"]
       ENV.GRADING_PERIODS_URL = "/api/v1/accounts/1/grading_periods"
+      ENV.GRADING_PERIODS_WEIGHTED = true
       @indexData =
         "grading_periods":[
           {
@@ -41,8 +59,7 @@ define [
           }
         ]
         "grading_periods_read_only": false,
-        "can_create_grading_periods": true,
-        "can_toggle_grading_periods": true
+        "can_create_grading_periods": true
 
       @formattedIndexData =
         "grading_periods":[
@@ -66,8 +83,7 @@ define [
           }
         ]
         "grading_periods_read_only": false,
-        "can_create_grading_periods": true,
-        "can_toggle_grading_periods": true
+        "can_create_grading_periods": true
 
       @createdPeriodData = "grading_periods":[
         {
@@ -103,6 +119,10 @@ define [
   test "renders grading periods with 'readOnly' set to the returned value (false)", ->
     equal @gradingPeriodCollection.refs.grading_period_1.props.readOnly, false
     equal @gradingPeriodCollection.refs.grading_period_2.props.readOnly, false
+
+  test "renders grading periods with 'weighted' set to the ENV variable (true)", ->
+    equal @gradingPeriodCollection.refs.grading_period_1.props.weighted, true
+    equal @gradingPeriodCollection.refs.grading_period_2.props.weighted, true
 
   test "renders grading periods with their individual 'closeDate'", ->
     deepEqual @gradingPeriodCollection.refs.grading_period_1.props.closeDate, new Date("2015-06-07T05:00:00Z")
@@ -165,13 +185,13 @@ define [
     deepEqual @gradingPeriodCollection.serializeDataForSubmission(), expectedOutput
 
   test 'batchUpdatePeriods makes an AJAX call if validations pass', ->
-    @sandbox.stub(@gradingPeriodCollection, 'areGradingPeriodsValid', -> true)
+    @sandbox.stub(@gradingPeriodCollection, 'areGradingPeriodsValid').returns(true)
     ajax = @sandbox.spy($, 'ajax')
     @gradingPeriodCollection.batchUpdatePeriods()
     ok ajax.calledOnce
 
   test 'batchUpdatePeriods does not make an AJAX call if validations fail', ->
-    @sandbox.stub(@gradingPeriodCollection, 'areGradingPeriodsValid', -> false)
+    @sandbox.stub(@gradingPeriodCollection, 'areGradingPeriodsValid').returns(false)
     ajax = @sandbox.spy($, 'ajax')
     @gradingPeriodCollection.batchUpdatePeriods()
     ok ajax.notCalled
@@ -260,57 +280,13 @@ define [
   test 'renderSaveButton renders a button if the user is not at the course grading periods page', ->
     ok @gradingPeriodCollection.renderSaveButton()
 
-  module 'GradingPeriodCollection with one grading period',
+  QUnit.module 'GradingPeriodCollection with read-only grading periods',
     setup: ->
       @server = sinon.fakeServer.create()
       fakeENV.setup()
       ENV.current_user_roles = ["admin"]
       ENV.GRADING_PERIODS_URL = "/api/v1/accounts/1/grading_periods"
-      @indexData =
-        "grading_periods":[
-          {
-            "id":"1", "start_date":"2015-03-01T06:00:00Z", "end_date":"2015-05-31T05:00:00Z",
-            "weight":null, "title":"Spring", "permissions": { "update":true, "delete":true }
-          }
-        ]
-        "grading_periods_read_only": false,
-        "can_create_grading_periods": true,
-        "can_toggle_grading_periods": true
-
-      @formattedIndexData =
-        "grading_periods":[
-          {
-            "id":"1", "startDate": new Date("2015-03-01T06:00:00Z"), "endDate": new Date("2015-05-31T05:00:00Z"),
-            "weight":null, "title":"Spring", "permissions": { "update":true, "delete":true }
-          }
-        ]
-        "grading_periods_read_only": false,
-        "can_create_grading_periods": true,
-        "can_toggle_grading_periods": true
-
-      @server.respondWith "GET", ENV.GRADING_PERIODS_URL, [200, {"Content-Type":"application/json"}, JSON.stringify @indexData]
-      GradingPeriodCollectionElement = React.createElement(GradingPeriodCollection)
-      @gradingPeriodCollection = TestUtils.renderIntoDocument(GradingPeriodCollectionElement)
-      @server.respond()
-
-    teardown: ->
-      ReactDOM.unmountComponentAtNode(@gradingPeriodCollection.getDOMNode().parentNode)
-      fakeENV.teardown()
-      @server.restore()
-
-  test 'shows a link to the settings page if the user can toggle the multiple grading periods feature', ->
-    ok @gradingPeriodCollection.refs.linkToSettings
-
-  test 'does not show a link to the settings page if the user cannot toggle the multiple grading periods feature', ->
-    @gradingPeriodCollection.setState(canChangeGradingPeriodsSetting: false)
-    notOk @gradingPeriodCollection.refs.linkToSettings
-
-  module 'GradingPeriodCollection with read-only grading periods',
-    setup: ->
-      @server = sinon.fakeServer.create()
-      fakeENV.setup()
-      ENV.current_user_roles = ["admin"]
-      ENV.GRADING_PERIODS_URL = "/api/v1/accounts/1/grading_periods"
+      ENV.GRADING_PERIODS_WEIGHTED = false
       @indexData =
         "grading_periods":[
           {
@@ -319,19 +295,7 @@ define [
           }
         ]
         "grading_periods_read_only": true,
-        "can_create_grading_periods": true,
-        "can_toggle_grading_periods": true
-
-      @formattedIndexData =
-        "grading_periods":[
-          {
-            "id":"1", "startDate": new Date("2015-03-01T06:00:00Z"), "endDate": new Date("2015-05-31T05:00:00Z"),
-            "weight":null, "title":"Spring", "permissions": { "update":true, "delete":true }
-          }
-        ]
-        "grading_periods_read_only": true,
-        "can_create_grading_periods": true,
-        "can_toggle_grading_periods": true
+        "can_create_grading_periods": true
 
       @server.respondWith "GET", ENV.GRADING_PERIODS_URL, [200, {"Content-Type":"application/json"}, JSON.stringify @indexData]
       GradingPeriodCollectionElement = React.createElement(GradingPeriodCollection)
@@ -345,3 +309,6 @@ define [
 
   test "renders grading periods with 'readOnly' set to true", ->
     equal @gradingPeriodCollection.refs.grading_period_1.props.readOnly, true
+
+  test "renders grading periods with 'weighted' set to the ENV variable (false)", ->
+    equal @gradingPeriodCollection.refs.grading_period_1.props.weighted, false

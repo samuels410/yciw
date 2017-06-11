@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2015 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -384,6 +384,37 @@ describe SIS::CSV::EnrollmentImporter do
     expect(@course.enrollments.map(&:user)).to eq [@user, @user]
   end
 
+  it "should set limit_section_privileges" do
+    process_csv_data_cleanly(
+      "course_id,short_name,long_name,account_id,term_id,status",
+      "test_1,TC 101,Test Course 101,,,active"
+    )
+    process_csv_data_cleanly(
+      "user_id,login_id,first_name,last_name,email,status",
+      "user_1,user1,User,Uno,user@example.com,active",
+      "user_2,user2,User,Uno,user2@example.com,active",
+      "user_3,user3,User,Uno,user@example.com,active"
+    )
+    process_csv_data_cleanly(
+      "course_id,user_id,role,section_id,status,limit_section_privileges",
+      "test_1,user_1,student,,active,true",
+      "test_1,user_2,teacher,,active,false",
+      "test_1,user_3,student,,active,"
+    )
+    course = Course.where(sis_source_id: 'test_1').first
+    user1 = Pseudonym.where(sis_user_id: 'user_1').first.user
+    user2 = Pseudonym.where(sis_user_id: 'user_2').first.user
+    user3 = Pseudonym.where(sis_user_id: 'user_3').first.user
+    expect(course.enrollments.where(user_id: user1).first.limit_privileges_to_course_section).to eq true
+    expect(course.enrollments.where(user_id: user2).first.limit_privileges_to_course_section).to eq false
+    expect(course.enrollments.where(user_id: user3).first.limit_privileges_to_course_section).to eq false
+    process_csv_data_cleanly(
+      "course_id,user_id,role,section_id,status,limit_section_privileges",
+      "test_1,user_1,student,,active,"
+    )
+    expect(course.enrollments.where(user_id: user1).first.limit_privileges_to_course_section).to eq true
+  end
+
   it "should allow one user to observe multiple students" do
     process_csv_data_cleanly(
       "course_id,short_name,long_name,account_id,term_id,status",
@@ -670,7 +701,7 @@ describe SIS::CSV::EnrollmentImporter do
         account: account2
     )
     user = account2.pseudonyms.where(sis_user_id: 'user_1').first.user
-    user.any_instantiation.expects(:find_pseudonym_for_account).with(@account, true).once.returns(user.pseudonyms.first)
+    expect(SisPseudonym).to receive(:for).with(user, @account, type: :implicit, require_sis: false).and_return(user.pseudonyms.first)
     SIS::EnrollmentImporter::Work.any_instance.expects(:root_account_from_id).with('account2').once.returns(account2)
     # the enrollments
     process_csv_data_cleanly(
@@ -694,7 +725,8 @@ describe SIS::CSV::EnrollmentImporter do
         account: account2
     )
     user = account2.pseudonyms.where(sis_user_id: 'user_1').first.user
-    user.any_instantiation.expects(:find_pseudonym_for_account).with(@account, true).once.returns(nil)
+    expect(SisPseudonym).to receive(:for).with(user, @account, type: :implicit, require_sis: false).once.and_return(nil)
+
     SIS::EnrollmentImporter::Work.any_instance.expects(:root_account_from_id).with('account2').once.returns(account2)
     # the enrollments
     importer = process_csv_data(
@@ -719,7 +751,8 @@ describe SIS::CSV::EnrollmentImporter do
         account: account2
     )
     user = account2.pseudonyms.where(sis_user_id: 'user_1').first.user
-    user.any_instantiation.expects(:find_pseudonym_for_account).with(@account, true).never
+    expect(SisPseudonym).to receive(:for).with(user, @account, type: :implicit, require_sis: false).never
+
     SIS::EnrollmentImporter::Work.any_instance.expects(:root_account_from_id).with('account2').once.returns(nil)
     # the enrollments
     importer = process_csv_data_cleanly(

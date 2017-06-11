@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'jquery'
   'underscore'
@@ -25,7 +42,7 @@ define [
 
     app.render()
 
-  module 'EditHeaderView',
+  QUnit.module 'EditHeaderView',
     setup: ->
       fakeENV.setup({
         current_user_roles: ['teacher']
@@ -69,7 +86,7 @@ define [
   test 'does not attempt to delete an assignment due in a closed grading period', ->
     view = editHeaderView(in_closed_grading_period: true)
 
-    @stub(window, "confirm", -> true )
+    @stub(window, "confirm").returns(true)
     @spy view, "delete"
 
     view.$(".delete_assignment_link").click()
@@ -77,7 +94,7 @@ define [
     ok window.confirm.notCalled
     ok view.delete.notCalled
 
-  module 'EditHeaderView - ConditionalRelease',
+  QUnit.module 'EditHeaderView - ConditionalRelease',
     setup: ->
       fakeENV.setup()
       ENV.CONDITIONAL_RELEASE_SERVICE_ENABLED = true

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2012 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -86,8 +86,8 @@ require 'action_controller_test_process'
 #
 class SubmissionsController < ApplicationController
   include Submissions::ShowHelper
-  before_filter :get_course_from_section, :only => :create
-  before_filter :require_context
+  before_action :get_course_from_section, :only => :create
+  before_action :require_context
 
   include Api::V1::Submission
 
@@ -103,13 +103,16 @@ class SubmissionsController < ApplicationController
     end
   end
 
-  rescue_from ActiveRecord::RecordNotFound, only: :show, with: :render_user_not_found
   def show
-    service = Submissions::SubmissionForShow.new(
-      @context, params.slice(:assignment_id, :id)
-    )
-    @assignment = service.assignment
-    @submission = service.submission
+    begin
+      service = Submissions::SubmissionForShow.new(
+        @context, params.slice(:assignment_id, :id)
+      )
+      @assignment = service.assignment
+      @submission = service.submission
+    rescue ActiveRecord::RecordNotFound
+      return render_user_not_found
+    end
 
     @rubric_association = @submission.rubric_association_with_assessing_user_id
     @visible_rubric_assessments = @submission.visible_rubric_assessments_for(@current_user)
@@ -120,11 +123,9 @@ class SubmissionsController < ApplicationController
         format.html
         format.json do
           @submission.limit_comments(@current_user, session)
-          excludes = @assignment.grants_right?(@current_user, session, :grade) ? [:grade, :score] : []
           render :json => @submission.as_json(
             Submission.json_serialization_full_parameters(
-              exclude: excludes,
-              except: %w(quiz_submission submission_history)
+              except: %i(quiz_submission submission_history)
             ).merge(permissions: {
               user: @current_user,
               session: session,
@@ -507,7 +508,7 @@ class SubmissionsController < ApplicationController
   private :legacy_plagiarism_report
 
   def plagiarism_report(type)
-    return render(:nothing => true, :status => 400) unless params_are_integers?(:assignment_id, :submission_id)
+    return head(:bad_request) unless params_are_integers?(:assignment_id, :submission_id)
 
     @assignment = @context.assignments.active.find(params[:assignment_id])
     @submission = @assignment.submissions.where(user_id: params[:submission_id]).first
@@ -530,11 +531,12 @@ class SubmissionsController < ApplicationController
   private :plagiarism_report
 
   def resubmit_to_plagiarism(type)
-    return render(:nothing => true, :status => 400) unless params_are_integers?(:assignment_id, :submission_id)
+    return head 400 unless params_are_integers?(:assignment_id, :submission_id)
 
     if authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
       @assignment = @context.assignments.active.find(params[:assignment_id])
       @submission = @assignment.submissions.where(user_id: params[:submission_id]).first
+      Canvas::LiveEvents.plagiarism_resubmit(@submission)
 
       if type == 'vericite'
         # VeriCite
@@ -550,7 +552,7 @@ class SubmissionsController < ApplicationController
           flash[:notice] = message
           redirect_to named_context_url(@context, :context_assignment_submission_url, @assignment.id, @submission.user_id)
         }
-        format.json { render :nothing => true, :status => :no_content }
+        format.json { head :no_content }
       end
     end
   end
@@ -564,7 +566,12 @@ class SubmissionsController < ApplicationController
 
     if params[:submission][:student_entered_score] && @submission.grants_right?(@current_user, session, :comment)
       update_student_entered_score(params[:submission][:student_entered_score])
-      render :json => @submission
+
+      render json: @submission.as_json(permissions: {
+        user: @current_user,
+        session: session,
+        include_permissions: false
+      })
       return
     end
 
@@ -617,7 +624,6 @@ class SubmissionsController < ApplicationController
           format.html { redirect_to course_assignment_url(@context, @assignment) }
 
           json_args = Submission.json_serialization_full_parameters({
-            :exclude => @assignment.grants_right?(@current_user, session, :grade) ? [:grade, :score, :turnitin_data] : [],
             :except => [:quiz_submission,:submission_history],
             :comments => admin_in_context ? :submission_comments : :visible_submission_comments
           }).merge(:permissions => { :user => @current_user, :session => session, :include_permissions => false })
@@ -642,12 +648,10 @@ class SubmissionsController < ApplicationController
   protected
 
   def update_student_entered_score(score)
-    if score.present? && score != "null"
-      @submission.student_entered_score = score.to_f.round(2)
-    else
-      @submission.student_entered_score = nil
-    end
-    @submission.save
+    new_score = score.present? && score != "null" ? score.to_f.round(2) : nil
+    # intentionally skipping callbacks here to fix a bug where entering a
+    # what-if grade for a quiz can put the submission back in a 'pending review' state
+    @submission.update_column(:student_entered_score, new_score)
   end
 
   def generate_submission_zip(assignment, context)

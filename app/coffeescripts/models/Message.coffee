@@ -1,9 +1,27 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
+  'i18n!messages'
   'jquery'
   'underscore'
   'Backbone'
   'compiled/str/TextHelper'
-], ($, _, {Model, Collection}, TextHelper) ->
+], (I18n, $, _, {Model, Collection}, TextHelper) ->
 
   class Message extends Model
     initialize: ->
@@ -30,7 +48,7 @@ define [
         data.participants = _.uniq(_.map(data.submission_comments, (m) -> {name: m.author_name}), null, (u) -> u.name)
         data.last_authored_message_at = data.submission_comments[0].created_at
         data.last_message_at = data.submission_comments[0].created_at
-        data.message_count = data.submission_comments.length
+        data.message_count = I18n.n(data.submission_comments.length)
         data.last_message = data.submission_comments[0].comment
         data.read = data.read_state
         data.workflow_state = if data.read_state then 'read' else 'unread'

@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 # Why are these in spec/selenium?
 # ===============================
 # Although these tests don't use selenium at all, they need to be have assets
@@ -75,20 +92,15 @@ describe 'Stuff related to how we load stuff from CDN and use brandable_css' do
     ['bundles/common', 'bundles/login'].each { |bundle| check_css(bundle) }
     ['images/favicon-yellow.ico', 'images/apple-touch-icon.png'].each { |i| check_asset('link', i) }
     optimized_js_flag = ENV['USE_OPTIMIZED_JS'] == 'true' || ENV['USE_OPTIMIZED_JS'] == 'True'
-    if CANVAS_WEBPACK
-      js_base_url = optimized_js_flag ? '/dist/webpack-production' : '/dist/webpack-dev'
-      expected_js_bundles = [
-        'vendor.js',
-        'vendor/timezone/Etc/UTC.js',
-        'vendor/timezone/en_US.js',
-        'appBootstrap.js',
-        'common.js',
-        'login.js'
-      ]
-    else
-      js_base_url = optimized_js_flag ? '/optimized' : '/javascripts'
-      expected_js_bundles = ['vendor/require.js', 'compiled/bundles/login.js']
-    end
-    expected_js_bundles.each { |s| check_asset('script', "#{js_base_url}/#{s}") }
+    js_base_url = optimized_js_flag ? '/dist/webpack-production' : '/dist/webpack-dev'
+    expected_js_bundles = [
+      "#{js_base_url}/vendor.js",
+      '/javascripts/vendor/timezone/Etc/UTC.js',
+      '/javascripts/vendor/timezone/en_US.js',
+      "#{js_base_url}/appBootstrap.js",
+      "#{js_base_url}/common.js",
+      "#{js_base_url}/login.js"
+    ]
+    expected_js_bundles.each { |s| check_asset('script', s) }
   end
 end

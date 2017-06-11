@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -74,7 +74,7 @@ module Api::V1::AssignmentGroup
           include_overrides: opts[:include_overrides],
           needs_grading_course_proxy: needs_grading_course_proxy,
           submission: includes.include?('submission') ? opts[:submissions][a.id] : nil,
-          include_master_course_restrictions: master_courses? && group.context.grants_right?(user, session, :manage_assignments)
+          master_course_status: opts[:master_course_status]
         )
 
         unless opts[:exclude_response_fields].include?('in_closed_grading_period')
@@ -99,9 +99,10 @@ module Api::V1::AssignmentGroup
   def update_assignment_group(assignment_group, params)
     return nil unless params.is_a?(ActionController::Parameters)
 
-    integration_data_keys = params["integration_data"].nil? ? {} : params["integration_data"].keys
     update_params = params.permit(*API_ALLOWED_ASSIGNMENT_GROUP_INPUT_FIELDS,
-                                   "integration_data": integration_data_keys)
+                                   integration_data: strong_anything)
+    update_params.delete(:integration_data) if update_params[:integration_data] == ''
+
     rules = params.delete('rules')
     if rules
       assignment_group.rules_hash = rules

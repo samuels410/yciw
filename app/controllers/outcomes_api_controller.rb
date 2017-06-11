@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -118,8 +118,8 @@
 class OutcomesApiController < ApplicationController
   include Api::V1::Outcome
 
-  before_filter :require_user
-  before_filter :get_outcome
+  before_action :require_user
+  before_action :get_outcome
 
   # @API Show an outcome
   #

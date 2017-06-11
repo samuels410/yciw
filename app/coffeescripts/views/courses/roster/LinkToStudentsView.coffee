@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'i18n!course_settings'
   'jquery'
@@ -27,6 +44,7 @@ define [
         placeholder: I18n.t 'link_students_placeholder', 'Enter a student name'
         change: (tokens) =>
           @students = tokens
+        onNewToken: @onNewToken
         selector:
           baseData:
             type: 'user'
@@ -49,6 +67,14 @@ define [
             data: e.observed_user
 
       this
+
+    onNewToken: ($token) =>
+      $link = $token.find('a')
+      $link.attr('href', '#')
+      $link.attr('title', I18n.t("Remove linked student %{name}", name: $token.find('div').attr('title')))
+      $screenreader_span = $('<span class="screenreader-only"></span>').text(
+        I18n.t("Remove linked student %{name}", name: $token.find('div').attr('title')))
+      $link.append($screenreader_span)
 
     getUserData: (id) ->
       $.getJSON("/api/v1/courses/#{ENV.course.id}/users/#{id}", include:['enrollments'])

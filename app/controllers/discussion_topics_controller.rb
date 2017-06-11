@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -236,8 +236,8 @@ require 'atom'
 #     }
 #
 class DiscussionTopicsController < ApplicationController
-  before_filter :require_context_and_read_access, :except => :public_feed
-  before_filter :rich_content_service_config
+  before_action :require_context_and_read_access, :except => :public_feed
+  before_action :rich_content_service_config
 
   include Api::V1::DiscussionTopics
   include Api::V1::Assignment
@@ -350,37 +350,43 @@ class DiscussionTopicsController < ApplicationController
           locked.is_a?(Hash) ? locked[:can_view] : locked
         end
 
-        hash = {USER_SETTINGS_URL: api_v1_user_settings_url(@current_user),
-                openTopics: open_topics,
-                lockedTopics: locked_topics,
-                newTopicURL: named_context_url(@context, :new_context_discussion_topic_url),
-                permissions: {
-                    create: @context.discussion_topics.temp_record.grants_right?(@current_user, session, :create),
-                    moderate: user_can_moderate,
-                    change_settings: user_can_edit_course_settings?,
-                    manage_content: @context.grants_right?(@current_user, session, :manage_content),
-                    publish: user_can_moderate
-                },
-                :discussion_topic_menu_tools => external_tools_display_hashes(:discussion_topic_menu)
+        hash = {
+          USER_SETTINGS_URL: api_v1_user_settings_url(@current_user),
+          openTopics: open_topics,
+          lockedTopics: locked_topics,
+          newTopicURL: named_context_url(@context, :new_context_discussion_topic_url),
+          permissions: {
+            create: @context.discussion_topics.temp_record.grants_right?(@current_user, session, :create),
+            moderate: user_can_moderate,
+            change_settings: user_can_edit_course_settings?,
+            manage_content: @context.grants_right?(@current_user, session, :manage_content),
+            publish: user_can_moderate
+          },
+          discussion_topic_menu_tools: external_tools_display_hashes(:discussion_topic_menu),
         }
+        if @context.is_a?(Course) && @context.grants_right?(@current_user, session, :read) && !@js_env[:COURSE_ID].present?
+          hash[:COURSE_ID] = @context.id.to_s
+        end
         conditional_release_js_env(includes: :active_rules)
         append_sis_data(hash)
         js_env(hash)
+        set_tutorial_js_env
 
         if user_can_edit_course_settings?
           js_env(SETTINGS_URL: named_context_url(@context, :api_v1_context_settings_url))
         end
       end
       format.json do
-        check_for_restrictions = master_courses? && @context.grants_right?(@current_user, session, :moderate_forum)
-        MasterCourses::Restrictor.preload_restrictions(@topics) if check_for_restrictions
+        if @context.grants_right?(@current_user, session, :moderate_forum)
+          mc_status = setup_master_course_restrictions(@topics, @context)
+        end
 
         render json: discussion_topics_api_json(@topics, @context, @current_user, session,
           user_can_moderate: user_can_moderate,
           plain_messages: value_to_boolean(params[:plain_messages]),
           exclude_assignment_description: value_to_boolean(params[:exclude_assignment_descriptions]),
           include_all_dates: include_params.include?('all_dates'),
-          include_master_course_restrictions: check_for_restrictions
+          master_course_status: mc_status
         )
       end
     end
@@ -403,7 +409,6 @@ class DiscussionTopicsController < ApplicationController
   def edit
     @topic ||= @context.all_discussion_topics.find(params[:id])
     if authorized_action(@topic, @current_user, (@topic.new_record? ? :create : :update))
-      return render_unauthorized_action if !@topic.new_record? && editing_restricted?(@topic)
       hash =  {
         URL_ROOT: named_context_url(@context, :api_v1_context_discussion_topics_url),
         PERMISSIONS: {
@@ -447,13 +452,18 @@ class DiscussionTopicsController < ApplicationController
         GROUP_CATEGORIES: categories.
            reject(&:student_organized?).
            map { |category| { id: category.id, name: category.name } },
-        MULTIPLE_GRADING_PERIODS_ENABLED: @context.feature_enabled?(:multiple_grading_periods),
+        HAS_GRADING_PERIODS: @context.grading_periods?,
         SECTION_LIST: sections.map { |section| { id: section.id, name: section.name } }
       }
 
       post_to_sis = Assignment.sis_grade_export_enabled?(@context)
       js_hash[:POST_TO_SIS] = post_to_sis
       js_hash[:POST_TO_SIS_DEFAULT] = @context.account.sis_default_grade_export[:value] if post_to_sis && @topic.new_record?
+
+      js_hash[:MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT] = AssignmentUtil.name_length_required_for_account?(@context)
+      js_hash[:MAX_NAME_LENGTH] = AssignmentUtil.assignment_max_name_length(@context)
+      js_hash[:DUE_DATE_REQUIRED_FOR_ACCOUNT] = AssignmentUtil.due_date_required_for_account?(@context)
+      js_hash[:SIS_NAME] = AssignmentUtil.post_to_sis_friendly_name(@context)
 
       if @context.is_a?(Course)
         js_hash['SECTION_LIST'] = sections.map { |section|
@@ -470,7 +480,7 @@ class DiscussionTopicsController < ApplicationController
       js_hash[:CANCEL_TO] = cancel_redirect_url
       append_sis_data(js_hash)
 
-      if @context.feature_enabled?(:multiple_grading_periods)
+      if @context.grading_periods?
         gp_context = @context.is_a?(Group) ? @context.context : @context
         js_hash[:active_grading_periods] = GradingPeriod.json_for(gp_context, @current_user)
       end
@@ -480,6 +490,7 @@ class DiscussionTopicsController < ApplicationController
       end
       js_env(js_hash)
 
+      set_master_course_js_env_data(@topic, @context)
       conditional_release_js_env(@topic.assignment)
 
       render :edit
@@ -537,7 +548,7 @@ class DiscussionTopicsController < ApplicationController
         end
       end
 
-      @initial_post_required = @topic.initial_post_required?(@current_user, @context_enrollment, session)
+      @initial_post_required = @topic.initial_post_required?(@current_user, session)
 
       @padless = true
 
@@ -617,6 +628,7 @@ class DiscussionTopicsController < ApplicationController
             end
 
             js_hash = {:DISCUSSION => env_hash}
+            js_hash[:COURSE_ID] = @context.id if @context.is_a?(Course)
             js_hash[:CONTEXT_ACTION_SOURCE] = :discussion_topic
             js_hash[:STUDENT_CONTEXT_CARDS_ENABLED] = @context.is_a?(Course) &&
               @domain_root_account.feature_enabled?(:student_context_cards) &&
@@ -624,6 +636,7 @@ class DiscussionTopicsController < ApplicationController
 
             append_sis_data(js_hash)
             js_env(js_hash)
+            set_master_course_js_env_data(@topic, @context)
             conditional_release_js_env(@topic.assignment, includes: [:rule])
           end
         end
@@ -841,11 +854,8 @@ class DiscussionTopicsController < ApplicationController
       feed.entries << entry.to_atom
     end
     respond_to do |format|
-      format.atom { render :text => feed.to_xml }
+      format.atom { render :plain => feed.to_xml }
     end
-  end
-
-  def public_topic_feed
   end
 
   # @API Reorder pinned topics
@@ -900,22 +910,29 @@ class DiscussionTopicsController < ApplicationController
   end
 
   API_ALLOWED_TOPIC_FIELDS = %w(title message discussion_type delayed_post_at lock_at podcast_enabled
-                                podcast_has_student_posts require_initial_post is_announcement pinned
+                                podcast_has_student_posts require_initial_post pinned
                                 group_category_id allow_rating only_graders_can_rate sort_by_rating).freeze
+
+  API_ALLOWED_TOPIC_FIELDS_FOR_GROUP = %w(title message discussion_type podcast_enabled pinned
+                                allow_rating only_graders_can_rate sort_by_rating).freeze
+
 
   def process_discussion_topic(is_new = false)
     @errors = {}
-    discussion_topic_hash = params.permit(*API_ALLOWED_TOPIC_FIELDS)
-    model_type = value_to_boolean(discussion_topic_hash.delete(:is_announcement)) && @context.announcements.temp_record.grants_right?(@current_user, session, :create) ? :announcements : :discussion_topics
+    model_type = value_to_boolean(params[:is_announcement]) && @context.announcements.temp_record.grants_right?(@current_user, session, :create) ? :announcements : :discussion_topics
     if is_new
       @topic = @context.send(model_type).build
+      prior_version = @topic.dup
     else
       @topic = @context.send(model_type).active.find(params[:id] || params[:topic_id])
+      prior_version = DiscussionTopic.find(@topic.id)
     end
 
     return unless authorized_action(@topic, @current_user, (is_new ? :create : :update))
 
-    prior_version = @topic.generate_prior_version
+    allowed_fields = @context.is_a?(Group) ? API_ALLOWED_TOPIC_FIELDS_FOR_GROUP : API_ALLOWED_TOPIC_FIELDS
+    discussion_topic_hash = params.permit(*allowed_fields)
+
     process_podcast_parameters(discussion_topic_hash)
 
     if is_new
@@ -967,9 +984,7 @@ class DiscussionTopicsController < ApplicationController
         end
 
         @topic = DiscussionTopic.find(@topic.id)
-        @topic.just_created = is_new
-        @topic.prior_version = prior_version
-        @topic.broadcast_notifications
+        @topic.broadcast_notifications(prior_version)
 
         render :json => discussion_topic_api_json(@topic, @context, @current_user, session)
       else

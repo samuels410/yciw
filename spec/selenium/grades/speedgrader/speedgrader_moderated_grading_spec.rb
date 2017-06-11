@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_relative '../../helpers/speed_grader_common'
 require_relative '../../helpers/gradebook_common'
 
@@ -287,7 +304,6 @@ describe "speed grader" do
       final_pg.reload
       expect(final_pg.score.to_i).to eql 8
       expect(final_pg.submission_comments.map(&:comment)).to be_include 'srsly'
-      wait_for_ajax_requests(150)
       expect(final_tab).to include_text("8/8") # should sync tab state
     end
 

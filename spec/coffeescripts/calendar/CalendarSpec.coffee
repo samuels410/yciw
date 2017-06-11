@@ -1,14 +1,31 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'compiled/calendar/Calendar'
   'compiled/util/fcUtil',
   'moment'
   'timezone'
-  'vendor/timezone/America/Denver'
+  'timezone/America/Denver'
   'helpers/fixtures'
   'jquery'
 ], (Calendar, fcUtil, moment, tz, denver, fixtures, $) ->
 
-  module "Calendar",
+  QUnit.module "Calendar",
     setup: ->
       @snapshot = tz.snapshot()
       tz.changeZone(denver, 'America/Denver')
@@ -108,3 +125,10 @@ define [
     ok Calendar.prototype.isSameWeek(date2, datetime3), 'sun-sat 1'
     ok Calendar.prototype.isSameWeek(datetime2, date3), 'sun-sat 2'
     ok Calendar.prototype.isSameWeek(date2, date3), 'sun-sat 3'
+
+  test 'gets appointment groups when show scheduler activated', ->
+    mockHeader = makeMockHeader()
+    mockDataSource = makeMockDataSource()
+    cal = new Calendar('#fixtures', [], null, mockDataSource, {header: mockHeader, showScheduler: true})
+    ok mockDataSource.getAppointmentGroups.called
+    ok mockDataSource.getEvents.called

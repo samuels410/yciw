@@ -1,4 +1,22 @@
 /*
+ * Copyright (C) 2014 - present Instructure, Inc.
+ *
+ * This file is part of Canvas.
+ *
+ * Canvas is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, version 3 of the License.
+ *
+ * Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+/*
 @styleguide Colors
 <br/>
 
@@ -12,28 +30,28 @@
     </div>
     <div class="Colorguide-color Colorguide-color--success">
       <span class="Colorguide-var ">
-        Success Green
+        Shamrock
         <br/>
         $ic-color-success
       </span>
     </div>
     <div class="Colorguide-color Colorguide-color--action">
       <span class="Colorguide-var">
-        Action
+        Barney
         <br/>
         $ic-color-action
       </span>
     </div>
     <div class="Colorguide-color Colorguide-color--danger">
       <span class="Colorguide-var">
-        Danger
+        Crimson
         <br/>
         $ic-color-danger
       </span>
     </div>
     <div class="Colorguide-color Colorguide-color--alert">
       <span class="Colorguide-var">
-        Alert
+        Fire
         <br/>
         $ic-color-alert
       </span>
@@ -42,35 +60,58 @@
 <div class="grid-row Colorguide-container--primary-theme">
   <div class="Colorguide-color Colorguide-color--dark">
     <span class="Colorguide-var">
-      Dark
+      Licorice
       <br/>
       $ic-color-dark
     </span>
   </div>
   <div class="Colorguide-color Colorguide-color--medium-darker">
     <span class="Colorguide-var">
-      Medium-Darker
+      Oxford
       <br/>
       $ic-color-medium-darker
     </span>
   </div>
   <div class="Colorguide-color Colorguide-color--medium">
     <span class="Colorguide-var">
-      Medium
+      Slate
       <br/>
       $ic-color-medium
     </span>
   </div>
+  <div class="Colorguide-color Colorguide-color--medium-lighter">
+    <span class="Colorguide-var">
+      Ash
+      <br/>
+      $ic-color-medium-lighter
+    </span>
+  </div>
+</div>
+<div class="grid-row Colorguide-container--primary-theme">
+  <div class="Colorguide-color Colorguide-color--border-dark">
+    <span class="Colorguide-var">
+      Heather
+      <br/>
+      $ic-border-dark
+    </span>
+  </div>
+  <div class="Colorguide-color Colorguide-color--border-light">
+    <span class="Colorguide-var">
+      Tiara
+      <br/>
+      $ic-border-light
+    </span>
+  </div>
   <div class="Colorguide-color Colorguide-color--medium-light">
     <span class="Colorguide-var">
-      Medium Light
+      Porcelain
       <br/>
       $ic-color-medium-light
     </span>
   </div>
   <div class="Colorguide-color Colorguide-color--light">
     <span class="Colorguide-var">
-      Light
+      White
       <br/>
       $ic-color-light
     </span>

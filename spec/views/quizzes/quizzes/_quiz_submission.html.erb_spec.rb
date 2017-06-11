@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -29,8 +29,8 @@ describe "/quizzes/quizzes/_quiz_submission" do
     before(:each) do
       quiz = @course.quizzes.create!
       submission = quiz.generate_submission(@user)
-      assigns[:quiz] = quiz
-      assigns[:submission] = submission
+      assign(:quiz, quiz)
+      assign(:submission, submission)
       Quizzes::SubmissionGrader.new(submission).grade_submission
     end
 
@@ -51,9 +51,9 @@ describe "/quizzes/quizzes/_quiz_submission" do
       quiz.hide_results = 'always'
       quiz.save!
 
-      assigns[:quiz] = quiz
-      assigns[:submission] = assigns[:quiz].generate_submission(@user)
-      Quizzes::SubmissionGrader.new(assigns[:submission]).grade_submission
+      assign(:quiz, quiz)
+      sub = assign(:submission, quiz.generate_submission(@user))
+      Quizzes::SubmissionGrader.new(sub).grade_submission
       render :partial => "quizzes/quizzes/quiz_submission"
       expect(response).not_to be_nil
     end
@@ -72,9 +72,9 @@ describe "/quizzes/quizzes/_quiz_submission" do
       quiz.save!
       @course.soft_conclude!
 
-      assigns[:quiz] = quiz
-      assigns[:submission] = assigns[:quiz].generate_submission(@student)
-      Quizzes::SubmissionGrader.new(assigns[:submission]).grade_submission
+      assign(:quiz, quiz)
+      sub = assign(:submission, quiz.generate_submission(@student))
+      Quizzes::SubmissionGrader.new(sub).grade_submission
       render :partial => "quizzes/quizzes/quiz_submission"
       expect(response).not_to be_nil
     end

@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'jquery'
   'underscore'
@@ -107,6 +124,10 @@ define [
       return @get 'lock_at' unless arguments.length > 0
       @set 'lock_at', date
 
+    name: (newName) =>
+      return @get 'title' unless arguments.length > 0
+      @set 'title', newName
+
     htmlUrl: =>
       @get 'url'
 
@@ -144,6 +165,21 @@ define [
       return @get 'post_to_sis' unless arguments.length > 0
       @set 'post_to_sis', postToSisBoolean
 
+    postToSISName: =>
+      return ENV.SIS_NAME
+
+    sisIntegrationSettingsEnabled: =>
+      return ENV.SIS_INTEGRATION_SETTINGS_ENABLED
+
+    maxNameLength: =>
+      return ENV.MAX_NAME_LENGTH
+
+    maxNameLengthRequiredForAccount: =>
+      return ENV.MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT
+
+    dueDateRequiredForAccount: =>
+      return ENV.DUE_DATE_REQUIRED_FOR_ACCOUNT
+
     toView: =>
       fields = [
         'htmlUrl', 'multipleDueDates', 'nonBaseDates', 'allDates', 'dueAt', 'lockAt', 'unlockAt', 'singleSectionDueDate'
@@ -155,3 +191,6 @@ define [
 
     postToSISEnabled: =>
       return ENV.FLAGS && ENV.FLAGS.post_to_sis_enabled
+
+    objectType: =>
+      return 'Quiz'

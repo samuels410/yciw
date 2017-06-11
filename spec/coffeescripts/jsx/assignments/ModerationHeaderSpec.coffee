@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'react'
   'react-dom'
@@ -5,7 +22,7 @@ define [
   'jsx/assignments/ModerationHeader'
 ], (React, ReactDOM, TestUtils, Header) ->
 
-  module 'ModerationHeader',
+  QUnit.module 'ModerationHeader',
     setup: ->
       @props =
         onPublishClick: ->
@@ -16,6 +33,8 @@ define [
           review: false,
           publish: false
         }
+        permissions:
+          editGrades: true
 
     teardown: ->
       @props = null
@@ -28,13 +47,28 @@ define [
     ok headerNode, 'the DOM node mounted'
     ReactDOM.unmountComponentAtNode(headerNode.parentNode)
 
+  test 'renders the publish button if the user has edit permissions', ->
+    HeaderElement = React.createElement(Header, @props)
+    header = TestUtils.renderIntoDocument(HeaderElement)
+    headerNode = ReactDOM.findDOMNode(header)
+    ok header.publishBtn
+    ReactDOM.unmountComponentAtNode(headerNode.parentNode)
+
+  test 'does not render the publish button if the user does not have edit permissions', ->
+    @props.permissions.editGrades = false
+    HeaderElement = React.createElement(Header, @props)
+    header = TestUtils.renderIntoDocument(HeaderElement)
+    headerNode = ReactDOM.findDOMNode(header)
+    notOk header.publishBtn
+    ReactDOM.unmountComponentAtNode(headerNode.parentNode)
+
   test 'sets buttons to disabled if published prop is true', ->
     @props.published = true
     HeaderElement = React.createElement(Header, @props)
     header = TestUtils.renderIntoDocument(HeaderElement)
     headerNode = ReactDOM.findDOMNode(header)
     addReviewerBtnNode = ReactDOM.findDOMNode(header.refs.addReviewerBtn)
-    publishBtnNode = ReactDOM.findDOMNode(header.refs.publishBtn)
+    publishBtnNode = header.publishBtn
 
     ok addReviewerBtnNode.disabled, 'add reviewers button is disabled'
     ok publishBtnNode.disabled, 'publish button is disabled'
@@ -45,7 +79,7 @@ define [
     HeaderElement = React.createElement(Header, @props)
     header = TestUtils.renderIntoDocument(HeaderElement)
     headerNode = ReactDOM.findDOMNode(header)
-    publishBtnNode = ReactDOM.findDOMNode(header.refs.publishBtn)
+    publishBtnNode = header.publishBtn
 
     ok publishBtnNode.disabled, 'publish button is disabled'
     ReactDOM.unmountComponentAtNode(headerNode.parentNode)

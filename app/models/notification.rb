@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -105,7 +105,7 @@ class Notification < ActiveRecord::Base
     to_list.each do |to|
       msgs = NotificationMessageCreator.new(self, asset, options.merge(:to_list => to)).create_message
       messages.concat msgs if Rails.env.test?
-      to.clear_association_cache if to.is_a?(User)
+      to.send(:clear_association_cache) if to.is_a?(User)
     end
     messages
   end

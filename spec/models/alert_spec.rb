@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2014 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -43,7 +43,7 @@ describe Alert do
         expect(alert.criteria.last).to be_new_record
 
         alert.criteria = []
-        alert.criteria be_empty
+        expect(alert.criteria).to be_empty
 
         expect(AlertCriterion.where(id: original_criterion_id).first).to be_nil
       end

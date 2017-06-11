@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 module Importers
   class LinkResolver
     include LinkParser::Helpers
@@ -46,7 +63,7 @@ module Importers
           end
         elsif context.respond_to?(type) && context.send(type).respond_to?(:scope)
           scope = context.send(type).scope
-          if scope.table.engine.columns_hash['migration_id']
+          if scope.klass.columns_hash['migration_id']
             if object_id = scope.where(migration_id: migration_id).limit(1).pluck(:id).first
               link[:new_value] = "#{context_path}/#{type_for_url}/#{object_id}"
             end

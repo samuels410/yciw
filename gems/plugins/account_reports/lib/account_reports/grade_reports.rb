@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 - 2014 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -91,8 +91,8 @@ module AccountReports
           arr << student["term_name"]
           arr << student["term_id"]
           arr << student["term_sis_id"]
-          arr << student["computed_current_score"]
-          arr << student["computed_final_score"]
+          arr << student["current_score"]
+          arr << student["final_score"]
           arr << student["enroll_state"]
           csv << arr
         end
@@ -149,13 +149,11 @@ module AccountReports
       headers << I18n.t('final score')
       headers << I18n.t('enrollment state')
 
-      firstpass_file = generate_and_run_report(nil, 'firstpass.csv') do |csv|
+      generate_and_run_report headers do |csv|
         students.find_in_batches do |student_chunk|
-          # loading students/courses in chunks to avoid unnecessarily
-          # re-loading assignments/etc. in the grade calculator
           students_by_course = student_chunk.group_by { |x| x.course_id }
-
           students_by_course.each do |course_id, course_students|
+            scores = indexed_scores(course_students, grading_periods)
             course_students.each do |student|
               arr = []
               arr << student["user_name"]
@@ -173,53 +171,39 @@ module AccountReports
               arr << gp_set.title
               arr << gp_set.id
               grading_periods.each do |gp|
+                scores_for_student = grading_period_scores_for_student(student, gp, scores)
                 arr << gp.id
-                # Putting placeholders there to be replaced after expensive grade calculation
-                arr << nil
-                arr << nil
+                arr << scores_for_student[:current]
+                arr << scores_for_student[:final]
               end
-              arr << student["computed_current_score"]
-              arr << student["computed_final_score"]
+              arr << student["current_score"]
+              arr << student["final_score"]
               arr << student["enroll_state"]
               csv << arr
             end
           end
         end
       end
-
-      generate_and_run_report headers do |report_csv|
-        read_csv_in_chunks(firstpass_file) do |rows|
-          rows_by_course = rows.group_by { |arr| arr[4].to_i  }
-          courses_by_id = Course.find(rows_by_course.keys).index_by(&:id)
-
-          rows_by_course.each do |course_id, course_rows|
-            grading_period_grades = grading_periods.reduce({}) do |h,gp|
-              h[gp] = GradeCalculator.new(course_rows.map { |arr| arr[1] },
-                                          courses_by_id[course_id],
-                                          grading_period: gp).compute_scores
-              h
-            end
-
-            course_rows.each do |row|
-              column = 13
-              grading_period_grades.each do |gp, grades|
-                row_grades = grades.shift
-                # this accounts for gp.id and moves us to where we want
-                # to drop our grades data.
-                column += 2
-                row[column] = row_grades[:current][:grade]
-                column += 1
-                row[column] = row_grades[:final][:grade]
-              end
-            end
-          end
-
-          rows.each { |r| report_csv << r }
-        end
-      end
     end
 
     private
+
+    def indexed_scores(students, grading_periods)
+      Score.where(
+        enrollment_id: students.map(&:enrollment_id),
+        grading_period_id: grading_periods.map(&:id)
+      ).active.pluck(
+        :enrollment_id,
+        :grading_period_id,
+        :current_score,
+        :final_score
+      ).index_by { |score| "#{score[0]}:#{score[1]}" }
+    end
+
+    def grading_period_scores_for_student(student, grading_period, scores)
+      scores_array = scores["#{student['enrollment_id']}:#{grading_period.id}"] || []
+      { current: scores_array[2], final: scores_array[3] }
+    end
 
     def student_grade_scope
       students = root_account.pseudonyms.except(:preload).
@@ -227,10 +211,11 @@ module AccountReports
                 pseudonyms.sis_user_id, c.name AS course_name,
                 c.sis_source_id AS course_sis_id, s.name AS section_name,
                 e.course_section_id, s.sis_source_id AS section_sis_id,
+                e.id as enrollment_id,
                 t.name AS term_name, t.id AS term_id,
                 t.sis_source_id AS term_sis_id,
-                CASE WHEN sc.id IS NOT NULL THEN sc.current_score ELSE e.computed_current_score END AS computed_current_score,
-                CASE WHEN sc.id IS NOT NULL THEN sc.final_score ELSE e.computed_final_score END AS computed_final_score,
+                sc.current_score,
+                sc.final_score,
            CASE WHEN e.workflow_state = 'active' THEN 'active'
                 WHEN e.workflow_state = 'completed' THEN 'concluded'
                 WHEN e.workflow_state = 'deleted' THEN 'deleted' END AS enroll_state").

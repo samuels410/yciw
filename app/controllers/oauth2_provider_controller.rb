@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2015 Instructure, Inc.
+# Copyright (C) 2015 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -20,8 +20,8 @@ class Oauth2ProviderController < ApplicationController
 
   rescue_from Canvas::Oauth::RequestError, with: :oauth_error
   protect_from_forgery :except => [:token, :destroy], with: :exception
-  before_filter :run_login_hooks, :only => [:token]
-  skip_before_filter :require_reacceptance_of_terms
+  before_action :run_login_hooks, :only => [:token]
+  skip_before_action :require_reacceptance_of_terms
 
   def auth
     if params[:code] || params[:error]
@@ -57,8 +57,8 @@ class Oauth2ProviderController < ApplicationController
       redirect_to Canvas::Oauth::Provider.confirmation_redirect(self, provider, @current_user)
     else
       params["pseudonym_session"] = {"unique_id" => params[:unique_id]} if params.key?(:unique_id)
-      redirect_to login_url(params.slice(:canvas_login, :pseudonym_session, :force_login,
-                                         :authentication_provider, :pseudonym_session))
+      redirect_to login_url(params.permit(:canvas_login, :force_login,
+                                          :authentication_provider, pseudonym_session: :unique_id))
     end
   end
 

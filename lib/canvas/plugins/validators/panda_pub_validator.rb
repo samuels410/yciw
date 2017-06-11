@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2013 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -30,7 +30,7 @@ module Canvas::Plugins::Validators::PandaPubValidator
           plugin_setting.errors.add(:base, I18n.t('canvas.plugins.errors.invalid_url', 'Invalid URL'))
           false
         else
-          settings.slice(:base_url, :application_id, :key_id, :key_secret)
+          settings.permit(:base_url, :application_id, :key_id, :key_secret).to_h.with_indifferent_access
         end
       end
     end

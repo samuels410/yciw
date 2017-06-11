@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2013 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -476,6 +476,19 @@ describe AppointmentGroup do
       enrollment.conclude
       expect(@ag.reload.available_slots).to eql 4
     end
+
+    it "should not cancel a slot for a user if they have another active enrollment" do
+      enrollment1 = student_in_course(:course => @course, :active_all => true)
+      cs = @course.course_sections.create!
+      enrollment2 = @course.enroll_student(@student, :section => cs, :allow_multiple_enrollments => true, :enrollment_state => 'active')
+
+      @appointment.reserve_for(@student, @teacher)
+      expect(@ag.reload.available_slots).to eql 3
+      enrollment1.conclude
+      expect(@ag.reload.available_slots).to eql 3
+      enrollment2.conclude
+      expect(@ag.reload.available_slots).to eql 4
+    end
   end
 
   context "possible_participants" do
@@ -532,6 +545,21 @@ describe AppointmentGroup do
     end
   end
 
+  it "should restrict instructors by section" do
+    course_factory(:active_all => true)
+    unrestricted_teacher = @teacher
+    limited_teacher1 = user_factory(:active_all => true)
+    @course.enroll_teacher(limited_teacher1, :limit_privileges_to_course_section => true, :enrollment_state => 'active')
+
+    section2 = @course.course_sections.create!
+    limited_teacher2 = user_factory(:active_all => true)
+    @course.enroll_teacher(limited_teacher2, :section => section2, :limit_privileges_to_course_section => true, :enrollment_state => 'active')
+
+    @ag = AppointmentGroup.create!(:title => "test", :contexts => [@course])
+    @ag.appointment_group_sub_contexts.create! :sub_context => section2
+    expect(@ag.instructors).to match_array([unrestricted_teacher, limited_teacher2])
+  end
+
   context "#requiring_action?" do
     before :once do
       course_with_teacher(:active_all => true)
@@ -567,4 +595,40 @@ describe AppointmentGroup do
       expect(ag).not_to be_all_appointments_filled
     end
   end
+
+  context "users_with_reservations_through_group" do
+    before :once do
+      course_with_teacher(:active_all => true)
+      @teacher = @user
+
+      @users = []
+      section = @course.course_sections.create!
+      2.times do
+        enrollment = student_in_course(:active_all => true)
+        @enrollment.course_section = section
+        @enrollment.save!
+        @users << @user
+      end
+      @not_group_enrollment = student_in_course(:active_all => true)
+      @not_group_enrollment.course_section = section
+      @not_group_enrollment.save!
+      @not_group_user = @user
+      @group1 = group(:name => "group1", :group_context => @course)
+      @group1.participating_users << @users
+      @group1.save!
+      @gc = @group1.group_category
+      @ag = AppointmentGroup.create!(:title => "test", :contexts => [@course],
+                                     :participants_per_appointment => 2,
+                                     :new_appointments => [["#{Time.now.year + 1}-01-01 12:00:00", "#{Time.now.year + 1}-01-01 13:00:00"], ["#{Time.now.year + 1}-01-01 13:00:00", "#{Time.now.year + 1}-01-01 14:00:00"]])
+    end
+
+    it "returns the ids of any users who are in groups that have made appointments" do
+      @ag.appointment_group_sub_contexts.create! :sub_context => @gc, :sub_context_code => @gc.asset_string
+      @ag.appointments.first.reserve_for(@group1, @users.first)
+      expect(@ag.users_with_reservations_through_group).to include @users[0].id
+      expect(@ag.users_with_reservations_through_group).to include @users[1].id
+      expect(@ag.users_with_reservations_through_group).not_to include @not_group_user.id
+    end
+  end
+
 end

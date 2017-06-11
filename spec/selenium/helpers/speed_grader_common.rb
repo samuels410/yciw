@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/../common')
 require_relative "../grades/page_objects/speedgrader_page"
 
@@ -82,7 +99,7 @@ module SpeedGraderCommon
     # move onto next student
     direction = direction_string.equal?(:next) ? 1 : -1
     new_index = (current_index + direction) % @students.length
-    student_x_of_x_string = "Student #{new_index + 1} of #{@students.length}"
+    student_x_of_x_string = "#{new_index + 1}/#{@students.length}"
 
     Speedgrader.selected_student.text.include?(@students[new_index].name) &&
         Speedgrader.student_x_of_x_label.text.include?(student_x_of_x_string)

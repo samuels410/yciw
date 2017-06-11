@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2016 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -106,8 +106,7 @@ class Account < ActiveRecord::Base
   after_save :invalidate_caches_if_changed
   after_update :clear_special_account_cache_if_special
 
-  after_create :default_enrollment_term
-  after_create :enable_canvas_authentication
+  after_create :create_default_objects
 
   serialize :settings, Hash
   include TimeZoneHelper
@@ -217,13 +216,13 @@ class Account < ActiveRecord::Base
   add_setting :include_students_in_global_survey, boolean: true, root_only: true, default: false
   add_setting :trusted_referers, root_only: true
   add_setting :app_center_access_token
-  add_setting :enable_offline_web_export, boolean: true, root_only: true, default: false
+  add_setting :enable_offline_web_export, boolean: true, default: false, inheritable: true
 
   add_setting :strict_sis_check, :boolean => true, :root_only => true, :default => false
   add_setting :lock_all_announcements, default: false, boolean: true, inheritable: true
 
   def settings=(hash)
-    if hash.is_a?(Hash)
+    if hash.is_a?(Hash) || hash.is_a?(ActionController::Parameters)
       hash.each do |key, val|
         if account_settings_options && account_settings_options[key.to_sym]
           opts = account_settings_options[key.to_sym]
@@ -231,7 +230,7 @@ class Account < ActiveRecord::Base
             settings.delete key.to_sym
           elsif opts[:hash]
             new_hash = {}
-            if val.is_a?(Hash)
+            if val.is_a?(Hash) || val.is_a?(ActionController::Parameters)
               val.each do |inner_key, inner_val|
                 inner_key = inner_key.to_sym
                 if opts[:values].include?(inner_key)
@@ -291,6 +290,10 @@ class Account < ActiveRecord::Base
     return unless AccountAuthorizationConfig::Canvas.columns_hash.key?('workflow_state')
     return if authentication_providers.active.where(auth_type: 'canvas').exists?
     authentication_providers.create!(auth_type: 'canvas')
+  end
+
+  def enable_offline_web_export?
+    enable_offline_web_export[:value]
   end
 
   def open_registration?
@@ -369,6 +372,7 @@ class Account < ActiveRecord::Base
 
     if self.root_account?
       self.errors.add(:sis_source_id, t('#account.root_account_cant_have_sis_id', "SIS IDs cannot be set on root accounts"))
+      throw :abort unless CANVAS_RAILS4_2
       return false
     end
 
@@ -378,6 +382,7 @@ class Account < ActiveRecord::Base
     return true unless scope.exists?
 
     self.errors.add(:sis_source_id, t('#account.sis_id_in_use', "SIS ID \"%{sis_id}\" is already in use", :sis_id => self.sis_source_id))
+    throw :abort unless CANVAS_RAILS4_2
     false
   end
 
@@ -420,11 +425,10 @@ class Account < ActiveRecord::Base
     !self.root_account_id
   end
 
-  def root_account_with_self
-    return self if self.root_account?
-    root_account_without_self
+  def root_account
+    return self if root_account?
+    super
   end
-  alias_method_chain :root_account, :self
 
   def sub_accounts_as_options(indent = 0, preloaded_accounts = nil)
     unless preloaded_accounts
@@ -517,14 +521,14 @@ class Account < ActiveRecord::Base
   end
 
   def self.account_lookup_cache_key(id)
-    ['_account_lookup4', id].cache_key
+    ['_account_lookup5', id].cache_key
   end
 
   def self.invalidate_cache(id)
     return unless id
-    birth_id = Shard.relative_id_for(id, Shard.current, Shard.birth)
-    Shard.birth.activate do
-      Rails.cache.delete(account_lookup_cache_key(birth_id)) if birth_id
+    default_id = Shard.relative_id_for(id, Shard.current, Shard.default)
+    Shard.default.activate do
+      Rails.cache.delete(account_lookup_cache_key(default_id)) if default_id
     end
   rescue
     nil
@@ -980,7 +984,7 @@ class Account < ActiveRecord::Base
     end
 
     given { |user| !self.account_users_for(user).empty? }
-    can :read and can :manage and can :update and can :delete and can :read_outcomes
+    can :read and can :read_as_admin and can :manage and can :update and can :delete and can :read_outcomes
 
     given { |user|
       result = false
@@ -1035,7 +1039,7 @@ class Account < ActiveRecord::Base
   def default_enrollment_term
     return @default_enrollment_term if @default_enrollment_term
     if self.root_account?
-      @default_enrollment_term = self.enrollment_terms.active.where(name: EnrollmentTerm::DEFAULT_TERM_NAME).first_or_create
+      @default_enrollment_term = Shackles.activate(:master) { self.enrollment_terms.active.where(name: EnrollmentTerm::DEFAULT_TERM_NAME).first_or_create }
     end
   end
 
@@ -1166,11 +1170,11 @@ class Account < ActiveRecord::Base
   class ::Canvas::AccountCacheError < StandardError; end
 
   def self.find_cached(id)
-    birth_id = Shard.relative_id_for(id, Shard.current, Shard.birth)
-    Shard.birth.activate do
-      Rails.cache.fetch(account_lookup_cache_key(birth_id)) do
+    default_id = Shard.relative_id_for(id, Shard.current, Shard.default)
+    Shard.default.activate do
+      Rails.cache.fetch(account_lookup_cache_key(default_id)) do
         begin
-          account = Account.find(birth_id)
+          account = Account.find(default_id)
         rescue ActiveRecord::RecordNotFound => e
           raise ::Canvas::AccountCacheError, e.message
         end
@@ -1530,8 +1534,6 @@ class Account < ActiveRecord::Base
     end
   end
 
-  def self.serialization_excludes; [:uuid]; end
-
   def find_child(child_id)
     return all_accounts.find(child_id) if root_account?
 
@@ -1636,5 +1638,14 @@ class Account < ActiveRecord::Base
   def to_param
     return 'site_admin' if site_admin?
     super
+  end
+
+  def create_default_objects
+    work = -> do
+      default_enrollment_term
+      enable_canvas_authentication
+    end
+    return work.call if Rails.env.test?
+    self.class.connection.after_transaction_commit(&work)
   end
 end

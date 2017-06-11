@@ -1,12 +1,24 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/../common')
 
 module GradezillaCommon
-  shared_context 'gradebook_components' do
-    let(:gradebook_settings_cog) { f('#gradebook_settings') }
-    let(:show_notes) { fj('li a:contains("Show Notes Column")') }
-    let(:save_button) { fj('button span:contains("Save")') }
-    let(:hide_notes) { f(".hide") }
-  end
+
   shared_context 'reusable_course' do
     let(:test_course)       { course_factory(active_course: true) }
     let(:teacher)           { user_factory(active_all: true) }
@@ -85,8 +97,7 @@ module GradezillaCommon
   end
 
   def set_default_grade(cell_index, points = "5")
-    open_assignment_options(cell_index)
-    f('[data-action="setDefaultGrade"]').click
+    move_to_click('[data-menu-item-id="set-default-grade"]')
     dialog = find_with_jquery('.ui-dialog:visible')
     f('.grading_value').send_keys(points)
     submit_dialog(dialog, '.ui-button')
@@ -94,8 +105,8 @@ module GradezillaCommon
   end
 
   def toggle_muting(assignment)
-    find_with_jquery(".gradebook-header-drop[data-assignment-id='#{assignment.id}']").click
-    find_with_jquery('[data-action="toggleMuting"]').click
+    find_with_jquery(".slick-header-column[id*='assignment_#{assignment.id}'] .Gradebook__ColumnHeaderAction").click
+    find_with_jquery('[data-menu-item-id="assignment-muter"]').click
     find_with_jquery('.ui-dialog-buttonpane [data-action$="mute"]:visible').click
     wait_for_ajaximations
   end
@@ -124,8 +135,9 @@ module GradezillaCommon
 
   def open_comment_dialog(x=0, y=0)
     cell = f("#gradebook_grid .container_1 .slick-row:nth-child(#{y+1}) .slick-cell:nth-child(#{x+1})")
-    hover cell
-    fj('.gradebook-cell-comment:visible', cell).click
+    cell.click
+    fj('.Grid__AssignmentRowCell__Options button:visible', cell).click
+    f('#ShowSubmissionDetailsAction').click
     # the dialog fetches the comments async after it displays and then innerHTMLs the whole
     # thing again once it has fetched them from the server, completely replacing it
     wait_for_ajax_requests
@@ -257,7 +269,7 @@ module GradezillaCommon
     @assignment.grade_student(@student_1, grade: 10, grader: @teacher)
 
     # second student submission for assignment 1
-    student_2_submission = @assignment.submit_homework(@student_2, :body => 'student 2 submission assignment 1')
+    @assignment.submit_homework(@student_2, :body => 'student 2 submission assignment 1')
     @assignment.grade_student(@student_2, grade: 5, grader: @teacher)
 
     # third student submission for assignment 1

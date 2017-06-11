@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -289,19 +289,9 @@ class PageView < ActiveRecord::Base
   scope :for_users, lambda { |users| where(:user_id => users) }
 
   def self.pv4_client
-    @pv4_client ||= begin
-      config = ConfigFile.load('pv4')
-      raise "Page Views v4 not configured!" unless config
+    ConfigFile.cache_object('pv4') do |config|
       Pv4Client.new(config['uri'], config['access_token'])
     end
-  end
-
-  def self.reset_pv4_client
-    @pv4_client = nil
-  end
-
-  Canvas::Reloader.on_reload do
-    reset_pv4_client
   end
 
   # returns a collection with very limited functionality
@@ -323,7 +313,7 @@ class PageView < ActiveRecord::Base
   end
 
   class << self
-    def transaction_with_cassandra_check(*args)
+    def transaction(*args)
       if PageView.cassandra?
         # Rails 3 autosave associations re-assign the attributes;
         # for sharding to work, the page view's shard has to be
@@ -338,10 +328,9 @@ class PageView < ActiveRecord::Base
           yield
         end
       else
-        self.transaction_without_cassandra_check(*args) { yield }
+        super
       end
     end
-    alias_method_chain :transaction, :cassandra_check
   end
 
   def add_to_transaction

@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 # @API SIS Integration
 #
 # Includes helpers for integration with SIS systems.
@@ -5,9 +22,9 @@
 class SisApiController < ApplicationController
   include Api::V1::SisAssignment
 
-  before_filter :require_view_all_grades, only: [:sis_assignments]
-  before_filter :require_grade_export, only: [:sis_assignments]
-  before_filter :require_published_course, only: [:sis_assignments]
+  before_action :require_view_all_grades, only: [:sis_assignments]
+  before_action :require_grade_export, only: [:sis_assignments]
+  before_action :require_published_course, only: [:sis_assignments]
 
   GRADE_EXPORT_NOT_ENABLED_ERROR = {
     code: 'not_enabled',
@@ -41,6 +58,9 @@ class SisApiController < ApplicationController
   #                                              this date (if they have a start date)
   # @argument ends_after [DateTime, Optional] When searching on an account, restricts to courses that end after this
   #                                              date (if they have an end date)
+  # @argument include [String, "student_overrides"] Array of additional information to include.
+  #
+  #   "student_overrides":: returns individual student override information
   #
   # @example_response
   #   [
@@ -84,9 +104,25 @@ class SisApiController < ApplicationController
   #             "due_at": "2015-02-01%17:00:00Z"
   #           }
   #         },
-  #
-  #         ...
-  #
+  #       ],
+  #       "user_overrides": [
+  #         {
+  #           "id": 54351,
+  #           "title": "Some Title",
+  #           "due_at": "2017-02-08 22:11:10",
+  #           "unlock_at": null,
+  #           "lock_at": null,
+  #           "students": [
+  #             {
+  #               "user_id": 643194
+  #               "sis_user_id": SIS_123
+  #             },
+  #             {
+  #               "user_id": 643195
+  #               "sis_user_id": SIS_456
+  #             }
+  #           ]
+  #         }
   #       ]
   #     },
   #
@@ -95,7 +131,9 @@ class SisApiController < ApplicationController
   #   ]
   #
   def sis_assignments
-    render json: sis_assignments_json(paginated_assignments)
+    includes = {}
+    includes[:student_overrides] = include_student_overrides?
+    render json: sis_assignments_json(paginated_assignments, includes)
   end
 
   private
@@ -134,13 +172,26 @@ class SisApiController < ApplicationController
     end
   end
 
+  def include_student_overrides?
+    params[:include].to_a.include?('student_overrides')
+  end
+
   def published_assignments
-    Assignment.published.
+    assignments = Assignment.published.
       where(post_to_sis: true).
       where(context_type: 'Course', context_id: published_course_ids).
       preload(:assignment_group).
-      preload(:active_assignment_overrides).
       preload(context: { active_course_sections: [:nonxlist_course] })
+
+    if include_student_overrides?
+      assignments = assignments.preload(
+        active_assignment_overrides: [assignment_override_students: [user: [:pseudonym]]]
+      )
+    else
+      assignments = assignments.preload(:active_assignment_overrides)
+    end
+
+    assignments
   end
 
   def paginated_assignments

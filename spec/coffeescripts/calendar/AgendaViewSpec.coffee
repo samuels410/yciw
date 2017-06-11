@@ -1,11 +1,28 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'jquery'
   'underscore'
   'timezone'
   'compiled/util/fcUtil'
-  'vendor/timezone/America/Denver'
-  'vendor/timezone/America/Juneau'
-  'vendor/timezone/fr_FR'
+  'timezone/America/Denver'
+  'timezone/America/Juneau'
+  'timezone/fr_FR'
   'compiled/views/calendar/AgendaView'
   'compiled/calendar/Calendar'
   'compiled/calendar/EventDataSource'
@@ -24,7 +41,7 @@ define [
     server.requests[requestIndex+1].respond 200,
       { 'Content-Type': 'application/json' }, assignments
 
-  module "AgendaView",
+  QUnit.module "AgendaView",
     setup: ->
       @container = $('<div />', id: 'agenda-wrapper').appendTo('#fixtures')
       @contexts = [{"asset_string":"user_1"}, {"asset_string":"course_2"}, {"asset_string":"group_3"}]

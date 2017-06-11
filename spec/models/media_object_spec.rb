@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -29,7 +29,7 @@ describe MediaObject do
     end
 
     it "should raise an error if someone tries to use find_by_media_id" do
-      expect { MediaObject.find_by_media_id('fjdksl') }.to raise_error
+      expect { MediaObject.find_by_media_id('fjdksl') }.to raise_error('Do not look up MediaObjects by media_id - use the scope by_media_id instead to support migrated content.')
     end
   end
 

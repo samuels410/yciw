@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_dependency 'importers'
 
 module Importers
@@ -74,10 +91,9 @@ module Importers
 
     def run
       return unless options.importable?
-      # not seeing where this is used, so I'm commenting it out for now
-      # options[:skip_replies] = true unless options.importable_entries?
       [:migration_id, :title, :discussion_type, :position, :pinned,
        :require_initial_post, :allow_rating, :only_graders_can_rate, :sort_by_rating].each do |attr|
+        next if options[attr].nil? && item.class.columns_hash[attr.to_s].type == :boolean
         item.send("#{attr}=", options[attr])
       end
 
@@ -88,7 +104,6 @@ module Importers
         item.message = I18n.t('#discussion_topic.empty_message', 'No message')
       end
 
-      item.posted_at       = Canvas::Migration::MigratorHelper.get_utc_time_from_timestamp(options[:posted_at])
       item.delayed_post_at = Canvas::Migration::MigratorHelper.get_utc_time_from_timestamp(options.delayed_post_at)
       item.lock_at         = Canvas::Migration::MigratorHelper.get_utc_time_from_timestamp(options[:lock_at])
       item.last_reply_at   = nil if item.new_record?

@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/common')
 
 describe "people" do
@@ -393,6 +410,22 @@ describe "people" do
      expect(ff(".StudentEnrollment")[0]).not_to include_text("section2")
     end
 
+    it "removes students linked to an observer" do
+      @student1 = user_factory; @course.enroll_student(@student1, enrollment_state: :active)
+      @student2 = user_factory; @course.enroll_student(@student2, enrollment_state: :active)
+      @observer = user_factory
+      @course.enroll_user(@observer, 'ObserverEnrollment', enrollment_state: :active, associated_user_id: @student1.id, allow_multiple_enrollments: true)
+      @course.enroll_user(@observer, 'ObserverEnrollment', enrollment_state: :active, associated_user_id: @student2.id, allow_multiple_enrollments: true)
+      get "/courses/#{@course.id}/users"
+      f(".ObserverEnrollment .icon-settings").click
+      fln("Link to Students").click
+      fln("Remove linked student #{@student1.name}", f("#token_#{@student1.id}")).click
+      f('.ui-dialog-buttonset .btn-primary').click
+      wait_for_ajax_requests
+      expect(@observer.enrollments.not_deleted.map(&:associated_user_id)).not_to include @student1.id
+      expect(@observer.enrollments.not_deleted.map(&:associated_user_id)).to include @student2.id
+    end
+
     it "should gray out sections the user doesn't have permission to remove" do
       @student = user_with_managed_pseudonym
       e = @course.enroll_student(@student, allow_multiple_enrollments: true)
@@ -524,7 +557,7 @@ describe "people" do
       click_option("#edit_roles #role_id", role.id.to_s, :value)
       f('.ui-dialog-buttonpane .btn-primary').click
       wait_for_ajaximations
-      assert_flash_notice_message /Role successfully updated/
+      assert_flash_notice_message "Role successfully updated"
 
       expect(f("#user_#{@teacher.id}")).to include_text(role_name)
       @enrollment.reload
@@ -544,7 +577,7 @@ describe "people" do
       click_option("#edit_roles #role_id", ta_role.id.to_s, :value)
       f('.ui-dialog-buttonpane .btn-primary').click
       wait_for_ajaximations
-      assert_flash_notice_message /Role successfully updated/
+      assert_flash_notice_message "Role successfully updated"
 
       expect(@enrollment.reload).to be_deleted
       expect(enrollment2.reload).to be_deleted
@@ -565,7 +598,7 @@ describe "people" do
       click_option("#edit_roles #role_id", ta_role.id.to_s, :value)
       f('.ui-dialog-buttonpane .btn-primary').click
       wait_for_ajaximations
-      assert_flash_notice_message /Role successfully updated/
+      assert_flash_notice_message "Role successfully updated"
 
       expect(@enrollment.reload).to be_deleted
       expect(enrollment2.reload).to_not be_deleted
@@ -582,7 +615,7 @@ describe "people" do
       click_option("#edit_roles #role_id", student_role.id.to_s, :value)
       f('.ui-dialog-buttonpane .btn-primary').click
       wait_for_ajaximations
-      assert_flash_notice_message /Role successfully updated/
+      assert_flash_notice_message "Role successfully updated"
 
       expect(@enrollment.reload).to be_deleted
       expect(enrollment2.reload).to be_deleted

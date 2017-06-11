@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'jquery'
   'underscore'
@@ -5,10 +22,15 @@ define [
   '../start_app'
   'ember'
   '../shared_ajax_fixtures'
+  'spec/jsx/gradebook/GradeCalculatorSpecHelper'
   '../../controllers/screenreader_gradebook_controller'
   'compiled/userSettings'
+  'jsx/gradebook/CourseGradeCalculator'
   'vendor/jquery.ba-tinypubsub'
-], ($, _, ajax, startApp, Ember, fixtures, SRGBController, userSettings) ->
+], (
+  $, _, ajax, startApp, Ember, fixtures, GradeCalculatorSpecHelper, SRGBController, userSettings,
+  CourseGradeCalculator
+) ->
 
   workAroundRaceCondition = ->
     ajax.request()
@@ -18,6 +40,13 @@ define [
 
   clone = (obj) ->
     Ember.copy obj, true
+
+  createExampleGrades = GradeCalculatorSpecHelper.createCourseGradesWithGradingPeriods
+
+  createExampleGradingPeriodSet = ->
+    id: '1501'
+    gradingPeriods: [{ id: '701', weight: 50 }, { id: '702', weight: 50 }]
+    weighted: true
 
   setup = (isDraftState=false, sortOrder='assignment_group') ->
     fixtures.create()
@@ -45,22 +74,22 @@ define [
     @contextSetStub.restore()
     Ember.run App, 'destroy'
 
-  module 'screenreader_gradebook_controller',
+  QUnit.module 'screenreader_gradebook_controller',
     setup: ->
       setup.call this
     teardown: ->
       teardown.call this
 
-
   test 'calculates students properly', ->
     equal @srgb.get('students.length'), 10
     equal @srgb.get('students.firstObject').name, fixtures.students[0].user.name
 
-  test 'calculates assignments properly', ->
+  asyncTest 'calculates assignments properly', ->
     workAroundRaceCondition().then =>
       equal @srgb.get('assignments.length'), 7
       ok !@srgb.get('assignments').findBy('name', 'Not Graded')
       equal @srgb.get('assignments.firstObject').name, fixtures.assignment_groups[0].assignments[0].name
+      start()
 
   test 'calculates outcomes properly', ->
     equal @srgb.get('outcomes.length'), 2
@@ -70,31 +99,33 @@ define [
     _.each @srgb.studentsHash(), (obj) =>
       strictEqual @srgb.get('students').findBy('id', obj.id), obj
 
-  test 'assignmentGroupsHash retuns the expected hash', ->
+  asyncTest 'assignmentGroupsHash retuns the expected hash', ->
     workAroundRaceCondition().then =>
       _.each @srgb.assignmentGroupsHash(), (obj) =>
         strictEqual @srgb.get('assignment_groups').findBy('id', obj.id), obj
+      start()
 
-  test 'student objects have isLoaded flag set to true once submissions are loaded', ->
+  asyncTest 'student objects have isLoaded flag set to true once submissions are loaded', ->
     workAroundRaceCondition().then =>
       @srgb.get('students').forEach (s) ->
         equal Ember.get(s, 'isLoaded'), true
+      start()
 
   test 'displayName is hiddenName when hideStudentNames is true', ->
     @srgb.set('hideStudentNames', true)
-    equal @srgb.get('displayName'), "hiddenName"
+    equal @srgb.get('displayName'), 'hiddenName'
     @srgb.set('hideStudentNames', false)
-    equal @srgb.get('displayName'), "name"
+    equal @srgb.get('displayName'), 'name'
 
-  test 'displayPointTotals is false when groups are weighted even if showTotalAsPoints is true', ->
+  test 'displayPointTotals is false when grades are weighted even if showTotalAsPoints is true', ->
     Ember.run =>
       @srgb.set('showTotalAsPoints', true)
-      @srgb.set('groupsAreWeighted', true)
+      @srgb.set('gradesAreWeighted', true)
       equal @srgb.get('displayPointTotals'), false
 
-  test 'displayPointTotals is toggled by showTotalAsPoints when groups are unweighted', ->
+  test 'displayPointTotals is toggled by showTotalAsPoints when grades are unweighted', ->
     Ember.run =>
-      @srgb.set('groupsAreWeighted', false)
+      @srgb.set('gradesAreWeighted', false)
       @srgb.set('showTotalAsPoints', true)
       equal @srgb.get('displayPointTotals'), true
       @srgb.set('showTotalAsPoints', false)
@@ -117,54 +148,116 @@ define [
     equal @srgb.get('studentsInSelectedSection.length'), 6
     equal @srgb.get('studentsInSelectedSection.firstObject').name, 'Buffy'
 
-  test 'sorting assignments by position', ->
+  asyncTest 'sorting assignments by position', ->
     workAroundRaceCondition().then =>
       Ember.run =>
         @srgb.set('assignmentSort', @srgb.get('assignmentSortOptions').findBy('value', 'assignment_group'))
       equal @srgb.get('assignments.firstObject.name'), 'Z Eats Soup'
       equal @srgb.get('assignments.lastObject.name'), 'Da Fish and Chips!'
+      start()
 
-  test 'updates assignment_visibility on an assignment', ->
+  asyncTest 'updates assignment_visibility on an assignment', ->
     workAroundRaceCondition().then =>
       assignments = @srgb.get('assignments')
       assgn = assignments.objectAt(2)
       @srgb.updateAssignmentVisibilities(assgn, '3')
       ok !assgn.assignment_visibility.contains('3')
+      start()
 
-  test 'studentsThatCanSeeAssignment doesnt return all students', ->
+  asyncTest 'studentsThatCanSeeAssignment doesnt return all students', ->
     workAroundRaceCondition().then =>
       assgn = @srgb.get('assignments.firstObject')
       students = @srgb.studentsThatCanSeeAssignment(assgn)
       ids = Object.keys(students)
       equal ids.length, 1
       equal ids[0], '1'
+      start()
 
-  test 'sorting assignments alphabetically', ->
+  asyncTest 'sorting assignments alphabetically', ->
     workAroundRaceCondition().then =>
       Ember.run =>
         @srgb.set('assignmentSort', @srgb.get('assignmentSortOptions').findBy('value', 'alpha'))
       equal @srgb.get('assignments.firstObject.name'), 'Apples are good'
       equal @srgb.get('assignments.lastObject.name'), 'Z Eats Soup'
+      start()
 
-  test 'sorting assignments by due date', ->
+  asyncTest 'sorting assignments by due date', ->
     workAroundRaceCondition().then =>
       Ember.run =>
         @srgb.set('assignmentSort', @srgb.get('assignmentSortOptions').findBy('value', 'due_date'))
       equal @srgb.get('assignments.firstObject.name'), 'Can You Eat Just One?'
       equal @srgb.get('assignments.lastObject.name'), 'Drink Water'
+      start()
 
-  module "#submissionsForStudent",
+  QUnit.module 'screenreader_gradebook_controller#gradesAreWeighted',
+    setup: ->
+      setup.call this
+    teardown: ->
+      teardown.call this
+
+  test 'is true when the grading period set is weighted', ->
+    gradingPeriodSet = createExampleGradingPeriodSet()
+    gradingPeriodSet.weighted = true
+    @stub(@srgb, 'getGradingPeriodSet').returns(gradingPeriodSet)
+    Ember.run =>
+      @srgb.set('groupsAreWeighted', false)
+      equal @srgb.get('gradesAreWeighted'), true
+
+  test 'is true when groupsAreWeighted is true', ->
+    gradingPeriodSet = createExampleGradingPeriodSet()
+    gradingPeriodSet.weighted = false
+    @stub(@srgb, 'getGradingPeriodSet').returns(gradingPeriodSet)
+    Ember.run =>
+      @srgb.set('groupsAreWeighted', true)
+      equal @srgb.get('gradesAreWeighted'), true
+
+  test 'is false when assignment groups are not weighted and the grading period set is not weighted', ->
+    gradingPeriodSet = createExampleGradingPeriodSet()
+    gradingPeriodSet.weighted = false
+    @stub(@srgb, 'getGradingPeriodSet').returns(gradingPeriodSet)
+    Ember.run =>
+      @srgb.set('groupsAreWeighted', false)
+      equal @srgb.get('gradesAreWeighted'), false
+
+  test 'is false when assignment groups are not weighted and the grading period set is not defined', ->
+    @stub(@srgb, 'getGradingPeriodSet').returns(null)
+    Ember.run =>
+      @srgb.set('groupsAreWeighted', false)
+      equal @srgb.get('gradesAreWeighted'), false
+
+  QUnit.module '#getGradingPeriodSet',
+    setup: ->
+      setup.call this
+
+    teardown: ->
+      teardown.call this
+
+  test 'normalizes the grading period set from the env', ->
+    ENV.GRADEBOOK_OPTIONS.grading_period_set =
+      id: '1501'
+      grading_periods: [{ id: '701', weight: 50 }, { id: '702', weight: 50 }]
+      weighted: true
+    gradingPeriodSet = @srgb.getGradingPeriodSet()
+    deepEqual(gradingPeriodSet.id, '1501')
+    equal(gradingPeriodSet.gradingPeriods.length, 2)
+    deepEqual(_.map(gradingPeriodSet.gradingPeriods, 'id'), ['701', '702'])
+
+  test 'sets grading period set to null when not defined in the env', ->
+    gradingPeriodSet = @srgb.getGradingPeriodSet()
+    deepEqual(gradingPeriodSet, null)
+
+  QUnit.module '#submissionsForStudent',
     setupThis: (options = {}) ->
       effectiveDueDates = Ember.ObjectProxy.create(
         content: {
-          1: { 1: { grading_period_id: "1" } },
-          2: { 1: { grading_period_id: "2" } }
+          1: { 1: { grading_period_id: '1' } },
+          2: { 1: { grading_period_id: '2' } }
         }
       )
 
       defaults = {
-        mgpEnabled: false,
-        "selectedGradingPeriod.id": null,
+        has_grading_periods: false,
+        'selectedGradingPeriod.id': null,
         effectiveDueDates
       }
       self = _.defaults options, defaults
@@ -173,40 +266,41 @@ define [
 
     setup: ->
       @student =
-        id: "1"
-        assignment_1: { assignment_id: "1", user_id: "1", name: "yolo" }
-        assignment_2: { assignment_id: "2", user_id: "1", name: "froyo" }
+        id: '1'
+        assignment_1: { assignment_id: '1', user_id: '1', name: 'yolo' }
+        assignment_2: { assignment_id: '2', user_id: '1', name: 'froyo' }
 
       setup.call this
 
     teardown: ->
       teardown.call this
 
-  test "returns all submissions for the student (multiple grading periods disabled)", ->
+  test 'returns all submissions for the student when there are no grading periods', ->
     self = @setupThis()
     submissions = @srgb.submissionsForStudent.call(self, @student)
-    propEqual _.pluck(submissions, "assignment_id"), ["1", "2"]
+    propEqual _.pluck(submissions, 'assignment_id'), ['1', '2']
 
-  test "returns all submissions if 'All Grading Periods' is selected", ->
+  test 'returns all submissions if "All Grading Periods" is selected', ->
     self = @setupThis(
-      mgpEnabled: true,
-      "selectedGradingPeriod.id": "0",
+      has_grading_periods: true,
+      'selectedGradingPeriod.id': '0'
     )
     submissions = @srgb.submissionsForStudent.call(self, @student)
-    propEqual _.pluck(submissions, "assignment_id"), ["1", "2"]
+    propEqual _.pluck(submissions, 'assignment_id'), ['1', '2']
 
-  test "only returns submissions due for the student in the selected grading period", ->
+  test 'only returns submissions due for the student in the selected grading period', ->
     self = @setupThis(
-      mgpEnabled: true,
-      "selectedGradingPeriod.id": "2"
+      has_grading_periods: true,
+      'selectedGradingPeriod.id': '2'
     )
     submissions = @srgb.submissionsForStudent.call(self, @student)
-    propEqual _.pluck(submissions, "assignment_id"), ["2"]
+    propEqual _.pluck(submissions, 'assignment_id'), ['2']
 
-
-  module 'screenreader_gradebook_controller: with selected student',
+  QUnit.module 'screenreader_gradebook_controller: with selected student',
     setup: ->
       setup.call this
+      @stub(@srgb, 'calculateStudentGrade')
+      @stub(@srgb, 'subtotalByGradingPeriod')
       @completeSetup = =>
         workAroundRaceCondition().then =>
           Ember.run =>
@@ -218,16 +312,18 @@ define [
     teardown: ->
       teardown.call this
 
-  test 'selectedSubmission should be null when just selectedStudent is set', ->
+  asyncTest 'selectedSubmission should be null when just selectedStudent is set', ->
     @completeSetup().then =>
       strictEqual @srgb.get('selectedSubmission'), null
+      start()
 
-  test 'assignments excludes any due for the selected student in a different grading period', ->
-    @srgb.mgpEnabled = true
+  asyncTest 'assignments excludes any due for the selected student in a different grading period', ->
+    @srgb.has_grading_periods = true
     @completeSetup().then =>
       deepEqual(@srgb.get('assignments').mapBy('id'), ['3'])
+      start()
 
-  module 'screenreader_gradebook_controller: with selected student, assignment, and outcome',
+  QUnit.module 'screenreader_gradebook_controller: with selected student, assignment, and outcome',
     setup: ->
       setup.call this
       @completeSetup = =>
@@ -243,41 +339,46 @@ define [
     teardown: ->
       teardown.call this
 
-  test 'assignmentDetails is computed properly', ->
+  asyncTest 'assignmentDetails is computed properly', ->
     @completeSetup().then =>
       ad = @srgb.get('assignmentDetails')
       selectedAssignment = @srgb.get('selectedAssignment')
       strictEqual ad.assignment, selectedAssignment
       strictEqual ad.cnt, '1'
+      start()
 
-  test 'outcomeDetails is computed properly', ->
+  asyncTest 'outcomeDetails is computed properly', ->
     @completeSetup().then =>
       od = @srgb.get('outcomeDetails')
       selectedOutcome = @srgb.get('selectedOutcome')
       strictEqual od.cnt, 1
+      start()
 
-  test 'selectedSubmission is computed properly', ->
+  asyncTest 'selectedSubmission is computed properly', ->
     @completeSetup().then =>
       selectedSubmission = @srgb.get('selectedSubmission')
       sub = _.find(fixtures.submissions, (s) => s.user_id == @student.id)
       submission = _.find(sub.submissions, (s) => s.assignment_id == @assignment.id)
       _.each submission, (val, key) =>
         equal selectedSubmission[key], val, "#{key} is the expected value on selectedSubmission"
+      start()
 
-  test 'selectedSubmission sets gradeLocked', ->
+  asyncTest 'selectedSubmission sets gradeLocked', ->
     @completeSetup().then =>
       selectedSubmission = @srgb.get('selectedSubmission')
       equal selectedSubmission.gradeLocked, false
+      start()
 
-  test 'selectedSubmission sets gradeLocked for unassigned students', ->
+  asyncTest 'selectedSubmission sets gradeLocked for unassigned students', ->
     @completeSetup().then =>
       @student = @srgb.get('students')[1]
       Ember.run =>
         @srgb.set('selectedStudent', @student)
         selectedSubmission = @srgb.get('selectedSubmission')
         equal selectedSubmission.gradeLocked, true
+        start()
 
-  module 'screenreader_gradebook_controller: with selected assignment',
+  QUnit.module 'screenreader_gradebook_controller: with selected assignment',
     setup: ->
       setup.call this
       @completeSetup = =>
@@ -291,15 +392,16 @@ define [
       @contextSetStub.restore()
       Ember.run App, 'destroy'
 
-  test 'gets the submission types', ->
+  asyncTest 'gets the submission types', ->
     @completeSetup().then =>
       equal @srgb.get('assignmentSubmissionTypes'), 'None'
       Ember.run =>
         assignments = @srgb.get('assignments')
         @srgb.set('selectedAssignment', assignments.objectAt(1))
       equal @srgb.get('assignmentSubmissionTypes'), 'Online URL, Online text entry'
+      start()
 
-  test 'assignmentInClosedGradingPeriod returns false when the selected assignment does not have
+  asyncTest 'assignmentInClosedGradingPeriod returns false when the selected assignment does not have
     a due date in a closed grading period', ->
     @completeSetup().then =>
       Ember.run =>
@@ -307,8 +409,9 @@ define [
         assignment.inClosedGradingPeriod = false
         @srgb.set('selectedAssignment', assignment)
       equal @srgb.get('assignmentInClosedGradingPeriod'), false
+      start()
 
-  test 'assignmentInClosedGradingPeriod returns true when the selected assignment has
+  asyncTest 'assignmentInClosedGradingPeriod returns true when the selected assignment has
     a due date in a closed grading period', ->
     @completeSetup().then =>
       Ember.run =>
@@ -316,8 +419,9 @@ define [
         assignment.inClosedGradingPeriod = true
         @srgb.set('selectedAssignment', assignment)
       equal @srgb.get('assignmentInClosedGradingPeriod'), true
+      start()
 
-  module 'screenreader_gradebook_controller:draftState',
+  QUnit.module 'screenreader_gradebook_controller:draftState',
     setup: ->
       setup.call this, true
       @completeSetup = =>
@@ -332,8 +436,8 @@ define [
                   id: '21'
                   name: 'Unpublished Assignment'
                   points_possible: 10
-                  grading_type: "percent"
-                  submission_types: ["none"]
+                  grading_type: 'percent'
+                  submission_types: ['none']
                   due_at: null
                   position: 6
                   assignment_group_id:'4'
@@ -344,31 +448,15 @@ define [
     teardown: ->
       teardown.call this
 
-  test 'calculates assignments properly', ->
+  asyncTest 'calculates assignments properly', ->
     @completeSetup().then =>
       equal @srgb.get('assignments.length'), 7
       ok !@srgb.get('assignments').findBy('name', 'Unpublished Assignment')
+      start()
 
 
   calc_stub = {
-    group_sums: [
-      {
-        final:
-          possible: 100
-          score: 50
-          submission_count: 10
-          weight: 50
-          submissions: []
-        current:
-          possible: 100
-          score: 20
-          submission_count: 5
-          weight: 50
-          submissions:[]
-        group:
-          id: "1"
-      }
-    ]
+    assignmentGroups: {}
     final:
       possible: 100
       score: 90
@@ -379,24 +467,7 @@ define [
 
 
   calc_stub_with_0_possible = {
-    group_sums: [
-      {
-        final:
-          possible: 0
-          score: 50
-          submission_count: 10
-          weight: 50
-          submissions: []
-        current:
-          possible: 0
-          score: 20
-          submission_count: 5
-          weight: 50
-          submissions:[]
-        group:
-          id: "1"
-      }
-    ]
+    assignmentGroups: {}
     final:
       possible: 0
       score: 0
@@ -420,24 +491,147 @@ define [
         sections: Ember.ArrayProxy.create(content: clone fixtures.sections)
       })
 
-  module 'screenreader_gradebook_controller: grade calc',
+  QUnit.module 'screenreader_gradebook_controller: grade calc',
     setup: ->
       calculationSetup.call this
 
-  test 'calculates final grade', ->
+  asyncTest 'calculates final grade', ->
     workAroundRaceCondition().then =>
-      equal @srgb.get('students.firstObject.total_percent'), '79.55%'
+      equal @srgb.get('students.firstObject.total_percent'), 79.55
+      start()
 
-  module 'grade calc with 0s',
+  QUnit.module 'grade calc with 0s',
     setup: ->
       calculationSetup.call this, calc_stub_with_0_possible
 
-  test 'calculates final grade', ->
+  asyncTest 'calculates final grade', ->
     workAroundRaceCondition().then =>
-      equal @srgb.get('students.firstObject.total_percent'), '0%'
+      equal @srgb.get('students.firstObject.total_percent'), 0
+      start()
 
+  QUnit.module 'screenreader_gradebook_controller: calculate',
+    setupThis:(options = {}) ->
+      assignments = [{ id: 201, points_possible: 10, omit_from_final_grade: false }]
+      submissions = [{ assignment_id: 201, score: 10 }]
+      assignmentGroupsHash = { 301: { id: 301, group_weight: 60, rules: {}, assignments } }
+      gradingPeriodSet =
+        id: '1501'
+        gradingPeriods: [{ id: '701', weight: 50 }, { id: '702', weight: 50 }]
+        weighted: true
+      props = _.defaults options,
+        weightingScheme: 'points'
+        getGradingPeriodSet: () -> gradingPeriodSet
+        'effectiveDueDates.content': { 201: { 101: { grading_period_id: '701' } } }
+      _.extend {}, props,
+        get: (attr) -> props[attr]
+        submissionsForStudent: () -> submissions
+        assignmentGroupsHash: () -> assignmentGroupsHash
 
-  module 'screenreader_gradebook_controller: notes computed props',
+    setup: ->
+      @calculate = SRGBController.prototype.calculate
+
+  test 'calculates grades using properties from the gradebook', ->
+    self = @setupThis()
+    @stub(CourseGradeCalculator, 'calculate').returns('expected')
+    grades = @calculate.call(self, id: '101', loaded: true)
+    equal(grades, 'expected')
+    args = CourseGradeCalculator.calculate.getCall(0).args
+    equal(args[0], self.submissionsForStudent())
+    equal(args[1], self.assignmentGroupsHash())
+    equal(args[2], self.get('weightingScheme'))
+    equal(args[3], self.getGradingPeriodSet())
+
+  test 'scopes effective due dates to the user', ->
+    self = @setupThis()
+    @stub(CourseGradeCalculator, 'calculate')
+    @calculate.call(self, id: '101', loaded: true)
+    dueDates = CourseGradeCalculator.calculate.getCall(0).args[4]
+    deepEqual(dueDates, 201: { grading_period_id: '701' })
+
+  test 'calculates grades without grading period data when grading period set is null', ->
+    self = @setupThis(getGradingPeriodSet: -> null)
+    @stub(CourseGradeCalculator, 'calculate')
+    @calculate.call(self, id: '101', loaded: true)
+    args = CourseGradeCalculator.calculate.getCall(0).args
+    equal(args[0], self.submissionsForStudent())
+    equal(args[1], self.assignmentGroupsHash())
+    equal(args[2], self.get('weightingScheme'))
+    equal(typeof args[3], 'undefined')
+    equal(typeof args[4], 'undefined')
+
+  test 'calculates grades without grading period data when effective due dates are not defined', ->
+    self = @setupThis('effectiveDueDates.content': null)
+    @stub(CourseGradeCalculator, 'calculate')
+    @calculate.call(self, id: '101', loaded: true)
+    args = CourseGradeCalculator.calculate.getCall(0).args
+    equal(args[0], self.submissionsForStudent())
+    equal(args[1], self.assignmentGroupsHash())
+    equal(args[2], self.get('weightingScheme'))
+    equal(typeof args[3], 'undefined')
+    equal(typeof args[4], 'undefined')
+
+  QUnit.module 'screenreader_gradebook_controller: calculateStudentGrade',
+    setupThis:(options = {}) ->
+      assignments = [{ id: 201, points_possible: 10, omit_from_final_grade: false }]
+      submissions = [{ assignment_id: 201, score: 10 }]
+      assignmentGroupsHash = { 301: { id: 301, group_weight: 60, rules: {}, assignments } }
+      gradingPeriodSet =
+        id: '1501'
+        gradingPeriods: [{ id: '701', weight: 50 }, { id: '702', weight: 50 }]
+        weighted: true
+      props = _.defaults options,
+        weightingScheme: 'points'
+        getGradingPeriodSet: () -> gradingPeriodSet
+        calculate: () -> CourseGradeCalculator.calculate()
+        'effectiveDueDates.content': { 201: { 101: { grading_period_id: '701' } } }
+        'selectedGradingPeriod.id': '0'
+      _.extend {}, props,
+        get: (attr) -> props[attr]
+        submissionsForStudent: () -> submissions
+        assignmentGroupsHash: () -> assignmentGroupsHash
+        subtotalByGradingPeriod: () -> false
+        calculateSingleGrade: ->
+
+    setup: ->
+      @calculateStudentGrade = SRGBController.prototype.calculateStudentGrade
+
+  test 'stores the current grade on the student when not including ungraded assignments', ->
+    exampleGrades = createExampleGrades()
+    self = @setupThis(includeUngradedAssignments: false)
+    @stub(CourseGradeCalculator, 'calculate').returns(exampleGrades)
+    student = Ember.Object.create(id: '101', loaded: true)
+    student.set('isLoaded', true)
+    @calculateStudentGrade.call(self, student)
+    equal(student.total_grade, exampleGrades.current)
+
+  test 'stores the final grade on the student when including ungraded assignments', ->
+    exampleGrades = createExampleGrades()
+    self = @setupThis(includeUngradedAssignments: true)
+    @stub(CourseGradeCalculator, 'calculate').returns(exampleGrades)
+    student = Ember.Object.create(id: '101', loaded: true)
+    student.set('isLoaded', true)
+    @calculateStudentGrade.call(self, student)
+    equal(student.total_grade, exampleGrades.final)
+
+  test 'stores the current grade from the selected grading period when not including ungraded assignments', ->
+    exampleGrades = createExampleGrades()
+    self = @setupThis('selectedGradingPeriod.id': 701, includeUngradedAssignments: false)
+    @stub(CourseGradeCalculator, 'calculate').returns(exampleGrades)
+    student = Ember.Object.create(id: '101', loaded: true)
+    student.set('isLoaded', true)
+    @calculateStudentGrade.call(self, student)
+    equal(student.total_grade, exampleGrades.gradingPeriods[701].current)
+
+  test 'stores the final grade from the selected grading period when including ungraded assignments', ->
+    exampleGrades = createExampleGrades()
+    self = @setupThis('selectedGradingPeriod.id': 701, includeUngradedAssignments: true)
+    @stub(CourseGradeCalculator, 'calculate').returns(exampleGrades)
+    student = Ember.Object.create(id: '101', loaded: true)
+    student.set('isLoaded', true)
+    @calculateStudentGrade.call(self, student)
+    equal(student.total_grade, exampleGrades.gradingPeriods[701].final)
+
+  QUnit.module 'screenreader_gradebook_controller: notes computed props',
     setup: ->
       setup.call this
       window.ENV.GRADEBOOK_OPTIONS.custom_column_url = '/here/is/an/:id'
@@ -498,20 +692,20 @@ define [
     Ember.run =>
       @srgb.set('showNotesColumn', true)
       @srgb.set('shouldCreateNotes', false)
-    deepEqual @srgb.get('notesParams'), "column[hidden]": false
+    deepEqual @srgb.get('notesParams'), 'column[hidden]': false
 
     Ember.run =>
       @srgb.set('showNotesColumn', false)
       @srgb.set('shouldCreateNotes', false)
-    deepEqual @srgb.get('notesParams'), "column[hidden]": true
+    deepEqual @srgb.get('notesParams'), 'column[hidden]': true
 
     Ember.run =>
       @srgb.set('showNotesColumn', true)
       @srgb.set('shouldCreateNotes', true)
     deepEqual @srgb.get('notesParams'),
-        "column[title]": "Notes"
-        "column[position]": 1
-        "column[teacher_notes]": true
+        'column[title]': 'Notes'
+        'column[position]': 1
+        'column[teacher_notes]': true
 
   test 'notesVerb', ->
     Ember.run =>
@@ -522,7 +716,7 @@ define [
       @srgb.set('shouldCreateNotes', false)
     equal @srgb.get('notesVerb'), 'PUT'
 
-  module 'screenreader_gradebook_controller:invalidGroups',
+  QUnit.module 'screenreader_gradebook_controller:invalidGroups',
     setup: ->
       setup.call this, true
       Ember.run =>
@@ -531,17 +725,18 @@ define [
       teardown.call this
 
   test 'calculates invalidGroupsWarningPhrases properly', ->
-    equal @srgb.get('invalidGroupsWarningPhrases'), "Note: Score does not include assignments from the group Invalid AG because it has no points possible."
+    equal @srgb.get('invalidGroupsWarningPhrases'),
+      'Note: Score does not include assignments from the group Invalid AG because it has no points possible.'
 
   test 'sets showInvalidGroupWarning to false if groups are not weighted', ->
     Ember.run =>
-      @srgb.set('weightingScheme', "equal")
+      @srgb.set('weightingScheme', 'equal')
       equal @srgb.get('showInvalidGroupWarning'), false
-      @srgb.set('weightingScheme', "percent")
+      @srgb.set('weightingScheme', 'percent')
       equal @srgb.get('showInvalidGroupWarning'), true
 
 
-  module 'screenreader_gradebook_controller: differentiated assignments',
+  QUnit.module 'screenreader_gradebook_controller: differentiated assignments',
     setup: ->
       setup.call this, true
     teardown: ->
@@ -556,7 +751,7 @@ define [
       @srgb.set('selectedStudent', student)
       equal @srgb.get('selectedSubmissionHidden'), false
 
-  test 'selectedSubmissionHidden is true when students dont have visibility', ->
+  asyncTest 'selectedSubmissionHidden is true when students dont have visibility', ->
     workAroundRaceCondition().then =>
       student = @srgb.get('students').objectAt(2)
       assignment = @srgb.get('assignments.firstObject')
@@ -565,8 +760,9 @@ define [
         @srgb.set('selectedAssignment', assignment)
         @srgb.set('selectedStudent', student)
         equal @srgb.get('selectedSubmissionHidden'), true
+        start()
 
-  module 'screenreader_gradebook_controller: selectedOutcomeResult',
+  QUnit.module 'screenreader_gradebook_controller: selectedOutcomeResult',
     setup: -> setup.call @
     teardown: -> teardown.call @
 

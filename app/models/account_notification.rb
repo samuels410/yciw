@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 class AccountNotification < ActiveRecord::Base
   validates_presence_of :start_at, :end_at, :subject, :message, :account_id
   validate :validate_dates
@@ -38,8 +55,8 @@ class AccountNotification < ActiveRecord::Base
       unless role_ids.empty? || user_role_ids.key?(announcement.account_id)
         # choose enrollments and account users to inspect
         if announcement.account.site_admin?
-          enrollments = user.enrollments.shard(user).active.uniq.select(:role_id)
-          account_users = user.account_users.shard(user).uniq.select(:role_id)
+          enrollments = user.enrollments.shard(user).active.distinct.select(:role_id)
+          account_users = user.account_users.shard(user).distinct.select(:role_id)
         else
           enrollments = user.enrollments_for_account_and_sub_accounts(account).select(:role_id)
           account_users = account.all_account_users_for(user)
@@ -80,7 +97,7 @@ class AccountNotification < ActiveRecord::Base
         end
       end
 
-      roles = user.enrollments.shard(user).active.uniq.pluck(:type)
+      roles = user.enrollments.shard(user).active.distinct.pluck(:type)
 
       if roles == ['StudentEnrollment'] && !account.include_students_in_global_survey?
         current.reject! { |announcement| announcement.required_account_service == 'account_survey_notifications' }

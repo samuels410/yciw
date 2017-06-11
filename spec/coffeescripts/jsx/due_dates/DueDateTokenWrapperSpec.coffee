@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'react'
   'react-dom'
@@ -8,7 +25,7 @@ define [
   'helpers/fakeENV'
 ], (React, ReactDOM, {Simulate, SimulateNative}, _, DueDateTokenWrapper, OverrideStudentStore, fakeENV) ->
 
-  module 'DueDateTokenWrapper',
+  QUnit.module 'DueDateTokenWrapper',
     setup: ->
       fakeENV.setup(context_asset_string = "course_1")
       @clock = sinon.useFakeTimers()
@@ -129,7 +146,7 @@ define [
   test 'overrideTokenAriaLabel method', ->
     equal @DueDateTokenWrapper.overrideTokenAriaLabel('group X'), "Currently assigned to group X, click to remove"
 
-  module 'disabled DueDateTokenWrapper',
+  QUnit.module 'disabled DueDateTokenWrapper',
     setup: ->
       fakeENV.setup(context_asset_string = "course_1")
       props =

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2014 Instructure, Inc.
+# Copyright (C) 2014 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -62,7 +62,7 @@ module Polling
   class PollsController < ApplicationController
     include ::Filters::Polling
 
-    before_filter :require_user
+    before_action :require_user
 
     # @API List polls
     # @beta

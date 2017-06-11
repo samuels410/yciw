@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2015 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -28,7 +28,7 @@ class Course < ActiveRecord::Base
   include ContentLicenses
   include TurnitinID
 
-  attr_accessor :teacher_names
+  attr_accessor :teacher_names, :master_course
   attr_writer :student_count, :primary_enrollment_type, :primary_enrollment_role_id, :primary_enrollment_rank, :primary_enrollment_state, :primary_enrollment_date, :invitation
 
   time_zone_attribute :time_zone
@@ -53,7 +53,7 @@ class Course < ActiveRecord::Base
 
   has_many :course_sections
   has_many :active_course_sections, -> { where(workflow_state: 'active') }, class_name: 'CourseSection'
-  has_many :enrollments, -> { preload(:user).where("enrollments.workflow_state<>'deleted'") }, dependent: :destroy, inverse_of: :course
+  has_many :enrollments, -> { where("enrollments.workflow_state<>'deleted'") }, dependent: :destroy, inverse_of: :course
 
   has_many :all_enrollments, :class_name => 'Enrollment'
   has_many :current_enrollments, -> { where("enrollments.workflow_state NOT IN ('rejected', 'completed', 'deleted', 'inactive')").preload(:user) }, class_name: 'Enrollment'
@@ -117,14 +117,14 @@ class Course < ActiveRecord::Base
 
   has_many :course_account_associations
   has_many :non_unique_associated_accounts, -> { order('course_account_associations.depth') }, source: :account, through: :course_account_associations
-  has_many :users, -> { uniq }, through: :enrollments, source: :user
-  has_many :current_users, -> { uniq }, through: :current_enrollments, source: :user
-  has_many :all_current_users, -> { uniq }, through: :all_current_enrollments, source: :user
+  has_many :users, -> { distinct }, through: :enrollments, source: :user
+  has_many :current_users, -> { distinct }, through: :current_enrollments, source: :user
+  has_many :all_current_users, -> { distinct }, through: :all_current_enrollments, source: :user
   has_many :group_categories, -> {where(deleted_at: nil) }, as: :context, inverse_of: :context
   has_many :all_group_categories, :class_name => 'GroupCategory', :as => :context, :inverse_of => :context
   has_many :groups, :as => :context, :inverse_of => :context
   has_many :active_groups, -> { where("groups.workflow_state<>'deleted'") }, as: :context, inverse_of: :context, class_name: 'Group'
-  has_many :assignment_groups, -> { order('assignment_groups.position, assignment_groups.name') }, as: :context, inverse_of: :context, dependent: :destroy
+  has_many :assignment_groups, -> { order('assignment_groups.position', AssignmentGroup.best_unicode_collation_key('assignment_groups.name')) }, as: :context, inverse_of: :context, dependent: :destroy
   has_many :assignments, -> { order('assignments.created_at') }, as: :context, inverse_of: :context, dependent: :destroy
   has_many :calendar_events, -> { where("calendar_events.workflow_state<>'cancelled'") }, as: :context, inverse_of: :context, dependent: :destroy
   has_many :submissions, -> { order('submissions.updated_at DESC') }, through: :assignments, dependent: :destroy
@@ -188,6 +188,8 @@ class Course < ActiveRecord::Base
   has_many :gradebook_csvs, inverse_of: :course
 
   has_many :master_course_templates, :class_name => "MasterCourses::MasterTemplate"
+  has_many :master_course_subscriptions, :class_name => "MasterCourses::ChildSubscription", :foreign_key => 'child_course_id'
+  has_one :late_policy, dependent: :destroy, inverse_of: :course
 
   prepend Profile::Association
 
@@ -351,6 +353,7 @@ class Course < ActiveRecord::Base
       end
     end
 
+    throw :abort if !is_unique && !CANVAS_RAILS4_2
     is_unique
   end
 
@@ -607,7 +610,7 @@ class Course < ActiveRecord::Base
     # enrollments as well as active enrollments
     user_id = args[0]
     workflow_states = (args[1].present? ? %w{'active' 'completed'} : %w{'active'}).join(', ')
-    uniq.joins("INNER JOIN (
+    distinct.joins("INNER JOIN (
          SELECT caa.course_id, au.user_id FROM #{CourseAccountAssociation.quoted_table_name} AS caa
          INNER JOIN #{Account.quoted_table_name} AS a ON a.id = caa.account_id AND a.workflow_state = 'active'
          INNER JOIN #{AccountUser.quoted_table_name} AS au ON au.account_id = a.id AND au.user_id = #{user_id.to_i}
@@ -655,6 +658,10 @@ class Course < ActiveRecord::Base
   scope :deleted, -> { where(:workflow_state => 'deleted') }
 
   scope :master_courses, -> { joins(:master_course_templates).where.not(MasterCourses::MasterTemplate.table_name => {:workflow_state => 'deleted'}) }
+  scope :not_master_courses, -> { joins("LEFT OUTER JOIN #{MasterCourses::MasterTemplate.quoted_table_name} AS mct ON mct.course_id=courses.id AND mct.workflow_state<>'deleted'").where("mct IS NULL") }
+
+  scope :associated_courses, -> { joins(:master_course_subscriptions).where.not(MasterCourses::ChildSubscription.table_name => {:workflow_state => 'deleted'}) }
+  scope :not_associated_courses, -> { joins("LEFT OUTER JOIN #{MasterCourses::ChildSubscription.quoted_table_name} AS mcs ON mcs.child_course_id=courses.id AND mcs.workflow_state<>'deleted'").where("mcs IS NULL") }
 
   def potential_collaborators
     current_users
@@ -665,10 +672,7 @@ class Course < ActiveRecord::Base
     p.to { participating_students_by_date + participating_observers_by_date }
     p.whenever { |record|
       (record.available? && @grade_weight_changed) ||
-      (
-        record.prior_version.present? &&
-        record.changed_in_state(:available, :fields => :group_weighting_scheme)
-      )
+      record.changed_in_state(:available, :fields => :group_weighting_scheme)
     }
 
     p.dispatch :new_course
@@ -676,8 +680,7 @@ class Course < ActiveRecord::Base
     p.whenever { |record|
       record.root_account &&
       ((record.just_created && record.name != Course.default_name) ||
-       (record.prior_version.present? &&
-         record.prior_version.name == Course.default_name &&
+       (record.name_was == Course.default_name &&
          record.name != Course.default_name)
       )
     }
@@ -692,7 +695,7 @@ class Course < ActiveRecord::Base
     scope = User.joins(:not_ended_enrollments).
       where(enrollments: {course_id: self, type: 'StudentEnrollment'}).
       where(Group.not_in_group_sql_fragment(groups.map(&:id))).
-      select("users.id, users.name, users.updated_at").uniq
+      select("users.id, users.name, users.updated_at").distinct
     scope = scope.select(opts[:order]).order(opts[:order]) if opts[:order]
     scope
   end
@@ -701,8 +704,17 @@ class Course < ActiveRecord::Base
     scope = current_enrollments.
       where(:course_id => self, :user_id => user_id).
       where("course_section_id IS NOT NULL")
-    section_ids = scope.uniq.pluck(:course_section_id)
+    section_ids = scope.distinct.pluck(:course_section_id)
     participating_instructors.restrict_to_sections(section_ids)
+  end
+
+  def user_is_admin?(user)
+    return unless user
+    RequestCache.cache('user_is_admin', self, user) do
+      Rails.cache.fetch([self, user, "course_user_is_admin"].cache_key) do
+        self.enrollments.for_user(user).active_by_date.of_admin_type.exists?
+      end
+    end
   end
 
   def user_is_instructor?(user)
@@ -720,7 +732,7 @@ class Course < ActiveRecord::Base
     RequestCache.cache('user_is_student', self, user, opts) do
       Rails.cache.fetch([self, user, "course_user_is_student", opts].cache_key) do
         enroll_types = ["StudentEnrollment"]
-        enroll_types << ["StudentViewEnrollment"] if opts[:include_fake_student]
+        enroll_types << "StudentViewEnrollment" if opts[:include_fake_student]
 
         enroll_scope = self.enrollments.for_user(user).where(:type => enroll_types)
         if opts[:include_future]
@@ -932,7 +944,7 @@ class Course < ActiveRecord::Base
           enrollment_ids = Enrollment.where(:course_id => self, :workflow_state => ['active', 'invited']).pluck(:id)
           if enrollment_ids.any?
             Enrollment.where(:id => enrollment_ids).update_all(:workflow_state => 'completed', :completed_at => Time.now.utc)
-            EnrollmentState.where(:enrollment_id => enrollment_ids).update_all(:state => 'completed', :state_is_current => true, :access_is_current => false)
+            EnrollmentState.where(:enrollment_id => enrollment_ids).update_all(["state = ?, state_is_current = ?, access_is_current = ?, lock_version = lock_version + 1", 'completed', true, false])
             EnrollmentState.send_later_if_production(:process_states_for_ids, enrollment_ids) # recalculate access
           end
 
@@ -946,7 +958,7 @@ class Course < ActiveRecord::Base
             enrollment_ids = enroll_scope.pluck(:id)
             if enrollment_ids.any?
               Enrollment.where(:id => enrollment_ids).update_all(:workflow_state => 'deleted')
-              EnrollmentState.where(:enrollment_id => enrollment_ids).update_all(:state => 'deleted', :state_is_current => true)
+              EnrollmentState.where(:enrollment_id => enrollment_ids).update_all(["state = ?, state_is_current = ?, lock_version = lock_version + 1", 'deleted', true])
             end
             User.send_later_if_production(:update_account_associations, user_ids)
           end
@@ -1034,13 +1046,34 @@ class Course < ActiveRecord::Base
     end
   end
 
-  def recompute_student_scores(student_ids = nil, grading_period_id: nil)
+  def recompute_student_scores(student_ids = nil, grading_period_id: nil,
+                                                  update_all_grading_period_scores: true,
+                                                  update_course_score: true)
+    inst_job_opts = {}
+    if student_ids.blank? && grading_period_id.nil? && update_all_grading_period_scores && update_course_score
+      # if we have all default args, let's queue this job in a singleton to avoid duplicates
+      inst_job_opts[:singleton] = "recompute_student_scores:#{global_id}"
+    end
+
+    send_later_if_production_enqueue_args(
+      :recompute_student_scores_without_send_later,
+      inst_job_opts,
+      student_ids,
+      grading_period_id: grading_period_id,
+      update_all_grading_period_scores: update_all_grading_period_scores
+    )
+  end
+
+  def recompute_student_scores_without_send_later(student_ids = nil, opts = {})
     student_ids ||= self.student_ids
     Rails.logger.info "GRADES: recomputing scores in course=#{global_id} students=#{student_ids.inspect}"
-    Enrollment.recompute_final_score(student_ids, self.id, grading_period_id: grading_period_id)
+    Enrollment.recompute_final_score(
+      student_ids,
+      self.id,
+      grading_period_id: opts[:grading_period_id],
+      update_all_grading_period_scores: opts.fetch(:update_all_grading_period_scores, true)
+    )
   end
-  handle_asynchronously_if_production :recompute_student_scores,
-    :singleton => proc { |c| "recompute_student_scores:#{ c.global_id }" }
 
   def home_page
     self.wiki.front_page
@@ -1069,10 +1102,10 @@ class Course < ActiveRecord::Base
   # Allows the account to be set directly
   belongs_to :account
 
-  def wiki_with_create
+  def wiki
+    return super if wiki_id
     Wiki.wiki_for_context(self)
   end
-  alias_method_chain :wiki, :create
 
   # A universal lookup for all messages.
   def messages
@@ -1463,57 +1496,44 @@ class Course < ActiveRecord::Base
     end
   end
 
-  def allow_web_export_download?
-    root_account.enable_offline_web_export? && self.enable_offline_web_export?
-  end
-
   def grade_publishing_status_translation(status, message)
     status = "unpublished" if status.blank?
-    case status
-    when 'error'
-      if message.present?
-        message = t('grade_publishing_status.error_with_message', "Error: %{message}", :message => message)
+
+    if message.present?
+      case status
+      when 'error'
+        t("Error: %{message}", message: message)
+      when 'unpublished'
+        t("Not Synced: %{message}", message: message)
+      when 'pending'
+        t("Pending: %{message}", message: message)
+      when 'publishing'
+        t("Syncing: %{message}", message: message)
+      when 'published'
+        t("Synced: %{message}", message: message)
+      when 'unpublishable'
+        t("Unsyncable: %{message}", message: message)
       else
-        message = t('grade_publishing_status.error', "Error")
-      end
-    when 'unpublished'
-      if message.present?
-        message = t('grade_publishing_status.unpublished_with_message', "Unpublished: %{message}", :message => message)
-      else
-        message = t('grade_publishing_status.unpublished', "Unpublished")
-      end
-    when 'pending'
-      if message.present?
-        message = t('grade_publishing_status.pending_with_message', "Pending: %{message}", :message => message)
-      else
-        message = t('grade_publishing_status.pending', "Pending")
-      end
-    when 'publishing'
-      if message.present?
-        message = t('grade_publishing_status.publishing_with_message', "Publishing: %{message}", :message => message)
-      else
-        message = t('grade_publishing_status.publishing', "Publishing")
-      end
-    when 'published'
-      if message.present?
-        message = t('grade_publishing_status.published_with_message', "Published: %{message}", :message => message)
-      else
-        message = t('grade_publishing_status.published', "Published")
-      end
-    when 'unpublishable'
-      if message.present?
-        message = t('grade_publishing_status.unpublishable_with_message', "Unpublishable: %{message}", :message => message)
-      else
-        message = t('grade_publishing_status.unpublishable', "Unpublishable")
+        t("Unknown status, %{status}: %{message}", message: message, status: status)
       end
     else
-      if message.present?
-        message = t('grade_publishing_status.unknown_with_message', "Unknown status, %{status}: %{message}", :message => message, :status => status)
+      case status
+      when 'error'
+        t("Error")
+      when 'unpublished'
+        t("Not Synced")
+      when 'pending'
+        t("Pending")
+      when 'publishing'
+        t("Syncing")
+      when 'published'
+        t("Synced")
+      when 'unpublishable'
+        t("Unsyncable")
       else
-        message = t('grade_publishing_status.unknown', "Unknown status, %{status}", :status => status)
+        t("Unknown status, %{status}", status: status)
       end
     end
-    message
   end
 
   def grade_publishing_statuses
@@ -1655,7 +1675,6 @@ class Course < ActiveRecord::Base
                                             :last_publish_attempt_at => last_publish_attempt_at).
         update_all(:grade_publishing_status => 'error', :grade_publishing_message => "Timed out.")
   end
-
 
   def gradebook_to_csv_in_background(filename, user, options = {})
     progress = progresses.build(tag: 'gradebook_to_csv')
@@ -2326,11 +2345,12 @@ class Course < ActiveRecord::Base
                                            enrollment_state: opts[:enrollment_state])
   end
 
-  def enrollments_visible_to(user)
+  def enrollments_visible_to(user, opts={})
     visibilities = section_visibilities_for(user)
     visibility = enrollment_visibility_level_for(user, visibilities)
 
-    apply_enrollment_visibilities_internal(current_enrollments.except(:preload), user, visibilities, visibility)
+    enrollment_scope = opts[:include_concluded] ? enrollments : current_enrollments
+    apply_enrollment_visibilities_internal(enrollment_scope.except(:preload), user, visibilities, visibility)
   end
 
   def apply_enrollment_visibilities_internal(scope, user, visibilities, visibility, enrollment_state: nil)
@@ -2406,7 +2426,7 @@ class Course < ActiveRecord::Base
   def invited_count_visible_to(user)
     scope = users_visible_to(user).
       where("enrollments.workflow_state in ('invited', 'creation_pending') AND enrollments.type != 'StudentViewEnrollment'")
-    scope.select('users.id').uniq.count
+    scope.select('users.id').distinct.count
   end
 
   def published?
@@ -2702,7 +2722,7 @@ class Course < ActiveRecord::Base
       opts[:default] ||= false
       cast_expression = "Canvas::Plugin.value_to_boolean(val)"
     end
-    class_eval <<-CODE
+    class_eval <<-CODE, __FILE__, __LINE__ + 1
       def #{setting}
         if Course.settings_options[#{setting.inspect}][:inherited]
           inherited = RequestCache.cache('inherited_course_setting', #{setting.inspect}, self.global_account_id) do
@@ -2753,7 +2773,7 @@ class Course < ActiveRecord::Base
   add_setting :image_id
   add_setting :image_url
   add_setting :organize_epub_by_content_type, :boolean => true, :default => false
-  add_setting :enable_offline_web_export, :boolean => true, :default => lambda { |c| c.root_account.enable_offline_web_export? }
+  add_setting :enable_offline_web_export, :boolean => true, :default => lambda { |c| c.account.enable_offline_web_export? }
   add_setting :is_public_to_auth_users, :boolean => true, :default => false
 
   add_setting :restrict_student_future_view, :boolean => true, :inherited => true
@@ -2811,17 +2831,18 @@ class Course < ActiveRecord::Base
       self.uuid = self.sis_source_id = self.sis_batch_id = self.integration_id = nil;
       self.save!
       Course.process_as_sis { new_course.save! }
-      self.course_sections.update_all(:course_id => new_course)
+      self.course_sections.update_all(:course_id => new_course.id)
       # we also want to bring along prior enrollments, so don't use the enrollments
       # association
-      Enrollment.where(:course_id => self).update_all(:course_id => new_course, :updated_at => Time.now.utc)
+      Enrollment.where(:course_id => self).update_all(:course_id => new_course.id, :updated_at => Time.now.utc)
       User.where(id: new_course.all_enrollments.select(:user_id)).
           update_all(updated_at: Time.now.utc)
       self.replacement_course_id = new_course.id
       self.workflow_state = 'deleted'
       self.save!
-      # Assign original course profile to the new course (automatically saves it)
-      new_course.profile = self.profile unless self.profile.new_record?
+      unless profile.new_record?
+        profile.update_attribute(:context, new_course)
+      end
 
       Course.find(new_course.id)
     end
@@ -3079,6 +3100,45 @@ class Course < ActiveRecord::Base
 
   def any_assignment_in_closed_grading_period?
     effective_due_dates.any_in_closed_grading_period?
+  end
+
+  # Does this course have grading periods?
+  # checks for both legacy and account-level grading period groups
+  def grading_periods?
+    return @has_grading_periods unless @has_grading_periods.nil?
+    return @has_grading_periods = true if @has_weighted_grading_periods
+
+    @has_grading_periods = shard.activate do
+      GradingPeriodGroup.active.
+        where("id = ? or course_id = ?", enrollment_term.grading_period_group_id, id).
+        exists?
+    end
+  end
+
+  def display_totals_for_all_grading_periods?
+    return @display_totals_for_all_grading_periods if defined?(@display_totals_for_all_grading_periods)
+
+    @display_totals_for_all_grading_periods =
+      !!GradingPeriodGroup.for_course(self)&.display_totals_for_all_grading_periods?
+  end
+
+  def weighted_grading_periods?
+    return @has_weighted_grading_periods unless @has_weighted_grading_periods.nil?
+    return @has_weighted_grading_periods = false if @has_grading_periods == false
+
+    @has_weighted_grading_periods = shard.activate do
+      grading_period_groups.active.none? &&
+      GradingPeriodGroup.active.
+        where(id: enrollment_term.grading_period_group_id, weighted: true).
+        exists?
+    end
+  end
+
+  def quiz_lti_tool
+    query = { tool_id: 'Quizzes 2' }
+    context_external_tools.active.find_by(query) ||
+      account.context_external_tools.active.find_by(query) ||
+        root_account.context_external_tools.active.find_by(query)
   end
 
   private

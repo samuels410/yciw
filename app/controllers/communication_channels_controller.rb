@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -78,8 +78,8 @@
 #     }
 #
 class CommunicationChannelsController < ApplicationController
-  before_filter :require_user, :only => [:create, :destroy]
-  before_filter :reject_student_view_student
+  before_action :require_user, :only => [:create, :destroy]
+  before_action :reject_student_view_student
 
   include Api::V1::CommunicationChannel
 
@@ -156,7 +156,8 @@ class CommunicationChannelsController < ApplicationController
       if !@access_token.developer_key.try(:sns_arn)
         return render :json => { errors: { type: 'SNS is not configured for this developer key'}}, status: :bad_request
       end
-      endpoint = @current_user.notification_endpoints.where(token: params[:communication_channel][:token]).first
+
+      endpoint = @current_user.notification_endpoints.where("lower(token) = ?", params[:communication_channel][:token].downcase).first
       endpoint ||= @access_token.notification_endpoints.create!(token: params[:communication_channel][:token])
 
       skip_confirmation = true
@@ -262,7 +263,7 @@ class CommunicationChannelsController < ApplicationController
       @merge_opportunities = []
       merge_users.each do |user|
         account_to_pseudonyms_hash = {}
-        root_account_pseudonym = user.find_pseudonym_for_account(@root_account)
+        root_account_pseudonym = SisPseudonym.for(user, @root_account, type: :exact, require_sis: false)
         if root_account_pseudonym
           @merge_opportunities << [user, [root_account_pseudonym]]
         else
@@ -366,7 +367,7 @@ class CommunicationChannelsController < ApplicationController
           end
 
           # They may have switched e-mail address when they logged in; create a CC if so
-          if @pseudonym.unique_id != cc.path
+          if @pseudonym.unique_id != cc.path && EmailAddressValidator.valid?(@pseudonym.unique_id)
             new_cc = @user.communication_channels.email.by_path(@pseudonym.unique_id).first
             new_cc ||= @user.communication_channels.build(:path => @pseudonym.unique_id)
             new_cc.user = @user
@@ -375,7 +376,7 @@ class CommunicationChannelsController < ApplicationController
             new_cc.save! if new_cc.changed?
             @pseudonym.communication_channel = new_cc
           end
-          @pseudonym.communication_channel.pseudonym = @pseudonym
+          @pseudonym.communication_channel.pseudonym = @pseudonym if @pseudonym.communication_channel
 
           @user.save!
           @pseudonym.save!

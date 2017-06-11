@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -21,6 +21,7 @@ require File.expand_path(File.dirname(__FILE__) + '/../spec_helper.rb')
 describe I18n do
   context "_core_en.js" do
     it "should be up-to-date" do
+      skip("Rails 4.2 specific") unless CANVAS_RAILS4_2
       translations = {'en' => I18n.backend.send(:translations)[:en].slice(*I18nTasks::Utils::CORE_KEYS)}
 
       # HINT: if this spec fails, run `rake i18n:generate_js`...

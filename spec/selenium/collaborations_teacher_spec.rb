@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/common')
 require File.expand_path(File.dirname(__FILE__) + '/helpers/collaborations_common')
 require File.expand_path(File.dirname(__FILE__) + '/helpers/collaborations_specs_common')
@@ -66,14 +83,14 @@ describe "collaborations" do
       all_icons.last.click
       driver.switch_to.alert.accept
       wait_for_ajaximations
-      expect(check_element_has_focus(all_icons.first))
+      expect(check_element_has_focus(all_icons.first)).to be
     end
 
     it 'should set focus to the add collaboration button if there are no previous collaborations' do
       f('.delete_collaboration_link').click
       driver.switch_to.alert.accept
       wait_for_ajaximations
-      expect(check_element_has_focus(f('.add_collaboration_link')))
+      expect(check_element_has_focus(f('.add_collaboration_link'))).to be
     end
   end
 end

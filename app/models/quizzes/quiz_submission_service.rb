@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 class Quizzes::QuizSubmissionService
   attr_accessor :participant
 
@@ -166,7 +183,7 @@ class Quizzes::QuizSubmissionService
       legacy_params[:fudge_points] = scoring_data[:fudge_points].to_f
     end
 
-    if scoring_data[:questions].is_a?(Hash)
+    if scoring_data[:questions].is_a?(Hash) || scoring_data[:questions].is_a?(ActionController::Parameters)
       scoring_data[:questions].each_pair do |question_id, question_data|
         question_id = question_id.to_i
         score, comment = question_data[:score], question_data[:comment]

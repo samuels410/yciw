@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -37,7 +37,7 @@ class WikiPage < ActiveRecord::Base
   include MasterCourses::Restrictor
   restrict_columns :content, [:body, :title]
   restrict_columns :settings, [:editing_roles]
-  restrict_columns :settings, Assignment::RESTRICTED_SETTINGS
+  restrict_assignment_columns
 
   after_update :post_to_pandapub_when_revised
 
@@ -345,7 +345,7 @@ class WikiPage < ActiveRecord::Base
       if !self.active?
         res += context.participating_admins
       else
-        res += context.participants
+        res += context.participants(by_date: true)
       end
     end
     res.flatten.uniq

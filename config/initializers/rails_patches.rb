@@ -1,20 +1,37 @@
-ActiveSupport::Cache::Entry.class_eval do
-  def value_with_untaint
+#
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
+module UntaintCacheEntries
+  def value
     @value.untaint if @value
-    value_without_untaint
+    super
   end
-  alias_method_chain :value, :untaint
 end
+ActiveSupport::Cache::Entry.prepend(UntaintCacheEntries)
 
 # Extend the query logger to add "SQL" back to the front, like it was in
 # rails2, to make it easier to pull out those log lines for analysis.
-ActiveRecord::LogSubscriber.class_eval do
-  def sql_with_tag(event)
+module AddSQLToLogLines
+  def sql(event)
     name = event.payload[:name]
     if name != 'SCHEMA'
       event.payload[:name] = "SQL #{name}"
     end
-    sql_without_tag(event)
+    super
   end
-  alias_method_chain :sql, :tag
 end
+ActiveRecord::LogSubscriber.prepend(AddSQLToLogLines)

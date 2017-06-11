@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/../helpers/discussions_common')
 
 describe "discussions" do
@@ -167,6 +184,21 @@ describe "discussions" do
         wait_for_ajaximations
 
         expect(f("#filterResults .entry-header .discussion-title")).to_not include_text("inactive")
+      end
+
+      it "should show peer review information" do
+        assignment.update_attribute(:peer_reviews, true)
+        other_student1 = student_in_course(course: course, name: 'student1', active_all: true).user
+        assignment_topic.reply_from(:user => other_student1, :text => "reply")
+        other_student2 = student_in_course(course: course, name: 'student2', active_all: true).user
+        assignment_topic.reply_from(:user => other_student2, :text => "reply")
+        assignment.assign_peer_review(student, other_student1)
+        assignment.assign_peer_review(student, other_student2).complete!
+
+        get "/courses/#{course.id}/discussion_topics/#{assignment_topic.id}"
+
+        expect(f(".peer-review-alert.alert")).to include_text("You have been assigned a peer review for student1")
+        expect(f(".peer-review-alert.alert-info")).to include_text("You have completed a peer review for student2")
       end
     end
 

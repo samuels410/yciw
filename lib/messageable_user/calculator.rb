@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2013 Instructure, Inc.
+# Copyright (C) 2013 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -165,7 +165,7 @@ class MessageableUser
 
     def count_messageable_users_in_scope(scope)
       if scope
-        scope.except(:select, :group, :order).uniq.count
+        scope.except(:select, :group, :order).distinct.count
       else
         0
       end
@@ -226,12 +226,15 @@ class MessageableUser
       messageable_groups_by_shard.values.flatten
     end
 
+    def self.slave_module
+      @slave_module ||= Module.new.tap { |m| prepend(m) }
+    end
+
     def self.slave(method)
-      module_eval <<-RUBY, __FILE__, __LINE__ + 1
-        def #{method}_with_slave(*args)
-          Shackles.activate(:slave) { #{method}_without_slave(*args) }
+      slave_module.module_eval <<-RUBY, __FILE__, __LINE__ + 1
+        def #{method}(*)
+          Shackles.activate(:slave) { super }
         end
-        alias_method_chain #{method.inspect}, :slave
       RUBY
     end
 
@@ -771,7 +774,7 @@ class MessageableUser
     def uncached_messageable_groups
       fully_visible_scope = GroupMembership.
         select("group_memberships.group_id AS group_id").
-        uniq.
+        distinct.
         joins(:user, :group).
         where(:workflow_state => 'accepted').
         where("groups.workflow_state<>'deleted'").
@@ -780,7 +783,7 @@ class MessageableUser
 
       section_visible_scope = GroupMembership.
         select("group_memberships.group_id AS group_id").
-        uniq.
+        distinct.
         joins(:user, :group).
         joins(<<-SQL).
           INNER JOIN #{Enrollment.quoted_table_name} ON

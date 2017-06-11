@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 module Authlogic
   module ControllerAdapters
     class RailsAdapter < AbstractAdapter
@@ -20,10 +37,10 @@ cb = callback_chain.delete(callback_chain.find { |cb| cb.filter == :persist_by_c
 callback_chain.append(cb) if cb
 
 # be tolerant of using a slave
-Authlogic::Session::Callbacks.module_eval do
-  def save_record_with_ro_check(alternate_record = nil)
+module IgnoreSlaveErrors
+  def save_record(alternate_record = nil)
     begin
-      save_record_without_ro_check(alternate_record)
+      super
     rescue ActiveRecord::StatementInvalid => error
       # "simulated" slave of a user with read-only access; probably the same error for Slony
       raise if !error.message.match(/PG(?:::)?Error: ERROR: +permission denied for relation/) &&
@@ -31,5 +48,5 @@ Authlogic::Session::Callbacks.module_eval do
           !error.message.match(/PG(?:::)?Error: ERROR: +cannot execute UPDATE in a read-only transaction/)
     end
   end
-  alias_method_chain :save_record, :ro_check
 end
+Authlogic::Session::Callbacks.prepend(IgnoreSlaveErrors)

@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_relative 'common'
 require_relative 'helpers/groups_common'
 require_relative 'helpers/announcements_common'
@@ -190,7 +207,7 @@ describe "groups" do
         get files_page
         add_folder
         delete(0, :toolbar_menu)
-        expect(all_files_folders.count).to eq 0
+        expect(f("body")).not_to contain_css('.ef-item-row')
       end
 
       it "should allow a teacher to delete a file", priority: "2", test_id: 304183 do
@@ -198,7 +215,7 @@ describe "groups" do
         get files_page
         delete(0, :toolbar_menu)
         wait_for_ajaximations
-        expect(all_files_folders.count).to eq 0
+        expect(f("body")).not_to contain_css('.ef-item-row')
       end
 
       it "should allow teachers to move a file", priority: "2", test_id: 304185 do

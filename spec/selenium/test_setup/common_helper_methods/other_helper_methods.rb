@@ -1,41 +1,21 @@
-module OtherHelperMethods
-  # usage
-  # require_exec 'compiled/util/foo', 'bar', <<-CS
-  #   foo('something')
-  #   # optionally I should be able to do
-  #   bar 'something else', ->
-  #     "stuff"
-  #     callback('i made it')
-  #
-  # CS
-  #
-  # simple usage
-  # require_exec 'i18n!messages', 'i18n.t("foobar")'
-  def require_exec(*args)
-    code = args.last
-    things_to_require = {}
-    args[0...-1].each do |file_path|
-      things_to_require[file_path] = file_path.split('/').last.split('!').first
-    end
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
 
-    # make sure the code you pass is at least as intented as it should be
-    code = code.gsub(/^/, '          ')
-    coffee_source = <<-CS
-      _callback = arguments[arguments.length - 1];
-      cancelCallback = false
-      callback = ->
-        _callback.apply(this, arguments)
-        cancelCallback = true
-      require #{things_to_require.keys.to_json}, (#{things_to_require.values.join(', ')}) ->
-        res = do ->
-#{code}
-        _callback(res) unless cancelCallback
-    CS
-    # make it `bare` because selenium already wraps it in a function and we need to get
-    # the arguments for our callback
-    js = CoffeeScript.compile(coffee_source, :bare => true)
-    driver.execute_async_script(js)
-  end
+module OtherHelperMethods
 
   def stub_kaltura
     # trick kaltura into being activated
@@ -116,21 +96,22 @@ module OtherHelperMethods
     [filename, fullpath, data, @file]
   end
 
-  unless EncryptedCookieStore.respond_to?(:test_secret)
-    EncryptedCookieStore.class_eval do
-      cattr_accessor :test_secret
+  module EncryptedCookieStoreTestSecret
+    cattr_accessor :test_secret
 
-      def call_with_test_secret(env)
-        if self.class.test_secret.present?
-          @secret = self.class.test_secret
-          @encryption_key = unhex(@secret)
-        end
-        call_without_test_secret(env)
+    def self.prepended(klass)
+      klass.cattr_accessor(:test_secret)
+    end
+
+    def call(env)
+      if self.class.test_secret.present?
+        @secret = self.class.test_secret
+        @encryption_key = unhex(@secret[0...(@data_cipher.key_len * 2)]).freeze
       end
-
-      alias_method_chain :call, :test_secret
+      super
     end
   end
+  EncryptedCookieStore.prepend(EncryptedCookieStoreTestSecret)
 
   def clear_timers!
     # we don't want any AJAX requests getting kicked off after a test ends.

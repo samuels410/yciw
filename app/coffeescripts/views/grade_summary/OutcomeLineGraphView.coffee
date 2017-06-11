@@ -1,11 +1,29 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'underscore'
   'Backbone'
+  'i18n!outcomes'
   'compiled/collections/OutcomeResultCollection'
   'd3'
   'jst/outcomes/accessibleLineGraph'
   'compiled/underscore-ext/sum'
-], (_, Backbone, OutcomeResultCollection, d3, accessibleTemplate) ->
+], (_, Backbone, I18n, OutcomeResultCollection, d3, accessibleTemplate) ->
   # Trend class based on formulae found here:
   # http://classroom.synonym.com/calculate-trendline-2709.html
   class Trend
@@ -204,11 +222,11 @@ define [
           _.first(@data()).date
           _.last(@data()).date
         ])
-        .tickFormat((d) -> d3.time.format("%m/%d")(d))
+        .tickFormat((d) -> Intl.DateTimeFormat(I18n.currentLocale(), { day: 'numeric', month: 'numeric'}).format(d))
       @yAxis = d3.svg.axis()
         .scale(@y)
         .orient("left")
-        .tickFormat((d) -> "#{d}%" )
+        .tickFormat((d) -> I18n.n(d, { percentage: true }))
         .tickValues([0, 50, 100])
       @yGuides = d3.svg.axis()
         .scale(@y)
@@ -260,4 +278,3 @@ define [
         (@width() / (@limit - 1)) *
         (@limit - @data().length)
       ))
-

@@ -1,5 +1,5 @@
-/**
- * Copyright (C) 2011 Instructure, Inc.
+/*
+ * Copyright (C) 2011 - present Instructure, Inc.
  *
  * This file is part of Canvas.
  *
@@ -12,8 +12,8 @@
  * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
  * details.
  *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 define([
@@ -120,6 +120,13 @@ $(document).ready(function() {
         data: bank,
         hrefValues: ['id']
       })
+      // if you can convince fillTemplateData to do this, please be my guest
+      $bank.find('.links a').each(function(_, link) {
+        link.setAttribute('title', link.getAttribute('title').replace('{{ title }}', bank.title));
+      });
+      $bank.find('.links a span').each(function(_, span) {
+        span.textContent = span.textContent.replace('{{ title }}', bank.title);
+      });
       $bank.find('a.title')[0].focus()
     },
     error: function(data, $bank) {

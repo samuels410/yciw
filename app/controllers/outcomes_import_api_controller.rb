@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2015 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -20,7 +20,7 @@ class OutcomesImportApiController < ApplicationController
   include Api::V1::Outcome
   include Api::V1::ContentMigration
 
-  before_filter :require_user, :can_manage_global_outcomes, :has_api_config
+  before_action :require_user, :can_manage_global_outcomes, :has_api_config
 
   def available
     render json: AcademicBenchmark.list_of_available_guids
@@ -127,7 +127,7 @@ class OutcomesImportApiController < ApplicationController
   end
 
   def parse_rating(rating)
-    if rating.nil? || !rating.is_a?(Hash)
+    if rating.nil? || !rating.is_a?(ActionController::Parameters)
       raise "invalid ratings value: #{rating}"
     end
     if rating[:description].nil? || !rating[:description].is_a?(String)

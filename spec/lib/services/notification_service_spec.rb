@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2013 Instructure, Inc.
+# Copyright (C) 2016 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -129,7 +129,7 @@ module Services
           NotificationService.stubs(:notification_queue).returns(spy)
 
           NotificationService.process(1, 'hello', 'email', 'alice@example.com')
-          compare_json(expected, spy.sent_hash)
+          expect(expected).to eq spy.sent_hash
         end
       end
     end

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -187,8 +187,8 @@ class Quizzes::QuizQuestionsController < ApplicationController
   include ::Filters::Quizzes
   include ::Filters::QuizSubmissions
 
-  before_filter :require_context, :require_quiz
-  before_filter :require_question, :only => [:show]
+  before_action :require_context, :require_quiz
+  before_action :require_question, :only => [:show]
 
   # @API List questions in a quiz or a submission
   # @beta

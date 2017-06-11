@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -31,7 +31,7 @@ module Api::V1::Folders
             :only => %w(id name full_name position parent_folder_id context_type context_id unlock_at lock_at created_at updated_at))
     if folder
       if opts[:master_course_restricted_folder_ids]&.include?(folder.id)
-        json['is_master_course_content'] = true
+        json['is_master_course_child_content'] = true
         json['restricted_by_master_course'] = true
       end
       json['locked'] = !!folder.locked

@@ -1,5 +1,5 @@
-/**
- * Copyright (C) 2011 Instructure, Inc.
+/*
+ * Copyright (C) 2011 - present Instructure, Inc.
  *
  * This file is part of Canvas.
  *
@@ -12,8 +12,8 @@
  * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
  * details.
  *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 define([
@@ -84,7 +84,7 @@ define([
     $(".delete_quiz_link").click(function(event) {
       event.preventDefault();
       var deleteConfirmMessage = I18n.t('confirms.delete_quiz', "Are you sure you want to delete this quiz?");
-      submittedCount = parseInt($('#quiz_details_wrapper').data('submitted-count'));
+      var submittedCount = parseInt($('#quiz_details_wrapper').data('submitted-count'));
       if (submittedCount > 0) {
         deleteConfirmMessage += "\n\n" + I18n.t('confirms.delete_quiz_submissions_warning',
           {'one': "Warning: 1 student has already taken this quiz. If you delete it, any completed submissions will be deleted and no longer appear in the gradebook.",

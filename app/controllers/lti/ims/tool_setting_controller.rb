@@ -1,4 +1,5 @@
-# Copyright (C) 2014 Instructure, Inc.
+#
+# Copyright (C) 2014 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -22,10 +23,38 @@ module Lti
     class ToolSettingController < ApplicationController
       include Lti::ApiServiceHelper
 
-      skip_before_filter :require_context
-      skip_before_filter :require_user
-      skip_before_filter :load_user
-      before_filter :authenticate_api_call
+      skip_before_action :load_user
+      before_action :authenticate_api_call
+
+      SERVICE_DEFINITIONS = [
+        {
+          id: 'ToolProxySettings',
+          endpoint: 'api/lti/tool_settings/tool_proxy/{tool_proxy_id}',
+          format: %w(
+            application/vnd.ims.lti.v2.toolsettings+json
+            application/vnd.ims.lti.v2.toolsettings.simple+json
+          ).freeze,
+          action: %w(GET PUT).freeze
+        }.freeze,
+        {
+          id: 'ToolProxyBindingSettings',
+          endpoint: 'api/lti/tool_settings/bindings/{binding_id}',
+          format: %w(
+            application/vnd.ims.lti.v2.toolsettings+json'
+            application/vnd.ims.lti.v2.toolsettings.simple+json
+          ).freeze,
+          action: %w(GET PUT).freeze
+        }.freeze,
+        {
+          id: 'LtiLinkSettings',
+          endpoint: 'api/lti/tool_settings/links/{tool_proxy_id}',
+          format: %w(
+            application/vnd.ims.lti.v2.toolsettings+json
+            application/vnd.ims.lti.v2.toolsettings.simple+json
+          ).freeze,
+          action: %w(GET PUT).freeze
+        }.freeze
+      ].freeze
 
       def show
         render_bad_request and return unless valid_show_request?
@@ -36,7 +65,7 @@ module Lti
         json = JSON.parse(request.body.read)
         render_bad_request and return unless valid_update_request?(json)
         @tool_setting.update_attribute(:custom, custom_settings(tool_setting_type(@tool_setting), json))
-        render nothing: true
+        head :ok
       end
 
       private

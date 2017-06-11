@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2013 Instructure, Inc.
+# Copyright (C) 2013 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -138,7 +138,7 @@
 class FeatureFlagsController < ApplicationController
   include Api::V1::FeatureFlag
 
-  before_filter :get_context
+  before_action :get_context
 
   # @API List features
   #

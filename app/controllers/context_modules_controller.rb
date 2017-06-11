@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2014 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -18,10 +18,11 @@
 
 class ContextModulesController < ApplicationController
   include Api::V1::ContextModule
+  include WebZipExportHelper
 
-  before_filter :require_context
+  before_action :require_context
   add_crumb(proc { t('#crumbs.modules', "Modules") }) { |c| c.send :named_context_url, c.instance_variable_get("@context"), :context_context_modules_url }
-  before_filter { |c| c.active_tab = "modules" }
+  before_action { |c| c.active_tab = "modules" }
 
   module ModuleIndexHelper
     include ContextModulesHelper
@@ -58,6 +59,10 @@ class ContextModulesController < ApplicationController
 
       @is_student = @context.grants_right?(@current_user, session, :participate_as_student)
       @is_cyoe_on = ConditionalRelease::Service.enabled_in_context?(@context)
+      if allow_web_export_download?
+        @allow_web_export_download = true
+        @last_web_export = @context.web_zip_exports.visible_to(@current_user).order('epub_exports.created_at').last
+      end
 
       @menu_tools = {}
       placements = [:assignment_menu, :discussion_topic_menu, :file_menu, :module_menu, :quiz_menu, :wiki_page_menu]
@@ -76,10 +81,12 @@ class ContextModulesController < ApplicationController
         }
 
       if master_courses?
+        is_master_course = MasterCourses::MasterTemplate.is_master_course?(@context)
         is_child_course = MasterCourses::ChildSubscription.is_child_course?(@context)
-        if is_child_course # todo: someday expose master side data via here too
+        if is_master_course || is_child_course
           js_env(:MASTER_COURSE_SETTINGS => {
-            :HAS_MASTER_COURSE_SUBSCRIPTION => is_child_course,
+            :IS_MASTER_COURSE => is_master_course,
+            :IS_CHILD_COURSE => is_child_course,
             :MASTER_COURSE_DATA_URL => context_url(@context, :context_context_modules_master_course_info_url)
           })
         end
@@ -95,13 +102,11 @@ class ContextModulesController < ApplicationController
       log_asset_access([ "modules", @context ], "modules", "other")
       load_modules
 
+      set_tutorial_js_env
+
       if @is_student && tab_enabled?(@context.class::TAB_MODULES)
         @modules.each{|m| m.evaluate_for(@current_user) }
         session[:module_progressions_initialized] = true
-      end
-
-      if @context.allow_web_export_download?
-        @last_web_export = @context.web_zip_exports.visible_to(@current_user).order('epub_exports.created_at').last
       end
     end
   end
@@ -148,7 +153,7 @@ class ContextModulesController < ApplicationController
 
             @page_title = join_title(t('Choose Assignment Set'), @context.name)
 
-            return render :text => '', :layout => true
+            return render :html => '', :layout => true
           else
             flash[:warning] = t('Module Item is locked.')
             return redirect_to named_context_url(@context, :context_context_modules_url)
@@ -303,14 +308,21 @@ class ContextModulesController < ApplicationController
     return not_found unless master_courses?
     if authorized_action(@context, @current_user, :read_as_admin)
       info = {}
-      if MasterCourses::ChildSubscription.is_child_course?(@context)
+      is_child_course = MasterCourses::ChildSubscription.is_child_course?(@context)
+      is_master_course = MasterCourses::MasterTemplate.is_master_course?(@context)
+
+      if is_child_course || is_master_course
         tag_scope = @context.module_items_visible_to(@current_user)
         tag_scope = tag_scope.where(:id => params[:tag_id]) if params[:tag_id]
         tag_ids = tag_scope.pluck(:id)
         restriction_info = {}
         if tag_ids.any?
-          MasterCourses::MasterContentTag.fetch_module_item_restrictions(tag_ids).each do |tag_id, restrictions|
-            restriction_info[tag_id] = restrictions.any?{|k, v| v} ? 'locked' : 'unlocked' # might need to elaborate in the future
+          if is_child_course
+            MasterCourses::MasterContentTag.fetch_module_item_restrictions_for_child(tag_ids).each do |tag_id, restrictions|
+              restriction_info[tag_id] = restrictions.any?{|k, v| v} ? 'locked' : 'unlocked' # might need to elaborate in the future
+            end
+          elsif is_master_course
+            restriction_info = MasterCourses::MasterContentTag.fetch_module_item_restrictions_for_master(tag_ids)
           end
         end
         info[:tag_restrictions] = restriction_info
@@ -408,7 +420,7 @@ class ContextModulesController < ApplicationController
       else
         @progression.collapsed = !@progression.collapsed
       end
-      @progression.save
+      @progression.save unless @progression.new_record?
       respond_to do |format|
         format.html { redirect_to named_context_url(@context, :context_context_modules_url) }
         format.json { render :json => (@progression.collapsed ? @progression : @module.content_tags_visible_to(@current_user) )}
@@ -540,7 +552,7 @@ class ContextModulesController < ApplicationController
         return render :json => @tag.errors, :status => :bad_request
       end
 
-      @tag.update_asset_name! if params[:content_tag][:title]
+      @tag.update_asset_name!(@current_user) if params[:content_tag][:title]
       render :json => @tag
     end
   end

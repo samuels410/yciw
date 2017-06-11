@@ -1,5 +1,5 @@
-/**
- * Copyright (C) 2011 Instructure, Inc.
+/*
+ * Copyright (C) 2011 - present Instructure, Inc.
  *
  * This file is part of Canvas.
  *
@@ -12,9 +12,10 @@
  * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
  * details.
  *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
+
 define([
   'jquery' /* $ */
 ], function($) {
@@ -102,11 +103,10 @@ define([
         var $option = $("<div class='option minimal' style='cursor: pointer; padding: 2px 5px; overflow: hidden; white-space: nowrap;'>" +
                         "  <span tabindex='-1'>" + optionHtml + "</span>" +
                         "</div>").appendTo($list);
-
+        function unhoverOtherOptions () {
+          $option.parent().find("div.option").removeClass('ui-state-hover ui-state-active').addClass('minimal');
+        }
         if($.isFunction(callback)) {
-          function unhoverOtherOptions(){
-            $option.parent().find("div.option").removeClass('ui-state-hover ui-state-active').addClass('minimal');
-          }
           $option.addClass('ui-state-default').bind({
             mouseenter: function() {
               unhoverOtherOptions();

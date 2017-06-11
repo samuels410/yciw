@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011-2016 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -35,6 +35,7 @@ class EnrollmentTerm < ActiveRecord::Base
 
   before_validation :verify_unique_sis_source_id
   after_save :update_courses_later_if_necessary
+  after_save :recompute_course_scores, if: :grading_period_group_id_has_changed?
 
   include StickySisFields
   are_sis_sticky :name, :start_at, :end_at
@@ -62,6 +63,13 @@ class EnrollmentTerm < ActiveRecord::Base
 
   def touch_all_courses
     self.courses.touch_all
+  end
+
+  def recompute_course_scores(update_all_grading_period_scores: true)
+    courses.active.each do |course|
+      course.recompute_student_scores(update_all_grading_period_scores: update_all_grading_period_scores)
+      DueDateCacher.recompute_course(course)
+    end
   end
 
   def update_courses_and_states_later(enrollment_type=nil)
@@ -123,6 +131,7 @@ class EnrollmentTerm < ActiveRecord::Base
     return true unless scope.exists?
 
     self.errors.add(:sis_source_id, t('errors.not_unique', "SIS ID \"%{sis_source_id}\" is already in use", :sis_source_id => self.sis_source_id))
+    throw :abort unless CANVAS_RAILS4_2
     false
   end
 
@@ -186,4 +195,12 @@ class EnrollmentTerm < ActiveRecord::Base
   scope :not_started, -> { where('enrollment_terms.start_at IS NOT NULL AND enrollment_terms.start_at > ?', Time.now.utc) }
   scope :not_default, -> { where.not(name: EnrollmentTerm::DEFAULT_TERM_NAME)}
   scope :by_name, -> { order(best_unicode_collation_key('name')) }
+
+  private
+
+  def grading_period_group_id_has_changed?
+    # migration 20111111214313_add_trust_link_for_default_account
+    # will throw an error without this check
+    respond_to?(:grading_period_group_id_changed?) && grading_period_group_id_changed?
+  end
 end

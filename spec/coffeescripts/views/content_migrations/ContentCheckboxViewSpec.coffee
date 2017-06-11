@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'compiled/collections/content_migrations/ContentCheckboxCollection'
   'compiled/views/content_migrations/ContentCheckboxView'
@@ -72,7 +89,7 @@ define [
                                               }
                                           ])]
 
-  module "Content Checkbox Behaviors",
+  QUnit.module "Content Checkbox Behaviors",
     teardown: -> CheckboxHelper.teardown()
 
   test 'renders a checkbox with name set from model property', ->
@@ -81,7 +98,7 @@ define [
 
     equal nameValue, 'copy[all_assignments]', 'Adds the correct name attribute from property'
 
-  module "Sublevel Content Checkbox and Carrot Behaviors",
+  QUnit.module "Sublevel Content Checkbox and Carrot Behaviors",
     setup: ->
       fakeENV.setup()
       @url = '/api/v1/courses/42/content_migrations/5/selective_data?type=assignments'

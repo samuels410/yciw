@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2013 Instructure, Inc.
+# Copyright (C) 2015 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -30,9 +30,10 @@ define [
     constructor: (params) ->
       @dateRange = params['date_range']
       @data = params['data']
-      @multipleGradingPeriodsEnabled = params.multipleGradingPeriodsEnabled
+      @hasGradingPeriods = params.hasGradingPeriods
       @gradingPeriods = params.gradingPeriods
       @userIsAdmin = params.userIsAdmin
+      @dueDateRequired = params.postToSIS && ENV.DUE_DATE_REQUIRED_FOR_ACCOUNT
 
     validateDatetimes: ->
       lockAt = @data.lock_at
@@ -72,7 +73,13 @@ define [
           type: "due"
         }
 
-      if @multipleGradingPeriodsEnabled && !@userIsAdmin && @data.persisted == false
+      if @dueDateRequired
+        datetimesToValidate.push {
+          date: dueAt,
+          dueDateRequired: @dueDateRequired,
+        }
+
+      if @hasGradingPeriods && !@userIsAdmin && @data.persisted == false
         datetimesToValidate.push {
           date: dueAt,
           range: "grading_period_range",
@@ -112,6 +119,8 @@ define [
 
     _validateDatetimeSequences: (datetimesToValidate, errs) =>
       for datetimeSet in datetimesToValidate
+        if datetimeSet.dueDateRequired && !datetimeSet.date
+          errs["due_at"] = I18n.t("Please add a due date")
         if datetimeSet.range == "grading_period_range"
           @_validateMultipleGradingPeriods(datetimeSet.date, errs)
         else if datetimeSet.date

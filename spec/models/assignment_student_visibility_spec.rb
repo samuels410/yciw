@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_relative '../spec_helper'
 require_relative '../sharding_spec_helper'
 
@@ -34,10 +51,6 @@ describe "differentiated_assignments" do
 
   def assignment_with_false_only_visible_to_overrides
     make_assignment({date: Time.now, ovto: false})
-  end
-
-  def assignment_with_null_only_visible_to_overrides
-    make_assignment({date: Time.now, ovto: nil})
   end
 
   def group_assignment_with_true_only_visible_to_overrides(opts={})
@@ -369,37 +382,6 @@ describe "differentiated_assignments" do
           it "should not show deleted assignments" do
             @assignment.destroy
             ensure_user_does_not_see_assignment
-          end
-        end
-        context "user in section with override" do
-          before{enroller_user_in_section(@section_foo)}
-          it "should show the assignment to the user" do
-            ensure_user_sees_assignment
-          end
-        end
-        context "user in section with no override" do
-          before{enroller_user_in_section(@section_bar)}
-          it "should show the assignment to the user" do
-            ensure_user_sees_assignment
-          end
-        end
-        context "user in section with override and one without override" do
-          before do
-            enroller_user_in_both_sections
-          end
-          it "should show the assignment to the user" do
-            ensure_user_sees_assignment
-          end
-        end
-      end
-      context "assignment with null only_visible_to_overrides" do
-        before do
-          assignment_with_null_only_visible_to_overrides
-          give_section_due_date(@assignment, @section_foo)
-        end
-        context "user in default section" do
-          it "should show the assignment to the user" do
-            ensure_user_sees_assignment
           end
         end
         context "user in section with override" do

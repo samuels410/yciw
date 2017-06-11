@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -25,7 +25,7 @@ class Score < ActiveRecord::Base
 
   validates :enrollment, presence: true
   validates :current_score, :final_score, numericality: true, allow_nil: true
-  validates_uniqueness_of :enrollment_id, scope: :grading_period_id, conditions: -> { active }
+  validates_uniqueness_of :enrollment_id, scope: :grading_period_id
 
   def current_grade
     score_to_grade(current_score)

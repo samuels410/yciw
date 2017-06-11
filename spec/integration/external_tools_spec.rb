@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -109,7 +109,7 @@ describe "External Tools" do
       expect(response).to redirect_to(course_url(@course))
       expect(flash[:error]).to be_present
     end
-    
+
     it "should render inline external tool links with a full return url" do
       student_in_course(:active_all => true)
       user_session(@user)
@@ -119,12 +119,12 @@ describe "External Tools" do
       expect(doc.at_css('#tool_form')).not_to be_nil
       expect(doc.at_css("input[name='launch_presentation_return_url']")['value']).to match(/^http/)
     end
-    
+
     it "should render user navigation tools with a full return url" do
       tool = @course.root_account.context_external_tools.build(:shared_secret => 'test_secret', :consumer_key => 'test_key', :name => 'my grade passback test tool', :domain => 'example.com', :privacy_level => 'public')
       tool.user_navigation = {:url => "http://www.example.com", :text => "Example URL"}
       tool.save!
-      
+
       student_in_course(:active_all => true)
       user_session(@user)
       get "/users/#{@user.id}/external_tools/#{tool.id}"
@@ -133,22 +133,7 @@ describe "External Tools" do
       expect(doc.at_css('#tool_form')).not_to be_nil
       expect(doc.at_css("input[name='launch_presentation_return_url']")['value']).to match(/^http/)
     end
-    
-  end
 
-  it "should highlight the navigation tab when using an external tool" do
-    course_with_teacher_logged_in(:active_all => true)
-
-    @tool = @course.context_external_tools.create!(:shared_secret => 'test_secret', :consumer_key => 'test_key', :name => 'my grade passback test tool', :domain => 'example.com')
-    @tool.course_navigation = {:url => "http://www.example.com", :text => "Example URL"}
-    @tool.save!
-
-    get "/courses/#{@course.id}/external_tools/#{@tool.id}"
-    expect(response).to be_success
-    doc = Nokogiri::HTML.parse(response.body)
-    tab = doc.at_css("a.#{@tool.asset_string}")
-    expect(tab).not_to be_nil
-    expect(tab['class'].split).to include("active")
   end
 
   it "should highlight the navigation tab when using an external tool" do

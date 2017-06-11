@@ -1,3 +1,21 @@
+/*
+ * Copyright (C) 2011 - present Instructure, Inc.
+ *
+ * This file is part of Canvas.
+ *
+ * Canvas is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, version 3 of the License.
+ *
+ * Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 define([
   'vendor/i18n_js_extension',
   'jquery',
@@ -6,6 +24,28 @@ define([
   'compiled/str/i18nLolcalize',
   'vendor/date' /* Date.parse, Date.UTC */
 ], function(I18n, $, _, htmlEscape, i18nLolcalize) {
+
+/*
+ * Overridden interpolator that localizes any interpolated numbers.
+ * Defaults to localizeNumber behavior (precision 9, but strips
+ * insignificant digits). If you want a different format, do it
+ * before you interpolate.
+ */
+var interpolate = I18n.interpolate;
+I18n.interpolate = function(message, origOptions) {
+  var options = $.extend(true, {}, origOptions);
+  var matches = message.match(this.PLACEHOLDER) || [];
+
+  var placeholder, name;
+
+  for (var i = 0; placeholder = matches[i]; i++) {
+    name = placeholder.replace(this.PLACEHOLDER, '$1');
+    if (typeof options[name] === 'number') {
+      options[name] = this.localizeNumber(options[name]);
+    }
+  }
+  return interpolate.call(this, message, options);
+};
 
 I18n.locale = document.documentElement.getAttribute('lang');
 
@@ -78,10 +118,10 @@ I18n.localizeNumber = function (value, options) {
   }
   var format = _.extend({}, I18n.lookup('number.format'), {
     // use a high precision and strip zeros if no precision is provided
-    // 9 is as high as we want to go without causing precision issues
-    // when used with toFixed()
-    strip_insignificant_zeros: options.precision == null,
-    precision: options.precision != null ? options.precision : 9
+    // 5 is as high as we want to go without causing precision issues
+    // when used with toFixed() and large numbers
+    strip_insignificant_zeros: options.strip_insignificant_zeros || options.precision == null,
+    precision: options.precision != null ? options.precision : 5
   })
   var method = options.percentage ? 'toPercentage' : 'toNumber'
   return I18n[method](value, format)
@@ -211,6 +251,7 @@ I18n.strftime = function(date, format) {
   return f;
 };
 
+// like the original, except it formats count
 I18n.pluralize = function(count, scope, options) {
   var translation;
 
@@ -229,8 +270,8 @@ I18n.pluralize = function(count, scope, options) {
   switch(Math.abs(count)) {
     case 0:
       message = this.isValidNode(translation, "zero") ? translation.zero :
-          this.isValidNode(translation, "none") ? translation.none :
-              this.isValidNode(translation, "other") ? translation.other :
+              this.isValidNode(translation, "none") ? translation.none :
+                this.isValidNode(translation, "other") ? translation.other :
                   this.missingTranslation(scope, "zero");
       break;
     case 1:
@@ -303,7 +344,8 @@ I18n.scope.prototype = {
   toCurrency:   I18n.toCurrency.bind(I18n),
   toHumanSize:  I18n.toHumanSize.bind(I18n),
   toPercentage: I18n.toPercentage.bind(I18n),
-  localizeNumber: I18n.n.bind(I18n)
+  localizeNumber: I18n.n.bind(I18n),
+  currentLocale: I18n.currentLocale.bind(I18n)
 };
 I18n.scope.prototype.t = I18n.scope.prototype.translate;
 I18n.scope.prototype.l = I18n.scope.prototype.localize;

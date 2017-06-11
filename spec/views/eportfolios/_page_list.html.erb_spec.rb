@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -26,24 +26,24 @@ describe "/eportfolios/_page_list" do
 
   it "should render" do
     view_portfolio
-    assigns[:category] = @portfolio.eportfolio_categories.create!(:name => "some category")
-    assigns[:page] = @portfolio.eportfolio_entries.create!(:name => "some entry", :eportfolio_category => assigns[:category])
+    category = assign(:category, @portfolio.eportfolio_categories.create!(:name => "some category"))
+    assign(:page, @portfolio.eportfolio_entries.create!(:name => "some entry", :eportfolio_category => category))
     render :partial => "eportfolios/page_list"
     expect(response).not_to be_nil
   end
 
   it "should render, even if a eportfolio entry name is blank" do
     view_portfolio
-    assigns[:category] = @portfolio.eportfolio_categories.create!(:name => "some category")
-    assigns[:page] = @portfolio.eportfolio_entries.create!(:name => "", :eportfolio_category => assigns[:category])
+    category = assign(:category, @portfolio.eportfolio_categories.create!(:name => "some category"))
+    assign(:page, @portfolio.eportfolio_entries.create!(:name => "", :eportfolio_category => category))
     render :partial => "eportfolios/page_list"
     expect(response).not_to be_nil
   end
 
   it "should render even with a blank category slug" do
     view_portfolio
-    assigns[:category] = @portfolio.eportfolio_categories.create!(:name => "+++")
-    assigns[:page] = @portfolio.eportfolio_entries.create!(:name => "some entry", :eportfolio_category => assigns[:category])
+    category = assign(:category, @portfolio.eportfolio_categories.create!(:name => "+++"))
+    assign(:page, @portfolio.eportfolio_entries.create!(:name => "some entry", :eportfolio_category => category))
     render :partial => "eportfolios/page_list"
     expect(response).not_to be_nil
   end

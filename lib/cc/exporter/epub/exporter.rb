@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 module CC::Exporter::Epub
   class Exporter
 
@@ -23,15 +40,16 @@ module CC::Exporter::Epub
       "WikiPage" => :pages
     }.freeze
 
-    def initialize(cartridge, sort_by_content=false)
+    def initialize(cartridge, sort_by_content=false, export_type=:epub)
       @cartridge = cartridge
+      @export_type = export_type
       @sort_by_content = sort_by_content || cartridge_json[:modules].empty?
     end
     attr_reader :cartridge, :sort_by_content
     delegate :unsupported_files, to: :cartridge_converter, allow_nil: true
 
     def cartridge_json
-      @_cartridge_json ||= cartridge_converter.export
+      @_cartridge_json ||= cartridge_converter.export(@export_type)
     end
 
     def templates

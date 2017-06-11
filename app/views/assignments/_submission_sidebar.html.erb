@@ -1,3 +1,21 @@
+<%
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+%>
+
 <% cache([
   'submission_sidebar_render',
   @current_user_submission,
@@ -67,8 +85,8 @@
           <span><%= t "This assignment has been excused." %></span>
         <% else %>
           <div><%= t 'labels.grade', "Grade: %{grade} *(%{points_possible} pts possible)*", {
-            :grade => @current_user_submission.grade,
-            :points_possible => round_if_whole(@assignment.points_possible),
+            :grade => i18n_grade(@current_user_submission.grade, @assignment.grading_type),
+            :points_possible => n(round_if_whole(@assignment.points_possible)),
             :wrapper => '<span style="font-size: 0.8em;">\1</span>'
           } %></div>
           <div><%= t 'labels.graded_anonymously', "Graded Anonymously: %{value}", {

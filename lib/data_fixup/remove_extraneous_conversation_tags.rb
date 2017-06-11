@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 module DataFixup::RemoveExtraneousConversationTags
   def self.run
     # non-deleted CPs in a private conversation should usually have the same
@@ -21,7 +38,7 @@ module DataFixup::RemoveExtraneousConversationTags
     Conversation.transaction do
       c.lock!
       c.update_attribute :tags, c.tags & allowed_tags
-      c.conversation_participants(:include => :user).each do |cp|
+      c.conversation_participants.preload(:user).each do |cp|
         next unless cp.user
         tags_to_remove = cp.tags - c.tags
         next if tags_to_remove.empty?

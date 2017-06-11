@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 full_path_glob = '(/*full_path)'
 
 # allow plugins to prepend routes
@@ -655,7 +672,6 @@ CanvasRails::Application.routes.draw do
   get 'images/thumbnails/show/:id/:uuid' => 'files#show_thumbnail', as: :show_thumbnail_image
   post 'images/users/:user_id/report' => 'users#report_avatar_image', as: :report_avatar_image
   put 'images/users/:user_id' => 'users#update_avatar_image', as: :update_avatar_image
-  get 'all_menu_courses' => 'users#all_menu_courses'
   get 'grades' => 'users#grades'
   get 'grades_for_student' => 'users#grades_for_student'
 
@@ -713,6 +729,8 @@ CanvasRails::Application.routes.draw do
   get 'login/otp' => 'login/otp#new', as: :otp_login
   post 'login/otp/sms' => 'login/otp#send_via_sms', as: :send_otp_via_sms
   post 'login/otp' => 'login/otp#create'
+  get 'users/self/otps' => 'one_time_passwords#index', as: :one_time_passwords
+  delete 'users/self/otps' => 'one_time_passwords#destroy_all', as: :destroy_all_one_time_passwords
 
   # deprecated redirect
   get 'login/:id' => 'login#new'
@@ -788,6 +806,7 @@ CanvasRails::Application.routes.draw do
   get '' => 'users#user_dashboard', as: 'dashboard'
   get 'dashboard-sidebar' => 'users#dashboard_sidebar', as: :dashboard_sidebar
   post 'users/toggle_recent_activity_dashboard' => 'users#toggle_recent_activity_dashboard'
+  post 'users/toggle_hide_dashcard_color_overlays' => 'users#toggle_hide_dashcard_color_overlays'
   get 'styleguide' => 'info#styleguide'
   get 'accounts/:account_id/theme-preview' => 'brand_configs#show'
   get 'old_styleguide' => 'info#old_styleguide'
@@ -802,6 +821,7 @@ CanvasRails::Application.routes.draw do
   end
 
   scope '/dashboard' do
+    put 'view' => 'users#dashboard_view'
     delete 'account_notifications/:id' => 'users#close_notification', as: :dashboard_close_notification
     get 'eportfolios' => 'eportfolios#user_index', as: :dashboard_eportfolios
     post 'comment_session' => 'services_api#start_kaltura_session', as: :dashboard_comment_session
@@ -848,9 +868,14 @@ CanvasRails::Application.routes.draw do
   get 'equation_images/:id' => 'equation_images#show', as: :equation_images, id: /.+/
 
   # assignments at the top level (without a context) -- we have some specs that
-  # assert these routes exist, but just 404. I'm not sure we ever actually want
-  # top-level assignments available, maybe we should change the specs instead.
-  resources :assignments, only: [:index, :show]
+  # assert these routes exist, but just 404 unless it is a download from local
+  # storage. I'm not sure we ever actually want top-level assignments available,
+  # maybe we should change the specs instead.
+  # Note, if local storage is used, a file is fetched from this top level
+  # (i.e. SpeedGrader document preview with Google Docs viewer)
+  resources :assignments, only: [:index, :show] do
+    get "files/:id/download" => 'files#show', download: '1'
+  end
 
   resources :files, :except => [:new] do
     get 'download' => 'files#show', download: '1'
@@ -1218,6 +1243,9 @@ CanvasRails::Application.routes.draw do
       get 'users/:id/colors/:asset_string', controller: 'users', action: 'get_custom_color'
       put 'users/:id/colors/:asset_string', controller: 'users', action: 'set_custom_color'
 
+      get 'users/:id/new_user_tutorial_statuses', action: 'get_new_user_tutorial_statuses'
+      put 'users/:id/new_user_tutorial_statuses/:page_name', action: 'set_new_user_tutorial_status'
+
       get 'users/:id/dashboard_positions', controller: 'users', action: 'get_dashboard_positions'
       put 'users/:id/dashboard_positions', controller: 'users', action: 'set_dashboard_positions'
 
@@ -1369,6 +1397,7 @@ CanvasRails::Application.routes.draw do
       delete 'calendar_events/:id', action: :destroy
       post 'calendar_events/:id/reservations', action: :reserve
       post 'calendar_events/:id/reservations/:participant_id', action: :reserve, as: 'calendar_event_reserve'
+      get 'calendar_events/:id/participants', action: :participants, as: 'calendar_event_participants'
       post 'calendar_events/save_selected_contexts', action: :save_selected_contexts
 
       get 'courses/:course_id/calendar_events/timetable', action: :get_course_timetable
@@ -1878,6 +1907,7 @@ CanvasRails::Application.routes.draw do
 
     scope(controller: :jwts) do
       post 'jwts', action: :create
+      post 'jwts/refresh', action: :refresh
     end
 
     scope(controller: :gradebook_settings) do
@@ -1893,6 +1923,26 @@ CanvasRails::Application.routes.draw do
       get 'accounts/:account_id/rubrics/:id', action: :show
       get 'courses/:course_id/rubrics', action: :index, as: :course_rubrics
       get 'courses/:course_id/rubrics/:id', action: :show
+    end
+
+    scope(controller: 'master_courses/master_templates') do
+      get 'courses/:course_id/blueprint_templates/:template_id', action: :show
+      get 'courses/:course_id/blueprint_templates/:template_id/associated_courses', action: :associated_courses, as: :course_blueprint_associated_courses
+      put 'courses/:course_id/blueprint_templates/:template_id/update_associations', action: :update_associations
+      get 'courses/:course_id/blueprint_templates/:template_id/unsynced_changes', action: :unsynced_changes, as: :course_blueprint_unsynced_changes
+
+      post 'courses/:course_id/blueprint_templates/:template_id/migrations', action: :queue_migration
+      get 'courses/:course_id/blueprint_templates/:template_id/migrations', action: :migrations_index, as: :course_blueprint_migrations
+      get 'courses/:course_id/blueprint_templates/:template_id/migrations/:id', action: :migrations_show
+      get 'courses/:course_id/blueprint_templates/:template_id/migrations/:id/details', action: :migration_details
+
+      put 'courses/:course_id/blueprint_templates/:template_id/restrict_item', action: :restrict_item
+    end
+
+    scope(controller: :late_policy) do
+      get 'courses/:id/late_policy', action: :show
+      post 'courses/:id/late_policy', action: :create
+      patch 'courses/:id/late_policy', action: :update
     end
   end
 
@@ -1931,10 +1981,19 @@ CanvasRails::Application.routes.draw do
   end
 
   ApiRouteSet.draw(self, "/api/lti") do
-    post "authorize", controller: 'lti/ims/authorization', action: :authorize, as: 'lti_oauth2_authorize'
+
+    scope(controller: 'lti/subscriptions_api') do
+      post "subscriptions", action: :create
+      delete "subscriptions/:id", action: :destroy
+      get "subscriptions/:id", action: :show
+      put "subscriptions/:id", action: :update
+      get "subscriptions", action: :index
+    end
+
     %w(course account).each do |context|
       prefix = "#{context}s/:#{context}_id"
-      get  "#{prefix}/tool_consumer_profile/:tool_consumer_profile_id", controller: 'lti/ims/tool_consumer_profile',
+      post "#{prefix}/authorize", controller: 'lti/ims/authorization', action: :authorize, as: "#{context}_lti_oauth2_authorize"
+      get  "#{prefix}/tool_consumer_profile(/:tool_consumer_profile_id)", controller: 'lti/ims/tool_consumer_profile',
            action: 'show', as: "#{context}_tool_consumer_profile"
       post "#{prefix}/tool_proxy", controller: 'lti/ims/tool_proxy', action: :re_reg,
            as: "re_reg_#{context}_lti_tool_proxy", constraints: Lti::ReRegConstraint.new
@@ -1953,12 +2012,20 @@ CanvasRails::Application.routes.draw do
     get "courses/:course_id/membership_service", controller: "lti/membership_service", action: :course_index, as: :course_membership_service
     get "groups/:group_id/membership_service", controller: "lti/membership_service", action: :group_index, as: :group_membership_service
 
+    # Submissions Service
+    scope(controller: 'lti/submissions_api') do
+      get "assignments/:assignment_id/submissions/:submission_id", action: :show
+      get "assignments/:assignment_id/submissions/:submission_id/history", action: :history
+      get "assignments/:assignment_id/submissions/:submission_id/attachment/:attachment_id", action: :attachment, as: :lti_submission_attachment_download
+    end
+
     # Originality Report Service
     scope(controller: 'lti/originality_reports_api') do
       post "assignments/:assignment_id/submissions/:submission_id/originality_report", action: :create
       put "assignments/:assignment_id/submissions/:submission_id/originality_report/:id", action: :update
       get "assignments/:assignment_id/submissions/:submission_id/originality_report/:id", action: :show
     end
+
   end
 
   ApiRouteSet.draw(self, '/api/sis') do

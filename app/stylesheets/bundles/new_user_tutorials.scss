@@ -1,0 +1,85 @@
+/*
+ * Copyright (C) 2017 - present Instructure, Inc.
+ *
+ * This file is part of Canvas.
+ *
+ * Canvas is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, version 3 of the License.
+ *
+ * Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+@import "base/environment";
+
+.NewUserTutorialTray {
+  width: 18.75rem;
+  box-sizing: border-box;
+  padding: $ic-sp*4 $ic-sp*1.5 $ic-sp;
+
+  @include breakpoint(tablet) {
+    width: 21rem;
+    padding-left: $ic-sp*2;
+    padding-right: $ic-sp*2;
+  }
+}
+
+.NewUserTutorialTray__Subheading {
+  margin: ($ic-sp / 2) 0 ($ic-sp * 1.5) 0;
+}
+
+.NewUserTutorialTray__ButtonContainer {
+  position: absolute;
+  right: $ic-sp * 2;
+  top: $ic-sp + 2;
+}
+
+.NewUserTutorialTray__EndTutorialContainer {
+  position: absolute;
+  bottom: $ic-sp;
+  right: $ic-sp;
+}
+
+@keyframes trayImage {
+  to {
+    opacity: 1;
+  }
+}
+
+.NewUserTutorialTray__ImageContainer {
+  margin-top: $ic-sp * 2;
+  opacity: 0;
+  animation-name: trayImage;
+  animation-duration: 1s;
+  animation-delay: 0.3s;
+  animation-fill-mode: forwards;
+}
+
+.NewUserTutorialTray__ImageContainer svg  {
+  fill: $ic-border-light;
+  display: block;
+  margin: 0 auto;
+  width: 10rem;
+  height: auto;
+}
+
+.Modules .NewUserTutorialTray__ImageContainer svg  {
+  width: 5.25rem;
+}
+
+// HACK to help IE with inline SVG
+_:-ms-fullscreen, :root {
+  .NewUserTutorialTray__ImageContainer svg  {
+    height: 10rem;
+  }
+
+  .Modules .NewUserTutorialTray__ImageContainer svg  {
+    height: 19.5rem;
+  }
+}

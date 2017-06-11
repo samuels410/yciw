@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -32,9 +32,9 @@ describe "/quiz_submissions/show" do
     @quiz.stubs(:points_possible).returns(10)
     @quiz.stubs(:stored_questions).returns([])
     @quiz.stubs(:show_correct_answers?).returns(true)
-    assigns[:quiz] = @quiz
-    assigns[:submission] = @submission
-    
+    assign(:quiz, @quiz)
+    assign(:submission, @submission)
+
     render "quizzes/quiz_submissions/show"
     expect(response).not_to be_nil
   end

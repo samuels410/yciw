@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 # requires jquery and date.js
 define [
   'jquery'
@@ -6,7 +23,7 @@ define [
   'compiled/util/fcUtil'
 ], ($, TimeBlockList, moment, fcUtil) ->
 
-  module "TimeBlockList",
+  QUnit.module "TimeBlockList",
     setup: ->
       wrappedDate = (str) ->
         moment( new Date(str))
@@ -91,7 +108,7 @@ define [
     equal @me.rows.length, 12
     equal @me.blocks().length, 10
 
-  module "TimeBlockList with no time blocks",
+  QUnit.module "TimeBlockList with no time blocks",
     setup: ->
       wrappedDate = (str) ->
         moment( new Date(str))

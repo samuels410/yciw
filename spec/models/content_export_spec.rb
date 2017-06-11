@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -19,12 +19,12 @@
 require File.expand_path(File.dirname(__FILE__) + '/../spec_helper.rb')
 
 describe ContentExport do
+  before :once do
+    course_with_teacher(:active_all => true)
+    @ce = @course.content_exports.create!
+  end
 
   context "export_object?" do
-    before :once do
-      course = Account.default.courses.create!
-      @ce = course.content_exports.create!
-    end
 
     it "should return true for everything if there are no copy options" do
       expect(@ce.export_object?(@ce)).to eq true
@@ -61,12 +61,78 @@ describe ContentExport do
     end
   end
 
-  context "add_item_to_export" do
+  context "Quizzes2 Export" do
     before :once do
-      course = Account.default.courses.create!
-      @ce = course.content_exports.create!
+      quiz = @course.quizzes.create!(:title => 'quiz1')
+      Account.default.context_external_tools.create!(
+        name: 'Quizzes.Next',
+        consumer_key: 'test_key',
+        shared_secret: 'test_secret',
+        tool_id: 'Quizzes 2',
+        url: 'http://example.com/launch'
+      )
+      @ce = @course.content_exports.create!(
+        :export_type => ContentExport::QUIZZES2,
+        :selected_content => quiz.id,
+        :user => @user
+      )
     end
 
+    it "changes the workflow_state when :quizzes2_exporter is enabled" do
+      Account.default.enable_feature!(:quizzes2_exporter)
+      expect { @ce.export_without_send_later }.to change { @ce.workflow_state }
+      expect(@ce.workflow_state).to eq "exported"
+    end
+
+    it "fails the content export when :quizzes2_exporter is disabled" do
+      Account.default.disable_feature!(:quizzes2_exporter)
+      @ce.export_without_send_later
+      expect(@ce.workflow_state).to eq "created"
+    end
+
+    it "composes the payload with assignment details" do
+      Account.default.enable_feature!(:quizzes2_exporter)
+      @ce.export_without_send_later
+      expect(@ce.settings[:quizzes2][:assignment]).not_to be_empty
+    end
+
+    it "composes the payload with qti details" do
+      Account.default.enable_feature!(:quizzes2_exporter)
+      @ce.export_without_send_later
+      expect(@ce.settings[:quizzes2][:qti_export][:url]).to eq(@ce.attachment.download_url)
+    end
+
+    it "completes with export_type of 'quizzes2'" do
+      Account.default.enable_feature!(:quizzes2_exporter)
+      @ce.export_without_send_later
+      expect(@ce.export_type).to eq('quizzes2')
+    end
+
+    context 'failure cases' do
+      it "fails if the quiz exporter fails" do
+        Account.default.enable_feature!(:quizzes2_exporter)
+        allow_any_instance_of(Exporters::Quizzes2Exporter).to receive(:export).and_raise('fake error')
+        @ce.export_without_send_later
+        expect(@ce.workflow_state).to eq "failed"
+      end
+
+      it "fails if the qti exporter fails" do
+        Account.default.enable_feature!(:quizzes2_exporter)
+        allow_any_instance_of(CC::CCExporter).to receive(:export).and_raise('fake error')
+        @ce.export_without_send_later
+        expect(@ce.workflow_state).to eq "failed"
+      end
+
+      it "does not set the status to exported if either exporter is unsuccessful" do
+        Account.default.enable_feature!(:quizzes2_exporter)
+        allow_any_instance_of(CC::CCExporter).to receive(:export).and_return(false)
+        @ce.export_without_send_later
+        expect(@ce.workflow_state).to eq "exporting"
+      end
+    end
+  end
+
+  context "add_item_to_export" do
     it "should not add nil" do
       @ce.add_item_to_export(nil)
       expect(@ce.selected_content).to be_empty
@@ -99,9 +165,7 @@ describe ContentExport do
 
   context "notifications" do
     before :once do
-      course_with_teacher(:active_all => true)
-      @ce = @course.content_exports.create! { |ce| ce.user = @user }
-
+      @ce.update_attribute(:user_id, @user.id)
       Notification.create!(:name => 'Content Export Finished', :category => 'Migration')
       Notification.create!(:name => 'Content Export Failed', :category => 'Migration')
     end
@@ -137,6 +201,40 @@ describe ContentExport do
       @ce.workflow_state = 'failed'
       expect { @ce.save! }.to change(DelayedMessage, :count).by 0
       expect(@ce.messages_sent['Content Export Failed']).to be_blank
+    end
+  end
+
+  describe "#expired?" do
+    it "marks as expired after X days" do
+      ContentExport.where(id: @ce.id).update_all(created_at: 35.days.ago)
+      expect(@ce.reload).to be_expired
+    end
+
+    it "does not mark new exports as expired" do
+      expect(@ce.reload).not_to be_expired
+    end
+
+    it "does not mark as expired if setting is 0" do
+      Setting.set('content_exports_expire_after_days', '0')
+      ContentExport.where(id: @ce.id).update_all(created_at: 35.days.ago)
+      expect(@ce.reload).not_to be_expired
+    end
+  end
+
+  describe "#expired" do
+    it "marks as expired after X days" do
+      ContentExport.where(id: @ce.id).update_all(created_at: 35.days.ago)
+      expect(ContentExport.expired.pluck(:id)).to eq [@ce.id]
+    end
+
+    it "does not mark new exports as expired" do
+      expect(ContentExport.expired.pluck(:id)).to be_empty
+    end
+
+    it "does not mark as expired if setting is 0" do
+      Setting.set('content_exports_expire_after_days', '0')
+      ContentExport.where(id: @ce.id).update_all(created_at: 35.days.ago)
+      expect(ContentExport.expired.pluck(:id)).to be_empty
     end
   end
 end

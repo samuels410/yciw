@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2013 Instructure, Inc.
+# Copyright (C) 2013 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -26,6 +26,7 @@ describe Feature do
   let(:t_user) { user_with_pseudonym account: t_root_account }
 
   before do
+    User.any_instance.stubs(:set_default_feature_flags)
     Feature.stubs(:definitions).returns({
         'RA' => Feature.new(feature: 'RA', applies_to: 'RootAccount', state: 'hidden'),
         'A' => Feature.new(feature: 'A', applies_to: 'Account', state: 'on'),

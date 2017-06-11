@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require 'active_support/callbacks/suspension'
 
 class ActiveRecord::Base
@@ -9,11 +26,22 @@ class ActiveRecord::Base
     delegate :distinct_on, :find_ids_in_batches, to: :all
 
     def find_ids_in_ranges(opts={}, &block)
-      opts.reverse_merge(:loose => true)
+      opts.reverse_merge!(:loose => true)
       all.find_ids_in_ranges(opts, &block)
     end
 
     attr_accessor :in_migration
+
+    # determines if someone started a transaction in addition to the spec fixture transaction
+    # impossible to just count open transactions, cause by default it won't nest a transaction
+    # unless specifically requested
+    def in_transaction_in_test?
+      return false unless Rails.env.test?
+      transaction_method = ActiveRecord::ConnectionAdapters::DatabaseStatements.instance_method(:transaction).source_location.first
+      transaction_regex = /\A#{Regexp.escape(transaction_method)}:\d+:in `transaction'\z/.freeze
+      # transactions due to spec fixtures are _not_in the callstack, so we only need to find 1
+      !!caller.find { |s| s =~ transaction_regex && !s.include?('spec_helper.rb') }
+    end
   end
 
   def read_or_initialize_attribute(attr_name, default_value)
@@ -144,6 +172,10 @@ class ActiveRecord::Base
     send("#{field}_type").underscore + "_" + send("#{field}_id").to_s if send("#{field}_type")
   end
 
+  def self.asset_string_backcompat_module
+    @asset_string_backcompat_module ||= Module.new.tap { |m| prepend(m) }
+  end
+
   def self.define_asset_string_backcompat_method(string_version_name, association_version_name = string_version_name, method = nil)
     # just chain to the two methods
     unless method
@@ -159,19 +191,18 @@ class ActiveRecord::Base
       return
     end
 
-    self.class_eval <<-CODE
-      def #{association_version_name}_#{method}_with_backcompat
-        res = #{association_version_name}_#{method}_without_backcompat
+    asset_string_backcompat_module.class_eval <<-CODE, __FILE__, __LINE__ + 1
+      def #{association_version_name}_#{method}
+        res = super
         if !res && #{string_version_name}.present?
           type, id = ActiveRecord::Base.parse_asset_string(#{string_version_name})
           write_attribute(:#{association_version_name}_type, type)
           write_attribute(:#{association_version_name}_id, id)
-          res = #{association_version_name}_#{method}_without_backcompat
+          res = super
         end
         res
       end
     CODE
-    self.alias_method_chain "#{association_version_name}_#{method}".to_sym, :backcompat
   end
 
   def export_columns(format = nil)
@@ -591,6 +622,34 @@ class ActiveRecord::Base
   end
 end
 
+module UsefulFindInBatches
+  def find_in_batches(options = {}, &block)
+    # already in a transaction (or transactions don't matter); cursor is fine
+    if can_use_cursor? && !options[:start]
+      self.activate { find_in_batches_with_cursor(options, &block) }
+    elsif find_in_batches_needs_temp_table?
+      raise ArgumentError.new("GROUP and ORDER are incompatible with :start, as is an explicit select without the primary key") if options[:start]
+      self.activate { find_in_batches_with_temp_table(options, &block) }
+    else
+      super
+    end
+  end
+end
+ActiveRecord::Relation.prepend(UsefulFindInBatches)
+
+module LockForNoKeyUpdate
+  def lock(lock_type = true)
+    if lock_type == :no_key_update
+      postgres_9_3_or_above = connection.adapter_name == 'PostgreSQL' &&
+        connection.send(:postgresql_version) >= 90300
+      lock_type = true
+      lock_type = 'FOR NO KEY UPDATE' if postgres_9_3_or_above
+    end
+    super(lock_type)
+  end
+end
+ActiveRecord::Relation.prepend(LockForNoKeyUpdate)
+
 ActiveRecord::Relation.class_eval do
   def includes(*args)
     return super if args.empty? || args == [nil]
@@ -614,23 +673,10 @@ ActiveRecord::Relation.class_eval do
     order_values.any? ||
       group_values.any? ||
       select_values.to_s =~ /DISTINCT/i ||
-      uniq_value ||
+      distinct_value ||
       select_values_necessitate_temp_table?
   end
   private :find_in_batches_needs_temp_table?
-
-  def find_in_batches_with_usefulness(options = {}, &block)
-    # already in a transaction (or transactions don't matter); cursor is fine
-    if can_use_cursor? && !options[:start]
-      self.activate { find_in_batches_with_cursor(options, &block) }
-    elsif find_in_batches_needs_temp_table?
-      raise ArgumentError.new("GROUP and ORDER are incompatible with :start, as is an explicit select without the primary key") if options[:start]
-      self.activate { find_in_batches_with_temp_table(options, &block) }
-    else
-      find_in_batches_without_usefulness(options, &block)
-    end
-  end
-  alias_method_chain :find_in_batches, :usefulness
 
   def can_use_cursor?
     (connection.adapter_name == 'PostgreSQL' &&
@@ -665,19 +711,8 @@ ActiveRecord::Relation.class_eval do
     end
   end
 
-  # determines if someone started a transaction in addition to the spec fixture transaction
-  # impossible to just count open transactions, cause by default it won't nest a transaction
-  # unless specifically requested
-  def in_transaction_in_test?
-    return false unless Rails.env.test?
-    transaction_method = ActiveRecord::ConnectionAdapters::DatabaseStatements.instance_method(:transaction).source_location.first
-    transaction_regex = /\A#{Regexp.escape(transaction_method)}:\d+:in `transaction'\z/.freeze
-    # transactions due to spec fixtures are _not_in the callstack, so we only need to find 1
-    !!caller.find { |s| s =~ transaction_regex && !s.include?('spec_helper.rb') }
-  end
-
   def find_in_batches_with_temp_table(options = {})
-    can_do_it = Rails.env.production? || ActiveRecord::Base.in_migration || in_transaction_in_test?
+    can_do_it = Rails.env.production? || ActiveRecord::Base.in_migration || ActiveRecord::Base.in_transaction_in_test?
     raise "find_in_batches_with_temp_table probably won't work outside a migration
            and outside a transaction. Unfortunately, it's impossible to automatically
            determine a better way to do it that will work correctly. You can try
@@ -769,17 +804,6 @@ ActiveRecord::Relation.class_eval do
     end
   end
 
-  def lock_with_exclusive_smarts(lock_type = true)
-    if lock_type == :no_key_update
-      postgres_9_3_or_above = connection.adapter_name == 'PostgreSQL' &&
-        connection.send(:postgresql_version) >= 90300
-      lock_type = true
-      lock_type = 'FOR NO KEY UPDATE' if postgres_9_3_or_above
-    end
-    lock_without_exclusive_smarts(lock_type)
-  end
-  alias_method_chain :lock, :exclusive_smarts
-
   def polymorphic_where(args)
     raise ArgumentError unless args.length == 1
 
@@ -787,6 +811,7 @@ ActiveRecord::Relation.class_eval do
     values = Array(args.first.last)
     original_length = values.length
     values = values.compact
+    raise ArgumentError, "need to call polymorphic_where with at least one object" if values.empty?
 
     sql = (["(#{column}_id=? AND #{column}_type=?)"] * values.length).join(" OR ")
     sql << " OR (#{column}_id IS NULL AND #{column}_type IS NULL)" if values.length < original_length
@@ -842,7 +867,7 @@ ActiveRecord::Relation.class_eval do
     uniq_identifier = "#{table_name}.#{primary_key}"
     scopes << self
     sub_query = (scopes).map {|s| s.except(:select, :order).select(uniq_identifier).to_sql}.join(" UNION ALL ")
-    engine.where("#{uniq_identifier} IN (#{sub_query})")
+    unscoped.where("#{uniq_identifier} IN (#{sub_query})")
   end
 
   # returns batch_size ids at a time, working through the primary key from
@@ -913,20 +938,31 @@ module UpdateAndDeleteWithJoins
   def update_all(updates, *args)
     return super if joins_values.empty?
 
-    stmt = Arel::UpdateManager.new(arel.engine)
+    stmt = CANVAS_RAILS4_2 ? Arel::UpdateManager.new(arel.engine) : Arel::UpdateManager.new
 
     stmt.set Arel.sql(@klass.send(:sanitize_sql_for_assignment, updates))
-    from = from_value.try(:first)
+    from = (CANVAS_RAILS4_2 ? from_value&.first : from_clause.value)
     stmt.table(from ? Arel::Nodes::SqlLiteral.new(from) : table)
     stmt.key = table[primary_key]
 
     sql = stmt.to_sql
 
-    collector = Arel::Collectors::Bind.new
-    arel.join_sources.each do |node|
-      connection.visitor.accept(node, collector)
+    if CANVAS_RAILS4_2
+      collector = Arel::Collectors::Bind.new
+      arel.join_sources.each do |node|
+        connection.visitor.accept(node, collector)
+      end
+      join_sql = collector.compile(arel.bind_values.map{|bvs| connection.quote(*bvs.reverse)})
+    else
+      binds = connection.prepare_binds_for_database(bound_attributes)
+      binds.map! { |value| connection.quote(value) }
+      collector = Arel::Collectors::Bind.new
+      arel.join_sources.each do |node|
+        connection.visitor.accept(node, collector)
+      end
+      binds_in_join = collector.value.count { |x| x.is_a?(Arel::Nodes::BindParam) }
+      join_sql = collector.substitute_binds(binds).join
     end
-    join_sql = collector.compile(arel.bind_values.map{|bvs| connection.quote(*bvs.reverse)})
     tables, join_conditions = deconstruct_joins(join_sql)
 
     unless tables.empty?
@@ -946,7 +982,8 @@ module UpdateAndDeleteWithJoins
       end
       sql.concat('WHERE ' + sql_string.compile(binds.map{|bvs| connection.quote(*bvs.reverse)}))
     else
-      binds = scope.bound_attributes
+      # skip any binds that are used in the join
+      binds = scope.bound_attributes[binds_in_join..-1]
       binds = connection.prepare_binds_for_database(binds)
       binds.map! { |value| connection.quote(value) }
       sql_string = Arel::Collectors::Bind.new
@@ -1218,22 +1255,6 @@ ActiveRecord::Migrator.migrations_paths.concat Dir[Rails.root.join('gems', 'plug
 ActiveRecord::Tasks::DatabaseTasks.migrations_paths = ActiveRecord::Migrator.migrations_paths
 
 ActiveRecord::ConnectionAdapters::SchemaStatements.class_eval do
-  def add_index_with_length_raise(table_name, column_name, options = {})
-    unless options[:name].to_s =~ /^temp_/
-      column_names = Array(column_name)
-      index_name = index_name(table_name, :column => column_names)
-      index_name = options[:name].to_s if options[:name]
-      if index_name.length > index_name_length
-        raise(ArgumentError, "Index name '#{index_name}' on table '#{table_name}' is too long; the limit is #{index_name_length} characters.")
-      end
-      if index_exists?(table_name, column_names, :name => index_name)
-        raise(ArgumentError, "Index name '#{index_name}' on table '#{table_name}' already exists.")
-      end
-    end
-    add_index_without_length_raise(table_name, column_name, options)
-  end
-  alias_method_chain :add_index, :length_raise
-
   # in anticipation of having to re-run migrations due to integrity violations or
   # killing stuff that is holding locks too long
   def add_foreign_key_if_not_exists(from_table, to_table, options = {})
@@ -1266,12 +1287,6 @@ ActiveRecord::ConnectionAdapters::SchemaStatements.class_eval do
       raise unless e.message =~ /PG(?:::)?Error: ERROR:.+does not exist/
     end
   end
-
-  # does a query first to make the actual constraint adding fast
-  def change_column_null_with_less_locking(table, column)
-    execute("SELECT COUNT(*) FROM #{quote_table_name(table)} WHERE #{column} IS NULL") if open_transactions == 0
-    change_column_null table, column, false
-  end
 end
 
 ActiveRecord::Associations::CollectionAssociation.class_eval do
@@ -1283,23 +1298,28 @@ ActiveRecord::Associations::CollectionAssociation.class_eval do
 end
 
 module UnscopeCallbacks
-  def __run_callbacks__(*args)
-    scope = self.class.base_class.unscoped
-    scope.scoping { super }
+  if CANVAS_RAILS4_2
+    def __run_callbacks__(*args)
+      scope = self.class.base_class.unscoped
+      scope.scoping { super }
+    end
+  else
+    def __run_callbacks__(*args)
+      scope = self.class.all.klass.unscoped
+      scope.scoping { super }
+    end
   end
 end
 ActiveRecord::Base.send(:include, UnscopeCallbacks)
 
-ActiveRecord::DynamicMatchers::Method.class_eval do
-  class << self
-    def match_with_discard(model, name)
-      result = match_without_discard(model, name)
-      return nil if result && !result.is_a?(ActiveRecord::DynamicMatchers::FindBy)
-      result
-    end
-    alias_method_chain :match, :discard
+module MatchWithDiscard
+  def match(model, name)
+    result = super
+    return nil if result && !result.is_a?(ActiveRecord::DynamicMatchers::FindBy)
+    result
   end
 end
+ActiveRecord::DynamicMatchers::Method.singleton_class.prepend(MatchWithDiscard)
 
 # see https://github.com/rails/rails/issues/18659
 class AttributesDefiner
@@ -1365,3 +1385,22 @@ module ReadonlyCloning
   end
 end
 ActiveRecord::Base.prepend(ReadonlyCloning)
+
+if CANVAS_RAILS4_2
+  # https://github.com/rails/rails/commit/696f1766148453160e1f6f21e4d7d7aac1356c7d
+  # the fix was backported into rails 5-0-stable
+  module DecimalCastRescueRuby24
+    def cast_value(value)
+      if value.is_a?(::String)
+        begin
+          super(value)
+        rescue ArgumentError
+          BigDecimal(0)
+        end
+      else
+        super(value)
+      end
+    end
+  end
+  ActiveRecord::Type::Decimal.prepend DecimalCastRescueRuby24
+end

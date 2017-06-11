@@ -1,4 +1,5 @@
-# Copyright (C) 2014-2016 Instructure, Inc.
+#
+# Copyright (C) 2014 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -61,11 +62,8 @@
 #    }
 #
 class GradingPeriodsController < ApplicationController
-  include ::Filters::GradingPeriods
-
   before_action :require_user
   before_action :get_context
-  before_action :check_feature_flag
 
   # @API List grading periods
   # @beta
@@ -240,6 +238,7 @@ class GradingPeriodsController < ApplicationController
 
     set_subquery = GradingPeriodGroup.active.select(:account_id).where(id: params[:set_id])
     @context = Account.active.where(id: set_subquery).take
+    render json: {message: t('Page not found')}, status: :not_found unless @context
   end
 
   # model level validations
@@ -254,7 +253,7 @@ class GradingPeriodsController < ApplicationController
       # skip not_overlapping model validation in model level
       first_period.skip_not_overlapping_validator
       second_period.skip_not_overlapping_validator
-      if second_period.start_date < first_period.end_date
+      if second_period.start_date.change(sec: 0) < first_period.end_date.change(sec: 0)
         second_period.errors.add(:start_date, 'Start Date overlaps with another period')
       end
     end
@@ -325,11 +324,6 @@ class GradingPeriodsController < ApplicationController
   def index_permissions
     can_create_grading_periods = @context.is_a?(Account) &&
       @context.root_account? && @context.grants_right?(@current_user, :manage)
-    can_toggle_grading_periods = @domain_root_account.grants_right?(@current_user, :manage) ||
-      @context.feature_allowed?(:multiple_grading_periods, exclude_enabled: true)
-    {
-      can_create_grading_periods: can_create_grading_periods,
-      can_toggle_grading_periods: can_toggle_grading_periods
-    }.as_json
+    {can_create_grading_periods: can_create_grading_periods}.as_json
   end
 end

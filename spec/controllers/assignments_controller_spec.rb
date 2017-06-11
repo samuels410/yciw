@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -33,15 +33,13 @@ describe AssignmentsController do
       :assignment_group => @group,
       :due_at => Time.zone.now + 1.week
     )
-    expect(@assignment.assignment_group).to eql(@group)
-    expect(@group.assignments).to be_include(@assignment)
     @assignment
   end
 
   describe "GET 'index'" do
     it "should throw 404 error without a valid context id" do
       #controller.use_rails_error_handling!
-      get 'index'
+      get 'index', :course_id => 'notvalid'
       assert_status(404)
     end
 
@@ -63,6 +61,89 @@ describe AssignmentsController do
       get 'index', course_id: @course.id
 
       expect(assigns[:js_env][:WEIGHT_FINAL_GRADES]).to eq(@course.apply_group_weights?)
+    end
+
+    it "js_env DUE_DATE_REQUIRED_FOR_ACCOUNT is true when AssignmentUtil.due_date_required_for_account? == true" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:due_date_required_for_account?).returns(true)
+      get 'index', :course_id => @course.id
+      expect(assigns[:js_env][:DUE_DATE_REQUIRED_FOR_ACCOUNT]).to eq(true)
+    end
+
+    it "js_env SIS_INTEGRATION_SETTINGS_ENABLED is true when AssignmentUtil.sis_integration_settings_enabled? == true" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:sis_integration_settings_enabled?).returns(true)
+      get 'index', :course_id => @course.id
+      expect(assigns[:js_env][:SIS_INTEGRATION_SETTINGS_ENABLED]).to eq(true)
+    end
+
+    it "js_env SIS_INTEGRATION_SETTINGS_ENABLED is false when AssignmentUtil.sis_integration_settings_enabled? == false" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:sis_integration_settings_enabled?).returns(false)
+      get 'index', :course_id => @course.id
+      expect(assigns[:js_env][:SIS_INTEGRATION_SETTINGS_ENABLED]).to eq(false)
+    end
+
+    it "js_env DUE_DATE_REQUIRED_FOR_ACCOUNT is false when AssignmentUtil.due_date_required_for_account? == false" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:due_date_required_for_account?).returns(false)
+      get 'index', :course_id => @course.id
+      expect(assigns[:js_env][:DUE_DATE_REQUIRED_FOR_ACCOUNT]).to eq(false)
+    end
+
+    it "js_env SIS_NAME is SIS when @context does not respond_to assignments" do
+      user_session(@teacher)
+      @course.stubs(:respond_to?).returns(false)
+      controller.stubs(:set_js_assignment_data).returns({:js_env => {}})
+      get 'index', :course_id => @course.id
+      expect(assigns[:js_env][:SIS_NAME]).to eq('SIS')
+    end
+
+    it "js_env SIS_NAME is Foo Bar when AssignmentUtil.post_to_sis_friendly_name is Foo Bar" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:post_to_sis_friendly_name).returns('Foo Bar')
+      get 'index', :course_id => @course.id
+      expect(assigns[:js_env][:SIS_NAME]).to eq('Foo Bar')
+    end
+
+    it "should set QUIZ_LTI_ENABLED in js_env if quizzes 2 is available" do
+      user_session @teacher
+      @course.context_external_tools.create!(
+        :name => 'Quizzes.Next',
+        :consumer_key => 'test_key',
+        :shared_secret => 'test_secret',
+        :tool_id => 'Quizzes 2',
+        :url => 'http://example.com/launch'
+      )
+      get 'index', course_id: @course.id
+      expect(assigns[:js_env][:QUIZ_LTI_ENABLED]).to be true
+    end
+
+    it "should not set QUIZ_LTI_ENABLED in js_env if quizzes 2 is not available" do
+      user_session @teacher
+      get 'index', course_id: @course.id
+      expect(assigns[:js_env][:QUIZ_LTI_ENABLED]).to be false
+    end
+
+    it "js_env MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT is true when AssignmentUtil.name_length_required_for_account? == true" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:name_length_required_for_account?).returns(true)
+      get 'index', :course_id => @course.id
+      expect(assigns[:js_env][:MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT]).to eq(true)
+    end
+
+    it "js_env MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT is false when AssignmentUtil.name_length_required_for_account? == false" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:name_length_required_for_account?).returns(false)
+      get 'index', :course_id => @course.id
+      expect(assigns[:js_env][:MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT]).to eq(false)
+    end
+
+    it "js_env MAX_NAME_LENGTH is a 15 when AssignmentUtil.assignment_max_name_length returns 15" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:assignment_max_name_length).returns(15)
+      get 'index', :course_id => @course.id
+      expect(assigns[:js_env][:MAX_NAME_LENGTH]).to eq(15)
     end
 
     context "draft state" do
@@ -87,7 +168,6 @@ describe AssignmentsController do
   end
 
   describe "GET 'show_moderate'" do
-
     it "should set the js_env for URLS" do
       user_session(@teacher)
       assignment = @course.assignments.create(:title => "some assignment")
@@ -109,6 +189,60 @@ describe AssignmentsController do
 
       get 'show_moderate', :course_id => @course.id, :assignment_id => assignment.id
       expect(assigns[:js_env][:ASSIGNMENT_TITLE]).to eq "some assignment"
+    end
+
+    describe 'permissions' do
+      before(:once) do
+        @user = User.create!
+        @custom_role = @course.root_account.roles.create!(name: 'CustomRole', base_role_type: 'TaEnrollment')
+        @course.root_account.role_overrides.create!(permission: :moderate_grades, role: @custom_role, enabled: true)
+        @course.root_account.role_overrides.create!(permission: :view_all_grades, role: @custom_role, enabled: false)
+        @course.root_account.role_overrides.create!(permission: :manage_grades, role: @custom_role, enabled: false)
+        @course.enroll_user(@user, 'TaEnrollment', role: @custom_role, active_all: true)
+        @assignment = @course.assignments.create!(workflow_state: 'published', moderated_grading: true)
+      end
+
+      before(:each) { user_session(@user) }
+      let(:permissions) { assigns[:js_env][:PERMISSIONS] }
+
+      let(:allow_editing) do
+        override = @course.root_account.role_overrides.find_by(permission: 'manage_grades')
+        override.update!(enabled: true)
+      end
+
+      let(:allow_viewing) do
+        override = @course.root_account.role_overrides.find_by(permission: 'view_all_grades')
+        override.update!(enabled: true)
+      end
+
+      it 'grants the user view permissions if they have "View all grades" permissions in the course' do
+        allow_viewing
+        get :show_moderate, course_id: @course, assignment_id: @assignment
+        expect(permissions[:view_grades]).to eq true
+      end
+
+      it 'grants the user view permissions if they have "Edit grades" permissions in the course' do
+        allow_editing
+        get :show_moderate, course_id: @course, assignment_id: @assignment
+        expect(permissions[:view_grades]).to eq true
+      end
+
+      it 'denies the user view permissions if they lack both "View all grades" and "Edit grades" \
+      permissions in the course' do
+        get :show_moderate, course_id: @course, assignment_id: @assignment
+        expect(permissions[:view_grades]).to eq false
+      end
+
+      it 'grants the user edit permissions if they have "Edit grades" permissions in the course' do
+        allow_editing
+        get :show_moderate, course_id: @course, assignment_id: @assignment
+        expect(permissions[:edit_grades]).to eq true
+      end
+
+      it 'denies the user edit permissions if they lack "Edit grades" permissions in the course' do
+        get :show_moderate, course_id: @course, assignment_id: @assignment
+        expect(permissions[:edit_grades]).to eq false
+      end
     end
   end
 
@@ -307,6 +441,50 @@ describe AssignmentsController do
 
       expect(assigns[:assignment].workflow_state).to eq 'unpublished'
     end
+
+    it "js_env DUE_DATE_REQUIRED_FOR_ACCOUNT is true when AssignmentUtil.due_date_required_for_account? == true" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:due_date_required_for_account?).returns(true)
+      get 'new', :course_id => @course.id, :id => @assignment.id
+      expect(assigns[:js_env][:DUE_DATE_REQUIRED_FOR_ACCOUNT]).to eq(true)
+    end
+
+    it "js_env DUE_DATE_REQUIRED_FOR_ACCOUNT is false when AssignmentUtil.due_date_required_for_account? == false" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:due_date_required_for_account?).returns(false)
+      get 'new', :course_id => @course.id, :id => @assignment.id
+      expect(assigns[:js_env][:DUE_DATE_REQUIRED_FOR_ACCOUNT]).to eq(false)
+    end
+
+    it "js_env SIS_NAME is Foo Bar when AssignmentUtil.post_to_sis_friendly_name is Foo Bar" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:post_to_sis_friendly_name).returns('Foo Bar')
+      get 'new', :course_id => @course.id, :id => @assignment.id
+      expect(assigns[:js_env][:SIS_NAME]).to eq('Foo Bar')
+    end
+
+    context "with ?quiz_lti query param" do
+      it "uses quizzes 2 if available" do
+        tool = @course.context_external_tools.create!(
+          :name => 'Quizzes.Next',
+          :consumer_key => 'test_key',
+          :shared_secret => 'test_secret',
+          :tool_id => 'Quizzes 2',
+          :url => 'http://example.com/launch'
+        )
+        user_session(@teacher)
+        get 'new', :course_id => @course.id, :quiz_lti => true
+        expect(assigns[:assignment].quiz_lti?).to be true
+        expect(assigns[:assignment].external_tool_tag.content).to eq tool
+        expect(assigns[:assignment].external_tool_tag.url).to eq tool.url
+      end
+
+      it "falls back to normal behaviour if quizzes 2 is not set up" do
+        user_session(@teacher)
+        get 'new', :course_id => @course.id, :quiz => true
+        expect(assigns[:assignment].quiz_lti?).to be false
+      end
+    end
   end
 
   describe "POST 'create'" do
@@ -382,7 +560,7 @@ describe AssignmentsController do
   end
 
   describe "GET 'edit'" do
-    include_context "multiple grading periods within controller" do
+    include_context "grading periods within controller" do
       let(:course) { @course }
       let(:teacher) { @teacher }
       let(:request_params) { [:edit, course_id: course, id: @assignment] }
@@ -411,6 +589,27 @@ describe AssignmentsController do
       expect(assigns[:js_env][:COURSE_ID]).to eq @course.id
       expect(assigns[:js_env][:SELECTED_CONFIG_TOOL_ID]).to eq tool.id
       expect(assigns[:js_env][:SELECTED_CONFIG_TOOL_TYPE]).to eq tool.class.to_s
+    end
+
+    it "js_env DUE_DATE_REQUIRED_FOR_ACCOUNT is true when AssignmentUtil.due_date_required_for_account? == true" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:due_date_required_for_account?).returns(true)
+      get 'edit', :course_id => @course.id, :id => @assignment.id
+      expect(assigns[:js_env][:DUE_DATE_REQUIRED_FOR_ACCOUNT]).to eq(true)
+    end
+
+    it "js_env DUE_DATE_REQUIRED_FOR_ACCOUNT is false when AssignmentUtil.due_date_required_for_account? == false" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:due_date_required_for_account?).returns(false)
+      get 'edit', :course_id => @course.id, :id => @assignment.id
+      expect(assigns[:js_env][:DUE_DATE_REQUIRED_FOR_ACCOUNT]).to eq(false)
+    end
+
+    it "js_env SIS_NAME is Foo Bar when AssignmentUtil.post_to_sis_friendly_name is Foo Bar" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:post_to_sis_friendly_name).returns('Foo Bar')
+      get 'edit', :course_id => @course.id, :id => @assignment.id
+      expect(assigns[:js_env][:SIS_NAME]).to eq('Foo Bar')
     end
 
     it "bootstraps the correct message_handler id for LTI 2 tools to js_env" do
@@ -446,6 +645,7 @@ describe AssignmentsController do
         resource_handler: resource_handler
       )
 
+      AssignmentConfigurationToolLookup.any_instance.stubs(:create_subscription).returns true
       Lti::ToolProxyBinding.create(context: @course, tool_proxy: tool_proxy)
       @assignment.tool_settings_tool = message_handler
 
@@ -471,7 +671,7 @@ describe AssignmentsController do
       end
 
       it "to wiki page" do
-        Course.any_instance.stubs(:feature_enabled?).with(:conditional_release).returns(true)
+        @course.enable_feature!(:conditional_release)
         wiki_page_assignment_model course: @course
         get 'edit', :course_id => @course.id, :id => @page.assignment.id
         expect(response).to redirect_to controller.edit_course_wiki_page_path(@course, @page)
@@ -502,23 +702,6 @@ describe AssignmentsController do
         get 'edit', :course_id => @course.id, :id => @assignment.id
         expect(assigns[:js_env][:dummy]).to be nil
       end
-    end
-  end
-
-  describe "PUT 'update'" do
-    it "should require authorization" do
-      #controller.use_rails_error_handling!
-      put 'update', :course_id => @course.id, :id => @assignment.id
-      assert_unauthorized
-    end
-
-    it "should update attributes" do
-      user_session(@teacher)
-      put 'update', :course_id => @course.id, :id => @assignment.id,
-        :assignment_type => "attendance", :assignment => { :title => "test title" }
-      expect(assigns[:assignment]).to eql(@assignment)
-      expect(assigns[:assignment].title).to eql("test title")
-      expect(assigns[:assignment].submission_types).to eql("attendance")
     end
   end
 

@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_relative '../common'
 require_relative '../helpers/quizzes_common'
 
@@ -277,15 +294,8 @@ describe 'quizzes question creation' do
 
       # get focus out of tinymce to allow change event to propogate
       f(".question_header").click
-      f('button.recompute_variables').click
-      val = f('.variable .value').text.to_i
-      expect(val <= 10 && val >= 0)
       recompute_button = f('button.recompute_variables')
-      var_el = f('.variable .value')
-      keep_trying_until do
-        recompute_button.click
-        var_el.text.to_i != val
-      end
+      recompute_button.click
       fj('.supercalc:visible').send_keys('x + y')
       f('button.save_formula_button').click
       # normally it's capped at 200 (to keep the yaml from getting crazy big)...
@@ -418,6 +428,7 @@ describe 'quizzes question creation' do
       type_in_tiny '.question:visible textarea.question_content', 'This is an essay question.'
       submit_form(fj('.question_form:visible'))
       wait_for_ajax_requests
+      expect(Quizzes::QuizQuestion.where("question_data like '%This is an essay question%'")).to be_present
     end
   end
 

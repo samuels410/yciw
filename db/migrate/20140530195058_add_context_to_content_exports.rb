@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 class AddContextToContentExports < ActiveRecord::Migration[4.2]
   tag :predeploy
 
@@ -7,21 +24,7 @@ class AddContextToContentExports < ActiveRecord::Migration[4.2]
 
     remove_foreign_key :content_exports, :courses
 
-    if connection.adapter_name == 'PostgreSQL'
-      create_trigger("content_export_after_insert_row_when_context_id_is_null__tr", :generated => true).
-          on("content_exports").
-          after(:insert).
-          where("NEW.context_id IS NULL") do
-        <<-SQL_ACTIONS
-          UPDATE content_exports
-          SET context_id = NEW.course_id
-          WHERE id = NEW.id
-        SQL_ACTIONS
-      end
-      execute("ALTER FUNCTION #{connection.quote_table_name('content_export_after_insert_row_when_context_id_is_null__tr')}() SET search_path TO #{Shard.current.name}")
-
-      execute("ALTER TABLE #{ContentExport.quoted_table_name} ALTER context_type SET DEFAULT 'Course'")
-    end
+    change_column_default :content_exports, :context_type, 'Course'
 
     while ContentExport.where("context_id IS NULL AND course_id IS NOT NULL").limit(1000).
         update_all("context_id = course_id, context_type = 'Course'") > 0; end

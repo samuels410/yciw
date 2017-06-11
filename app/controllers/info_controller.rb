@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -17,8 +17,8 @@
 #
 
 class InfoController < ApplicationController
-  skip_before_filter :load_account, :only => :health_check
-  skip_before_filter :load_user, :only => [:health_check, :browserconfig]
+  skip_before_action :load_account, :only => :health_check
+  skip_before_action :load_user, :only => [:health_check, :browserconfig]
 
   def styleguide
     js_bundle :styleguide
@@ -55,7 +55,7 @@ class InfoController < ApplicationController
     Tempfile.open("heartbeat", ENV['TMPDIR'] || Dir.tmpdir) { |f| f.write("heartbeat"); f.flush }
 
     respond_to do |format|
-      format.html { render :text => 'canvas ok' }
+      format.html { render plain: 'canvas ok' }
       format.json { render json:
                                { status: 'canvas ok',
                                  revision: Canvas.revision,

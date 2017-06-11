@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016 Instructure, Inc.
+# Copyright (C) 2016 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -27,7 +27,7 @@ shared_context "announcements_page_shared_context" do
   let(:announcement_message) { '.discussion-summary.ellipsis:contains("Announcement 1 detail")' }
   let(:stream_announcement) { '.title:contains("Announcement")' }
   let(:announcement_title) { '.content_summary:contains("Announcement 1")' }
-  let(:course_page_disabled_notice) { /That page has been disabled for this course/ }
+  let(:course_page_disabled_notice) { "That page has been disabled for this course" }
 end
 
 

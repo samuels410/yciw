@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2013 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -125,10 +125,10 @@ class Group < ActiveRecord::Base
     self.group_memberships
   end
 
-  def wiki_with_create
+  def wiki
+    return super if wiki_id
     Wiki.wiki_for_context(self)
   end
-  alias_method_chain :wiki, :create
 
   def auto_accept?
     self.group_category &&
@@ -285,7 +285,7 @@ class Group < ActiveRecord::Base
   def potential_collaborators
     if context.is_a?(Course)
       # >99.9% of groups have fewer than 100 members
-      User.where(id: participating_group_memberships.pluck(:user_id) + context.participating_admins.pluck(:id))
+      User.where(id: participating_users_in_context.pluck(:id) + context.participating_admins.pluck(:id))
     else
       participating_users
     end
@@ -460,7 +460,11 @@ class Group < ActiveRecord::Base
   def account_id=(new_account_id)
     write_attribute(:account_id, new_account_id)
     if self.account_id_changed?
-      self.root_account = self.account(true).try(:root_account)
+      if CANVAS_RAILS4_2
+        self.root_account = self.account(true)&.root_account
+      else
+        self.root_account = self.reload_account&.root_account
+      end
     end
   end
 
@@ -541,6 +545,9 @@ class Group < ActiveRecord::Base
       can :send_messages_all and
       can :update and
       can :view_unpublished_items
+
+      given { |user, session| self.context && self.context.grants_all_rights?(user, session, :read_as_admin, :post_to_forum) }
+      can :post_to_forum
 
       given { |user, session| self.context && self.context.grants_right?(user, session, :view_group_pages) }
       can :read and can :read_forum and can :read_announcements and can :read_roster
@@ -713,6 +720,10 @@ class Group < ActiveRecord::Base
     # shouldn't matter, but most specs create anonymous (contextless) groups :(
     return false if context.nil?
     context.feature_enabled?(feature)
+  end
+
+  def grading_periods?
+    !!context.try(:grading_periods?)
   end
 
   def serialize_permissions(permissions_hash, user, session)

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2015 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -37,8 +37,8 @@ class Mailer < ActionMailer::Base
     params[:reply_to] = reply_to if reply_to
 
     mail(params) do |format|
-      format.text{ render text: m.body }
-      format.html{ render text: m.html_body } if m.html_body
+      format.text{ render plain: m.body }
+      format.html{ render plain: m.html_body } if m.html_body
     end
   end
 

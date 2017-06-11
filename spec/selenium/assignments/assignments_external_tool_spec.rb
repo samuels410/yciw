@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_relative '../common'
 
 describe "external tool assignments" do
@@ -23,7 +40,7 @@ describe "external tool assignments" do
     f('.create_assignment').click
     wait_for_ajaximations
 
-    a = @course.assignments(true).last
+    a = @course.assignments.reload.last
     expect(a).to be_present
     expect(a.submission_types).to eq 'external_tool'
   end
@@ -52,10 +69,10 @@ describe "external tool assignments" do
     f("#edit_assignment_form button[type='submit']").click
 
     keep_trying_until do # timing issues require waiting
-      expect(@course.assignments(true).last).to be_present
+      expect(@course.assignments.reload.last).to be_present
     end
 
-    a = @course.assignments(true).last
+    a = @course.assignments.reload.last
     expect(a).to be_present
     expect(a.submission_types).to eq 'external_tool'
     expect(a.external_tool_tag).to be_present

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -19,8 +19,8 @@
 class AssessmentQuestionsController < ApplicationController
   include Api::V1::QuizQuestion
 
-  before_filter :require_context
-  before_filter :require_bank
+  before_action :require_context
+  before_action :require_bank
   def create
     if authorized_action(@bank.assessment_questions.new, @current_user, :create)
       params[:assessment_question] ||= {}

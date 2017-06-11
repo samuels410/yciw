@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -46,7 +46,9 @@ class PluginSetting < ActiveRecord::Base
   def validate_posted_settings
     if @posted_settings
       plugin = Canvas::Plugin.find(name.to_s)
-      plugin.validate_settings(self, @posted_settings)
+      result = plugin.validate_settings(self, @posted_settings)
+      throw :abort if !CANVAS_RAILS4_2 && result == false
+      result
     end
   end
 
@@ -102,14 +104,15 @@ class PluginSetting < ActiveRecord::Base
   end
 
   def self.cached_plugin_setting(name)
-    plugin_setting = MultiCache.fetch(settings_cache_key(name)) do
-      PluginSetting.find_by_name(name.to_s)
+    RequestCache.cache(settings_cache_key(name)) do
+      MultiCache.fetch(settings_cache_key(name)) do
+        PluginSetting.find_by_name(name.to_s)
+      end
     end
-    plugin_setting
   end
 
   def self.settings_for_plugin(name, plugin=nil)
-    RequestCache.cache(settings_cache_key(name)) do
+    RequestCache.cache(settings_cache_key(name.to_s + "_settings")) do
       if (plugin_setting = cached_plugin_setting(name)) && plugin_setting.valid_settings? && plugin_setting.enabled?
         plugin_setting.plugin = plugin
         settings = plugin_setting.settings

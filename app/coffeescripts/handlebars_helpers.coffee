@@ -1,7 +1,24 @@
+#
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'timezone'
   'compiled/util/enrollmentName'
-  'handlebars'
+  'handlebars/runtime'
   'i18nObj'
   'jquery'
   'underscore'
@@ -11,11 +28,12 @@ define [
   'compiled/util/mimeClass'
   'compiled/str/apiUserContent'
   'compiled/str/TextHelper'
+  'jsx/shared/helpers/numberFormat'
   'jquery.instructure_date_and_time'
   'jquery.instructure_misc_helpers'
   'jquery.instructure_misc_plugins'
   'translations/_core_en'
-], (tz, enrollmentName, Handlebars, I18n, $, _, htmlEscape, semanticDateRange, dateSelect, mimeClass, apiUserContent, textHelper) ->
+], (tz, enrollmentName, {default: Handlebars}, I18n, $, _, htmlEscape, semanticDateRange, dateSelect, mimeClass, apiUserContent, textHelper, numberFormat) ->
 
   Handlebars.registerHelper name, fn for name, fn of {
     t : (args..., options) ->
@@ -25,7 +43,7 @@ define [
         wrappers[new Array(parseInt(key.replace('w', '')) + 2).join('*')] = value
         delete options[key]
       options.wrapper = wrappers if wrappers['*']
-      unless this instanceof Window
+      unless (typeof this == 'undefined') || (this instanceof Window)
         options[key] = this[key] for key in this
       new Handlebars.SafeString htmlEscape(I18n.t(args..., options))
 
@@ -116,7 +134,7 @@ define [
     # timezone preference. expects: anything tz() can handle
     dateString : (datetime) ->
       return '' unless datetime
-      tz.format(datetime, '%m/%d/%Y')
+      I18n.l "date.formats.medium", datetime
 
     # Convert the total amount of minutes into a Hours:Minutes format.
     minutesToHM : (minutes) ->
@@ -275,7 +293,7 @@ define [
       ret = ''
 
       if context and context.length > 0
-        for index, ctx of context
+        for own index, ctx of context
           ctx._index = index
           ret += fn ctx
       else
@@ -438,6 +456,9 @@ define [
     disabledIf: ( thing, hash ) ->
       if thing then 'disabled' else ''
 
+    readonlyIf: ( thing, hash ) ->
+      if thing then 'readonly' else ''
+
     checkedUnless: ( thing ) ->
       if thing then '' else 'checked'
 
@@ -558,8 +579,11 @@ define [
       else
        options.inverse @
 
-    n:(number, {hash: {precision, percentage}}) ->
-      I18n.n(number, {precision, percentage})
+    n:(number, {hash: {precision, percentage, strip_insignificant_zeros}}) ->
+      I18n.n(number, {precision, percentage, strip_insignificant_zeros})
+
+    nf:(number, {hash: {format}}) ->
+      numberFormat[format](number)
   }
 
   return Handlebars

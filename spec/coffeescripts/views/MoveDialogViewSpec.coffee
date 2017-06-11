@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'underscore'
   'jquery'
@@ -39,7 +56,7 @@ define [
       parentKey: 'assignment_group_id'
       saveURL: saveURL
 
-  module 'MoveDialogView',
+  QUnit.module 'MoveDialogView',
     setup: ->
       genSetup.call @
       @update_spy = @spy MoveDialogView.prototype, 'updateListView'
@@ -91,7 +108,7 @@ define [
         equal value, @assignments_2.at(ind).id
 
 
-  module 'MoveDialogView without a parentCollection',
+  QUnit.module 'MoveDialogView without a parentCollection',
     setup: ->
       genSetup.call @
       createDialog.call @, false
@@ -103,7 +120,7 @@ define [
     equal @moveDialog.$('select').length, 1
 
 
-  module 'MoveDialogView save and save success',
+  QUnit.module 'MoveDialogView save and save success',
     setup: ->
       genSetup.call @
       server = sinon.fakeServer.create()

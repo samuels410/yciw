@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -142,11 +142,11 @@
 #     }
 #
 class ProfileController < ApplicationController
-  before_filter :require_registered_user, :except => [:show, :settings, :communication, :communication_update]
-  before_filter :require_user, :only => [:settings, :communication, :communication_update]
-  before_filter :require_user_for_private_profile, :only => :show
-  before_filter :reject_student_view_student
-  before_filter :require_password_session, :only => [:communication, :communication_update, :update]
+  before_action :require_registered_user, :except => [:show, :settings, :communication, :communication_update]
+  before_action :require_user, :only => [:settings, :communication, :communication_update]
+  before_action :require_user_for_private_profile, :only => :show
+  before_action :reject_student_view_student
+  before_action :require_password_session, :only => [:communication, :communication_update, :update]
 
   include Api::V1::Avatar
   include Api::V1::CommunicationChannel
@@ -210,7 +210,10 @@ class ProfileController < ApplicationController
     @active_tab = "profile_settings"
     respond_to do |format|
       format.html do
+        show_tutorial_ff_to_user = @domain_root_account&.feature_enabled?(:new_user_tutorial) &&
+                                   @user.participating_instructor_course_ids.any?
         add_crumb(t(:crumb, "%{user}'s settings", :user => @user.short_name), settings_profile_path )
+        js_env(:NEW_USER_TUTORIALS_ENABLED_AT_ACCOUNT => show_tutorial_ff_to_user)
         render :profile
       end
       format.json do
@@ -328,7 +331,7 @@ class ProfileController < ApplicationController
       @user.preferences[:read_notification_privacy_info] = Time.now.utc.to_s
       @user.save
 
-      return render(:nothing => true, :status => 208)
+      return head 208
     end
 
     respond_to do |format|

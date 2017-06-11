@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'jquery'
   'compiled/models/Quiz'
@@ -7,7 +24,7 @@ define [
   'jquery.ajaxJSON'
 ], ($, Quiz, Assignment, DateGroup, AssignmentOverrideCollection) ->
 
-  module 'Quiz',
+  QUnit.module 'Quiz',
     setup: ->
       @quiz = new Quiz(id: 1, html_url: 'http://localhost:3000/courses/1/quizzes/24')
       @ajaxStub = @stub $, 'ajaxJSON'
@@ -109,7 +126,7 @@ define [
 
   # multiple due dates
 
-  module "Quiz#multipleDueDates"
+  QUnit.module "Quiz#multipleDueDates"
 
   test "checks for multiple due dates from assignment overrides", ->
     quiz = new Quiz all_dates: [{title: "Winter"}, {title: "Summer"}]
@@ -119,7 +136,7 @@ define [
     quiz = new Quiz
     ok !quiz.multipleDueDates()
 
-  module "Quiz#allDates"
+  QUnit.module "Quiz#allDates"
 
   test "gets the due dates from the assignment overrides", ->
     dueAt = new Date("2013-08-20T11:13:00Z")
@@ -157,7 +174,7 @@ define [
 
   # toView
 
-  module "Quiz#toView"
+  QUnit.module "Quiz#toView"
 
   test "returns the quiz's dueAt", ->
     date = Date.now()

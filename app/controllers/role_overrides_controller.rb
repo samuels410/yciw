@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2014 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -109,9 +109,9 @@
 #     }
 #
 class RoleOverridesController < ApplicationController
-  before_filter :require_context
-  before_filter :require_role, :only => [:activate_role, :remove_role, :update, :show]
-  before_filter :set_js_env_for_current_account
+  before_action :require_context
+  before_action :require_role, :only => [:activate_role, :remove_role, :update, :show]
+  before_action :set_js_env_for_current_account
 
   # @API List roles
   # List the roles available to an account.
@@ -486,7 +486,7 @@ class RoleOverridesController < ApplicationController
         RoleOverride.permissions.keys.each do |key|
           if params[:permissions][key]
             roles.each do |role|
-              if settings = params[:permissions][key][role.id]
+              if (settings = params[:permissions][key][role.id.to_s] || params[:permissions][key][role.id])
                 override = settings[:override] == 'checked' if ['checked', 'unchecked'].include?(settings[:override])
                 locked = settings[:locked] == 'true' if settings[:locked]
                 RoleOverride.manage_role_override(@context, role, key.to_s, :override => override, :locked => locked)

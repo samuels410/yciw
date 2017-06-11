@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -25,8 +25,8 @@ describe "/quizzes/quizzes/submission_versions" do
     course_quiz
 
     view_context
-    assigns[:quiz] = @quiz
-    assigns[:versions] = []
+    assign(:quiz, @quiz)
+    assign(:versions, [])
 
     render "quizzes/quizzes/submission_versions"
     expect(response).not_to be_nil

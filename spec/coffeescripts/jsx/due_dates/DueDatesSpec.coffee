@@ -1,4 +1,22 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
+  'jquery'
   'react'
   'react-dom'
   'react-addons-test-utils'
@@ -8,12 +26,12 @@ define [
   'jsx/due_dates/StudentGroupStore'
   'compiled/models/AssignmentOverride'
   'helpers/fakeENV'
-], (React, ReactDOM, TestUtils, _, DueDates, OverrideStudentStore, StudentGroupStore, AssignmentOverride, fakeENV) ->
+], ($, React, ReactDOM, TestUtils, _, DueDates, OverrideStudentStore, StudentGroupStore, AssignmentOverride, fakeENV) ->
 
   findAllByTag = TestUtils.scryRenderedDOMComponentsWithTag
   findAllByClass = TestUtils.scryRenderedDOMComponentsWithClass
 
-  module 'DueDates',
+  QUnit.module 'DueDates',
     setup: ->
       fakeENV.setup()
       ENV.context_asset_string = "course_1"
@@ -32,7 +50,7 @@ define [
         groups: {1:{id: "1", name: "Reading Group One"}, 2: {id: "2", name: "Reading Group Two"}}
         overrideModel: AssignmentOverride
         syncWithBackbone: ->
-        multipleGradingPeriodsEnabled: false
+        hasGradingPeriods: false
         gradingPeriods: []
         isOnlyVisibleToOverrides: false
         dueAt: null
@@ -135,7 +153,7 @@ define [
     attributes = _.keys(@dueDates.getAllOverrides()[0].attributes)
     ok _.contains(attributes, "persisted")
 
-  module 'DueDates with Multiple Grading Periods enabled',
+  QUnit.module 'DueDates with grading periods',
     setup: ->
       fakeENV.setup()
       @server = sinon.fakeServer.create()
@@ -236,9 +254,9 @@ define [
           sections: ["8"]
           group_ids: []
 
-      @stub(OverrideStudentStore, 'getStudents', -> students)
-      @stub(OverrideStudentStore, 'currentlySearching', -> false)
-      @stub(OverrideStudentStore, 'allStudentsFetched', -> true)
+      @stub(OverrideStudentStore, 'getStudents').returns(students)
+      @stub(OverrideStudentStore, 'currentlySearching').returns(false)
+      @stub(OverrideStudentStore, 'allStudentsFetched').returns(true)
 
       props =
         overrides: overrides
@@ -247,7 +265,7 @@ define [
         sections: sections
         groups: {1:{id: "1", name: "Reading Group One"}, 2: {id: "2", name: "Reading Group Two"}}
         syncWithBackbone: ->
-        multipleGradingPeriodsEnabled: true
+        hasGradingPeriods: true
         gradingPeriods: gradingPeriods
         isOnlyVisibleToOverrides: true
         dueAt: null
@@ -283,14 +301,13 @@ define [
   test 'dropdown options do not include students whose sections are assigned in closed periods', ->
     notOk _.contains(@dropdownOptions, "Scipio Africanus")
 
-  test 'dropdown options include sections that are not assigned in closed periods and do not have'/
-  'any students assigned in closed periods', ->
+  test 'dropdown options include sections that are not assigned in closed periods and do not have any students assigned in closed periods', ->
     ok _.contains(@dropdownOptions, "Section 3")
 
   test 'dropdown options include students that do not belong to sections assigned in closed periods', ->
     ok _.contains(@dropdownOptions, "Publius Publicoa")
 
-  module 'DueDates render callbacks',
+  QUnit.module 'DueDates render callbacks',
     setup: ->
       fakeENV.setup()
       @server = sinon.fakeServer.create()
@@ -306,7 +323,7 @@ define [
         students: {"1":{id: "1", name: "Scipio Africanus"}, "3":{id: 3, name: "Publius Publicoa"}}
         overrideModel: AssignmentOverride
         syncWithBackbone: ->
-        multipleGradingPeriodsEnabled: false
+        hasGradingPeriods: false
         gradingPeriods: []
         isOnlyVisibleToOverrides: false
         dueAt: null

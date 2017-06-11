@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2013 Instructure, Inc.
+# Copyright (C) 2013 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -155,6 +155,14 @@ END
       state: 'allowed',
       beta: true
     },
+    'new_user_tutorial_on_off' =>
+    {
+      display_name: -> { I18n.t('Course Set-up Tutorial') },
+      description: -> { I18n.t('Course set-up tutorial provides tips on how to leverage the feature opportunities on each page in Canvas. It is especially useful when you are new to Canvas or are setting up a new course for the first time in a long time.') },
+      applies_to: 'User',
+      state: 'allowed',
+    },
+
     'outcome_gradebook' =>
     {
       display_name: -> { I18n.t('features.learning_mastery_gradebook', 'Learning Mastery Gradebook') },
@@ -215,6 +223,15 @@ END
       root_opt_in: true,
       beta: true
     },
+    'duplicate_objects' =>
+    {
+      display_name: -> { I18n.t('Duplicate Objects') },
+      description: -> { I18n.t("Allows the duplicating of objects in Canvas") },
+      applies_to: 'Account',
+      state: 'hidden',
+      root_opt_in: true,
+      beta: true
+    },
     'allow_opt_out_of_inbox' =>
     {
       display_name: -> { I18n.t('features.allow_opt_out_of_inbox', "Allow Users to Opt-out of the Inbox") },
@@ -242,17 +259,6 @@ Allow users to view and use external tools configured for LOR.
 END
       applies_to: 'RootAccount',
       state: 'hidden'
-    },
-    'multiple_grading_periods' =>
-    {
-      display_name: -> { I18n.t('features.multiple_grading_periods', 'Multiple Grading Periods') },
-      description: -> { I18n.t('enable_multiple_grading_periods', <<-END) },
-      Multiple Grading Periods allows teachers and admins to create grading periods with set
-      cutoff dates. Assignments can be filtered by these grading periods in the gradebook.
-END
-      applies_to: 'Course',
-      state: 'allowed',
-      root_opt_in: true
     },
     'course_catalog' =>
     {
@@ -387,14 +393,6 @@ END
       state: 'hidden',
       root_opt_in: true
     },
-    'all_grading_periods_totals' =>
-    {
-      display_name: -> { I18n.t('Display Totals for "All Grading Periods"') },
-      description: -> { I18n.t('Display total grades when the "All Grading Periods" dropdown option is selected (Multiple Grading Periods must be enabled).') },
-      applies_to: 'Course',
-      state: 'allowed',
-      root_opt_in: true
-    },
     'course_user_search' => {
       display_name: -> { I18n.t('Account Course and User Search') },
       description: -> { I18n.t('Updated UI for searching and displaying users and courses within an account.') },
@@ -473,7 +471,7 @@ END
     {
       display_name: -> { I18n.t('New Annotations') },
       description: -> { I18n.t('Use the new document annotation tool') },
-      applies_to: 'Course',
+      applies_to: 'Account',
       state: 'hidden',
       beta: true,
       root_opt_in: true
@@ -517,15 +515,56 @@ END
       development: true,
       root_opt_in: true,
     },
+    'new_gradebook_history' =>
+    {
+      display_name: -> { I18n.t('New Gradebook History') },
+      description: -> { I18n.t('Enable New Gradebook History page.') },
+      applies_to: "RootAccount",
+      state: "hidden",
+      beta: true,
+      development: true,
+    },
     'modules_home_page' =>
     {
       display_name: -> { I18n.t('Modules Home Page') },
       description: -> { I18n.t('Default to modules for the course home page') },
       applies_to: "Course",
+      state: "allowed",
+    },
+    'new_user_tutorial' =>
+    {
+      display_name: -> { I18n.t('New User Tutorial')},
+      description: -> { I18n.t('Provide tutorial information for new users in a flyout tray.')},
+      applies_to: "RootAccount",
+      state: "allowed",
+    },
+    'student_planner' =>
+    {
+      display_name: -> { I18n.t('Student Planner')},
+      description: -> { I18n.t('Provides users with a planner dashboard option.')},
+      applies_to: "RootAccount",
       state: "hidden",
       beta: true,
       development: false,
-      root_opt_in: true,
+      root_opt_in: true
+    },
+    'quizzes2_exporter' =>
+    {
+      display_name: -> { I18n.t('Export to Quizzes 2 format') },
+      description: -> { I18n.t('Export an existing quiz to new Quizzes 2 format') },
+      applies_to: "RootAccount",
+      state: "hidden",
+      beta: false,
+      development: true,
+    },
+    'lti_2_auth_url_registration' =>
+    {
+      display_name: -> { I18n.t('Send Authorization URL in LTI2 Registration') },
+      description: -> { I18n.t("If enabled, 'oauth2_access_token_url' will be sent in LTI2 registration launch") },
+      applies_to: 'RootAccount',
+      state: 'hidden',
+      beta: false,
+      root_opt_in: true
     },
   )
 

@@ -1,10 +1,27 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'underscore'
   'tinymce_plugins/instructure_external_tools/ExternalToolsHelper',
   'jquery'
 ], (_, ExternalToolsHelper, $)->
 
-  module "ExternalToolsHelper:buttonConfig",
+  QUnit.module "ExternalToolsHelper:buttonConfig",
     setup: ->
       @buttonOpts = {
         name: "SomeName",
@@ -30,7 +47,7 @@ define [
     equal config.icon, null
     equal config.image, "example.com"
 
-  module "ExternalToolsHelper:clumpedButtonMapping",
+  QUnit.module "ExternalToolsHelper:clumpedButtonMapping",
     setup: ->
       @clumpedButtons = [
         {id: "ID_1", name: "NAME_1", icon_url: "", canvas_icon_class: "foo"},
@@ -70,7 +87,7 @@ define [
     imageTag = imageKey.split("&nbsp")[0]
     equal $(imageTag).prop("tagName"), "IMG"
 
-  module "ExternalToolsHelper:attachClumpedDropdown",
+  QUnit.module "ExternalToolsHelper:attachClumpedDropdown",
     setup: ->
       @theSpy = sinon.spy()
       @fakeTarget = {

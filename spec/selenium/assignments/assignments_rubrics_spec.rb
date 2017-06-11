@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_relative '../common'
 require_relative '../helpers/rubrics_common'
 
@@ -286,11 +303,11 @@ describe "assignment rubrics" do
 
       get "/courses/#{@course.id}/assignments/#{@assignment.id}/submissions/#{@student.id}"
       f('.assess_submission_link').click
+      wait_for_animations
       expect(f('.total_points_holder .assessing')).to include_text "out of 5"
       f("#rubric_#{@rubric.id} tbody tr:nth-child(2) .ratings td:nth-child(1)").click
       expect(f('.rubric_total')).to include_text "5"
       f('.save_rubric_button').click
-      wait_for_ajaximations
       expect(f('.grading_value')).to have_attribute(:value, '5')
     end
 

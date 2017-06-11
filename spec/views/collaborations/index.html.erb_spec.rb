@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011-2012 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -23,7 +23,7 @@ describe "/collaborations/index" do
   before do
     course_with_student
     view_context(@course, @user)
-    assigns[:collaborations] = [@course.collaborations.create!(user: @user, title: "my collab!")]
+    assign(:collaborations, [@course.collaborations.create!(user: @user, title: "my collab!")])
   end
 
   it "should render" do

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2013 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -20,6 +20,18 @@
 # Likewise, all the methods added will be available for all controllers.
 
 class ApplicationController < ActionController::Base
+  class << self
+    [:before, :after, :around,
+     :skip_before, :skip_after, :skip_around,
+     :prepend_before, :prepend_after, :prepend_around].each do |type|
+      class_eval <<-RUBY, __FILE__, __LINE__ + 1
+        def #{type}_filter(*)
+          raise "Please use #{type}_action instead of #{type}_filter"
+        end
+      RUBY
+    end
+  end
+
   attr_accessor :active_tab
   attr_reader :context
 
@@ -28,8 +40,9 @@ class ApplicationController < ActionController::Base
   include Api::V1::User
   include Api::V1::WikiPage
   include LegalInformationHelper
-  around_filter :set_locale
-  around_filter :enable_request_cache
+  around_action :set_locale
+  around_action :enable_request_cache
+  around_action :batch_statsd
 
   helper :all
 
@@ -39,29 +52,29 @@ class ApplicationController < ActionController::Base
   protect_from_forgery with: :exception
 
   # load_user checks masquerading permissions, so this needs to be cleared first
-  before_filter :clear_cached_contexts
-  prepend_before_filter :load_user, :load_account
+  before_action :clear_cached_contexts
+  prepend_before_action :load_user, :load_account
   # make sure authlogic is before load_user
-  skip_before_filter :activate_authlogic
-  prepend_before_filter :activate_authlogic
+  skip_before_action :activate_authlogic
+  prepend_before_action :activate_authlogic
 
-  before_filter :check_pending_otp
-  before_filter :set_user_id_header
-  before_filter :set_time_zone
-  before_filter :set_page_view
-  before_filter :require_reacceptance_of_terms
-  before_filter :clear_policy_cache
-  before_filter :setup_live_events_context
-  after_filter :log_page_view
-  after_filter :discard_flash_if_xhr
-  after_filter :cache_buster
+  before_action :check_pending_otp
+  before_action :set_user_id_header
+  before_action :set_time_zone
+  before_action :set_page_view
+  before_action :require_reacceptance_of_terms
+  before_action :clear_policy_cache
+  before_action :setup_live_events_context
+  after_action :log_page_view
+  after_action :discard_flash_if_xhr
+  after_action :cache_buster
   # Yes, we're calling this before and after so that we get the user id logged
   # on events that log someone in and log someone out.
-  after_filter :set_user_id_header
-  before_filter :fix_xhr_requests
-  before_filter :init_body_classes
-  after_filter :set_response_headers
-  after_filter :update_enrollment_last_activity_at
+  after_action :set_user_id_header
+  before_action :fix_xhr_requests
+  before_action :init_body_classes
+  after_action :set_response_headers
+  after_action :update_enrollment_last_activity_at
 
   add_crumb(proc {
     title = I18n.t('links.dashboard', 'My Dashboard')
@@ -124,7 +137,7 @@ class ApplicationController < ActionController::Base
           collapse_global_nav: @current_user.try(:collapse_global_nav?),
           show_feedback_link: show_feedback_link?,
           enable_profiles: (@domain_root_account && @domain_root_account.settings[:enable_profiles] != false)
-        }
+        },
       }
       @js_env[:page_view_update_url] = page_view_path(@page_view.id, page_view_token: @page_view.token) if @page_view
       @js_env[:IS_LARGE_ROSTER] = true if !@js_env[:IS_LARGE_ROSTER] && @context.respond_to?(:large_roster?) && @context.large_roster?
@@ -220,18 +233,61 @@ class ApplicationController < ActionController::Base
   end
   helper_method :k12?
 
-  def multiple_grading_periods?
-    account_and_grading_periods_allowed? ||
-      context_grading_periods_enabled?
+  def grading_periods?
+    !!@context.try(:grading_periods?)
   end
-  helper_method :multiple_grading_periods?
+  helper_method :grading_periods?
 
   def master_courses?
     @domain_root_account && @domain_root_account.feature_enabled?(:master_courses)
   end
   helper_method :master_courses?
 
-  def editing_restricted?(content, edit_type=:all)
+  def setup_master_course_restrictions(objects, course)
+    return unless master_courses? && course.is_a?(Course) && course.grants_right?(@current_user, session, :read_as_admin)
+
+    if MasterCourses::MasterTemplate.is_master_course?(course)
+      MasterCourses::Restrictor.preload_default_template_restrictions(objects, course)
+      return :master # return master/child status
+    elsif MasterCourses::ChildSubscription.is_child_course?(course)
+      MasterCourses::Restrictor.preload_child_restrictions(objects)
+      return :child
+    end
+  end
+  helper_method :setup_master_course_restrictions
+
+  def set_master_course_js_env_data(object, course)
+    return unless object.respond_to?(:master_course_api_restriction_data) && object.persisted?
+    status = setup_master_course_restrictions([object], course)
+    return unless status
+    # we might have to include more information about the object here to make it easier to plug a common component in
+    data = object.master_course_api_restriction_data(status)
+    if status == :master
+      data[:default_restrictions] = MasterCourses::MasterTemplate.full_template_for(course).default_restrictions_for(object)
+    end
+    js_env(:MASTER_COURSE_DATA => data)
+  end
+  helper_method :set_master_course_js_env_data
+
+  def load_blueprint_courses_ui
+    return unless @context && @context.is_a?(Course) && master_courses? && @context.grants_right?(@current_user, :manage) && (MasterCourses::MasterTemplate.is_master_course?(@context) || MasterCourses::ChildSubscription.is_child_course?(@context))
+
+    js_bundle :blueprint_courses
+    css_bundle :blueprint_courses
+    js_env({
+      BLUEPRINT_COURSES_DATA: {
+        isMasterCourse: MasterCourses::MasterTemplate.is_master_course?(@context),
+        isChildCourse: MasterCourses::ChildSubscription.is_child_course?(@context),
+        accountId: @context.account.id,
+        course: @context.slice(:id, :name),
+        subAccounts: @context.account.sub_accounts.pluck(:id, :name).map{|id, name| {id: id, name: name}},
+        terms: @context.account.root_account.enrollment_terms.active.pluck(:id, :name).map{|id, name| {id: id, name: name}}
+      }
+    })
+  end
+  helper_method :load_blueprint_courses_ui
+
+  def editing_restricted?(content, edit_type=:any)
     return false unless master_courses? && content.respond_to?(:editing_restricted?)
     content.editing_restricted?(edit_type)
   end
@@ -248,18 +304,6 @@ class ApplicationController < ActionController::Base
     tool_dimensions
   end
   private :tool_dimensions
-
-  def account_and_grading_periods_allowed?
-    @context.is_a?(Account) &&
-      @context.feature_allowed?(:multiple_grading_periods)
-  end
-  private :account_and_grading_periods_allowed?
-
-  def context_grading_periods_enabled?
-    @context.present? &&
-      @context.feature_enabled?(:multiple_grading_periods)
-  end
-  private :context_grading_periods_enabled?
 
   # Reject the request by halting the execution of the current handler
   # and returning a helpful error message (and HTTP status code).
@@ -304,7 +348,7 @@ class ApplicationController < ActionController::Base
     include_host = opts[-1].delete(:include_host)
     if !include_host
       opts[-1][:host] = context.host_name rescue nil
-      opts[-1][:only_path] = true
+      opts[-1][:only_path] = true unless name.end_with?("_path")
     end
     self.send name, *opts
   end
@@ -347,10 +391,12 @@ class ApplicationController < ActionController::Base
     I18n.localizer = nil
   end
 
-  def enable_request_cache
-    RequestCache.enable do
-      yield
-    end
+  def enable_request_cache(&block)
+    RequestCache.enable(&block)
+  end
+
+  def batch_statsd(&block)
+    CanvasStatsd::Statsd.batch(&block)
   end
 
   def store_session_locale
@@ -411,7 +457,7 @@ class ApplicationController < ActionController::Base
 
   def check_pending_otp
     if session[:pending_otp] && params[:controller] != 'login/otp'
-      return render text: "Please finish logging in", status: 403 if request.xhr?
+      return render plain: "Please finish logging in", status: 403 if request.xhr?
 
       reset_session
       redirect_to login_url
@@ -496,7 +542,7 @@ class ApplicationController < ActionController::Base
       # to a web browser - but you've lost your cookies! This breaks not only store_location,
       # but in the case of delegated authentication where the provider does an additional
       # redirect storing important information in session, makes it impossible to log in at all
-      render text: '', status: 200
+      render plain: '', status: 200
       return false
     end
     true
@@ -513,7 +559,7 @@ class ApplicationController < ActionController::Base
       format.html {
         return unless fix_ms_office_redirects
         store_location
-        return redirect_to login_url(params.slice(:authentication_provider)) if !@files_domain && !@current_user
+        return redirect_to login_url(params.permit(:authentication_provider)) if !@files_domain && !@current_user
 
         if @context.is_a?(Course) && @context_enrollment
           if @context_enrollment.inactive?
@@ -532,18 +578,19 @@ class ApplicationController < ActionController::Base
       }
       format.zip { redirect_to(url_for(path_params)) }
       format.json { render_json_unauthorized }
+      format.all { render plain: 'Unauthorized', status: :unauthorized }
     end
     set_no_cache_headers
   end
 
-  # To be used as a before_filter, requires controller or controller actions
+  # To be used as a before_action, requires controller or controller actions
   # to have their urls scoped to a context in order to be valid.
   # So /courses/5/assignments or groups/1/assignments would be valid, but
   # not /assignments
   def require_context
     get_context
     if !@context
-      if request.path.match(/\A\/profile/)
+      if @context_is_current_user
         store_location
         redirect_to login_url
       elsif params[:context_id]
@@ -578,7 +625,7 @@ class ApplicationController < ActionController::Base
 
   MAX_ACCOUNT_LINEAGE_TO_SHOW_IN_CRUMBS = 3
 
-  # Can be used as a before_filter, or just called from controller code.
+  # Can be used as a before_action, or just called from controller code.
   # Assigns the variable @context to whatever context the url is scoped
   # to.  So /courses/5/assignments would have a @context=Course.find(5).
   # Also assigns @context_membership to the membership type of @current_user
@@ -620,6 +667,7 @@ class ApplicationController < ActionController::Base
         @context = api_find(CourseSection, params[:course_section_id])
       elsif request.path.match(/\A\/profile/) || request.path == '/' || request.path.match(/\A\/dashboard\/files/) || request.path.match(/\A\/calendar/) || request.path.match(/\A\/assignments/) || request.path.match(/\A\/files/) || request.path == '/api/v1/calendar_events/visible_contexts'
         # ^ this should be split out into things on the individual controllers
+        @context_is_current_user = true
         @context = @current_user
         @context_membership = @context
       end
@@ -935,7 +983,7 @@ class ApplicationController < ActionController::Base
     # We only record page_views for html page requests coming from within the
     # app, or if coming from a developer api request and specified as a
     # page_view.
-    if (@developer_key && params[:user_request]) || (!@developer_key && @current_user && !request.xhr? && request.get?)
+    if @current_user && !request.xhr? && request.get?
       generate_page_view
     end
   end
@@ -952,17 +1000,10 @@ class ApplicationController < ActionController::Base
   end
 
   def generate_page_view(user=@current_user)
-    attributes = { :user => user, :developer_key => @developer_key, :real_user => @real_current_user }
+    attributes = { :user => user, :real_user => @real_current_user }
     @page_view = PageView.generate(request, attributes)
     @page_view.user_request = true if params[:user_request] || (user && !request.xhr? && request.get?)
     @page_before_render = Time.now.utc
-  end
-
-  def generate_new_page_view
-    return true if !page_views_enabled?
-
-    generate_page_view
-    @page_view.generated_by_hand = true
   end
 
   def disable_page_views
@@ -1026,61 +1067,78 @@ class ApplicationController < ActionController::Base
 
     user = @current_user || (@accessed_asset && @accessed_asset[:user])
     if user && @log_page_views != false
-      updated_fields = params.slice(:interaction_seconds)
-      if request.xhr? && params[:page_view_token] && !updated_fields.empty? && !(@page_view && @page_view.generated_by_hand)
-        RequestContextGenerator.store_interaction_seconds_update(params[:page_view_token], updated_fields[:interaction_seconds])
-
-        page_view_info = PageView.decode_token(params[:page_view_token])
-        @page_view = PageView.find_for_update(page_view_info[:request_id])
-        if @page_view
-          if @page_view.id
-            response.headers["X-Canvas-Page-View-Update-Url"] = page_view_path(
-              @page_view.id, page_view_token: @page_view.token)
-          end
-          @page_view.do_update(updated_fields)
-          @page_view_update = true
-        end
-      end
-      # If we're logging the asset access, and it's either a participatory action
-      # or it's not an update to an already-existing page_view.  We check to make sure
-      # it's not an update because if the page_view already existed, we don't want to
-      # double-count it as multiple views when it's really just a single view.
-
-      if @accessed_asset && (@accessed_asset[:level] == 'participate' || !@page_view_update)
-        @access = AssetUserAccess.where(user_id: user.id, asset_code: @accessed_asset[:code]).first_or_initialize
-        @accessed_asset[:level] ||= 'view'
-        @access.log @context, @accessed_asset
-
-        if @page_view.nil? && page_views_enabled? && %w{participate submit}.include?(@accessed_asset[:level])
-          generate_page_view(user)
-        end
-
-        if @page_view
-          @page_view.participated = %w{participate submit}.include?(@accessed_asset[:level])
-          @page_view.asset_user_access = @access
-        end
-
-        @page_view_update = true
-      end
-      if @page_view && !request.xhr? && request.get? && (response.content_type || "").to_s.match(/html/)
-        @page_view.render_time ||= (Time.now.utc - @page_before_render) rescue nil
-        @page_view_update = true
-      end
-      if @page_view && @page_view_update
-        @page_view.context = @context if !@page_view.context_id && PageView::CONTEXT_TYPES.include?(@context.class.name)
-        @page_view.account_id = @domain_root_account.id
-        @page_view.developer_key_id = @access_token.try(:developer_key_id)
-        @page_view.store
-        RequestContextGenerator.store_page_view_meta(@page_view)
-      end
+      add_interaction_seconds
+      log_participation(user)
+      log_gets
+      finalize_page_view
     else
       @page_view.destroy if @page_view && !@page_view.new_record?
     end
+
   rescue StandardError, CassandraCQL::Error::InvalidRequestException => e
     Canvas::Errors.capture_exception(:page_view, e)
     logger.error "Pageview error!"
     raise e if Rails.env.development?
     true
+  end
+
+  def add_interaction_seconds
+    updated_fields = params.slice(:interaction_seconds)
+    if request.xhr? && params[:page_view_token] && !updated_fields.empty? && !(@page_view && @page_view.generated_by_hand)
+      RequestContextGenerator.store_interaction_seconds_update(params[:page_view_token], updated_fields[:interaction_seconds])
+
+      page_view_info = PageView.decode_token(params[:page_view_token])
+      @page_view = PageView.find_for_update(page_view_info[:request_id])
+      if @page_view
+        if @page_view.id
+          response.headers["X-Canvas-Page-View-Update-Url"] = page_view_path(
+            @page_view.id, page_view_token: @page_view.token)
+        end
+        @page_view.do_update(updated_fields)
+        @page_view_update = true
+      end
+    end
+  end
+
+  def log_participation(user)
+    # If we're logging the asset access, and it's either a participatory action
+    # or it's not an update to an already-existing page_view.  We check to make sure
+    # it's not an update because if the page_view already existed, we don't want to
+    # double-count it as multiple views when it's really just a single view.
+    if @accessed_asset && (@accessed_asset[:level] == 'participate' || !@page_view_update)
+      @access = AssetUserAccess.where(user_id: user.id, asset_code: @accessed_asset[:code]).first_or_initialize
+      @accessed_asset[:level] ||= 'view'
+      @access.log @context, @accessed_asset
+
+      if @page_view.nil? && page_views_enabled? && %w{participate submit}.include?(@accessed_asset[:level])
+        generate_page_view(user)
+      end
+
+      if @page_view
+        @page_view.participated = %w{participate submit}.include?(@accessed_asset[:level])
+        @page_view.asset_user_access = @access
+      end
+
+      @page_view_update = true
+    end
+  end
+
+  def log_gets
+    if @page_view && !request.xhr? && request.get? && (((response.content_type || "").to_s.match(/html/)) ||
+      (Setting.get('create_get_api_page_views', 'true') == 'true') && api_request?)
+      @page_view.render_time ||= (Time.now.utc - @page_before_render) rescue nil
+      @page_view_update = true
+    end
+  end
+
+  def finalize_page_view
+    if @page_view && @page_view_update
+      @page_view.context = @context if !@page_view.context_id && PageView::CONTEXT_TYPES.include?(@context.class.name)
+      @page_view.account_id = @domain_root_account.id
+      @page_view.developer_key_id = @access_token.try(:developer_key_id)
+      @page_view.store
+      RequestContextGenerator.store_page_view_meta(@page_view)
+    end
   end
 
   rescue_from Exception, :with => :rescue_exception
@@ -1284,10 +1342,6 @@ class ApplicationController < ActionController::Base
 
   def verified_file_request?
     params[:controller] == 'files' && params[:action] == 'show' && params[:verifier].present?
-  end
-
-  def session_loaded?
-    session.send(:loaded?) rescue false
   end
 
   # Retrieving wiki pages needs to search either using the id or
@@ -1575,10 +1629,6 @@ class ApplicationController < ActionController::Base
   end
   helper_method :feature_and_service_enabled?
 
-  def show_new_dashboard?
-    @current_user && @current_user.preferences[:new_dashboard]
-  end
-
   def temporary_user_code(generate=true)
     if generate
       session[:temporary_user_code] ||= "tmp_#{Digest::MD5.hexdigest("#{Time.now.to_i}_#{rand}")}"
@@ -1743,6 +1793,7 @@ class ApplicationController < ActionController::Base
   end
 
   def json_cast(obj)
+    obj = obj.as_json if obj.respond_to?(:as_json) unless obj.is_a?(Hash) || obj.is_a?(Array)
     stringify_json_ids? ? StringifyIds.recursively_stringify_ids(obj) : obj
   end
 
@@ -1764,8 +1815,8 @@ class ApplicationController < ActionController::Base
       # fix for some browsers not properly handling json responses to multipart
       # file upload forms and s3 upload success redirects -- we'll respond with text instead.
       if options[:as_text] || json_as_text?
-        options[:text] = json
-        options[:content_type] = "text/html"
+        options[:html] = json.html_safe
+        options[:content_type] = "text/html" if CANVAS_RAILS4_2
       else
         options[:json] = json
       end
@@ -1943,7 +1994,7 @@ class ApplicationController < ActionController::Base
 
   def self.batch_jobs_in_actions(opts = {})
     batch_opts = opts.delete(:batch)
-    around_filter(opts) do |controller, action|
+    around_action(opts) do |controller, action|
       Delayed::Batch.serial_batch(batch_opts || {}) do
         action.call
       end
@@ -1979,23 +2030,21 @@ class ApplicationController < ActionController::Base
       hash[:COURSE_TITLE] = @context.name
     end
 
-    if opts[:show_announcements]
-      hash[:SHOW_ANNOUNCEMENTS] = true
-      hash[:ANNOUNCEMENT_LIMIT] = @context.home_page_announcement_limit
-    end
-
     if @page
-      check_for_restrictions = master_courses? && @context.wiki.grants_right?(@current_user, :manage)
-      hash[:WIKI_PAGE] = wiki_page_json(@page, @current_user, session, true, :deep_check_if_needed => true, :include_master_course_restrictions => check_for_restrictions)
+      if @context.wiki.grants_right?(@current_user, :manage)
+        mc_status = setup_master_course_restrictions(@page, @context)
+      end
+
+      hash[:WIKI_PAGE] = wiki_page_json(@page, @current_user, session, true, :deep_check_if_needed => true, :master_course_status => mc_status)
       hash[:WIKI_PAGE_REVISION] = (current_version = @page.versions.current) ? StringifyIds.stringify_id(current_version.number) : nil
       hash[:WIKI_PAGE_SHOW_PATH] = named_context_url(@context, :context_wiki_page_path, @page)
       hash[:WIKI_PAGE_EDIT_PATH] = named_context_url(@context, :edit_context_wiki_page_path, @page)
       hash[:WIKI_PAGE_HISTORY_PATH] = named_context_url(@context, :context_wiki_page_revisions_path, @page)
+    end
 
-      if @context.is_a?(Course) && @context.grants_right?(@current_user, session, :read)
-        hash[:COURSE_ID] = @context.id
-        hash[:MODULES_PATH] = polymorphic_path([@context, :context_modules])
-      end
+    if @context.is_a?(Course) && @context.grants_right?(@current_user, session, :read)
+      hash[:COURSE_ID] = @context.id.to_s
+      hash[:MODULES_PATH] = polymorphic_path([@context, :context_modules])
     end
 
     js_env hash
@@ -2018,7 +2067,7 @@ class ApplicationController < ActionController::Base
       },
       :POST_TO_SIS => Assignment.sis_grade_export_enabled?(@context),
       :PERMISSIONS => permissions,
-      :MULTIPLE_GRADING_PERIODS_ENABLED => @context.feature_enabled?(:multiple_grading_periods),
+      :HAS_GRADING_PERIODS => @context.grading_periods?,
       :VALID_DATE_RANGE => CourseDateRange.new(@context),
       :assignment_menu_tools => external_tools_display_hashes(:assignment_menu),
       :discussion_topic_menu_tools => external_tools_display_hashes(:discussion_topic_menu),
@@ -2029,7 +2078,7 @@ class ApplicationController < ActionController::Base
 
     conditional_release_js_env(includes: :active_rules)
 
-    if @context.feature_enabled?(:multiple_grading_periods)
+    if @context.grading_periods?
       js_env(:active_grading_periods => GradingPeriod.json_for(@context, @current_user))
     end
   end
@@ -2087,13 +2136,16 @@ class ApplicationController < ActionController::Base
 
   def setup_live_events_context
     ctx = {}
-    ctx[:root_account_id] = @domain_root_account.global_id if @domain_root_account
-    ctx[:root_account_lti_guid] = @domain_root_account.lti_guid if @domain_root_account
+
+    if @domain_root_account
+      ctx[:root_account_uuid] = @domain_root_account.uuid
+      ctx[:root_account_id] = @domain_root_account.global_id
+      ctx[:root_account_lti_guid] = @domain_root_account.lti_guid
+    end
+
     ctx[:user_id] = @current_user.global_id if @current_user
     ctx[:real_user_id] = @real_current_user.global_id if @real_current_user
     ctx[:user_login] = @current_pseudonym.unique_id if @current_pseudonym
-    ctx[:hostname] = request.host
-    ctx[:user_agent] = request.headers['User-Agent']
     ctx[:context_type] = @context.class.to_s if @context
     ctx[:context_id] = @context.global_id if @context
     if @context_membership
@@ -2111,6 +2163,10 @@ class ApplicationController < ActionController::Base
       ctx[:request_id] = tctx[:request_id]
       ctx[:session_id] = tctx[:session_id]
     end
+
+    ctx[:hostname] = request.host
+    ctx[:user_agent] = request.headers['User-Agent']
+    ctx[:producer] = 'canvas'
 
     StringifyIds.recursively_stringify_ids(ctx)
     LiveEvents.set_context(ctx)

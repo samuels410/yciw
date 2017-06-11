@@ -1,4 +1,22 @@
-require File.expand_path(File.dirname(__FILE__) + '/../../../spec_helper')
+#
+# Copyright (C) 2017 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
+require "spec_helper"
+require_dependency "lti/oauth2/access_token"
 require 'json/jwt'
 
 module Lti
@@ -80,6 +98,11 @@ module Lti
           expect(Canvas::Security.decode_jwt(access_token.to_s)['sub']).to eq sub
         end
 
+        it "includes the reg_key if passed in" do
+          access_token = Lti::Oauth2::AccessToken.create_jwt(aud: aud, sub: sub, reg_key: 'reg_key')
+          expect(Canvas::Security.decode_jwt(access_token.to_s)['reg_key']).to eq('reg_key')
+        end
+
       end
 
       describe ".from_jwt" do
@@ -115,6 +138,11 @@ module Lti
         it "raises an InvalidTokenError if the 'aud' is different than the passed in 'aud'" do
           body[:aud] = 'invalid aud'
           expect{ access_token.validate! }.to raise_error InvalidTokenError, 'invalid aud'
+        end
+
+        it "handles an array for aud" do
+          body[:aud] = [aud, 'file_host']
+          expect{ access_token.validate!}.to_not raise_error
         end
 
         it "raises an InvalidTokenError if the 'iat' is in the future" do

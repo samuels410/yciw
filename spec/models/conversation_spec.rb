@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -108,7 +108,7 @@ describe Conversation do
   context "adding participants" do
     it "should not add participants to private conversations" do
       root_convo = Conversation.initiate([sender, recipient], true)
-      expect{ root_convo.add_participants(sender, [user_factory]) }.to raise_error
+      expect{ root_convo.add_participants(sender, [user_factory]) }.to raise_error("can't add participants to a private conversation")
     end
 
     it "should add new participants to group conversations and give them all messages" do
@@ -172,7 +172,7 @@ describe Conversation do
         @shard1.activate do
           users << user_factory(:name => 'd')
           conversation.add_participants(users.first, [users.last])
-          expect(conversation.conversation_participants(:reload).size).to eq 4
+          expect(conversation.conversation_participants.reload.size).to eq 4
           expect(conversation.conversation_participants.all? { |cp| cp.shard == Shard.default }).to be_truthy
           expect(users.last.all_conversations.last.shard).to eq @shard1
           expect(conversation.participants(true).map(&:id)).to eq users.map(&:id)
@@ -180,7 +180,7 @@ describe Conversation do
         @shard2.activate do
           users << user_factory(:name => 'e')
           conversation.add_participants(users.first, users[-2..-1])
-          expect(conversation.conversation_participants(:reload).size).to eq 5
+          expect(conversation.conversation_participants.reload.size).to eq 5
           expect(conversation.conversation_participants.all? { |cp| cp.shard == Shard.default }).to be_truthy
           expect(users.last.all_conversations.last.shard).to eq @shard2
           expect(conversation.participants(true).map(&:id)).to eq users.map(&:id)
@@ -821,10 +821,6 @@ describe Conversation do
         ConversationMessageParticipant.update_all "tags = NULL"
 
         @conversation = Conversation.find(@conversation.id)
-        expect(@conversation.tags).to eql []
-        expect(@u1.conversations.first.tags).to eql []
-        expect(@u2.conversations.first.tags).to eql []
-        expect(@u3.conversations.first.tags).to eql []
       end
 
       it "should set the default tags when migrating" do

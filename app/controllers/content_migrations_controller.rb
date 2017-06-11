@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2013 Instructure, Inc.
+# Copyright (C) 2013 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -125,8 +125,8 @@ class ContentMigrationsController < ApplicationController
   include Api::V1::ContentMigration
   include Api::V1::ExternalTools
 
-  before_filter :require_context
-  before_filter :require_auth
+  before_action :require_context
+  before_action :require_auth
 
   # @API List content migrations
   #
@@ -171,6 +171,7 @@ class ContentMigrationsController < ApplicationController
       js_env(:OLD_START_DATE => datetime_string(@context.start_at, :verbose))
       js_env(:OLD_END_DATE => datetime_string(@context.conclude_at, :verbose))
       js_env(:SHOW_SELECT => @current_user.manageable_courses.count <= 100)
+      set_tutorial_js_env
     end
   end
 

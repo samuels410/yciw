@@ -1,4 +1,5 @@
-# Copyright (C) 2014 Instructure, Inc.
+#
+# Copyright (C) 2014 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -19,12 +20,27 @@ module Lti
   module Ims
     class ToolProxyController < ApplicationController
       include Lti::ApiServiceHelper
+      include Lti::Ims::AccessTokenHelper
 
-      before_filter :require_context, :except => [:show]
-      skip_before_filter :require_user, only: [:create, :show, :re_reg]
-      skip_before_filter :load_user, only: [:create, :show, :re_reg]
+      SERVICE_DEFINITIONS = [
+        {
+          id: 'ToolProxy.collection',
+          endpoint: ->(context) { "api/lti/#{context.class.name.downcase}s/#{context.id}/tool_proxy" },
+          format: ['application/vnd.ims.lti.v2.toolproxy+json'].freeze,
+          action: ['POST'].freeze
+        }.freeze,
+        {
+          id: 'ToolProxy.item',
+          endpoint: 'api/lti/tool_proxy/{tool_proxy_guid}',
+          format: ['application/vnd.ims.lti.v2.toolproxy+json'].freeze,
+          action: ['GET'].freeze
+        }.freeze
+      ].freeze
 
-      rescue_from 'Lti::ToolProxyService::InvalidToolProxyError', only: [:create, :re_reg] do |exception|
+      before_action :require_context, :except => [:show]
+      skip_before_action :load_user, only: [:create, :show, :re_reg]
+
+      rescue_from 'Lti::ToolProxyService::InvalidToolProxyError' do |exception|
         render json: {error: exception.message}, status: 400
       end
 
@@ -38,35 +54,20 @@ module Lti
       end
 
       def create
-        tool_proxy_guid = oauth_consumer_key
-        secret = RegistrationRequestService.retrieve_registration_password(context, oauth_consumer_key)
-
-        if secret.blank?
-          dev_key = DeveloperKey.find_cached(oauth_consumer_key)
-          secret = dev_key.present? && dev_key.api_key
-          tool_proxy_guid = SecureRandom.uuid
-        end
-
-        if oauth_authenticated_request?(secret)
-          tp_service = ToolProxyService.new
-          tool_proxy = tp_service.process_tool_proxy_json(
-            json: request.body.read,
-            context: context,
-            guid: tool_proxy_guid,
-            developer_key: dev_key
-          )
-
-          json = {
-            "@context" => "http://purl.imsglobal.org/ctx/lti/v2/ToolProxyId",
-            "@type" => "ToolProxy",
-            "@id" => nil,
-            "tool_proxy_guid" => tool_proxy.guid
-          }
-          json["tc_half_shared_secret"] = tp_service.tc_half_secret if tp_service.tc_half_secret
-          render json: json, status: :created, content_type: 'application/vnd.ims.lti.v2.toolproxy.id+json'
+        if oauth2_request?
+          begin
+            validate_access_token!
+            reg_key = access_token.reg_key
+            reg_secret = RegistrationRequestService.retrieve_registration_password(context, reg_key) if reg_key
+            render_new_tool_proxy(context, reg_key, developer_key) and return if reg_secret.present?
+          rescue Lti::Oauth2::InvalidTokenError
+            render_unauthorized and return
+          end
         else
-          render json: {error: 'unauthorized'}, status: :unauthorized
+          secret = RegistrationRequestService.retrieve_registration_password(context, oauth_consumer_key)
+          render_new_tool_proxy(context, oauth_consumer_key) and return if secret.present? && oauth_authenticated_request?(secret)
         end
+        render_unauthorized
       end
 
       def re_reg
@@ -108,6 +109,24 @@ module Lti
 
       private
 
+      def render_new_tool_proxy(context, tool_proxy_guid, dev_key = nil)
+        tp_service = ToolProxyService.new
+        tool_proxy = tp_service.process_tool_proxy_json(
+          json: request.body.read,
+          context: context,
+          guid: tool_proxy_guid,
+          developer_key: dev_key
+        )
+        json = {
+          "@context" => "http://purl.imsglobal.org/ctx/lti/v2/ToolProxyId",
+          "@type" => "ToolProxy",
+          "@id" => nil,
+          "tool_proxy_guid" => tool_proxy.guid
+        }
+        json["tc_half_shared_secret"] = tp_service.tc_half_secret if tp_service.tc_half_secret
+        render json: json, status: :created, content_type: 'application/vnd.ims.lti.v2.toolproxy.id+json'
+      end
+
       def payload
         @payload ||= (
           request.body.rewind
@@ -116,15 +135,15 @@ module Lti
       end
 
       def tp_validator
-        @tp_validator ||= (
+        @tp_validator ||= begin
           tcp_url = polymorphic_url([@context, :tool_consumer_profile],
-                                    tool_consumer_profile_id: Lti::ToolConsumerProfileCreator::TCP_UUID)
+                                    tool_consumer_profile_id: Lti::ToolConsumerProfile::DEFAULT_TCP_UUID)
           profile = Lti::ToolConsumerProfileCreator.new(@context, tcp_url).create
 
           tp_validator = IMS::LTI::Services::ToolProxyValidator.new(IMS::LTI::Models::ToolProxy.from_json(payload))
           tp_validator.tool_consumer_profile = profile
           tp_validator
-        )
+        end
       end
     end
   end

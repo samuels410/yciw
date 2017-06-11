@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -139,9 +139,9 @@
 class OutcomeGroupsApiController < ApplicationController
   include Api::V1::Outcome
 
-  before_filter :require_user
-  before_filter :get_context
-  before_filter :require_context, :only => [:link_index]
+  before_action :require_user
+  before_action :get_context
+  before_action :require_context, :only => [:link_index]
 
   # @API Redirect to root outcome group for context
   #
@@ -193,7 +193,7 @@ class OutcomeGroupsApiController < ApplicationController
 
     unless params["outcome_style"] == "abbrev"
       outcome_ids = links.map(&:content_id)
-      ret = LearningOutcomeResult.uniq.where(learning_outcome_id: outcome_ids).pluck(:learning_outcome_id)
+      ret = LearningOutcomeResult.distinct.where(learning_outcome_id: outcome_ids).pluck(:learning_outcome_id)
       # ret is now a list of outcomes that have been assessed
       outcome_params[:assessed_outcomes] = ret
     end

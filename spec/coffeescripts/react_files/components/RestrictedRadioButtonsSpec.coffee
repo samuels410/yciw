@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'react'
   'react-dom'
@@ -7,7 +24,7 @@ define [
   'compiled/models/Folder'
 ], (React, ReactDOM, {Simulate}, $, RestrictedRadioButtons, Folder) ->
 
-  module 'RestrictedRadioButtons',
+  QUnit.module 'RestrictedRadioButtons',
     setup: ->
       props =
         models: [new Folder(id: 999)]
@@ -33,7 +50,7 @@ define [
     Simulate.change(@RestrictedRadioButtons.refs.permissionsInput.getDOMNode())
     ok @RestrictedRadioButtons.refs.dateRange, "should have a dateRange input field"
 
-  module 'RestrictedRadioButtons Multiple Selected Items',
+  QUnit.module 'RestrictedRadioButtons Multiple Selected Items',
     setup: ->
       props =
         models: [new Folder(id: 1000, hidden: false), new Folder(id: 999, hidden: true)]
@@ -56,7 +73,7 @@ define [
 
     equal @RestrictedRadioButtons.refs.link_only.props.checked, true, 'default checks hiddenInput'
 
-  module 'RestrictedRadioButtons#extractFormValues',
+  QUnit.module 'RestrictedRadioButtons#extractFormValues',
     setup: ->
       props =
         models: [new Folder(id: 999)]
@@ -120,7 +137,7 @@ define [
 
     deepEqual @restrictedRadioButtons.extractFormValues(), expectedObject, "returns the correct object"
 
-  module 'RestrictedRadioButtons Multiple Items',
+  QUnit.module 'RestrictedRadioButtons Multiple Items',
     setup: ->
       props =
         models: [new Folder(id: 999, hidden: true, lock_at: undefined, unlock_at: undefined), new Folder(id: 1000, hidden: true, lock_at: undefined, unlock_at: undefined)]

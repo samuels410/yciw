@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 class SplitUsers
   ENROLLMENT_DATA_UPDATES = [
     {table: 'asset_user_accesses',
@@ -47,9 +64,6 @@ class SplitUsers
     {table: 'rubric_assessments', foreign_key: :assessor_id,
      scope: -> { joins({submission: :assignment}) },
      context_id: 'assignments.context_id'}.freeze,
-    {table: 'submission_comment_participants',
-     scope: -> { joins(:submission_comment) },
-     context_id: 'submission_comments.context_id'}.freeze,
     {table: 'submission_comments', foreign_key: :author_id}.freeze,
     {table: 'web_conference_participants',
      scope: -> { joins(:web_conference).where(web_conferences: {context_type: 'Course'}) },
@@ -122,7 +136,7 @@ class SplitUsers
       transfer_enrollment_data(source_user, user, Course.where(id: courses))
 
       account_users_ids = records.where(context_type: 'AccountUser').pluck(:context_id)
-      AccountUser.where(id: account_users_ids).update_all(user_id: user)
+      AccountUser.where(id: account_users_ids).update_all(user_id: user.id)
       restore_worklow_states_from_records(records)
     end
 
@@ -136,7 +150,7 @@ class SplitUsers
       # move moved communication channels back
       max_position = user.communication_channels.last.try(:position) || 0
       scope = source_user.communication_channels.where(id: cc_records.where(previous_user_id: user).pluck(:context_id))
-      scope.update_all(["user_id=?, position=position+?", user, max_position]) unless scope.empty?
+      scope.update_all(["user_id=?, position=position+?", user.id, max_position]) unless scope.empty?
 
       cc_records.where.not(previous_workflow_state: 'non existent').each do |cr|
         CommunicationChannel.where(id: cr.context_id).update_all(workflow_state: cr.previous_workflow_state)
@@ -148,8 +162,8 @@ class SplitUsers
       not_obs = UserObserver.where(user_id: [source_user, user], observer_id: [source_user, user])
       obs = UserObserver.where(id: records.pluck(:context_id)).where.not(id: not_obs)
 
-      source_user.user_observers.where(id: obs).update_all(user_id: user)
-      source_user.user_observees.where(id: obs).update_all(observer_id: user)
+      source_user.user_observers.where(id: obs).update_all(user_id: user.id)
+      source_user.user_observees.where(id: obs).update_all(observer_id: user.id)
     end
 
     def move_attachments(source_user, user, records)
@@ -159,11 +173,11 @@ class SplitUsers
 
     def update_grades(users, records)
       users.each do |user|
-        e_ids =records.where(previous_user_id: user, context_type: 'Enrollment').pluck(:context_id)
+        e_ids = records.where(previous_user_id: user, context_type: 'Enrollment').pluck(:context_id)
         user.enrollments.where(id: e_ids).joins(:course).
           where.not(courses: {workflow_state: 'deleted'}).
           select(&:student?).uniq { |e| [e.user_id, e.course_id] }.
-          each { |e| Enrollment.recompute_final_score(e.user_id, e.course_id) }
+          each { |e| Enrollment.recompute_final_score_in_singleton(e.user_id, e.course_id) }
       end
     end
 

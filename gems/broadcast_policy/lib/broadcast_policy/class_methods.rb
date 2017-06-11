@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2014 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -20,8 +20,7 @@ module BroadcastPolicy
     def has_a_broadcast_policy
       extend BroadcastPolicy::SingletonMethods
       include BroadcastPolicy::InstanceMethods
-      after_save :broadcast_notifications # Must be defined locally...
-      before_save :set_broadcast_flags
+      after_save :broadcast_notifications
     end
   end
 end

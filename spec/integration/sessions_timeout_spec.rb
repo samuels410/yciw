@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -27,10 +27,11 @@ describe "Session Timeout" do
     context "when a user logs in" do 
       before do
         course_with_student(:active_all => true, :user => user_with_pseudonym(:active_user => true))
-        login_as
       end
 
       it "should time out after 40 minutes of inactivity" do
+        login_as
+
         now = Time.now
         get "/"
         expect(response).to be_success
@@ -41,6 +42,8 @@ describe "Session Timeout" do
       end
 
       it "should not time out if the user remains active" do
+        login_as
+
         now = Time.now
         get "/"
         expect(response).to be_success

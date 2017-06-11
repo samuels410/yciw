@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2014 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -152,6 +152,11 @@ require 'atom'
 #           "example": false,
 #           "type": "boolean"
 #         },
+#         "participant_type": {
+#           "description": "The type of participant to sign up for a slot: 'User' or 'Group'",
+#           "example": "User",
+#           "type": "string"
+#         },
 #         "participants_per_appointment": {
 #           "description": "If the event is a time slot, this is the participant limit",
 #           "type": "integer"
@@ -261,10 +266,10 @@ require 'atom'
 class CalendarEventsApiController < ApplicationController
   include Api::V1::CalendarEvent
 
-  before_filter :require_user, :except => %w(public_feed index)
-  before_filter :get_calendar_context, :only => :create
-  before_filter :require_user_or_observer, :only => [:user_index]
-  before_filter :require_authorization, :only => %w(index user_index)
+  before_action :require_user, :except => %w(public_feed index)
+  before_action :get_calendar_context, :only => :create
+  before_action :require_user_or_observer, :only => [:user_index]
+  before_action :require_authorization, :only => %w(index user_index)
 
   # @API List calendar events
   #
@@ -351,7 +356,7 @@ class CalendarEventsApiController < ApplicationController
       Shard.partition_by_shard(events) do |shard_events|
         having_submission = Submission.having_submission.
             where(assignment_id: shard_events).
-            uniq.
+            distinct.
             pluck(:assignment_id).to_set
         shard_events.each do |event|
           event.has_submitted_submissions = having_submission.include?(event.id)
@@ -360,7 +365,7 @@ class CalendarEventsApiController < ApplicationController
         having_student_submission = Submission.having_submission.
             where(assignment_id: shard_events).
             where.not(user_id: nil).
-            uniq.
+            distinct.
             pluck(:assignment_id).to_set
         shard_events.each do |event|
           event.has_student_submissions = having_student_submission.include?(event.id)
@@ -509,7 +514,7 @@ class CalendarEventsApiController < ApplicationController
   #        -H "Authorization: Bearer <token>"
   def reserve
     get_event
-    if authorized_action(@event, @current_user, :reserve)
+    if authorized_action(@event, @current_user, :reserve) && check_for_past_signup(@event)
       begin
         participant_id = Shard.relative_id_for(params[:participant_id], Shard.current, Shard.current) if params[:participant_id]
         if participant_id && @event.appointment_group.grants_right?(@current_user, session, :manage)
@@ -534,6 +539,18 @@ class CalendarEventsApiController < ApplicationController
                          }],
                :status => :bad_request
       end
+    end
+  end
+
+  # Pulling participants is done from the parent event that spawns the user's child calendar events
+  def participants
+    get_event
+    if authorized_action(@event, @current_user, :read_child_events)
+      participants = Api.paginate(@event.child_event_participants.order(:id), self, api_v1_calendar_event_participants_url)
+      json = participants.map do |user|
+        user_display_json(user)
+      end
+      render :json => json
     end
   end
 
@@ -627,10 +644,13 @@ class CalendarEventsApiController < ApplicationController
   #        -H "Authorization: Bearer <token>"
   def destroy
     get_event
-    if authorized_action(@event, @current_user, :delete)
+    if authorized_action(@event, @current_user, :delete) && check_for_past_signup(@event.parent_event)
       @event.updating_user = @current_user
       @event.cancel_reason = params[:cancel_reason]
       if @event.destroy
+        if @event.appointment_group && @event.appointment_group.appointments.count == 0 && @event.appointment_group.context.root_account.feature_enabled?(:better_scheduler)
+          @event.appointment_group.destroy
+        end
         render :json => event_json(@event, @current_user, session)
       else
         render :json => @event.errors, :status => :bad_request
@@ -712,7 +732,7 @@ class CalendarEventsApiController < ApplicationController
           calendar.add_event(ics_event) if ics_event
         end
 
-        render :text => calendar.to_ical
+        render plain: calendar.to_ical
       end
       format.atom do
         feed = Atom::Feed.new do |f|
@@ -724,7 +744,7 @@ class CalendarEventsApiController < ApplicationController
         @events.each do |e|
           feed.entries << e.to_atom
         end
-        render :text => feed.to_xml
+        render :plain => feed.to_xml
       end
     end
   end
@@ -1227,7 +1247,7 @@ class CalendarEventsApiController < ApplicationController
 
     if options[:child_event_data].present?
       event_attributes[:child_event_data] = options[:child_event_data].map do |child_event|
-        new_child_event = child_event.dup
+        new_child_event = child_event.permit(:start_at, :end_at, :context_code)
         new_child_event[:start_at] = Time.zone.parse(child_event[:start_at]) + offset unless child_event[:start_at].blank?
         new_child_event[:end_at] = Time.zone.parse(child_event[:end_at]) + offset unless child_event[:end_at].blank?
         new_child_event
@@ -1272,5 +1292,15 @@ class CalendarEventsApiController < ApplicationController
   def calendar_event_params
     params.require(:calendar_event).
       permit(CalendarEvent.permitted_attributes + [:child_event_data => strong_anything])
+  end
+
+  def check_for_past_signup(event)
+    if event && event.end_at < Time.now.utc && event.context.is_a?(AppointmentGroup)
+      unless event.context.grants_right?(@current_user, :manage)
+        render :json => { :message => 'Cannot create or change reservation for past appointment' }, :status => :forbidden
+        return false
+      end
+    end
+    true
   end
 end

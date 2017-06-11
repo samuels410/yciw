@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2014 Instructure, Inc.
+# Copyright (C) 2014 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -20,10 +20,10 @@
 # API for accessing information about the users a user is observing.
 
 class UserObserveesController < ApplicationController
-  before_filter :require_user
+  before_action :require_user
 
-  before_filter :self_or_admin_permission_check, except: [:update]
-  before_filter :admin_permission_check, only: [:update]
+  before_action :self_or_admin_permission_check, except: [:update]
+  before_action :admin_permission_check, only: [:update]
 
   # @API List observees
   #

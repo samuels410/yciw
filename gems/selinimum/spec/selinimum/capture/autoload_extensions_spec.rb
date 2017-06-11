@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require "selinimum/capture/autoload_extensions"
 require "active_support/core_ext/string/inflections"
 
@@ -27,7 +44,7 @@ describe Selinimum::Capture::AutoloadExtensions do
       end
 
       context "dependency tracking" do
-        it "temporarily resets other top-level autoloads" do
+        it "temporarily resets top-level sibling autoloads" do
           cache_constants("SelinimumFoo") do
             SelinimumFoo = Class.new
           end
@@ -41,15 +58,38 @@ describe Selinimum::Capture::AutoloadExtensions do
           expect(Object.const_defined?("SelinimumBar")).to be true
         end
 
-        it "doesn't reset nested autoloads" do
-          cache_constants("SelinimumFoo") do
-            SelinimumFoo = Class.new
+        it "temporarily resets nested sibling autoloads" do
+          cache_constants("SelinimumTopLevel") do
+            SelinimumTopLevel = Class.new
+
+            cache_constants("SelinimumFoo") do
+              SelinimumFoo = Class.new
+            end
 
             cache_constants("SelinimumBar") do
-              expect(Object.const_defined?("SelinimumFoo")).to be true
+              expect(Object.const_defined?("SelinimumFoo")).to be false
               SelinimumBar = Class.new
             end
+            expect(Object.const_defined?("SelinimumFoo")).to be true
+            expect(Object.const_defined?("SelinimumBar")).to be true
           end
+        end
+
+        # this will require some refactoring...
+        it "temporarily resets outer autoloads" do
+          pending "not implemented"
+
+          cache_constants("SelinimumFoo") do
+            SelinimumTopLevel = Class.new
+
+            cache_constants("SelinimumBar") do
+              expect(Object.const_defined?("SelinimumFoo")).to be false
+              SelinimumFoo = Class.new
+            end
+          end
+
+          expect(Object.const_defined?("SelinimumFoo")).to be true
+          expect(Object.const_defined?("SelinimumBar")).to be true
         end
 
         it "doesn't reset autoloads from surrounding modules" do
@@ -71,7 +111,6 @@ describe Selinimum::Capture::AutoloadExtensions do
             SelinimumFoo = Class.new
 
             cache_constants("SelinimumBar") do
-              expect(Object.const_defined?("SelinimumFoo")).to be true
               SelinimumBar = Class.new
             end
           end

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2012 Instructure, Inc.
+# Copyright (C) 2013 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -23,7 +23,7 @@
 class Quizzes::QuizSubmissionFilesController < ApplicationController
   include Api::V1::Submission
 
-  before_filter :require_user, :require_context
+  before_action :require_user, :require_context
 
   # @API Upload a file
   # @beta

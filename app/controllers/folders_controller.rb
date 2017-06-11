@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -112,7 +112,7 @@ class FoldersController < ApplicationController
   include Api::V1::Attachment
   include AttachmentHelper
 
-  before_filter :require_context, :except => [:api_index, :show, :api_destroy, :update, :create, :create_file, :copy_folder, :copy_file]
+  before_action :require_context, :except => [:api_index, :show, :api_destroy, :update, :create, :create_file, :copy_folder, :copy_file]
 
   def index
     if authorized_action(@context, @current_user, :read)
@@ -135,8 +135,7 @@ class FoldersController < ApplicationController
     folder = Folder.find(params[:id])
     if authorized_action(folder, @current_user, :read_contents)
       can_view_hidden_files = can_view_hidden_files?(folder.context, @current_user, session)
-      opts = {:can_view_hidden_files => can_view_hidden_files}
-
+      opts = {:can_view_hidden_files => can_view_hidden_files, :context => folder.context}
       if can_view_hidden_files && folder.context.is_a?(Course) &&
           master_courses? && MasterCourses::ChildSubscription.is_child_course?(folder.context)
         opts[:master_course_restricted_folder_ids] = MasterCourses::FolderLockingHelper.locked_folder_ids_for_course(folder.context)
@@ -184,7 +183,7 @@ class FoldersController < ApplicationController
       end
 
       folders = Api.paginate(scope, self, url)
-      render json: folders_json(folders, @current_user, session, :can_view_hidden_files => can_view_hidden_files)
+      render json: folders_json(folders, @current_user, session, :can_view_hidden_files => can_view_hidden_files, :context => @context)
     end
   end
 
@@ -208,7 +207,7 @@ class FoldersController < ApplicationController
       can_view_hidden_files = can_view_hidden_files?(@context, @current_user, session)
       folders = Folder.resolve_path(@context, params[:full_path], can_view_hidden_files)
       raise ActiveRecord::RecordNotFound if folders.blank?
-      render json: folders_json(folders, @current_user, session, :can_view_hidden_files => can_view_hidden_files)
+      render json: folders_json(folders, @current_user, session, :can_view_hidden_files => can_view_hidden_files, :context => @context)
     end
   end
 

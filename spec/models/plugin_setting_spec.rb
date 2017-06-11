@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -81,6 +81,19 @@ describe PluginSetting do
       # new settings
       settings = PluginSetting.settings_for_plugin("plugin_setting_test")
       expect(settings).to eq({:food => "bar"})
+    end
+  end
+
+  it "should cache in process" do
+    RequestCache.enable do
+      enable_cache do
+        name = "plugin_setting_test"
+        ps = PluginSetting.new(:name => name, :settings => {:bar => "qwerty"})
+        s.save!
+        MultiCache.expects(:fetch).once.returns(s)
+        PluginSetting.cached_plugin_setting(name) # sets the cache
+        PluginSetting.cached_plugin_setting(name) # 2nd lookup
+      end
     end
   end
 end

@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_relative '../common'
 require_relative '../helpers/conferences_common'
 require_relative '../helpers/public_courses_context'
@@ -40,8 +57,10 @@ describe 'Web conferences' do
 
   context 'when concluding a conference' do
     let(:conference_title) { 'Newer Conference' }
-    before(:once) { create_wimba_conference(conference_title) }
-    before(:each) { start_first_conference_in_list }
+    before(:once) do
+      conference = create_wimba_conference(conference_title)
+      conference.add_attendee(@user)
+    end
 
     context 'as a teacher' do
       it 'concludes the conference', priority: "1", test_id: 323320 do
@@ -97,7 +116,7 @@ describe 'Web conferences' do
   end
 
   context 'when one conference exists' do
-    before(:once) { @conference = create_wimba_conference }
+    before(:once) { @conference = create_wimba_conference('A Conference', 1234) }
 
     context 'when the conference is open' do
       it 'should delete active conferences', priority: "1", test_id: 126912 do
@@ -114,6 +133,17 @@ describe 'Web conferences' do
         cog_menu_item = f('.al-trigger')
         delete_conference(cog_menu_item: cog_menu_item, cancel: true)
         check_element_has_focus(cog_menu_item)
+      end
+
+      it 'should open editor if edit selected from cog menu', priority: "2" do
+        cog_menu_item = f('.al-trigger')
+        edit_conference(cog_menu_item: cog_menu_item, cancel: false)
+
+        duration_edit_field = f('#web_conference_duration');
+
+        expect(duration_edit_field).to be_displayed # input field w/in editor
+        # value is localized
+        expect(duration_edit_field.attribute('value')).to eq('1,234')
       end
     end
 

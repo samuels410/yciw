@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -26,7 +26,7 @@ module ContextModulesHelper
       cache_key = cache_key_items.join('/')
       cache_key = add_menu_tools_to_cache_key(cache_key)
       cache_key = add_mastery_paths_to_cache_key(cache_key, context, context_module, user)
-      cache(cache_key, nil, &block)
+      cache(cache_key, {}, &block)
     else
       yield
     end

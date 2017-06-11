@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 module GradebookSetup
   include Factories
 
@@ -9,9 +26,7 @@ module GradebookSetup
     Factories::GradingPeriodHelper.new
   end
 
-  def create_multiple_grading_periods(term_name, now = Time.zone.now)
-    Account.default.enable_feature!(:multiple_grading_periods)
-
+  def create_grading_periods(term_name, now = Time.zone.now)
     set1 = backend_group_helper.create_for_account_with_term(Account.default, term_name, "Set 1")
     @gp_closed = backend_period_helper.create_for_group(set1, closed_attributes(now))
     @gp_ended = backend_period_helper.create_for_group(set1, ended_attributes(now))
@@ -52,5 +67,28 @@ module GradebookSetup
         start_date: 1.day.ago(now),
         end_date: 2.weeks.from_now
     }
+  end
+
+  def update_teacher_course_preferences(preferences)
+    @teacher.update preferences: {
+      gradebook_settings: {
+        @course.id => preferences
+      }
+    }
+  end
+
+  def update_display_preferences(concluded, inactive)
+    update_teacher_course_preferences({
+      'show_concluded_enrollments' => concluded.to_s,
+      'show_inactive_enrollments' => inactive.to_s
+    })
+  end
+
+  def display_concluded_enrollments
+    update_display_preferences(true, false)
+  end
+
+  def display_inactive_enrollments
+    update_display_preferences(false, true)
   end
 end

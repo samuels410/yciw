@@ -1,15 +1,28 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require 'adheres_to_policy'
 
-ActiveRecord::Base.send :extend, AdheresToPolicy::ClassMethods
+ActiveRecord::Base.singleton_class.include(AdheresToPolicy::ClassMethods)
 
-module AdheresToPolicy::InstanceMethods
-
+module ShardAwarePermissionCacheKey
   # Override the adheres_to_policy permission_cache_key for to make it shard aware.
-  def permission_cache_key_for_with_sharding(user, session, right)
-    Shard.default.activate do
-      permission_cache_key_for_without_sharding(user, session, right)
-    end
+  def permission_cache_key(user, session, right)
+    Shard.default.activate { super }
   end
-  alias_method_chain :permission_cache_key_for, :sharding
-
 end
+AdheresToPolicy::InstanceMethods.prepend(ShardAwarePermissionCacheKey)

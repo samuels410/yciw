@@ -1,8 +1,21 @@
-require 'academic_benchmarks'
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
 
-require 'academic_benchmark/ab_gem_extensions/standard'
-require 'academic_benchmark/ab_gem_extensions/authority'
-require 'academic_benchmark/ab_gem_extensions/document'
+require 'academic_benchmarks'
 
 module AcademicBenchmark
   class Converter < Canvas::Migration::Migrator
@@ -60,7 +73,7 @@ module AcademicBenchmark
           if !@archive_file.nil? && settings[:archive_file].nil?
             settings[:archive_file] = @archive_file
           end
-          fetcher = Data.load_data(settings)
+          fetcher = OutcomeData.load_data(settings)
           @_outcome_data = fetcher.data
         rescue EOFError, APIError => e
           add_error(
@@ -73,3 +86,5 @@ module AcademicBenchmark
     end
   end
 end
+
+SafeYAML.whitelist_class!(AcademicBenchmark::Converter)

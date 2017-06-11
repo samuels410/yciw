@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 # Utility methods for arrays of objects
 #
 # Returns an array with extra methods.  It uses direct property injection so our
@@ -9,7 +26,7 @@ define ->
     array.indexOf = (needle) ->
       for item, index in array
         return index if item is needle
-    -1
+      -1
 
     # Can find a specific element by a property ie:
     #   arr = arrayOfObjects([{id: 1}, {id: 2}])

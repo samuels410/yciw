@@ -1,10 +1,27 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+#
+
 require_relative '../../helpers/gradebook_common'
 require_relative '../page_objects/srgb_page'
 require_relative '../page_objects/grading_curve_page'
 
 describe "Screenreader Gradebook" do
   include_context 'in-process server selenium tests'
-  include_context 'gradebook_components'
   include_context 'reusable_course'
   include GradebookCommon
 
@@ -80,11 +97,11 @@ describe "Screenreader Gradebook" do
 
     click_option '#student_select', @students[0].name
     assignment_points = ["(#{@grade_array[0]} / 20)", "(#{@grade_array[2]} / 20)"]
-    expect(ff('#student_information .assignment-group-grade .points').map(&:text)).to eq assignment_points
+    expect(ff('#student_information .assignment-subtotal-grade .points').map(&:text)).to eq assignment_points
 
     click_option '#student_select', @students[1].name
     assignment_points = ["(#{@grade_array[1]} / 20)", "(#{@grade_array[3]} / 20)"]
-    expect(ff('#student_information .assignment-group-grade .points').map(&:text)).to eq assignment_points
+    expect(ff('#student_information .assignment-subtotal-grade .points').map(&:text)).to eq assignment_points
   end
 
   it 'can select a student using buttons', priority: '1', test_id: 163997 do

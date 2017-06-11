@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -27,6 +27,8 @@ class ContextModuleProgression < ActiveRecord::Base
 
   serialize :requirements_met, Array
   serialize :incomplete_requirements, Array
+
+  validates_presence_of :user_id, :context_module_id
 
   def completion_requirements
     context_module.try(:completion_requirements) || []

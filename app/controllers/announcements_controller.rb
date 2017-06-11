@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -21,8 +21,8 @@ require 'atom'
 class AnnouncementsController < ApplicationController
   include Api::V1::DiscussionTopics
 
-  before_filter :require_context, :except => :public_feed
-  before_filter { |c| c.active_tab = "announcements" }
+  before_action :require_context, :except => :public_feed
+  before_action { |c| c.active_tab = "announcements" }
 
   def index
     return unless authorized_action(@context, @current_user, :read)
@@ -35,10 +35,17 @@ class AnnouncementsController < ApplicationController
         can_create = @context.announcements.temp_record.grants_right?(@current_user, session, :create)
         js_env :permissions => {
           :create => can_create,
+          manage_content: @context.grants_right?(@current_user, session, :manage_content),
           :moderate => can_create
         }
         js_env :is_showing_announcements => true
         js_env :atom_feed_url => feeds_announcements_format_path((@context_enrollment || @context).feed_code, :atom)
+
+        if @context.is_a?(Course) && @context.grants_right?(@current_user, session, :read) && !@js_env[:COURSE_ID].present?
+          js_env :COURSE_ID => @context.id.to_s
+        end
+
+        set_tutorial_js_env
       end
     end
   end
@@ -63,7 +70,7 @@ class AnnouncementsController < ApplicationController
         announcements.each do |e|
           feed.entries << e.to_atom
         end
-        render :text => feed.to_xml
+        render :plain => feed.to_xml
       }
       format.rss {
         @announcements = announcements
@@ -83,7 +90,7 @@ class AnnouncementsController < ApplicationController
           channel.items << item
         end
         rss.channel = channel
-        render :text => rss.to_s
+        render :plain => rss.to_s
       }
     end
   end

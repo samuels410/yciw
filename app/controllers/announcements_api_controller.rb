@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016 Instructure, Inc.
+# Copyright (C) 2016 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -24,8 +24,8 @@
 class AnnouncementsApiController < ApplicationController
   include Api::V1::DiscussionTopics
 
-  before_filter :parse_context_codes, :only => [:index]
-  before_filter :get_dates, :only => [:index]
+  before_action :parse_context_codes, :only => [:index]
+  before_action :get_dates, :only => [:index]
 
   # @API List announcements
   #
@@ -88,9 +88,11 @@ class AnnouncementsApiController < ApplicationController
 
     @topics = Api.paginate(scope, self, api_v1_announcements_url)
 
+    text_only = value_to_boolean(params[:text_only])
     render :json => @topics.map { |topic|
              discussion_topic_api_json(topic, topic.context, @current_user, session,
-               { :user_can_moderate => false, :include_assignment => false, :include_context_code => true })
+               { :user_can_moderate => false, :include_assignment => false,
+                 :include_context_code => true, :text_only => text_only})
            }
   end
 

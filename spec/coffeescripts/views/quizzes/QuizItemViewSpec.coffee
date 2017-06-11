@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'Backbone'
   'compiled/models/Quiz'
@@ -30,14 +47,16 @@ define [
 
     ENV.FLAGS = {
       post_to_sis_enabled: options.post_to_sis
+      migrate_quiz_enabled: options.migrate_quiz_enabled
     }
 
     view = new QuizItemView(model: quiz, publishIconView: icon)
     view.$el.appendTo $('#fixtures')
     view.render()
 
-  module 'QuizItemView',
+  QUnit.module 'QuizItemView',
     setup: ->
+      @ajaxStub = @stub $, 'ajaxJSON'
       fakeENV.setup({
         CONDITIONAL_RELEASE_ENV: {
           active_rules: [{
@@ -65,19 +84,69 @@ define [
     view = createView(quiz)
     equal view.$('.ig-admin').length, 0
 
-  test "initializes sis toggle if post to sis enabled", ->
+  test "renders Migrate Button if post to migrateQuizEnabled is true", ->
     quiz = createQuiz(id: 1, title: 'Foo', can_update: true)
+    view = createView(quiz, canManage: true, migrate_quiz_enabled: true)
+    equal view.$('.migrate').length, 1
+
+  test "does not render Migrate Button if migrateQuizEnabled is false", ->
+    quiz = createQuiz(id: 1, title: 'Foo', can_update: true)
+    view = createView(quiz, canManage: true, migrate_quiz_enabled: false)
+    equal view.$('.migrate').length, 0
+
+  test "#migrateQuiz is called", ->
+    quiz = createQuiz(id: 1, title: 'Foo', can_update: true)
+    view = createView(quiz, canManage: true, migrate_quiz_enabled: false)
+    event = new jQuery.Event
+    view.migrateQuiz(event)
+    ok @ajaxStub.called
+
+  test "initializes sis toggle if post to sis enabled", ->
+    quiz = createQuiz(id: 1, title: 'Foo', can_update: true, published: true)
+    quiz.set('post_to_sis', true)
     view = createView(quiz, canManage: true, post_to_sis: true)
     ok view.sisButtonView
 
-  test "does not initialize sis toggle if post to sis disabled", ->
+  test "initializes sis toggle if post to sis disabled", ->
+    quiz = createQuiz(id: 1, title: 'Foo', can_update: true, published: true)
+    quiz.set('post_to_sis', false)
+    view = createView(quiz, canManage: true, post_to_sis: true)
+    ok view.sisButtonView
+
+  test "does not initialize sis toggle if post to sis is null", ->
     quiz = createQuiz(id: 1, title: 'Foo', can_update: true)
-    view = createView(quiz, canManage: true, post_to_sis: false)
+    quiz.set('post_to_sis', null)
+    view = createView(quiz, canManage: true)
     ok !view.sisButtonView
 
   test "does not initialize sis toggle if sis enabled but can't manage", ->
     quiz = createQuiz(id: 1, title: 'Foo', can_update: false)
-    view = createView(quiz, canManage: false, post_to_sis: false)
+    quiz.set('post_to_sis', false)
+    view = createView(quiz, canManage: false)
+    ok !view.sisButtonView
+
+  test "does not initialize sis toggle if sis enabled, can't manage and is unpublished", ->
+    quiz = createQuiz(id: 1, title: 'Foo', can_update: false, published: false)
+    quiz.set('post_to_sis', true)
+    view = createView(quiz, canManage: false)
+    ok !view.sisButtonView
+
+  test "does not initialize sis toggle if sis disabled, can't manage and is unpublished", ->
+    quiz = createQuiz(id: 1, title: 'Foo', can_update: false, published: false)
+    quiz.set('post_to_sis', false)
+    view = createView(quiz, canManage: false)
+    ok !view.sisButtonView
+
+  test "does not initialize sis toggle if sis enabled, can manage and is unpublished", ->
+    quiz = createQuiz(id: 1, title: 'Foo', can_update: false, published: false)
+    quiz.set('post_to_sis', true)
+    view = createView(quiz, canManage: true)
+    ok !view.sisButtonView
+
+  test "does not initialize sis toggle if sis disabled, can manage and is unpublished", ->
+    quiz = createQuiz(id: 1, title: 'Foo', can_update: false, published: false)
+    quiz.set('post_to_sis', false)
+    view = createView(quiz, canManage: true)
     ok !view.sisButtonView
 
   test 'udpates publish status when model changes', ->
@@ -105,7 +174,7 @@ define [
     view = createView(quiz)
     quiz.destroy = -> true
 
-    @stub(window, "confirm", -> true )
+    @stub(window, "confirm").returns(true)
 
     view.$('.delete-item').simulate 'click'
     ok window.confirm.called
@@ -116,7 +185,7 @@ define [
 
     destroyed = false
     quiz.destroy = ->  destroyed = true
-    @stub(window, "confirm", -> true )
+    @stub(window, "confirm").returns(true)
 
     view.$('.delete-item').simulate 'click'
     ok destroyed

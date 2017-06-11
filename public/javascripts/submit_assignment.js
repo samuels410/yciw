@@ -1,5 +1,5 @@
-/**
- * Copyright (C) 2012 Instructure, Inc.
+/*
+ * Copyright (C) 2012 - present Instructure, Inc.
  *
  * This file is part of Canvas.
  *
@@ -12,8 +12,8 @@
  * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
  * details.
  *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 define([
@@ -238,11 +238,12 @@ define([
       }
     });
 
-    window.onbeforeunload = function() {
+    $(window).on('beforeunload', function(e) {
       if($("#submit_assignment:visible").length > 0 && !submitting) {
-        return I18n.t('messages.not_submitted_yet', "You haven't finished submitting your assignment.  You still need to click \"Submit\" to finish turning it in.  Do you want to leave this page anyway?");
+        e.returnValue = I18n.t('messages.not_submitted_yet', "You haven't finished submitting your assignment.  You still need to click \"Submit\" to finish turning it in.  Do you want to leave this page anyway?");
+        return e.returnValue;
       }
-    };
+    });
 
     $(document).fragmentChange(function(event, hash) {
       if(hash && hash.indexOf("#submit") == 0) {
@@ -297,7 +298,7 @@ define([
         },
         activate: function(event, ui) {
           if (ui.newTab.find('a').hasClass('submit_online_text_entry_option')) {
-            $el = $("#submit_online_text_entry_form textarea:first");
+            var $el = $("#submit_online_text_entry_form textarea:first");
             if (!RichContentEditor.callOnRCE($el, 'exists?')) {
               RichContentEditor.loadNewEditor($el, {manageParent: true});
             }
@@ -309,7 +310,7 @@ define([
         },
         create: function(event, ui) {
           if (ui.tab.find('a').hasClass('submit_online_text_entry_option')) {
-            $el = $("#submit_online_text_entry_form textarea:first");
+            var $el = $("#submit_online_text_entry_form textarea:first");
             if (!RichContentEditor.callOnRCE($el, 'exists?')) {
               RichContentEditor.loadNewEditor($el, {manageParent: true});
             }

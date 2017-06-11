@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 module Canvas::LiveEvents
   def self.post_event_stringified(event_name, payload, context = nil)
     StringifyIds.recursively_stringify_ids(payload)
@@ -11,6 +28,7 @@ module Canvas::LiveEvents
       context_type: canvas_context.class.to_s,
       context_id: canvas_context.global_id,
       root_account_id: canvas_context.root_account.try(:global_id),
+      root_account_uuid: canvas_context.root_account.try(:uuid),
       root_account_lti_guid: canvas_context.root_account.try(:lti_guid),
     })
   end
@@ -78,15 +96,24 @@ module Canvas::LiveEvents
     })
   end
 
-  def self.group_membership_created(membership)
-    post_event_stringified('group_membership_created', {
+  def self.get_group_membership_data(membership)
+    {
       group_membership_id: membership.global_id,
       user_id: membership.global_user_id,
       group_id: membership.global_group_id,
       group_name: membership.group.name,
       group_category_id: membership.group.global_group_category_id,
-      group_category_name: membership.group.group_category.try(:name)
-    })
+      group_category_name: membership.group.group_category.try(:name),
+      workflow_state: membership.workflow_state
+    }
+  end
+
+  def self.group_membership_created(membership)
+    post_event_stringified('group_membership_created', get_group_membership_data(membership))
+  end
+
+  def self.group_membership_updated(membership)
+    post_event_stringified('group_membership_updated', get_group_membership_data(membership))
   end
 
   def self.group_category_created(group_category)
@@ -96,13 +123,25 @@ module Canvas::LiveEvents
     })
   end
 
-  def self.group_created(group)
-    post_event_stringified('group_created', {
+  def self.get_group_data(group)
+    {
       group_category_id: group.global_group_category_id,
       group_category_name: group.group_category.try(:name),
       group_id: group.global_id,
-      group_name: group.name
-    })
+      group_name: group.name,
+      context_type: group.context_type,
+      context_id: group.global_context_id,
+      account_id: group.global_account_id,
+      workflow_state: group.workflow_state
+    }
+  end
+
+  def self.group_created(group)
+    post_event_stringified('group_created', get_group_data(group))
+  end
+
+  def self.group_updated(group)
+    post_event_stringified('group_updated', get_group_data(group))
   end
 
   def self.get_assignment_data(assignment)
@@ -117,7 +156,8 @@ module Canvas::LiveEvents
       unlock_at: assignment.unlock_at,
       lock_at: assignment.lock_at,
       updated_at: assignment.updated_at,
-      points_possible: assignment.points_possible
+      points_possible: assignment.points_possible,
+      lti_assignment_id: assignment.lti_context_id
     }
   end
 
@@ -142,7 +182,8 @@ module Canvas::LiveEvents
       submission_type: submission.submission_type,
       body: LiveEvents.truncate(submission.body),
       url: submission.url,
-      attempt: submission.attempt
+      attempt: submission.attempt,
+      lti_assignment_id: submission.assignment.lti_context_id
     }
   end
 
@@ -170,6 +211,10 @@ module Canvas::LiveEvents
     post_event_stringified('submission_updated', get_submission_data(submission))
   end
 
+  def self.plagiarism_resubmit(submission)
+    post_event_stringified('plagiarism_resubmit', get_submission_data(submission))
+  end
+
   def self.get_user_data(user)
     {
       user_id: user.global_id,
@@ -190,8 +235,7 @@ module Canvas::LiveEvents
   end
 
   def self.get_enrollment_data(enrollment)
-    {
-
+    data = {
       enrollment_id: enrollment.global_id,
       course_id: enrollment.global_course_id,
       user_id: enrollment.global_user_id,
@@ -203,6 +247,8 @@ module Canvas::LiveEvents
       course_section_id: enrollment.global_course_section_id,
       workflow_state: enrollment.workflow_state
     }
+    data[:associated_user_id] = enrollment.global_associated_user_id if enrollment.observer?
+    data
   end
 
   def self.enrollment_created(enrollment)
@@ -273,16 +319,16 @@ module Canvas::LiveEvents
   def self.wiki_page_updated(page, old_title, old_body)
     payload = {
       wiki_page_id: page.global_id,
-      title: page.title,
-      body: page.body
+      title: LiveEvents.truncate(page.title),
+      body: LiveEvents.truncate(page.body)
     }
 
     if old_title
-      payload[:old_title] = old_title
+      payload[:old_title] = LiveEvents.truncate(old_title)
     end
 
     if old_body
-      payload[:old_body] = old_body
+      payload[:old_body] = LiveEvents.truncate(old_body)
     end
 
     post_event_stringified('wiki_page_updated', payload)
@@ -352,5 +398,10 @@ module Canvas::LiveEvents
       role: role,
       level: level
     })
+  end
+
+  def self.quiz_export_complete(content_export)
+    payload = content_export.settings[:quizzes2]
+    post_event_stringified('quiz_export_complete', payload, amended_context(content_export.context))
   end
 end

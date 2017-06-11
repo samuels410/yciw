@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -23,10 +23,10 @@ describe "/assignments/syllabus" do
   it "should render" do
     course_with_student
     view_context(@course, @user)
-    
-    assigns[:events] = [@course.assignments.create!(:title => "some assignment", :due_at => Time.now), @course.calendar_events.create!(:title => "some event", :start_at => Time.now, :end_at => Time.now)]
-    assigns[:dates] = assigns[:events].map{|e| e.start_at}
-    assigns[:undated_events] = [@course.assignments.create!(:title => "assignment 2"), @course.calendar_events.create!(:title => "event 2")]
+
+    events = assign(:events, [@course.assignments.create!(:title => "some assignment", :due_at => Time.now), @course.calendar_events.create!(:title => "some event", :start_at => Time.now, :end_at => Time.now)])
+    assign(:dates, events.map{|e| e.start_at})
+    assign(:undated_events, [@course.assignments.create!(:title => "assignment 2"), @course.calendar_events.create!(:title => "event 2")])
     render 'assignments/syllabus'
     expect(response).not_to be_nil
   end

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -27,8 +27,8 @@ describe "/context_modules/url_show" do
     @tag = @module.add_item(:type => 'external_url',
                             :url => 'http://example.com/lolcats',
                             :title => 'pls view')
-    assigns[:module] = @module
-    assigns[:tag] = @tag
+    assign(:module, @module)
+    assign(:tag, @tag)
     render 'context_modules/url_show'
     doc = Nokogiri::HTML.parse(response.body)
     expect(doc.at_css('iframe')['src']).to eq 'http://example.com/lolcats'

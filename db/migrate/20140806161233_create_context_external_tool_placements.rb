@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 class CreateContextExternalToolPlacements < ActiveRecord::Migration[4.2]
   tag :predeploy
 
@@ -15,49 +32,6 @@ class CreateContextExternalToolPlacements < ActiveRecord::Migration[4.2]
     add_index :context_external_tool_placements, [:placement_type, :context_external_tool_id], unique: true, :name => 'external_tool_placements_type_and_tool_id'
 
     add_foreign_key :context_external_tool_placements, :context_external_tools
-
-    # create some triggers so nothing falls through the cracks
-    if connection.adapter_name == 'PostgreSQL'
-
-      EXTENSION_TYPES.each do |type|
-        column = "has_#{type}"
-        create_trigger("tool_after_insert_#{type}_is_true__tr", :generated => true).
-            on("context_external_tools").
-            after(:insert).
-            where("NEW.#{column}") do
-          <<-SQL_ACTIONS
-            INSERT INTO context_external_tool_placements(placement_type, context_external_tool_id)
-            VALUES ('#{type}', NEW.id)
-          SQL_ACTIONS
-        end
-        connection.set_search_path_on_function("tool_after_insert_#{type}_is_true__tr")
-
-        create_trigger("tool_after_update_#{type}_is_true__tr", :generated => true).
-            on("context_external_tools").
-            after(:update).
-            where("NEW.#{column}") do
-          <<-SQL_ACTIONS
-            INSERT INTO context_external_tool_placements(placement_type, context_external_tool_id)
-            SELECT '#{type}', NEW.id
-            WHERE NOT EXISTS(
-              SELECT 1 FROM context_external_tool_placements WHERE placement_type = '#{type}' AND context_external_tool_id = NEW.id
-            )
-          SQL_ACTIONS
-        end
-        connection.set_search_path_on_function("tool_after_update_#{type}_is_true__tr")
-
-
-        create_trigger("tool_after_update_#{type}_is_false__tr", :generated => true).
-            on("context_external_tools").
-            after(:update).
-            where("NOT NEW.#{column}") do
-          <<-SQL_ACTIONS
-            DELETE FROM context_external_tool_placements WHERE placement_type = '#{type}' AND context_external_tool_id = NEW.id
-          SQL_ACTIONS
-        end
-        connection.set_search_path_on_function("tool_after_update_#{type}_is_false__tr")
-      end
-    end
 
     # now populate the placements
     EXTENSION_TYPES.each do |type|

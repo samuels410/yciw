@@ -1,3 +1,21 @@
+/*
+ * Copyright (C) 2015 - present Instructure, Inc.
+ *
+ * This file is part of Canvas.
+ *
+ * Canvas is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, version 3 of the License.
+ *
+ * Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 @mixin primary-nav-badge-border($border-color) { box-shadow: 0 0 0 2px $border-color; }
 
 
@@ -337,7 +355,13 @@ body.primary-nav-expanded {
 
   .ic-app-header__menu-list-item.ic-app-header__menu-list-item--active {
     .menu-item__text {
-      color: $ic-brand-global-nav-menu-item__text-color--active;
+
+      @if $use_high_contrast {
+        color: $ic-link-color;
+      }
+      @else {
+        color: $ic-brand-global-nav-menu-item__text-color--active;
+      }
     }
   }
 
@@ -368,7 +392,7 @@ body.primary-nav-expanded {
     opacity: 1;
     text-align: center;
     display: block;
-    line-height: 1;
+    line-height: 1.4;
     border-radius: 0;
     margin: $ic-sp/4 0 0;
     padding: 0;
@@ -486,6 +510,9 @@ body.primary-nav-expanded {
     .ic-NavMenu__headline {
       flex: 1;
       min-width: 1px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
     }
 
   }

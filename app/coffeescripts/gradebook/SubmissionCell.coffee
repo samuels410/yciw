@@ -1,6 +1,26 @@
+#
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'jquery'
   'underscore'
+  'i18n!gradebook'
+  'jsx/shared/helpers/numberHelper'
+  'jsx/gradebook/shared/helpers/GradeFormatHelper'
   'compiled/gradebook/GradebookTranslations'
   'jsx/grading/helpers/OutlierScoreHelper'
   'str/htmlEscape'
@@ -8,7 +28,8 @@ define [
   'compiled/util/round'
   'jquery.ajaxJSON'
   'jquery.instructure_misc_helpers' # raw
-], ($, _, GRADEBOOK_TRANSLATIONS, OutlierScoreHelper, htmlEscape, {extractDataTurnitin}, round) ->
+], ($, _, I18n, numberHelper, GradeFormatHelper, GRADEBOOK_TRANSLATIONS,
+  OutlierScoreHelper, htmlEscape, {extractDataTurnitin}, round) ->
 
   class SubmissionCell
 
@@ -30,7 +51,10 @@ define [
       @val = if @opts.item[@opts.column.field].excused
         "EX"
       else
-        @val = htmlEscape @opts.item[@opts.column.field].grade || ""
+        submission = @opts.item[@opts.column.field]
+        grade = submission.grade || ''
+        formattedGrade = GradeFormatHelper.formatGrade(grade, { gradingType: submission.gradingType })
+        @val = htmlEscape(formattedGrade)
       @$input.val(@val)
       @$input[0].defaultValue = @val
       @$input.select()
@@ -44,8 +68,9 @@ define [
         submission.excused = true
       else
         submission.grade = htmlEscape state
-        pointsPossible = @opts.column.object.points_possible
-        outlierScoreHelper = new OutlierScoreHelper(state, pointsPossible)
+        pointsPossible = numberHelper.parse(@opts.column.object.points_possible)
+        score = numberHelper.parse(state)
+        outlierScoreHelper = new OutlierScoreHelper(score, pointsPossible)
         $.flashWarning(outlierScoreHelper.warningMessage()) if outlierScoreHelper.hasWarning()
       @wrapper?.remove()
       @postValue(item, state)
@@ -57,7 +82,7 @@ define [
       data = if state.toUpperCase() == "EX"
         {"submission[excuse]": true}
       else
-        {"submission[posted_grade]": state}
+        {"submission[posted_grade]": GradeFormatHelper.delocalizeGrade(state)}
       $.ajaxJSON url, "PUT", data, @onUpdateSuccess, @onUpdateError
 
     onUpdateSuccess: (submission) ->
@@ -76,14 +101,13 @@ define [
       if submission.excused
         grade = "EX"
       else
-        grade = parseFloat submission.grade
-        grade = if isNaN(grade)
-          submission.grade
-        else
-          round(grade, round.DEFAULT)
-
-        if grade && assignment?.grading_type == "percent"
-          grade = grade.toString() + "%"
+        grade = GradeFormatHelper.formatGrade(
+          submission.grade,
+          {
+            gradingType: assignment?.grading_type,
+            precision: round.DEFAULT
+          }
+        )
 
       this.prototype.cellWrapper(grade, {
         submission: submission,
@@ -181,7 +205,11 @@ define [
       @$wrapper = $(@cellWrapper("""
         <div class="overflow-wrapper">
           <div class="grade-and-outof-wrapper">
-            <input type="text" #{@ariaLabelTemplate(submission.submission_type)} class="grade"/><span class="outof"><span class="divider">/</span>#{htmlEscape @opts.column.object.points_possible}</span>
+            <input type="text" #{@ariaLabelTemplate(submission.submission_type)} class="grade"/>
+            <span class="outof">
+              <span class="divider">/</span>
+              #{htmlEscape(I18n.n(@opts.column.object.points_possible))}
+            </span>
           </div>
         </div>
       """, { classes: 'gradebook-cell-out-of-formatter' })).appendTo(@opts.container)
@@ -192,7 +220,7 @@ define [
       innerContents = if submission.excused
         "EX"
       else if submission.score?
-        "#{htmlEscape submission.grade}<span class='letter-grade-points'>#{htmlEscape submission.score}</span>"
+        "#{htmlEscape submission.grade}<span class='letter-grade-points'>#{htmlEscape(I18n.n(submission.score))}</span>"
       else
         submission.grade
 

@@ -1,4 +1,5 @@
-# Copyright (C) 2014 Instructure, Inc.
+#
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -38,8 +39,8 @@ module Lti
         case o
         when ContextExternalTool
           hash = external_tool_definition(o)
-          if opts[:include_master_course_restrictions]
-            hash.merge!(o.master_course_api_restriction_data)
+          if opts[:master_course_status]
+            hash.merge!(o.master_course_api_restriction_data(opts[:master_course_status]))
           end
           hash
         when ToolProxy

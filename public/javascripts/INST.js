@@ -1,3 +1,21 @@
+/*
+ * Copyright (C) 2011 - present Instructure, Inc.
+ *
+ * This file is part of Canvas.
+ *
+ * Canvas is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, version 3 of the License.
+ *
+ * Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 /* global ScriptEngineMajorVersion: false, escape: false */
 define(['jquery'], function($) {
   var classesToAdd, userAgent, isIEGreaterThan10;
@@ -10,7 +28,7 @@ define(['jquery'], function($) {
 
   // for backwards compat, this might be defined already but we expose
   // it as a module here
-  if (typeof INST === 'undefined') INST = {};
+  if (!('INST' in window)) window.INST = {};
 
   // ============================================================================================
   // = Try to figure out what browser they are using and set INST.broswer.theirbrowser to true  =

@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 class EnrollmentState < ActiveRecord::Base
   belongs_to :enrollment
 
@@ -18,11 +35,6 @@ class EnrollmentState < ActiveRecord::Base
     Shackles.activate(:master) do
       retry_count = 0
       begin
-        if self.lock_version == 0 || self.lock_version.nil?
-          # needed to prevent stale object errors for pre-existing enrollment state objects (it casts the null value to 0)
-          EnrollmentState.where(:enrollment_id => self, :lock_version => nil).update_all(:lock_version => 0)
-        end
-
         self.recalculate_state if self.state_needs_recalculation? || retry_count > 0 # force double-checking on lock conflict
         self.recalculate_access if !self.access_is_current? || retry_count > 0
         self.save! if self.changed?

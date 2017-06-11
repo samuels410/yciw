@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2013 Instructure, Inc.
+# Copyright (C) 2013 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -26,6 +26,7 @@ describe FeatureFlags do
   let(:t_course) { course_with_teacher(user: t_user, account: t_sub_account, active_all: true).course }
 
   before do
+    User.any_instance.stubs(:set_default_feature_flags)
     Feature.stubs(:definitions).returns({
       'root_account_feature' => Feature.new(feature: 'root_account_feature', applies_to: 'RootAccount', state: 'off'),
       'account_feature' => Feature.new(feature: 'account_feature', applies_to: 'Account', state: 'on'),

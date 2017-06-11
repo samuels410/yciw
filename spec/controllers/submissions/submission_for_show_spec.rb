@@ -1,4 +1,5 @@
-# Copyright (C) 2016 Instructure, Inc.
+#
+# Copyright (C) 2015 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -42,6 +43,7 @@ describe Submissions::SubmissionForShow do
 
   describe '#submission' do
     it 'instantiates a new submission when one is not present' do
+      Submission.delete_all
       expect(subject.submission).to be_new_record
     end
 
@@ -89,7 +91,7 @@ describe Submissions::SubmissionForShow do
             submission.quiz_submission.with_versioning(true) do
               submission.quiz_submission.update_attribute(:finished_at, 1.hour.ago)
             end
-            @options = @options.merge({ preview: true, version: submission.quiz_submission_version })
+            @options = @options.merge({ preview: true, version: submission.quiz_submission.versions.last.number, assignment_id: @assignment.id })
           end
 
           it 'ignores version params' do

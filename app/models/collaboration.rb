@@ -1,5 +1,5 @@
-
-# Copyright (C) 2011-2012 Instructure, Inc.
+#
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -113,11 +113,7 @@ class Collaboration < ActiveRecord::Base
   #
   # Returns a class or nil.
   def self.collaboration_class(type)
-    config_exists = Collaboration.collaboration_types.map { |collaboration|
-      collaboration['type'].titleize.gsub(/\s/, '')
-    }.include?(type)
-
-    if config_exists && klass = "#{type}Collaboration".constantize
+    if klass = "#{type}Collaboration".constantize
       klass.ancestors.include?(Collaboration) && klass.config ? klass : nil
     end
   rescue NameError
@@ -268,7 +264,7 @@ class Collaboration < ActiveRecord::Base
     update_group_collaborators(group_ids)
     if respond_to?(:add_users_to_document)
       group_users_to_add = User.
-          uniq.
+          distinct.
           joins(:group_memberships).
           where('group_memberships.group_id' => group_ids).to_a
       add_users_to_document((users + group_users_to_add).uniq)

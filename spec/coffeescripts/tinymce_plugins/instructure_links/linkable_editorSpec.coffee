@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'jquery',
   'tinymce_plugins/instructure_links/linkable_editor',
@@ -6,7 +23,7 @@ define [
 
   rawEditor = null
 
-  module "LinkableEditor",
+  QUnit.module "LinkableEditor",
     setup: ->
       $("#fixtures").html("<div id='some_editor' data-value='42'></div>")
       rawEditor = {
@@ -34,12 +51,13 @@ define [
     text = "Link HREF"
     classes = ""
     expectedOpts = {
-      url: text,
-      classes: classes,
-      selectedContent: "Some Content"
+      classes: "",
+      dataAttributes: undefined,
+      selectedContent: "Some Content",
+      url: "Link HREF"
     }
     edMock = @mock(jqueryEditor)
-    edMock.expects("editorBox").withArgs('create_link', sinon.match(expectedOpts))
+    edMock.expects("editorBox").withArgs('create_link', expectedOpts)
     editor.createLink(text, classes)
 
   test "createLink passes data attributes to create_link command", ->

@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'react'
   'react-dom'
@@ -8,6 +25,8 @@ define [
 
   defaultProps =
     title: "Spring"
+    weight: 50
+    weighted: false
     startDate: new Date("2015-03-01T00:00:00Z")
     endDate: new Date("2015-05-31T00:00:00Z")
     closeDate: new Date("2015-06-07T00:00:00Z")
@@ -24,7 +43,7 @@ define [
 
   wrapper = document.getElementById('fixtures')
 
-  module 'GradingPeriod with read-only permissions',
+  QUnit.module 'GradingPeriod with read-only permissions',
     renderComponent: (opts = {}) ->
       readOnlyProps =
         permissions: {
@@ -60,18 +79,23 @@ define [
   test 'displays the correct attributes', ->
     gradingPeriod = @renderComponent()
     equal gradingPeriod.refs.title.textContent, "Spring"
-    equal gradingPeriod.refs.startDate.textContent, "Mar 1, 2015 at 12am"
-    equal gradingPeriod.refs.endDate.textContent, "May 31, 2015 at 12am"
+    equal gradingPeriod.refs.startDate.textContent, "Mar 1, 2015"
+    equal gradingPeriod.refs.endDate.textContent, "May 31, 2015"
+    equal gradingPeriod.refs.weight, null
 
   test 'displays the assigned close date', ->
     gradingPeriod = @renderComponent()
-    equal gradingPeriod.refs.closeDate.textContent, "Jun 7, 2015 at 12am"
+    equal gradingPeriod.refs.closeDate.textContent, "Jun 7, 2015"
 
   test 'uses the end date when close date is not defined', ->
     gradingPeriod = @renderComponent(closeDate: null)
-    equal gradingPeriod.refs.closeDate.textContent, "May 31, 2015 at 12am"
+    equal gradingPeriod.refs.closeDate.textContent, "May 31, 2015"
 
-  module "GradingPeriod with 'readOnly' set to true",
+  test 'displays weight only when weighted is true', ->
+    gradingPeriod = @renderComponent(weighted: true)
+    equal gradingPeriod.refs.weight.textContent, "50%"
+
+  QUnit.module "GradingPeriod with 'readOnly' set to true",
     renderComponent: (opts = {}) ->
       readOnlyProps =
         readOnly: true
@@ -100,22 +124,24 @@ define [
     notEqual gradingPeriod.refs.title.type, "INPUT"
     notEqual gradingPeriod.refs.startDate.type, "INPUT"
     notEqual gradingPeriod.refs.endDate.type, "INPUT"
+    equal gradingPeriod.refs.weight, null
 
   test 'displays the correct attributes', ->
     gradingPeriod = @renderComponent()
     equal gradingPeriod.refs.title.textContent, "Spring"
-    equal gradingPeriod.refs.startDate.textContent, "Mar 1, 2015 at 12am"
-    equal gradingPeriod.refs.endDate.textContent, "May 31, 2015 at 12am"
+    equal gradingPeriod.refs.startDate.textContent, "Mar 1, 2015"
+    equal gradingPeriod.refs.endDate.textContent, "May 31, 2015"
+    equal gradingPeriod.refs.weight, null
 
   test 'displays the assigned close date', ->
     gradingPeriod = @renderComponent()
-    equal gradingPeriod.refs.closeDate.textContent, "Jun 7, 2015 at 12am"
+    equal gradingPeriod.refs.closeDate.textContent, "Jun 7, 2015"
 
   test 'uses the end date when close date is not defined', ->
     gradingPeriod = @renderComponent(closeDate: null)
-    equal gradingPeriod.refs.closeDate.textContent, "May 31, 2015 at 12am"
+    equal gradingPeriod.refs.closeDate.textContent, "May 31, 2015"
 
-  module 'editable GradingPeriod',
+  QUnit.module 'editable GradingPeriod',
     renderComponent: (opts = {}) ->
       props = _.defaults(opts, defaultProps)
       GradingPeriodElement = React.createElement(GradingPeriod, props)
@@ -133,16 +159,18 @@ define [
     equal gradingPeriod.refs.title.tagName, "INPUT"
     equal gradingPeriod.refs.startDate.tagName, "INPUT"
     equal gradingPeriod.refs.endDate.tagName, "INPUT"
+    equal gradingPeriod.refs.weight, null
 
   test 'displays the correct attributes', ->
     gradingPeriod = @renderComponent()
     equal gradingPeriod.refs.title.value, "Spring"
-    equal gradingPeriod.refs.startDate.value, "Mar 1, 2015 at 12am"
-    equal gradingPeriod.refs.endDate.value, "May 31, 2015 at 12am"
+    equal gradingPeriod.refs.startDate.value, "Mar 1, 2015"
+    equal gradingPeriod.refs.endDate.value, "May 31, 2015"
+    equal gradingPeriod.refs.weight, null
 
   test 'uses the end date for close date', ->
     gradingPeriod = @renderComponent()
-    equal gradingPeriod.refs.closeDate.textContent, "May 31, 2015 at 12am"
+    equal gradingPeriod.refs.closeDate.textContent, "May 31, 2015"
 
   test "calls onClick handler for clicks on 'delete grading period'", ->
     deleteSpy = sinon.spy()
@@ -156,7 +184,7 @@ define [
     Simulate.click(gradingPeriod.refs.deleteButton)
     notOk deleteSpy.called
 
-  module 'custom prop validation for editable periods',
+  QUnit.module 'custom prop validation for editable periods',
     renderComponent: (opts = {}) ->
       props = _.defaults(opts, defaultProps)
       GradingPeriodElement = React.createElement(GradingPeriod, props)

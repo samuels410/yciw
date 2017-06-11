@@ -2,15 +2,8 @@
 <project version="4">
   <component name="dataSourceStorageLocal">
     <data-source name="PostgreSQL - yciw@localhost" uuid="d3bc9edf-7a17-40a2-8c99-19cf785fadfc">
-      <database-info product="PostgreSQL" version="9.3.12" jdbc-version="4.0" driver-name="PostgreSQL Native Driver" driver-version="PostgreSQL 9.4 JDBC4 (build 1201)">
-        <identifier-quote-string>&quot;</identifier-quote-string>
-      </database-info>
-      <case-sensitivity plain-identifiers="lower" quoted-identifiers="exact" />
-      <secret-storage>master_key</secret-storage>
-      <user-name>canvas</user-name>
+      <database-info product="" version="" jdbc-version="" driver-name="" driver-version="" />
       <introspection-schemas>yciw:pg_catalog,public</introspection-schemas>
-      <resolve-scope>yciw:public</resolve-scope>
-      <unqualified-resolve-schemas>yciw:public</unqualified-resolve-schemas>
     </data-source>
   </component>
 </project>

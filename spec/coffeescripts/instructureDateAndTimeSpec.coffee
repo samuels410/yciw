@@ -1,13 +1,30 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'jquery'
   'timezone'
-  'vendor/timezone/America/Detroit'
-  'vendor/timezone/America/Juneau'
-  'vendor/timezone/pt_PT'
+  'timezone/America/Detroit'
+  'timezone/America/Juneau'
+  'timezone/pt_PT'
   'helpers/I18nStubber'
   'jquery.instructure_date_and_time'
 ], ($, tz, detroit, juneau, portuguese, I18nStubber) ->
-  module 'fudgeDateForProfileTimezone',
+  QUnit.module 'fudgeDateForProfileTimezone',
     setup: ->
       @snapshot = tz.snapshot()
       @original = new Date(expectedTimestamp = Date.UTC(2013, 8, 1))
@@ -50,7 +67,7 @@ define [
     fudged = $.fudgeDateForProfileTimezone(@original)
     equal fudged.toString('yyyy-MM-dd HH:mm:ss'), tz.format(@original, '%F %T')
 
-  module 'unfudgeDateForProfileTimezone',
+  QUnit.module 'unfudgeDateForProfileTimezone',
     setup: ->
       @snapshot = tz.snapshot()
       @original = new Date(expectedTimestamp = Date.UTC(2013, 8, 1))
@@ -86,7 +103,7 @@ define [
     unfudged = $.unfudgeDateForProfileTimezone(@original)
     equal tz.format(unfudged, '%F %T'), @original.toString('yyyy-MM-dd HH:mm:ss')
 
-  module 'sameYear',
+  QUnit.module 'sameYear',
     setup: -> @snapshot = tz.snapshot()
     teardown: -> tz.restore(@snapshot)
 
@@ -105,7 +122,7 @@ define [
     ok $.sameYear(date1, date2)
     ok !$.sameYear(date1, date3)
 
-  module 'sameDate',
+  QUnit.module 'sameDate',
     setup: -> @snapshot = tz.snapshot()
     teardown: -> tz.restore(@snapshot)
 
@@ -124,7 +141,7 @@ define [
     ok $.sameDate(date1, date2)
     ok !$.sameDate(date1, date3)
 
-  module 'dateString',
+  QUnit.module 'dateString',
     setup: ->
       @snapshot = tz.snapshot()
       I18nStubber.pushFrame()
@@ -138,7 +155,7 @@ define [
     tz.changeZone(detroit, 'America/Detroit')
     equal $.dateString(new Date(0)), 'Dec 31, 1969'
 
-  module 'timeString',
+  QUnit.module 'timeString',
     setup: ->
       @snapshot = tz.snapshot()
       I18nStubber.pushFrame()
@@ -162,7 +179,7 @@ define [
     tz.changeZone(detroit, 'America/Detroit')
     equal $.timeString(new Date(0)), '7pm'
 
-  module 'datetimeString',
+  QUnit.module 'datetimeString',
     setup: ->
       @snapshot = tz.snapshot()
       I18nStubber.pushFrame()
@@ -188,7 +205,7 @@ define [
       'time.event': "%{date} em %{time}"
     equal $.datetimeString('1970-01-01 15:01:00Z'), "1 Jan 1970 em 15:01"
 
-  module '$.datepicker.parseDate',
+  QUnit.module '$.datepicker.parseDate',
     setup: ->
       @snapshot = tz.snapshot()
       I18nStubber.pushFrame()

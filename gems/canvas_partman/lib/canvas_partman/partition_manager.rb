@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require 'canvas_partman/partition_manager/by_date'
 require 'canvas_partman/partition_manager/by_id'
 
@@ -65,6 +82,11 @@ See CanvasPartman::Concerns::Partitioned.
       ) INHERITS (#{base_class.quoted_table_name})
 SQL
 
+      # copy foreign keys, since INCLUDING ALL won't bring them along
+      base_class.connection.foreign_keys(base_class.table_name).each do |foreign_key|
+        base_class.connection.add_foreign_key partition_table, foreign_key.to_table, foreign_key.options.except(:name)
+      end
+
       partition_table
     end
 
@@ -73,7 +95,10 @@ SQL
     end
 
     def partition_exists?(table_name)
-      base_class.connection.table_exists?(table_name)
+      # CANVAS_RAILS5_0 - don't silence this deprecation in 5.1
+      ActiveSupport::Deprecation.silence do
+        base_class.connection.table_exists?(table_name)
+      end
     end
 
     def drop_partition(value)

@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_relative '../common'
 require_relative '../helpers/quizzes_common'
 require_relative '../helpers/assignment_overrides'
@@ -31,6 +48,7 @@ describe 'creating a quiz' do
         unlock_at_a = default_time_for_unlock_date(now.advance(days: -3))
         lock_at_a = default_time_for_lock_date(now.advance(days: 3))
 
+        select_first_override_section(@section_a.name)
         assign_dates_for_first_override_section(
           due_at: due_at_a,
           unlock_at: unlock_at_a,
@@ -43,16 +61,13 @@ describe 'creating a quiz' do
         lock_at_b = default_time_for_lock_date(now.advance(days: 5))
 
         add_override
+        select_last_override_section(@section_b.name)
         assign_dates_for_last_override_section(
           due_at: due_at_b,
           unlock_at: unlock_at_b,
           lock_at: lock_at_b
         )
 
-        # Must select sections after setting dates in order to avoid intermittent failure.
-        # Workaround is to set the dates using the date-selector tools.
-        select_first_override_section(@section_a.name)
-        select_last_override_section(@section_b.name)
         save_settings
 
         # verify default section due date & availability dates
@@ -94,57 +109,28 @@ describe 'creating a quiz' do
     context 'when on the quizzes index page' do
       before(:each) do
         get "/courses/#{@course.id}/quizzes"
+      end
+
+      def create_new_quiz
         expect_new_page_load do
           f('.new-quiz-link').click
         end
       end
 
       it 'creates a quiz directly from the index page', priority: "1", test_id: 210055 do
-        expect_new_page_load do
-          click_save_settings_button
-        end
-        expect(f('#quiz_title')).to include_text 'Unnamed Quiz'
+        expect do
+          create_new_quiz
+        end.to change{ Quizzes::Quiz.count }.by(1)
       end
 
       it 'redirects to the correct quiz edit form', priority: "2", test_id: 399887 do
+        create_new_quiz
         # check url
-        expect(driver.current_url).to match %r{/courses/\d+/quizzes/\d+\/edit}
-
-        # check quiz id
-        # The =~ operator compares the regex with the string.
-        # The (?<quiz_id>(\d+)) part of the regex tells the =~ to assign
-        # the value of the number found therein to the variable, quiz_id.
-        %r courses/\d+/quizzes/(?<quiz_id>(\d+))/edit =~ driver.current_url
-        expect(quiz_id.to_i).to be > 0
+        expect(driver.current_url).to match %r{/courses/\d+/quizzes/#{Quizzes::Quiz.last.id}\/edit}
       end
 
-      it 'creates and previews a new quiz', priority: "1", test_id: 210056 do
-        # input name and description then save quiz
-        replace_content(f('#quiz_title'), 'new quiz')
-        description_text = 'new description'
-        expect(f('#quiz_description_ifr')).to be_displayed
-        type_in_tiny '#quiz_description', description_text
-        in_frame 'quiz_description_ifr' do
-          expect(f('#tinymce')).to include_text(description_text)
-        end
-
-        # add a question
-        click_questions_tab
-        click_new_question_button
-        submit_form('.question_form')
-        wait_for_ajaximations
-
-        # save the quiz
-        expect_new_page_load do
-          click_save_settings_button
-          wait_for_ajaximations
-        end
-        wait_for_ajaximations
-
-        # check quiz preview
-        f('#preview_quiz_button').click
-        expect(f('#questions')).to be_present
-      end
+      # TODO: remove this from test-rail, this test is redundant
+      it 'creates and previews a new quiz', priority: "1", test_id: 210056
     end
 
     it 'inserts files using the rich content editor', priority: "1", test_id: 132545 do
@@ -177,7 +163,7 @@ describe 'creating a quiz' do
         f('.new-quiz-link').click
         wait_for_ajaximations
       end
-      expect(is_checked('#assignment_post_to_sis')).to be_truthy
+      expect(is_checked('#quiz_post_to_sis')).to be_truthy
     end
 
     it "should not default to post grades if account setting is not enabled" do
@@ -186,7 +172,7 @@ describe 'creating a quiz' do
         f('.new-quiz-link').click
         wait_for_ajaximations
       end
-      expect(is_checked('#assignment_post_to_sis')).to be_falsey
+      expect(is_checked('#quiz_post_to_sis')).to be_falsey
     end
   end
 end

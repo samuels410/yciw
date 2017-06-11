@@ -1,4 +1,5 @@
-# Copyright (C) 2014 Instructure, Inc.
+#
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -16,9 +17,9 @@
 #
 module Lti
   class ToolProxyController < ApplicationController
-    before_filter :require_context
-    before_filter :require_user
-    before_filter :set_tool_proxy, only: [:destroy, :update, :accept_update, :dismiss_update]
+    before_action :require_context
+    before_action :require_user
+    before_action :set_tool_proxy, only: [:destroy, :update, :accept_update, :dismiss_update]
 
     def destroy
       if authorized_action(@context, @current_user, :update)
@@ -95,7 +96,7 @@ module Lti
 
     def update_workflow_state(workflow_state)
       @tool_proxy.update_attribute(:workflow_state, workflow_state)
-
+      ToolProxyService.delete_subscriptions(@tool_proxy) if workflow_state == 'deleted'
       # this needs to be moved to whatever changes the workflow state to active
       invalidate_nav_tabs_cache(@tool_proxy)
     end

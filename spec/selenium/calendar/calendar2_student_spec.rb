@@ -1,4 +1,21 @@
-﻿require File.expand_path(File.dirname(__FILE__) + '/../common')
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
+require File.expand_path(File.dirname(__FILE__) + '/../common')
 require File.expand_path(File.dirname(__FILE__) + '/../helpers/calendar2_common')
 
 describe "calendar2" do
@@ -15,16 +32,6 @@ describe "calendar2" do
   context "as a student" do
     before(:each) do
       @student = course_with_student_logged_in(:active_all => true).user
-    end
-
-    describe "contexts list" do
-      it "should not allow a student to create an assignment through the context list" do
-        get "/calendar2"
-
-        # first context is the user's calendar
-        driver.execute_script(%{$(".context_list_context:nth-child(2)").addClass('hovering')})
-        expect(f("ul#context-list > li:nth-child(2)")).not_to contain_css('button') # no button, can't add events
-      end
     end
 
     describe "main calendar" do

@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require 'attachment_fu/railtie'
 require 'attachment_fu/processors/mini_magick_processor'
 require 'attachment_fu/backends/file_system_backend'
@@ -196,19 +213,6 @@ module AttachmentFu # :nodoc:
         tmp.binmode
         tmp.write data
         tmp.close
-      end
-    end
-
-    if Rails.env.test?
-      # thanks to test_after_commit, we can use transactional fixtures,
-      # but we still need reach into connection, since we conditionally
-      # use after_transaction_commit based on transaction nesting
-      def open_transactions
-        connection.instance_variable_get(:@test_open_transactions)
-      end
-    else
-      def open_transactions
-        connection.open_transactions
       end
     end
   end
@@ -554,10 +558,10 @@ module AttachmentFu # :nodoc:
             run_callbacks(:save_and_attachment_processing)
           end
 
-          if self.class.open_transactions == 1 # yes, == 1, not > 0 ... see comment above
-            self.class.connection.after_transaction_commit(&save_and_callbacks)
-          else
+          if Rails.env.test?
             save_and_callbacks.call()
+          else
+            self.class.connection.after_transaction_commit(&save_and_callbacks)
           end
         else
           run_callbacks(:save_and_attachment_processing)

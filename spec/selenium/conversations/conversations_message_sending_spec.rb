@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/../helpers/conversations_common')
 
 describe "conversations new" do
@@ -17,7 +34,7 @@ describe "conversations new" do
   describe "message sending" do
     it "should show error messages when no recipient is entered", priority: "1", test_id: 351236 do
       get '/conversations'
-      f('.icon-compose').click
+      move_to_click('.icon-compose')
       click_send
       errors = ff('.error_text')
       expect(errors[2].text).to include('Invalid recipient name.')
@@ -79,6 +96,12 @@ describe "conversations new" do
       wait_for_ajaximations
       select_message_course(@group, true)
       add_message_recipient @s2
+      write_message_subject('blah')
+      write_message_body('bluh')
+      click_send
+      run_jobs
+      conv = @s2.conversations.last.conversation
+      expect(conv.subject).to eq 'blah'
     end
 
     it "should allow messages to be sent individually for account-level groups", priority: "2", test_id: 201506 do
@@ -150,7 +173,7 @@ describe "conversations new" do
         @course.save!
 
         get '/conversations'
-        f('.icon-compose').click
+        move_to_click('.icon-compose')
         expect(fj("#compose-message-course option:contains('#{@course.name}')")).to be
       end
 
@@ -160,7 +183,7 @@ describe "conversations new" do
         @course.save!
 
         get '/conversations'
-        f('.icon-compose').click
+        move_to_click('.icon-compose')
         expect(f("#compose-message-course")).not_to contain_jqcss("option:contains('#{@course.name}')")
       end
 
@@ -170,7 +193,7 @@ describe "conversations new" do
         @course.save!
 
         get '/conversations'
-        f('.icon-compose').click
+        move_to_click('.icon-compose')
         expect(f("#compose-message-course")).not_to contain_jqcss("option:contains('#{@course.name}')")
       end
     end
@@ -245,7 +268,7 @@ describe "conversations new" do
         f('.message-body textarea').send_keys("I'll pay you Tuesday for a hamburger today")
         click_send
 
-        expect_flash_message :success, /Message sent!/
+        expect_flash_message :success, "Message sent!"
       end
 
       context "Message Address Book" do
@@ -261,7 +284,7 @@ describe "conversations new" do
           fj('.btn.dropdown-toggle :contains("Select course")').click
           wait_for_ajaximations
 
-          expect(f('.dropdown-menu.open')).to be_truthy
+          f('.dropdown-menu.open')
 
           fj('.message-header-input .text:contains("Unnamed Course")').click
           wait_for_ajaximations
@@ -316,9 +339,9 @@ describe "conversations new" do
   def goto_compose_modal
     fln('Inbox').click
     wait_for_ajaximations
-    f('.icon-compose').click
+    move_to_click('.icon-compose')
     wait_for_ajaximations
-    expect(f("#compose-new-message")).to be_present
+    f("#compose-new-message")
   end
 
 end

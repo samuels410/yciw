@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -33,8 +33,8 @@ describe "/conference/index" do
     @conference.user = @user
     @conference.save!
     @conference.add_initiator(@user)
-    assigns[:conferences] = [@conference]
-    assigns[:users] = @course.users
+    assign(:conferences, [@conference])
+    assign(:users, @course.users)
     render "conferences/index"
     expect(response).to have_tag("#new-conference-list")
   end

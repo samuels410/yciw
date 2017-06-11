@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -52,8 +52,8 @@ describe 'FixUserMergeConversations2' do
       unrelated.reload
 
       # these are gone for reals now
-      expect { borked.reload }.to raise_error
-      borked_cps.each { |cp| expect { cp.reload }.to raise_error }
+      expect { borked.reload }.to raise_error(ActiveRecord::RecordNotFound)
+      borked_cps.each { |cp| expect { cp.reload }.to raise_error(ActiveRecord::RecordNotFound) }
 
       # these are moved to the right place
       borked_cmps.each do |cmp|

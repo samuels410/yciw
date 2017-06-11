@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -44,9 +44,9 @@ module Canvas::Security
 
   def self.encrypt_password(secret, key)
     require 'base64'
-    c = OpenSSL::Cipher::Cipher.new('aes-256-cbc')
+    c = OpenSSL::Cipher.new('aes-256-cbc')
     c.encrypt
-    c.key = Digest::SHA1.hexdigest(key + "_" + encryption_key)
+    c.key = Digest::SHA1.hexdigest(key + "_" + encryption_key)[0...32]
     c.iv = iv = c.random_iv
     e = c.update(secret)
     e << c.final
@@ -58,9 +58,9 @@ module Canvas::Security
     encryption_keys = Array(encryption_key) + self.encryption_keys
     last_error = nil
     encryption_keys.each do |encryption_key|
-      c = OpenSSL::Cipher::Cipher.new('aes-256-cbc')
+      c = OpenSSL::Cipher.new('aes-256-cbc')
       c.decrypt
-      c.key = Digest::SHA1.hexdigest(key + "_" + encryption_key)
+      c.key = Digest::SHA1.hexdigest(key + "_" + encryption_key)[0...32]
       c.iv = Base64.decode64(salt)
       d = c.update(Base64.decode64(secret))
       begin
@@ -167,13 +167,13 @@ module Canvas::Security
     raise Canvas::Security::InvalidToken
   end
 
-  def self.decrypt_services_jwt(token, signing_secret=nil, encryption_secret=nil)
+  def self.decrypt_services_jwt(token, signing_secret=nil, encryption_secret=nil, ignore_expiration: false)
     signing_secret ||= services_signing_secret
     encryption_secret ||= services_encryption_secret
     begin
       signed_coded_jwt = JSON::JWT.decode(token, encryption_secret)
       raw_jwt = JSON::JWT.decode(signed_coded_jwt.plain_text, signing_secret)
-      verify_jwt(raw_jwt)
+      verify_jwt(raw_jwt, ignore_expiration: ignore_expiration)
       raw_jwt.with_indifferent_access
     rescue JSON::JWS::VerificationFailed
       raise Canvas::Security::InvalidToken
@@ -317,8 +317,8 @@ module Canvas::Security
 
   class << self
     private
-    def verify_jwt(body)
-      if body[:exp].present?
+    def verify_jwt(body, ignore_expiration: false)
+      if body[:exp].present? && !ignore_expiration
         if timestamp_is_expired?(body[:exp])
           raise Canvas::Security::TokenExpired
         end
@@ -342,12 +342,11 @@ module Canvas::Security
     end
 
     def services_encryption_secret
-      Canvas::DynamicSettings.from_cache("canvas")["encryption-secret"]
+      Canvas::DynamicSettings.from_cache("canvas", use_env: false)["encryption-secret"]
     end
 
     def services_signing_secret
-      Canvas::DynamicSettings.from_cache("canvas")["signing-secret"]
+      Canvas::DynamicSettings.from_cache("canvas", use_env: false)["signing-secret"]
     end
   end
-
 end

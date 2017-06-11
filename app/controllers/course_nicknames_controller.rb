@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015 Instructure, Inc.
+# Copyright (C) 2015 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -49,7 +49,7 @@
 #     }
 #
 class CourseNicknamesController < ApplicationController
-  before_filter :require_user
+  before_action :require_user
 
   # @API List course nicknames
   #

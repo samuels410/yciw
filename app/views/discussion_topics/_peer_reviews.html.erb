@@ -1,6 +1,34 @@
+<%
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+%>
+
 <% @presenter.peer_reviews_for(@current_user).each do |peer_review| %>
-  <div class="discussion-section discussion-assignment-section peer-review-alert alert">
+  <div class="discussion-section discussion-assignment-section peer-review-alert <%= peer_review.assigned? ? "alert" : "alert-info" %>">
     <div class="row-fluid">
+      <% if peer_review.completed? %>
+        <div class="span9">
+          <p class="peer-review-title">
+            <i class="icon-peer-review"></i>
+            <strong>
+              <%= t('You have completed a peer review for %{person}. Thank you', {:person => peer_review.user.name}) %>
+            </strong>
+          </p>
+        </div>
+      <% else %>
       <div class="span9">
         <p class="peer-review-title">
           <i class="icon-peer-review"></i>
@@ -8,9 +36,8 @@
             <%= t('peer_review_alert',
             'You have been assigned a peer review for %{person}',
             {:person => peer_review.user.name}) %>
-            <%= link_to "Review Now", course_assignment_submission_path(@assignment.context_id, @assignment.id, peer_review.user_id) %>
+            <%= link_to t("Review Now"), course_assignment_submission_path(@assignment.context_id, @assignment.id, peer_review.user_id) %>
           </strong>
-         
         </p>
       </div>
 
@@ -21,8 +48,8 @@
           </b>
         </div>
       </div>
+      <% end %>
     </div>
-
   </div>
 
 <% end %>

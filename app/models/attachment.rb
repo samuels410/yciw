@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2014 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -267,18 +267,23 @@ class Attachment < ActiveRecord::Base
     excluded_atts += ["locked", "hidden"] if dup == existing
     dup.assign_attributes(self.attributes.except(*excluded_atts))
 
-    dup.write_attribute(:filename, self.filename)
     # avoid cycles (a -> b -> a) and self-references (a -> a) in root_attachment_id pointers
     if dup.new_record? || ![self.id, self.root_attachment_id].include?(dup.id)
       dup.root_attachment_id = self.root_attachment_id || self.id
     end
+    dup.write_attribute(:filename, self.filename) unless dup.root_attachment_id?
     dup.context = context
     dup.migration_id = options[:migration_id] || CC::CCHelper.create_key(self)
     dup.mark_as_importing!(options[:migration]) if options[:migration]
     if context.respond_to?(:log_merge_result)
       context.log_merge_result("File \"#{dup.folder && dup.folder.full_name}/#{dup.display_name}\" created")
     end
-    dup.updated_at = Time.now
+    if Attachment.s3_storage? && context.respond_to?(:root_account_id) && self.namespace != context.root_account.file_namespace
+      dup.save_without_broadcasting!
+      dup.make_rootless
+      dup.change_namespace(context.root_account.file_namespace)
+    end
+    dup.updated_at = Time.zone.now
     dup.clone_updated = true
     dup.set_publish_state_for_usage_rights unless self.locked?
     dup
@@ -318,6 +323,7 @@ class Attachment < ActiveRecord::Base
   def assert_attachment
     if !self.to_be_zipped? && !self.zipping? && !self.errored? && !self.deleted? && (!filename || !content_type || !downloadable?)
       self.errors.add(:base, t('errors.not_found', "File data could not be found"))
+      throw :abort unless CANVAS_RAILS4_2
       return false
     end
   end
@@ -508,7 +514,7 @@ class Attachment < ActiveRecord::Base
           existing_attachment.write_attribute(:filename, nil)
           existing_attachment.save!
           Attachment.where(root_attachment_id: existing_attachment).update_all(
-            root_attachment_id: self,
+            root_attachment_id: id,
             filename: nil,
             updated_at: Time.zone.now)
         end
@@ -523,7 +529,6 @@ class Attachment < ActiveRecord::Base
   S3_EXPIRATION_TIME = 30.minutes
 
   def ajax_upload_params(pseudonym, local_upload_url, s3_success_url, options = {})
-
     # Build the data that will be needed for the user to upload to s3
     # without us being the middle-man
     sanitized_filename = full_filename.gsub(/\+/, " ")
@@ -537,8 +542,15 @@ class Attachment < ActiveRecord::Base
       ]
     }
 
+    # We don't use a Aws::S3::PresignedPost object to build this for us because
+    # there is no way to add custom parameters to the condition, like we do
+    # with `extras` below.
+    options[:datetime] = Time.now.utc.strftime("%Y%m%dT%H%M%SZ")
     res = self.store.initialize_ajax_upload_params(local_upload_url, s3_success_url, options)
-    policy = self.store.amend_policy_conditions(policy, pseudonym)
+    policy = self.store.amend_policy_conditions(policy,
+      pseudonym: pseudonym,
+      datetime: options[:datetime]
+    )
 
     if res[:upload_params]['folder'].present?
       policy['conditions'] << ['starts-with', '$folder', '']
@@ -559,11 +571,7 @@ class Attachment < ActiveRecord::Base
     policy['conditions'] += extras
 
     policy_encoded = Base64.encode64(policy.to_json).gsub(/\n/, '')
-    signature = Base64.encode64(
-      OpenSSL::HMAC.digest(
-        OpenSSL::Digest.new('sha1'), shared_secret, policy_encoded
-      )
-    ).gsub(/\n/, '')
+    sig_key, sig_val = self.store.sign_policy(policy_encoded, options[:datetime])
 
     res[:id] = id
     res[:upload_params].merge!({
@@ -571,7 +579,7 @@ class Attachment < ActiveRecord::Base
        'key' => sanitized_filename,
        'acl' => 'private',
        'Policy' => policy_encoded,
-       'Signature' => signature,
+       sig_key => sig_val
     })
     extras.map(&:to_a).each{ |extra| res[:upload_params][extra.first.first] = extra.first.last }
     res
@@ -654,7 +662,7 @@ class Attachment < ActiveRecord::Base
     end
 
     if method == :overwrite
-      atts = self.shard.activate { self.folder.active_file_attachments.where("display_name=? AND id<>?", self.display_name, self.id) }
+      atts = self.shard.activate { self.folder.active_file_attachments.where("display_name=? AND id<>?", self.display_name, self.id).to_a }
       method = :rename if atts.any? { |att| att.editing_restricted?(:any) }
     end
 
@@ -678,14 +686,14 @@ class Attachment < ActiveRecord::Base
           end
         end
       end
-    elsif method == :overwrite
-      atts.update_all(:replacement_attachment_id => self) # so we can find the new file in content links
-      copy_access_attributes!(atts) unless atts.empty?
+    elsif method == :overwrite && atts.any?
+      Attachment.where(:id => atts).update_all(replacement_attachment_id: self.id) # so we can find the new file in content links
+      copy_access_attributes!(atts)
       atts.each do |a|
         # update content tags to refer to the new file
-        ContentTag.where(:content_id => a, :content_type => 'Attachment').update_all(:content_id => self)
+        ContentTag.where(:content_id => a, :content_type => 'Attachment').update_all(content_id: self.id)
         # update replacement pointers pointing at the overwritten file
-        context.attachments.where(:replacement_attachment_id => a).update_all(:replacement_attachment_id => self)
+        context.attachments.where(:replacement_attachment_id => a).update_all(replacement_attachment_id: self.id)
         # delete the overwritten file (unless the caller is queueing them up)
         a.destroy unless opts[:caller_will_destroy]
         deleted_attachments << a
@@ -724,8 +732,8 @@ class Attachment < ActiveRecord::Base
     "local_storage" + Canvas::Security.encryption_key
   end
 
-  def shared_secret
-    store.shared_secret
+  def shared_secret(datetime)
+    store.shared_secret(datetime)
   end
 
   def downloadable?
@@ -943,10 +951,9 @@ class Attachment < ActiveRecord::Base
     super(name)
   end
 
-  def thumbnail_with_root_attachment
-    self.thumbnail_without_root_attachment || self.root_attachment.try(:thumbnail)
+  def thumbnail
+    super || root_attachment.try(:thumbnail)
   end
-  alias_method_chain :thumbnail, :root_attachment
 
   def content_directory
     self.directory_name || Folder.root_folders(self.context).first.name
@@ -1223,25 +1230,63 @@ class Attachment < ActiveRecord::Base
     true
   end
 
+  # this will delete the content of the attachment but not delete the attachment
+  # object. It will replace the attachment content with a file_removed file.
+  def destroy_content_and_replace
+    raise 'must be a root_attachment' if self.root_attachment_id
+    self.destroy_content
+    self.uploaded_data = File.open Rails.root.join('public/file_removed/file_removed.pdf')
+    CrocodocDocument.where(attachment_id: self).delete_all
+    Canvadoc.where(attachment_id: self).delete_all
+    self.save!
+  end
+
+  def dmca_file_removal
+    destroy_content_and_replace
+  end
+
+  def destroy_content
+    raise 'must be a root_attachment' if self.root_attachment_id
+    return unless self.filename
+    if Attachment.s3_storage?
+      self.s3object.delete
+    else
+      FileUtils.rm full_filename
+    end
+  end
+
   def make_childless(preferred_child = nil)
     return if root_attachment_id
     child = preferred_child || children.take
     return unless child
     raise "must be a child" unless child.root_attachment_id == id
     child.root_attachment_id = nil
-    child.filename = filename if filename
+    copy_attachment_content(child)
+    Attachment.where(root_attachment_id: self).where.not(id: child).update_all(root_attachment_id: child.id)
+  end
+
+  def copy_attachment_content(destination)
+    destination.write_attribute(:filename, filename) if filename
     if Attachment.s3_storage?
-      if filename && s3object.exists? && !child.s3object.exists?
-        s3object.copy_to(child.s3object)
+      if filename && s3object.exists? && !destination.s3object.exists?
+        s3object.copy_to(destination.s3object)
       end
     else
+      return if destination.store.exists? && open == destination.open
       old_content_type = self.content_type
       Attachment.where(:id => self).update_all(:content_type => "invalid/invalid") # prevents find_existing_attachment_for_md5 from reattaching the child to the old root
-      child.uploaded_data = open
+      destination.uploaded_data = open
       Attachment.where(:id => self).update_all(:content_type => old_content_type)
     end
-    child.save!
-    Attachment.where(root_attachment_id: self).where.not(id: child).update_all(root_attachment_id: child)
+    destination.save!
+  end
+
+  def make_rootless
+    return unless root_attachment_id
+    root = self.root_attachment
+    return unless root
+    self.root_attachment_id = nil
+    root.copy_attachment_content(self)
   end
 
   def restore
@@ -1572,6 +1617,7 @@ class Attachment < ActiveRecord::Base
 
   def set_publish_state_for_usage_rights
     if self.context &&
+       (!self.folder || !self.folder.for_submissions?) &&
        self.context.respond_to?(:feature_enabled?) &&
        self.context.feature_enabled?(:usage_rights_required)
       self.locked = self.usage_rights.nil?
@@ -1603,7 +1649,12 @@ class Attachment < ActiveRecord::Base
         attachment.filename ||= File.basename(uri.path)
         attachment.uploaded_data = tmpfile
         if attachment.content_type.blank? || attachment.content_type == "unknown/unknown"
-          attachment.content_type = http_response.content_type
+          # uploaded_data= clobbers the content_type set in preflight; if it was given, prefer it to the HTTP response
+          attachment.content_type = if attachment.content_type_was.present? && attachment.content_type_was != 'unknown/unknown'
+            attachment.content_type_was
+          else
+            http_response.content_type
+          end
         end
         return attachment
       else

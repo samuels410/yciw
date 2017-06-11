@@ -1,3 +1,21 @@
+<%
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+%>
+
 <% content_for :page_title, t(:page_title, "Rubrics") %>
 <% add_crumb t('#crumbs.rubrics', "Rubrics") %>
 <% content_for :right_side do %>
@@ -28,8 +46,8 @@
         <% end %>
       </span>
       <span class="details">
-        <%= rubric.criteria.length %> <%= rubric.criteria.length == 1 ? 'criterion' : 'criteria' %><br/>
-        <%= t('points_possible', {:one => "point possible", :other => "points possible"}, :count => round_if_whole(rubric.points_possible)) %>
+        <%= t({:one => "1 criterion", :other => "%{count} criteria"}, :count => rubric.criteria.length) %><br/>
+        <%= t('points_possible', {:one => "1 point possible", :other => "%{count} points possible"}, :count => round_if_whole(rubric.points_possible)) %>
       </span>
     </li>
   <% end %>

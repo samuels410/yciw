@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 class UserListV2
   # not really much better than the first one
   # stealing some things from it because I don't feel like reinventing the whole wheel
@@ -96,8 +113,10 @@ class UserListV2
     grouped_results = @all_results.group_by{|r| @lowercase ? r[:address].downcase : r[:address]}
 
     grouped_results.each do |_a, results|
-      if results.uniq{|r| r[:user_id]}.count == 1
+      if results.count == 1
         @resolved_results << results.first
+      elsif results.uniq{|r| Shard.global_id_for(r[:user_id])}.count == 1
+        @resolved_results << results.detect{|r| r[:account_id] == @root_account.id} || results.first # prioritize local result first
       else
         @duplicate_results << results
       end
@@ -126,12 +145,10 @@ class UserListV2
         user = user_map[dup_hash[:user_id]]
 
         dup_hash[:email] = user.email
-        pseudnoym = nil
+        pseudonym = SisPseudonym.for(user, @root_account, type: :trusted, require_sis: false)
         if @can_read_sis
-          pseudonym = SisPseudonym.for(user, @root_account, @root_account.trust_exists?)
           dup_hash[:sis_user_id] = pseudonym.sis_user_id if pseudonym
         end
-        pseudonym ||= user.find_pseudonym_for_account(@root_account, true)
         dup_hash[:login_id] = pseudonym.unique_id if pseudonym
       end
     end

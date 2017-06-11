@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -172,72 +172,12 @@ module ApplicationHelper
     @wiki_sidebar_data
   end
 
-  # js_block captures the content of what you pass it and render_js_blocks will
-  # render all of the blocks that were captured by js_block inside of a <script> tag
-  # if you are in the development environment it will also print out a javascript // comment
-  # that shows the file and line number of where this block of javascript came from.
-  def js_block(options = {}, &block)
-    js_blocks << options.merge(
-      :file_and_line => block.to_s,
-      :contents => capture(&block)
-    )
-  end
-
-  def js_blocks; @js_blocks ||= []; end
-
-  def render_js_blocks
-    output = js_blocks.inject('') do |str, e|
-      # print file and line number for debugging in development mode.
-      value = ""
-      value << "<!-- BEGIN SCRIPT BLOCK FROM: " + e[:file_and_line] + " --> \n" if Rails.env.development?
-      value << e[:contents]
-      value << "<!-- END SCRIPT BLOCK FROM: " + e[:file_and_line] + " --> \n" if Rails.env.development?
-      str << value
-    end
-    raw(output)
-  end
-
-  def hidden_dialog(id, &block)
-    content = capture(&block)
-    if !Rails.env.production? && hidden_dialogs[id] && hidden_dialogs[id] != content
-      raise "Attempted to capture a hidden dialog with #{id} and different content!"
-    end
-    hidden_dialogs[id] = capture(&block)
-  end
-
-  def hidden_dialogs; @hidden_dialogs ||= {}; end
-
-  def render_hidden_dialogs
-    output = hidden_dialogs.keys.sort.inject('') do |str, id|
-      str << "<div id='#{id}' style='display: none;''>" << hidden_dialogs[id] << "</div>"
-    end
-    raw(output)
-  end
-
-  class << self
-    attr_accessor :cached_translation_blocks
-  end
-
-  def include_js_translations?
-    !!(params[:include_js_translations] || use_optimized_js?)
-  end
-
   # See `js_base_url`
   def use_optimized_js?
-    if ENV['USE_OPTIMIZED_JS'] == 'true' || ENV['USE_OPTIMIZED_JS'] == 'True'
-      # allows overriding by adding ?debug_assets=1 or ?debug_js=1 to the url
-      use_webpack? || !(params[:debug_assets] || params[:debug_js])
+    if params.key?(:optimized_js)
+      params[:optimized_js] == 'true' || params[:optimized_js] == '1'
     else
-      # allows overriding by adding ?optimized_js=1 to the url
-      params[:optimized_js] || false
-    end
-  end
-
-  def use_webpack?
-    if CANVAS_WEBPACK
-      !(params[:require_js])
-    else
-      params[:webpack]
+      ENV['USE_OPTIMIZED_JS'] == 'true' || ENV['USE_OPTIMIZED_JS'] == 'True'
     end
   end
 
@@ -252,39 +192,26 @@ module ApplicationHelper
   #   * when ENV['USE_OPTIMIZED_JS'] is false
   #   * or when ?debug_assets=true is present in the url
   def js_base_url
-    if use_webpack?
-      use_optimized_js? ? '/dist/webpack-production' : '/dist/webpack-dev'
-    else
-      use_optimized_js? ? '/optimized' : '/javascripts'
-    end.freeze
+    (use_optimized_js? ? '/dist/webpack-production' : '/dist/webpack-dev').freeze
   end
 
   # Returns a <script> tag for each registered js_bundle
   def include_js_bundles
-    if use_webpack?
+    # This contains the webpack runtime, it needs to be loaded first
+    paths = ["#{js_base_url}/vendor"]
 
-      # This contains the webpack runtime, it needs to be loaded first
-      paths = ["#{js_base_url}/vendor"]
+    # We preemptive load these timezone/locale data files so they are ready
+    # by the time our app-code runs and so webpack doesn't need to know how to load them
+    paths << "/javascripts/vendor/timezone/#{js_env[:TIMEZONE]}.js" if js_env[:TIMEZONE]
+    paths << "/javascripts/vendor/timezone/#{js_env[:CONTEXT_TIMEZONE]}.js" if js_env[:CONTEXT_TIMEZONE]
+    paths << "/javascripts/vendor/timezone/#{js_env[:BIGEASY_LOCALE]}.js" if js_env[:BIGEASY_LOCALE]
+    paths << "#{js_base_url}/moment/locale/#{js_env[:MOMENT_LOCALE]}" if js_env[:MOMENT_LOCALE] && js_env[:MOMENT_LOCALE] != 'en'
 
-      # We preemptive load these timezone/locale data files so they are ready
-      # by the time our app-code runs and so webpack doesn't need to know how to load them
-      paths << "#{js_base_url}/vendor/timezone/#{js_env[:TIMEZONE]}" if js_env[:TIMEZONE]
-      paths << "#{js_base_url}/vendor/timezone/#{js_env[:CONTEXT_TIMEZONE]}" if js_env[:CONTEXT_TIMEZONE]
-      paths << "#{js_base_url}/vendor/timezone/#{js_env[:BIGEASY_LOCALE]}" if js_env[:BIGEASY_LOCALE]
-      paths << "#{js_base_url}/moment/locale/#{js_env[:MOMENT_LOCALE]}" if js_env[:MOMENT_LOCALE] && js_env[:MOMENT_LOCALE] != 'en'
-
-      paths << "#{js_base_url}/appBootstrap"
-      paths << "#{js_base_url}/common"
-    else
-      paths = []
-    end
+    paths << "#{js_base_url}/appBootstrap"
+    paths << "#{js_base_url}/common"
 
     js_bundles.each do |(bundle, plugin)|
-      if use_webpack?
-        paths << "#{js_base_url}/#{plugin ? "#{plugin}-" : ''}#{bundle}"
-      else
-        paths << "#{js_base_url}#{plugin ? "/plugins/#{plugin}" : ''}/compiled/bundles/#{bundle}.js"
-      end
+      paths << "#{js_base_url}/#{plugin ? "#{plugin}-" : ''}#{bundle}"
     end
     javascript_include_tag(*paths, type: nil)
   end
@@ -610,52 +537,6 @@ module ApplicationHelper
     mapped
   end
 
-  def menu_courses_locals
-    courses = @current_user.menu_courses
-    all_courses_count = @current_user.courses_with_primary_enrollment.size
-
-    {
-      :collection             => map_courses_for_menu(courses),
-      :collection_size        => all_courses_count,
-      :more_link_for_over_max => courses_path,
-      :title                  => t('#menu.my_courses', "My Courses"),
-      :link_text              => t('#layouts.menu.view_all_or_customize', 'View All or Customize'),
-      :edit                   => t("#menu.customize", "Customize")
-    }
-  end
-
-  def menu_groups_locals
-    {
-      :collection => @current_user.menu_data[:group_memberships],
-      :collection_size => @current_user.menu_data[:group_memberships_count],
-      :partial => "shared/menu_group_membership",
-      :max_to_show => 8,
-      :more_link_for_over_max => groups_path,
-      :title => t('#menu.current_groups', "Current Groups"),
-      :link_text => t('#layouts.menu.view_all_groups', 'View all groups')
-    }
-  end
-
-  def menu_accounts_locals
-    {
-      :collection => @current_user.menu_data[:accounts],
-      :collection_size => @current_user.menu_data[:accounts_count],
-      :partial => "shared/menu_account",
-      :max_to_show => 8,
-      :more_link_for_over_max => accounts_path,
-      :title => t('#menu.managed_accounts', "Managed Accounts"),
-      :link_text => t('#layouts.menu.view_all_accounts', 'View all accounts')
-    }
-  end
-
-  def cache_if(cond, *args)
-    if cond
-      cache(*args) { yield }
-    else
-      yield
-    end
-  end
-
   def show_feedback_link?
     Setting.get("show_feedback_link", "false") == "true"
   end
@@ -739,6 +620,12 @@ module ApplicationHelper
     "#{Canvas::Cdn.config.host}/#{path}"
   end
 
+  def active_brand_config_js_url(opts={})
+    path = active_brand_config(opts).try(:public_js_path)
+    path ||= BrandableCSS.public_default_js_path
+    "#{Canvas::Cdn.config.host}/#{path}"
+  end
+
   def brand_config_for_account(opts={})
     account = Context.get_account(@context || @course)
 
@@ -766,45 +653,8 @@ module ApplicationHelper
   end
   private :brand_config_for_account
 
-  def get_global_includes
-    return @global_includes if defined?(@global_includes)
-    @global_includes = if @domain_root_account.try(:sub_account_includes?)
-      # get the deepest account to start looking for branding
-      if (acct = Context.get_account(@context))
-
-        # cache via the id because it could be that the root account js changes
-        # but the cache is for the sub-account, and we'd rather have everything
-        # reset after 15 minutes then have some places update immediately and
-        # some places wait.
-        key = [acct.id, 'account_context_global_includes'].cache_key
-        Rails.cache.fetch(key, :expires_in => 15.minutes) do
-          acct.account_chain(include_site_admin: true).
-            reverse.map(&:global_includes_hash)
-        end
-      elsif @current_user.present?
-        key = [
-          @domain_root_account.id,
-          'common_account_global_includes',
-          @current_user.id
-        ].cache_key
-        Rails.cache.fetch(key, :expires_in => 15.minutes) do
-          chain = @domain_root_account.account_chain(include_site_admin: true).reverse
-          chain.concat(@current_user.common_account_chain(@domain_root_account))
-          chain.uniq.map(&:global_includes_hash)
-        end
-      end
-    end
-
-    @global_includes ||= (@domain_root_account || Account.site_admin).
-      account_chain(include_site_admin: true).
-      reverse.map(&:global_includes_hash)
-    @global_includes.uniq!
-    @global_includes.compact!
-    @global_includes
-  end
-
   def include_account_js(options = {})
-    return if params[:global_includes] == '0'
+    return if params[:global_includes] == '0' || !@domain_root_account
 
     includes = if @domain_root_account.allow_global_includes? && (abc = active_brand_config(ignore_high_contrast_preference: true))
       abc.css_and_js_overrides[:js_overrides]
@@ -818,7 +668,7 @@ module ApplicationHelper
         javascript_include_tag(*includes)
       else
         str = <<-ENDSCRIPT
-          require(['jquery'], function () {
+          require(['jquery'], function fnCanvasUsesToLoadAccountJSAfterJQueryIsReady () {
             #{includes.to_json}.forEach(function (src) {
               var s = document.createElement('script');
               s.src = src;
@@ -838,7 +688,7 @@ module ApplicationHelper
   end
 
   def disable_account_css?
-    @disable_account_css || params[:global_includes] == '0'
+    @disable_account_css || params[:global_includes] == '0' || !@domain_root_account
   end
 
   def include_account_css
@@ -1018,4 +868,24 @@ module ApplicationHelper
     link_to(t("Parents sign up here"), '#', id: "signup_parent", class: "signup_link",
             data: {template: template, path: path}, title: t("Parent Signup"))
   end
+
+  def tutorials_enabled?
+    @domain_root_account&.feature_enabled?(:new_user_tutorial) &&
+    @current_user&.feature_enabled?(:new_user_tutorial_on_off)
+  end
+
+  def set_tutorial_js_env
+    return if @js_env && @js_env[:NEW_USER_TUTORIALS]
+
+    is_enabled = @context.is_a?(Course) &&
+      tutorials_enabled? &&
+      @context.grants_right?(@current_user, session, :manage)
+
+    js_env NEW_USER_TUTORIALS: {is_enabled: is_enabled}
+  end
+
+  def planner_enabled?
+    @domain_root_account&.feature_enabled?(:student_planner)
+  end
+
 end

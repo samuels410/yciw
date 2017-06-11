@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -23,13 +23,13 @@ describe '/quizzes/quizzes/take_quiz' do
   it 'should render' do
     course_with_student
     view_context
-    assigns[:quiz] = @course.quizzes.create!(description: 'Hello')
-    assigns[:submission] = assigns[:quiz].generate_submission(@user)
-    assigns[:quiz_presenter] = Quizzes::TakeQuizPresenter.new(
-      assigns[:quiz],
-      assigns[:submission],
+    quiz = assign(:quiz, @course.quizzes.create!(description: 'Hello'))
+    sub = assign(:submission, quiz.generate_submission(@user))
+    assign(:quiz_presenter, Quizzes::TakeQuizPresenter.new(
+      quiz,
+      sub,
       params
-    )
+    ))
     render 'quizzes/quizzes/take_quiz'
     doc = Nokogiri::HTML(response.body)
     expect(doc.css('#quiz-instructions').first.content.strip).to eq 'Hello'
@@ -39,14 +39,14 @@ describe '/quizzes/quizzes/take_quiz' do
   it 'should render preview alert for unpublished quiz' do
     course_with_student
     view_context
-    assigns[:quiz] = @course.quizzes.create!
-    assigns[:submission] = assigns[:quiz].generate_submission(@user)
-    assigns[:submission].update_attribute(:workflow_state, 'preview')
-    assigns[:quiz_presenter] = Quizzes::TakeQuizPresenter.new(
-      assigns[:quiz],
-      assigns[:submission],
+    quiz = assign(:quiz, @course.quizzes.create!)
+    sub = assign(:submission, quiz.generate_submission(@user))
+    sub.update_attribute(:workflow_state, 'preview')
+    assign(:quiz_presenter, Quizzes::TakeQuizPresenter.new(
+      quiz,
+      sub,
       params
-    )
+    ))
     render 'quizzes/quizzes/take_quiz'
 
     expect(response).to include 'preview of the draft version'
@@ -57,14 +57,14 @@ describe '/quizzes/quizzes/take_quiz' do
     view_context
     quiz = @course.quizzes.create!
     quiz.publish!
-    assigns[:quiz] = quiz
-    assigns[:submission] = quiz.generate_submission(@user)
-    assigns[:submission].update_attribute(:workflow_state, 'preview')
-    assigns[:quiz_presenter] = Quizzes::TakeQuizPresenter.new(
-      assigns[:quiz],
-      assigns[:submission],
+    assign(:quiz, quiz)
+    sub = assign(:submission, quiz.generate_submission(@user))
+    sub.update_attribute(:workflow_state, 'preview')
+    assign(:quiz_presenter, Quizzes::TakeQuizPresenter.new(
+      quiz,
+      sub,
       params
-    )
+    ))
     render 'quizzes/quizzes/take_quiz'
 
     expect(response).to include 'preview of the published version'

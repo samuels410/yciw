@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -22,10 +22,10 @@
 #
 # NOTE: Placements not documented here should be considered beta features and are not officially supported.
 class ExternalToolsController < ApplicationController
-  before_filter :require_context
-  before_filter :require_access_to_context, except: [:index, :sessionless_launch]
-  before_filter :require_user, only: [:generate_sessionless_launch]
-  before_filter :get_context, :only => [:retrieve, :show, :resource_selection]
+  before_action :require_context
+  before_action :require_access_to_context, except: [:index, :sessionless_launch]
+  before_action :require_user, only: [:generate_sessionless_launch]
+  before_action :get_context, :only => [:retrieve, :show, :resource_selection]
   include Api::V1::ExternalTools
 
   REDIS_PREFIX = 'external_tool:sessionless_launch:'
@@ -887,6 +887,10 @@ class ExternalToolsController < ApplicationController
   #   Set this to ContentItemSelectionRequest to tell the tool to use
   #   content-item; otherwise, omit
   #
+  # @argument tool_configuration[prefer_sis_email] [Boolean]
+  #   Set this to default the lis_person_contact_email_primary to prefer
+  #   provisioned sis_email; otherwise, omit
+  #
   # @argument resource_selection[url] [String]
   #   The url of the external tool
   #
@@ -975,17 +979,15 @@ class ExternalToolsController < ApplicationController
         external_tool_params[:custom_fields] = custom_fields if custom_fields.present?
       end
       set_tool_attributes(@tool, external_tool_params)
-      respond_to do |format|
-        if @tool.save
-          invalidate_nav_tabs_cache(@tool)
-          if api_request?
-            format.json { render :json => external_tool_json(@tool, @context, @current_user, session) }
-          else
-            format.json { render :json => @tool.as_json(:methods => [:readable_state, :custom_fields_string, :vendor_help_link], :include_root => false) }
-          end
+      if @tool.save
+        invalidate_nav_tabs_cache(@tool)
+        if api_request?
+          render :json => external_tool_json(@tool, @context, @current_user, session)
         else
-          format.json { render :json => @tool.errors, :status => :bad_request }
+          render :json => @tool.as_json(:methods => [:readable_state, :custom_fields_string, :vendor_help_link], :include_root => false)
         end
+      else
+        render :json => @tool.errors, :status => :bad_request
       end
     end
   end

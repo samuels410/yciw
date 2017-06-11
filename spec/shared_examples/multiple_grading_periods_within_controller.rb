@@ -1,15 +1,32 @@
-shared_context "multiple grading periods within controller" do
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
+shared_context "grading periods within controller" do
   let(:root_account) { course.root_account }
 
-  it "injects grading periods into the JS ENV if Multiple Grading Periods is enabled" do
-    root_account.enable_feature!(:multiple_grading_periods)
+  it "injects grading periods into the JS ENV if grading periods exist" do
+    group = root_account.grading_period_groups.create!
+    group.enrollment_terms << course.enrollment_term
     user_session(teacher)
     get(*request_params)
     expect(assigns[:js_env]).to have_key(:active_grading_periods)
   end
 
   it "includes 'last' and 'closed' data on each grading period " do
-    root_account.enable_feature!(:multiple_grading_periods)
     group = root_account.grading_period_groups.create!
     group.enrollment_terms << course.enrollment_term
     group.grading_periods.create!(title: "hi", start_date: 3.days.ago, end_date: 3.days.from_now)
@@ -19,7 +36,7 @@ shared_context "multiple grading periods within controller" do
     expect(period.keys).to include("is_closed", "is_last")
   end
 
-  it "does not inject grading periods into the JS ENV if Multiple Grading Periods is disabled" do
+  it "does not inject grading periods into the JS ENV if there are no grading periods" do
     user_session(teacher)
     get(*request_params)
     expect(assigns[:js_env]).not_to have_key(:active_grading_periods)

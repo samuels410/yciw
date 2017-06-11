@@ -1,3 +1,21 @@
+/*
+ * Copyright (C) 2015 - present Instructure, Inc.
+ *
+ * This file is part of Canvas.
+ *
+ * Canvas is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, version 3 of the License.
+ *
+ * Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 // this is how we do the magic for making sure extensions in plugins get applied
 // to canvas modules.  It depends upon conventional file system names (
 // some file in the plugin has the same name as the coffeescript file it extends
@@ -25,11 +43,11 @@ const glob = require('glob')
 
 // this is all the extensions that we can find in gems/plugins
 const extensions = (() => {
-  const pluginExtensionsPattern = __dirname + '/../gems/plugins/*/app/coffeescripts/extensions/**/*.coffee'
+  const pluginExtensionsPattern = `${__dirname}/../gems/plugins/*/app/coffeescripts/extensions/**/*.coffee`
   const pluginExtensions = glob.sync(pluginExtensionsPattern, [])
   const extensionsMap = {}
   const extensionPartsRegexp = /plugins\/([^/]*)\/app\/coffeescripts\/extensions\/(.*)\.coffee/
-  pluginExtensions.forEach(extension => {
+  pluginExtensions.forEach((extension) => {
     const extractions = extension.match(extensionPartsRegexp)
     const pluginName = extractions[1]
     const fileName = extractions[2]
@@ -41,20 +59,20 @@ const extensions = (() => {
   return extensionsMap
 })()
 
-const requireUndextendedRegexp = /^unextended!/
+const unextendedRegexp = /^unextended!/
 const extensionRequirementRegexp = /\/extensions\//
 
 class BundleExtensionsPlugin {
   apply (compiler) {
-    compiler.plugin('normal-module-factory', nmf => {
+    compiler.plugin('normal-module-factory', (nmf) => {
       nmf.plugin('before-resolve', (result, callback) => {
         let addLoadersFor = []
         // if we're resolving an extension, we don't want to try to
         // extend the extension itself, so skip the check and move on
         if (!extensionRequirementRegexp.test(result.request)) {
-          Object.keys(extensions).forEach(key => {
-            if (result.request.indexOf(key) > -1) {
-              if (requireUndextendedRegexp.test(result.request)) {
+          Object.keys(extensions).forEach((key) => {
+            if (result.request.includes(key)) {
+              if (unextendedRegexp.test(result.request)) {
                 // skip, unextended loader means we really want the original
               } else {
                 // we're trying to resolve a file that has an extension in at least one plugin,
@@ -66,7 +84,7 @@ class BundleExtensionsPlugin {
           })
 
           if (addLoadersFor.length > 0) {
-            const newRequest = `withExtensions?${addLoadersFor.join(",")}!${result.request}`
+            const newRequest = `withExtensions?${addLoadersFor.join(',')}!${result.request}`
             result.request = newRequest
           }
         }

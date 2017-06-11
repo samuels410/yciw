@@ -1,5 +1,5 @@
-/**
- * Copyright (C) 2011 Instructure, Inc.
+/*
+ * Copyright (C) 2011 - present Instructure, Inc.
  *
  * This file is part of Canvas.
  *
@@ -12,10 +12,11 @@
  * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
  * details.
  *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+/*global jsonData*/
 define([
   'jsx/speed_grader/gradingPeriod',
   'jsx/grading/helpers/OutlierScoreHelper',
@@ -29,6 +30,7 @@ define([
   'underscore',
   'INST' /* INST */,
   'i18n!gradebook',
+  'compiled/util/natcompare',
   'jquery' /* $ */,
   'timezone',
   'compiled/userSettings',
@@ -61,7 +63,7 @@ define([
   'vendor/ui.selectmenu' /* /\.selectmenu/ */
 ], function (MGP, OutlierScoreHelper, quizzesNextSpeedGrading, numberHelper,
   GradeFormatHelper, studentViewedAtTemplate, submissionsDropdownTemplate,
-  speechRecognitionTemplate, round, _, INST, I18n, $, tz, userSettings, htmlEscape,
+  speechRecognitionTemplate, round, _, INST, I18n, natcompare, $, tz, userSettings, htmlEscape,
   rubricAssessment, SpeedgraderSelectMenu, SpeedgraderHelpers, turnitinInfoTemplate,
   turnitinScoreTemplate, vericiteInfoTemplate, vericiteScoreTemplate) {
   // PRIVATE VARIABLES AND FUNCTIONS
@@ -224,34 +226,15 @@ define([
     //by defaut the list is sorted alphbetically by student last name so we dont have to do any more work here,
     // if the cookie to sort it by submitted_at is set we need to sort by submitted_at.
     var hideStudentNames = utils.shouldHideStudentNames();
-    var compareStudentsBy = function(f) {
-      return function(studentA, studentB) {
-        var a = f(studentA);
-        var b = f(studentB);
 
-        if ((!a && !b) || a === b) {
-          // chrome / safari sort isn't stable, so we need to sort by name in
-          // case of tie
-          if (studentA.name > studentB.name) {
-            return -1;
-          } else if (studentB.name > studentA.name) {
-            return 1;
-          } else {
-            return 0;
-          }
-        }
-        else if (!a || a > b) { return 1; }
-        else { return -1; }
-      };
-    };
     if(hideStudentNames) {
-      jsonData.studentsWithSubmissions.sort(compareStudentsBy(function(student) {
+      window.jsonData.studentsWithSubmissions.sort(EG.compareStudentsBy(function (student) {
         return student &&
           student.submission &&
           student.submission.id;
       }));
     } else if (userSettings.get("eg_sort_by") == "submitted_at") {
-      jsonData.studentsWithSubmissions.sort(compareStudentsBy(function(student){
+      window.jsonData.studentsWithSubmissions.sort(EG.compareStudentsBy(function (student) {
         var submittedAt = student &&
                           student.submission &&
                           student.submission.submitted_at;
@@ -270,7 +253,7 @@ define([
         "graded": 4,
         "not_gradeable": 5
       };
-      jsonData.studentsWithSubmissions.sort(compareStudentsBy(function(student){
+      window.jsonData.studentsWithSubmissions.sort(EG.compareStudentsBy(function (student) {
         return student &&
           states[SpeedgraderHelpers.submissionState(student, ENV.grading_role)];
       }));
@@ -356,6 +339,9 @@ define([
         link: $('#mute_link'),
         modal: $('#mute_dialog')
       },
+      unmute: {
+        modal: $('#unmute_dialog')
+      },
       nav: $gradebook_header.find('#prev-student-button, #next-student-button'),
       settings: {
         form: $('#settings_form'),
@@ -399,7 +385,7 @@ define([
           }, this)
         },{
           text: I18n.t('mute_assignment', 'Mute Assignment'),
-          'class': 'btn-primary',
+          class: 'btn-primary btn-mute',
           click: $.proxy(function(){
             this.toggleMute();
             this.elements.mute.modal.dialog('close');
@@ -408,6 +394,26 @@ define([
         modal: true,
         resizable: false,
         title: this.elements.mute.modal.data('title'),
+        width: 400
+      });
+      this.elements.unmute.modal.dialog({
+        autoOpen: false,
+        buttons: [{
+          text: I18n.t('Cancel'),
+          click: $.proxy(function () {
+            this.elements.unmute.modal.dialog('close');
+          }, this)
+        }, {
+          text: I18n.t('Unmute Assignment'),
+          class: 'btn-primary btn-unmute',
+          click: $.proxy(function () {
+            this.toggleMute();
+            this.elements.unmute.modal.dialog('close');
+          }, this)
+        }],
+        modal: true,
+        resizable: false,
+        title: this.elements.unmute.modal.data('title'),
         width: 400
       });
     },
@@ -451,7 +457,11 @@ define([
 
     onMuteClick: function(e){
       e.preventDefault();
-      this.muted ? this.toggleMute() : this.elements.mute.modal.dialog('open');
+      if (this.muted) {
+        this.elements.unmute.modal.dialog('open');
+      } else {
+        this.elements.mute.modal.dialog('open');
+      }
     },
 
     muteUrl: function(){
@@ -559,7 +569,7 @@ define([
         // show the div that contains the button because it is hidden from browsers that dont support speech
       $(".speech_recognition_link").closest('div.speech-recognition').show();
 
-      function processSpeech($this){
+      var processSpeech = function ($this){
         if ($('#record_button').attr("recording") == "true"){
           recognition.stop();
           var current_comment = $('#final_results').html() + $('#interim_results').html()
@@ -572,11 +582,11 @@ define([
         }
       }
 
-      function formatComment(current_comment){
+      var formatComment = function (current_comment){
         return current_comment.replace(/<p><\/p>/g, '\n\n').replace(/<br>/g, '\n');
       }
 
-      function configureRecognition(recognition){
+      function configureRecognition (recognition) {
         recognition.continuous = true;
         recognition.interimResults = true;
         var final_transcript = '';
@@ -811,7 +821,7 @@ define([
     }
   });
 
-  function beforeLeavingSpeedgrader() {
+  function beforeLeavingSpeedgrader(e) {
     // Submit any draft comments that need submitting
     EG.addSubmissionComment(true);
 
@@ -822,20 +832,24 @@ define([
         return (snapshot == student) && student.name;
       })[0];
     })
-      hasPendingQuizSubmissions = (function(){
-        var ret = false;
-        if (userNamesWithPendingQuizSubmission.length){
-          for (var i = 0, max = userNamesWithPendingQuizSubmission.length; i < max; i++){
-            if (userNamesWithPendingQuizSubmission[i] !== false) { ret = true; }
-          }
+
+    var hasPendingQuizSubmissions = (function(){
+      var ret = false;
+      if (userNamesWithPendingQuizSubmission.length){
+        for (var i = 0, max = userNamesWithPendingQuizSubmission.length; i < max; i++){
+          if (userNamesWithPendingQuizSubmission[i] !== false) { ret = true; }
         }
-        return ret;
-      })();
+      }
+      return ret;
+    })();
+
     var hasUnsubmittedComments = $.trim($add_a_comment_textarea.val()) !== "";
     if (hasPendingQuizSubmissions) {
-      return I18n.t('confirms.unsaved_changes', "The following students have unsaved changes to their quiz submissions: \n\n %{users}\nContinue anyway?", {'users': userNamesWithPendingQuizSubmission.join('\n ')});
+      e.returnValue = I18n.t('confirms.unsaved_changes', "The following students have unsaved changes to their quiz submissions: \n\n %{users}\nContinue anyway?", {'users': userNamesWithPendingQuizSubmission.join('\n ')});
+      return e.returnValue;
     } else if (hasUnsubmittedComments) {
-      return I18n.t("If you would like to keep your unsubmitted comments, please save them before navigating away from this page.");
+      e.returnValue = I18n.t("If you would like to keep your unsubmitted comments, please save them before navigating away from this page.");
+      return e.returnValue;
     }
   }
 
@@ -963,7 +977,7 @@ define([
         e.preventDefault();
       });
 
-      window.onbeforeunload = beforeLeavingSpeedgrader;
+      window.addEventListener('beforeunload', beforeLeavingSpeedgrader);
     },
 
     jsonReady: function(){
@@ -1088,7 +1102,7 @@ define([
         if (student.avatar_path && !hideStudentNames) {
           // If there's any kind of delay in loading the user's avatar, it's
           // better to show a blank image than the previous student's image.
-          $new_image = $avatar_image.clone().show();
+          var $new_image = $avatar_image.clone().show();
           $avatar_image.after($new_image.attr('src', student.avatar_path)).remove();
           $avatar_image = $new_image;
         } else {
@@ -1454,7 +1468,7 @@ define([
         var defaultInfoMessage = I18n.t('turnitin.info_message',
                                         'This file is still being processed by turnitin. Please check back later to see the score'),
             defaultErrorMessage = I18n.t('turnitin.error_message',
-                                         'There was an error submitting to turnitin. Please try resubmitting the file before contacting support');
+                                         'There was an error submitting to the similarity detection service. Please try resubmitting the file before contacting support.');
         var $turnitinInfo = $(turnitinInfoTemplate({
           assetString: assetString,
           message: (turnitinAsset.status == 'error' ? (turnitinAsset.public_error_message || defaultErrorMessage) : defaultInfoMessage),
@@ -1612,7 +1626,7 @@ define([
         if (browserableCssClasses.test(attachment.mime_class)) {
           browserableAttachments.push(attachment);
         }
-        $submission_file = $submission_file_hidden.clone(true).fillTemplateData({
+        var $submission_file = $submission_file_hidden.clone(true).fillTemplateData({
           data: {
             submissionId: submission.user_id,
             attachmentId: attachment.id,
@@ -1773,14 +1787,14 @@ define([
 
       if (scores.length) { //if there are some submissions that have been graded.
         $average_score_wrapper.show();
-        function avg(arr) {
+        var avg = function (arr) {
           var sum = 0;
           for (var i = 0, j = arr.length; i < j; i++) {
             sum += arr[i];
           }
           return sum / arr.length;
         }
-        function roundWithPrecision(number, precision) {
+        var roundWithPrecision = function (number, precision) {
           precision = Math.abs(parseInt(precision, 10)) || 0;
           var coefficient = Math.pow(10, precision);
           return Math.round(number*coefficient)/coefficient;
@@ -2418,9 +2432,9 @@ define([
           .removeClass(submissionStates)
           .addClass(className.raw)
 
-        $status = $(".ui-selectmenu-status");
-        $statusIcon = $status.find(".speedgrader-selectmenu-icon");
-        $queryIcon = $query.find(".speedgrader-selectmenu-icon");
+        var $status = $(".ui-selectmenu-status");
+        var $statusIcon = $status.find(".speedgrader-selectmenu-icon");
+        var $queryIcon = $query.find(".speedgrader-selectmenu-icon");
 
         if(this == EG.currentStudent && (className.raw == "graded" || className.raw == "not_gradeable")){
           var studentInfo = EG.getStudentNameAndGrade()
@@ -2524,6 +2538,23 @@ define([
         }
         return false; // so that it doesn't hit the $("a.instructure_inline_media_comment").live('click' event handler
       });
+    },
+
+    compareStudentsBy: function (f) {
+      return function (studentA, studentB) {
+        var a = f(studentA);
+        var b = f(studentB);
+
+        if ((!a && !b) || a === b) {
+          // chrome / safari sort isn't stable, so we need to sort by name in
+          // case of tie
+          return natcompare.strings(studentA.sortable_name, studentB.sortable_name);
+        } else if (!a || a > b) {
+          return 1;
+        }
+
+        return -1;
+      };
     }
   };
 

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015 Instructure, Inc.
+# Copyright (C) 2014 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -17,7 +17,7 @@
 #
 
 class LegalInformationController < ApplicationController
-  skip_before_filter :require_reacceptance_of_terms
+  skip_before_action :require_reacceptance_of_terms
 
   def terms_of_use
     redirect_to terms_of_use_url

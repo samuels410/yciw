@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -24,10 +24,6 @@ describe ContextExternalTool do
     @root_account = @course.root_account
     @account = account_model(:root_account => @root_account, :parent_account => @root_account)
     @course.update_attribute(:account, @account)
-    expect(@course.account).to eql(@account)
-    expect(@course.root_account).to eql(@root_account)
-    expect(@account.parent_account).to eql(@root_account)
-    expect(@account.root_account).to eql(@root_account)
   end
 
   describe '#content_migration_configured?' do
@@ -748,6 +744,21 @@ describe ContextExternalTool do
       expect(url).to eql(ContextExternalTool.standardize_url("http://www.google.com?b=2&a=1"))
       expect(url).to eql(ContextExternalTool.standardize_url("http://www.google.com/?b=2&a=1"))
       expect(url).to eql(ContextExternalTool.standardize_url("www.google.com/?b=2&a=1"))
+    end
+
+    it 'should handle spaces in front of url' do
+      url = ContextExternalTool.standardize_url(" http://sub_underscore.google.com?a=1&b=2")
+      expect(url).to eql('http://sub_underscore.google.com/?a=1&b=2')
+    end
+
+    it 'should handle tabs in front of url' do
+      url = ContextExternalTool.standardize_url("\thttp://sub_underscore.google.com?a=1&b=2")
+      expect(url).to eql('http://sub_underscore.google.com/?a=1&b=2')
+    end
+
+    it 'should handle unicode whitespace' do
+      url = ContextExternalTool.standardize_url("\u00A0http://sub_underscore.go\u2005ogle.com?a=1\u2002&b=2")
+      expect(url).to eql('http://sub_underscore.google.com/?a=1&b=2')
     end
 
     it 'handles underscores in the domain' do

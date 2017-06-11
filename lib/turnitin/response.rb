@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2014 Instructure, Inc.
+# Copyright (C) 2014 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -72,7 +72,7 @@ module Turnitin
       when 1023
         I18n.t('turnitin.error_1023', "The PDF file could not be read. Please make sure that the file is not password protected.")
       else
-        I18n.t('turnitin.error_default', "There was an error submitting to turnitin. Please try resubmitting the file before contacting support.")
+        I18n.t('There was an error submitting to the similarity detection service. Please try resubmitting the file before contacting support.')
       end
     end
 

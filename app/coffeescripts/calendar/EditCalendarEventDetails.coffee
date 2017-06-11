@@ -1,4 +1,22 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
+  'i18n!calendar'
   'jquery'
   'underscore'
   'timezone'
@@ -7,11 +25,13 @@ define [
   'compiled/calendar/TimeBlockList'
   'jst/calendar/editCalendarEvent'
   'compiled/util/coupleTimeFields'
+  'jsx/shared/helpers/datePickerFormat'
   'jquery.instructure_date_and_time'
   'jquery.instructure_forms'
   'jquery.instructure_misc_helpers'
   'vendor/date'
-], ($, _, tz, fcUtil, commonEventFactory, TimeBlockList, editCalendarEventTemplate, coupleTimeFields) ->
+  'compiled/calendar/fcMomentHandlebarsHelpers'
+], (I18n, $, _, tz, fcUtil, commonEventFactory, TimeBlockList, editCalendarEventTemplate, coupleTimeFields, datePickerFormat) ->
 
   class EditCalendarEventDetails
     constructor: (selector, @event, @contextChangeCB, @closeCB) ->
@@ -21,6 +41,7 @@ define [
         contexts: @event.possibleContexts()
         lockedTitle: @event.lockedTitle
         location_name: @event.location_name
+        date: @event.startDate()
       }))
       $(selector).append @$form
 
@@ -142,15 +163,13 @@ define [
       $end = @$form.find(".time_field.end_time")
 
       # set them up as appropriate variants of datetime_field
-      $date.date_field()
+      $date.date_field({ datepicker: { dateFormat: datePickerFormat(I18n.t('#date.formats.medium_with_weekday')) } })
       $start.time_field()
       $end.time_field()
 
       # fill initial values of each field according to @event
       start = fcUtil.unwrap(@event.startDate())
       end = fcUtil.unwrap(@event.endDate())
-
-      $date.data('instance').setDate(start)
 
       $start.data('instance').setTime(if @event.allDay then null else start)
       $end.data('instance').setTime(if @event.allDay then null else end)

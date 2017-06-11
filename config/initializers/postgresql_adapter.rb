@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 class QuotedValue < String
 end
 
@@ -58,40 +75,6 @@ module PostgreSQLAdapterExtensions
 
   def rename_index(table_name, old_name, new_name)
     return execute "ALTER INDEX #{quote_table_name(old_name)} RENAME TO #{quote_column_name(new_name)}";
-  end
-
-  # have to replace the entire method to support concurrent
-  def add_index(table_name, column_name, options = {})
-    column_names = Array(column_name)
-    index_name   = index_name(table_name, :column => column_names)
-
-    if Hash === options # legacy support, since this param was a string
-      index_type = options[:unique] ? "UNIQUE" : ""
-      index_name = options[:name].to_s if options[:name]
-      concurrently = "CONCURRENTLY " if options[:algorithm] == :concurrently && self.open_transactions == 0
-      conditions = options[:where]
-      if conditions
-        sql_conditions = options[:where]
-        conditions = " WHERE #{sql_conditions}"
-      end
-    else
-      index_type = options
-    end
-
-    if index_name.length > index_name_length
-      warning = "Index name '#{index_name}' on table '#{table_name}' is too long; the limit is #{index_name_length} characters. Skipping."
-      @logger.warn(warning)
-      raise warning unless Rails.env.production?
-      return
-    end
-
-    if index_exists?(table_name, column_names, :name => index_name)
-      @logger.warn("Index name '#{index_name}' on table '#{table_name}' already exists. Skipping.")
-      return
-    end
-    quoted_column_names = quoted_columns_for_index(column_names, options).join(", ")
-
-    execute "CREATE #{index_type} INDEX #{concurrently}#{quote_column_name(index_name)} ON #{quote_table_name(table_name)} (#{quoted_column_names})#{conditions}"
   end
 
   def set_standard_conforming_strings
@@ -177,30 +160,50 @@ module PostgreSQLAdapterExtensions
     end
   end
 
+  def index_exists?(_table_name, columns, _options = {})
+    raise ArgumentError.new("if you're identifying an index by name only, you should use index_name_exists?") if columns.is_a?(Hash) && columns[:name]
+    raise ArgumentError.new("columns should be a string, a symbol, or an array of those ") unless columns.is_a?(String) || columns.is_a?(Symbol) || columns.is_a?(Array)
+    super
+  end
+
+  # some migration specs test migrations that add concurrent indexes; detect that, and strip the concurrent
+  # but _only_ if there isn't another transaction in the stack
+  def add_index_options(_table_name, _column_name, _options = {})
+    index_name, index_type, index_columns, index_options, algorithm, using = super
+    algorithm = nil if Rails.env.test? && algorithm == "CONCURRENTLY" && !ActiveRecord::Base.in_transaction_in_test?
+    [index_name, index_type, index_columns, index_options, algorithm, using]
+  end
+
   # Force things with (approximate) integer representations (Floats,
   # BigDecimals, Times, etc.) into those representations. Raise
   # ActiveRecord::StatementInvalid for any other non-integer things.
   def quote(value, column = nil)
     return value if value.is_a?(QuotedValue)
 
-    if column && column.type == :integer && !value.respond_to?(:quoted_id)
-      case value
-        when String, ActiveSupport::Multibyte::Chars, nil, true, false
-          # these already have branches for column.type == :integer (or don't
-          # need one)
-          super(value, column)
-        else
-          if value.respond_to?(:to_i)
-            # quote the value in its integer representation
-            value.to_i.to_s
+    if CANVAS_RAILS4_2
+      if column && column.type == :integer && !value.respond_to?(:quoted_id)
+        case value
+          when String, ActiveSupport::Multibyte::Chars, nil, true, false
+            # these already have branches for column.type == :integer (or don't
+            # need one)
+            super(value, column)
           else
-            # doesn't have a (known) integer representation, can't quote it
-            # for an integer column
-            raise ActiveRecord::StatementInvalid, "#{value.inspect} cannot be interpreted as an integer"
-          end
+            if value.respond_to?(:to_i)
+              # quote the value in its integer representation
+              value.to_i.to_s
+            else
+              # doesn't have a (known) integer representation, can't quote it
+              # for an integer column
+              raise ActiveRecord::StatementInvalid, "#{value.inspect} cannot be interpreted as an integer"
+            end
+        end
+      else
+        super
       end
     else
-      super
+      # rails 5 doesn't have a column argument; when we remove rails 4.2 support, just a regular
+      # super call will work
+      super(value)
     end
   end
 
@@ -242,6 +245,39 @@ module PostgreSQLAdapterExtensions
         end
       end
     end
+  end
+
+  # we no longer use any triggers, so we removed hair_trigger,
+  # but don't want to go modifying all the old migrations, so just
+  # make them dummies
+  class CreateTriggerChain
+    def on(*)
+      self
+    end
+
+    def after(*)
+      self
+    end
+
+    def where(*)
+      self
+    end
+  end
+
+  def create_trigger(*)
+    CreateTriggerChain.new
+  end
+
+  def drop_trigger(name, table, generated: false)
+    execute("DROP TRIGGER IF EXISTS #{name} ON #{quote_table_name(table)};\nDROP FUNCTION IF EXISTS #{quote_table_name(name)}();\n")
+  end
+
+  # does a query first to warm the db cache, to make the actual constraint adding fast
+  def change_column_null(table, column, nullness, default = nil)
+    # no point in pre-warming the cache to avoid locking if we're already in a transaction
+    return super if nullness != false || default || open_transactions != 0
+    execute("SELECT COUNT(*) FROM #{quote_table_name(table)} WHERE #{column} IS NULL")
+    super
   end
 
   private

@@ -1,9 +1,28 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_relative '../../spec_helper.rb'
 
 describe Canvas::RequestForgeryProtection do
   before :each do
     # default setup is a protected non-GET non-API session-authenticated request with bogus tokens
-    headers = ActionDispatch::Http::Headers.new('X-CSRF-Token' => "bogus")
+    raw_headers = { 'X-CSRF-Token' => "bogus" }
+    raw_headers = ActionDispatch::Request.new(raw_headers) unless CANVAS_RAILS4_2
+    headers = ActionDispatch::Http::Headers.new(raw_headers)
     cookies = ActionDispatch::Cookies::CookieJar.new(nil)
     request = stub("request",
       host_with_port: "example.com:80",

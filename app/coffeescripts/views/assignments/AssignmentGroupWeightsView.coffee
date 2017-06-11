@@ -1,9 +1,28 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'jquery'
   'compiled/util/round'
   'Backbone'
+  'i18n!assignments'
   'jst/assignments/AssignmentGroupWeights'
-], ($, round, Backbone, AssignmentGroupWeightsTemplate) ->
+  'jsx/shared/helpers/numberHelper'
+], ($, round, Backbone, I18n, AssignmentGroupWeightsTemplate, numberHelper) ->
 
   class AssignmentGroupWeightsView extends Backbone.View
     template: AssignmentGroupWeightsTemplate
@@ -17,11 +36,14 @@ define [
 
     roundWeight: (e) ->
       value = $(e.target).val()
-      rounded_value = round(parseFloat(value), 2)
-      $(e.target).val(rounded_value)
+      rounded_value = round(numberHelper.parse(value), 2)
+      if isNaN(rounded_value)
+        return
+      else
+        $(e.target).val(I18n.n(rounded_value))
 
     findWeight: ->
-      round(parseFloat(@$el.find('.group_weight_value').val()), 2)
+      round(numberHelper.parse(@$el.find('.group_weight_value').val()), 2)
 
     toJSON: ->
       data = super

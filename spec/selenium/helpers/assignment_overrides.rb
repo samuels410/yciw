@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 module AssignmentOverridesSeleniumHelper
   def visit_new_assignment_page
     get "/courses/#{@course.id}/assignments/new"
@@ -80,19 +97,15 @@ module AssignmentOverridesSeleniumHelper
   end
 
   def select_last_override_section(override_name)
-    driver.switch_to.default_content
     fj('.ic-tokeninput-input:last').send_keys(override_name)
-    wait_for_ajaximations
     fj(".ic-tokeninput-option:visible:last").click
-    wait_for_ajaximations
+    driver.action.send_keys(:tab).perform # hide the menu so it doesn't interfere with later actions
   end
 
   def select_first_override_section(override_name)
-    driver.switch_to.default_content
     fj('.ic-tokeninput-input:first').send_keys(override_name)
-    wait_for_ajaximations
     fj(".ic-tokeninput-option:visible:first").click
-    wait_for_ajaximations
+    driver.action.send_keys(:tab).perform # hide the menu so it doesn't interfere with later actions
   end
 
   def select_first_override_header(override_name)

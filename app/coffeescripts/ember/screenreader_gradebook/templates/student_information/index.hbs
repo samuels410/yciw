@@ -30,12 +30,12 @@
 
           <h4>{{#t 'grades'}}Grades{{/t}}</h4>
 
-          {{partial "student_information/assignment_groups"}}
+          {{partial "student_information/assignment_subtotals"}}
 
           {{
             final-grade
             student=selectedStudent
-            weighted_groups=groupsAreWeighted
+            weighted_grades=gradesAreWeighted
             gradingStandard=ENV.GRADEBOOK_OPTIONS.grading_standard
           }}
 

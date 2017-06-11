@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 module BroadcastPolicies
   class AssignmentPolicy
     extend DatesOverridable::ClassMethods
@@ -11,7 +28,7 @@ module BroadcastPolicies
       accepting_messages? &&
       assignment.changed_in_state(:published, :fields => :due_at) &&
       !just_published? &&
-      !AssignmentPolicy.due_dates_equal?(assignment.due_at, prior_version.due_at) &&
+      !AssignmentPolicy.due_dates_equal?(assignment.due_at, assignment.due_at_was) &&
       created_before(3.hours.ago)
     end
 
@@ -21,14 +38,14 @@ module BroadcastPolicies
       !assignment.muted? &&
       created_before(30.minutes.ago) &&
       !just_published? &&
-      (assignment.points_possible != prior_version.points_possible || assignment.assignment_changed)
+      (assignment.points_possible_changed? || assignment.assignment_changed)
     end
 
     def should_dispatch_assignment_created?
       return false unless context_sendable?
 
       published_on_create? || just_published? ||
-        (prior_version && prior_version.workflow_state != assignment.workflow_state && assignment.published?)
+        (assignment.workflow_state_changed? && assignment.published?)
     end
 
     def should_dispatch_assignment_unmuted?
@@ -45,11 +62,7 @@ module BroadcastPolicies
 
     def accepting_messages?
       context_sendable? &&
-      prior_version
-    end
-
-    def prior_version
-      assignment.prior_version
+        !assignment.just_created
     end
 
     def created_before(time)

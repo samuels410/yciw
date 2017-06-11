@@ -1,4 +1,5 @@
-# Copyright (C) 2013 Instructure, Inc.
+#
+# Copyright (C) 2013 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -160,6 +161,7 @@ class RequestThrottle
 
   def self.reload!
     @whitelist = @blacklist = nil
+    LeakyBucket.reload!
   end
 
   def self.enabled?
@@ -208,7 +210,7 @@ class RequestThrottle
   # and hwm were equal, then the bucket would always leak at least a tiny bit
   # by the beginning of the next request, and thus would never be considered
   # full.
-  class LeakyBucket < Struct.new(:client_identifier, :count, :last_touched)
+  LeakyBucket = Struct.new(:client_identifier, :count, :last_touched) do
     def initialize(client_identifier, count = 0.0, last_touched = nil)
       super
     end
@@ -235,8 +237,23 @@ class RequestThrottle
 
     SETTING_DEFAULTS.each do |(setting, default)|
       define_method(setting) do
-        Setting.get("request_throttle.#{setting}", default).to_f
+        (self.class.custom_settings_hash[client_identifier]&.[](setting.to_s) ||
+          Setting.get("request_throttle.#{setting}", default)).to_f
       end
+    end
+
+    def self.custom_settings_hash
+      @custom_settings_hash ||= begin
+        JSON.parse(
+          Setting.get('request_throttle.custom_settings', '{}')
+        )
+      rescue JSON::JSONError
+        {}
+      end
+    end
+
+    def self.reload!
+      @custom_settings_hash = nil
     end
 
     # up_front_cost is a placeholder cost. Essentially it adds some cost to

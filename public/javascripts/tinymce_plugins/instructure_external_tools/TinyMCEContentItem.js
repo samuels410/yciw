@@ -1,3 +1,21 @@
+/*
+ * Copyright (C) 2015 - present Instructure, Inc.
+ *
+ * This file is part of Canvas.
+ *
+ * Canvas is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, version 3 of the License.
+ *
+ * Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 define(['jquery'], function ($){
   var LTI_MIME_TYPES = [ 'application/vnd.ims.lti.v1.ltilink', 'application/vnd.ims.lti.v1.launch+json'];
 
@@ -60,6 +78,9 @@ define(['jquery'], function ($){
     },
 
     link: function (tinyMCEContentItem) {
+      var editorSelection = window.tinyMCE && window.tinyMCE.activeEditor && window.tinyMCE.activeEditor.contentDocument.getSelection();
+      var selectedText = editorSelection && editorSelection.anchorNode && editorSelection.anchorNode.data;
+
       var $linkContainer = $("<div/>"),
         $link = $("<a/>", {
           href: tinyMCEContentItem.url,
@@ -80,7 +101,7 @@ define(['jquery'], function ($){
           alt: tinyMCEContentItem.text
         }))
       } else {
-        $link.text(tinyMCEContentItem.text);
+        $link.text(selectedText || tinyMCEContentItem.text);
       }
 
       return $linkContainer.html();

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -18,6 +18,7 @@
 
 class Conversation < ActiveRecord::Base
   include SimpleTags
+  include ModelCache
 
   has_many :conversation_participants, :dependent => :destroy
   has_many :conversation_messages, -> { order("created_at DESC, id DESC") }, dependent: :delete_all
@@ -549,18 +550,18 @@ class Conversation < ActiveRecord::Base
     transaction do
       new_participants = other.conversation_participants.index_by(&:user_id)
       ConversationParticipant.suspend_callbacks(:destroy_conversation_message_participants) do
-        conversation_participants(true).each do |cp|
+        conversation_participants.reload.each do |cp|
           if new_cp = new_participants[cp.user_id]
             new_cp.update_attribute(:workflow_state, cp.workflow_state) if cp.unread? || new_cp.archived?
             # backcompat
-            cp.conversation_message_participants.update_all(:conversation_participant_id => new_cp)
+            cp.conversation_message_participants.update_all(conversation_participant_id: new_cp.id)
             # remove the duplicate participant
             cp.destroy
 
             if cp.user.shard != self.shard
               # remove the duplicate secondary CP on the user's shard
               cp.user.shard.activate do
-                ConversationParticipant.where(:conversation_id => self, :user_id => cp.user_id).delete_all
+                ConversationParticipant.where(conversation_id: self, :user_id => cp.user_id).delete_all
               end
             end
           else
@@ -577,7 +578,7 @@ class Conversation < ActiveRecord::Base
             if cp.user.shard != self.shard
               cp.user.shard.activate do
                 ConversationParticipant.where(:conversation_id => self, :user_id => cp.user_id).
-                  update_all(:conversation_id => other)
+                  update_all(conversation_id: other.id)
               end
             end
             # create a new duplicate cp on the target conversation's shard
@@ -593,7 +594,7 @@ class Conversation < ActiveRecord::Base
         end
       end
       if other.shard == self.shard
-        conversation_messages.update_all(:conversation_id => other)
+        conversation_messages.update_all(conversation_id: other.id)
       else
         # move messages and participants over to new shard
         conversation_messages.find_each do |message|
@@ -617,7 +618,7 @@ class Conversation < ActiveRecord::Base
       end
 
       conversation_participants.reload # now empty ... need to make sure callbacks don't double-delete
-      other.conversation_participants(true).each do |cp|
+      other.conversation_participants.reload.each do |cp|
         cp.update_cached_data! :recalculate_count => true, :set_last_message_at => false, :regenerate_tags => false
       end
       destroy
@@ -724,7 +725,8 @@ class Conversation < ActiveRecord::Base
   protected
 
   def maybe_update_timestamp(col, val, additional_conditions=[])
-    condition = self.class.where(["(#{col} IS NULL OR #{col} < ?)", val]).where(additional_conditions).where_values.join(' AND ')
+    scope = self.class.where(["(#{col} IS NULL OR #{col} < ?)", val]).where(additional_conditions)
+    condition = (CANVAS_RAILS4_2 ? scope.where_values : scope.where_clause.send(:predicates)).join(' AND ')
     sanitize_sql ["#{col} = CASE WHEN #{condition} THEN ? ELSE #{col} END", val]
   end
 end

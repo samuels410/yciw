@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2016 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -45,7 +45,7 @@ class AssignmentGroup < ActiveRecord::Base
     if self.name.blank?
       self.name = t 'default_title', "Assignments"
     end
-    if !self.group_weight
+    if !self.group_weight || self.group_weight.nan?
       self.group_weight = 0
     end
     self.default_assignment_name = self.name
@@ -227,7 +227,7 @@ class AssignmentGroup < ActiveRecord::Base
     order = new_group.assignments.active.pluck(:id)
     ids_to_change = self.assignments.active.pluck(:id)
     order += ids_to_change
-    Assignment.where(:id => ids_to_change).update_all(:assignment_group_id => new_group, :updated_at => Time.now.utc) unless ids_to_change.empty?
+    Assignment.where(:id => ids_to_change).update_all(:assignment_group_id => new_group.id, :updated_at => Time.now.utc) unless ids_to_change.empty?
     Assignment.where(id: order).first.update_order(order) unless order.empty?
     new_group.touch
     self.reload

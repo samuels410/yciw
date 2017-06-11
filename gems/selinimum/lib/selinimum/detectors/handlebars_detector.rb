@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_relative "js_detector"
 
 module Selinimum
@@ -5,38 +22,6 @@ module Selinimum
     class HandlebarsDetector < JSDetector
       def can_process?(file, _)
         file =~ %r{\Aapp/views/jst/.*\.handlebars\z}
-      end
-
-      # let the Embers die out, not worth the effort to selinimize :P
-      def module_from(file)
-        "jst/" + file.sub(%r{\Aapp/views/jst/(.*?)\.handlebars}, "\\1")
-      end
-
-      def dependents_for(file)
-        dependent_modules_for(file).inject([]) do |result, f|
-          result.concat super(f)
-        end
-      end
-
-      def dependent_modules_for(file)
-        # if not a partial, it's just a module like any other, so we're done
-        return [file] if file !~ %r{/_}
-
-        # trace partials back to template
-        (template_graph[file] || []).inject([]) do |result, dependent|
-          result.concat dependent_modules_for(dependent)
-        end.uniq
-      end
-
-      def template_graph
-        @template_graph ||= Dir["app/views/jst/**/*.handlebars"].each_with_object({}) do |file, graph|
-          partials = File.read(file).scan(/\{\{>\s?\[?(.+?)\]?( .*?)?}}/).map { |m| m[0].strip }.uniq
-          partials.each do |partial|
-            partial.sub!(/\A(.*\/)(.*)/, "app/views/jst/\\1_\\2.handlebars")
-            graph[partial] ||= []
-            graph[partial] << file
-          end
-        end
       end
     end
   end

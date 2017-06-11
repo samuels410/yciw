@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -207,7 +207,7 @@ describe Account do
     end
 
     it "should allow settings services" do
-      expect {@a.enable_service(:completly_bogs)}.to raise_error
+      expect {@a.enable_service(:completly_bogs)}.to raise_error("Invalid Service")
 
       @a.disable_service(:twitter)
       expect(@a.service_enabled?(:twitter)).to be_falsey
@@ -474,7 +474,7 @@ describe Account do
       hash[k][:user] = user
     end
 
-    limited_access = [ :read, :manage, :update, :delete, :read_outcomes ]
+    limited_access = [ :read, :read_as_admin, :manage, :update, :delete, :read_outcomes ]
     conditional_access = RoleOverride.permissions.select { |_, v| v[:account_allows] }.map(&:first)
     full_access = RoleOverride.permissions.keys +
                   limited_access - conditional_access +
@@ -523,7 +523,7 @@ describe Account do
       account.role_overrides.create!(:permission => 'reset_any_mfa', :role => @sa_role, :enabled => true)
       # clear caches
       account.tap{|a| a.settings[:mfa_settings] = :optional; a.save!}
-      v[:account] = Account.find(account)
+      v[:account] = Account.find(account.id)
     end
     RoleOverride.clear_cached_contexts
     AdheresToPolicy::Cache.clear
@@ -989,7 +989,6 @@ describe Account do
 
     before do
       account.authentication_providers.scope.delete_all
-      expect(account.delegated_authentication?).to eq false
     end
 
     it "is false for LDAP" do
@@ -1088,12 +1087,12 @@ describe Account do
         au = sa.account_users.create!(user: @user)
         # out-of-proc cache should clear, but we have to manually clear
         # the in-proc cache
-        sa = Account.find(sa)
+        sa = Account.find(sa.id)
         expect(sa.account_users_for(@user)).to eq [au]
 
         au.destroy
         #ditto
-        sa = Account.find(sa)
+        sa = Account.find(sa.id)
         expect(sa.account_users_for(@user)).to eq []
       end
     end
@@ -1111,12 +1110,12 @@ describe Account do
             au = sa.account_users.create!(user: @user)
             # out-of-proc cache should clear, but we have to manually clear
             # the in-proc cache
-            sa = Account.find(sa)
+            sa = Account.find(sa.id)
             expect(sa.account_users_for(@user)).to eq [au]
 
             au.destroy
             #ditto
-            sa = Account.find(sa)
+            sa = Account.find(sa.id)
             expect(sa.account_users_for(@user)).to eq []
           end
         end
@@ -1377,7 +1376,7 @@ describe Account do
         account = Account.find(account.id)
         expect(account.default_storage_quota).to eq 20.megabytes
 
-        subaccount = Account.find(subaccount)
+        subaccount = Account.find(subaccount.id)
         expect(subaccount.default_storage_quota).to eq 20.megabytes
       end
     end

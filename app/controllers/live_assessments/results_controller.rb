@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2014 Instructure, Inc.
+# Copyright (C) 2014 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -74,9 +74,9 @@ module LiveAssessments
   class ResultsController < ApplicationController
     include ::Filters::LiveAssessments
 
-    before_filter :require_user
-    before_filter :require_context
-    before_filter :require_assessment
+    before_action :require_user
+    before_action :require_context
+    before_action :require_assessment
 
     # @API Create live assessment results
     # @beta

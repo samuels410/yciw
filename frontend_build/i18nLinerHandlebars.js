@@ -1,3 +1,21 @@
+/*
+ * Copyright (C) 2015 - present Instructure, Inc.
+ *
+ * This file is part of Canvas.
+ *
+ * Canvas is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, version 3 of the License.
+ *
+ * Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 // This is basically one big port of what we do in ruby-land in the
 // handlebars-tasks gem.  We need to run handlebars source through basic
 // compilation to extract i18nliner scopes, and then we wrap the resulting
@@ -7,8 +25,9 @@ const Handlebars = require('handlebars')
 const {pick} = require('lodash')
 const {EmberHandlebars} = require('ember-template-compiler')
 const ScopedHbsExtractor = require('./../gems/canvas_i18nliner/js/scoped_hbs_extractor')
+require('babel-polyfill')
 const {allFingerprintsFor} = require('brandable_css/lib/main')
-const PreProcessor = require('./../gems/canvas_i18nliner/node_modules/i18nliner-handlebars/dist/lib/pre_processor')
+const PreProcessor = require('./../gems/canvas_i18nliner/node_modules/i18nliner-handlebars/dist/lib/pre_processor').default
 require('./../gems/canvas_i18nliner/js/scoped_hbs_pre_processor')
 
 // In this main file, we do a bunch of stuff to monkey-patch the default behavior of
@@ -43,6 +62,7 @@ const emitTemplate = (path, name, result, dependencies, cssRegistration, partial
   const moduleName = `jst/${path.replace(/.*\/\jst\//, '').replace(/\.handlebars/, '')}`
   return `
     define('${moduleName}', ${JSON.stringify(dependencies)}, function(Handlebars){
+      Handlebars = Handlebars.default
       var template = Handlebars.template, templates = Handlebars.templates = Handlebars.templates || {};
       var name = '${name}';
       templates[name] = template(${result['template']});
@@ -130,7 +150,7 @@ const buildPartialRequirements = (partialPaths) => {
 module.exports = function i18nLinerHandlebarsLoader (source) {
   this.cacheable()
   const name = resourceName(this.resourcePath)
-  const dependencies = ['handlebars']
+  const dependencies = ['handlebars/runtime']
 
   const partialRegistration = emitPartialRegistration(this.resourcePath, name)
 
@@ -153,6 +173,10 @@ module.exports = function i18nLinerHandlebarsLoader (source) {
   if (result.translationCount > 0) {
     dependencies.push('i18n!' + result.scope)
   }
+
+  // make sure the template has access to all our handlebars helpers
+  dependencies.push('coffeescripts/handlebars_helpers.coffee')
+
   const compiledTemplate = emitTemplate(this.resourcePath, name, result, dependencies, cssRegistration, partialRegistration)
   return compiledTemplate
 }

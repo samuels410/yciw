@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2014 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -82,8 +82,8 @@
 #     }
 #
 class SectionsController < ApplicationController
-  before_filter :require_context
-  before_filter :require_section, :except => [:index, :create]
+  before_action :require_context
+  before_action :require_section, :except => [:index, :create]
 
   include Api::V1::Section
 
@@ -109,8 +109,12 @@ class SectionsController < ApplicationController
 
       includes = Array(params[:include])
 
-      sections = Api.paginate(@context.active_course_sections.order(CourseSection.best_unicode_collation_key('name')), self, api_v1_course_sections_url)
+      sections = @context.active_course_sections.order(CourseSection.best_unicode_collation_key('name'))
 
+      unless params[:all].present?
+        sections = Api.paginate(sections, self, api_v1_course_sections_url)
+      end
+      
       render :json => sections_json(sections, @current_user, session, includes)
     end
   end

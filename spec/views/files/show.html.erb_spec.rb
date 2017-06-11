@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -23,7 +23,7 @@ describe "/files/index" do
   it "should render" do
     course_with_student
     view_context
-    assigns[:attachment] = @course.attachments.create!(:uploaded_data => default_uploaded_data)
+    assign(:attachment, @course.attachments.create!(:uploaded_data => default_uploaded_data))
     render "files/show"
     expect(response).not_to be_nil
   end
@@ -34,7 +34,7 @@ describe "/files/index" do
     attachment = @course.attachments.create!(:uploaded_data => default_uploaded_data)
     attachment.locked = true
     attachment.save!
-    assigns[:attachment] = attachment
+    assign(:attachment, attachment)
     render "files/show"
     expect(rendered).to match /This file is currently locked/
   end

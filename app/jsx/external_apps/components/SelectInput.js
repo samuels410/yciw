@@ -1,0 +1,73 @@
+/*
+ * Copyright (C) 2014 - present Instructure, Inc.
+ *
+ * This file is part of Canvas.
+ *
+ * Canvas is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, version 3 of the License.
+ *
+ * Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+import I18n from 'i18n!external_tools'
+import $ from 'jquery'
+import _ from 'underscore'
+import React from 'react'
+import InputMixin from 'jsx/external_apps/mixins/InputMixin'
+
+export default React.createClass({
+    displayName: 'SelectInput',
+
+    mixins: [InputMixin],
+
+    propTypes: {
+      defaultValue: React.PropTypes.string,
+      allowBlank:   React.PropTypes.bool,
+      values:       React.PropTypes.object,
+      label:        React.PropTypes.string,
+      id:           React.PropTypes.string,
+      required:     React.PropTypes.bool,
+      hintText:     React.PropTypes.string,
+      errors:       React.PropTypes.object
+    },
+
+    renderSelectOptions() {
+      var options = _.map(this.props.values, function(v, k) {
+        return <option key={k} value={k}>{v}</option>
+      }.bind(this));
+      if (this.props.allowBlank) {
+        options.unshift(<option key="NO_VALUE" value={null}></option>);
+      }
+      return options;
+    },
+
+    handleSelectChange(e) {
+      e.preventDefault();
+      this.setState({ value: e.target.value });
+    },
+
+    render() {
+      return (
+        <div className={this.getClassNames()}>
+          <label>
+            {this.props.label}
+            <select ref="input" className="form-control input-block-level"
+              defaultValue={this.props.defaultValue}
+              required={this.props.required ? "required" : null}
+              onChange={this.handleSelectChange}
+              aria-invalid={!!this.getErrorMessage()}>
+              {this.renderSelectOptions()}
+            </select>
+            {this.renderHint()}
+          </label>
+        </div>
+      )
+    }
+  });

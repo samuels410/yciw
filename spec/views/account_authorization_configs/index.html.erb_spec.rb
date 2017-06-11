@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -23,22 +23,21 @@ describe "account_authorization_configs/index" do
   let(:account){ Account.default }
 
   before do
-    assigns[:context] = assigns[:account] = account
-    assigns[:current_user] = user_with_pseudonym
-    assigns[:current_pseudonym] = @pseudonym
-    assigns[:saml_identifiers] = []
-    assigns[:saml_authn_contexts] = []
-    assigns[:saml_login_attributes] = {}
-    assigns[:presenter] = AccountAuthorizationConfigsPresenter.new(account)
+    assign(:context, assign(:account, account))
+    assign(:current_user, user_with_pseudonym)
+    assign(:current_pseudonym, @pseudonym)
+    assign(:saml_identifiers, [])
+    assign(:saml_authn_contexts, [])
+    assign(:saml_login_attributes, {})
+    @presenter = assign(:presenter, AccountAuthorizationConfigsPresenter.new(account))
   end
 
   it "should list the auth ips" do
     Setting.set('account_authorization_config_ip_addresses', "192.168.0.1,192.168.0.2")
-    presenter = assigns[:presenter]
     account.authentication_providers.scope.delete_all
     account.authentication_providers = [
-      presenter.new_config(auth_type: 'saml'),
-      presenter.new_config(auth_type: 'saml')
+      @presenter.new_config(auth_type: 'saml'),
+      @presenter.new_config(auth_type: 'saml')
     ]
     render 'account_authorization_configs/index'
     expect(response.body).to match("192.168.0.1\n192.168.0.2")
@@ -53,8 +52,7 @@ describe "account_authorization_configs/index" do
     ]
     timed_out_aac.last_timeout_failure = 1.minute.ago
     timed_out_aac.save!
-    presenter = assigns[:presenter]
-    expect(presenter.configs).to include(timed_out_aac)
+    expect(@presenter.configs).to include(timed_out_aac)
     render 'account_authorization_configs/index'
     doc = Nokogiri::HTML(response.body)
     expect(doc.css('.last_timeout_failure').length).to eq 1
@@ -72,7 +70,7 @@ describe "account_authorization_configs/index" do
 
   it "doesn't display delete button for the config the current user logged in with" do
     aac = account.authentication_providers.create!(auth_type: 'ldap')
-    assigns[:current_pseudonym].update_attribute(:authentication_provider, aac)
+    @pseudonym.update_attribute(:authentication_provider, aac)
     render 'account_authorization_configs/index'
     doc = Nokogiri::HTML(response.body)
     expect(doc.css("#delete-aac-#{aac.id}")).to be_blank

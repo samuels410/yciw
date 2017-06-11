@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2014 Instructure, Inc.
+# Copyright (C) 2014 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -156,7 +156,8 @@ module Api
       end
 
       def self.apply_mathml(node)
-        mathml = UserContent.latex_to_mathml(node['alt'])
+        equation = node['data-equation-content'] || node['alt']
+        mathml = UserContent.latex_to_mathml(equation)
         return if mathml.blank?
 
         node['data-mathml'] = mathml

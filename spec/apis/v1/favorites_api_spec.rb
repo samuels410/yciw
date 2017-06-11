@@ -212,8 +212,17 @@ describe "Favorites API", type: :request do
       expect(@user.favorites.size).to eql(0)
       json = api_call(:get, "/api/v1/users/self/favorites/groups",
                       :controller=>"favorites", :action=>"list_favorite_groups", :format=>"json")
-      expect(json.any?)
+      expect(json.any?).to be
     end
   end
 
+  it "should ignore master courses if requested" do
+    MasterCourses::MasterTemplate.set_as_master_course(@courses[0])
+    json = api_call(:get, "/api/v1/users/self/favorites/courses", :controller=>"favorites", :action=>"list_favorite_courses", :format=>"json")
+    expect(json.size).to eql(6)
+
+    json = api_call(:get, "/api/v1/users/self/favorites/courses?exclude_blueprint_courses=1",
+      :controller=>"favorites", :action=>"list_favorite_courses", :format=>"json", :exclude_blueprint_courses => "1")
+    expect(json.size).to eql(5)
+  end
 end

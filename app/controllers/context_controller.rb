@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2014 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -20,9 +20,9 @@ class ContextController < ApplicationController
   include SearchHelper
   include CustomSidebarLinksHelper
 
-  before_filter :require_context, :except => [:inbox, :create_media_object, :kaltura_notifications, :media_object_redirect, :media_object_inline, :media_object_thumbnail, :object_snippet]
-  before_filter :require_user, :only => [:inbox, :report_avatar_image]
-  before_filter :reject_student_view_student, :only => [:inbox]
+  before_action :require_context, :except => [:inbox, :create_media_object, :kaltura_notifications, :media_object_redirect, :media_object_inline, :media_object_thumbnail, :object_snippet]
+  before_action :require_user, :only => [:inbox, :report_avatar_image]
+  before_action :reject_student_view_student, :only => [:inbox]
   protect_from_forgery :except => [:kaltura_notifications, :object_snippet], with: :exception
 
   def create_media_object
@@ -155,13 +155,13 @@ class ContextController < ApplicationController
   # views.
   def object_snippet
     if HostUrl.has_file_host? && !HostUrl.is_file_host?(request.host_with_port)
-      return render(:nothing => true, :status => 400)
+      return head 400
     end
 
     @snippet = params[:object_data] || ""
 
     unless Canvas::Security.verify_hmac_sha1(params[:s], @snippet)
-      return render :nothing => true, :status => 400
+      return head 400
     end
 
     # http://blogs.msdn.com/b/ieinternals/archive/2011/01/31/controlling-the-internet-explorer-xss-filter-with-the-x-xss-protection-http-header.aspx
@@ -222,24 +222,27 @@ class ContextController < ApplicationController
           :pendingInvitationsCount => @context.invited_count_visible_to(@current_user)
         }
       })
+
+      set_tutorial_js_env
+
       if manage_students || manage_admins
         js_env :ROOT_ACCOUNT_NAME => @domain_root_account.name
         if @context.root_account.open_registration? || @context.root_account.grants_right?(@current_user, session, :manage_user_logins)
           js_env({:INVITE_USERS_URL => course_invite_users_url(@context)})
         end
       end
-      if @context.grants_right? @current_user, session, :manage
+      if @context.grants_right? @current_user, session, :read_as_admin
         js_env STUDENT_CONTEXT_CARDS_ENABLED: @domain_root_account.feature_enabled?(:student_context_cards)
       end
     elsif @context.is_a?(Group)
       if @context.grants_right?(@current_user, :read_as_admin)
         @users = @context.participating_users.uniq.order_by_sortable_name
       else
-        @users = @context.participating_users_in_context(sort: true).uniq.order_by_sortable_name
+        @users = @context.participating_users_in_context(sort: true).distinct.order_by_sortable_name
       end
       @primary_users = { t('roster.group_members', 'Group Members') => @users }
       if course = @context.context.try(:is_a?, Course) && @context.context
-        @secondary_users = { t('roster.teachers_and_tas', 'Teachers & TAs') => course.participating_instructors.order_by_sortable_name.uniq }
+        @secondary_users = { t('roster.teachers_and_tas', 'Teachers & TAs') => course.participating_instructors.order_by_sortable_name.distinct }
       end
     end
 
@@ -318,13 +321,17 @@ class ContextController < ApplicationController
       end
       user_id = Shard.relative_id_for(params[:id], Shard.current, @context.shard)
       if @context.is_a?(Course)
-        scope = @context.enrollments.where(user_id: user_id)
-        scope = @context.grants_right?(@current_user, session, :read_as_admin) ? scope.active : scope.active_or_pending
+        is_admin = @context.grants_right?(@current_user, session, :read_as_admin)
+        scope = @context.enrollments_visible_to(@current_user, :include_concluded => is_admin).where(user_id: user_id)
+        scope = scope.active_or_pending unless is_admin
         @membership = scope.first
-
-        log_asset_access(@membership, "roster", "roster") if @membership
+        if @membership
+          @enrollments = scope.to_a
+          log_asset_access(@membership, "roster", "roster")
+        end
       elsif @context.is_a?(Group)
         @membership = @context.group_memberships.active.where(user_id: user_id).first
+        @enrollments = []
       end
 
       @user = @membership.user rescue nil
@@ -337,8 +344,6 @@ class ContextController < ApplicationController
         redirect_to named_context_url(@context, :context_users_url)
         return
       end
-
-      @enrollments = @context.enrollments.for_user(@user) rescue []
 
       if @domain_root_account.enable_profiles?
         @user_data = profile_data(

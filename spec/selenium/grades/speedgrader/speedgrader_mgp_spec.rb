@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2016 Instructure, Inc.
+# Copyright (C) 2016 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -20,19 +20,19 @@ require_relative '../../common'
 require_relative '../page_objects/speedgrader_page'
 require_relative '../setup/gradebook_setup'
 
-describe "speedgrader - multiple grading periods" do
+describe "speedgrader with grading periods" do
   include_context "in-process server selenium tests"
   include GradebookSetup
 
   context 'with close and end dates' do
-    before(:each) do
+    before do
       term_name = "First Term"
-      create_multiple_grading_periods(term_name)
+      create_grading_periods(term_name)
       add_teacher_and_student
       associate_course_to_term(term_name)
     end
 
-    before(:each) do
+    before do
       user_session(@teacher)
     end
 
@@ -51,7 +51,7 @@ describe "speedgrader - multiple grading periods" do
       Speedgrader.enter_grade(8)
 
       expect(Speedgrader.current_grade).to eq ""
-      expect(Submission.where(assignment_id: assignment.id, user_id: @student.id).first).to eq nil
+      expect(Submission.where(assignment_id: assignment.id, user_id: @student.id).first).not_to be_graded
       expect(Speedgrader.top_bar).to contain_css(Speedgrader.closed_gp_notice_selector)
     end
   end

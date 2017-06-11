@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2013 Instructure, Inc.
+# Copyright (C) 2013 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -98,7 +98,7 @@
 class Quizzes::QuizReportsController < ApplicationController
   include ::Filters::Quizzes
 
-  before_filter :require_context, :require_quiz
+  before_action :require_context, :require_quiz
 
   # @API Retrieve all quiz reports
   #

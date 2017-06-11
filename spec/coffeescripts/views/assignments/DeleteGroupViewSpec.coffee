@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'underscore'
   'Backbone'
@@ -28,16 +45,16 @@ define [
     new DeleteGroupView
       model: ag_group
 
-  module 'DeleteGroupView',
+  QUnit.module 'DeleteGroupView',
     setup: ->
     teardown: ->
       $("#fixtures").empty()
       $("form.dialogFormView").remove()
 
   test 'it should delete a group without assignments', ->
-    @stub(window, "confirm", -> true )
+    @stub(window, "confirm").returns(true)
     view = createView(false, true)
-    @stub(view, "destroyModel", -> )
+    @stub(view, "destroyModel")
     view.render()
     view.open()
 
@@ -68,7 +85,7 @@ define [
     view.close()
 
   test 'it should delete a group with assignments', ->
-    destroy_stub = @stub(DeleteGroupView.prototype, "destroy", -> )
+    destroy_stub = @stub(DeleteGroupView.prototype, "destroy")
     view = createView(true, true)
     view.render()
     view.open()
@@ -79,7 +96,7 @@ define [
     view.close()
 
   test 'it should not delete the last assignment group', ->
-    alert_stub = @stub(window, "alert", -> true )
+    alert_stub = @stub(window, "alert").returns(true)
     view = createView(true, false)
     destroy_spy = @spy(view, "destroyModel")
     view.render()

@@ -2587,7 +2587,7 @@ if (typeof Slick === "undefined") {
       if (rowsCache[row]) {
         var $cell = $(getCellNode(row, cell));
 
-        function toggleCellClass(times) {
+        var toggleCellClass = function (times) {
           if (!times) {
             return;
           }
@@ -2647,6 +2647,12 @@ if (typeof Slick === "undefined") {
 
     function handleKeyDown(e) {
       trigger(self.onKeyDown, {row: activeRow, cell: activeCell}, e);
+
+      // Canvas Hack: SlickGrid has unreasonable default behavior that is unavoidable without an early return here.
+      if (e.originalEvent.skipSlickGridDefaults) {
+        return;
+      }
+
       var handled = e.isImmediatePropagationStopped();
 
       if (!handled) {

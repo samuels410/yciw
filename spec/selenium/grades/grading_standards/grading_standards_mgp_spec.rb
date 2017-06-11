@@ -1,24 +1,52 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_relative '../../common'
 require_relative '../page_objects/mgp_page'
 
-describe "multiple grading periods account page" do
+describe "grading periods account page" do
   include_context "in-process server selenium tests"
 
-  context 'with mgp enabled' do
+  context 'with grading periods' do
     let(:grading_standards_page) { GradingStandards::MultipleGradingPeriods.new }
     let(:backend_group_helper) { Factories::GradingPeriodGroupHelper.new }
     let(:backend_period_helper) { Factories::GradingPeriodHelper.new }
 
-    before(:each) do
+    before do
       admin_logged_in
-      Account.default.enable_feature!(:multiple_grading_periods)
     end
 
     it "adds grading period set", test_id: 2528622, priority: "1" do
       grading_standards_page.visit(Account.default.id)
-      grading_standards_page.add_grading_period_set("Set Name!", "Default Term")
+      grading_standards_page.add_grading_period_set(name: "Set Name!", term: "Default Term")
       expect(grading_standards_page.grading_period_set_displayed?("Set Name!")).to eq(true)
       expect(grading_standards_page.add_grading_period_link_displayed?).to eq(true)
+    end
+
+    it "enable wieghted grading on grading period set", test_id: 3035964, priority: "1" do
+      grading_standards_page.visit(Account.default.id)
+      grading_standards_page.add_grading_period_set(name: "Set Name!", term: "Default Term", weighted: true)
+      expect(grading_standards_page.weight_field_in_grading_period?).to eq(true)
+    end
+
+    it "enable show total column on grading period set", test_id: 3104470, priority: "1" do
+      grading_standards_page.visit(Account.default.id)
+      grading_standards_page.add_grading_period_set(name: "Set Name!", show_total: true)
+      expect(grading_standards_page.show_total_checked?).to eq("true")
     end
 
     it "deletes grading period set", test_id: 2528621, priority: "1" do

@@ -1,3 +1,21 @@
+<%
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+%>
+
 <%-
   set_badge_counts_for(@context, @current_user, @current_enrollment) if @set_badge_counts
 
@@ -9,11 +27,19 @@
   wizard = (yield :wizard_box).presence
   top_nav = (yield :top_nav).presence
 
-  subnav_menu_text = t('Hide Navigation Menu')
-  subnav_menu_text = t('Hide Account Navigation Menu') if active_path?('/profile')
-  subnav_menu_text = t('Hide Admin Navigation Menu') if active_path?('/accounts')
-  subnav_menu_text = t('Hide Courses Navigation Menu') if active_path?('/courses')
-  subnav_menu_text = t('Hide Groups Navigation Menu') if active_path?('/groups')
+  if @collapse_course_menu
+    subnav_menu_text = t('Show Navigation Menu')
+    subnav_menu_text = t('Show Courses Navigation Menu') if active_path?('/courses')
+    subnav_menu_text = t('Show Account Navigation Menu') if active_path?('/profile')
+    subnav_menu_text = t('Show Admin Navigation Menu') if active_path?('/accounts')
+    subnav_menu_text = t('Show Groups Navigation Menu') if active_path?('/groups')
+  else
+    subnav_menu_text = t('Hide Navigation Menu')
+    subnav_menu_text = t('Hide Courses Navigation Menu') if active_path?('/courses')
+    subnav_menu_text = t('Hide Account Navigation Menu') if active_path?('/profile')
+    subnav_menu_text = t('Hide Admin Navigation Menu') if active_path?('/accounts')
+    subnav_menu_text = t('Hide Groups Navigation Menu') if active_path?('/groups')
+  end
 
   content_for :pre_html do
     @collapse_global_nav = @current_user.try(:collapse_global_nav?)
@@ -39,12 +65,16 @@
     @body_classes << 'is-masquerading-or-student-view' if @real_current_user && @real_current_user != @current_user
     @body_classes << 'primary-nav-expanded' unless @collapse_global_nav
     @body_classes << 'primary-nav-transitions' if @collapse_global_nav
+    # We probably want to consider doing this everywhere, all the time.
+    @body_classes << 'full-width' if @domain_root_account.try(:feature_enabled?, :new_user_tutorial)
   end
 
   css_bundle(:instructure_eportfolio) if @eportfolio_view === true
+  css_bundle(:new_user_tutorials) if tutorials_enabled?
 
   content_for :head, include_common_stylesheets
 
+  load_blueprint_courses_ui
 -%>
 <%= render :partial => "layouts/head" %>
 <body class="<%= (@body_classes).uniq.join(" ") %>">
@@ -81,11 +111,17 @@
         <% end %>
         <%= render_crumbs %>
         <% if @show_left_side %></div><% end %>
+        <% if tutorials_enabled? %>
+          <div class="TutorialToggleHolder"></div>
+        <% end %>
       </div>
     <% end %>
     <div id="main" class="ic-Layout-columns">
       <% if @show_left_side %>
-        <div id="left-side" class="ic-app-course-menu <% if !@no_left_side_list_view %>list-view<% end %>">
+        <div id="left-side"
+          class="ic-app-course-menu <% if !@no_left_side_list_view %>list-view<% end %>"
+          style="display: <%= @collapse_course_menu ? "none" : "block" %>"
+          >
           <% if left_side %>
             <%= left_side %>
           <% else %>
@@ -177,8 +213,10 @@
   <% end %>
   <div id='aria_alerts' class='hide-text affix' role="alert" aria-live="assertive"></div>
   <div id='StudentContextTray__Container'></div>
+  <% if tutorials_enabled? %>
+    <div class="NewUserTutorialTray__Container"></div>
+  <% end %>
   <%= render :partial => 'layouts/foot', :locals => { :include_common_bundle => true } %>
-
 </div> <!-- #application -->
 </body>
 </html>

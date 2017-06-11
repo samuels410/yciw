@@ -1,5 +1,5 @@
-/**
- * Copyright (C) 2011 - 2012 Instructure, Inc.
+/*
+ * Copyright (C) 2011 - present Instructure, Inc.
  *
  * This file is part of Canvas.
  *
@@ -12,9 +12,10 @@
  * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
  * details.
  *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
+
 /*jshint evil:true*/
 
 define([
@@ -38,7 +39,12 @@ define([
       return;
     }
     url = url || ".";
-    if(submit_type != "GET") {
+    if(
+      submit_type != "GET" &&
+      // if it's a json request and has already been JSON.stringify'ed,
+      //  then we can't attach properties to `data` since it's already a string
+      typeof data !== 'string'
+    ) {
       data._method = submit_type;
       submit_type = "POST";
       data.authenticity_token = authenticity_token();

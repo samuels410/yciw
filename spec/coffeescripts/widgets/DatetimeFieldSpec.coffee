@@ -1,17 +1,34 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'compiled/widget/DatetimeField'
   'jquery'
   'timezone'
-  'vendor/timezone/America/Detroit'
-  'vendor/timezone/America/Juneau'
-  'vendor/timezone/pt_PT'
+  'timezone/America/Detroit'
+  'timezone/America/Juneau'
+  'timezone/pt_PT'
   'helpers/I18nStubber'
   'helpers/fakeENV'
 ], (DatetimeField, $, tz, detroit, juneau, portuguese, I18nStubber, fakeENV) ->
 
   moonwalk = tz.parse('1969-07-21T02:56:00Z')
 
-  module 'processTimeOptions',
+  QUnit.module 'processTimeOptions',
     setup: ->
       @$field = $('<input type="text" name="due_at">')
       @field = new DatetimeField(@$field, {})
@@ -47,7 +64,7 @@ define [
     ok @field.showDate, 'showDate is true'
     ok @field.allowTime, 'allowTime is true'
 
-  module 'addDatePicker',
+  QUnit.module 'addDatePicker',
     setup: ->
       @$field = $('<input type="text" name="due_at">')
       # timeOnly=true to prevent creation of the datepicker before we do it in
@@ -79,7 +96,7 @@ define [
     $trigger = @$field.next()
     equal $trigger.text(), 'pick me!', 'used provided buttonText'
 
-  module 'addSuggests',
+  QUnit.module 'addSuggests',
     setup: ->
       @$field = $('<input type="text" name="due_at">')
       @field = new DatetimeField(@$field, {})
@@ -105,7 +122,7 @@ define [
     equal @field.$suggest.next()[0], @field.$courseSuggest[0]
     fakeENV.teardown()
 
-  module 'constructor',
+  QUnit.module 'constructor',
     setup: ->
       fakeENV.setup()
       @$field = $('<input type="text" name="due_at">')
@@ -164,7 +181,7 @@ define [
     @$field.val('Jul 21, 1969 at 5:56am').trigger('keyup')
     equal field.$suggest.text(), 'Mon Jul 21, 1969 5:56am'
 
-  module 'setFromValue',
+  QUnit.module 'setFromValue',
     setup: ->
       fakeENV.setup()
       @$field = $('<input type="text" name="due_at">')
@@ -183,7 +200,7 @@ define [
     @field.setFromValue()
     equal @field.$suggest.text(), 'Mon Jul 21, 1969 2:56am'
 
-  module 'parseValue',
+  QUnit.module 'parseValue',
     setup: ->
       @snapshot = tz.snapshot()
       @$field = $('<input type="text" name="due_at">')
@@ -270,7 +287,7 @@ define [
     @field.parseValue()
     equal tz.format(@field.datetime, '%F %T'), tz.format(moonwalk, '%F ') + '12:00:00'
 
-  module 'updateData',
+  QUnit.module 'updateData',
     setup: ->
       @snapshot = tz.snapshot()
       tz.changeZone(detroit, 'America/Detroit')
@@ -341,7 +358,7 @@ define [
     @field.updateData()
     equal @$field.data('time-hour'), null
 
-  module 'updateSuggest',
+  QUnit.module 'updateSuggest',
     setup: ->
       @$field = $('<input type="text" name="due_at">')
       @field = new DatetimeField(@$field, {})
@@ -380,7 +397,7 @@ define [
     @field.updateSuggest()
     ok @field.$suggest.hasClass('invalid_datetime')
 
-  module 'alertScreenreader',
+  QUnit.module 'alertScreenreader',
     setup: ->
       @$field = $('<input type="text" name="due_at">')
       @field = new DatetimeField(@$field, {})
@@ -424,7 +441,7 @@ define [
   # ~100ms only actually creates one alert. will require upgrading lodash first
   # so we can use debounced.flush()
 
-  module 'formatSuggest',
+  QUnit.module 'formatSuggest',
     setup: ->
       @snapshot = tz.snapshot()
       tz.changeZone(detroit, 'America/Detroit')
@@ -462,7 +479,7 @@ define [
     equal @field.formatSuggest(), 'Dom, 20 Jul 1969 21:56'
     I18nStubber.popFrame()
 
-  module 'formatSuggestCourse',
+  QUnit.module 'formatSuggestCourse',
     setup: ->
       @snapshot = tz.snapshot()
       tz.changeZone(detroit, 'America/Detroit')
@@ -495,7 +512,7 @@ define [
     @field.showDate = false
     equal @field.formatSuggestCourse(), ' 7:56pm'
 
-  module 'normalizeValue',
+  QUnit.module 'normalizeValue',
     setup: ->
       @$field = $('<input type="text" name="due_at">')
       @field = new DatetimeField(@$field, {})
@@ -543,7 +560,7 @@ define [
     equal @field.normalizeValue("25"), "25"
     equal @field.normalizeValue("99"), "99"
 
-  module 'setFormattedDatetime',
+  QUnit.module 'setFormattedDatetime',
     setup: ->
       @snapshot = tz.snapshot()
       tz.changeZone(detroit, 'America/Detroit')
@@ -584,7 +601,7 @@ define [
     equal @$field.val(), '20 Jul 1969 21:56'
     I18nStubber.popFrame()
 
-  module 'setDate/setTime/setDatetime',
+  QUnit.module 'setDate/setTime/setDatetime',
     setup: ->
       @snapshot = tz.snapshot()
       tz.changeZone(detroit, 'America/Detroit')

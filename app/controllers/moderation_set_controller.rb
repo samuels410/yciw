@@ -1,20 +1,19 @@
 #
-# Copyright (C) 2011 - 2012 Instructure, Inc.
+# Copyright (C) 2015 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
 # Canvas is free software: you can redistribute it and/or modify it under
-# the terms of the GNU Affero General Public License as published by the
-# Free Software Foundation, version 3 of the License.
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
 #
-# Canvas is distributed in the hope that it will be useful, but WITHOUT
-# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-# FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public
-# License for more details.
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
 #
-# You should have received a copy of the GNU Affero General Public
-# License along with this program. If not, see
-# <http://www.gnu.org/licenses/>.
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
 # @API Moderated Grading
@@ -27,7 +26,7 @@
 class ModerationSetController < ApplicationController
   include Api::V1::User
 
-  before_filter :load_assignment
+  before_action :load_assignment
 
   # @API List students selected for moderation
   #
@@ -76,7 +75,7 @@ class ModerationSetController < ApplicationController
     current_selections = @assignment.moderated_grading_selections.pluck(:student_id)
     new_student_ids = student_ids - current_selections
 
-    new_students = visible_students.where(id: new_student_ids).uniq
+    new_students = visible_students.where(id: new_student_ids).distinct
 
     new_students.each do |student|
       @assignment.moderated_grading_selections.create! student: student
@@ -84,7 +83,7 @@ class ModerationSetController < ApplicationController
   end
 
   def visible_students
-    @visible_students ||= @context.students_visible_to(@current_user, include: :inactive).uniq
+    @visible_students ||= @context.students_visible_to(@current_user, include: :inactive).distinct
   end
 
   def load_assignment

@@ -45,6 +45,7 @@ describe "Accounts API", type: :request do
       expect(json.sort_by { |a| a['id'] }).to eq [
         {
           'id' => @a1.id,
+          'uuid' => @a1.uuid,
           'name' => 'root',
           'root_account_id' => nil,
           'parent_account_id' => nil,
@@ -56,6 +57,7 @@ describe "Accounts API", type: :request do
         },
         {
           'id' => @a2.id,
+          'uuid' => @a2.uuid,
           'integration_id' => nil,
           'name' => 'subby',
           'root_account_id' => @a1.id,
@@ -66,7 +68,7 @@ describe "Accounts API", type: :request do
           'default_storage_quota_mb' => 321,
           'default_user_storage_quota_mb' => 54,
           'default_group_storage_quota_mb' => 41,
-          'workflow_state' => 'active',
+          'workflow_state' => 'active'
         },
       ]
     end
@@ -87,6 +89,7 @@ describe "Accounts API", type: :request do
           'default_user_storage_quota_mb' => 45,
           'default_group_storage_quota_mb' => 42,
           'workflow_state' => 'active',
+          'uuid' => @a1.uuid
         },
       ]
     end
@@ -106,6 +109,7 @@ describe "Accounts API", type: :request do
               'parent_account_id' => nil,
               'workflow_state' => 'active',
               'default_time_zone' => 'Etc/UTC',
+              'uuid' => @a1.uuid
             },
             {
               'id' => @a2.id,
@@ -114,6 +118,7 @@ describe "Accounts API", type: :request do
               'parent_account_id' => @a1.id,
               'workflow_state' => 'active',
               'default_time_zone' => 'America/Juneau',
+              'uuid' => @a2.uuid
             },
           ]
     end
@@ -137,6 +142,7 @@ describe "Accounts API", type: :request do
                 'parent_account_id' => nil,
                 'workflow_state' => 'active',
                 'default_time_zone' => 'Etc/UTC',
+                'uuid' => @a1.uuid
             },
             {
                 'id' => @a5.global_id,
@@ -145,6 +151,7 @@ describe "Accounts API", type: :request do
                 'parent_account_id' => nil,
                 'workflow_state' => 'active',
                 'default_time_zone' => 'Etc/UTC',
+                'uuid' => @a5.uuid
             },
         ]
       end
@@ -233,6 +240,7 @@ describe "Accounts API", type: :request do
         {
           'id' => @a1.id,
           'name' => 'root',
+          'uuid' => @a1.uuid,
           'root_account_id' => nil,
           'parent_account_id' => nil,
           'default_time_zone' => 'Etc/UTC',
@@ -258,6 +266,7 @@ describe "Accounts API", type: :request do
               'parent_account_id' => nil,
               'workflow_state' => 'active',
               'default_time_zone' => 'Etc/UTC',
+              'uuid' => limited.uuid
           }
       )
     end
@@ -335,6 +344,23 @@ describe "Accounts API", type: :request do
 
       expect(json['services']['avatars']).to be_truthy
       expect(Account.find(@a1.id).service_enabled?(:avatars)).to be_truthy
+    end
+
+    it "should update sis_id" do
+      json = api_call(:put, "/api/v1/accounts/#{@a2.id}",
+        { controller: 'accounts', action: 'update', id: @a2.to_param, format: 'json' },
+        { account: {sis_account_id: 'subsis'}})
+
+      expect(json['sis_account_id']).to eq 'subsis'
+      expect(Account.find(@a2.id).sis_source_id).to eq 'subsis'
+    end
+
+    it "should not update sis_id for root_accounts" do
+      json = api_call(:put, "/api/v1/accounts/#{@a1.id}",
+        { controller: 'accounts', action: 'update', id: @a1.to_param, format: 'json' },
+        { account: {sis_account_id: 'subsis'}}, {}, expected_status: 401)
+      expect(json["errors"]["unauthorized"].first["message"]).to eq 'Cannot set sis_account_id on a root_account.'
+      expect(Account.find(@a1.id).sis_source_id).to be_nil
     end
 
     # These following tests focus on testing the sis_assignment_name_length_input account setting
@@ -907,6 +933,48 @@ describe "Accounts API", type: :request do
       response = raw_api_call(:get, "/api/v1/accounts/#{@a1.id}/courses?search_term=#{search_term}",
         { :controller => 'accounts', :action => 'courses_api', :account_id => @a1.to_param, :format => 'json', :search_term => search_term })
       expect(response).to eq 400
+    end
+
+    context "blueprint courses" do
+      before :once do
+        @a = Account.create!
+        @a.enable_feature! :master_courses
+        @mc = course_model :name => 'MasterCourse', :account => @a
+        @cc = course_model :name => 'ChildCourse', :account => @a
+        @oc = course_model :name => 'OtherCourse', :account => @a
+        template = MasterCourses::MasterTemplate.set_as_master_course(@mc)
+        template.add_child_course!(@cc).destroy # ensure deleted subscriptions don't affect the result
+        template.add_child_course!(@cc)
+        account_admin_user(:account => @a)
+      end
+
+      it 'filters in blueprint courses' do
+        json = api_call(:get, "/api/v1/accounts/#{@a.id}/courses?blueprint=true",
+          { :controller => 'accounts', :action => 'courses_api', :account_id => @a.to_param,
+            :format => 'json', :blueprint => true })
+        expect(json.map{ |c| c['name'] }).to match_array %w(MasterCourse)
+      end
+
+      it 'filters out blueprint courses' do
+        json = api_call(:get, "/api/v1/accounts/#{@a.id}/courses?blueprint=false",
+          { :controller => 'accounts', :action => 'courses_api', :account_id => @a.to_param,
+            :format => 'json', :blueprint => false })
+        expect(json.map{ |c| c['name'] }).to match_array %w(ChildCourse OtherCourse)
+      end
+
+      it 'filters in associated courses' do
+        json = api_call(:get, "/api/v1/accounts/#{@a.id}/courses?blueprint_associated=true",
+          { :controller => 'accounts', :action => 'courses_api', :account_id => @a.to_param,
+            :format => 'json', :blueprint_associated => true })
+        expect(json.map{ |c| c['name'] }).to match_array %w(ChildCourse)
+      end
+
+      it 'filters out associated courses' do
+        json = api_call(:get, "/api/v1/accounts/#{@a.id}/courses?blueprint_associated=false",
+          { :controller => 'accounts', :action => 'courses_api', :account_id => @a.to_param,
+            :format => 'json', :blueprint_associated => false })
+        expect(json.map{ |c| c['name'] }).to match_array %w(MasterCourse OtherCourse)
+      end
     end
   end
 

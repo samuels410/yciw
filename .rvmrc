@@ -2,5 +2,5 @@
 if [ -e '.rvmrc_custom' ]; then
   source .rvmrc_custom;
 else
-  rvm --create use ruby-2.3.1@greatlearning;
+  rvm --create use ruby-2.4.0@greatlearning;
 fi

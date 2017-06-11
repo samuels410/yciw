@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -193,7 +193,7 @@
 #     }
 #
 class AccountAuthorizationConfigsController < ApplicationController
-  before_filter :require_context, :require_root_account_management
+  before_action :require_context, :require_root_account_management
   include Api::V1::AccountAuthorizationConfig
 
   # @API List authentication providers
@@ -914,6 +914,8 @@ class AccountAuthorizationConfigsController < ApplicationController
     auth_type = data.delete(:auth_type)
     klass = AccountAuthorizationConfig.find_sti_class(auth_type)
     federated_attributes = data[:federated_attributes]
+    federated_attributes = {} if federated_attributes == ""
+    federated_attributes = federated_attributes&.to_hash
     data = data.permit(klass.recognized_params)
     data[:federated_attributes] = federated_attributes if federated_attributes
     data[:auth_type] = auth_type

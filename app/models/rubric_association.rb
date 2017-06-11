@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -131,8 +131,11 @@ class RubricAssociation < ActiveRecord::Base
   attr_accessor :assessing_user_id
 
   set_policy do
-    given {|user, session| self.context.grants_right?(user, session, :manage) }
-    can :update and can :delete and can :manage and can :assess
+    given {|user, session| self.context.grants_right?(user, session, :manage_rubrics) }
+    can :update and can :delete and can :manage
+
+    given {|user, session| self.context.grants_right?(user, session, :manage_grades) }
+    can :assess
 
     given {|user| user && @assessing_user_id && self.assessment_requests.for_assessee(@assessing_user_id).map{|r| r.assessor_id}.include?(user.id) }
     can :assess
@@ -182,7 +185,7 @@ class RubricAssociation < ActiveRecord::Base
     if self.association_id && self.association_type == 'Assignment'
       self.association_object.submissions.each do |sub|
         sub.assessment_requests.incomplete.where(:rubric_association_id => nil).
-            update_all(:rubric_association_id => self)
+            update_all(:rubric_association_id => id)
       end
     end
   end

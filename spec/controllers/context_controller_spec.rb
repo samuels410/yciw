@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -156,6 +156,63 @@ describe ContextController do
 
         get 'roster_user', :course_id => course1.id, :id => @user2.id
         expect(response).to be_success
+      end
+    end
+
+    describe 'section visibility' do
+      before :once do
+        @other_section = @course.course_sections.create! :name => 'Other Section FRD'
+        @course.enroll_teacher(@teacher, :section => @other_section, :allow_multiple_enrollments => true).accept!
+        @other_student = user_factory
+        @course.enroll_student(@other_student, :section => @other_section, :limit_privileges_to_course_section => true).accept!
+      end
+
+      it 'prevents section-limited users from seeing users in other sections' do
+        user_session(@student)
+        get 'roster_user', :course_id => @course.id, :id => @other_student.id
+        expect(response).to be_success
+
+        user_session(@other_student)
+        get 'roster_user', :course_id => @course.id, :id => @student.id
+        expect(response).to be_redirect
+        expect(flash[:error]).to be_present
+      end
+
+      it 'limits enrollments by visibility' do
+        user_session(@student)
+        get 'roster_user', :course_id => @course.id, :id => @teacher.id
+        expect(response).to be_success
+        expect(assigns[:enrollments].map(&:course_section_id)).to match_array([@course.default_section.id, @other_section.id])
+
+        user_session(@other_student)
+        get 'roster_user', :course_id => @course.id, :id => @teacher.id
+        expect(response).to be_success
+        expect(assigns[:enrollments].map(&:course_section_id)).to match_array([@other_section.id])
+      end
+
+      it "lets admins see concluded students" do
+        user_session(@teacher)
+        @student.enrollments.first.complete!
+        get 'roster_user', :course_id => @course.id, :id => @student.id
+        expect(response).to be_success
+      end
+
+      it "lets admins see inactive students" do
+        user_session(@teacher)
+        @student.enrollments.first.deactivate
+        get 'roster_user', :course_id => @course.id, :id => @student.id
+        expect(response).to be_success
+      end
+
+      it "does not let students see inactive students" do
+        another_student = user_factory
+        @course.enroll_student(another_student, :section => @course.default_section).accept!
+        user_session(another_student)
+
+        @student.enrollments.first.deactivate
+
+        get 'roster_user', :course_id => @course.id, :id => @student.id
+        expect(response).to_not be_success
       end
     end
   end

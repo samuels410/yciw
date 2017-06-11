@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -31,6 +31,9 @@ describe "one time passwords" do
   context "mid-login" do
     before do
       post '/login/canvas', :pseudonym_session => { :unique_id => @pseudonym.unique_id, :password => 'qwertyuiop' }
+    end
+
+    it "should redirect" do
       expect(response).to redirect_to(otp_login_url)
     end
 

@@ -1,7 +1,24 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/../sharding_spec_helper')
 
 describe GradeSummaryPresenter do
-  describe '#selectable_courses' do
+  describe '#courses_with_grades' do
 
     describe 'all on one shard' do
       let(:course) { Course.create! }
@@ -16,7 +33,7 @@ describe GradeSummaryPresenter do
       end
 
       it 'includes courses where the user is enrolled' do
-        expect(presenter.selectable_courses).to include(course)
+        expect(presenter.courses_with_grades).to include(course)
       end
     end
 
@@ -35,7 +52,7 @@ describe GradeSummaryPresenter do
         end
 
         presenter = GradeSummaryPresenter.new(course, user, user.id)
-        expect(presenter.selectable_courses).to include(course)
+        expect(presenter.courses_with_grades).to include(course)
       end
 
       it 'can find courses when the user and course are on different shards' do
@@ -53,7 +70,23 @@ describe GradeSummaryPresenter do
         end
 
         presenter = GradeSummaryPresenter.new(course, user, user.id)
-        expect(presenter.selectable_courses).to include(course)
+        expect(presenter.courses_with_grades).to include(course)
+      end
+
+      it 'can find courses for an observer across shards' do
+        course_with_student(:active_all => true)
+        @observer = user_factory(:active_all => true)
+        @course.observer_enrollments.create!(:user_id => @observer, :associated_user_id => @student)
+
+        @shard1.activate do
+          account = Account.create!
+          @course2 = account.courses.create!(:workflow_state => "available")
+          enrollment = StudentEnrollment.create!(:course => @course2, :user => @student, :workflow_state => 'active')
+          @course2.observer_enrollments.create!(:user_id => @observer, :associated_user_id => @student)
+        end
+
+        presenter = GradeSummaryPresenter.new(@course, @observer, @student.id)
+        expect(presenter.courses_with_grades).to match_array([@course, @course2])
       end
     end
   end
@@ -247,6 +280,25 @@ describe GradeSummaryPresenter do
       @course.context_modules.create!(name: "I <3 Modules")
       expect(presenter.sort_options).to include module_option
     end
+
+    it 'localizes menu text' do
+      @course.assignments.create!(title: 'Math Assignment')
+      science_group = @course.assignment_groups.create!(name: 'Science Assignments')
+      @course.assignments.create!(title: 'Science Assignment', assignment_group: science_group)
+      @course.context_modules.create!(name: 'I <3 Modules')
+
+      expect(I18n).to receive(:t).with('Due Date')
+      expect(I18n).to receive(:t).with('Title')
+      expect(I18n).to receive(:t).with('Assignment Group')
+      expect(I18n).to receive(:t).with('Module')
+
+      presenter.sort_options
+    end
+
+    it 'sorts menu items in a locale-aware way' do
+      expect(Canvas::ICU).to receive(:collate_by).with([['Due Date', 'due_at'], ['Title', 'title']], &:first)
+      presenter.sort_options
+    end
   end
 
   describe '#sorted_assignments' do
@@ -255,9 +307,9 @@ describe GradeSummaryPresenter do
       student_in_course
     end
 
-    let!(:assignment1) { @course.assignments.create!(title: 'Apple', due_at: 2.days.ago, position: 1) }
-    let!(:assignment2) { @course.assignments.create!(title: 'Banana', due_at: 2.days.from_now, position: 2) }
-    let!(:assignment3) { @course.assignments.create!(title: 'Carrot', due_at: 5.days.ago, position: 3) }
+    let!(:assignment1) { @course.assignments.create!(title: 'Jalapeno', due_at: 2.days.ago, position: 1) }
+    let!(:assignment2) { @course.assignments.create!(title: 'Jalapeño', due_at: 2.days.from_now, position: 2) }
+    let!(:assignment3) { @course.assignments.create!(title: 'Jalapezo', due_at: 5.days.ago, position: 3) }
     let(:ordered_assignment_ids) { presenter.assignments.map(&:id) }
 
     it "assignment order defaults to due_at" do
@@ -321,7 +373,7 @@ describe GradeSummaryPresenter do
         it "sorts alphabetically for assignments not belonging to modules (ignoring case)" do
           assignment3.title = "apricot"
           assignment3.save!
-          expected_id_order = [assignment1.id, assignment3.id, assignment2.id]
+          expected_id_order = [assignment3.id, assignment1.id, assignment2.id]
           expect(ordered_assignment_ids).to eq(expected_id_order)
         end
       end

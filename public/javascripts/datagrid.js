@@ -1,5 +1,5 @@
-/**
- * Copyright (C) 2011 Instructure, Inc.
+/*
+ * Copyright (C) 2011 - present Instructure, Inc.
  *
  * This file is part of Canvas.
  *
@@ -12,8 +12,8 @@
  * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
  * details.
  *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 // xsslint jqueryObject.method _createCell _templateCellHTML
@@ -168,7 +168,7 @@ define([
                 $topRow = $datagrid_top.find('.row'),
                 $all_rows = $topRow.add('#datagrid_data .row');
 
-            function fixForDifferentZoomLevelInFirefox(){
+            var fixForDifferentZoomLevelInFirefox = function () {
               var existingDatagridTopWidth = $datagrid_top.width();
 
               // make styles so the .row can be as wide as it needs to fit all the .cell's in it without wrapping
@@ -347,7 +347,7 @@ define([
       datagrid.rows = newRows;
     },
     moveColumn: function(from_index, to_index) {
-      new_order = [];
+      var new_order = [];
       if(from_index == 0 || to_index == 0 || from_index == to_index) { return; }
       for(var col = 0; col < datagrid.columns.length; col++) {
         if(col == to_index) {

@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'Backbone'
   'compiled/models/AssignmentGroup'
@@ -49,7 +66,7 @@ define [
 
     app.render()
 
-  module 'assignmentIndex',
+  QUnit.module 'assignmentIndex',
     setup: ->
       fakeENV.setup(PERMISSIONS: {manage: true})
       @enable_spy = @spy(IndexView.prototype, 'enableSearch')
@@ -102,8 +119,22 @@ define [
     ok view.$("#assignment_1 .modules").text().match(/One\s+Two/)
     ok view.$("#assignment_2 .modules").text().match(/Three Module/)
 
+  test "should show 'Add Quiz/Test' button if quiz lti is enabled", ->
+    ENV.PERMISSIONS.manage_course = true
+    ENV.QUIZ_LTI_ENABLED = true
+    view = assignmentIndex()
+    $button = view.$('.new_quiz_lti')
+    equal $button.length, 1
+    ok /\?quiz_lti$/.test $button.attr('href')
 
-  module 'student index view',
+  test "should not show 'Add Quiz/Test' button if quiz lti is not enabled", ->
+    ENV.PERMISSIONS.manage_course = true
+    ENV.QUIZ_LTI_ENABLED = false
+    view = assignmentIndex()
+    equal $('.new_quiz_lti').length, 0
+
+
+  QUnit.module 'student index view',
     setup: ->
       fakeENV.setup(PERMISSIONS: {manage: false})
 

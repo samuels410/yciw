@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_dependency 'importers'
 
 module Importers
@@ -105,7 +122,7 @@ module Importers
       end
 
       position = hash[:position] || hash[:order]
-      if item.new_record? && migration.try(:last_module_position) # try to import new modules after current ones instead of interweaving positions
+      if (item.new_record? || item.workflow_state_was == 'deleted') && migration.try(:last_module_position) # try to import new modules after current ones instead of interweaving positions
         position = migration.last_module_position + (position || 1)
       end
       item.position = position

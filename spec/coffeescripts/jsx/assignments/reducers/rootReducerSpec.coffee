@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'underscore'
   "jsx/assignments/reducers/rootReducer"
@@ -97,19 +114,32 @@ define [
       ]
 
 
-  module "students reducer"
+  QUnit.module "students reducer"
 
   test "concatenates students on GOT_STUDENTS", ->
     initialState =
       studentList: {
-        students: [{'one': 1}, {'two': 2}]
+        students: [{id: 1, one: 1}, {id: 2, two: 2}]
       }
     gotStudentsAction =
       type: 'GOT_STUDENTS'
       payload:
-        students: [{'three': 3}, {'four': 4}]
+        students: [{id: 3, three: 3}, {id: 4, four: 4}]
     newState = rootReducer(initialState, gotStudentsAction)
-    expected = [{'one': 1}, {'two': 2}, {'three': 3}, {'four': 4}]
+    expected = [{id: 1, one: 1}, {id: 2, two: 2}, {id: 3, three: 3}, {id: 4, four: 4}]
+    deepEqual newState.studentList.students, expected, 'successfully concatenates'
+
+  test "filters out duplicate students on GOT_STUDENTS", ->
+    initialState =
+      studentList: {
+        students: [{id: 1, one: 1}, {id: 2, two: 2}]
+      }
+    gotStudentsAction =
+      type: 'GOT_STUDENTS'
+      payload:
+        students: [{id: 3, three: 3}, {id: 3, three: 3}]
+    newState = rootReducer(initialState, gotStudentsAction)
+    expected = [{id: 1, one: 1}, {id: 2, two: 2}, {id: 3, three: 3}]
     deepEqual newState.studentList.students, expected, 'successfully concatenates'
 
   test "updates the moderation set handling UPDATED_MODERATION_SET", ->
@@ -219,7 +249,7 @@ define [
 
     deepEqual newState.studentList.students, expected, 'student received updated selected_provisional_grade_id property'
 
-  module "urls reducer"
+  QUnit.module "urls reducer"
 
   test "passes through whatever the current state is", ->
     initialState =
@@ -230,7 +260,7 @@ define [
     newState = rootReducer(initialState, someRandomAction)
     deepEqual newState.urls, initialState.urls, 'passes through unchanged'
 
-  module "assignments reducer"
+  QUnit.module "assignments reducer"
 
   test "sets to published on PUBLISHED_GRADES", ->
     initialState =
@@ -245,7 +275,7 @@ define [
     ok newState.assignment.published, 'successfully sets to publish'
 
 
-  module "flashMessage reducer"
+  QUnit.module "flashMessage reducer"
 
   test "sets success message on PUBLISHED_GRADES", ->
     initialState =
@@ -331,7 +361,7 @@ define [
       error: true
     deepEqual newState.flashMessage, expected, 'updates state'
 
-  module 'inflightAction reducer',
+  QUnit.module 'inflightAction reducer',
     setup: ->
       @initialState =
         inflightAction:
@@ -400,7 +430,7 @@ define [
     stateWithPublishLanded = rootReducer(@inflightInitialState, publishedGradesFailedAction)
     equal stateWithPublishLanded.inflightAction.publish, false
 
-  module "sorting mark1 column on SORT_MARK1_COLUMN"
+  QUnit.module "sorting mark1 column on SORT_MARK1_COLUMN"
 
   test 'default to descending order when clicking on a new column', ->
     initialState =
@@ -445,7 +475,7 @@ define [
     equal newState.studentList.sort.direction, Constants.sortDirections.ASCENDING, 'sets the right direction'
     deepEqual newState.studentList.students[0].id, 2, 'sorts the right student to the top'
 
-  module "sorting mark2 column on SORT_MARK2_COLUMN"
+  QUnit.module "sorting mark2 column on SORT_MARK2_COLUMN"
 
   test 'default to descending order when clicking on a new column', ->
     initialState =
@@ -490,7 +520,7 @@ define [
     equal newState.studentList.sort.direction, Constants.sortDirections.ASCENDING, 'sets the right direction'
     deepEqual newState.studentList.students[0].id, 2, 'sorts the right student to the top'
 
-  module "sorting mark3 column on SORT_MARK3_COLUMN"
+  QUnit.module "sorting mark3 column on SORT_MARK3_COLUMN"
 
   test 'default to descending order when clicking on a new column', ->
     initialState =

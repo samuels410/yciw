@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 class BrandConfig < ActiveRecord::Base
   include BrandableCSS
 
@@ -101,8 +118,16 @@ class BrandConfig < ActiveRecord::Base
     BrandableCSS.all_brand_variable_values(self).to_json
   end
 
+  def to_js
+    BrandableCSS.all_brand_variable_values_as_js(self)
+  end
+
   def json_file
     public_brand_dir.join("variables-#{BrandableCSS.default_variables_md5}.json")
+  end
+
+  def js_file
+    public_brand_dir.join("variables-#{BrandableCSS.default_variables_md5}.js")
   end
 
   def scss_dir
@@ -121,6 +146,10 @@ class BrandConfig < ActiveRecord::Base
     "#{public_folder}/variables-#{BrandableCSS.default_variables_md5}.json"
   end
 
+  def public_js_path
+    "#{public_folder}/variables-#{BrandableCSS.default_variables_md5}.js"
+  end
+
   def save_scss_file!
     logger.info "saving brand variables file: #{scss_file}"
     scss_dir.mkpath
@@ -128,16 +157,35 @@ class BrandConfig < ActiveRecord::Base
   end
 
   def save_json_file!
-    logger.info "saving brand variables file: #{json_file}"
+    logger.info "saving brand variables json file: #{json_file}"
     public_brand_dir.mkpath
     json_file.write(to_json)
     move_json_to_s3_if_enabled!
   end
 
+  def save_js_file!
+    logger.info "saving brand variables js file: #{js_file}"
+    public_brand_dir.mkpath
+    js_file.write(to_js)
+    move_js_to_s3_if_enabled!
+  end
+
   def move_json_to_s3_if_enabled!
     return unless Canvas::Cdn.enabled?
     s3_uploader.upload_file(public_json_path)
-    File.delete(json_file)
+    begin
+      File.delete(json_file)
+    rescue Errno::ENOENT # continue if something else deleted it in another process
+    end
+  end
+
+  def move_js_to_s3_if_enabled!
+    return unless Canvas::Cdn.enabled?
+    s3_uploader.upload_file(public_js_path)
+    begin
+      File.delete(json_file)
+    rescue Errno::ENOENT # continue if something else deleted it in another process
+    end
   end
 
   def s3_uploader
@@ -147,6 +195,7 @@ class BrandConfig < ActiveRecord::Base
   def save_all_files!
     save_scss_file!
     save_json_file!
+    save_js_file!
   end
 
   def remove_scss_dir!

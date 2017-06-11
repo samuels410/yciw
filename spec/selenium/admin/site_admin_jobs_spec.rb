@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/../common')
 
 describe "site admin jobs ui" do
@@ -41,13 +58,10 @@ describe "site admin jobs ui" do
     all_jobs.each { |job| expect(job).to have_class('selected') }
   end
 
-  def first_jobs_cell_displayed?
-    expect(f('#jobs-grid .slick-cell')).to be
-  end
-
   def load_jobs_page
     get "/jobs"
-    first_jobs_cell_displayed?
+    # wait for it
+    f('#jobs-grid .slick-cell')
   end
 
   def filter_jobs(job_flavor_text)
@@ -101,7 +115,7 @@ describe "site admin jobs ui" do
       f('#job-handler-show').click
       wait_for_ajax_requests
       expect(get_value('#job-handler')).to eq job.handler
-      f('a.ui-dialog-titlebar-close').click
+      f('button.ui-dialog-titlebar-close').click
 
       # also for failed job
       filter_jobs(FlavorTags::FAILED)
@@ -116,28 +130,6 @@ describe "site admin jobs ui" do
     context "all jobs" do
       before(:each) do
         load_jobs_page
-      end
-
-      it "should confirm that clicking on delete button should delete all future jobs" do
-        2.times { "test".send_at 2.hours.from_now, :to_s }
-        filter_jobs(FlavorTags::FUTURE)
-        validate_all_jobs_selected
-        expect(f("#jobs-grid .odd")).to be_displayed
-        expect(f("#jobs-grid .even")).to be_displayed
-        expect(f("#jobs-total").text).to eq(future_jobs.count.to_s)
-
-        delete = f("#delete-jobs")
-        keep_trying_until do
-          delete.click
-          expect(driver.switch_to.alert).not_to be_nil
-          driver.switch_to.alert.accept
-        end
-
-        wait_for_ajaximations
-        expect(future_jobs.count).to eq(0)
-
-        expect(f("#content")).not_to contain_css("#jobs-grid .odd")
-        expect(f("#content")).not_to contain_css("#jobs-grid .even")
       end
 
       it "should check current popular tags" do

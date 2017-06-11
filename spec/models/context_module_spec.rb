@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -20,7 +20,7 @@ require File.expand_path(File.dirname(__FILE__) + '/../spec_helper.rb')
 
 describe ContextModule do
   def course_module
-    @course = course_factory(active_all: true)
+    course_with_student(active_all: true)
     @module = @course.context_modules.create!(:name => "some module")
   end
 
@@ -79,6 +79,20 @@ describe ContextModule do
       expect(@module.available_for?(@student)).to be_falsey
       opts = {user_context_module_progressions: {@module.id => @progression}}
       expect(@module.available_for?(@student, opts)).to be_truthy
+    end
+
+    it "should reevaluate progressions if a tag is not provided and deep_check_if_needed is given" do
+      module1 = course_module
+      module1.find_or_create_progression(@student)
+      module2 = course_module
+      url_item = module2.content_tags.create!(content_type: 'ExternalUrl', context: @course,
+        title: 'url', url: 'https://www.google.com')
+      module2.completion_requirements = [{id: url_item.id, type: 'must_view'}]
+      module2.prerequisites = [{id: module1.id, type: 'context_module', name: 'some module'}]
+      module2.save!
+
+      expect(module2.available_for?(@student)).to be false
+      expect(module2.available_for?(@student, deep_check_if_needed: true)).to be true
     end
   end
 
@@ -1050,9 +1064,6 @@ describe ContextModule do
         {id: @other_assignment_tag.id, type: 'min_score', min_score: 90},
       ]
       @module.save!
-
-      expect(@module.completion_requirements.include?({id: @assignment_tag.id, type: 'min_score', min_score: 90})).to be_truthy
-      expect(@module.completion_requirements.include?({id: @other_assignment_tag.id, type: 'min_score', min_score: 90})).to be_truthy
     end
 
     it 'should not prevent a student from completing a module' do

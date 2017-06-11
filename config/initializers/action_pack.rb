@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 module TimeZoneFormImprovements
   def time_zone_options_for_select(selected = nil, priority_zones = nil, model = I18nTimeZone)
     selected = selected.name if selected && selected.is_a?(ActiveSupport::TimeZone)
@@ -23,16 +40,16 @@ end
 
 ActionView::Helpers::FormOptionsHelper.prepend(TimeZoneFormImprovements)
 
-ActionController::DataStreaming.class_eval do
-  def send_file_with_content_length(path, options = {})
+module DataStreamingContentLength
+  def send_file(path, _options = {})
     headers.merge!('Content-Length' => File.size(path).to_s)
-    send_file_without_content_length(path, options)
+    super
   end
-  alias_method_chain :send_file, :content_length
 
-  def send_data_with_content_length(data, options = {})
+  def send_data(data, _options = {})
     headers.merge!('Content-Length' => data.bytesize.to_s) if data.respond_to?(:bytesize)
-    send_data_without_content_length(data, options)
+    super
   end
-  alias_method_chain :send_data, :content_length
 end
+
+ActionController::Base.include(DataStreamingContentLength)

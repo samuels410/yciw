@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2016 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -116,12 +116,82 @@ describe Quizzes::QuizzesController do
 
       get 'index', :course_id => @course.id
     end
+
+    it "js_env SIS_INTEGRATION_SETTINGS_ENABLED is true when AssignmentUtil.sis_integration_settings_enabled? == true" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:sis_integration_settings_enabled?).returns(true)
+      get 'index', :course_id => @course.id
+      expect(assigns[:js_env][:SIS_INTEGRATION_SETTINGS_ENABLED]).to eq(true)
+    end
+
+    it "js_env SIS_INTEGRATION_SETTINGS_ENABLED is false when AssignmentUtil.sis_integration_settings_enabled? == false" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:sis_integration_settings_enabled?).returns(false)
+      get 'index', :course_id => @course.id
+      expect(assigns[:js_env][:SIS_INTEGRATION_SETTINGS_ENABLED]).to eq(false)
+    end
+
+    it "js_env SIS_NAME is Foo Bar when AssignmentUtil.post_to_sis_friendly_name is Foo Bar" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:post_to_sis_friendly_name).returns('Foo Bar')
+      get 'index', :course_id => @course.id
+      expect(assigns[:js_env][:SIS_NAME]).to eq('Foo Bar')
+    end
+
+    it "js_env migrate_quiz_enabled is true when quizzes2_exporter is enabled" do
+      user_session(@teacher)
+      Account.default.enable_feature!(:quizzes2_exporter)
+      get 'index', :course_id => @course.id
+      expect(assigns[:js_env][:FLAGS][:migrate_quiz_enabled]).to eq(true)
+    end
+
+    it "js_env DUE_DATE_REQUIRED_FOR_ACCOUNT is true when AssignmentUtil.due_date_required_for_account? == true" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:due_date_required_for_account?).returns(true)
+      get 'index', :course_id => @course.id
+      expect(assigns[:js_env][:DUE_DATE_REQUIRED_FOR_ACCOUNT]).to eq(true)
+    end
+
+    it "js_env DUE_DATE_REQUIRED_FOR_ACCOUNT is false when AssignmentUtil.due_date_required_for_account? == false" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:due_date_required_for_account?).returns(false)
+      get 'index', :course_id => @course.id
+      expect(assigns[:js_env][:DUE_DATE_REQUIRED_FOR_ACCOUNT]).to eq(false)
+    end
+
+    it "js_env MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT is true when AssignmentUtil.name_length_required_for_account? == true" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:name_length_required_for_account?).returns(true)
+      get 'index', :course_id => @course.id
+      expect(assigns[:js_env][:MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT]).to eq(true)
+    end
+
+    it "js_env MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT is false when AssignmentUtil.name_length_required_for_account? == false" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:name_length_required_for_account?).returns(false)
+      get 'index', :course_id => @course.id
+      expect(assigns[:js_env][:MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT]).to eq(false)
+    end
   end
 
   describe "GET 'new'" do
     it "should require authorization" do
       get 'new', :course_id => @course.id
       assert_unauthorized
+    end
+
+    it "js_env DUE_DATE_REQUIRED_FOR_ACCOUNT is true when AssignmentUtil.due_date_required_for_account? == true" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:due_date_required_for_account?).returns(true)
+      get 'new', :course_id => @course.id
+      expect(assigns[:js_env][:DUE_DATE_REQUIRED_FOR_ACCOUNT]).to eq(true)
+    end
+
+    it "js_env DUE_DATE_REQUIRED_FOR_ACCOUNT is false when AssignmentUtil.due_date_required_for_account? == false" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:due_date_required_for_account?).returns(false)
+      get 'new', :course_id => @course.id
+      expect(assigns[:js_env][:DUE_DATE_REQUIRED_FOR_ACCOUNT]).to eq(false)
     end
 
     it "should assign variables" do
@@ -142,16 +212,37 @@ describe Quizzes::QuizzesController do
       expect(assigns[:quiz]).not_to eql(q)
 
       get 'new', :course_id => @course.id, :fresh => 1
-      # Quizzes::Quiz.where(id: q).first.should be_deleted
+
       expect(assigns[:quiz]).not_to be_nil
       expect(assigns[:quiz]).not_to eql(q)
+    end
+
+    it "js_env MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT is true when AssignmentUtil.name_length_required_for_account? == true" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:name_length_required_for_account?).returns(true)
+      get 'new', :course_id => @course.id
+      expect(assigns[:js_env][:MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT]).to eq(true)
+    end
+
+    it "js_env MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT is false when AssignmentUtil.name_length_required_for_account? == false" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:name_length_required_for_account?).returns(false)
+      get 'new', :course_id => @course.id
+      expect(assigns[:js_env][:MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT]).to eq(false)
+    end
+
+    it "js_env MAX_NAME_LENGTH is a 15 when AssignmentUtil.assignment_max_name_length returns 15" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:assignment_max_name_length).returns(15)
+      get 'new', :course_id => @course.id
+      expect(assigns[:js_env][:MAX_NAME_LENGTH]).to eq(15)
     end
   end
 
   describe "GET 'edit'" do
     before(:once) { course_quiz }
 
-    include_context "multiple grading periods within controller" do
+    include_context "grading periods within controller" do
       let(:course) { @course }
       let(:teacher) { @teacher }
       let(:request_params) { [:edit, course_id: course, id: @quiz] }
@@ -173,6 +264,41 @@ describe Quizzes::QuizzesController do
       expect(assigns[:quiz]).to eql(@quiz)
       expect(assigns[:js_env][:REGRADE_OPTIONS]).to eq({q.id => 'no_regrade' })
       expect(response).to render_template("new")
+    end
+
+    it "js_env DUE_DATE_REQUIRED_FOR_ACCOUNT is true when AssignmentUtil.due_date_required_for_account? == true" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:due_date_required_for_account?).returns(true)
+      get 'edit', :course_id => @course.id, :id => @quiz.id
+      expect(assigns[:js_env][:DUE_DATE_REQUIRED_FOR_ACCOUNT]).to eq(true)
+    end
+
+    it "js_env DUE_DATE_REQUIRED_FOR_ACCOUNT is false when AssignmentUtil.due_date_required_for_account? == false" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:due_date_required_for_account?).returns(false)
+      get 'edit', :course_id => @course.id, :id => @quiz.id
+      expect(assigns[:js_env][:DUE_DATE_REQUIRED_FOR_ACCOUNT]).to eq(false)
+    end
+
+    it "js_env MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT is true when AssignmentUtil.name_length_required_for_account? == true" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:name_length_required_for_account?).returns(true)
+      get 'edit', :course_id => @course.id, :id => @quiz.id
+      expect(assigns[:js_env][:MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT]).to eq(true)
+    end
+
+    it "js_env MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT is false when AssignmentUtil.name_length_required_for_account? == false" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:name_length_required_for_account?).returns(false)
+      get 'edit', :course_id => @course.id, :id => @quiz.id
+      expect(assigns[:js_env][:MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT]).to eq(false)
+    end
+
+    it "js_env MAX_NAME_LENGTH is a 15 when AssignmentUtil.assignment_max_name_length returns 15" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:assignment_max_name_length).returns(15)
+      get 'edit', :course_id => @course.id, :id => @quiz.id
+      expect(assigns[:js_env][:MAX_NAME_LENGTH]).to eq(15)
     end
 
     context "conditional release" do
@@ -526,7 +652,7 @@ describe Quizzes::QuizzesController do
 
     it "should respect section privilege limitations" do
       section = @course.course_sections.create!(:name => 'section 2')
-      @student2.enrollments.update_all(course_section_id: section)
+      @student2.enrollments.update_all(course_section_id: section.id)
 
       ta1 = user_with_pseudonym(:active_all => true, :name => 'TA1', :username => 'ta1@instructure.com')
       @course.enroll_ta(ta1).update_attribute(:limit_privileges_to_course_section, true)
@@ -996,7 +1122,7 @@ describe Quizzes::QuizzesController do
       expect(@student.recent_stream_items.map {|item| item.data['notification_id']}).not_to include notification.id
     end
 
-    context "with multiple grading periods enabled" do
+    context "with grading periods" do
       def call_create(params)
         post('create', course_id: @course.id, quiz: {
           title: "Example Quiz", quiz_type: "assignment"
@@ -1007,7 +1133,6 @@ describe Quizzes::QuizzesController do
 
       before :once do
         teacher_in_course(active_all: true)
-        @course.root_account.enable_feature!(:multiple_grading_periods)
         grading_period_group = Factories::GradingPeriodGroupHelper.new.create_for_account(@course.root_account)
         term = @course.enrollment_term
         term.grading_period_group = grading_period_group
@@ -1082,6 +1207,7 @@ describe Quizzes::QuizzesController do
 
         it "does not allow a nil override due date when the last grading period is closed" do
           override_params = [{ due_at: nil, course_section_id: section_id }]
+          request.content_type = 'application/json' unless CANVAS_RAILS4_2
           call_create(due_at: 7.days.from_now.iso8601, assignment_overrides: override_params)
           assert_forbidden
           expect(@course.quizzes.count).to eql 0
@@ -1165,14 +1291,14 @@ describe Quizzes::QuizzesController do
       it "should set post_to_sis quizzes" do
         user_session(@teacher)
         course_quiz
-        post 'update', :course_id => @course.id, :id => @quiz.id, :quiz => {:title => "some quiz"}, :assignment => {post_to_sis: true}
+        post 'update', :course_id => @course.id, :id => @quiz.id, :quiz => {:title => "some quiz"}, :post_to_sis => '1'
         expect(assigns[:quiz].assignment.post_to_sis).to eq true
       end
 
       it "doesn't blow up for surveys" do
         user_session(@teacher)
         survey = @course.quizzes.create! quiz_type: "survey", title: "survey"
-        post 'update', :course_id => @course.id, :id => survey.id, :quiz => {:title => "changed"}, :assignment => {post_to_sis: true}
+        post 'update', :course_id => @course.id, :id => survey.id, :quiz => {:title => "changed"}, :post_to_sis => '1'
         expect(assigns[:quiz].title).to eq "changed"
       end
     end
@@ -1350,7 +1476,7 @@ describe Quizzes::QuizzesController do
       end
     end
 
-    context "with multiple grading periods enabled" do
+    context "with grading periods" do
       def create_quiz(attr)
         @course.quizzes.create!({ title: "Example Quiz", quiz_type: "assignment" }.merge(attr))
       end
@@ -1373,7 +1499,6 @@ describe Quizzes::QuizzesController do
 
       before :once do
         teacher_in_course(active_all: true)
-        @course.root_account.enable_feature!(:multiple_grading_periods)
         grading_period_group = Factories::GradingPeriodGroupHelper.new.create_for_account(@course.root_account)
         term = @course.enrollment_term
         term.grading_period_group = grading_period_group

@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'i18n!discussion_topics'
   'compiled/views/ValidatedFormView'
@@ -20,10 +37,32 @@ define [
   'jsx/shared/conditional_release/ConditionalRelease'
   'compiled/util/deparam'
   'compiled/jquery.rails_flash_notifications' #flashMessage
-], (I18n, ValidatedFormView, AssignmentGroupSelector, GradingTypeSelector,
-GroupCategorySelector, PeerReviewsSelector, PostToSisSelector, _, template, RichContentEditor,
-htmlEscape, DiscussionTopic, Announcement, Assignment, $, preventDefault, MissingDateDialog, KeyboardShortcuts,
-ConditionalRelease, deparam) ->
+  'jsx/shared/helpers/numberHelper'
+  'compiled/util/SisValidationHelper'
+], (
+    I18n,
+    ValidatedFormView,
+    AssignmentGroupSelector,
+    GradingTypeSelector,
+    GroupCategorySelector,
+    PeerReviewsSelector,
+    PostToSisSelector,
+    _,
+    template,
+    RichContentEditor,
+    htmlEscape,
+    DiscussionTopic,
+    Announcement,
+    Assignment,
+    $,
+    preventDefault,
+    MissingDateDialog,
+    KeyboardShortcuts,
+    ConditionalRelease,
+    deparam,
+    flashMessage,
+    numberHelper,
+    SisValidationHelper) ->
 
   RichContentEditor.preloadRemoteModule()
 
@@ -72,6 +111,8 @@ ConditionalRelease, deparam) ->
         @redirectAfterSave()
       super
 
+      @lockedItems = options.lockedItems || {}
+
     redirectAfterSave: ->
       window.location = @locationAfterSave(deparam())
 
@@ -111,6 +152,7 @@ ConditionalRelease, deparam) ->
         isLargeRoster: ENV?.IS_LARGE_ROSTER || false
         threaded: data.discussion_type is "threaded"
         inClosedGradingPeriod: @assignment.inClosedGradingPeriod()
+        lockedItems: @lockedItems
       json.assignment = json.assignment.toView()
       json
 
@@ -122,28 +164,31 @@ ConditionalRelease, deparam) ->
 
     handlePointsChange:(ev) =>
       ev.preventDefault()
+      @assignment.pointsPossible(@$assignmentPointsPossible.val())
       if @assignment.hasSubmittedSubmissions()
-        @$discussionPointPossibleWarning.toggleAccessibly(@$assignmentPointsPossible.val() != "#{@initialPointsPossible}")
+        @$discussionPointPossibleWarning.toggleAccessibly(@assignment.pointsPossible() != @initialPointsPossible)
 
 
     # also separated for easy stubbing
     loadNewEditor: ($textarea)->
+      return if @lockedItems.content
       RichContentEditor.loadNewEditor($textarea, { focus: true, manageParent: true})
 
     render: =>
       super
       $textarea = @$('textarea[name=message]').attr('id', _.uniqueId('discussion-topic-message'))
 
-      RichContentEditor.initSidebar()
-      _.defer =>
-        @loadNewEditor($textarea)
-        $('.rte_switch_views_link').click (event) ->
-          event.preventDefault()
-          event.stopPropagation()
-          RichContentEditor.callOnRCE($textarea, 'toggle')
-          # hide the clicked link, and show the other toggle link.
-          # todo: replace .andSelf with .addBack when JQuery is upgraded.
-          $(event.currentTarget).siblings('.rte_switch_views_link').andSelf().toggle()
+      unless @lockedItems.content
+        RichContentEditor.initSidebar()
+        _.defer =>
+          @loadNewEditor($textarea)
+          $('.rte_switch_views_link').click (event) ->
+            event.preventDefault()
+            event.stopPropagation()
+            RichContentEditor.callOnRCE($textarea, 'toggle')
+            # hide the clicked link, and show the other toggle link.
+            # todo: replace .andSelf with .addBack when JQuery is upgraded.
+            $(event.currentTarget).siblings('.rte_switch_views_link').andSelf().toggle()
       if @assignmentGroupCollection
         (@assignmentGroupFetchDfd ||= @assignmentGroupCollection.fetch()).done @renderAssignmentGroupOptions
 
@@ -238,11 +283,19 @@ ConditionalRelease, deparam) ->
       assign_data = data.assignment
       delete data.assignment
 
+      if assign_data?.points_possible
+        # this happens before validation, so we better validate it here
+        if numberHelper.validate(assign_data.points_possible)
+          assign_data.points_possible = numberHelper.parse(assign_data.points_possible)
+      if assign_data?.peer_review_count
+        if numberHelper.validate(assign_data.peer_review_count)
+          assign_data.peer_review_count = numberHelper.parse(assign_data.peer_review_count)
+
       if assign_data?.set_assignment is '1'
         data.set_assignment = '1'
         data.assignment = @updateAssignment(assign_data)
-        data.delayed_post_at = ''
-        data.lock_at = ''
+        # code used to set delayed_post_at = locked_at = '', but that broke
+        # saving a locked graded discussion.  Leaving them as they were didn't break anything
       else
         # Announcements don't have assignments.
         # DiscussionTopics get a model created for them in their
@@ -329,10 +382,12 @@ ConditionalRelease, deparam) ->
       if @isTopic() && data.set_assignment is '1'
         if @assignmentGroupSelector?
           errors = @assignmentGroupSelector.validateBeforeSave(data, errors)
-        data2 =
-          assignment_overrides: @dueDateOverrideView.getAllDates()
-        errors = @dueDateOverrideView.validateBeforeSave(data2, errors)
+        validateBeforeSaveData =
+          assignment_overrides: @dueDateOverrideView.getAllDates(),
+          postToSIS: data.assignment.attributes.post_to_sis == '1'
+        errors = @dueDateOverrideView.validateBeforeSave(validateBeforeSaveData, errors)
         errors = @_validatePointsPossible(data, errors)
+        errors = @_validateTitle(data, errors)
       else
         @model.set 'assignment', @model.createAssignment(set_assignment: false)
 
@@ -348,11 +403,30 @@ ConditionalRelease, deparam) ->
 
       errors
 
+    _validateTitle: (data, errors) =>
+      post_to_sis = data.assignment.attributes.post_to_sis == '1'
+      max_name_length = 256
+      if post_to_sis && ENV.MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT == true
+        max_name_length = ENV.MAX_NAME_LENGTH
+
+      validationHelper = new SisValidationHelper({
+        postToSIS: post_to_sis
+        maxNameLength: max_name_length
+        name: data.title
+        maxNameLengthRequired: ENV.MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT
+      })
+
+      if validationHelper.nameTooLong()
+        errors["title"] = [
+          message: I18n.t("Title is too long, must be under %{length} characters", length: (max_name_length + 1))
+        ]
+      errors
+
     _validatePointsPossible: (data, errors) =>
       assign = data.assignment
       frozenPoints = _.contains(assign.frozenAttributes(), "points_possible")
 
-      if !frozenPoints and assign.pointsPossible() and isNaN(parseFloat(assign.pointsPossible()))
+      if !frozenPoints and assign.pointsPossible() and !numberHelper.validate(assign.pointsPossible())
         errors["assignment[points_possible]"] = [
           message: I18n.t 'points_possible_number', 'Points possible must be a number'
         ]

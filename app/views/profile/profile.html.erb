@@ -1,4 +1,22 @@
-<% content_for :page_title do %>
+<%
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+%>
+
+<% content_for(:page_title) do %>
   <%= join_title t("User Settings"), @user.name %>
 <% end %>
 
@@ -14,6 +32,9 @@
     <% end %>
     <% if mfa_settings == :optional && @user.otp_secret_key %>
       <a href="<%= disable_mfa_path('self') %>" class="btn button-sidebar-wide" id="disable_mfa_link"><%= image_tag "unlock.png", :alt => '' %> <%= t('links.disable_mfa', "Disable Multi-Factor Authentication") %></a>
+    <% end %>
+    <% if @user.otp_secret_key %>
+        <a href="<%= one_time_passwords_path %>" class="btn button-sidebar-wide" id="otp_backup_codes_link" target="_blank"><%= image_tag "lock.png" %> <%= t('links.otp_backup_codes', "Multi-Factor Authentication Backup Codes") %></a>
     <% end %>
     <a href="<%= dashboard_content_exports_path %>" class="btn button-sidebar-wide"><i class="icon-download"></i> <%= t("Download Submissions") %></a>
     <% if @domain_root_account.feature_allowed?(:epub_export) && !@domain_root_account.enable_offline_web_export? %>
@@ -480,8 +501,8 @@ TEXT
           <th scope="col"><%= t('headers.application_abbrev', "App") %></th>
           <th scope="col"><%= t('headers.purpose', "Purpose") %></th>
           <th scope="col"><%= t('headers.dates', "Dates") %></th>
-          <th>&nbsp;</th>
-          <th>&nbsp;</th>
+          <td>&nbsp;</td>
+          <td>&nbsp;</td>
         </tr>
       </thead>
       <tbody>
@@ -563,11 +584,7 @@ TEXT
         </tr>
         <tr>
           <td>
-            <%= f.blabel :expires_at, en: "Expires" %>
-            <label class="screenreader-only" id="token_expires_at_accessible_label">
-              <%= t("Access token is valid until") %>
-              <%= datepicker_screenreader_prompt %>
-            </label>
+            <%= f.blabel :expires_at, en: "Expires", id: "token_expires_at_accessible_label" %>
           </td>
           <td>
             <div>
@@ -575,10 +592,11 @@ TEXT
                                class: "expires_field datetime_field",
                                style: "width: 120px;",
                                "aria-labelledby" => "token_expires_at_accessible_label",
+                               "aria-describedby" => "leave_blank_for_no_expiration",
                                "data-tooltip" => "{\"position\":\"top\",\"force_position\":\"true\"}",
                                title: accessible_date_format %>
             </div>
-            <div style="font-size: 0.8em;" class="hint">
+            <div style="font-size: 0.8em;" class="hint" id="leave_blank_for_no_expiration">
               <%= t('hints.expires_at', "leave blank for no expiration") %>
             </div>
           </td>

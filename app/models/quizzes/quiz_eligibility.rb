@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2013 Instructure, Inc.
+# Copyright (C) 2015 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -154,7 +154,7 @@ class Quizzes::QuizEligibility
   end
 
   def assignment_override_sections
-    AssignmentOverride.where(quiz_id: quiz.id, set_type: CourseSection).map(&:set) & student_sections
+    AssignmentOverride.where(quiz_id: quiz.id, set_type: 'CourseSection').map(&:set) & student_sections
   end
 
   def inactive_non_admin?

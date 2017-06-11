@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -23,15 +23,15 @@ describe "/quizzes/quizzes/history" do
   before do
     course_with_student
     view_context
-    assigns[:user] = @user
+    assign(:user, @user)
   end
 
   context 'beta quiz navigation' do
     before do
-      assigns[:quiz] = @course.quizzes.create!
-      assigns[:submission] = assigns[:quiz].generate_submission(@user)
-      assigns[:current_submission] = assigns[:submission]
-      assigns[:version_instances] = assigns[:submission].submitted_attempts
+      quiz = assign(:quiz, @course.quizzes.create!)
+      sub = assign(:submission, quiz.generate_submission(@user))
+      assign(:current_submission, sub)
+      assign(:version_instances, sub.submitted_attempts)
     end
 
     it 'displays when configured' do
@@ -58,20 +58,20 @@ describe "/quizzes/quizzes/history" do
     it 'displays when quiz has question groups' do
       @quiz = @course.quizzes.create!
       @quiz.quiz_groups.create!
-      assigns[:quiz] = @quiz
-      assigns[:submission] = assigns[:quiz].generate_submission(@user)
-      assigns[:current_submission] = assigns[:submission]
-      assigns[:version_instances] = assigns[:submission].submitted_attempts
+      assign(:quiz, @quiz)
+      sub = assign(:submission, @quiz.generate_submission(@user))
+      assign(:current_submission, sub)
+      assign(:version_instances, sub.submitted_attempts)
 
       render "quizzes/quizzes/history"
       expect(response.body).to match /grade-by-question-warning/
     end
 
     it 'does not display when quiz has only questions' do
-      assigns[:quiz] = @course.quizzes.create!
-      assigns[:submission] = assigns[:quiz].generate_submission(@user)
-      assigns[:current_submission] = assigns[:submission]
-      assigns[:version_instances] = assigns[:submission].submitted_attempts
+      quiz = assign(:quiz, @course.quizzes.create!)
+      sub = assign(:submission, quiz.generate_submission(@user))
+      assign(:current_submission, sub)
+      assign(:version_instances, sub.submitted_attempts)
 
       render "quizzes/quizzes/history"
       expect(response.body).not_to match /grade-by-question-warning/

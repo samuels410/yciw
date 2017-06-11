@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -34,6 +34,7 @@ module Api::V1::Quiz
       one_question_at_a_time
       one_time_results
       only_visible_to_overrides
+      points_possible
       published
       quiz_type
       require_lockdown_browser
@@ -53,10 +54,8 @@ module Api::V1::Quiz
 
   def quizzes_json(quizzes, context, user, session, options={})
     options[:description_formatter] = description_formatter(context, user)
-    check_for_restrictions = master_courses? && context.grants_right?(user, session, :manage_assignments)
-    if check_for_restrictions
-      MasterCourses::Restrictor.preload_restrictions(quizzes)
-      options[:include_master_course_restrictions] = true
+    if context.grants_right?(user, session, :manage_assignments)
+      options[:master_course_status] = setup_master_course_restrictions(quizzes, context)
     end
 
     quizzes.map do |quiz|
@@ -122,7 +121,7 @@ module Api::V1::Quiz
 
   def update_api_quiz(quiz, params, save = true)
     quiz_params = accepts_jsonapi? ? Array(params[:quizzes]).first : params[:quiz]
-    return nil unless quiz.is_a?(Quizzes::Quiz) && quiz_params.is_a?(Hash)
+    return nil unless quiz.is_a?(Quizzes::Quiz) && quiz_params.is_a?(ActionController::Parameters)
     update_params = filter_params(quiz_params)
 
     # make sure assignment_group_id belongs to context

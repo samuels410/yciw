@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -66,7 +66,7 @@ module QuizzesHelper
     if score.nil?
       '_'
     else
-      round_if_whole(score.to_f.round(precision)).to_s
+      I18n.n(round_if_whole(score.to_f.round(precision)))
     end
   end
 

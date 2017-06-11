@@ -1,11 +1,26 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_relative '../helpers/gradezilla_common'
 require_relative '../grades/page_objects/gradezilla_page'
 
 describe "outcome gradezilla" do
   include_context "in-process server selenium tests"
   include GradezillaCommon
-
-  let(:gradezilla_page) { Gradezilla::MultipleGradingPeriods.new }
 
   context "as a teacher" do
     before(:once) do
@@ -21,7 +36,7 @@ describe "outcome gradezilla" do
     end
 
     it "should not be visible by default" do
-      gradezilla_page.visit(@course)
+      Gradezilla.visit(@course)
       expect(f("#content")).not_to contain_css('.gradebook-navigation')
     end
 
@@ -30,24 +45,23 @@ describe "outcome gradezilla" do
         Account.default.set_feature_flag!('outcome_gradebook', 'on')
       end
 
-      it "should be visible" do
-        gradezilla_page.visit(@course)
-        expect(ff('.gradebook-navigation')).to have_size 1
-
-        f('a[data-id=outcome]').click
+      it "is visible" do
+        Gradezilla.visit(@course)
+        f('.assignment-gradebook-container .gradebook-menus button').click
+        f('span[data-menu-item-id="learning-mastery"]').click
         expect(f('.outcome-gradebook-container')).not_to be_nil
       end
 
-      it "should allow showing only a certain section" do
-        gradezilla_page.visit(@course)
-        f('a[data-id=outcome]').click
+      it "allows showing only a certain section" do
+        Gradezilla.visit(@course)
+        f('.assignment-gradebook-container .gradebook-menus button').click
+        f('span[data-menu-item-id="learning-mastery"]').click
 
         expect(ff('.outcome-student-cell-content')).to have_size 3
 
         choose_section = ->(name) do
           fj('.section-select-button:visible').click
           fj(".section-select-menu:visible a:contains('#{name}')").click
-          wait_for_js
         end
 
         choose_section.call "All Sections"
@@ -59,7 +73,7 @@ describe "outcome gradezilla" do
         expect(ff('.outcome-student-cell-content')).to have_size 1
 
         # verify that it remembers the section to show across page loads
-        gradezilla_page.visit(@course)
+        Gradezilla.visit(@course)
         expect(fj('.section-select-button:visible')).to include_text @other_section.name
         expect(ff('.outcome-student-cell-content')).to have_size 1
 
@@ -76,7 +90,7 @@ describe "outcome gradezilla" do
       it "should handle multiple enrollments correctly" do
         @course.enroll_student(@student_1, :section => @other_section, :allow_multiple_enrollments => true)
 
-        gradezilla_page.visit(@course)
+        Gradezilla.visit(@course)
 
         meta_cells = find_slick_cells(0, f('.grid-canvas'))
         expect(meta_cells[0]).to include_text @course.default_section.display_name

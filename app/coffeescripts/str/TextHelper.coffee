@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -17,9 +17,10 @@
 #
 
 define [
+  'jquery'
   'i18n!lib.text_helper'
   'str/htmlEscape'
-], (I18n, htmlEscape) ->
+], ($, I18n, htmlEscape) ->
 
   AUTO_LINKIFY_PLACEHOLDER = "LINK-PLACEHOLDER"
   AUTO_LINKIFY_REGEX = ///

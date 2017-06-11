@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 - 2015 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -34,6 +34,19 @@ describe UserObserver do
     re_observee = student.user_observers.create_or_restore(observer_id: observer)
     expect(observee.id).to eq re_observee.id
     expect(re_observee.workflow_state).to eq 'active'
+  end
+
+  it 'should restore deleted observer enrollments on "restore" (even if nothing about the observee changed)' do
+    # i'm like 66% sure someone will complain about this
+    student_enroll = student_in_course(:user => student)
+
+    observer = user_with_pseudonym
+    student.observers << observer
+    observer_enroll = observer.observer_enrollments.first
+    observer_enroll.destroy
+
+    student.user_observers.create_or_restore(observer_id: observer)
+    expect(observer_enroll.reload).to_not be_deleted
   end
 
   it 'should create an observees when one does not exist' do
@@ -132,7 +145,6 @@ describe UserObserver do
       @observer = user_with_pseudonym
       student.observers << @observer
       @observer_enrollment = @observer.enrollments.where(type: 'ObserverEnrollment', course_id: @course, associated_user_id: student).first
-      expect(@observer_enrollment).not_to be_nil
     end
 
     it "should not attempt to add a duplicate observer enrollment" do

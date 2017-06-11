@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 class ContextExternalTool < ActiveRecord::Base
   include Workflow
   include SearchTermHelper
@@ -34,14 +51,8 @@ class ContextExternalTool < ActiveRecord::Base
   end
 
   set_policy do
-    given { |user, session| self.context.grants_right?(user, session, :update) }
-    can :read and can :update and can :delete
-
-    given do |user, session|
-      self.grants_right?(user, session, :update) &&
-      self.context.grants_right?(user, session, :lti_add_edit)
-    end
-    can :update_manually
+    given { |user, session| self.context.grants_right?(user, session, :lti_add_edit) }
+    can :read and can :update and can :delete and can :update_manually
   end
 
   CUSTOM_EXTENSION_KEYS = {:file_menu => [:accept_media_types].freeze}.freeze
@@ -316,6 +327,14 @@ class ContextExternalTool < ActiveRecord::Base
     settings[:text]
   end
 
+  def oauth_compliant=(val)
+    settings[:oauth_compliant] = Canvas::Plugin.value_to_boolean(val)
+  end
+
+  def oauth_compliant
+    settings[:oauth_compliant]
+  end
+
   def not_selectable
     !!read_attribute(:not_selectable)
   end
@@ -415,6 +434,7 @@ class ContextExternalTool < ActiveRecord::Base
 
   def self.standardize_url(url)
     return "" if url.blank?
+    url = url.gsub(/[[:space:]]/, '')
     url = "http://" + url unless url.match(/:\/\//)
     res = Addressable::URI.parse(url).normalize
     res.query = res.query.split(/&/).sort.join('&') if !res.query.blank?

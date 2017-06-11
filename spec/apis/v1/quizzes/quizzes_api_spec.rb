@@ -241,14 +241,11 @@ describe Quizzes::QuizzesApiController, type: :request do
     end
 
     context "non-existent quiz" do
-      before do
-        @json = api_call(:get, "/api/v1/courses/#{@course.id}/quizzes/10101",
-                        {:controller=>"quizzes/quizzes_api", :action=>"show", :format=>"json", :course_id=>"#{@course.id}", :id => "10101"},
-                        {}, {}, {:expected_status => 404})
-      end
-
       it "should return a not found error message" do
-        expect(@json.inspect).to include "does not exist"
+        json = api_call(:get, "/api/v1/courses/#{@course.id}/quizzes/10101",
+                       {:controller=>"quizzes/quizzes_api", :action=>"show", :format=>"json", :course_id=>"#{@course.id}", :id => "10101"},
+                       {}, {}, {:expected_status => 404})
+        expect(json.inspect).to include "does not exist"
       end
     end
   end
@@ -425,7 +422,7 @@ describe Quizzes::QuizzesApiController, type: :request do
       end
     end
 
-    context "with multiple grading periods enabled" do
+    context "with grading periods" do
       def call_create(params, expected_status)
         api_call_as_user(
           @current_user,
@@ -444,7 +441,6 @@ describe Quizzes::QuizzesApiController, type: :request do
 
       before :once do
         teacher_in_course(active_all: true)
-        @course.root_account.enable_feature!(:multiple_grading_periods)
         grading_period_group = Factories::GradingPeriodGroupHelper.new.create_for_account(@course.root_account)
         term = @course.enrollment_term
         term.grading_period_group = grading_period_group
@@ -598,6 +594,13 @@ describe Quizzes::QuizzesApiController, type: :request do
       end
     end
 
+    context 'points_possible' do
+      it "updates points_possible for graded surveys" do
+        api_update_quiz({quiz_type: "graded_survey", points_possible: 123.0}, {points_possible: 321.0})
+        expect(updated_quiz.points_possible).to eq 321.0
+      end
+    end
+
     context 'lockdown_browser' do
       before :once do
         # require_lockdown_browser, require_lockdown_browser_for_results and
@@ -741,7 +744,7 @@ describe Quizzes::QuizzesApiController, type: :request do
       end
     end
 
-    context "with multiple grading periods enabled" do
+    context "with grading periods" do
       def create_quiz(attr)
         @course.quizzes.create!({ title: "Example Quiz", quiz_type: "assignment" }.merge(attr))
       end
@@ -775,7 +778,6 @@ describe Quizzes::QuizzesApiController, type: :request do
 
       before :once do
         teacher_in_course(active_all: true)
-        @course.root_account.enable_feature!(:multiple_grading_periods)
         grading_period_group = Factories::GradingPeriodGroupHelper.new.create_for_account(@course.root_account)
         term = @course.enrollment_term
         term.grading_period_group = grading_period_group

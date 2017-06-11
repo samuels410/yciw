@@ -1,3 +1,21 @@
+<%
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+%>
+
 <div>
   <%= external_tools_menu_items(@course_settings_sub_navigation_tools, {link_class: "btn button-sidebar-wide course-settings-sub-navigation-lti", settings_key: :course_settings_sub_navigation}) %>
   <% if can_do(@context, @current_user, :use_student_view) %>
@@ -103,7 +121,7 @@
       <% @all_roles.each do |base_role| %>
         <tr>
           <td><%= base_role[:plural_label] %>:</td>
-          <td><%= user_count(base_role[:count]) %></td>
+          <td><%= n(user_count(base_role[:count])) %></td>
         </tr>
         <% base_role[:custom_roles].each do |cr|
            next if skip_custom_role?(cr)
@@ -112,7 +130,7 @@
             <td>
               <%= cr[:label] %><% if cr[:workflow_state] == 'inactive' %> (<%= t('role.inactive', 'inactive') %>)<% end %>:
             </td>
-            <td><%= user_count(cr[:count]) %></td>
+            <td><%= n(user_count(cr[:count])) %></td>
           </tr>
         <% end %>
       <% end %>

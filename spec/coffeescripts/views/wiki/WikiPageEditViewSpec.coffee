@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'jquery'
   'compiled/models/Assignment'
@@ -10,7 +27,7 @@ define [
 ], ($, Assignment, WikiPage, WikiPageEditView, RichContentEditor, fixtures, editorUtils, fakeENV) ->
 
 
-  module 'WikiPageEditView:Init',
+  QUnit.module 'WikiPageEditView:Init',
     setup: ->
       @initSpy = sinon.spy(RichContentEditor, 'initSidebar')
 
@@ -40,7 +57,7 @@ define [
     conditionalToggle = view.$el.find('#conditional_content')
     equal conditionalToggle.length, 0, 'Toggle is hidden'
 
-  module 'WikiPageEditView:ConditionalContent',
+  QUnit.module 'WikiPageEditView:ConditionalContent',
     setup: ->
       fakeENV.setup(CONDITIONAL_RELEASE_SERVICE_ENABLED: true)
 
@@ -98,7 +115,7 @@ define [
     equal assignment.get('set_assignment'), '1', 'Sets assignment'
     equal assignment.get('only_visible_to_overrides'), '1', 'Sets override visibility'
 
-  module 'WikiPageEditView:UnsavedChanges',
+  QUnit.module 'WikiPageEditView:UnsavedChanges',
     setup: ->
       fixtures.setup()
 
@@ -187,7 +204,7 @@ define [
     ok @view.onUnload({}) isnt undefined, "Returns warning if changed"
 
 
-  module 'WikiPageEditView:Validate'
+  QUnit.module 'WikiPageEditView:Validate'
 
   test 'validation of the title is only performed if the title is present', ->
     view = new WikiPageEditView
@@ -202,7 +219,7 @@ define [
     ok errors['title'], 'error when title is present, but blank'
     ok errors['title'][0].message, 'error message when title is present, but blank'
 
-  module 'WikiPageEditView:JSON'
+  QUnit.module 'WikiPageEditView:JSON'
 
   testRights = (subject, options) ->
     test "#{subject}", ->

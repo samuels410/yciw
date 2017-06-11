@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011-12 Instructure, Inc.
+# Copyright (C) 2013 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -18,9 +18,9 @@
 
 # @API CommMessages
 # @beta
-# 
+#
 # API for accessing the messages (emails, sms, twitter, etc) that have
-# been sent to a user. 
+# been sent to a user.
 #
 # @model CommMessage
 #     {
@@ -95,12 +95,12 @@
 class CommMessagesApiController < ApplicationController
   include Api::V1::CommMessage
 
-  before_filter :require_user
+  before_action :require_user
 
   # @API List of CommMessages for a user
-  # 
+  #
   # Retrieve messages sent to a user.
-  # 
+  #
   # @argument user_id [Required, String]
   #   The user id for whom you want to retrieve CommMessages
   #
@@ -135,5 +135,5 @@ class CommMessagesApiController < ApplicationController
 
     messages_json = messages.map { |m| comm_message_json(m) }
     render :json => messages_json
-  end  
+  end
 end

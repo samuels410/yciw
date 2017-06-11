@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2014 Instructure, Inc.
+# Copyright (C) 2015 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -19,9 +19,9 @@
 class Login::CanvasController < ApplicationController
   include Login::Shared
 
-  before_filter :forbid_on_files_domain
-  before_filter :run_login_hooks, only: [:new, :create]
-  before_filter :fix_ms_office_redirects, only: :new
+  before_action :forbid_on_files_domain
+  before_action :run_login_hooks, only: [:new, :create]
+  before_action :fix_ms_office_redirects, only: :new
 
   protect_from_forgery except: :create, with: :exception
 
@@ -59,7 +59,7 @@ class Login::CanvasController < ApplicationController
     params[:pseudonym_session][:unique_id].try(:strip!)
 
     # Try to use authlogic's built-in login approach first
-    @pseudonym_session = @domain_root_account.pseudonym_sessions.new(params[:pseudonym_session].permit(:unique_id, :password, :remember_me))
+    @pseudonym_session = @domain_root_account.pseudonym_sessions.new(params[:pseudonym_session].permit(:unique_id, :password, :remember_me).to_h)
     @pseudonym_session.remote_ip = request.remote_ip
     found = @pseudonym_session.save
 

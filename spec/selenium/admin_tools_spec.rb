@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/common')
 require File.expand_path(File.dirname(__FILE__) + '/helpers/calendar2_common')
 require File.expand_path(File.dirname(__FILE__) + '/../cassandra_spec_helper')
@@ -46,8 +63,6 @@ describe "admin_tools" do
   def click_view_tab(tab_name)
     wait_for_ajaximations
     tab = fj("#adminToolsTabs .#{tab_name} > a")
-    expect(tab).not_to be_nil
-    expect(tab).to be_displayed
     tab.click
     wait_for_ajaximations
   end
@@ -554,7 +569,7 @@ describe "admin_tools" do
       expect(fj('.ui-dialog dl dd:last').text).to eq @reset_course.name
     end
 
-    it "should show copied_from event details" do
+    it "should show reset_from event details" do
       @course, @reset_course = @course, course_factory(active_course: true, course_name: "Reset Course")
       @from_event, @to_event = Auditors::Course.record_reset(@course, @reset_course, @teacher)
 

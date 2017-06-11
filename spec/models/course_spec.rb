@@ -1,4 +1,5 @@
-# Copyright (C) 2011 - 2015 Instructure, Inc.
+#
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -19,6 +20,12 @@ require File.expand_path(File.dirname(__FILE__) + '/../sharding_spec_helper.rb')
 
 require 'csv'
 require 'socket'
+
+describe Course do
+  describe 'relationships' do
+    it { is_expected.to have_one(:late_policy).dependent(:destroy).inverse_of(:course) }
+  end
+end
 
 describe Course do
   before :once do
@@ -176,6 +183,121 @@ describe Course do
     end
   end
 
+  describe "#grading_periods?" do
+    it "should return true if course has grading periods" do
+      @course.save!
+      Factories::GradingPeriodGroupHelper.new.legacy_create_for_course(@course)
+      expect(@course.grading_periods?).to be true
+    end
+
+    it "should return true if account has grading periods for course term" do
+      @course.save!
+      group = Factories::GradingPeriodGroupHelper.new.create_for_account(@course.root_account)
+      group.enrollment_terms << @course.enrollment_term
+      expect(@course.grading_periods?).to be true
+    end
+
+    it "should return false if account has grading periods without course term" do
+      @course.save!
+      Factories::GradingPeriodGroupHelper.new.create_for_account(@course.root_account)
+      expect(@course.grading_periods?).to be false
+    end
+
+    it "should return false if neither course nor account have grading periods" do
+      expect(@course.grading_periods?).to be false
+    end
+  end
+
+  describe "#weighted_grading_periods?" do
+    it "returns false if course has legacy grading periods" do
+      @course.save!
+      account_group = Factories::GradingPeriodGroupHelper.new.create_for_account(@course.root_account)
+      account_group.enrollment_terms << @course.enrollment_term
+      group = Factories::GradingPeriodGroupHelper.new.legacy_create_for_course(@course)
+      group.weighted = true
+      group.save!
+      expect(@course.weighted_grading_periods?).to be false
+    end
+
+    it "returns false if account has unweighted grading periods for course term" do
+      @course.save!
+      group = Factories::GradingPeriodGroupHelper.new.create_for_account(@course.root_account)
+      group.enrollment_terms << @course.enrollment_term
+      expect(@course.weighted_grading_periods?).to be false
+    end
+
+    it "returns false if account has weighted grading periods without course term" do
+      @course.save!
+      group = Factories::GradingPeriodGroupHelper.new.create_for_account(@course.root_account)
+      group.weighted = true
+      group.save!
+      expect(@course.weighted_grading_periods?).to be false
+    end
+
+    it "returns true if account has weighted grading periods for course term" do
+      @course.save!
+      legacy_group = Factories::GradingPeriodGroupHelper.new.legacy_create_for_course(@course)
+      legacy_group.destroy
+      group = Factories::GradingPeriodGroupHelper.new.create_for_account(@course.root_account)
+      group.enrollment_terms << @course.enrollment_term
+      group.weighted = true
+      group.save!
+      expect(@course.weighted_grading_periods?).to be true
+    end
+  end
+
+  describe '#display_totals_for_all_grading_periods?' do
+    before do
+      @course.save!
+    end
+
+    it 'returns false for a course without an associated grading period group' do
+      expect(@course).not_to be_display_totals_for_all_grading_periods
+    end
+
+    it 'returns false for a course with an associated grading period group that is soft-deleted' do
+      group = Factories::GradingPeriodGroupHelper.new.create_for_account(@course.root_account)
+      group.enrollment_terms << @course.enrollment_term
+      group.update!(display_totals_for_all_grading_periods: true)
+      group.destroy
+      expect(@course).not_to be_display_totals_for_all_grading_periods
+    end
+
+    it 'returns true if the associated grading period group has the setting enabled' do
+      group = Factories::GradingPeriodGroupHelper.new.create_for_account(@course.root_account)
+      group.enrollment_terms << @course.enrollment_term
+      group.update!(display_totals_for_all_grading_periods: true)
+      expect(@course).to be_display_totals_for_all_grading_periods
+    end
+
+    it 'returns false if the associated grading period group has the setting disabled' do
+      group = Factories::GradingPeriodGroupHelper.new.create_for_account(@course.root_account)
+      group.enrollment_terms << @course.enrollment_term
+      expect(@course).not_to be_display_totals_for_all_grading_periods
+    end
+
+    context 'legacy grading periods support' do
+      before do
+        @group = Factories::GradingPeriodGroupHelper.new.legacy_create_for_course(@course)
+      end
+
+      it 'returns true if the associated grading period group has the setting enabled' do
+        @group.update!(display_totals_for_all_grading_periods: true)
+        expect(@course).to be_display_totals_for_all_grading_periods
+      end
+
+      it 'returns false if the associated grading period group has the setting disabled' do
+        expect(@course).not_to be_display_totals_for_all_grading_periods
+      end
+
+      it 'returns false for a course with an associated grading period group that is soft-deleted' do
+        @group.update!(display_totals_for_all_grading_periods: true)
+        @group.destroy
+        expect(@course).not_to be_display_totals_for_all_grading_periods
+      end
+    end
+  end
+
   describe "#time_zone" do
     it "should use provided value when set, regardless of root account setting" do
       @root_account = Account.default
@@ -188,16 +310,6 @@ describe Course do
       @root_account = Account.default
       @root_account.default_time_zone = 'America/Chicago'
       expect(@course.time_zone).to eq ActiveSupport::TimeZone['Central Time (US & Canada)']
-    end
-  end
-
-  describe "#allow_web_export_download?" do
-    it "should return setting" do
-      expect(course_factory.allow_web_export_download?).to eq false
-      account = Account.default
-      account.settings[:enable_offline_web_export] = true
-      account.save
-      expect(@course.allow_web_export_download?).to eq true
     end
   end
 
@@ -799,6 +911,33 @@ describe Course do
       expect(@course.turnitin_originality).to eq("after_grading")
     end
   end
+
+  describe '#quiz_lti_tool' do
+    before do
+      @course.save!
+      @tool = ContextExternalTool.new(
+        :name => 'Quizzes.Next',
+        :consumer_key => 'test_key',
+        :shared_secret => 'test_secret',
+        :tool_id => 'Quizzes 2',
+        :url => 'http://example.com/launch'
+      )
+    end
+
+    it 'returns the quiz LTI tool for the course' do
+      @course.context_external_tools << @tool
+      expect(@course.quiz_lti_tool).to eq @tool
+    end
+
+    it 'returns the quiz LTI tool for the account if not set up on the course' do
+      @course.account.context_external_tools << @tool
+      expect(@course.quiz_lti_tool).to eq @tool
+    end
+
+    it 'returns nil if no quiz LTI tool is configured' do
+      expect(@course.quiz_lti_tool).to be nil
+    end
+  end
 end
 
 describe Course do
@@ -1044,6 +1183,39 @@ describe Course, "enroll" do
     scope = account.associated_courses.active.select([:id, :name]).eager_load(:teachers).joins(:teachers).where(:enrollments => { :workflow_state => 'active' })
     sql = scope.to_sql
     expect(sql).to match(/"enrollments"\."type" IN \('TeacherEnrollment'\)/)
+  end
+end
+
+describe Course, '#assignment_groups' do
+  it 'orders groups by position' do
+    course_model
+    @course.assignment_groups.create!(:name => 'B Group', position: 3)
+    @course.assignment_groups.create!(:name => 'A Group', position: 2)
+    @course.assignment_groups.create!(:name => 'C Group', position: 1)
+
+    groups = @course.assignment_groups
+
+    expect(groups[0].name).to eq('C Group')
+    expect(groups[1].name).to eq('A Group')
+    expect(groups[2].name).to eq('B Group')
+  end
+
+  it 'orders groups by name when positions are equal' do
+    course_model
+
+    @course.assignment_groups.create!(:name => 'B Group', position: 1)
+    @course.assignment_groups.create!(:name => 'A Group', position: 2)
+    @course.assignment_groups.create!(:name => 'D Group', position: 3)
+    @course.assignment_groups.create!(:name => 'C Group', position: 3)
+
+    @course.reload
+    expect(AssignmentGroup).to receive(:best_unicode_collation_key).with('assignment_groups.name').and_call_original
+    groups = @course.assignment_groups
+
+    expect(groups[0].name).to eq('B Group')
+    expect(groups[1].name).to eq('A Group')
+    expect(groups[2].name).to eq('C Group')
+    expect(groups[3].name).to eq('D Group')
   end
 end
 
@@ -1344,6 +1516,7 @@ describe Course, "gradebook_to_csv" do
     @course.reload
     @course.root_account.stubs(:trust_exists?).returns(true)
     @course.root_account.any_instantiation.stubs(:trusted_account_ids).returns([account2.id])
+    allow(@user2.pseudonyms.first.any_instantiation).to receive(:works_for_account?).and_return(true)
     HostUrl.expects(:context_host).with(@course.root_account).returns('school1')
     HostUrl.expects(:context_host).with(account2).returns('school2')
 
@@ -1986,37 +2159,39 @@ describe Course, 'grade_publishing' do
 
     context 'grade_publishing_status_translation' do
       it 'should work with nil statuses and messages' do
-        expect(@course.grade_publishing_status_translation(nil, nil)).to eq "Unpublished"
-        expect(@course.grade_publishing_status_translation(nil, "hi")).to eq "Unpublished: hi"
-        expect(@course.grade_publishing_status_translation("published", nil)).to eq "Published"
-        expect(@course.grade_publishing_status_translation("published", "hi")).to eq "Published: hi"
+        expect(@course.grade_publishing_status_translation(nil, nil)).to eq "Not Synced"
+        expect(@course.grade_publishing_status_translation(nil, "hi")).to eq "Not Synced: hi"
+        expect(@course.grade_publishing_status_translation("published", nil)).to eq "Synced"
+        expect(@course.grade_publishing_status_translation("published", "hi")).to eq "Synced: hi"
       end
 
       it 'should work with invalid statuses' do
-        expect(@course.grade_publishing_status_translation("invalid_status", nil)).to eq "Unknown status, invalid_status"
-        expect(@course.grade_publishing_status_translation("invalid_status", "what what")).to eq "Unknown status, invalid_status: what what"
+        expect(@course.grade_publishing_status_translation("bad_status", nil)).to eq "Unknown status, bad_status"
+        expect(@course.grade_publishing_status_translation("bad_status", "what what")).to eq(
+          "Unknown status, bad_status: what what"
+        )
       end
 
       it "should work with empty string statuses and messages" do
-        expect(@course.grade_publishing_status_translation("", "")).to eq "Unpublished"
-        expect(@course.grade_publishing_status_translation("", "hi")).to eq "Unpublished: hi"
-        expect(@course.grade_publishing_status_translation("published", "")).to eq "Published"
-        expect(@course.grade_publishing_status_translation("published", "hi")).to eq "Published: hi"
+        expect(@course.grade_publishing_status_translation("", "")).to eq "Not Synced"
+        expect(@course.grade_publishing_status_translation("", "hi")).to eq "Not Synced: hi"
+        expect(@course.grade_publishing_status_translation("published", "")).to eq "Synced"
+        expect(@course.grade_publishing_status_translation("published", "hi")).to eq "Synced: hi"
       end
 
       it 'should work with all known statuses' do
         expect(@course.grade_publishing_status_translation("error", nil)).to eq "Error"
         expect(@course.grade_publishing_status_translation("error", "hi")).to eq "Error: hi"
-        expect(@course.grade_publishing_status_translation("unpublished", nil)).to eq "Unpublished"
-        expect(@course.grade_publishing_status_translation("unpublished", "hi")).to eq "Unpublished: hi"
+        expect(@course.grade_publishing_status_translation("unpublished", nil)).to eq "Not Synced"
+        expect(@course.grade_publishing_status_translation("unpublished", "hi")).to eq "Not Synced: hi"
         expect(@course.grade_publishing_status_translation("pending", nil)).to eq "Pending"
         expect(@course.grade_publishing_status_translation("pending", "hi")).to eq "Pending: hi"
-        expect(@course.grade_publishing_status_translation("publishing", nil)).to eq "Publishing"
-        expect(@course.grade_publishing_status_translation("publishing", "hi")).to eq "Publishing: hi"
-        expect(@course.grade_publishing_status_translation("published", nil)).to eq "Published"
-        expect(@course.grade_publishing_status_translation("published", "hi")).to eq "Published: hi"
-        expect(@course.grade_publishing_status_translation("unpublishable", nil)).to eq "Unpublishable"
-        expect(@course.grade_publishing_status_translation("unpublishable", "hi")).to eq "Unpublishable: hi"
+        expect(@course.grade_publishing_status_translation("publishing", nil)).to eq "Syncing"
+        expect(@course.grade_publishing_status_translation("publishing", "hi")).to eq "Syncing: hi"
+        expect(@course.grade_publishing_status_translation("published", nil)).to eq "Synced"
+        expect(@course.grade_publishing_status_translation("published", "hi")).to eq "Synced: hi"
+        expect(@course.grade_publishing_status_translation("unpublishable", nil)).to eq "Unsyncable"
+        expect(@course.grade_publishing_status_translation("unpublishable", "hi")).to eq "Unsyncable: hi"
       end
     end
 
@@ -2072,24 +2247,24 @@ describe Course, 'grade_publishing' do
         messages, overall_status = @course.grade_publishing_statuses
         expect(overall_status).to eq "error"
         expect(messages.count).to eq 5
-        expect(messages["Unpublished"].sort_by(&:id)).to eq [
-            @student_enrollments[7],
-            @student_enrollments[8]
-          ].sort_by(&:id)
-        expect(messages["Published"]).to eq [
-            @student_enrollments[0]
-          ]
+        expect(messages["Not Synced"].sort_by(&:id)).to eq [
+          @student_enrollments[7],
+          @student_enrollments[8]
+        ].sort_by(&:id)
+        expect(messages["Synced"]).to eq [
+          @student_enrollments[0]
+        ]
         expect(messages["Error: cause of this reason"]).to eq [
-            @student_enrollments[1]
-          ]
+          @student_enrollments[1]
+        ]
         expect(messages["Error: cause of that reason"]).to eq [
-            @student_enrollments[3]
-          ]
-        expect(messages["Unpublishable"].sort_by(&:id)).to eq [
-            @student_enrollments[2],
-            @student_enrollments[4],
-            @student_enrollments[5]
-          ].sort_by(&:id)
+          @student_enrollments[3]
+        ]
+        expect(messages["Unsyncable"].sort_by(&:id)).to eq [
+          @student_enrollments[2],
+          @student_enrollments[4],
+          @student_enrollments[5]
+        ].sort_by(&:id)
       end
 
       it 'should correctly figure out the overall status with no enrollments' do
@@ -3613,7 +3788,7 @@ describe Course, "enrollments" do
 
     @course.root_account = a2
     @course.save!
-    expect(@course.student_enrollments(true).map(&:root_account_id)).to eq [a2.id]
+    expect(@course.student_enrollments.reload.map(&:root_account_id)).to eq [a2.id]
     expect(@course.course_sections.reload.map(&:root_account_id)).to eq [a2.id]
   end
 end
@@ -4552,18 +4727,6 @@ describe Course, 'touch_root_folder_if_necessary' do
       expect(@course.restrict_student_future_view?).to be_truthy
     end
   end
-
-  describe "notificiations" do
-    it "doesnt blow up when trying to send notifications just because there's no prior_version" do
-      course = course_factory(account: Account.default, name: "SOME COURSE NAME")
-      course.prior_version=nil
-      course.stubs(just_created: false)
-      course.instance_variable_set(:@broadcasted, false)
-      expect { course.broadcast_notifications }.to_not raise_error
-    end
-  end
-
-  it { is_expected.to have_many(:submission_comments).conditions(-> { published }) }
 end
 
 describe Course, 'invited_count_visible_to' do
@@ -4661,7 +4824,7 @@ describe Course, "#apply_nickname_for!" do
     @course.apply_nickname_for!(@user)
     expect(@course.name).to eq 'nickname'
     @course.save!
-    expect(Course.find(@course).name).to eq 'some terrible name'
+    expect(Course.find(@course.id).name).to eq 'some terrible name'
   end
 
   it "undoes the change with nil user" do

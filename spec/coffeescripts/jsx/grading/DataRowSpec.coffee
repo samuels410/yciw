@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'react'
   'react-dom'
@@ -6,7 +23,7 @@ define [
   'jsx/grading/dataRow'
 ], (React, ReactDOM, {Simulate, SimulateNative}, $, DataRow) ->
 
-  module 'DataRow not being edited, without a sibling',
+  QUnit.module 'DataRow not being edited, without a sibling',
     setup: ->
       props =
         key: 0
@@ -37,7 +54,7 @@ define [
   test "renderMaxScore() returns a max score of 100 without a '<' sign", ->
     deepEqual @dataRow.renderMaxScore(), '100'
 
-  module 'DataRow being edited',
+  QUnit.module 'DataRow being edited',
     setup: ->
       @props =
         key: 0
@@ -59,46 +76,62 @@ define [
   test 'renders in "edit" mode (as opposed to "view" mode)', ->
     ok @dataRow.refs.editContainer
 
-  test 'does not accept non-numeric input', ->
+  test 'on change, accepts arbitrary input and saves to state', ->
     changeMinScore = @spy(@props, 'onRowMinScoreChange')
     DataRowElement = React.createElement(DataRow, @props)
     @dataRow = ReactDOM.render(DataRowElement, $('<table>').appendTo('#fixtures')[0])
-    Simulate.change(@dataRow.refs.minScoreInput, {target: {value: 'A'}})
-    deepEqual @dataRow.renderMinScore(), '92.346'
-    Simulate.change(@dataRow.refs.minScoreInput, {target: {value: '*&@%!'}})
-    deepEqual @dataRow.renderMinScore(), '92.346'
-    Simulate.change(@dataRow.refs.minScoreInput, {target: {value: '3B'}})
-    deepEqual @dataRow.renderMinScore(), '92.346'
+    Simulate.change(@dataRow.minScoreInput, {target: {value: 'A'}})
+    deepEqual @dataRow.renderMinScore(), 'A'
+    Simulate.change(@dataRow.minScoreInput, {target: {value: '*&@%!'}})
+    deepEqual @dataRow.renderMinScore(), '*&@%!'
+    Simulate.change(@dataRow.minScoreInput, {target: {value: '3B'}})
+    deepEqual @dataRow.renderMinScore(), '3B'
     ok changeMinScore.notCalled
     changeMinScore.restore()
 
-  test 'does not call onRowMinScoreChange if the input is less than 0', ->
+  test 'on blur, does not call onRowMinScoreChange if the input parsed value is less than 0', ->
     changeMinScore = @spy(@props, 'onRowMinScoreChange')
     DataRowElement = React.createElement(DataRow, @props)
     @dataRow = ReactDOM.render(DataRowElement, $('<table>').appendTo('#fixtures')[0])
-    Simulate.change(@dataRow.refs.minScoreInput, {target: {value: '-1'}})
+    Simulate.change(@dataRow.minScoreInput, {target: {value: '-1'}})
+    Simulate.blur(@dataRow.minScoreInput)
     ok changeMinScore.notCalled
     changeMinScore.restore()
 
-  test 'does not call onRowMinScoreChange if the input is greater than 100', ->
+  test 'on blur, does not call onRowMinScoreChange if the input parsed value is greater than 100', ->
     changeMinScore = @spy(@props, 'onRowMinScoreChange')
     DataRowElement = React.createElement(DataRow, @props)
     @dataRow = ReactDOM.render(DataRowElement, $('<table>').appendTo('#fixtures')[0])
-    Simulate.change(@dataRow.refs.minScoreInput, {target: {value: '101'}})
+    Simulate.change(@dataRow.minScoreInput, {target: {value: '101'}})
+    Simulate.blur(@dataRow.minScoreInput)
     ok changeMinScore.notCalled
     changeMinScore.restore()
 
-  test 'calls onRowMinScoreChange when input is a number between 0 and 100 (with or without a trailing period), or blank', ->
+  test 'on blur, calls onRowMinScoreChange when input parsed value is between 0 and 100', ->
     changeMinScore = @spy(@props, 'onRowMinScoreChange')
     DataRowElement = React.createElement(DataRow, @props)
     @dataRow = ReactDOM.render(DataRowElement, $('<table>').appendTo('#fixtures')[0])
-    Simulate.change(@dataRow.refs.minScoreInput, {target: {value: '88.'}})
-    Simulate.change(@dataRow.refs.minScoreInput, {target: {value: ''}})
-    Simulate.change(@dataRow.refs.minScoreInput, {target: {value: '100'}})
-    Simulate.change(@dataRow.refs.minScoreInput, {target: {value: '0'}})
-    Simulate.change(@dataRow.refs.minScoreInput, {target: {value: 'A'}})
-    Simulate.change(@dataRow.refs.minScoreInput, {target: {value: '%*@#($'}})
-    deepEqual changeMinScore.callCount, 4
+    Simulate.change(@dataRow.minScoreInput, {target: {value: '88.'}})
+    Simulate.blur(@dataRow.minScoreInput)
+    Simulate.change(@dataRow.minScoreInput, {target: {value: ''}})
+    Simulate.blur(@dataRow.minScoreInput)
+    Simulate.change(@dataRow.minScoreInput, {target: {value: '100'}})
+    Simulate.blur(@dataRow.minScoreInput)
+    Simulate.change(@dataRow.minScoreInput, {target: {value: '0'}})
+    Simulate.blur(@dataRow.minScoreInput)
+    Simulate.change(@dataRow.minScoreInput, {target: {value: 'A'}})
+    Simulate.blur(@dataRow.minScoreInput)
+    Simulate.change(@dataRow.minScoreInput, {target: {value: '%*@#($'}})
+    Simulate.blur(@dataRow.minScoreInput)
+    deepEqual changeMinScore.callCount, 3
+    changeMinScore.restore()
+
+  test 'on blur, does not call onRowMinScoreChange when input has not changed', ->
+    changeMinScore = @spy(@props, 'onRowMinScoreChange')
+    DataRowElement = React.createElement(DataRow, @props)
+    @dataRow = ReactDOM.render(DataRowElement, $('<table>').appendTo('#fixtures')[0])
+    Simulate.blur(@dataRow.minScoreInput)
+    ok changeMinScore.notCalled
     changeMinScore.restore()
 
   test 'calls onRowNameChange when input changes', ->
@@ -116,7 +149,7 @@ define [
     Simulate.click(@dataRow.refs.deleteButton.getDOMNode())
     ok deleteRow.calledOnce
 
-  module 'DataRow with a sibling',
+  QUnit.module 'DataRow with a sibling',
     setup: ->
       props =
         key: 1

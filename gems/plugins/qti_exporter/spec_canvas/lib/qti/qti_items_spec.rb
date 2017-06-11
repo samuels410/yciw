@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/../../qti_helper')
 if Qti.migration_executable
 describe "Converting QTI items" do
@@ -43,6 +60,13 @@ describe "Converting QTI items" do
     expect(hash[:answers].select{|a| a[:weight] == 100}.map{|a| a[:text]}).to match_array(["pen", "apple"])
     expect(hash[:question_text]).to include("I have a [RESPONSE]")
     expect(hash[:question_text]).to include("I have an [RESPONSE_1]")
+  end
+
+  it "should get feedback with accents correctly even when people write gross xml" do
+    file_path = File.join(BASE_FIXTURE_DIR, 'qti')
+    manifest_node=get_manifest_node('weird_html')
+    hash = Qti::ChoiceInteraction.create_instructure_question(:manifest_node=>manifest_node, :base_dir=>file_path)
+    expect(hash[:neutral_comments]).to eq "viva la molé"
   end
 end
 end

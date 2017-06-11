@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2014 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -30,7 +30,7 @@ module Canvas::Plugins::Validators::YoValidator
         begin
           Hey.api_token = settings[:api_token]
           Hey::Subscriber.count
-          settings.slice(:api_token)
+          settings.permit(:api_token).to_h.with_indifferent_access
         rescue => e
           plugin_setting.errors.add(:base, e.message)
           false

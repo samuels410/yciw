@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 module CustomSeleniumActions
 
   def skip_if_ie(additional_error_text)
@@ -10,14 +27,6 @@ module CustomSeleniumActions
 
   def skip_if_chrome(additional_error_text)
     skip("skipping test, fails in Chrome: #{additional_error_text}") if driver.browser == :chrome
-  end
-
-  def find(css)
-    driver.find(css)
-  end
-
-  def find_all(css)
-    driver.find_all(css)
   end
 
   def find_radio_button_by_value(value, scope = nil)
@@ -39,6 +48,7 @@ module CustomSeleniumActions
       (scope || driver).find_element :css, selector
     end
   end
+  alias find f
 
   # short for find with link
   def fln(link_text, scope = nil)
@@ -64,7 +74,7 @@ module CustomSeleniumActions
     stale_element_protection do
       wait_for(method: :fj) do
         find_with_jquery selector, scope
-      end or raise Selenium::WebDriver::Error::NoSuchElementError, "Unable to locate element: #{selector.inspect}", CallStackUtils.useful_backtrace
+      end or raise Selenium::WebDriver::Error::NoSuchElementError, "Unable to locate element: #{selector.inspect}"
     end
   end
 
@@ -74,11 +84,10 @@ module CustomSeleniumActions
   # the page, and will eventually raise if none are found
   def ff(selector, scope = nil)
     reloadable_collection do
-      result = (scope || driver).find_elements(:css, selector)
-      result.present? or raise Selenium::WebDriver::Error::NoSuchElementError, "Unable to locate element: #{selector.inspect}", CallStackUtils.useful_backtrace
-      result
+      (scope || driver).find_elements(:css, selector)
     end
   end
+  alias find_all ff
 
   # same as `fj`, but returns all matching elements
   #
@@ -90,7 +99,7 @@ module CustomSeleniumActions
       wait_for(method: :ffj) do
         result = find_all_with_jquery(selector, scope)
         result.present?
-      end or raise Selenium::WebDriver::Error::NoSuchElementError, "Unable to locate element: #{selector.inspect}", CallStackUtils.useful_backtrace
+      end or raise Selenium::WebDriver::Error::NoSuchElementError, "Unable to locate element: #{selector.inspect}"
       result
     end
   end
@@ -107,16 +116,6 @@ module CustomSeleniumActions
   # and the value ex. "Red"
   def fba(selector, attrib, value)
     f("#{selector} [#{attrib}='#{value}']")
-  end
-
-  def exec_cs(script, *args)
-    driver.execute_script(CoffeeScript.compile(script), *args)
-  end
-
-  # a varable named `callback` is injected into your function for you, just call it to signal you are done.
-  def exec_async_cs(script, *args)
-    to_compile = "var callback = arguments[arguments.length - 1]; #{CoffeeScript.compile(script)}"
-    driver.execute_async_script(script, *args)
   end
 
   def in_frame(id)
@@ -222,7 +221,6 @@ module CustomSeleniumActions
       assert_can_switch_views!
       switch_editor_views(tiny_controlling_element)
       tiny_controlling_element.clear
-      expect(tiny_controlling_element[:value]).to be_empty
       switch_editor_views(tiny_controlling_element)
     end
   end
@@ -237,23 +235,16 @@ module CustomSeleniumActions
 
     clear_tiny(tiny_controlling_element, iframe_id) if clear
 
-    if text.length > 1000
+    if text.length > 100 || text.lines.size > 1
       switch_editor_views(tiny_controlling_element)
-      driver.execute_script("return $(#{selector}).val('#{text}')")
+      html = "<p>" + ERB::Util.html_escape(text).gsub("\n", "</p><p>") + "</p>"
+      driver.execute_script("return $(#{selector}).val(#{html.inspect})")
       switch_editor_views(tiny_controlling_element)
     else
-      text_lines = text.split("\n")
       in_frame iframe_id do
         tinymce_element = f("body")
         tinymce_element.click
-        if text_lines.size > 1
-          text_lines.each_with_index do |line, index|
-            tinymce_element.send_keys(line)
-            tinymce_element.send_keys(:return) unless index >= text_lines.size - 1
-          end
-        else
-          tinymce_element.send_keys(text)
-        end
+        tinymce_element.send_keys(text)
       end
     end
   end
@@ -372,7 +363,6 @@ module CustomSeleniumActions
   def drag_with_js(selector, x, y)
     load_simulate_js
     driver.execute_script "$('#{selector}').simulate('drag', { dx: #{x}, dy: #{y} })"
-    wait_for_js
   end
 
   ##

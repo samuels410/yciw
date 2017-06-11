@@ -1,3 +1,21 @@
+/*
+ * Copyright (C) 2011 - present Instructure, Inc.
+ *
+ * This file is part of Canvas.
+ *
+ * Canvas is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, version 3 of the License.
+ *
+ * Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 define([
   'i18n!account_settings',
   'jquery', // $
@@ -35,14 +53,13 @@ define([
   }
 
   $(document).ready(function() {
-    checkFutureListingSetting = function() {
-
+    function checkFutureListingSetting () {
       if ($('#account_settings_restrict_student_future_view_value').is(':checked')) {
         $('.future_listing').show();
       } else {
         $('.future_listing').hide();
       }
-    };
+    }
     checkFutureListingSetting();
     $('#account_settings_restrict_student_future_view_value').change(checkFutureListingSetting);
 
@@ -173,10 +190,11 @@ define([
       '#account_settings_sis_syncing_value, ' +
       '#account_settings_sis_default_grade_export_value').change(function () {
         var $myFieldset = $('#'+ $(this).attr('id') + '_settings');
-        var iAmChecked = $(this).attr('checked');
+        var iAmChecked = $(this).prop('checked');
       $myFieldset.showIf(iAmChecked);
       if (!iAmChecked) {
-        $myFieldset.find("input,textarea").val("");
+        $myFieldset.find(":text").val("");
+        $myFieldset.find(":checkbox").prop("checked", false);
       }
     }).change();
 

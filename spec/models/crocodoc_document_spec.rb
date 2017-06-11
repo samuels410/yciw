@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -135,14 +135,14 @@ describe 'CrocodocDocument' do
     end
 
     context "#upload" do
-      it "raises exception on timeout cutofff" do
+      it "raises exception on timeout cutoff" do
         Canvas.stubs(:timeout_protection).raises Canvas::TimeoutCutoff.new(5)
         @crocodoc.update_attribute(:uuid, nil)
 
         expect { @crocodoc.upload }.to raise_exception(Canvas::Crocodoc::CutoffError)
       end
 
-      it "raises exception on timeout cutofff" do
+      it "raises exception on timeout" do
         Canvas.stubs(:timeout_protection).raises Timeout::Error
         @crocodoc.update_attribute(:uuid, nil)
 

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -17,7 +17,7 @@
 #
 
 class RubricAssociationsController < ApplicationController
-  before_filter :require_context
+  before_action :require_context
   def create
     update
   end
@@ -44,7 +44,7 @@ class RubricAssociationsController < ApplicationController
       @association = RubricAssociation.generate(@current_user, @rubric, @context, association_params)
       json_res = {
         :rubric => @rubric.as_json(:methods => :criteria, :include_root => false, :permissions => {:user => @current_user, :session => session}),
-        :rubric_association => @association.as_json(:include_root => false, :include => [:rubric_assessments, :assessment_requests], :methods => :assessor_name, :permissions => {:user => @current_user, :session => session})
+        :rubric_association => @association.as_json(:include_root => false, :include => [:rubric_assessments, :assessment_requests], :permissions => {:user => @current_user, :session => session})
       }
       render :json => json_res
     end

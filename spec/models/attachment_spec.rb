@@ -1,6 +1,6 @@
 # coding: utf-8
 #
-# Copyright (C) 2011 - 2014 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -303,21 +303,12 @@ describe Attachment do
       end
 
       it "should delay upload until the #save transaction is committed" do
+        allow(Rails.env).to receive(:test?).and_return(false)
         @attachment.uploaded_data = default_uploaded_data
-        Attachment.connection.expects(:after_transaction_commit).twice
-        @attachment.expects(:touch_context_if_appropriate).never
-        @attachment.expects(:ensure_media_object).never
+        expect(Attachment.connection).to receive(:after_transaction_commit).twice
+        expect(@attachment).to receive(:touch_context_if_appropriate).never
+        expect(@attachment).to receive(:ensure_media_object).never
         @attachment.save
-      end
-
-      it "should upload immediately when in a non-joinable transaction" do
-        Attachment.connection.transaction(:joinable => false) do
-          @attachment.uploaded_data = default_uploaded_data
-          Attachment.connection.expects(:after_transaction_commit).once
-          @attachment.expects(:touch_context_if_appropriate)
-          @attachment.expects(:ensure_media_object)
-          @attachment.save
-        end
       end
     end
   end
@@ -435,6 +426,13 @@ describe Attachment do
       a.destroy
       expect(a).to be_deleted
     end
+
+    it "should replace uploaded data on destroy_content_and_replace" do
+      a = attachment_model(uploaded_data: default_uploaded_data)
+      expect(a.content_type).to eq 'application/msword'
+      a.destroy_content_and_replace
+      expect(a.content_type).to eq 'unknown/unknown'
+    end
   end
 
   context "restore" do
@@ -517,7 +515,19 @@ describe Attachment do
       new_a = a.clone_for(@course)
       expect(new_a.context).not_to eql(a.context)
       expect(new_a.filename).to eql(a.filename)
+      expect(new_a.read_attribute(:filename)).to be_nil
       expect(new_a.root_attachment_id).to eql(a.id)
+    end
+
+    it "should clone to another root_account" do
+      c = course_factory
+      a = attachment_model(filename: "blech.ppt", context: c)
+      new_account = Account.create
+      c2 = course_factory(account: new_account)
+      Attachment.stubs(:s3_storage?).returns(true)
+      Attachment.any_instance.expects(:make_rootless).once
+      Attachment.any_instance.expects(:change_namespace).once
+      a.clone_for(c2)
     end
 
     it "should link the thumbnail" do
@@ -564,25 +574,24 @@ describe Attachment do
       expect(new_b.root_attachment_id).to be_nil
     end
 
-    it "should maintain namespace across clones" do
-      a = attachment_model(uploaded_data: stub_png_data, content_type: 'image/png')
+    it "should set correct namespace across clones" do
+      s3_storage!
+      a = attachment_model
       expect(a.root_attachment_id).to be_nil
       coursea = @course
-      @context = courseb = course_factory
-
-      # emulate the situation where a namespace doesn't match what
-      # infer_namespace now returns
-      a.update_attribute(:namespace, "test_ns")
+      @context = courseb = course_factory(account: Account.create)
 
       b = a.clone_for(courseb, nil, overwrite: true)
+      expect(b.id).not_to be_nil
+      expect(b.filename).to eq a.filename
       b.save
-      expect(b.root_attachment).to eq a
-      expect(b.namespace).to eq "test_ns"
+      expect(b.root_attachment_id).to eq nil
+      expect(b.namespace).to eq courseb.root_account.file_namespace
 
       new_a = b.clone_for(coursea, nil, overwrite: true)
       new_a.save
       expect(new_a).to eq a
-      expect(new_a.namespace).to eq "test_ns"
+      expect(new_a.namespace).to eq coursea.root_account.file_namespace
     end
   end
 
@@ -1009,19 +1018,19 @@ describe Attachment do
     before :each do
       s3_storage!
       Attachment.domain_namespace = @old_account.file_namespace
-      @root = attachment_model
+      @root = attachment_model(filename: 'unknown 2.loser')
       @child = attachment_model(:root_attachment => @root)
 
-      @old_object = mock('old object')
-      @new_object = mock('new object')
+      @old_object = double('old object')
+      @new_object = double('new object')
       new_full_filename = @root.full_filename.sub(@root.namespace, @new_account.file_namespace)
-      @root.bucket.stubs(:object).with(@root.full_filename).returns(@old_object)
-      @root.bucket.stubs(:object).with(new_full_filename).returns(@new_object)
+      allow(@root.bucket).to receive(:object).with(@root.full_filename).and_return(@old_object)
+      allow(@root.bucket).to receive(:object).with(new_full_filename).and_return(@new_object)
     end
 
     it "should fail for non-root attachments" do
       @old_object.expects(:copy_to).never
-      expect { @child.change_namespace(@new_account.file_namespace) }.to raise_error
+      expect { @child.change_namespace(@new_account.file_namespace) }.to raise_error('change_namespace must be called on a root attachment')
       expect(@root.reload.namespace).to eq @old_account.file_namespace
       expect(@child.reload.namespace).to eq @root.reload.namespace
     end
@@ -1036,17 +1045,17 @@ describe Attachment do
 
     it "should rename root attachments and update children" do
       expect(@new_object).to receive(:exists?).and_return(false)
-      expect(@old_object).to receive(:copy_to).with(@root.full_filename.sub(@old_account.id.to_s, @new_account.id.to_s), anything)
+      expect(@old_object).to receive(:copy_to).with(@new_object, anything)
       @root.change_namespace(@new_account.file_namespace)
       expect(@root.namespace).to eq @new_account.file_namespace
       expect(@child.reload.namespace).to eq @root.namespace
     end
 
-    it 'should allow making a root_attachment childess' do
+    it 'should allow making a root_attachment childless' do
       @child.update_attribute(:filename, 'invalid')
-      @root.s3object.stubs(:exists?).returns(true)
-      @child.stubs(:s3object).returns(@old_object)
-      @child.s3object.stubs(:exists?).returns(true)
+      expect(@root.s3object).to receive(:exists?).and_return(true)
+      expect(@child).to receive(:s3object).and_return(@old_object)
+      expect(@old_object).to receive(:exists?).and_return(true)
       @root.make_childless(@child)
       expect(@root.reload.children).to eq []
       expect(@child.reload.root_attachment_id).to eq nil
@@ -1109,7 +1118,7 @@ describe Attachment do
       thumb = @attachment.thumbnails.where(thumbnail: "640x>").first
       expect(thumb).to eq nil
 
-      expect(@attachment).to receive(:create_or_update_thumbnail).with(anything, sz, sz) { 
+      expect(@attachment).to receive(:create_or_update_thumbnail).with(anything, sz, sz) {
         @attachment.thumbnails.create!(:thumbnail => "640x>", :uploaded_data => stub_png_data)
       }
       url = @attachment.thumbnail_url(:size => "640x>")
@@ -1528,6 +1537,16 @@ describe Attachment do
       expect(a.open.read).to eq "this is a jpeg"
     end
 
+    it "should not overwrite the content_type if already present" do
+      url = "http://example.com/test.png"
+      a = attachment_model(:content_type => 'image/jpeg')
+      CanvasHttp.expects(:get).with(url).yields(FakeHttpResponse.new('200', 'this is a jpeg', 'content-type' => 'application/octet-stream'))
+      Attachment.clone_url_as_attachment(url, :attachment => a)
+      a.save!
+      expect(a.open.read).to eq "this is a jpeg"
+      expect(a.content_type).to eq 'image/jpeg'
+    end
+
     it "should detect the content_type from the body" do
       url = "http://example.com/test.png"
       CanvasHttp.expects(:get).with(url).yields(FakeHttpResponse.new('200', 'this is a jpeg', 'content-type' => 'image/jpeg'))
@@ -1570,7 +1589,7 @@ describe Attachment do
       expect(@attachment.grants_right?(@student, :download)).to eq false # prime cache
       Timecop.freeze(@attachment.unlock_at + 1.second) do
         run_jobs
-        expect(Attachment.find(@attachment).grants_right?(@student, :download)).to eq true
+        expect(Attachment.find(@attachment.id).grants_right?(@student, :download)).to eq true
       end
     end
   end

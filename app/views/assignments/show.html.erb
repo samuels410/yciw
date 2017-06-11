@@ -1,4 +1,22 @@
 <%
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+%>
+
+<%
   content_for :page_title, @assignment.new_record? ? t(:new_assignment, "New Assignment") : @assignment.title
   content_for :right_side, render(:partial => "assignment_sidebar")
 %>
@@ -35,7 +53,7 @@
           data-id='<%= @assignment.id %>'
           class='btn <%= "published" if @assignment.published? %> <%= "disabled" unless assignment_publishing_enabled?(@assignment, @current_user) %>'>
         </button>
-        <% if can_do(@assignment, @current_user, :update) && !editing_restricted?(@assignment) %>
+        <% if can_do(@assignment, @current_user, :update) %>
           <a href="<%= edit_polymorphic_path([@context, @assignment]) %>" class='btn edit_assignment_link'>
             <i class='icon-edit'></i> <%= t('links.edit', 'Edit') %>
           </a>
@@ -98,7 +116,7 @@
       </li>
       <li>
         <span class='title'><%= t :points, 'Points' %></span>
-        <span class='value'><%= round_if_whole(@assignment.points_possible) || t(:no_points, 'None') %></span>
+        <span class='value'><%= n(round_if_whole(@assignment.points_possible)) || t(:no_points, 'None') %></span>
       </li>
       <% if @assignment.expects_submission? || @assignment.expects_external_submission? %>
         <% turnitin_text = turnitin_active? ? ' ' + t(:turnitin_enabled_short, '(Turnitin enabled)') : '' %>
@@ -138,7 +156,7 @@
         <div class="control-group">
           <div class="control-label"><%= t(:points, 'Points') %></div>
           <div class="controls">
-            <span class="value points_possible"><%= round_if_whole(@assignment.points_possible) || t(:no_points, 'None') %></span>
+            <span class="value points_possible"><%= n(round_if_whole(@assignment.points_possible)) || t(:no_points, 'None') %></span>
           </div>
         </div>
         <div class="control-group">

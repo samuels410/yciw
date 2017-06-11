@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2013 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -60,7 +60,7 @@ module Api::V1::QuizGroup
   end
 
   def update_api_quiz_group(quiz_group, quiz_group_params)
-    return nil unless quiz_group.is_a?(Quizzes::QuizGroup) && quiz_group_params.is_a?(Hash)
+    return nil unless quiz_group.is_a?(Quizzes::QuizGroup) && quiz_group_params.is_a?(ActionController::Parameters)
 
     quiz_group.attributes = filter_params(quiz_group_params)
     quiz_group.save

@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 class EnsureSubmissionsForDiscussions < ActiveRecord::Migration[4.2]
   tag :predeploy
 
@@ -6,7 +23,7 @@ class EnsureSubmissionsForDiscussions < ActiveRecord::Migration[4.2]
     # the topic's assignment's course and there's no current submission for the
     # poster and that assignment, but only one entry per (topic, user) pair
     entries = DiscussionTopic.select(["discussion_entries.discussion_topic_id", "discussion_entries.user_id"]).
-        uniq.
+        distinct.
         joins("
       INNER JOIN #{Assignment.quoted_table_name} ON
         assignments.id=discussion_topics.assignment_id AND

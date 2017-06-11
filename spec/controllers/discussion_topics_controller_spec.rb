@@ -1,5 +1,5 @@
-
-# Copyright (C) 2012 Instructure, Inc.
+#
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -28,7 +28,7 @@ describe DiscussionTopicsController do
   end
 
   def course_topic(opts={})
-    @topic = @course.discussion_topics.build(:title => "some topic", :pinned => opts[:pinned])
+    @topic = @course.discussion_topics.build(:title => "some topic", :pinned => opts.fetch(:pinned, false))
     user = opts[:user] || @user
     if user && !opts[:skip_set_user]
       @topic.user = user
@@ -567,6 +567,48 @@ describe DiscussionTopicsController do
       get 'new', course_id: @course.id, due_at: due_at.iso8601
       expect(assigns[:js_env][:DISCUSSION_TOPIC][:ATTRIBUTES][:assignment][:due_at]).to eq due_at.iso8601
     end
+
+    it "js_env DUE_DATE_REQUIRED_FOR_ACCOUNT is true when AssignmentUtil.due_date_required_for_account? == true" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:due_date_required_for_account?).returns(true)
+      get 'new', :course_id => @course.id
+      expect(assigns[:js_env][:DUE_DATE_REQUIRED_FOR_ACCOUNT]).to eq(true)
+    end
+
+    it "js_env DUE_DATE_REQUIRED_FOR_ACCOUNT is false when AssignmentUtil.due_date_required_for_account? == false" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:due_date_required_for_account?).returns(false)
+      get 'new', :course_id => @course.id
+      expect(assigns[:js_env][:DUE_DATE_REQUIRED_FOR_ACCOUNT]).to eq(false)
+    end
+
+    it "js_env MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT is true when AssignmentUtil.name_length_required_for_account? == true" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:name_length_required_for_account?).returns(true)
+      get 'new', :course_id => @course.id
+      expect(assigns[:js_env][:MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT]).to eq(true)
+    end
+
+    it "js_env MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT is false when AssignmentUtil.name_length_required_for_account? == false" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:name_length_required_for_account?).returns(false)
+      get 'new', :course_id => @course.id
+      expect(assigns[:js_env][:MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT]).to eq(false)
+    end
+
+    it "js_env MAX_NAME_LENGTH is a 15 when AssignmentUtil.assignment_max_name_length returns 15" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:assignment_max_name_length).returns(15)
+      get 'new', :course_id => @course.id
+      expect(assigns[:js_env][:MAX_NAME_LENGTH]).to eq(15)
+    end
+
+    it "js_env SIS_NAME is Foo Bar when AssignmentUtil.post_to_sis_friendly_name is Foo Bar" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:post_to_sis_friendly_name).returns('Foo Bar')
+      get 'new', :course_id => @course.id
+      expect(assigns[:js_env][:SIS_NAME]).to eq('Foo Bar')
+    end
   end
 
   describe "GET 'edit'" do
@@ -574,20 +616,63 @@ describe DiscussionTopicsController do
       course_topic
     end
 
-    include_context "multiple grading periods within controller" do
+    include_context "grading periods within controller" do
       let(:course) { @course }
       let(:teacher) { @teacher }
       let(:request_params) { [:edit, course_id: course, id: @topic] }
     end
 
     it "should not explode with mgp and group context" do
-      @course.root_account.enable_feature!(:multiple_grading_periods)
+      group1 = Factories::GradingPeriodGroupHelper.new.create_for_account(@course.root_account)
+      group1.enrollment_terms << @course.enrollment_term
       user_session(@teacher)
       group = group_model(:context => @course)
       group_topic = group.discussion_topics.create!(:title => "title")
       get(:edit, group_id: group, id: group_topic)
       expect(response).to be_success
       expect(assigns[:js_env]).to have_key(:active_grading_periods)
+    end
+
+    it "js_env DUE_DATE_REQUIRED_FOR_ACCOUNT is true when AssignmentUtil.due_date_required_for_account? == true" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:due_date_required_for_account?).returns(true)
+      get :edit, course_id: @course.id, id: @topic.id
+      expect(assigns[:js_env][:DUE_DATE_REQUIRED_FOR_ACCOUNT]).to eq(true)
+    end
+
+    it "js_env DUE_DATE_REQUIRED_FOR_ACCOUNT is false when AssignmentUtil.due_date_required_for_account? == false" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:due_date_required_for_account?).returns(false)
+      get :edit, course_id: @course.id, id: @topic.id
+      expect(assigns[:js_env][:DUE_DATE_REQUIRED_FOR_ACCOUNT]).to eq(false)
+    end
+
+    it "js_env MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT is true when AssignmentUtil.name_length_required_for_account? == true" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:name_length_required_for_account?).returns(true)
+      get :edit, course_id: @course.id, id: @topic.id
+      expect(assigns[:js_env][:MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT]).to eq(true)
+    end
+
+    it "js_env MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT is false when AssignmentUtil.name_length_required_for_account? == false" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:name_length_required_for_account?).returns(false)
+      get :edit, course_id: @course.id, id: @topic.id
+      expect(assigns[:js_env][:MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT]).to eq(false)
+    end
+
+    it "js_env MAX_NAME_LENGTH is a 15 when AssignmentUtil.assignment_max_name_length returns 15" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:assignment_max_name_length).returns(15)
+      get :edit, course_id: @course.id, id: @topic.id
+      expect(assigns[:js_env][:MAX_NAME_LENGTH]).to eq(15)
+    end
+
+    it "js_env SIS_NAME is Foo Bar when AssignmentUtil.post_to_sis_friendly_name is Foo Bar" do
+      user_session(@teacher)
+      AssignmentUtil.stubs(:post_to_sis_friendly_name).returns('Foo Bar')
+      get :edit, :course_id => @course.id, :id => @topic.id
+      expect(assigns[:js_env][:SIS_NAME]).to eq('Foo Bar')
     end
 
     context 'conditional-release' do

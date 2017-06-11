@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016 Instructure, Inc.
+# Copyright (C) 2016 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -26,7 +26,6 @@ shared_context "discussions_page_shared_context" do
   let(:permissions_page) { "/account/#{@account.id}/permissions" }
   let(:discussion_link) { '.discussions' }
   let(:discussion_message) { '.message.user_content.enhanced:contains("Discussion 1 message")' }
-  let(:discussion_reply_button) { '.discussion-reply-action .icon-replied' }
   let(:discussion_edit_button) { '.btn.edit-btn' }
   let(:course_navigation_items) { '#section-tabs' }
   let(:discussions_link) { 'Discussions' }

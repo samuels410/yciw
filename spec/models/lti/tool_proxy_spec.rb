@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2014 Instructure, Inc.
+# Copyright (C) 2014 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -165,6 +165,14 @@ module Lti
           expect(proxies.first).to eq tool_proxy
         end
 
+        describe "#active_in_context?" do
+          it 'returns false if the tool proxy is not active in the context' do
+            c = Course.create!(account: sub_account_2_1)
+            tool_proxy = create_tool_proxy(context: c)
+            expect(tool_proxy.active_in_context?(c)).not_to be_truthy
+          end
+        end
+
         describe "#find_active_proxies_for_context" do
           it "doesn't return tool_proxies that are disabled" do
             tool_proxy = create_tool_proxy(context: sub_account_2_1, workflow_state: 'disabled')
@@ -264,6 +272,14 @@ module Lti
 
       end
 
+    end
+
+    describe "#enabled_capabilities" do
+      it 'returns the enabled capabilities' do
+        capabilities = ['a_capability']
+        subject.raw_data = {'enabled_capability' => capabilities}
+        expect(subject.enabled_capabilities).to eq capabilities
+      end
     end
 
   end

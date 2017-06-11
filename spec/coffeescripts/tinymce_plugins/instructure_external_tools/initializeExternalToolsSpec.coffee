@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'tinymce_plugins/instructure_external_tools/initializeExternalTools',
   'jquery',
@@ -19,7 +36,7 @@ define [
     }
     @INST = INST
 
-  module "initializeExternalTools: with 2 max maxVisibleEditorButtons",
+  QUnit.module "initializeExternalTools: with 2 max maxVisibleEditorButtons",
     setup: ->
       setUp.call(@, 2)
     teardown: ->
@@ -31,7 +48,7 @@ define [
     ok @buttonSpy.calledWith "instructure_external_button_button_id"
     ok @commandSpy.calledWith "instructureExternalButtonbutton_id"
 
-  module "initializeExternalTools: with 0 max maxVisibleEditorButtons",
+  QUnit.module "initializeExternalTools: with 0 max maxVisibleEditorButtons",
     setup: ->
       setUp.call(@, 0)
     teardown: ->
@@ -42,7 +59,7 @@ define [
     ok @buttonSpy.calledWith("instructure_external_button_clump")
     ok @commandSpy.notCalled
 
-  module "buttonSelected",
+  QUnit.module "buttonSelected",
     setup: ->
       fixtures = document.getElementById('fixtures')
       fixtures.innerHTML = '<a href="http://example.com" id="context_external_tool_resource_selection_url"></a>'

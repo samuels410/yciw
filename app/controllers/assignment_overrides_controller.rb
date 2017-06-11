@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2014 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -84,13 +84,13 @@
 #     }
 #
 class AssignmentOverridesController < ApplicationController
-  before_filter :require_group, :only => :group_alias
-  before_filter :require_section, :only => :section_alias
-  before_filter :require_course
-  before_filter :require_assignment, :except => [:batch_retrieve, :batch_update, :batch_create]
-  before_filter :require_assignment_edit, :only => [:create, :update, :destroy]
-  before_filter :require_all_assignments_edit, :only => [:batch_update, :batch_create]
-  before_filter :require_override, :only => [:show, :update, :destroy]
+  before_action :require_group, :only => :group_alias
+  before_action :require_section, :only => :section_alias
+  before_action :require_course
+  before_action :require_assignment, :except => [:batch_retrieve, :batch_update, :batch_create]
+  before_action :require_assignment_edit, :only => [:create, :update, :destroy]
+  before_action :require_all_assignments_edit, :only => [:batch_update, :batch_create]
+  before_action :require_override, :only => [:show, :update, :destroy]
 
   include Api::V1::AssignmentOverride
 
@@ -322,7 +322,7 @@ class AssignmentOverridesController < ApplicationController
       return bad_request(errors: [ 'no assignment_overrides values present' ])
     elsif !override_params.is_a? Array
       return bad_request(errors: [ 'must specify an array with entry format { id, assignment_id }' ])
-    elsif !override_params.all? { |o| o.is_a?(Hash) && o.key?('assignment_id') && o.key?('id') }
+    elsif !override_params.all? { |o| o.is_a?(ActionController::Parameters) && o.key?('assignment_id') && o.key?('id') }
       return bad_request(errors: [ 'must specify an array with entry format { id, assignment_id }' ])
     end
 

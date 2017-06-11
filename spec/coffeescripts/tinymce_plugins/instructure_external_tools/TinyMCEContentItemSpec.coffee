@@ -1,9 +1,26 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'tinymce_plugins/instructure_external_tools/TinyMCEContentItem',
-  'spec/javascripts/compiled/tinymce_plugins/instructure_external_tools/ContentItems'
+  './ContentItems.coffee'
 ], (TinyMCEContentItem, contentItems)->
 
-  module "TinyMCEContentItem LTI Link",
+  QUnit.module "TinyMCEContentItem LTI Link",
     setup: ->
     teardown: ->
 
@@ -57,7 +74,7 @@ define [
     equal(contentItem.codePayload, '<a href="/courses/1/external_tools/retrieve?url=http%3A%2F%2Flti-tool-provider-example.dev%2Fmessages%2Fblti" title="Its like sexy for your computer" target="_blank">Arch Linux plain window</a>')
 
 
-  module "TinyMCEContentItem File Item",
+  QUnit.module "TinyMCEContentItem File Item",
     setup: ->
     teardown: ->
 

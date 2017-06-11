@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2016 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -28,12 +28,12 @@ class Quizzes::QuizzesController < ApplicationController
   # locked down.
   attr_reader :lock_results_if_needed
 
-  before_filter :require_context
-  before_filter :rich_content_service_config, only: [:show, :new, :edit]
+  before_action :require_context
+  before_action :rich_content_service_config, only: [:show, :new, :edit]
 
   add_crumb(proc { t('#crumbs.quizzes', "Quizzes") }) { |c| c.send :named_context_url, c.instance_variable_get("@context"), :context_quizzes_url }
-  before_filter { |c| c.active_tab = "quizzes" }
-  before_filter :require_quiz, :only => [
+  before_action { |c| c.active_tab = "quizzes" }
+  before_action :require_quiz, :only => [
     :statistics,
     :edit,
     :show,
@@ -47,8 +47,8 @@ class Quizzes::QuizzesController < ApplicationController
     :submission_html,
     :toggle_post_to_sis
   ]
-  before_filter :set_download_submission_dialog_title , only: [:show,:statistics]
-  after_filter :lock_results, only: [ :show, :submission_html ]
+  before_action :set_download_submission_dialog_title , only: [:show,:statistics]
+  after_action :lock_results, only: [ :show, :submission_html ]
   # The number of questions that can display "details". After this number, the "Show details" option is disabled
   # and the data is not even loaded.
   QUIZ_QUESTIONS_DETAIL_LIMIT = 25
@@ -104,8 +104,13 @@ class Quizzes::QuizzesController < ApplicationController
       skip_date_overrides: true,
       skip_lock_tests: true
     }]
+    max_name_length = AssignmentUtil.assignment_max_name_length(@context)
+    sis_name = AssignmentUtil.post_to_sis_friendly_name(@context)
+    due_date_required_for_account = AssignmentUtil.due_date_required_for_account?(@context)
+    max_name_length_required_for_account = AssignmentUtil.name_length_required_for_account?(@context)
+    sis_integration_settings_enabled = AssignmentUtil.sis_integration_settings_enabled?(@context)
 
-    js_env({
+    hash = {
       :QUIZZES => {
         assignment: quizzes_json(assignment_quizzes, *serializer_options),
         open: quizzes_json(open_quizzes, *serializer_options),
@@ -124,10 +129,22 @@ class Quizzes::QuizzesController < ApplicationController
       },
       :FLAGS => {
         question_banks: feature_enabled?(:question_banks),
-        post_to_sis_enabled: Assignment.sis_grade_export_enabled?(@context)
+        post_to_sis_enabled: Assignment.sis_grade_export_enabled?(@context),
+        migrate_quiz_enabled:  @domain_root_account.feature_enabled?(:quizzes2_exporter)
       },
       :quiz_menu_tools => external_tools_display_hashes(:quiz_menu),
-    })
+      :SIS_NAME => sis_name,
+      :MAX_NAME_LENGTH => max_name_length,
+      :DUE_DATE_REQUIRED_FOR_ACCOUNT => due_date_required_for_account,
+      :MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT => max_name_length_required_for_account,
+      :SIS_INTEGRATION_SETTINGS_ENABLED => sis_integration_settings_enabled
+    }
+    if @context.is_a?(Course) && @context.grants_right?(@current_user, session, :read)
+      hash[:COURSE_ID] = @context.id.to_s
+    end
+    js_env(hash)
+
+    set_tutorial_js_env
 
     conditional_release_js_env(includes: :active_rules)
 
@@ -226,6 +243,8 @@ class Quizzes::QuizzesController < ApplicationController
       js_env(hash)
       conditional_release_js_env(@quiz.assignment, includes: [:rule])
 
+      set_master_course_js_env_data(@quiz, @context)
+
       @quiz_menu_tools = external_tools_display_hashes(:quiz_menu)
       @can_take = can_take_quiz?
       if params[:take] && @can_take
@@ -258,16 +277,25 @@ class Quizzes::QuizzesController < ApplicationController
       if authorized_action(@quiz, @current_user, :update)
         @assignment = @quiz.assignment
       end
+
+      max_name_length_required_for_account = AssignmentUtil.name_length_required_for_account?(@context)
+      max_name_length = AssignmentUtil.assignment_max_name_length(@context)
+
+      hash = {
+        :MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT => max_name_length_required_for_account,
+        :MAX_NAME_LENGTH => max_name_length,
+        :DUE_DATE_REQUIRED_FOR_ACCOUNT => AssignmentUtil.due_date_required_for_account?(@context),
+      }
+
+      js_env(hash)
       redirect_to(named_context_url(@context, :edit_context_quiz_url, @quiz))
     end
   end
 
   def edit
     if authorized_action(@quiz, @current_user, :update)
-      return render_unauthorized_action if editing_restricted?(@quiz)
       add_crumb(@quiz.title, named_context_url(@context, :context_quiz_url, @quiz))
       @assignment = @quiz.assignment
-
       @quiz.title = params[:title] if params[:title]
       @quiz.due_at = params[:due_at] if params[:due_at]
       @quiz.assignment_group_id = params[:assignment_group_id] if params[:assignment_group_id]
@@ -284,11 +312,15 @@ class Quizzes::QuizzesController < ApplicationController
       end]
       sections = @context.course_sections.active
 
+      max_name_length_required_for_account = AssignmentUtil.name_length_required_for_account?(@context)
+      max_name_length = AssignmentUtil.assignment_max_name_length(@context)
+
       hash = {
         :ASSIGNMENT_ID => @assignment.present? ? @assignment.id : nil,
         :ASSIGNMENT_OVERRIDES => assignment_overrides_json(@quiz.overrides_for(@current_user,
                                                            ensure_set_not_empty: true),
                                                            @current_user),
+        :DUE_DATE_REQUIRED_FOR_ACCOUNT => AssignmentUtil.due_date_required_for_account?(@context),
         :QUIZ => quiz_json(@quiz, @context, @current_user, session),
         :SECTION_LIST => sections.map { |section|
           {
@@ -306,10 +338,12 @@ class Quizzes::QuizzesController < ApplicationController
         :quiz_max_combination_count => QUIZ_MAX_COMBINATION_COUNT,
         :SHOW_QUIZ_ALT_TEXT_WARNING => true,
         :VALID_DATE_RANGE => CourseDateRange.new(@context),
-        :MULTIPLE_GRADING_PERIODS_ENABLED => @context.feature_enabled?(:multiple_grading_periods)
+        :HAS_GRADING_PERIODS => @context.grading_periods?,
+        :MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT => max_name_length_required_for_account,
+        :MAX_NAME_LENGTH => max_name_length
       }
 
-      if @context.feature_enabled?(:multiple_grading_periods)
+      if @context.grading_periods?
         hash[:active_grading_periods] = GradingPeriod.json_for(@context, @current_user)
       end
 
@@ -317,6 +351,7 @@ class Quizzes::QuizzesController < ApplicationController
       js_env(hash)
 
       conditional_release_js_env(@quiz.assignment)
+      set_master_course_js_env_data(@quiz, @context)
 
       render :new
     end
@@ -360,13 +395,12 @@ class Quizzes::QuizzesController < ApplicationController
         @quiz.update_attributes!(quiz_params)
         batch_update_assignment_overrides(@quiz, overrides, @current_user) unless overrides.nil?
       end
-      if Assignment.sis_grade_export_enabled?(@context) && @quiz.assignment
-        post_to_sis = nil
-        post_to_sis = params[:assignment][:post_to_sis] if params[:assignment].present?
-        post_to_sis = @context.account.sis_default_grade_export[:value] if post_to_sis.nil?
-        @quiz.assignment.post_to_sis = post_to_sis
-        @quiz.assignment.save
+
+      if params[:post_to_sis]
+        @quiz.assignment.post_to_sis = params[:post_to_sis] == '1' ? true : false
       end
+
+
       @quiz.did_edit if @quiz.created?
       @quiz.reload
       render :json => @quiz.as_json(:include => {:assignment => {:include => :assignment_group}})
@@ -423,9 +457,7 @@ class Quizzes::QuizzesController < ApplicationController
             old_assignment = @quiz.assignment.clone
             old_assignment.id = @quiz.assignment.id
 
-            if params[:assignment] && Assignment.sis_grade_export_enabled?(@context)
-              @quiz.assignment.post_to_sis = params[:assignment][:post_to_sis]
-            end
+            @quiz.assignment.post_to_sis = params[:post_to_sis] == '1' ? true : false
           end
 
           auto_publish = @quiz.published?
@@ -683,7 +715,7 @@ class Quizzes::QuizzesController < ApplicationController
     if authorized_action(@quiz, @current_user, :grade)
       @students = @context.students_visible_to(@current_user, include: :inactive)
       @students = @students.name_like(params[:search_term]) if params[:search_term].present?
-      @students = @students.uniq.order_by_sortable_name
+      @students = @students.distinct.order_by_sortable_name
       @students = @students.order(:uuid) if @quiz.survey? && @quiz.anonymous_submissions
       last_updated_at = Time.parse(params[:last_updated_at]) rescue nil
       respond_to do |format|
@@ -708,7 +740,7 @@ class Quizzes::QuizzesController < ApplicationController
       if @versions.size > 0 && !@quiz.muted?
         render :layout => false
       else
-        render :nothing => true
+        head :ok
       end
     end
   end
@@ -731,7 +763,7 @@ class Quizzes::QuizzesController < ApplicationController
       @lock_results_if_needed = true
       render layout: false
     else
-      render nothing: true
+      head :ok
     end
   end
 

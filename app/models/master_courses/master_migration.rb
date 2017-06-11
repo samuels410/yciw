@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 class MasterCourses::MasterMigration < ActiveRecord::Base
   belongs_to :master_template, :class_name => "MasterCourses::MasterTemplate"
   belongs_to :user
@@ -18,13 +35,13 @@ class MasterCourses::MasterMigration < ActiveRecord::Base
   end
 
   # create a new migration and queue it up (if we can)
-  def self.start_new_migration!(master_template, user=nil)
+  def self.start_new_migration!(master_template, user, opts = {})
     master_template.class.transaction do
       master_template.lock!
       if master_template.active_migration_running?
         raise "cannot start new migration while another one is running"
       else
-        new_migration = master_template.master_migrations.create!(:user => user)
+        new_migration = master_template.master_migrations.create!({:user => user}.merge(opts))
         master_template.active_migration = new_migration
         master_template.save!
         new_migration.queue_export_job
@@ -72,6 +89,7 @@ class MasterCourses::MasterMigration < ActiveRecord::Base
     self.save!
 
     subs = self.master_template.child_subscriptions.active.preload(:child_course).to_a
+    subs.reject!{|s| s.child_course.deleted?}
     if subs.empty?
       self.workflow_state = 'completed'
       self.export_results[:message] = "No child courses to export to"
@@ -89,25 +107,39 @@ class MasterCourses::MasterMigration < ActiveRecord::Base
     export_to_child_courses(:selective, up_to_date_subs, true) if up_to_date_subs.any?
     export_to_child_courses(:full, new_subs, !up_to_date_subs.any?) if new_subs.any?
 
-    self.workflow_state = 'imports_queued'
-    self.imports_queued_at = Time.now
-    self.save!
+    unless self.workflow_state == 'exports_failed'
+      self.workflow_state = 'imports_queued'
+      self.imports_queued_at = Time.now
+      self.save!
+    end
   rescue => e
     self.fail_export_with_error!(e)
     raise e
   end
 
   def export_to_child_courses(type, subscriptions, export_is_primary)
-    export = self.create_export(type, export_is_primary)
+    if type == :selective
+      @deletions = self.master_template.deletions_since_last_export
+      @creations = {} # will be populated during export
+      @updates = {}   # "
+      @export_count = 0
+    end
+    export = self.create_export(type, export_is_primary, :deletions => @deletions)
 
     if export.exported_for_course_copy?
+      self.export_results[type] = {:subscriptions => subscriptions.map(&:id), :content_export_id => export.id}
+      if type == :selective
+        self.export_results[type][:deleted] = @deletions
+        self.export_results[type][:created] = @creations
+        self.export_results[type][:updated] = @updates
+      end
       self.queue_imports(type, export, subscriptions)
     else
       self.fail_export_with_error!("#{type} content export #{export.id} failed")
     end
   end
 
-  def create_export(type, is_primary)
+  def create_export(type, is_primary, export_opts)
     # ideally we'll make this do more than just the usual CC::Exporter but we'll also do some stuff
     # in CC::Importer::Canvas to turn it into the big ol' "course_export.json" and we'll save that alone
     # and return it
@@ -120,15 +152,37 @@ class MasterCourses::MasterMigration < ActiveRecord::Base
     ce.user = self.user
     ce.save!
     ce.master_migration = self # don't need to reload
-    ce.export_course
-    self.master_template.ensure_attachment_tags_on_export if is_primary
+    ce.export_course(export_opts)
+    detect_updated_attachments(type) if ce.exported_for_course_copy? && is_primary
     ce
+  end
+
+  def last_export_at
+    self.master_template.last_export_started_at
   end
 
   def export_object?(obj)
     return false unless obj
-    last_export_at = self.master_template.last_export_started_at
     last_export_at.nil? || obj.updated_at >= last_export_at
+  end
+
+  def detect_updated_attachments(type)
+    # because attachments don't get "added" to the export
+    scope = self.master_template.course.attachments.not_deleted
+    scope = scope.where('updated_at>?', last_export_at) if type == :selective && last_export_at
+    scope.each do |att|
+      master_template.ensure_tag_on_export(att)
+      add_exported_asset(att)
+    end
+  end
+
+  def add_exported_asset(asset)
+    return unless last_export_at
+    @export_count += 1
+    return if @export_count > Setting.get('master_courses_history_count', '150').to_i
+    set = asset.created_at >= last_export_at ? @creations : @updates
+    set[asset.class.name] ||= []
+    set[asset.class.name] << master_template.content_tag_for(asset).migration_id
   end
 
   class MigrationPluginStub # so we can (ab)use queue_migration
@@ -138,8 +192,6 @@ class MasterCourses::MasterMigration < ActiveRecord::Base
   end
 
   def queue_imports(type, export, subscriptions)
-    self.export_results[type] = {:subscriptions => subscriptions.map(&:id), :content_export_id => export.id}
-
     imports_expire_at = self.created_at + hours_until_expire.hours # tighten the limit until the import jobs expire
 
     cms = []
@@ -175,6 +227,7 @@ class MasterCourses::MasterMigration < ActiveRecord::Base
           sub.update_attribute(:use_selective_copy, true) # mark subscription as up-to-date
         end
       end
+      res[:skipped] = import_migration.skipped_master_course_items&.to_a || []
       if self.import_results.values.all?{|r| r[:state] != 'queued'}
         # all imports are done
         if self.import_results.values.all?{|r| r[:state] == 'completed'}

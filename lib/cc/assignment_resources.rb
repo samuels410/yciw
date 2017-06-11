@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -22,6 +22,7 @@ module CC
       Assignments::ScopedToUser.new(@course, @user).scope.
         no_submittables.each do |assignment|
         next unless export_object?(assignment)
+        next if @user && assignment.locked_for?(@user, check_policies: true)
 
         title = assignment.title || I18n.t('course_exports.unknown_titles.assignment', "Unknown assignment")
 
@@ -229,7 +230,7 @@ module CC
         node.external_tool_url assignment.external_tool_tag.url
         node.external_tool_new_tab assignment.external_tool_tag.new_tab
       end
-      node.tag!(:turnitin_settings, (assignment.send(:turnitin_settings).to_json)) if assignment.turnitin_enabled
+      node.tag!(:turnitin_settings, (assignment.send(:turnitin_settings).to_json)) if assignment.turnitin_enabled || assignment.vericite_enabled
     end
 
   end

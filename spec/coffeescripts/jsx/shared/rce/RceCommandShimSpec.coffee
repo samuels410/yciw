@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'jsx/shared/rce/RceCommandShim',
   'wikiSidebar',
@@ -5,7 +22,7 @@ define [
 ], (RceCommandShim, wikiSidebar, fixtures) ->
 
   remoteEditor = null
-  module 'RceCommandShim - send',
+  QUnit.module 'RceCommandShim - send',
     setup: ->
       fixtures.setup()
       @$target = fixtures.create('<textarea />')
@@ -52,7 +69,23 @@ define [
     @$target.data('remoteEditor', remoteEditor)
     equal RceCommandShim.send(@$target, "get_code"), 'methodResult'
 
-  module 'RceCommandShim - focus',
+  test "transforms create_link call for remote editor", ->
+    url = 'http://someurl'
+    classes = 'one two'
+    previewAlt = 'alt text for preview'
+    @$target.data('remoteEditor', remoteEditor)
+    RceCommandShim.send(@$target, "create_link",
+      url: url
+      classes: classes
+      dataAttributes: {'preview-alt': previewAlt}
+    )
+    ok remoteEditor.call.calledWithMatch('insertLink',
+      href: url
+      'class': classes
+      'data-preview-alt': previewAlt
+    )
+
+  QUnit.module 'RceCommandShim - focus',
     setup: ->
       fixtures.setup()
       @$target = fixtures.create('<textarea />')
@@ -74,7 +107,7 @@ define [
     ok wikiSidebar.attachToEditor.calledWith(@$target)
     wikiSidebar.attachToEditor.restore()
 
-  module 'RceCommandShim - destroy',
+  QUnit.module 'RceCommandShim - destroy',
     setup: ->
       fixtures.setup()
       @$target = fixtures.create('<textarea />')

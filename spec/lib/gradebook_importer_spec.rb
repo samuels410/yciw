@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012-2016 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -466,13 +466,12 @@ describe GradebookImporter do
     end
   end
 
-  context "multiple grading periods" do
+  context "with grading periods" do
     before(:once) do
       account = Account.default
       @course = account.courses.create!
       @teacher = User.create!
       course_with_teacher(course: @course, user: @teacher, active_enrollment: true)
-      account.enable_feature!(:multiple_grading_periods)
       group = account.grading_period_groups.create!
       group.enrollment_terms << @course.enrollment_term
       @now = Time.zone.now

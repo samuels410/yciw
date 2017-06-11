@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_relative '../../helpers/gradebook_common'
 
 describe "gradebook - total points toggle" do
@@ -71,6 +88,7 @@ describe "gradebook - total points toggle" do
 
   it 'should allow toggling display by points or percent', priority: "1", test_id: 164012 do
     get "/courses/#{@course.id}/gradebook"
+    wait_for_ajaximations
     should_show_percentages
     toggle_grade_display
 
@@ -84,6 +102,7 @@ describe "gradebook - total points toggle" do
 
   it 'should change the text on the toggle option when toggling' do
     get "/courses/#{@course.id}/gradebook"
+    wait_for_ajaximations
     dropdown_text = []
     f("#total_dropdown").click
     dropdown_text << f(".toggle_percent").text
@@ -99,6 +118,7 @@ describe "gradebook - total points toggle" do
 
   it 'should not show the warning once dont show is checked' do
     get "/courses/#{@course.id}/gradebook"
+    wait_for_ajaximations
     open_display_dialog
     close_dialog_and_dont_show_again
 

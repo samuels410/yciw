@@ -1,4 +1,5 @@
-# Copyright (C) 2016 Instructure, Inc.
+#
+# Copyright (C) 2015 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -17,7 +18,7 @@
 module Submissions
   class DownloadsController < ApplicationController
     include Submissions::ShowHelper
-    before_filter :require_context
+    before_action :require_context
 
     def show
       service = Submissions::SubmissionForShow.new(

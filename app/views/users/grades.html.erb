@@ -1,4 +1,22 @@
 <%
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+%>
+
+<%
   content_for :page_title, join_title(t(:page_title, "Grades"), @current_user.name)
   js_bundle :user_grades
   css_bundle :user_grades
@@ -12,10 +30,10 @@
   <tr>
     <td class="course"><a href="<%= course_student_grades_path(course.id, enrollment.user_id) %>"><%= course.name %></a></td>
     <td class="percent">
-      <% if course.hide_final_grades? || (@grading_periods[course.id] && @grading_periods[course.id][:selected_period_id] == 0 && !course.feature_enabled?(:all_grading_periods_totals))%>
+      <% if course.hide_final_grades? || (@grading_periods[course.id] && @grading_periods[course.id][:selected_period_id] == 0 && !course.display_totals_for_all_grading_periods?)%>
         --
       <% elsif @grades[:student_enrollments][course.id] %>
-        <%= @grades[:student_enrollments][course.id] %>%
+        <%= I18n.n(@grades[:student_enrollments][course.id], percentage: true) %>
       <% else %>
         <%= t('no_grade', 'no grade') %>
       <% end %>
@@ -23,7 +41,7 @@
     <td style="display: none;"><a href="#" title="<%= t('send_teacher_message', 'Send a Message to the Teacher') %>" class="no-hover"><%= image_tag "email.png", :alt => t('Send a Message to the Teacher') %></a></td>
     <td class="grading_period_dropdown">
       <% if @grading_periods[course.id] %>
-          <%= render partial: "shared/grading_periods_selector", locals: {selected_period_id: @grading_periods[course.id][:selected_period_id], enrollment_id: enrollment.global_id, grading_periods: @grading_periods[course.id][:periods], all_grading_periods_option: course.feature_enabled?(:all_grading_periods_totals)} %>
+          <%= render partial: "shared/grading_periods_selector", locals: {selected_period_id: @grading_periods[course.id][:selected_period_id], enrollment_id: enrollment.global_id, grading_periods: @grading_periods[course.id][:periods], all_grading_periods_option: course.display_totals_for_all_grading_periods?} %>
       <% end %>
     </td>
   </tr>
@@ -37,7 +55,7 @@
   <tr>
     <td class="course"><a href="<%= course_student_grades_path(enrollment.course_id, enrollment.user_id) %>"><%= context_user_name(enrollment.course, enrollment.user_id) %>, <%= enrollment.course.name %></a></td>
     <td class="percent">
-      <% if enrollment.course.hide_final_grades? || (@grading_periods[enrollment.course_id] && @grading_periods[enrollment.course_id][:selected_period_id] == 0) && !enrollment.course.feature_enabled?(:all_grading_periods_totals)%>
+      <% if enrollment.course.hide_final_grades? || (@grading_periods[enrollment.course_id] && @grading_periods[enrollment.course_id][:selected_period_id] == 0) && !enrollment.course.display_totals_for_all_grading_periods?%>
         --
       <% elsif @grades[:observed_enrollments][enrollment.course_id][enrollment.user_id] %>
         <%= @grades[:observed_enrollments][enrollment.course_id][enrollment.user_id] %>%
@@ -48,7 +66,7 @@
     <td style="display: none;"><a href="#" title="<%= t('send_teacher_message', 'Send a Message to the Teacher') %>" class="no-hover"><%= image_tag "email.png", :alt => t('Send a Message to the Teacher') %></a></td>
     <td class="grading_period_dropdown">
       <% if @grading_periods[enrollment.course_id] %>
-          <%= render partial: "shared/grading_periods_selector", locals: {selected_period_id: @grading_periods[enrollment.course_id][:selected_period_id], enrollment_id: enrollment.global_id, grading_periods: @grading_periods[enrollment.course_id][:periods], all_grading_periods_option: enrollment.course.feature_enabled?(:all_grading_periods_totals)} %>
+          <%= render partial: "shared/grading_periods_selector", locals: {selected_period_id: @grading_periods[enrollment.course_id][:selected_period_id], enrollment_id: enrollment.global_id, grading_periods: @grading_periods[enrollment.course_id][:periods], all_grading_periods_option: enrollment.course.display_totals_for_all_grading_periods?} %>
       <% end %>
     </td>
   </tr>

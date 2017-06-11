@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -22,12 +22,12 @@ class DiscussionTopicsApiController < ApplicationController
   include Api::V1::User
   include SubmittableHelper
 
-  before_filter :require_context_and_read_access
-  before_filter :require_topic
-  before_filter :require_initial_post, except: [:add_entry, :mark_topic_read,
+  before_action :require_context_and_read_access
+  before_action :require_topic
+  before_action :require_initial_post, except: [:add_entry, :mark_topic_read,
                                                 :mark_topic_unread, :show,
                                                 :unsubscribe_topic]
-  before_filter only: [:replies, :entries, :add_entry, :add_reply, :show,
+  before_action only: [:replies, :entries, :add_entry, :add_reply, :show,
                        :view, :entry_list, :subscribe_topic] do
     check_differentiated_assignments(@topic)
   end
@@ -121,6 +121,13 @@ class DiscussionTopicsApiController < ApplicationController
         structure = entries.to_json
       end
 
+      if new_entries
+        new_entries.each do |e|
+          e["message"] = resolve_placeholders(e["message"]) if e["message"]
+          e["attachments"].each {|att| att["url"] = resolve_placeholders(att["url"]) if att["url"] } if e["attachments"]
+        end
+      end
+
       participants = Shard.partition_by_shard(participant_ids) do |shard_ids|
         # Preload accounts because they're needed to figure out if a user's avatar should be shown in
         # AvatarHelper#avatar_url_for_user, which is used by user_display_json. We get an N+1 on the
@@ -185,7 +192,7 @@ class DiscussionTopicsApiController < ApplicationController
       fragments = fragments.map { |k, v| %("#{k}": #{v}) }
       render :json => "{ #{fragments.join(', ')} }"
     else
-      render :nothing => true, :status => 503
+      head 503
     end
   end
 
@@ -600,7 +607,7 @@ class DiscussionTopicsApiController < ApplicationController
   end
 
   def require_initial_post
-    return true if !@topic.initial_post_required?(@current_user, @context_enrollment, session)
+    return true if !@topic.initial_post_required?(@current_user, session)
 
     # neither the current user nor the enrollment user (if any) has posted yet,
     # so give them the forbidden status
@@ -692,7 +699,7 @@ class DiscussionTopicsApiController < ApplicationController
   # for failure with participant errors if there are any
   def render_state_change_result(result)
     if result == true || result.try(:errors).blank?
-      render :nothing => true, :status => :no_content
+      head :no_content
     else
       render :json => result.try(:errors) || {}, :status => :bad_request
     end

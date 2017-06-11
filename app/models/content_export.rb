@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -33,13 +33,14 @@ class ContentExport < ActiveRecord::Base
 
   has_one :job_progress, :class_name => 'Progress', :as => :context, :inverse_of => :context
 
-  #export types
-  COMMON_CARTRIDGE = 'common_cartridge'
-  COURSE_COPY = 'course_copy'
-  MASTER_COURSE_COPY = 'master_course_copy'
-  QTI = 'qti'
-  USER_DATA = 'user_data'
-  ZIP = 'zip'
+  # export types
+  COMMON_CARTRIDGE = 'common_cartridge'.freeze
+  COURSE_COPY = 'course_copy'.freeze
+  MASTER_COURSE_COPY = 'master_course_copy'.freeze
+  QTI = 'qti'.freeze
+  USER_DATA = 'user_data'.freeze
+  ZIP = 'zip'.freeze
+  QUIZZES2 = 'quizzes2'.freeze
 
   workflow do
     state :created
@@ -54,7 +55,8 @@ class ContentExport < ActiveRecord::Base
     context_type == 'Course' &&
             export_type != ZIP &&
             content_migration.blank? &&
-            !settings[:skip_notifications]
+            !settings[:skip_notifications] &&
+            !epub_export
   end
 
   set_broadcast_policy do |p|
@@ -90,23 +92,45 @@ class ContentExport < ActiveRecord::Base
   end
 
   def export(opts={})
+    opts = opts.with_indifferent_access
     case export_type
     when ZIP
       export_zip(opts)
     when USER_DATA
       export_user_data(opts)
+    when QUIZZES2
+      return unless root_account.feature_enabled?(:quizzes2_exporter)
+      export_quizzes2
     else
       export_course(opts)
     end
   end
   handle_asynchronously :export, :priority => Delayed::LOW_PRIORITY, :max_attempts => 1
 
-  def export_course(opts={})
+  def reset_and_start_job_progress
+    self.job_progress.try :reset!
+    self.job_progress.try :start!
+  end
+
+  def mark_exporting
     self.workflow_state = 'exporting'
     self.save
+  end
+
+  def mark_exported
+    self.job_progress.try :complete!
+    self.workflow_state = 'exported'
+  end
+
+  def mark_failed
+    self.workflow_state = 'failed'
+    self.job_progress.try :fail!
+  end
+
+  def export_course(opts={})
+    mark_exporting
     begin
-      self.job_progress.try :reset!
-      self.job_progress.try :start!
+      reset_and_start_job_progress
 
       @cc_exporter = CC::CCExporter.new(self, opts.merge({:for_course_copy => for_course_copy?}))
       if @cc_exporter.export
@@ -118,13 +142,11 @@ class ContentExport < ActiveRecord::Base
           self.workflow_state = 'exported'
         end
       else
-        self.workflow_state = 'failed'
-        self.job_progress.try :fail!
+        mark_failed
       end
     rescue
       add_error("Error running course export.", $!)
-      self.workflow_state = 'failed'
-      self.job_progress.try :fail!
+      mark_failed
     ensure
       self.save
       epub_export.try(:mark_exported) || true
@@ -132,41 +154,72 @@ class ContentExport < ActiveRecord::Base
   end
 
   def export_user_data(opts)
-    self.workflow_state = 'exporting'
-    self.save
+    mark_exporting
     begin
       self.job_progress.try :start!
 
-      if exported_attachment = Exporters::UserDataExporter.create_user_data_export(self.context)
+      if (exported_attachment = Exporters::UserDataExporter.create_user_data_export(self.context))
         self.attachment = exported_attachment
         self.progress = 100
-        self.job_progress.try :complete!
-        self.workflow_state = 'exported'
+        mark_exported
       end
     rescue
       add_error("Error running user_data export.", $!)
-      self.workflow_state = 'failed'
-      self.job_progress.try :fail!
+      mark_failed
     ensure
       self.save
     end
   end
 
   def export_zip(opts={})
-    self.workflow_state = 'exporting'
-    self.save
+    mark_exporting
     begin
       self.job_progress.try :start!
-      if attachment = Exporters::ZipExporter.create_zip_export(self, opts)
+      if (attachment = Exporters::ZipExporter.create_zip_export(self, opts))
         self.attachment = attachment
         self.progress = 100
-        self.job_progress.try :complete!
-        self.workflow_state = 'exported'
+        mark_exported
       end
     rescue
       add_error("Error running zip export.", $!)
-      self.workflow_state = 'failed'
-      self.job_progress.try :fail!
+      mark_failed
+    ensure
+      self.save
+    end
+  end
+
+  def export_quizzes2
+    mark_exporting
+    begin
+      reset_and_start_job_progress
+
+      @quiz_exporter = Exporters::Quizzes2Exporter.new(self)
+
+      if @quiz_exporter.export
+        self.update(
+          export_type: QTI,
+          selected_content: {
+            quizzes: {
+              create_key(@quiz_exporter.quiz) => true
+            }
+          }
+        )
+        self.settings[:quizzes2] = @quiz_exporter.build_assignment_payload
+        @cc_exporter = CC::CCExporter.new(self)
+      end
+
+      if @cc_exporter && @cc_exporter.export
+        self.update(
+          export_type: QUIZZES2
+        )
+        self.settings[:quizzes2][:qti_export] = {}
+        self.settings[:quizzes2][:qti_export][:url] = self.attachment.download_url
+        self.progress = 100
+        mark_exported
+      end
+    rescue
+      add_error("Error running export to Quizzes 2.", $!)
+      mark_failed
     ensure
       self.save
     end
@@ -208,6 +261,10 @@ class ContentExport < ActiveRecord::Base
 
   def qti_export?
     self.export_type == QTI
+  end
+
+  def quizzes2_export?
+    self.export_type == QUIZZES2
   end
 
   def zip_export?
@@ -311,13 +368,17 @@ class ContentExport < ActiveRecord::Base
   def add_exported_asset(obj)
     if for_master_migration? && settings[:primary_master_migration]
       master_migration.master_template.ensure_tag_on_export(obj)
+      master_migration.add_exported_asset(obj)
     end
     return unless selective_export?
-    return if qti_export? || epub_export.present?
+    return if qti_export? || epub_export.present? || quizzes2_export?
 
     # for integrating selective exports with external content
-    if type = Canvas::Migration::ExternalContent::Translator::CLASSES_TO_TYPES[obj.class]
+    if (type = Canvas::Migration::ExternalContent::Translator::CLASSES_TO_TYPES[obj.class])
       exported_assets << "#{type}_#{obj.id}"
+      if obj.respond_to?(:for_assignment?) && obj.for_assignment?
+        exported_assets << "assignment_#{obj.assignment_id}"
+      end
     end
   end
 
@@ -365,10 +426,24 @@ class ContentExport < ActiveRecord::Base
     self.job_progress.try(:update_completion!, val)
   end
 
+  def self.expire_days
+    Setting.get('content_exports_expire_after_days', '30').to_i
+  end
+
+  def self.expire?
+    ContentExport.expire_days > 0
+  end
+
+  def expired?
+    return false unless ContentExport.expire?
+    created_at < ContentExport.expire_days.days.ago
+  end
+
   scope :active, -> { where("content_exports.workflow_state<>'deleted'") }
   scope :not_for_copy, -> { where("content_exports.export_type NOT IN (?)", [COURSE_COPY, MASTER_COURSE_COPY]) }
   scope :common_cartridge, -> { where(export_type: COMMON_CARTRIDGE) }
   scope :qti, -> { where(export_type: QTI) }
+  scope :quizzes2, -> { where(export_type: QUIZZES2) }
   scope :course_copy, -> { where(export_type: COURSE_COPY) }
   scope :running, -> { where(workflow_state: ['created', 'exporting']) }
   scope :admin, ->(user) {
@@ -382,6 +457,13 @@ class ContentExport < ActiveRecord::Base
     ], user)
   }
   scope :without_epub, -> {eager_load(:epub_export).where(epub_exports: {id: nil})}
+  scope :expired, -> {
+    if ContentExport.expire?
+      where('created_at < ?', ContentExport.expire_days.days.ago)
+    else
+      none
+    end
+  }
 
   private
   def is_set?(option)

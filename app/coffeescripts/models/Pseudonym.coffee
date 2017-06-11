@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'i18n!pseudonym'
   'Backbone'
@@ -15,6 +32,7 @@ define [
         not_email:    I18n.t("errors.not_email", "Not a valid email address")
       sis_user_id:
         too_long:     I18n.t("errors.too_long", "Can't exceed %{max} characters", {max: 255})
+        taken:        I18n.t("errors.sis_taken", "The SIS ID is already in use")
       password:
         too_short:    I18n.t("errors.too_short", "Must be at least %{min} characters", {min: policy.min_length})
         sequence:     I18n.t("errors.sequence", "Can't incude a run of more than %{max} characters (e.g. abcdef)", {max: policy.max_sequence})

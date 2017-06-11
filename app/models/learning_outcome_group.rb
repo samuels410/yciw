@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -179,7 +179,7 @@ class LearningOutcomeGroup < ActiveRecord::Base
 
   def infer_defaults
     self.context ||= self.parent_outcome_group && self.parent_outcome_group.context
-    if self.context && !self.context.learning_outcome_groups.empty? && !building_default
+    if self.context && self.context.learning_outcome_groups.exists? && !building_default
       default = self.context.root_outcome_group
       self.learning_outcome_group_id ||= default.id unless self == default
     end

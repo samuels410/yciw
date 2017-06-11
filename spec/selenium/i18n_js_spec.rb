@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + "/common")
 
 describe "i18n js" do
@@ -24,6 +41,7 @@ describe "i18n js" do
 
   context "locales" do
     it "should pull in core translations for all locales" do
+      skip("Rails 4.2 specific") unless CANVAS_RAILS4_2
       skip('USE_OPTIMIZED_JS=true') unless ENV['USE_OPTIMIZED_JS']
       skip('RAILS_LOAD_ALL_LOCALES=true') unless ENV['RAILS_LOAD_ALL_LOCALES']
       core_keys = I18nTasks::Utils::CORE_KEYS
@@ -53,13 +71,9 @@ describe "i18n js" do
       skip('RAILS_LOAD_ALL_LOCALES=true') unless ENV['RAILS_LOAD_ALL_LOCALES']
 
       (I18n.available_locales - [:en]).each do |locale|
-        exec_cs("I18n.locale = '#{locale}'")
+        driver.execute_script("I18n.locale = '#{locale}'")
         rb_value = I18n.t('dashboard.confirm.close', 'fake en default', locale: locale)
-        js_value = if CANVAS_WEBPACK
-          driver.execute_script("return I18n.scoped('dashboard').t('confirm.close', 'fake en default');")
-        else
-          require_exec('i18n!dashboard', "i18n.t('confirm.close', 'fake en default')")
-        end
+        js_value = driver.execute_script("return I18n.scoped('dashboard').t('confirm.close', 'fake en default');")
         expect(js_value).to eq(rb_value)
       end
     end

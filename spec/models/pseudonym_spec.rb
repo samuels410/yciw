@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -22,21 +22,21 @@ describe Pseudonym do
 
   it "should create a new instance given valid attributes" do
     user_model
-    factory_with_protected_attributes(Pseudonym, valid_pseudonym_attributes)
+    expect{factory_with_protected_attributes(Pseudonym, valid_pseudonym_attributes)}.to change(Pseudonym, :count).by(1)
   end
 
   it "should allow single character usernames" do
     user_model
     pseudonym_model
     @pseudonym.unique_id = 'c'
-    @pseudonym.save!
+    expect(@pseudonym.save).to be true
   end
 
   it "should allow a username that starts with a special character" do
     user_model
     pseudonym_model
     @pseudonym.unique_id = '+c'
-    @pseudonym.save!
+    expect(@pseudonym.save).to be true
   end
 
   it "should allow apostrophes in usernames" do
@@ -339,14 +339,14 @@ describe Pseudonym do
       specs_require_sharding
       let_once(:account2) { @shard1.activate { Account.create! } }
 
-      it "should only query pertinent shards" do
+      it "should only query the pertinent shard" do
         Pseudonym.expects(:associated_shards).with('abc').returns([@shard1])
         Pseudonym.expects(:active).once.returns(Pseudonym.none)
         GlobalLookups.stubs(:enabled?).returns(true)
         Pseudonym.authenticate({ unique_id: 'abc', password: 'def' }, [Account.default.id, account2])
       end
 
-      it "should only query pertinent shards" do
+      it "should query all pertinent shards" do
         Pseudonym.expects(:associated_shards).with('abc').returns([Shard.default, @shard1])
         Pseudonym.expects(:active).twice.returns(Pseudonym.none)
         GlobalLookups.stubs(:enabled?).returns(true)
@@ -414,13 +414,21 @@ describe Pseudonym do
       it 'returns false if the sis_user_id is already taken' do
         new_pseudonym = Pseudonym.new(:account => @pseudonym.account)
         new_pseudonym.sis_user_id = sis_user_id
-        expect(new_pseudonym.verify_unique_sis_user_id).to be_falsey
+        if CANVAS_RAILS4_2
+          expect(new_pseudonym.verify_unique_sis_user_id).to eq false
+        else
+          expect { new_pseudonym.verify_unique_sis_user_id }.to throw_symbol(:abort)
+        end
       end
 
       it 'also can validate if the new sis_user_id is an integer' do
         new_pseudonym = Pseudonym.new(:account => @pseudonym.account)
         new_pseudonym.sis_user_id = sis_user_id.to_i
-        expect(new_pseudonym.verify_unique_sis_user_id).to be_falsey
+        if CANVAS_RAILS4_2
+          expect(new_pseudonym.verify_unique_sis_user_id).to eq false
+        else
+          expect { new_pseudonym.verify_unique_sis_user_id }.to throw_symbol(:abort)
+        end
       end
 
     end
@@ -704,6 +712,17 @@ describe Pseudonym do
     expect(p2.errors[:unique_id].first.type).to eq :taken
     p2.authentication_provider = aac
     expect(p2).to be_valid
+  end
+
+  describe ".find_all_by_arbtrary_credentials" do
+    it "doesn't choke on if global lookups is down" do
+      u = User.create!
+      p = u.pseudonyms.create!(unique_id: 'a', account: Account.default, password: 'abcdefgh', password_confirmation: 'abcdefgh')
+      expect(GlobalLookups).to receive(:enabled?).and_return(true)
+      expect(Pseudonym).to receive(:associated_shards).and_raise("an error")
+      expect(Pseudonym.find_all_by_arbitrary_credentials({ unique_id: 'a', password: 'abcdefgh' },
+        [Account.default.id], '127.0.0.1')).to eq [p]
+    end
   end
 end
 

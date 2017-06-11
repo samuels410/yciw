@@ -1,13 +1,30 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 class BrandConfigsController < ApplicationController
 
   include Api::V1::Progress
   include Api::V1::Account
 
-  before_filter :require_account_context
-  before_filter :require_user
-  before_filter :require_account_management
-  before_filter :require_account_branding, except: [:destroy]
-  before_filter { |c| c.active_tab = "brand_configs" }
+  before_action :require_account_context
+  before_action :require_user
+  before_action :require_account_management
+  before_action :require_account_branding, except: [:destroy]
+  before_action { |c| c.active_tab = "brand_configs" }
 
   def index
     add_crumb t('Themes')
@@ -25,7 +42,7 @@ class BrandConfigsController < ApplicationController
       sharedBrandConfigs: visible_shared_brand_configs.as_json(include_root: false, include: 'brand_config'),
       activeBrandConfig: active_brand_config(ignore_parents: true).as_json(include_root: false)
     }
-    render text: '', layout: true
+    render html: '', layout: true
   end
 
   def new
@@ -39,7 +56,7 @@ class BrandConfigsController < ApplicationController
            variableSchema: default_schema,
            allowGlobalIncludes: @account.allow_global_includes?,
            account_id: @account.id
-    render text: '', layout: 'layouts/bare'
+    render html: '', layout: 'layouts/bare'
   end
 
   def show

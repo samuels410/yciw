@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -277,14 +277,14 @@ describe GradebooksHelper do
 
   describe '#percentage?' do
     it 'returns true if given grade is a percentage' do
-      expect(helper.percentage?('42%'))
-      expect(helper.percentage?('42.32%'))
+      expect(helper.percentage?('42%')).to eq true
+      expect(helper.percentage?('42.32%')).to eq true
     end
 
     it 'returns false if given grade is not a percentage' do
-      expect(helper.percentage?('42'))
-      expect(helper.percentage?('42.32'))
-      expect(helper.percentage?('A'))
+      expect(helper.percentage?('42')).to eq false
+      expect(helper.percentage?('42.32')).to eq false
+      expect(helper.percentage?('A')).to eq false
     end
   end
 

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 - 2014 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -71,7 +71,7 @@
 #     }
 #
 class GroupMembershipsController < ApplicationController
-  before_filter :find_group, :only => [:index, :show, :create, :update, :destroy]
+  before_action :find_group, :only => [:index, :show, :create, :update, :destroy]
 
   include Api::V1::Group
 

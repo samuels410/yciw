@@ -1,5 +1,32 @@
+#
+# Copyright (C) 2017 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 module SpecTimeLimit
-  class Error < StandardError
+  class Error < ::Timeout::Error
+    # #initialize and #to_s are overwritten here to prevent Timeout.timeout
+    # overwriting the error message to "execution expired"
+    def initialize(message)
+      @message = message
+    end
+
+    def to_s
+      @message
+    end
+
     def self.message_for(type, timeout)
       case type
       when :target
@@ -15,13 +42,11 @@ module SpecTimeLimit
   class << self
     def enforce(example)
       type, timeout = timeout_for(example)
-      Timeout.timeout(timeout) do
+      Timeout.timeout(timeout, Error.new(Error.message_for(type, timeout))) do
         example.run
       end
-    rescue Timeout::Error
-      bt = $ERROR_INFO.backtrace
-      bt.shift while bt.first =~ /\/(gems|test_setup)\//
-      raise Error, Error.message_for(type, timeout), bt
+      # no error handling needed, since rspec will catch the error and
+      # perform set_exception(spec_time_limit_error) on the example
     end
 
     # find an appropriate timeout for this spec

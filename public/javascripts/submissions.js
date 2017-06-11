@@ -1,5 +1,5 @@
-/**
- * Copyright (C) 2011 Instructure, Inc.
+/*
+ * Copyright (C) 2012 - present Instructure, Inc.
  *
  * This file is part of Canvas.
  *
@@ -12,14 +12,15 @@
  * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
  * details.
  *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 define([
   'compiled/util/round',
   'i18n!submissions',
   'jquery',
+  'jsx/gradebook/shared/helpers/GradeFormatHelper',
   'jquery.ajaxJSON' /* ajaxJSON */,
   'jquery.instructure_forms' /* ajaxJSONFiles */,
   'jquery.instructure_date_and_time' /* datetimeString */,
@@ -28,12 +29,15 @@ define([
   'jquery.templateData' /* fillTemplateData, getTemplateData */,
   'media_comments' /* mediaComment */,
   'compiled/jquery/mediaCommentThumbnail',
-  'vendor/jquery.scrollTo' /* /\.scrollTo/ */
-], function(round, I18n, $) {
+  'vendor/jquery.scrollTo', /* /\.scrollTo/ */
+  'rubric_assessment' /*global rubricAssessment*/
+], function (round, I18n, $, GradeFormatHelper) {
+
+  var rubricAssessments = ENV.rubricAssessments;
 
   $("#content").addClass('padless');
   var fileIndex = 1;
-  var submissionLoaded = function(data) {
+  function submissionLoaded (data) {
     if(data.submission) {
       var d = [];
       d.push(data);
@@ -54,7 +58,7 @@ define([
           id: 'submission_comment_' + comment.id
         });
         if(comment.media_comment_id) {
-          $media_comment_link = $("#comment_media_blank").clone(true).removeAttr('id');
+          var $media_comment_link = $("#comment_media_blank").clone(true).removeAttr('id');
           $media_comment_link.fillTemplateData({
             data: comment
           });
@@ -88,12 +92,18 @@ define([
     }
     $(".submission_header").loadingImage('remove');
   }
-  var showGrade = function(submission) {
-    $(".grading_box").val(submission.grade != undefined && submission.grade !== null ? submission.grade : "");
-    $(".score").text(submission.score != undefined && submission.score !== null ? round(submission.score, round.DEFAULT) : "");
-    $(".published_score").text(submission.published_score != undefined && submission.published_score !== null ? round(submission.published_score, round.DEFAULT) : "");
+  function callIfSet (value, fn) {
+    return value == null ? '' : fn.call(this, value);
   }
-  var makeRubricAccessible = function($rubric) {
+  function roundAndFormat (value) {
+    return I18n.n(round(value, round.DEFAULT));
+  }
+  function showGrade (submission) {
+    $('.grading_box').val(callIfSet(submission.grade, GradeFormatHelper.formatGrade));
+    $('.score').text(callIfSet(submission.score, roundAndFormat));
+    $('.published_score').text(callIfSet(submission.published_score, roundAndFormat));
+  }
+  function makeRubricAccessible ($rubric) {
     $rubric.show()
     var $tabs = $rubric.find(":tabbable")
     var tabBounds = [$tabs.first()[0], $tabs.last()[0]]
@@ -131,23 +141,23 @@ define([
       parentsUntil("#application").siblings().not("#aria_alerts").attr('data-hide_from_rubric', true)
     $rubric.hide()
   }
-  var closeRubric = function() {
+  function closeRubric () {
     $("#rubric_holder").fadeOut(function() {
       toggleRubric($(this));
       $(".assess_submission_link").focus();
     });
   }
-  var openRubric = function() {
+  function openRubric () {
     $("#rubric_holder").fadeIn(function() {
       toggleRubric($(this));
       $(this).find('.hide_rubric_link').focus();
     });
   }
-  var toggleRubric = function($rubric) {
-    ariaSetting = $rubric.is(":visible");
+  function toggleRubric ($rubric) {
+    var ariaSetting = $rubric.is(":visible");
     $("#application").find("[data-hide_from_rubric]").attr("aria-hidden", ariaSetting)
   }
-  var windowResize = function() {
+  function windowResize () {
     var $frame = $("#preview_frame");
     var top = $frame.offset().top;
     var height = $(window).height() - top;
@@ -227,7 +237,7 @@ define([
           'submission[group_comment]': ($("#submission_group_comment").attr('checked') ? "1" : "0")
         };
         if($(".grading_value:visible").length > 0) {
-          formData['submission[grade]'] = $(".grading_value").val();
+          formData['submission[grade]'] = GradeFormatHelper.delocalizeGrade($('.grading_value').val());
           $.ajaxJSON(url, method, formData, submissionLoaded);
         } else {
           $(".submission_header").loadingImage('remove');
@@ -280,7 +290,7 @@ define([
           $("#new_rubric_assessment_option").remove();
           $("#rubric_assessments_list").show();
           rubricAssessment.populateRubric($rubric, assessment);
-          submission = assessment.artifact;
+          var submission = assessment.artifact;
           if (submission) {
             showGrade(submission);
           }
@@ -315,7 +325,7 @@ define([
         event.preventDefault();
         $("#add_comment_form").hide();
         $("#media_media_recording").show();
-        $recording = $("#media_media_recording").find(".media_recording");
+        var $recording = $("#media_media_recording").find(".media_recording");
         $recording.mediaComment('create', 'any', function(id, type) {
           $("#media_media_recording").data('comment_id', id).data('comment_type', type);
           $(document).triggerHandler('comment_change');

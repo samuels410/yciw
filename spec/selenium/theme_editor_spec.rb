@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/common')
 require File.expand_path(File.dirname(__FILE__) + '/helpers/theme_editor_common')
 require File.expand_path(File.dirname(__FILE__) + '/helpers/color_common')
@@ -50,7 +67,7 @@ describe 'Theme Editor' do
     fj('.Theme__header button:contains("Exit")').click
     driver.switch_to.alert.accept
     # validations
-    assert_flash_notice_message(/Theme editor changes have been cancelled/)
+    assert_flash_notice_message("Theme editor changes have been cancelled")
     expect(driver.current_url).to end_with("/accounts/#{Account.default.id}/brand_configs")
     expect(f('#left-side #section-tabs .brand_configs').text).to eq 'Themes'
   end
@@ -74,7 +91,7 @@ describe 'Theme Editor' do
     exit_btn = fj('.Theme__header button:contains("Exit")')
     exit_btn.click
     driver.switch_to.alert.accept
-    assert_flash_notice_message(/Theme editor changes have been cancelled/)
+    assert_flash_notice_message("Theme editor changes have been cancelled")
     expect(driver.current_url).to end_with("/accounts/#{Account.default.id}/brand_configs")
     expect(f('#left-side #section-tabs .brand_configs').text).to eq 'Themes'
   end
@@ -154,7 +171,7 @@ describe 'Theme Editor' do
   end
 
   it 'should have validation for every text field', priority: "2", test_id: 241992 do
-    skip_if_firefox('Broken after upgrade to webdriver 2.53 - seems to be a timing issue on jenkins, passes locally')
+    skip('Broken after upgrade to webdriver 2.53 - seems to be a timing issue on jenkins, passes locally')
     open_theme_editor(Account.default.id)
 
     # input invalid text into every text field

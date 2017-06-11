@@ -1,17 +1,34 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'jquery'
   'compiled/util/fcUtil'
   'compiled/calendar/TimeBlockList'
   'compiled/calendar/TimeBlockRow'
   'timezone'
-  'vendor/timezone/America/Detroit'
+  'timezone/America/Detroit'
 ], ($, fcUtil, TimeBlockList, TimeBlockRow, tz, detroit) ->
 
   nextYear = new Date().getFullYear() + 1
   unfudged_start = tz.parse("#{nextYear}-02-03T12:32:00Z")
   unfudged_end   = tz.parse("#{nextYear}-02-03T17:32:00Z")
 
-  module "TimeBlockRow",
+  QUnit.module "TimeBlockRow",
     setup: ->
       @snapshot = tz.snapshot()
       tz.changeZone(detroit, 'America/Detroit')

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016 Instructure, Inc.
+# Copyright (C) 2016 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -69,6 +69,7 @@ describe ConditionalRelease::Setup do
     @user = user_with_pseudonym account: @root_account
     service.stubs(:jwt_for).returns("some.jwt.thing")
     service.stubs(:unique_id).returns("unique@cyoe.id")
+    User.any_instance.stubs(:set_default_feature_flags)
     Feature.stubs(:definitions).returns({
       'conditional_release' => Feature.new(feature: 'conditional_release', applies_to: 'Account')
     })

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -26,7 +26,7 @@ module SIS
         yield importer
       end
       importer.abstract_courses_to_update_sis_batch_id.in_groups_of(1000, false) do |batch|
-        AbstractCourse.where(:id => batch).update_all(:sis_batch_id => @batch)
+        AbstractCourse.where(:id => batch).update_all(:sis_batch_id => @batch.id)
       end if @batch
       @logger.debug("AbstractCourses took #{Time.now - start} seconds")
       return importer.success_count

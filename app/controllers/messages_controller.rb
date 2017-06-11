@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011-12 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -19,7 +19,7 @@
 require 'mail'
 
 class MessagesController < ApplicationController
-  before_filter :require_read_messages, :get_context
+  before_action :require_read_messages, :get_context
 
   def require_read_messages
     require_site_admin_with_permission(:read_messages)
@@ -39,7 +39,7 @@ class MessagesController < ApplicationController
     message.body            = params[:message]
 
     IncomingMailProcessor::IncomingMessageProcessor.new(IncomingMail::MessageHandler.new, ErrorReport::Reporter.new).process_single(message, "#{secure_id}-#{message_id}")
-    render :nothing => true
+    head :ok
   end
 
   def html_message

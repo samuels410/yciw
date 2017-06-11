@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2013 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -259,7 +259,7 @@ describe ActiveRecord::Base do
           tries += 1
           Submission.create!(:user => @user, :assignment => @assignment)
         end
-      }.to raise_error # we don't catch the error the last time
+      }.to raise_error(ActiveRecord::RecordNotUnique) # we don't catch the error the last time
       expect(tries).to eql 3
       expect(Submission.count).to eql 1
     end
@@ -298,7 +298,7 @@ describe ActiveRecord::Base do
           tries += 1
           raise "oh crap"
         }
-      }.to raise_error
+      }.to raise_error("oh crap")
       expect(tries).to eql 1
     end
   end
@@ -438,12 +438,6 @@ describe ActiveRecord::Base do
       @user = user_model
     end
 
-    it "should fail with improper nested hashes" do
-      expect {
-        User.where(:name => { :users => { :id => @user }}).first
-      }.to raise_error(ActiveRecord::StatementInvalid)
-    end
-
     it "should fail with dot in nested column name" do
       expect {
         User.where(:name => { "users.id" => @user }).first
@@ -539,7 +533,7 @@ describe ActiveRecord::Base do
   describe "add_index" do
     it "should raise an error on too long of name" do
       name = 'some_really_long_name_' * 10
-      expect { User.connection.add_index :users, [:id], name: name }.to raise_error
+      expect { User.connection.add_index :users, [:id], name: name }.to raise_error(/Index name .+ is too long/)
     end
   end
 
@@ -577,8 +571,6 @@ describe ActiveRecord::Base do
       @u4 = User.create!(name: 'b')
 
       @us = [@u1, @u2, @u3, @u4]
-      # for sanity
-      expect(User.where(id: @us, name: nil).order(:id).all).to eq [@u1, @u3]
     end
 
     it "should sort nulls first" do

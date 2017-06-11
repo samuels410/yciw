@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -88,7 +88,7 @@ describe RoleOverride do
 
     AdheresToPolicy::Cache.clear
     RoleOverride.clear_cached_contexts
-    c2 = Course.find(c2)
+    c2 = Course.find(c2.id)
 
     expect(c2.grants_right?(u2, :moderate_forum)).to be_truthy
   end
@@ -256,13 +256,6 @@ describe RoleOverride do
     context 'using :account_allows' do
       it "should be enabled for account if not specified" do
         permission_data = RoleOverride.permission_for(@account, :undelete_courses, admin_role)
-        expect(permission_data[:account_allows]).to be_truthy
-        expect(permission_data[:enabled]).to be_truthy
-        expect(permission_data[:explicit]).to be_falsey
-      end
-
-      it "should be enabled for account if not specified" do
-        permission_data = RoleOverride.permission_for(@account, :view_grade_changes, admin_role)
         expect(permission_data[:account_allows]).to be_truthy
         expect(permission_data[:enabled]).to be_truthy
         expect(permission_data[:explicit]).to be_falsey

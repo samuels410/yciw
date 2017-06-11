@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2014 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -35,6 +35,11 @@ require 'csv'
 #         "name": {
 #           "description": "The display name of the account",
 #           "example": "Canvas Account",
+#           "type": "string"
+#         },
+#         "uuid": {
+#           "description": "The UUID of the account",
+#           "example": "WvAHhY5FINzq5IyRIJybGeiXyFkG3SqHUPb7jZY5",
 #           "type": "string"
 #         },
 #         "parent_account_id": {
@@ -96,10 +101,10 @@ require 'csv'
 #     }
 #
 class AccountsController < ApplicationController
-  before_filter :require_user, :only => [:index]
-  before_filter :reject_student_view_student
-  before_filter :get_context
-  before_filter :rich_content_service_config, only: [:settings]
+  before_action :require_user, :only => [:index]
+  before_action :reject_student_view_student
+  before_action :get_context
+  before_action :rich_content_service_config, only: [:settings]
 
   include Api::V1::Account
   include CustomSidebarLinksHelper
@@ -151,7 +156,7 @@ class AccountsController < ApplicationController
       account_ids = Rails.cache.fetch(['admin_enrollment_course_account_ids', @current_user].cache_key) do
         Account.joins(:courses => :enrollments).merge(
           @current_user.enrollments.admin.shard(@current_user).except(:select)
-        ).select("accounts.id").uniq.pluck(:id).map{|id| Shard.global_id_for(id)}
+        ).select("accounts.id").distinct.pluck(:id).map{|id| Shard.global_id_for(id)}
       end
       course_accounts = BookmarkedCollection.wrap(Account::Bookmarker, Account.where(:id => account_ids))
       @accounts = Api.paginate(course_accounts, self, api_v1_accounts_url)
@@ -291,6 +296,14 @@ class AccountsController < ApplicationController
   #   'completed', or their enrollment term may have ended).  If false, exclude
   #   completed courses.  If not present, do not filter on completed status.
   #
+  # @argument blueprint [Boolean]
+  #   If true, include only blueprint courses. If false, exclude them.
+  #   If not present, do not filter on this basis.
+  #
+  # @argument blueprint_associated [Boolean]
+  #   If true, include only courses that inherit content from a blueprint course.
+  #   If false, exclude them. If not present, do not filter on this basis.
+  #
   # @argument by_teachers[] [Integer]
   #   List of User IDs of teachers; if supplied, include only courses taught by
   #   one of the referenced users.
@@ -344,6 +357,18 @@ class AccountsController < ApplicationController
       @courses = @courses.completed
     elsif !params[:completed].nil? && !value_to_boolean(params[:completed])
       @courses = @courses.not_completed
+    end
+
+    if value_to_boolean(params[:blueprint])
+      @courses = @courses.master_courses
+    elsif !params[:blueprint].nil?
+      @courses = @courses.not_master_courses
+    end
+
+    if value_to_boolean(params[:blueprint_associated])
+      @courses = @courses.associated_courses
+    elsif !params[:blueprint_associated].nil?
+      @courses = @courses.not_associated_courses
     end
 
     if params[:by_teachers].is_a?(Array)
@@ -412,6 +437,20 @@ class AccountsController < ApplicationController
       account_params = params[:account].present? ? strong_account_params : {}
       includes = Array(params[:includes]) || []
       unauthorized = false
+
+      if params[:account].key?(:sis_account_id)
+        sis_id = params[:account].delete(:sis_account_id)
+        if @account.root_account.grants_right?(@current_user, session, :manage_sis) && !@account.root_account?
+          @account.sis_source_id = sis_id.presence
+        else
+          if @account.root_account?
+            @account.errors.add(:unauthorized, t('Cannot set sis_account_id on a root_account.'))
+          else
+            @account.errors.add(:unauthorized, t('To change sis_account_id the user must have manage_sis permission.'))
+          end
+          unauthorized = true
+        end
+      end
 
       if params[:account][:services]
         if authorized_action(@account, @current_user, :manage_account_settings)
@@ -496,6 +535,10 @@ class AccountsController < ApplicationController
   #
   # @argument account[name] [String]
   #   Updates the account name
+  #
+  # @argument account[sis_account_id] [String]
+  #   Updates the account sis_account_id
+  #   Must have manage_sis permission and must not be a root_account.
   #
   # @argument account[default_time_zone] [String]
   #   The default time zone of the account. Allowed time zones are
@@ -659,16 +702,18 @@ class AccountsController < ApplicationController
     if authorized_action(@account, @current_user, :read)
       @available_reports = AccountReport.available_reports if @account.grants_right?(@current_user, @session, :read_reports)
       if @available_reports
-        scope = @account.account_reports.where("report_type=name").most_recent
-        @last_complete_reports = AccountReport.from("unnest('{#{@available_reports.keys.join(',')}}'::text[]) report_types (name),
-              LATERAL (#{scope.complete.to_sql}) account_reports ").
-            order("report_types.name").
-            preload(:attachment).
-            index_by(&:report_type)
-        @last_reports = AccountReport.from("unnest('{#{@available_reports.keys.join(',')}}'::text[]) report_types (name),
-              LATERAL (#{scope.to_sql}) account_reports ").
-            order("report_types.name").
-            index_by(&:report_type)
+        @account.shard.activate do
+          scope = @account.account_reports.active.where("report_type=name").most_recent
+          @last_complete_reports = AccountReport.from("unnest('{#{@available_reports.keys.join(',')}}'::text[]) report_types (name),
+                LATERAL (#{scope.complete.to_sql}) account_reports ").
+              order("report_types.name").
+              preload(:attachment).
+              index_by(&:report_type)
+          @last_reports = AccountReport.from("unnest('{#{@available_reports.keys.join(',')}}'::text[]) report_types (name),
+                LATERAL (#{scope.to_sql}) account_reports ").
+              order("report_types.name").
+              index_by(&:report_type)
+        end
       end
       load_course_right_side
       @account_users = @account.account_users
@@ -962,7 +1007,7 @@ class AccountsController < ApplicationController
       end
     end
 
-    teachers = TeacherEnrollment.for_courses_with_user_name(courses_to_fetch_users_for).admin.active
+    teachers = TeacherEnrollment.for_courses_with_user_name(courses_to_fetch_users_for).admin.where.not(:enrollments => {:workflow_state => %w{rejected deleted}})
     course_to_student_counts = StudentEnrollment.student_in_claimed_or_available.where(:course_id => courses_to_fetch_users_for).group(:course_id).distinct.count(:user_id)
     courses_to_teachers = teachers.inject({}) do |result, teacher|
       result[teacher.course_id] ||= []

@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2017 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 module Lti
   module Oauth2
     class AccessToken
@@ -5,10 +22,10 @@ module Lti
 
       ISS = 'Canvas'.freeze
 
-      attr_reader :aud, :sub
+      attr_reader :aud, :sub, :reg_key
 
-      def self.create_jwt(aud:, sub:)
-        new(aud: aud, sub: sub)
+      def self.create_jwt(aud:, sub:, reg_key: nil)
+        new(aud: aud, sub: sub, reg_key: reg_key)
       end
 
       def self.from_jwt(aud:, jwt:)
@@ -20,8 +37,9 @@ module Lti
         raise InvalidTokenError, e
       end
 
-      def initialize(aud:, sub:, jwt: nil)
+      def initialize(aud:, sub:, jwt: nil, reg_key: nil)
         @_jwt = jwt if jwt
+        @reg_key = reg_key || (jwt && decoded_jwt['reg_key'])
         @aud = aud
         @sub = sub
       end
@@ -30,7 +48,7 @@ module Lti
         decoded_jwt = Canvas::Security.decode_jwt(jwt)
         check_required_assertions(decoded_jwt.keys)
         raise InvalidTokenError, 'invalid iss' if decoded_jwt['iss'] != ISS
-        raise InvalidTokenError, 'invalid aud' if decoded_jwt[:aud] != aud
+        raise InvalidTokenError, 'invalid aud' unless [*decoded_jwt[:aud]].include?(aud)
         raise InvalidTokenError, 'iat must be in the past' unless Time.zone.at(decoded_jwt['iat']) < Time.zone.now
         true
       rescue InvalidTokenError
@@ -62,6 +80,7 @@ module Lti
             nbf: Setting.get('lti.oauth2.access_token.nbf', 30.seconds).to_i.seconds.ago,
             jti: SecureRandom.uuid
           }
+          body[:reg_key] = @reg_key if @reg_key
           Canvas::Security.create_jwt(body)
         end
       end

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2014 Instructure, Inc.
+# Copyright (C) 2014 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -209,6 +209,7 @@ describe Lti::LtiOutboundAdapter do
     end
 
     it "does not copy query params to the post body if oauth_compliant tool setting is enabled" do
+      allow(account).to receive(:all_account_users_for).with(user).and_return([])
       tool.settings = {oauth_compliant: true}
       adapter.prepare_tool_launch(return_url, variable_expander)
       payload = adapter.generate_post_payload

@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path('../../../spec_helper', File.dirname(__FILE__))
 require_dependency "canvas/oauth/token"
 
@@ -158,9 +175,9 @@ module Canvas::Oauth
       end
 
       it 'returns the expires_in parameter' do
-        Time.stubs(:now).returns(DateTime.parse('2015-07-10T09:29:00+00:00').utc.to_time)
+        Time.stubs(:now).returns(DateTime.parse('2015-07-10T09:29:00Z').utc.to_time)
         access_token = token.access_token
-        access_token.expires_at = DateTime.parse('2015-07-10T10:29:00+00:00')
+        access_token.expires_at = DateTime.parse('2015-07-10T10:29:00Z')
         access_token.save!
         expect(json['expires_in']).to eq 3600
       end
@@ -208,8 +225,8 @@ module Canvas::Oauth
 
     context "token expiration" do
       it "starts expiring tokens in 1 hour" do
-        DateTime.stubs(:now).returns(DateTime.parse('2016-06-29T23:01:00+00:00'))
-        expect(token.access_token.expires_at.utc.iso8601).to eq('2016-06-30T00:01:00+00:00')
+        DateTime.stubs(:now).returns(DateTime.parse('2016-06-29T23:01:00Z'))
+        expect(token.access_token.expires_at.utc).to eq(DateTime.parse('2016-06-30T00:01:00Z'))
       end
 
       it 'doesn\'t set an expiration if the dev key has auto_expire_tokens set to false' do
@@ -220,7 +237,7 @@ module Canvas::Oauth
       end
 
       it 'Tokens wont expire if the dev key has auto_expire_tokens set to false' do
-        DateTime.stubs(:now).returns(Time.zone.parse('2015-06-29T23:01:00+00:00'))
+        DateTime.stubs(:now).returns(Time.zone.parse('2015-06-29T23:01:00Z'))
         key = token.key
         key.auto_expire_tokens = false
         key.save!

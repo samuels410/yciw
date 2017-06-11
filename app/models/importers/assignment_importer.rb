@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_dependency 'importers'
 
 module Importers
@@ -114,7 +131,16 @@ module Importers
         item.points_possible = 0
       end
 
+      if !item.new_record? && item.is_child_content? && (item.editing_restricted?(:due_dates) || item.editing_restricted?(:availability_dates))
+        # is a date-restricted master course item - clear their old overrides because we're mean
+        item.assignment_overrides.where.not(:set_type => AssignmentOverride::SET_TYPE_NOOP).destroy_all
+      end
+
       item.save_without_broadcasting!
+      # somewhere in the callstack, save! will call Quiz#update_assignment, and Rails will have helpfully
+      # reloaded the quiz's assignment, so we won't know about the changes to the object (in particular,
+      # workflow_state) that it did
+      item.reload
 
       rubric = nil
       rubric = context.rubrics.where(migration_id: hash[:rubric_migration_id]).first if hash[:rubric_migration_id]
@@ -150,7 +176,7 @@ module Importers
             key: [item.migration_id, override.set_type, override.set_id].join('/'))
         end
         if hash.has_key?(:only_visible_to_overrides)
-          item.only_visible_to_overrides = hash[:only_visible_to_overrides]          
+          item.only_visible_to_overrides = hash[:only_visible_to_overrides]
         end
       end
 
@@ -192,7 +218,7 @@ module Importers
         item.group_category ||= context.group_categories.active.where(:name => t("Project Groups")).first_or_create
       end
 
-      [:turnitin_enabled, :vericite_enabled, :peer_reviews,
+      [:peer_reviews,
        :automatic_peer_reviews, :anonymous_peer_reviews,
        :grade_group_students_individually, :allowed_extensions,
        :position, :peer_review_count, :muted, :moderated_grading,
@@ -201,10 +227,20 @@ module Importers
         item.send("#{prop}=", hash[prop]) unless hash[prop].nil?
       end
 
-      if item.turnitin_enabled
+      [:turnitin_enabled, :vericite_enabled].each do |prop|
+        if !hash[prop].nil? && context.send("#{prop}?")
+          item.send("#{prop}=", hash[prop])
+        end
+      end
+
+      if item.turnitin_enabled || item.vericite_enabled
         settings = JSON.parse(hash[:turnitin_settings]).with_indifferent_access
         settings[:created] = false if settings[:created]
-        item.turnitin_settings = settings
+        if item.vericite_enabled
+          item.vericite_settings = settings
+        else
+          item.turnitin_settings = settings
+        end
       end
 
       migration.add_imported_item(item)

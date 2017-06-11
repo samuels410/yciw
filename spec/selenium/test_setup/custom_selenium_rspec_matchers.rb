@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 # assert the presence (or absence) of a css class on an element.
 # will return as soon as the expectation is met, e.g.
 #
@@ -196,7 +213,7 @@ RSpec::Matchers.define :contain_link do |text|
 end
 
 # assert whether or not an element is displayed. will wait up to
-# IMPLICIT_WAIT_TIMEOUT seconds
+# TIMEOUTS[:finder] seconds
 RSpec::Matchers.define :be_displayed do
   match do |element|
     wait_for(method: :be_displayed) { element.displayed? }
@@ -207,7 +224,7 @@ RSpec::Matchers.define :be_displayed do
   end
 end
 
-# assert the size of the collection. will wait up to IMPLICIT_WAIT_TIMEOUT
+# assert the size of the collection. will wait up to TIMEOUTS[:finder]
 # seconds, and will reload the collection if it can (i.e. if it's the
 # result of a ff/ffj call)
 RSpec::Matchers.define :have_size do |size|

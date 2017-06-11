@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -134,9 +134,10 @@ describe CoursesController do
         @student = user_factory
 
         # by course date, unrestricted
-        course1 = Account.default.courses.create! start_at: 2.months.ago, conclude_at: 1.month.ago,
-                                                  restrict_enrollments_to_course_dates: false,
-                                                  name: 'One'
+        course1 = Account.default.courses.create! start_at: 2.months.ago,
+          conclude_at: 1.month.ago, # oh hey this already "ended" (not really because it's unrestricted) but whatever
+          restrict_enrollments_to_course_dates: false,
+          name: 'One'
         course1.offer!
         enrollment1 = course_with_student course: course1, user: @student, active_all: true
 
@@ -153,11 +154,57 @@ describe CoursesController do
         enrollment3.course.enrollment_term = past_term
         enrollment3.course.save!
 
+        # by course date, unrestricted but the course dates aren't over yet
+        course4 = Account.default.courses.create! start_at: 2.months.ago, conclude_at: 1.month.from_now,
+          restrict_enrollments_to_course_dates: false,
+          name: 'Fore'
+        course4.offer!
+        enrollment4 = course_with_student course: course4, user: @student, active_all: true
+
+        # by course date, unrestricted past view
+        course5 = Account.default.courses.create! start_at: 2.months.ago, conclude_at: 1.month.ago,
+                                                  restrict_enrollments_to_course_dates: false,
+                                                  name: 'Phive',
+                                                  restrict_student_past_view: false
+        course5.offer!
+        enrollment5 = course_with_student course: course5, user: @student, active_all: true
+
+        # by course date, restricted past view & enrollment dates
+        course6 = Account.default.courses.create! start_at: 2.months.ago, conclude_at: 1.month.ago,
+                                                  restrict_enrollments_to_course_dates: true,
+                                                  name: 'Styx',
+                                                  restrict_student_past_view: true
+        course6.offer!
+        enrollment6 = course_with_student course: course6, user: @student, active_all: true
+
         user_session(@student)
         get 'index'
         expect(response).to be_success
-        expect(assigns[:past_enrollments]).to eq [enrollment3, enrollment2]
-        expect(assigns[:current_enrollments]).to eq [enrollment1]
+        expect(assigns[:past_enrollments]).to match_array([enrollment6, enrollment5, enrollment3, enrollment2, enrollment1])
+        expect(assigns[:current_enrollments]).to eq [enrollment4]
+        expect(assigns[:future_enrollments]).to be_empty
+      end
+
+      it "should do other terrible date logic based on sections" do
+        @student = user_factory
+
+        # section date in past
+        course1 = Account.default.courses.create! start_at: 2.months.ago, conclude_at: 1.month.from_now
+        course1.default_section.update_attributes(:end_at => 1.month.ago)
+        course1.offer!
+        enrollment1 = course_with_student course: course1, user: @student, active_all: true
+
+        # by section date, in future
+        course2 = Account.default.courses.create! start_at: 2.months.ago, conclude_at: 1.month.ago
+        course2.default_section.update_attributes(:end_at => 1.month.from_now)
+        course2.offer!
+        enrollment2 = course_with_student course: course2, user: @student, active_all: true
+
+        user_session(@student)
+        get 'index'
+        expect(response).to be_success
+        expect(assigns[:past_enrollments]).to eq [enrollment1]
+        expect(assigns[:current_enrollments]).to eq [enrollment2]
         expect(assigns[:future_enrollments]).to be_empty
       end
 
@@ -201,7 +248,7 @@ describe CoursesController do
         user_session(@student)
         get 'index'
         expect(response).to be_success
-        expect(assigns[:past_enrollments]).to be_empty
+        expect(assigns[:past_enrollments]).to match_array([enrollment])
         expect(assigns[:current_enrollments]).to be_empty
         expect(assigns[:future_enrollments]).to be_empty
 
@@ -210,7 +257,7 @@ describe CoursesController do
         user_session(observer)
         get 'index'
         expect(response).to be_success
-        expect(assigns[:past_enrollments]).to be_empty
+        expect(assigns[:past_enrollments]).to match_array([o.observer.enrollments.first])
         expect(assigns[:current_enrollments]).to be_empty
         expect(assigns[:future_enrollments]).to be_empty
 
@@ -228,8 +275,7 @@ describe CoursesController do
         # no dates at all
         enrollment1 = student_in_course active_all: true, course_name: 'A'
 
-        # past date that doesn't count
-        course2 = Account.default.courses.create! start_at: 2.weeks.ago, conclude_at: 1.week.ago,
+        course2 = Account.default.courses.create! start_at: 2.weeks.ago, conclude_at: 1.week.from_now,
                                                   restrict_enrollments_to_course_dates: false,
                                                   name: 'B'
         course2.offer!
@@ -816,6 +862,20 @@ describe CoursesController do
         expect(controller.js_env[:COURSE_HOME]).to be_truthy
         expect(controller.js_env[:SHOW_ANNOUNCEMENTS]).to be_truthy
         expect(controller.js_env[:ANNOUNCEMENT_LIMIT]).to eq(3)
+      end
+
+      it "should not show announcements for public users" do
+        @course1.default_view = "wiki"
+        @course1.show_announcements_on_home_page = true
+        @course1.home_page_announcement_limit = 3
+        @course1.is_public = true
+        @course1.save!
+        @course1.wiki.wiki_pages.create!(:title => 'blah').set_as_front_page!
+        remove_user_session
+        get 'show', :id => @course1.id
+        expect(response).to be_success
+        expect(controller.js_env[:COURSE_HOME]).to be_truthy
+        expect(controller.js_env[:SHOW_ANNOUNCEMENTS]).to be_falsey
       end
 
       it "should work for syllabus view" do
@@ -1473,7 +1533,6 @@ describe CoursesController do
         Assignment.where(:id => @assignment).update_all(:updated_at => @time)
 
         @assignment.reload
-        expect(@assignment.updated_at).to eq @time
       end
 
       it "should touch content when is_public is updated" do
@@ -1594,6 +1653,91 @@ describe CoursesController do
         @course.reload
         expect(@course.settings[:image_id]).to eq ''
         expect(@course.settings[:image_url]).to eq ''
+      end
+    end
+
+    describe 'master courses' do
+      before :once do
+        Account.default.enable_feature! :master_courses
+        account_admin_user
+        course_factory
+      end
+
+      before :each do
+        user_session(@admin)
+      end
+
+      it 'should require :manage_master_courses permission' do
+        ta_in_course
+        user_session @ta
+        put 'update', :id => @course.id, :format => 'json', :course => { :blueprint => '1' }
+        expect(response).to be_unauthorized
+      end
+
+      it 'should set a course as a master course' do
+        put 'update', :id => @course.id, :format => 'json', :course => { :blueprint => '1' }
+        expect(response).to be_success
+        expect(MasterCourses::MasterTemplate).to be_is_master_course @course
+      end
+
+      it 'should not allow a course with students to be set as a master course' do
+        student_in_course
+        put 'update', :id => @course.id, :format => 'json', :course => { :blueprint => '1' }
+        expect(response.status).to eq 400
+        expect(response.body).to include 'Cannot have a blueprint course with students'
+      end
+
+      it 'should not allow a minion course to be set as a master course' do
+        c1 = @course
+        c2 = course_factory
+        template = MasterCourses::MasterTemplate.set_as_master_course(c1)
+        template.add_child_course!(c2)
+        put 'update', :id => c2.id, :format => 'json', :course => { :blueprint => '1' }
+        expect(response.status).to eq 400
+        expect(response.body).to include 'Course is already associated'
+      end
+
+      it "should allow setting of default template restrictions" do
+        put 'update', :id => @course.id, :format => 'json', :course => { :blueprint => '1',
+          :blueprint_restrictions => {'content' => '0', 'due_dates' => '1'}}
+        expect(response).to be_success
+        template = MasterCourses::MasterTemplate.full_template_for(@course)
+        expect(template.default_restrictions).to eq({:content => false, :due_dates => true})
+      end
+
+      it "should validate template restrictions" do
+        put 'update', :id => @course.id, :format => 'json', :course => { :blueprint => '1',
+          :blueprint_restrictions => {'content' => '1', 'doo_dates' => '1'}}
+        expect(response).to_not be_success
+        expect(response.body).to include 'Invalid restrictions'
+      end
+
+      it "should allow setting whether to use template restrictions by object type" do
+        put 'update', :id => @course.id, :format => 'json', :course => { :blueprint => '1',
+          :use_blueprint_restrictions_by_object_type => '1'}
+        expect(response).to be_success
+        template = MasterCourses::MasterTemplate.full_template_for(@course)
+        expect(template.use_default_restrictions_by_type).to be_truthy
+      end
+
+      it "should allow setting default template restrictions by object type" do
+        put 'update', :id => @course.id, :format => 'json', :course => { :blueprint => '1',
+          :blueprint_restrictions_by_object_type =>
+            {'assignment' => {'content' => '1', 'due_dates' => '1'}, 'quiz' => {'content' => '1'}}}
+        expect(response).to be_success
+        template = MasterCourses::MasterTemplate.full_template_for(@course)
+        expect(template.default_restrictions_by_type).to eq ({
+          "Assignment" => {:content => true, :due_dates => true},
+          "Quizzes::Quiz" => {:content => true}
+        })
+      end
+
+      it "should validate default template restrictions by object type" do
+        put 'update', :id => @course.id, :format => 'json', :course => { :blueprint => '1',
+          :blueprint_restrictions_by_object_type =>
+            {'notarealtype' => {'content' => '1', 'due_dates' => '1'}}}
+        expect(response).to_not be_success
+        expect(response.body).to include 'Invalid restrictions'
       end
     end
   end
@@ -1720,19 +1864,34 @@ describe CoursesController do
       get 'sis_publish_status', :course_id => @course.id
       expect(response).to be_success
       response_body = json_parse(response.body)
-      response_body["sis_publish_statuses"]["Published"].sort_by!{|x|x["id"]}
+      response_body["sis_publish_statuses"]["Synced"].sort_by!{|x| x["id"]}
       expect(response_body).to eq({
-          "sis_publish_overall_status" => "error",
-          "sis_publish_statuses" => {
-              "Error: cause of this reason" => [
-                  {"name"=>"User", "sortable_name"=>"User", "url"=>course_user_url(@course, students[1].user), "id"=>students[1].user.id}
-                ],
-              "Published" => [
-                  {"name"=>"User", "sortable_name"=>"User", "url"=>course_user_url(@course, students[0].user), "id"=>students[0].user.id},
-                  {"name"=>"User", "sortable_name"=>"User", "url"=>course_user_url(@course, students[2].user), "id"=>students[2].user.id}
-                ].sort_by{|x|x["id"]}
+        "sis_publish_overall_status" => "error",
+        "sis_publish_statuses" => {
+          "Error: cause of this reason" => [
+            {
+              "name"=>"User",
+              "sortable_name"=>"User",
+              "url"=>course_user_url(@course, students[1].user),
+              "id"=>students[1].user.id
             }
-        })
+          ],
+          "Synced" => [
+            {
+              "name"=>"User",
+              "sortable_name"=>"User",
+              "url"=>course_user_url(@course, students[0].user),
+              "id"=>students[0].user.id
+            },
+            {
+              "name"=>"User",
+              "sortable_name"=>"User",
+              "url"=>course_user_url(@course, students[2].user),
+              "id"=>students[2].user.id
+            }
+          ].sort_by{|x| x["id"]}
+        }
+      })
     end
   end
 
@@ -1780,17 +1939,32 @@ describe CoursesController do
 
       expect(response).to be_success
       response_body = json_parse(response.body)
-      response_body["sis_publish_statuses"]["Published"].sort_by!{|x|x["id"]}
+      response_body["sis_publish_statuses"]["Synced"].sort_by!{|x| x["id"]}
       expect(response_body).to eq({
-          "sis_publish_overall_status" => "published",
-          "sis_publish_statuses" => {
-              "Published" => [
-                  {"name"=>"User", "sortable_name"=>"User", "url"=>course_user_url(@course, students[0].user), "id"=>students[0].user.id},
-                  {"name"=>"User", "sortable_name"=>"User", "url"=>course_user_url(@course, students[1].user), "id"=>students[1].user.id},
-                  {"name"=>"User", "sortable_name"=>"User", "url"=>course_user_url(@course, students[2].user), "id"=>students[2].user.id}
-                ].sort_by{|x|x["id"]}
+        "sis_publish_overall_status" => "published",
+        "sis_publish_statuses" => {
+          "Synced" => [
+            {
+              "name"=>"User",
+              "sortable_name"=>"User",
+              "url"=>course_user_url(@course, students[0].user),
+              "id"=>students[0].user.id
+            },
+            {
+              "name"=>"User",
+              "sortable_name"=>"User",
+              "url"=>course_user_url(@course, students[1].user),
+              "id"=>students[1].user.id
+            },
+            {
+              "name"=>"User",
+              "sortable_name"=>"User",
+              "url"=>course_user_url(@course, students[2].user),
+              "id"=>students[2].user.id
             }
-        })
+          ].sort_by{|x| x["id"]}
+        }
+      })
     end
   end
 
@@ -2081,6 +2255,10 @@ describe CoursesController do
       test_student = @course.student_view_student
       assignment = @course.assignments.create!(:workflow_state => 'published', :moderated_grading => true)
       assignment.grade_student test_student, { :grade => 1, :grader => @teacher, :provisional => true }
+      file = assignment.attachments.create! uploaded_data: default_uploaded_data
+      assignment.submissions.first.add_comment(commenter: @teacher, message: 'blah', provisional: true, attachments: [file])
+      assignment.moderated_grading_selections.create!(:student => test_student, :provisional_grade => ModeratedGrading::ProvisionalGrade.last)
+
       expect(test_student.submissions.size).not_to be_zero
       delete 'reset_test_student', course_id: @course.id
       test_student.reload

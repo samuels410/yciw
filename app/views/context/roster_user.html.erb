@@ -1,4 +1,22 @@
 <%
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+%>
+
+<%
   add_crumb(t('#crumbs.people', "People"), context_url(@context, :context_users_url))
   add_crumb(context_user_name(@context, @user), context_url(@context, :context_user_url, @user))
   @active_tab="people"
@@ -129,7 +147,7 @@
                   </div>
                 <% end %>
                 <div style="font-size: 0.8em; padding-left: 20px; <%= hidden unless enrollment.completed? || enrollment.inactive? %>" class="completed_at_holder">
-                  <% if enrollment.inactive? %>
+                  <% if enrollment.workflow_state == 'inactive' %>
                     <%= t 'inactive' %>
                   <% elsif enrollment.completed_at %>
                     <%= t 'completed_enrollment', "completed *%{completed_at}*", :completed_at => datetime_string(enrollment.completed_at), :wrapper => '<span class="completed_at">\1</span>' %>

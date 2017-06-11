@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 module Messages
   class AssetContext
     attr_reader :asset, :notification_name
@@ -8,7 +25,7 @@ module Messages
 
     def from_name
       return nil unless has_named_source?
-      anonymized_user
+      CanvasTextHelper.truncate_text(anonymized_user_name, :max_length => 50)
     end
 
     def reply_to_name
@@ -18,7 +35,7 @@ module Messages
 
     private
 
-    def anonymized_user
+    def anonymized_user_name
       if is_anonymized_asset?
         asset.can_read_author?(asset.recipient, nil) ? source_user.short_name : I18n.t(:anonymous_user, 'Anonymous User')
       else

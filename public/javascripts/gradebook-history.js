@@ -1,5 +1,5 @@
-/**
- * Copyright (C) 2011 Instructure, Inc.
+/*
+ * Copyright (C) 2011 - present Instructure, Inc.
  *
  * This file is part of Canvas.
  *
@@ -12,8 +12,8 @@
  * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
  * details.
  *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 define([
@@ -23,6 +23,20 @@ define([
   'jquery.ajaxJSON' /* ajaxJSON */,
   'jquery.instructure_date_and_time' /* datetimeString */
 ], function (I18n, $, GradeFormatHelper) {
+  function announceUpdatedCurrentGrade (currentGrade) {
+    var noGrade = '--';
+    var flashMessage;
+    if (currentGrade === noGrade) {
+      flashMessage = I18n.t('Updated current grade to be empty');
+    } else {
+      flashMessage = I18n.t(
+        'Updated current grade to %{currentGrade}',
+        { currentGrade: currentGrade }
+      );
+    }
+    $.screenReaderFlashMessage(flashMessage);
+  }
+
   var GradebookHistory = {
     init: function(){
       $('.assignment_header').click(function(event) {
@@ -64,20 +78,23 @@ define([
       }
 
       $.ajaxJSON(url, method, formData, function(submissions) {
-        $.each(submissions, function(){
+        var currentGradeText;
+        $.each(submissions, function () {
           var submission = this.submission;
-          var el = $('.assignment_' + submission.assignment_id + '_user_' + submission.user_id + '_current_grade')
-            el.removeClass('loading');
-            el.attr('title', I18n.t('graded_by_me', "%{graded_time} by me", { 'graded_time': $.datetimeString(submission.graded_at) }));
-            if(submission.excused) {
-              el.text("EX");
-            } else {
-              el.text(GradeFormatHelper.formatGrade(submission.grade) || '--');
-            }
+          var el = $('.assignment_' + submission.assignment_id + '_user_' + submission.user_id + '_current_grade');
+          el.removeClass('loading');
+          el.attr('title', I18n.t('graded_by_me', "%{graded_time} by me", { 'graded_time': $.datetimeString(submission.graded_at) }));
+          if (submission.excused) {
+            currentGradeText = 'EX';
+          } else {
+            currentGradeText = GradeFormatHelper.formatGrade(submission.grade) || '--';
+          }
+          el.text(currentGradeText);
         });
+        announceUpdatedCurrentGrade(currentGradeText);
       });
     }
   };
 
-$(document).ready(GradebookHistory.init);
+  return GradebookHistory;
 });

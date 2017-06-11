@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -24,11 +24,11 @@ describe "/groups/show" do
     course_with_student
     @group = @course.groups.create!(:name => "some group")
     view_context(@group, @user)
-    assigns[:group] = @group
-    assigns[:topics] = []
-    assigns[:upcoming_events] = []
-    assigns[:context] = @group
-    assigns[:stream_items] = []
+    assign(:group, @group)
+    assign(:topics, [])
+    assign(:upcoming_events, [])
+    assign(:context, @group)
+    assign(:stream_items, [])
     render "groups/show"
     expect(response).not_to be_nil
   end

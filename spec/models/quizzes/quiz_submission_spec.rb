@@ -1,6 +1,6 @@
 # encoding: UTF-8
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -189,7 +189,7 @@ describe Quizzes::QuizSubmission do
       it "should not allow updating scores on an uncompleted submission" do
         qs = @quiz.generate_submission(@student)
         expect(qs).to be_untaken
-        expect { qs.update_scores }.to raise_error
+        expect { qs.update_scores({}) }.to raise_error("Can't update submission scores unless it's completed")
       end
 
       it "should update scores for a previous submission" do
@@ -222,7 +222,7 @@ describe Quizzes::QuizSubmission do
         qs.backup_submission_data({ "question_1" => "" }) # simulate k/v pairs we store for quizzes in progress
         expect(qs.reload.attempt).to eq 2
 
-        expect { qs.update_scores }.to raise_error
+        expect { qs.update_scores({}) }.to raise_error("Can't update submission scores unless it's completed")
         expect { qs.update_scores(:submission_version_number => 1, :fudge_points => 1, :question_score_1 => 0) }.not_to raise_error
 
         expect(qs).to be_untaken
@@ -1135,13 +1135,11 @@ describe Quizzes::QuizSubmission do
           s.score = 10
           s.save(:validate => false)
         end
-        expect(submission.version_number).to eq 1
 
         submission.with_versioning(true) do |s|
           s.score = 15
           s.save(:validate => false)
         end
-        expect(submission.version_number).to eq 2
       end
 
       it "updates a previous version given current attributes" do
@@ -1350,8 +1348,6 @@ describe Quizzes::QuizSubmission do
         @submission.score = 5.0
         @submission.attempt = 1
         @submission.with_versioning(true, &:save!)
-        expect(@submission.version_number).to eql(1)
-        expect(@submission.score).to eql(5.0)
         @submission.save
       end
 
@@ -1533,6 +1529,33 @@ describe Quizzes::QuizSubmission do
         other_enrollment = @course.enroll_teacher(other_teacher, :section => other_section, :limit_privileges_to_course_section => true)
         other_enrollment.accept
         expect(@quiz_submission.teachers).to_not include other_teacher
+      end
+    end
+  end
+
+  describe "associated submission" do
+    before(:each) { course_with_student }
+
+    it "assigns minutes_late to zero when not late" do
+      Timecop.freeze do
+        quiz = @course.quizzes.create(due_at: 5.minutes.from_now, quiz_type: "assignment")
+        qs = Quizzes::QuizSubmission.create(
+          finished_at: Time.zone.now, user: @user, quiz: quiz, workflow_state: :complete
+        )
+
+        expect(qs.submission.minutes_late).to be_zero
+      end
+    end
+
+    it "assigns minutes_late with a -1 minute offset" do
+      Timecop.freeze do
+        quiz = @course.quizzes.create(due_at: 5.minutes.ago, quiz_type: "assignment")
+        qs = Quizzes::QuizSubmission.create(
+          finished_at: Time.zone.now, user: @user, quiz: quiz, workflow_state: :complete
+        )
+
+        expected_minutes_late = (Time.zone.now - 60.seconds - 5.minutes.ago.change(sec: 0)) / 60
+        expect(qs.submission.minutes_late).to eq(expected_minutes_late)
       end
     end
   end

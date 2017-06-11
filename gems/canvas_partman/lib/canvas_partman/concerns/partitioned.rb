@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 module CanvasPartman::Concerns
   # Mix into a model to enforce partitioning behavior.
   #
@@ -99,7 +116,11 @@ module CanvasPartman::Concerns
 
         @arel_tables ||= {}
         @arel_tables[partition_table_name] ||= begin
-          Arel::Table.new(partition_table_name, { engine: self.arel_engine })
+          if ::ActiveRecord.version < Gem::Version.new('5')
+            Arel::Table.new(partition_table_name, { engine: self.arel_engine })
+          else
+            Arel::Table.new(partition_table_name, type_caster: type_caster)
+          end
         end
       end
 

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -20,7 +20,7 @@ require 'securerandom'
 
 class EportfolioCategoriesController < ApplicationController
   include EportfolioPage
-  before_filter :rich_content_service_config
+  before_action :rich_content_service_config
 
   def index
     @portfolio = Eportfolio.find(params[:eportfolio_id])
@@ -34,7 +34,7 @@ class EportfolioCategoriesController < ApplicationController
       @category = @portfolio.eportfolio_categories.build(eportfolio_category_params)
       respond_to do |format|
         if @category.save
-          @portfolio.eportfolio_entries.create(:eportfolio_category => @category, :name => t(:default_name, "New Page"), :allow_comments => true, :show_comments => :true)
+          @portfolio.eportfolio_entries.create(:eportfolio_category => @category, :name => t(:default_name, "New Page"), :allow_comments => true, :show_comments => true)
           format.html { redirect_to eportfolio_category_url(@portfolio, @category) }
           format.json { render :json => @category }
         else

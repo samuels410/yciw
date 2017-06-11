@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2013 - 2016 Instructure, Inc.
+# Copyright (C) 2015 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -95,5 +95,24 @@ describe 'lti report' do
       @t2.url,
       nil
     ])
+  end
+
+  it 'should not include tools from deleted courses' do
+    @course.destroy
+    parsed = read_report(@type, {order: 4})
+    expect(parsed.length).to eq 2
+  end
+
+  it 'should not include tools from courses in deleted accounts' do
+    @sub_account2.destroy
+    parsed = read_report(@type, {order: 4})
+    expect(parsed.length).to eq 2
+  end
+
+  it 'should include tools from deleted courses for include deleted objects' do
+    @sub_account2.destroy
+    @course.destroy
+    parsed = read_report(@type, {params: {"include_deleted" => true}, order: 4})
+    expect(parsed.length).to eq 3
   end
 end

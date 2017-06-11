@@ -1,6 +1,24 @@
 <%
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+%>
+
+<%
   currently_peer_reviewing = @assessment_request.try(:assigned?)
-  js_bundle :rubric_assessment, :submissions
+  js_bundle :submissions
   css_bundle :submission
   js_env({
     :RUBRIC_ASSESSMENT => {
@@ -49,31 +67,35 @@
               <% if @submission.excused? %>
                 <%= t "Excused" %>
               <% else %>
-                <%= @submission.published_grade %>
+                <%= i18n_grade(@submission.published_grade) %>
               <% end %>
             </span>
           <% end %>
           <br/>
         <% if can_do(@assignment, @current_user, :grade) %>
-          <span class="published_score" style="<%= hidden if @assignment.grading_type == 'points' %>"><% if @submission.published_score? %><%= @submission.published_score.round(2)%><% end %></span>
+          <span class="published_score" style="<%= hidden if @assignment.grading_type == 'points' %>">
+            <% if @submission.published_score? %><%= I18n.n(@submission.published_score.round(2)) %><% end %>
+          </span>
         <% elsif @submission.user_can_read_grade?(@current_user, session) %>
-          <span class="score" style="<%= hidden if @assignment.grading_type == 'points' %>"><% if @submission.score? %><%=@submission.score.round(2) %><% end %></span>
+          <span class="score" style="<%= hidden if @assignment.grading_type == 'points' %>">
+            <% if @submission.score? %><%= I18n.n(@submission.score.round(2)) %><% end %>
+          </span>
         <% end %>
-        <% if @submission.assignment.points_possible %>
-          <%= t('out_of_points', 'out of %{points_possible}', :points_possible => round_if_whole(@submission.assignment.points_possible)) %>
+        <% if @assignment.points_possible %>
+          <%= t('out of %{points_possible}', points_possible: I18n.n(round_if_whole(@assignment.points_possible))) %>
         <% end %>
         <br/>
 
         <% if can_do(@submission, @current_user, :view_turnitin_report) %>
-          <% if (turnitin_score = @submission.turnitin_data[@submission.asset_string]) && @submission.turnitin_data[:provider] == nil && turnitin_score[:similarity_score] %>
+          <% if (turnitin_score = @submission.turnitin_data[@submission.asset_string]) &&
+            @submission.turnitin_data[:provider] == nil && turnitin_score[:similarity_score] %>
             <span class="turnitin_score_container">
               <span class="turnitin_score_container_caret <%= turnitin_score[:state] %>_score"></span>
               <a href="<%= context_url(@context, :context_assignment_submission_turnitin_report_url, @submission.assignment_id, @submission.user_id, @submission.asset_string) %>" target="_blank" class="not_external turnitin_similarity_score <%= turnitin_score[:state] %>_score"><%= turnitin_score[:similarity_score] %>%</a>
             </span>
           <% end %>
         <% end %>
-      <% end %>
-      <% if @submission.can_view_plagiarism_report('vericite', @current_user, session) && !@assignment.muted? %>
+      <% elsif @submission.can_view_plagiarism_report('vericite', @current_user, session) && !@assignment.muted? %>
         <% if (vericite_score = @submission.vericite_data(true)[@submission.asset_string]) && @submission.turnitin_data[:provider] == :vericite && vericite_score[:similarity_score] %>
           <span class="turnitin_score_container">
             <span class="vericite_score_container_caret <%= vericite_score[:state] %>_score"></span>
@@ -101,7 +123,7 @@
     <h2 class="submission_header" style="margin-bottom: 0;"><%= @assessment_request ? t('peer_review', "Peer Review") : t('submission_details', "Submission Details") %></h2>
     <span class="SubmissionDetails__Text"><%= @assignment.title %>, <%= submission_author_name_for @assessment_request %></span>
 
-    <span class="SubmissionDetails__Text <%='late' if @submission.late? %> <%= hidden unless @submission.submitted_at %>">
+    <span class="SubmissionDetails__Text <%='late' if @submission.late? %> <%= 'hidden' unless @submission.submitted_at %>">
       <%= t('submitted_at', 'submitted %{submit_date}', :submit_date => datetime_string(@submission.submitted_at)) %>
       <%= t('late_submission', '(late)') if @submission.late? %>
     </span>
@@ -290,9 +312,4 @@
       </div>
     </div>
   </div>
-<% js_block do %>
-<script>
-var rubricAssessments = <%= raw @visible_rubric_assessments.to_json(:include => :assessor, :permissions => {:user => @current_user, :session => session}) %>;
-//rubricAssessment.populateRubric($("#rubric_holder"), rubricAssessments.rubric_assessment);
-</script>
-<% end %>
+<% js_env :rubricAssessments => @visible_rubric_assessments.as_json(:include => :assessor, :permissions => {:user => @current_user, :session => session}) %>

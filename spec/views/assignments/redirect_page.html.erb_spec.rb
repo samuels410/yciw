@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -25,8 +25,8 @@ describe "/assignments/redirect_page" do
     view_context(@course, @user)
     a = @course.assignments.create(:title => "some assignment")
     s = a.submit_homework(@user)
-    assigns[:assignment] = a
-    assigns[:submission] = s
+    assign(:assignment, a)
+    assign(:submission, s)
     render 'assignments/redirect_page'
     expect(response).not_to be_nil
   end

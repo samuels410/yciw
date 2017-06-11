@@ -1,20 +1,29 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require 'net/http'
 
 require 'cgi'
 
-require 'academic_benchmark_v1'
-
 require 'academic_benchmark/engine'
-require 'academic_benchmark/cli_tools'
 
 require 'academic_benchmark/ab_gem_extensions/standard'
 require 'academic_benchmark/ab_gem_extensions/authority'
 require 'academic_benchmark/ab_gem_extensions/document'
-
-require 'academic_benchmark/outcome_data'
-require 'academic_benchmark/outcome_data/from_api'
-require 'academic_benchmark/outcome_data/from_file'
-
 
 module AcademicBenchmark
   NATIONAL_STANDARDS_TITLE = "National Standards".freeze

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2013 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -17,7 +17,7 @@
 #
 
 class AppCenterController < ApplicationController
-  before_filter :require_context
+  before_action :require_context
 
   def map_tools_to_apps!(context, apps)
     return unless apps

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -121,7 +121,8 @@ define [
         $text.attr('title', text)
         $text.text(text)
         $token.append($text)
-        $close = $('<a />')
+        $close = $('<a/>')
+        $close.append($('<i class="icon-x" aria-hidden="true"></i>'))
         $token.append($close)
         $token.append($('<input />')
           .attr('type', 'hidden')

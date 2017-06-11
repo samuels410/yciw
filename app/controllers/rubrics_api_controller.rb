@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016 Instructure, Inc.
+# Copyright (C) 2016 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -137,17 +137,17 @@ class RubricsApiController < ApplicationController
   include Api::V1::Rubric
   include Api::V1::RubricAssessment
 
-  before_filter :require_user
-  before_filter :require_context
-  before_filter :validate_args
-  before_filter :find_rubric, only: [:show]
+  before_action :require_user
+  before_action :require_context
+  before_action :validate_args
+  before_action :find_rubric, only: [:show]
 
   # @API List rubrics
   # Returns the paginated list of active rubrics for the current context.
 
   def index
     return unless authorized_action(@context, @current_user, :manage_rubrics)
-    rubrics = Api.paginate(@context.rubrics.active, self, api_v1_course_assignments_url(@context))
+    rubrics = Api.paginate(@context.rubrics.active, self, rubric_pagination_url)
     render json: rubrics_json(rubrics, @current_user, session) unless performed?
   end
 

@@ -1,22 +1,35 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'i18n!datepicker'
   'jquery'
   'underscore'
   'timezone'
+  'jsx/shared/helpers/datePickerFormat'
   'jquery.instructure_date_and_time' # for $input.datepicker
   'compiled/jquery.rails_flash_notifications' # for $.screenReaderFlashMessageExclusive
-], (I18n, $, {debounce}, tz) ->
-
-  # translate a strftime style format string (guaranteed to only use %d, %-d,
-  # %b, and %Y, though in dynamic order) into a datepicker style format string
-  datepickerFormat = (format) ->
-    format.replace(/%Y/, 'yy').replace(/%b/, 'M').replace(/%-?d/, 'd')
+], (I18n, $, {debounce}, tz, datePickerFormat) ->
 
   # adds datepicker and suggest functionality to the specified $field
   class DatetimeField
     datepickerDefaults:
       constrainInput: false
-      dateFormat: datepickerFormat(I18n.t('#date.formats.medium'))
+      dateFormat: datePickerFormat(I18n.t('#date.formats.medium'))
       showOn: 'button'
       buttonText: '<i class="icon-calendar-month"></i>'
       buttonImageOnly: false
@@ -80,26 +93,28 @@ define [
     addDatePicker: (options) ->
       @$field.wrap('<div class="input-append" />')
       $wrapper = @$field.parent('.input-append')
-      datepickerOptions = $.extend {}, @datepickerDefaults, {
-        timePicker: @allowTime,
-        beforeShow: () =>
-          @$field.trigger("detachTooltip")
-        ,
-        onClose: () =>
-          @$field.trigger("reattachTooltip")
-      }, options.datepicker
-      @$field.datepicker(datepickerOptions)
+      unless @isReadonly()
+        datepickerOptions = $.extend {}, @datepickerDefaults, {
+          timePicker: @allowTime,
+          beforeShow: () =>
+            @$field.trigger("detachTooltip")
+          ,
+          onClose: () =>
+            @$field.trigger("reattachTooltip")
+        }, options.datepicker
+        @$field.datepicker(datepickerOptions)
 
-      # TEMPORARY FIX: Hide from aria screenreader until the jQuery UI datepicker is updated for accessibility.
-      $datepickerButton = @$field.next()
-      $datepickerButton.attr('aria-hidden', 'true')
-      $datepickerButton.attr('tabindex', '-1')
-      if (options.disableButton)
-        $datepickerButton.attr('disabled', 'true')
+        # TEMPORARY FIX: Hide from aria screenreader until the jQuery UI datepicker is updated for accessibility.
+        $datepickerButton = @$field.next()
+        $datepickerButton.attr('aria-hidden', 'true')
+        $datepickerButton.attr('tabindex', '-1')
+        if (options.disableButton)
+          $datepickerButton.attr('disabled', 'true')
 
       return $wrapper
 
     addSuggests: ($sibling, options={}) ->
+      return if @isReadonly()
       @courseTimezone = options.courseTimezone or ENV.CONTEXT_TIMEZONE
       @$suggest = $('<div class="datetime_suggest" />').insertAfter($sibling)
       if @courseTimezone? and @courseTimezone isnt ENV.TIMEZONE
@@ -220,6 +235,7 @@ define [
           'time-ampm': null
 
     updateSuggest: ->
+      return if @isReadonly()
       localText = @formatSuggest()
       @screenreaderAlert = localText
       if @$courseSuggest
@@ -271,3 +287,6 @@ define [
         I18n.t("#date.formats.medium_with_weekday")
       else
         I18n.t("#time.formats.tiny")
+
+    isReadonly: ->
+      !!@$field.attr('readonly')

@@ -139,9 +139,9 @@ describe Api::V1::Course do
 
     context "total_scores" do
       before do
-        @enrollment.computed_current_score = 95.0;
-        @enrollment.computed_final_score = 85.0;
-        def @course.grading_standard_enabled?; true; end
+        @enrollment.scores.create!(current_score: 95.0, final_score: 85.0)
+        @course.grading_standard_enabled = true
+        @course.save!
       end
 
       let(:json) { @test_api.course_json(@course1, @me, {}, ['total_scores'], [@enrollment]) }
@@ -153,8 +153,8 @@ describe Api::V1::Course do
           "role_id" => student_role.id,
           "user_id" => @me.id,
           "enrollment_state" => "active",
-          "computed_current_score" => 95,
-          "computed_final_score" => 85,
+          "computed_current_score" => 95.0,
+          "computed_final_score" => 85.0,
           "computed_current_grade" => "A",
           "computed_final_grade" => "B"
         }]
@@ -373,6 +373,29 @@ describe CoursesController, type: :request do
 
     courses = json.select { |c| [@course1.id, @course2.id].include?(c['id']) }
     expect(courses.length).to eq 2
+  end
+
+  it "returns course list ordered by name (including nicknames)" do
+    c1 = course_with_student(course_name: 'def', active_all: true).course
+    c2 = course_with_student(user: @student, course_name: 'abc', active_all: true).course
+    c3 = course_with_student(user: @student, course_name: 'jkl', active_all: true).course
+    c4 = course_with_student(user: @student, course_name: 'xyz', active_all: true).course
+    @student.course_nicknames[c4.id] = 'ghi'; @student.save!
+    json = api_call(:get, "/api/v1/courses.json", controller: 'courses', action: 'index', format: 'json')
+    expect(json.map { |course| course['name'] }).to eq %w(abc def ghi jkl)
+  end
+
+  it "should exclude master courses if requested" do
+    c1 = course_with_teacher(active_all: true).course
+    MasterCourses::MasterTemplate.set_as_master_course(c1)
+    c2 = course_with_teacher(user: @teacher, active_all: true).course
+
+    json = api_call(:get, "/api/v1/courses.json", controller: 'courses', action: 'index', format: 'json')
+    expect(json.map { |course| course['id'] }).to match_array([c1.id, c2.id])
+
+    json = api_call(:get, "/api/v1/courses.json?exclude_blueprint_courses=1",
+      controller: 'courses', action: 'index', format: 'json', exclude_blueprint_courses: '1')
+    expect(json.map { |course| course['id'] }).to eq([c2.id])
   end
 
   describe "user index" do
@@ -935,7 +958,6 @@ describe CoursesController, type: :request do
 
       context "when an assignment is due in a closed grading period" do
         before(:once) do
-          @course.root_account.enable_feature!(:multiple_grading_periods)
           @course.update_attributes(group_weighting_scheme: "equal")
           @grading_period_group = Factories::GradingPeriodGroupHelper.new.create_for_account(@course.root_account)
           term = @course.enrollment_term
@@ -1092,10 +1114,6 @@ describe CoursesController, type: :request do
           })
         end
 
-        before :each do
-          @course.root_account.enable_feature!(:multiple_grading_periods)
-        end
-
         it "cannot change apply_assignment_group_weights with a term change" do
           @term.grading_period_group = @grading_period_group
           @term.save!
@@ -1134,14 +1152,6 @@ describe CoursesController, type: :request do
           expect(response.code).to eql '401'
           @course.reload
           expect(@course.group_weighting_scheme).to eql("equal")
-        end
-
-        it "succeeds when multiple grading periods is disabled" do
-          @course.root_account.disable_feature!(:multiple_grading_periods)
-          raw_api_call(:put, @path, @params, @new_values)
-          expect(response.code).to eql '200'
-          @course.reload
-          expect(@course.group_weighting_scheme).to eql("percent")
         end
 
         it "succeeds when apply_assignment_group_weights is not changed" do
@@ -1595,10 +1605,8 @@ describe CoursesController, type: :request do
 
     context "include total scores" do
       before(:once) do
-        @course2.all_student_enrollments.update_all(
-          computed_current_score: 80,
-          computed_final_score: 70
-        )
+        student_enrollment = @course2.all_student_enrollments.first
+        student_enrollment.scores.create!(current_score: 80, final_score: 70)
       end
 
       it "includes scores in course list if requested" do
@@ -1628,6 +1636,7 @@ describe CoursesController, type: :request do
     context "include current grading period scores" do
       let(:grading_period_keys) do
         [ 'multiple_grading_periods_enabled',
+          'has_grading_periods',
           'totals_for_all_grading_periods_option',
           'current_period_computed_current_score',
           'current_period_computed_final_score',
@@ -1665,33 +1674,31 @@ describe CoursesController, type: :request do
         @course2.save
         json_response = courses_api_index_call(includes: ['total_scores', 'current_grading_period_scores'])
         enrollment_json = enrollment(json_response)
-        expect(enrollment_json).to_not include(*grading_period_keys)
+        expect(enrollment_json).not_to include(*grading_period_keys)
       end
 
-      it "returns true for 'multiple_grading_periods_enabled' on the enrollment " \
-      "JSON if the course has Multiple Grading Periods enabled" do
+      it "returns true for 'has_grading_periods' on the enrollment " \
+      "JSON if the course has grading periods" do
         json_response = courses_api_index_call(includes: ['total_scores', 'current_grading_period_scores'])
         enrollment_json = enrollment(json_response)
-        expect(enrollment_json['multiple_grading_periods_enabled']).to eq(true)
+        expect(enrollment_json['has_grading_periods']).to be true
+        expect(enrollment_json['multiple_grading_periods_enabled']).to be true
       end
 
-      it "returns false for 'multiple_grading_periods_enabled' if the course has Multiple Grading Periods disabled" do
-        @course2.root_account.disable_feature!(:multiple_grading_periods)
-        json_response = courses_api_index_call(includes: ['total_scores', 'current_grading_period_scores'])
-        enrollment_json = enrollment(json_response)
-        expect(enrollment_json['multiple_grading_periods_enabled']).to eq(false)
-      end
-
-      it "returns a 'multiple_grading_periods_enabled' key at the course-level " \
+      it "returns 'has_grading_periods' and 'has_weighted_grading_periods' keys at the course-level " \
       "on the JSON response if 'current_grading_period_scores' are requested" do
         course_json_response = courses_api_index_call(includes: ['total_scores', 'current_grading_period_scores']).first
+        expect(course_json_response).to have_key 'has_grading_periods'
         expect(course_json_response).to have_key 'multiple_grading_periods_enabled'
+        expect(course_json_response).to have_key 'has_weighted_grading_periods'
       end
 
-      it "does not return a 'multiple_grading_periods_enabled' key at the course-level " \
+      it "does not return 'has_grading_periods' and 'has_weighted_grading_periods' keys at the course-level " \
       "on the JSON response if 'current_grading_period_scores' are not requested" do
         course_json_response = courses_api_index_call.first
-        expect(course_json_response).to_not have_key 'multiple_grading_periods_enabled'
+        expect(course_json_response).not_to have_key 'has_grading_periods'
+        expect(course_json_response).not_to have_key 'multiple_grading_periods_enabled'
+        expect(course_json_response).not_to have_key 'has_weighted_grading_periods'
       end
 
       context "computed scores" do
@@ -2268,6 +2275,7 @@ describe CoursesController, type: :request do
         @user = @course1.teachers.first
         @ta.profile.bio = 'hey'
         @ta.save!
+        @ta_enroll1.accept!
         @course1.root_account.settings[:enable_profiles] = true
         @course1.root_account.save!
 
@@ -2390,12 +2398,26 @@ describe CoursesController, type: :request do
         expect(json.map{ |s| s["name"] }).to include("Test Student")
       end
 
-      it "returns a list of users with emails" do
+      it "returns a list of users with emails (unless unconfirmed)" do
+        secretstudent = user_with_pseudonym(:username => 'secretuser@example.com', :active_all => true)
+        @course1.enroll_student(secretstudent) #don't accept
         @user = @course1.teachers.first
-        json = api_call(:get, "/api/v1/courses/#{@course1.id}/users.json",
+        json1 = api_call(:get, "/api/v1/courses/#{@course1.id}/users.json",
                         { :controller => 'courses', :action => 'users', :course_id => @course1.id.to_s, :format => 'json' },
                         :include => ['email'])
-        json.each { |u| expect(u.keys).to include('email') }
+
+        json2 = api_call(:get, "/api/v1/courses/#{@course1.id}/users.json",
+          { :controller => 'courses', :action => 'users', :course_id => @course1.id.to_s, :format => 'json' },
+          :include => ['email', 'enrollments']) # should work either way
+
+        [json1, json2].each do |json|
+          normal = json.detect{|h| h['id'] == @user.id}
+          expect(normal['email']).to eq @user.email
+          expect(normal['login_id']).to eq @user.pseudonym.unique_id
+
+          secret = json.detect{|h| h['id'] == secretstudent.id}
+          expect(secret.keys & %w{email login_id}).to be_empty
+        end
       end
 
       it "returns a list of users and enrollments with enrollments option" do
@@ -3479,7 +3501,6 @@ describe CoursesController, type: :request do
     let_once(:account) { Account.default }
     let_once(:test_course) { account.courses.create! }
     let_once(:grading_period) do
-      account.enable_feature!(:multiple_grading_periods)
       group = account.grading_period_groups.create!(title: "Score Test Group")
       group.enrollment_terms << test_course.enrollment_term
       Factories::GradingPeriodHelper.new.create_presets_for_group(group, :current)

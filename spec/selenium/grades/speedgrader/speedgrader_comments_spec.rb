@@ -1,6 +1,24 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_relative "../../common"
 require_relative "../../helpers/speed_grader_common"
 require_relative "../../helpers/assignments_common"
+require_relative "../page_objects/speedgrader_page"
 
 describe "speed grader" do
   include_context "in-process server selenium tests"
@@ -63,6 +81,17 @@ describe "speed grader" do
         f('#speed_grader_gradebook_link').click
       end
       expect(f('body.grades')).to be_displayed
+    end
+
+    it 'displays attachments', test_id: 3058055, priority: "1" do
+      student_submission
+      filename, fullpath, _data = get_file("amazing_file.txt")
+      Speedgrader.visit(@course.id, @assignment.id)
+      Speedgrader.add_comment_attachment(fullpath)
+      Speedgrader.add_comment_and_submit("commenting")
+
+      expect(Speedgrader.attachment_link).to include_text("amazing_file")
+      expect(Speedgrader.attachment_link).to be_displayed
     end
 
     it "shows comment post time", priority: "1", test_id: 283755 do

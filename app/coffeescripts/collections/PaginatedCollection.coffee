@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -17,9 +17,10 @@
 #
 
 define [
+  'jquery'
   'Backbone'
   'underscore'
-], (Backbone, _) ->
+], ($, Backbone, _) ->
 
   capitalize = (string = '') ->
     string.charAt(0).toUpperCase() + string.substring(1).toLowerCase()

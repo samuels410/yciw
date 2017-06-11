@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 class AddRoleIdColumns < ActiveRecord::Migration[4.2]
   disable_ddl_transaction!
   tag :predeploy
@@ -37,127 +54,6 @@ class AddRoleIdColumns < ActiveRecord::Migration[4.2]
           ) LIMIT 1
         )"
       Role.connection.update(delete_duplicate_roles_sql)
-
-      # create triggers to handle things until the postdeploy runs
-      create_trigger("account_user_after_insert_set_role_id__tr", :generated => true).
-          on("account_users").
-          after(:insert).
-          where("NEW.role_id IS NULL") do
-        <<-SQL_ACTIONS
-            UPDATE account_users
-            SET role_id = (
-              SELECT id FROM roles WHERE roles.name = NEW.membership_type AND (
-                roles.workflow_state = 'built_in' OR (
-                  roles.workflow_state = 'active' AND (
-                    roles.account_id = NEW.account_id OR
-                    roles.account_id IN (
-                      WITH RECURSIVE t AS (
-                        SELECT * FROM accounts WHERE id=NEW.account_id
-                        UNION
-                        SELECT accounts.* FROM accounts INNER JOIN t ON accounts.id=t.parent_account_id
-                      )
-                      SELECT id FROM t
-                    )
-                  )
-                )
-              ) LIMIT 1
-            ) WHERE id = NEW.id
-        SQL_ACTIONS
-      end
-      connection.set_search_path_on_function("account_user_after_insert_set_role_id__tr")
-
-      create_trigger("account_notification_role_after_insert_set_role_id__tr", :generated => true).
-          on("account_notification_roles").
-          after(:insert).
-          where("NEW.role_id IS NULL") do
-        <<-SQL_ACTIONS
-            UPDATE account_notification_roles
-            SET role_id = (
-              SELECT id FROM roles WHERE roles.name = NEW.role_type AND (
-                roles.workflow_state = 'built_in' OR (
-                  roles.workflow_state = 'active' AND (
-                    roles.account_id = (SELECT account_id FROM account_notifications WHERE id=NEW.account_notification_id LIMIT 1) OR
-                    roles.account_id IN (
-                      WITH RECURSIVE t AS (
-                        SELECT * FROM accounts WHERE id=(SELECT account_id FROM account_notifications WHERE id=NEW.account_notification_id LIMIT 1)
-                        UNION
-                        SELECT accounts.* FROM accounts INNER JOIN t ON accounts.id=t.parent_account_id
-                      )
-                      SELECT id FROM t
-                    )
-                  )
-                )
-              ) LIMIT 1
-            ) WHERE id = NEW.id
-        SQL_ACTIONS
-      end
-      connection.set_search_path_on_function("account_notification_role_after_insert_set_role_id__tr")
-
-      create_trigger("enrollment_after_insert_set_role_id_if_role_name__tr", :generated => true).
-          on("enrollments").
-          after(:insert).
-          where("NEW.role_id IS NULL AND NEW.role_name IS NOT NULL") do
-        <<-SQL_ACTIONS
-            UPDATE enrollments
-            SET role_id = (
-              SELECT id FROM roles WHERE roles.name = NEW.role_name AND (
-                roles.workflow_state = 'built_in' OR (
-                  roles.workflow_state = 'active' AND (
-                    roles.account_id = (SELECT account_id FROM courses WHERE id=NEW.course_id LIMIT 1) OR
-                    roles.account_id IN (
-                      WITH RECURSIVE t AS (
-                        SELECT * FROM accounts WHERE id=(SELECT account_id FROM courses WHERE id=NEW.course_id LIMIT 1)
-                        UNION
-                        SELECT accounts.* FROM accounts INNER JOIN t ON accounts.id=t.parent_account_id
-                      )
-                      SELECT id FROM t
-                    )
-                  )
-                )
-              ) LIMIT 1
-            ) WHERE id = NEW.id
-        SQL_ACTIONS
-      end
-      connection.set_search_path_on_function("enrollment_after_insert_set_role_id_if_role_name__tr")
-
-      create_trigger("enrollment_after_insert_set_role_id_if_no_role_name__tr", :generated => true).
-          on("enrollments").
-          after(:insert).
-          where("NEW.role_id IS NULL AND NEW.role_name IS NULL") do
-        <<-SQL_ACTIONS
-            UPDATE enrollments
-            SET role_id = (SELECT id FROM roles WHERE roles.workflow_state = 'built_in' AND roles.name = NEW.type LIMIT 1)
-            WHERE id = NEW.id
-        SQL_ACTIONS
-      end
-      connection.set_search_path_on_function("enrollment_after_insert_set_role_id_if_no_role_name__tr")
-
-      create_trigger("role_override_after_insert_set_role_id__tr", :generated => true).
-          on("role_overrides").
-          after(:insert).
-          where("NEW.role_id IS NULL AND NEW.context_type = 'Account'") do
-        <<-SQL_ACTIONS
-            UPDATE role_overrides
-            SET role_id = (
-              SELECT id FROM roles WHERE roles.name = NEW.enrollment_type AND (
-                roles.workflow_state = 'built_in' OR (
-                  roles.workflow_state = 'active' AND (
-                    roles.account_id = NEW.context_id OR
-                    roles.account_id IN (
-                      WITH RECURSIVE t AS (
-                        SELECT * FROM accounts WHERE id=NEW.context_id
-                        UNION
-                        SELECT accounts.* FROM accounts INNER JOIN t ON accounts.id=t.parent_account_id
-                      )
-                      SELECT id FROM t
-                    )
-                  )
-                )
-              ) LIMIT 1
-            ) WHERE id = NEW.id
-        SQL_ACTIONS
-      end
-      connection.set_search_path_on_function("role_override_after_insert_set_role_id__tr")
     end
 
     # Populate the role_ids for account_users and role_overrides (and enrollments with custom role_names)

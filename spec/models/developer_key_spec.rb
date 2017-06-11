@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -54,6 +54,36 @@ describe DeveloperKey do
     key.redirect_uris = ['tealpass://somewhere.edu/authentication']
     expect(key).to be_valid
   end
+
+  it "returns the correct count of access_tokens" do
+    key = DeveloperKey.create!(
+      :name => 'test',
+      :email => 'test@test.com',
+      :redirect_uri => 'http://test.com'
+    )
+
+    expect(key.access_token_count).to eq 0
+
+    AccessToken.create!(:user => user_model, :developer_key => key)
+    AccessToken.create!(:user => user_model, :developer_key => key)
+    AccessToken.create!(:user => user_model, :developer_key => key)
+
+    expect(key.access_token_count).to eq 3
+  end
+
+  it "returns the last_used_at value for a key" do
+    key = DeveloperKey.create!(
+      :name => 'test',
+      :email => 'test@test.com',
+      :redirect_uri => 'http://test.com'
+    )
+
+    expect(key.last_used_at).to be_nil
+    at = AccessToken.create!(:user => user_model, :developer_key => key)
+    at.used!
+    expect(key.last_used_at).not_to be_nil
+  end
+
 
   describe "#redirect_domain_matches?" do
     it "should match domains exactly, and sub-domains" do
@@ -121,5 +151,10 @@ describe DeveloperKey do
 
       include_examples "authorized_for_account?"
     end
+  end
+
+  it "doesn't allow the default key to be deleted" do
+    expect { DeveloperKey.default.destroy }.to raise_error "Please never delete the default developer key"
+    expect { DeveloperKey.default.deactivate }.to raise_error "Please never delete the default developer key"
   end
 end

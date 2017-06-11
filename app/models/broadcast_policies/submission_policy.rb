@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 module BroadcastPolicies
   class SubmissionPolicy
     attr_reader :submission
@@ -74,20 +91,16 @@ module BroadcastPolicies
     end
 
     def just_submitted?
-      (submission.just_created && submission.submitted?) || submission.changed_state_to(:submitted)
+      submission.changed_state_to(:submitted)
     end
 
     def just_submitted_late?
-      (just_submitted? || prior.try(:submitted_at) != submission.submitted_at)
-    end
-
-    def prior
-      submission.prior_version
+      (just_submitted? || submission.submitted_at_changed?)
     end
 
     def is_a_resubmission?
-      prior.submitted_at &&
-      prior.submitted_at != submission.submitted_at
+      submission.submitted_at_was &&
+      submission.submitted_at_changed?
     end
 
     def grade_updated?

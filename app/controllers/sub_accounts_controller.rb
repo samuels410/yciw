@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -42,7 +42,7 @@ class SubAccountsController < ApplicationController
     end
   end
 
-  before_filter :require_context, :require_account_management
+  before_action :require_context, :require_account_management
   def index
     @query = params[:account] && params[:account][:name] || params[:term]
     if @query

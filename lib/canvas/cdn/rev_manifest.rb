@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require 'set'
 
 # An interface to the manifest file created by `gulp rev` and webpack
@@ -59,14 +76,18 @@ module Canvas
           "/#{webpack_dir}/#{fingerprinted}" if fingerprinted
         end
 
+        def revved_url_for(source)
+          fingerprinted = gulp_manifest[source]
+          "/dist/#{fingerprinted}" if fingerprinted
+        end
+
         def url_for(source)
           # remove the leading slash if there is one
           source = source.sub(/^\//, '')
           if webpack_request?(source)
             webpack_url_for(source)
           else
-            fingerprinted = gulp_manifest[source]
-            "/dist/#{fingerprinted}" if fingerprinted
+            revved_url_for(source)
           end
         end
 
@@ -92,7 +113,8 @@ module Canvas
             Rails.logger.debug "reading #{file}"
             @webpack_manifest = JSON.parse(file.read).freeze
           else
-            raise "you need to run webpack"
+            raise "you need to run webpack" unless Rails.env.test?
+            @webpack_manifest = Hash.new("Error: you need to run webpack").freeze
           end
           @webpack_revved_urls = Set.new(@webpack_manifest.values.map{|s| "/#{webpack_dir}/#{s}" }).freeze
         end

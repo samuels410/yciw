@@ -1,5 +1,5 @@
-
-# Copyright (C) 2011-2012 Instructure, Inc.
+#
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -19,9 +19,9 @@
 # @API Logins
 # API for creating and viewing user logins under an account
 class PseudonymsController < ApplicationController
-  before_filter :get_context, :only => [:index, :create]
-  before_filter :require_user, :only => [:create, :show, :edit, :update]
-  before_filter :reject_student_view_student, :only => [:create, :show, :edit, :update]
+  before_action :get_context, :only => [:index, :create]
+  before_action :require_user, :only => [:create, :show, :edit, :update]
+  before_action :reject_student_view_student, :only => [:create, :show, :edit, :update]
   protect_from_forgery :except => [:registration_confirmation, :change_password, :forgot_password], with: :exception
 
   include Api::V1::Pseudonym

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2013 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -83,9 +83,9 @@
 #     }
 #
 class GroupCategoriesController < ApplicationController
-  before_filter :get_context
-  before_filter :require_context, :only => [:create, :index]
-  before_filter :get_category_context, :only => [:show, :update, :destroy, :groups, :users, :assign_unassigned_members]
+  before_action :get_context
+  before_action :require_context, :only => [:create, :index]
+  before_action :get_category_context, :only => [:show, :update, :destroy, :groups, :users, :assign_unassigned_members]
 
   include Api::V1::Attachment
   include Api::V1::GroupCategory
@@ -465,7 +465,7 @@ class GroupCategoriesController < ApplicationController
   end
 
   def populate_group_category_from_params
-    args = api_request? ? params : params[:category]
+    args = api_request? ? params : (params[:category] || {})
     @group_category = GroupCategories::ParamsPolicy.new(@group_category, @context).populate_with(args)
     unless @group_category.save
       render :json => @group_category.errors, :status => :bad_request

@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 module DataFixup::MoveAccountMembershipTypesToRoles
   def self.run
     # Step 1.
@@ -7,7 +24,7 @@ module DataFixup::MoveAccountMembershipTypesToRoles
   Account.where("membership_types IS NOT NULL").select([:id, :membership_types]).
     find_in_batches do |accounts|
       roles = Role.where(:account_id => accounts).select([:account_id, :name]).to_a
-      account_users = AccountUser.where(:account_id => accounts).select([:account_id, :membership_type]).uniq.to_a
+      account_users = AccountUser.where(:account_id => accounts).select([:account_id, :membership_type]).distinct.to_a
 
       accounts.each do |account|
         names = roles.select{|r| r.account_id == account.id}.collect(&:name) + Role::KNOWN_TYPES
@@ -42,7 +59,7 @@ module DataFixup::MoveAccountMembershipTypesToRoles
     #   then look for the role overrides that are referencing to a (presumably) deleted membership type
     #   and make 'inactive' roles for each of them, if they don't exist already
     RoleOverride.where("context_type='Account' AND enrollment_type NOT IN (?)", Role::KNOWN_TYPES).
-                 uniq.
+                 distinct.
                  select([:context_id, :enrollment_type]).each_slice(500) do |role_overrides|
       roles = Role.where(:account_id => role_overrides.collect(&:context_id).uniq).select([:account_id, :name]).to_a
 

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -17,7 +17,7 @@
 #
 
 class QuestionBanksController < ApplicationController
-  before_filter :require_context, :except => :bookmark
+  before_action :require_context, :except => :bookmark
   add_crumb(proc { t('#crumbs.question_banks', "Question Banks") }, :except => :bookmark) { |c| c.send :named_context_url, c.instance_variable_get("@context"), :context_question_banks_url }
 
   include Api::V1::Outcome
@@ -90,7 +90,7 @@ class QuestionBanksController < ApplicationController
             "INSERT INTO #{AssessmentQuestion.quoted_table_name} (#{(%w{assessment_question_bank_id created_at updated_at} + attributes).join(', ')})" +
             @questions.select(([@new_bank.id, now, now] + attributes).join(', ')).to_sql)
       else
-        @questions.update_all(:assessment_question_bank_id => @new_bank)
+        @questions.update_all(:assessment_question_bank_id => @new_bank.id)
       end
 
       [ @bank, @new_bank ].each(&:touch)

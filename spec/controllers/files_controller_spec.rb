@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -150,25 +150,17 @@ describe FilesController do
       expect(assigns[:contexts][0]).to eql(@course)
     end
 
-    it "should return data for sub_folder if specified" do
+    it "should return a json format for wiki sidebar" do
       user_session(@teacher)
+      r1 = Folder.root_folders(@course).first
       f1 = course_folder
       a1 = folder_file
       get 'index', :course_id => @course.id, :format => 'json'
       expect(response).to be_success
       data = json_parse
       expect(data).not_to be_nil
-      expect(data['contexts'].length).to eql(1)
-      expect(data['contexts'][0]['course']['id']).to eql(@course.id)
-
-      f2 = course_folder
-      a2 = folder_file
-      get 'index', :course_id => @course.id, :folder_id => f2.id, :format => 'json'
-      expect(response).to be_success
-      expect(assigns[:current_folder]).to eql(f2)
-      expect(assigns[:current_attachments]).not_to be_nil
-      expect(assigns[:current_attachments]).not_to be_empty
-      expect(assigns[:current_attachments][0]).to eql(a2)
+      # order expected
+      expect(data["folders"].map{|x| x["folder"]["id"]}).to eql([r1.id, f1.id])
     end
 
     it "should work for a user context, too" do
@@ -412,14 +404,6 @@ describe FilesController do
       it "should mark files as viewed for module progressions if the file is downloaded" do
         file_in_a_module
         get 'show', :course_id => @course.id, :id => @file.id, :download => 1
-        @module.reload
-        expect(@module.evaluate_for(@student).state).to eql(:completed)
-      end
-
-      it "should mark files as viewed for module progressions if the file is previewed inline" do
-        file_in_a_module
-        get 'show', :course_id => @course.id, :id => @file.id, :inline => 1
-        expect(json_parse).to eq({'ok' => true})
         @module.reload
         expect(@module.evaluate_for(@student).state).to eql(:completed)
       end
@@ -872,7 +856,7 @@ describe FilesController do
       expect(json['id']).to eql(assigns[:attachment].id)
       expect(json['upload_url']).not_to be_nil
       expect(json['upload_params']).to be_present
-      expect(json['upload_params']['AWSAccessKeyId']).to eq 'stub_id'
+      expect(json['upload_params']['x-amz-credential']).to start_with('stub_id')
     end
 
     it "should not allow going over quota for file uploads" do
@@ -906,7 +890,7 @@ describe FilesController do
       expect(json['id']).to eql(assigns[:attachment].id)
       expect(json['upload_url']).not_to be_nil
       expect(json['upload_params']).to be_present
-      expect(json['upload_params']['AWSAccessKeyId']).to eq 'stub_id'
+      expect(json['upload_params']['x-amz-credential']).to start_with('stub_id')
     end
 
     it "should associate assignment submission for a group assignment with the group" do
@@ -997,6 +981,26 @@ describe FilesController do
       expect(assigns[:attachment]).not_to be_nil
       expect(assigns[:attachment].context).to eq group
       expect(assigns[:attachment].folder).to be_for_submissions
+    end
+
+    it "does not require usage rights for group submissions to be visible to students" do
+      @course.root_account.enable_feature! :submissions_folder
+      @course.root_account.enable_feature! :usage_rights_required
+      user_session(@student)
+      category = group_category
+      assignment = @course.assignments.create(:group_category => category, :submission_types => 'online_upload')
+      group = category.groups.create(:context => @course)
+      group.add_user(@student)
+      user_session(@student)
+      post 'create_pending', {:attachment => {
+        :context_code => @course.asset_string,
+        :asset_string => assignment.asset_string,
+        :intent => 'submit',
+        :filename => "bob.txt"
+      }}
+      expect(response).to be_success
+      expect(assigns[:attachment]).not_to be_nil
+      expect(assigns[:attachment]).not_to be_locked
     end
 
     context "sharding" do

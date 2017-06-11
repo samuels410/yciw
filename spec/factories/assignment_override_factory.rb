@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -58,5 +58,14 @@ module Factories
       @override_student.save!
     end
     @override
+  end
+
+  def create_mastery_paths_override_for_assignment(assignment_or_quiz, opts={})
+    mastery_paths_opts = {
+      assignment: assignment_or_quiz,
+      set_type: AssignmentOverride::SET_TYPE_NOOP,
+      set_id: AssignmentOverride::NOOP_MASTERY_PATHS
+    }
+    assignment_override_model(opts.merge(mastery_paths_opts))
   end
 end

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2015 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -42,7 +42,7 @@ module Canvas::Plugins::Validators::GoogleDriveValidator
           :client_secret_json => ""
          }
       else
-         to_return = settings
+         to_return = settings.to_hash.with_indifferent_access
       end
       to_return
     end

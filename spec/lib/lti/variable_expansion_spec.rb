@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -38,6 +38,11 @@ module Lti
 
       var_exp = described_class.new('test', [], -> { @one + @two + @three }, -> { false }, -> { true } )
       expect(var_exp.expand(TestExpander.new)).to eq '$test'
+    end
+
+    it 'accepts and sets default_name' do
+      var_exp = described_class.new('test', [], -> { 'test' }, -> { true }, default_name: 'test_name' )
+      expect(var_exp.default_name).to eq 'test_name'
     end
 
     it 'expands variables' do

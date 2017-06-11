@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -23,10 +23,10 @@ describe "/gradebooks/submissions_zip_upload", type: :view do
   before do
     course_with_student
     view_context
-    assigns[:students] = [@user]
-    assigns[:assignment] = @course.assignments.create!(:title => "some assignment")
-    assigns[:comments] = []
-    assigns[:failures] = []
+    assign(:students, [@user])
+    assign(:assignment, @course.assignments.create!(:title => "some assignment"))
+    assign(:comments, [])
+    assign(:failures, [])
   end
 
   it "should render" do

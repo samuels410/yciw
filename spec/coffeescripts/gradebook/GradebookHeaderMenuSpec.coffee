@@ -1,13 +1,31 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+#
+
 define [
   'jquery'
   'underscore'
   'helpers/fakeENV'
   'compiled/gradebook/GradebookHeaderMenu'
   'compiled/gradebook/SetDefaultGradeDialog'
-  'compiled/gradebook/CurveGradesDialog'
+  'compiled/shared/CurveGradesDialog'
 ], ($, _, fakeENV, GradebookHeaderMenu, SetDefaultGradeDialog, CurveGradesDialog) ->
 
-  module 'GradebookHeaderMenu#menuPopupOpenHandler',
+  QUnit.module 'GradebookHeaderMenu#menuPopupOpenHandler',
     setup: ->
       @menuPopupOpenHandler = GradebookHeaderMenu.prototype.menuPopupOpenHandler
       @hideMenuActionsWithUnmetDependencies = @stub()
@@ -38,25 +56,22 @@ define [
     @menuPopupOpenHandler()
     ok @disableUnavailableMenuActions.called
 
-  module 'GradebookHeaderMenu#hideMenuActionsWithUnmetDependencies',
+  QUnit.module 'GradebookHeaderMenu#hideMenuActionsWithUnmetDependencies',
     setup: ->
       fakeENV.setup()
       @hideMenuActionsWithUnmetDependencies = GradebookHeaderMenu.prototype.hideMenuActionsWithUnmetDependencies
 
       # These are all set to ensure all options are visible by default
       @allSubmissionsLoaded = true
-      @assignment = {
+      @assignment =
         grading_type: 'not pass_fail',
         points_possible: 10,
         submission_types: 'online_upload',
         has_submitted_submissions: true
         submissions_downloads: 1
-      }
-      @gradebook = {
-        options: {
+      @gradebook =
+        options:
           gradebook_is_editable: true
-        }
-      }
 
       @menuElement = document.createElement('ul')
       @createMenu(@menuElement)
@@ -160,13 +175,12 @@ define [
 
     notOk _.contains(@visibleMenuItemNames(@menu), 'reuploadSubmissions')
 
-  module 'GradebookHeaderMenu#disableUnavailableMenuActions',
+  QUnit.module 'GradebookHeaderMenu#disableUnavailableMenuActions',
     setup: ->
-      fakeENV.setup({
-        GRADEBOOK_OPTIONS: {
-          multiple_grading_periods_enabled: true
-        }
-      })
+      fakeENV.setup(
+        GRADEBOOK_OPTIONS:
+          has_grading_periods: true
+      )
       @disableUnavailableMenuActions = GradebookHeaderMenu.prototype.disableUnavailableMenuActions
 
       @menuElement = document.createElement('ul')
@@ -199,17 +213,15 @@ define [
     equal @disabledMenuItems(@menu).length, 0
 
   test 'disables 0 menu items when given a menu and @assignment which has inClosedGradingPeriod set', ->
-    @assignment = {
+    @assignment =
       inClosedGradingPeriod: false
-    }
 
     @disableUnavailableMenuActions(@menu)
     equal @disabledMenuItems(@menu).length, 0
 
   test 'given an assignment in closed grading period, disable curveGrades and setDefaultGrade menu items', ->
-    @assignment = {
+    @assignment =
       inClosedGradingPeriod: true
-    }
 
     @disableUnavailableMenuActions(@menu)
 
@@ -220,14 +232,13 @@ define [
     ok disabledMenuItems[0].getAttribute('aria-disabled')
     ok disabledMenuItems[1].getAttribute('aria-disabled')
 
-  module 'GradebookHeaderMenu#setDefaultGrade',
+  QUnit.module 'GradebookHeaderMenu#setDefaultGrade',
     setup: ->
-      fakeENV.setup({
-        GRADEBOOK_OPTIONS: {
-          multiple_grading_periods_enabled: true
-        },
+      fakeENV.setup(
+        GRADEBOOK_OPTIONS:
+          has_grading_periods: true
         current_user_roles: ['admin']
-      })
+      )
       @setDefaultGrade = GradebookHeaderMenu.prototype.setDefaultGrade
 
       @options = {
@@ -236,7 +247,7 @@ define [
         }
       }
       @spy($, 'flashError')
-      @dialogStub = @stub SetDefaultGradeDialog.prototype, 'initDialog'
+      @dialogStub = @stub SetDefaultGradeDialog.prototype, 'show'
 
     teardown: ->
       fakeENV.teardown()
@@ -270,23 +281,20 @@ define [
       notOk @dialogStub.called
       ok $.flashError.called
 
-  module 'GradebookHeaderMenu#curveGrades',
+  QUnit.module 'GradebookHeaderMenu#curveGrades',
     setup: ->
-      fakeENV.setup({
-        GRADEBOOK_OPTIONS: {
-          multiple_grading_periods_enabled: true
-        },
+      fakeENV.setup(
+        GRADEBOOK_OPTIONS:
+          has_grading_periods: true
         current_user_roles: ['admin']
-      })
+      )
       @curveGrades = GradebookHeaderMenu.prototype.curveGrades
 
-      @options = {
-        assignment: {
+      @options =
+        assignment:
           inClosedGradingPeriod: false
-        }
-      }
       @spy($, 'flashError')
-      @dialogStub = @stub CurveGradesDialog.prototype, 'initDialog'
+      @dialogStub = @stub CurveGradesDialog.prototype, 'show'
 
     teardown: ->
       fakeENV.teardown()

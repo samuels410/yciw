@@ -1,5 +1,5 @@
-/**
- * Copyright (C) 2011 Instructure, Inc.
+/*
+ * Copyright (C) 2011 - present Instructure, Inc.
  *
  * This file is part of Canvas.
  *
@@ -12,8 +12,8 @@
  * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
  * details.
  *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 define([
@@ -53,6 +53,7 @@ define([
     $extraTime.toggle(extraTime > 0);
   };
 
+  /*global moderation*/
   window.moderation = {
     updateTimes: function() {
       var now = new Date();
@@ -424,7 +425,7 @@ define([
       },
       buildResultList: function(data) {
         $.each(data["quiz_submissions"], function (index, qs) {
-          clone = $(".example_autosubmit_row").clone()
+          var clone = $(".example_autosubmit_row").clone()
             .removeClass("example_autosubmit_row")
             .appendTo(".outstanding_submissions_list").show();
           clone.children("input").val(qs.id);

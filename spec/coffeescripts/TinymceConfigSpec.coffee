@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'jquery'
   'tinymce.config'
@@ -14,7 +31,7 @@ define [
                "instructure_links,unlink,instructure_image,instructure_equation"
   toolbar3 = "ltr,rtl,fontsizeselect,formatselect"
 
-  module "EditorConfig",
+  QUnit.module "EditorConfig",
     setup: ->
       INST = {}
       INST.editorButtons = []
@@ -55,7 +72,7 @@ define [
     INST.maxVisibleEditorButtons = 2
     config = new EditorConfig(fake_tinymce, INST, largeScreenWidth, dom_id)
     schema = config.defaultConfig()
-    equal(schema.skin, 'light')
+    equal(schema.skin, false)
 
   test "default config includes toolbar", ->
     INST.maxVisibleEditorButtons = 2
@@ -68,33 +85,29 @@ define [
     schema = config.defaultConfig()
     equal(schema.selector, "#some_textarea")
 
-  test "it loads up the right skin_url from an absolute path", ->
-    config = new EditorConfig(fake_tinymce, INST, largeScreenWidth, dom_id)
-    schema = config.defaultConfig()
-    equal(schema.skin_url, "/vendor/tinymce_themes/light")
-
   test "browser spellcheck enabled by default", ->
     config = new EditorConfig(fake_tinymce, INST, largeScreenWidth, dom_id)
     schema = config.defaultConfig()
     equal(schema.browser_spellcheck, true)
 
-  module "Tinymce Config Integration",
+  QUnit.module "Tinymce Config Integration",
     setup: ->
-      $("body").append("<textarea id=42></textarea>")
+      $("body").append("<textarea id=a42></textarea>")
 
     teardown: ->
-      $("textarea#42").remove()
+      $("textarea#a42").remove()
 
   asyncTest "configured not to strip spans", ->
     expect(1)
-    $textarea = $("textarea#42")
-    config = new EditorConfig(tinymce, INST, 1000, "42")
+    $textarea = $("textarea#a42")
+    config = new EditorConfig(tinymce, INST, 1000, "a42")
     configHash = $.extend(config.defaultConfig(),{
       plugins: "",
       external_plugins: {},
       init_instance_callback: (editor)->
-        start()
         content = editor.setContent("<span></span>")
         ok(content.match("<span></span>"))
+        start()
+
     })
     tinymce.init(configHash)

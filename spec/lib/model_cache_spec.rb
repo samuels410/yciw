@@ -1,4 +1,5 @@
-# Copyright (C) 2012 Instructure, Inc.
+#
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -22,6 +23,7 @@ describe ModelCache do
   before(:all) do
     class TestModelCacheUser < ActiveRecord::Base
       self.table_name = :users # reuse exiting tables so AR doesn't asplode
+      include ModelCache
     end
 
     class TestModelCachePseudonym < ActiveRecord::Base

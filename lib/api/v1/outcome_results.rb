@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2013 Instructure, Inc.
+# Copyright (C) 2013 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -65,7 +65,7 @@ module Api::V1::OutcomeResults
     end
     assessed_outcomes = []
     outcomes.map(&:id).each_slice(100) do |outcome_ids|
-      assessed_outcomes += LearningOutcomeResult.uniq.where(learning_outcome_id: outcome_ids).pluck(:learning_outcome_id)
+      assessed_outcomes += LearningOutcomeResult.distinct.where(learning_outcome_id: outcome_ids).pluck(:learning_outcome_id)
     end
     outcomes.map do |o|
       hash = outcome_json(o, @current_user, session, assessed_outcomes: assessed_outcomes)

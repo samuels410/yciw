@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -31,9 +31,9 @@ describe "/quizzes/quizzes/moderate" do
     end
     course_quiz
     view_context
-    assigns[:students] = @students.paginate
-    assigns[:quiz] = @quiz
-    assigns[:submissions] = []
+    assign(:students, @students.paginate)
+    assign(:quiz, @quiz)
+    assign(:submissions, [])
   end
 
   it "should render" do

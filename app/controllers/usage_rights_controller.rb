@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2014 Instructure, Inc.
+# Copyright (C) 2014 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -82,7 +82,7 @@
 class UsageRightsController < ApplicationController
   include Api::V1::UsageRights
 
-  before_filter :require_context
+  before_action :require_context
 
   # @API Set usage rights
   # Sets copyright and license information for one or more files
@@ -110,7 +110,7 @@ class UsageRightsController < ApplicationController
   def set_usage_rights
     if authorized_action(@context, @current_user, :manage_files)
       return render json: { message: I18n.t("Must supply 'file_ids' and/or 'folder_ids' parameter") }, status: :bad_request unless params[:file_ids].present? || params[:folder_ids].present?
-      return render json: { message: I18n.t("No 'usage_rights' object supplied") }, status: :bad_request unless params[:usage_rights].is_a?(Hash)
+      return render json: { message: I18n.t("No 'usage_rights' object supplied") }, status: :bad_request unless params[:usage_rights].is_a?(ActionController::Parameters)
 
       usage_rights_params = params.require(:usage_rights).permit(:use_justification, :legal_copyright, :license)
       usage_rights = @context.usage_rights.where(usage_rights_params).first
@@ -164,7 +164,7 @@ private
     folders = @context.folders.active.where(id: folder_ids).to_a
     file_ids = folders.inject([]) { |file_ids, folder| file_ids += enumerate_contents(folder) }
     file_ids += @context.attachments.not_deleted.where(id: Array(params[:file_ids]).map(&:to_i)).pluck(:id)
-    update_attrs = {usage_rights_id: usage_rights}
+    update_attrs = {usage_rights_id: usage_rights&.id}
     update_attrs.merge!(locked: false) if usage_rights.present? && value_to_boolean(params[:publish])
 
     count = @context.attachments.not_deleted.where(id: file_ids).update_all(update_attrs)

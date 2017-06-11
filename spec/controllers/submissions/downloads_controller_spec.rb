@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016 Instructure, Inc.
+# Copyright (C) 2015 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -77,7 +77,7 @@ describe Submissions::DownloadsController do
       end
 
       it "renders as json" do
-        request.accept = Mime::JSON.to_s
+        request.accept = Mime[:json].to_s
         get :show, {
           course_id: @context.id,
           assignment_id: @assignment.id,

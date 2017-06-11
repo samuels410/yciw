@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/../helpers/discussions_common')
 
 describe "discussions" do
@@ -159,23 +176,6 @@ describe "discussions" do
         end
       end
 
-      it "should have working unread button", priority: "1", test_id: 150506 do
-        disc1 = @course.discussion_topics.create!(user: teacher, title: 'Philip', message: 'teacher topic message')
-        disc2 = @course.discussion_topics.create!(user: teacher, title: 'Fry', message: 'teacher topic message')
-        disc1.discussion_entries.create(message: "first entry", user: @user)
-        get url
-
-        # verify that both discussions are present as well as the other 2 empty sections
-        expect(ffj('.discussion:visible').size).to eq 3
-
-        # going to this page once will let it be filtered as unread
-        get "/courses/#{course.id}/discussion_topics/#{disc2.id}"
-        get url
-
-        fj('label.ui-button.ui-widget.ui-state-default.ui-button-text-only.ui-corner-left').click
-        expect(ffj('.discussion:visible').size).to eq 2
-      end
-
       it "should have working unread button", priority: "1", test_id: 150505 do
         @course.discussion_topics.create!(user: teacher, title: 'Philip J. Fry', message: 'teacher topic message')
         assignment = @course.assignments.create(title: "discussion assignment", points_possible: 20)
@@ -184,7 +184,6 @@ describe "discussions" do
 
         # verify that both discussions are present as well as the other empty section
         expect(ffj('.discussion:visible').size).to eq 3
-
         fj('label.ui-button.ui-widget.ui-state-default.ui-button-text-only.ui-corner-right:').click
         expect(ffj('.discussion:visible').size).to eq 2
       end

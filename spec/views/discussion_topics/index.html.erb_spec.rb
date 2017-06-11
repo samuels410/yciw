@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -23,7 +23,7 @@ describe "/discussion_topics/index" do
   it "should render" do
     course_with_teacher
     view_context(@course, @user)
-    assigns[:body_classes] = []
+    assign(:body_classes, [])
     render "discussion_topics/index"
     expect(response).not_to be_nil
   end

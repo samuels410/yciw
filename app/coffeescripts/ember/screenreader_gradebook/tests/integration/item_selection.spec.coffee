@@ -1,8 +1,26 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
+  'jquery'
   '../start_app'
   'ember'
   '../shared_ajax_fixtures'
-], (startApp, Ember, fixtures) ->
+], ($, startApp, Ember, fixtures) ->
 
   App = null
 
@@ -24,7 +42,7 @@ define [
     checkSelectedText(selected.name, '#student_select')
 
 
-  module 'screenreader_gradebook student/assignment navigation: on page load',
+  QUnit.module 'screenreader_gradebook student/assignment navigation: on page load',
     setup: ->
       fixtures.create()
       App = startApp()
@@ -50,7 +68,7 @@ define [
     checkText('.assignment_selection', 'Select an assignment to view additional information here.')
 
 
-  module 'screenreader_gradebook student/assignment navigation: with first item selected',
+  QUnit.module 'screenreader_gradebook student/assignment navigation: with first item selected',
     setup: ->
       fixtures.create()
       App = startApp()
@@ -100,7 +118,7 @@ define [
       click('.assignment_navigation .previous_object').then =>
         equal($(".assignment_navigation .next_object")[0],document.activeElement)
 
-  module 'screenreader_gradebook student/assignment navigation: with second item selected',
+  QUnit.module 'screenreader_gradebook student/assignment navigation: with second item selected',
     setup: ->
       App = startApp()
       visit('/').then =>
@@ -120,7 +138,7 @@ define [
     buttonDisabled('.assignment_navigation .next_object', false)
 
 
-  module 'screenreader_gradebook student/assignment navigation: with last item selected',
+  QUnit.module 'screenreader_gradebook student/assignment navigation: with last item selected',
     setup: ->
       fixtures.create()
       App = startApp()
@@ -176,7 +194,7 @@ define [
       click('.assignment_navigation .next_object').then =>
         equal($(".assignment_navigation .previous_object")[0],document.activeElement)
 
-  module 'screenreader_gradebook assignment navigation: display update',
+  QUnit.module 'screenreader_gradebook assignment navigation: display update',
     setup: ->
       fixtures.create()
       App = startApp()
@@ -200,7 +218,7 @@ define [
     newSelectedAssigName = @controller.get('selectedAssignment.name')
     checkText(assignment_name_selector, "Grade for: #{newSelectedAssigName}")
 
-  module 'screenreader_gradebook assignment navigation: assignment sorting',
+  QUnit.module 'screenreader_gradebook assignment navigation: assignment sorting',
     setup: ->
       fixtures.create()
       App = startApp()
@@ -273,7 +291,7 @@ define [
           click('.assignment_navigation .next_object').then =>
             checkSelection(next.id, '#assignment_select')
 
-  module 'screenreader_gradebook student navigation: section selection',
+  QUnit.module 'screenreader_gradebook student navigation: section selection',
     setup: ->
       fixtures.create()
       App = startApp()
@@ -357,7 +375,7 @@ define [
       equal(position, 3)
       equal(@controller.get("studentIndex"), position)
 
-  module 'screenreader_gradebook student/assignment navigation: announcing selection with aria-live',
+  QUnit.module 'screenreader_gradebook student/assignment navigation: announcing selection with aria-live',
     setup: ->
       fixtures.create()
       App = startApp()

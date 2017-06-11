@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_relative '../../helpers/gradebook_common'
 require_relative '../page_objects/student_grades_page'
 
@@ -30,12 +47,10 @@ describe "gradebook - logged in as a student" do
     expect(student_grades_page.final_grade).to include_text("10")
   end
 
-  context 'when testing multiple grading periods' do
-    # enable mgp
-    before(:each) do
+  context 'when testing grading periods' do
+    before do
       course_with_admin_logged_in
       student_in_course
-      @course.root_account.enable_feature!(:multiple_grading_periods)
     end
 
     context 'with one past and one current period' do
@@ -44,7 +59,7 @@ describe "gradebook - logged in as a student" do
       past_assignment_name = "Past Assignment"
       current_assignment_name = "Current Assignment"
 
-      before(:each) do
+      before do
         # create term
         term = @course.root_account.enrollment_terms.create!
         @course.update_attributes(enrollment_term: term)

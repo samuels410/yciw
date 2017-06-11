@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2013 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -21,6 +21,7 @@ module Api::V1::CommMessage
 
   def comm_message_json(message, options = {})
     result = message.as_json(options)
+    result['from'] ||= HostUrl.outgoing_email_default_name
     result
   end
 

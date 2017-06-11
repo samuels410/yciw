@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -30,7 +30,7 @@ module Canvas::Plugins::Validators::DiigoValidator
           plugin_setting.errors.add(:base, res)
           false
         else
-          settings.slice(:api_key)
+          settings.permit(:api_key).to_h.with_indifferent_access
         end
       end
     end

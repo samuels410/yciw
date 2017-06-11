@@ -293,22 +293,22 @@ describe "Roles API", type: :request do
 
     it "should not create an override for course role for account-only permissions" do
       api_call_with_settings(:permission => 'manage_courses', :base_role_type => 'TeacherEnrollment', :explicit => '1', :enabled => '1')
-      expect(@account.role_overrides(true).size).to eq @initial_count
+      expect(@account.role_overrides.reload.size).to eq @initial_count
     end
 
     it "should not create an override if enabled is nil and locked is not 1" do
       api_call_with_settings(:explicit => '1', :locked => '0')
-      expect(@account.role_overrides(true).size).to eq @initial_count
+      expect(@account.role_overrides.reload.size).to eq @initial_count
     end
 
     it "should not create an override if explicit is not 1 and locked is not 1" do
       api_call_with_settings(:explicit => '0', :enabled => '1', :locked => '0')
-      expect(@account.role_overrides(true).size).to eq @initial_count
+      expect(@account.role_overrides.reload.size).to eq @initial_count
     end
 
     it "should create the override if explicit is 1 and enabled has a value" do
       api_call_with_settings(:explicit => '1', :enabled => '0')
-      expect(@account.role_overrides(true).size).to eq @initial_count + 1
+      expect(@account.role_overrides.reload.size).to eq @initial_count + 1
       override = @account.role_overrides.where(:permission => @permission, :role_id => @role.id).first
       expect(override).to_not be_nil
       expect(override.enabled).to be_falsey
@@ -316,7 +316,7 @@ describe "Roles API", type: :request do
 
     it "should create an override for course-level roles" do
       api_call_with_settings(:base_role_type => 'TeacherEnrollment', :explicit => '1', :enabled => '0')
-      expect(@account.role_overrides(true).size).to eq @initial_count + 1
+      expect(@account.role_overrides.reload.size).to eq @initial_count + 1
       override = @account.role_overrides.where(:permission => @permission, :role_id => @role.id).first
       expect(override).to_not be_nil
       expect(override.enabled).to be_falsey
@@ -324,13 +324,13 @@ describe "Roles API", type: :request do
 
     it "should create the override if enabled is nil but locked is 1" do
       api_call_with_settings(:locked => '1')
-      expect(@account.role_overrides(true).size).to eq @initial_count + 1
+      expect(@account.role_overrides.reload.size).to eq @initial_count + 1
       override = @account.role_overrides.where(:permission => @permission, :role_id => @role.id).first
       expect(override).to_not be_nil
       expect(override.locked).to be_truthy
     end
 
-    it "should set applies to self and applies to descendents" do
+    it "should set applies to descendents" do
       json = api_call_with_settings(enabled: '1', explicit: '1', applies_to_descendants: '0')
       override = @account.role_overrides.where(permission: @permission, role_id: @role.id).first
       expect(override).to_not be_nil
@@ -340,7 +340,7 @@ describe "Roles API", type: :request do
       expect(override.applies_to_descendants).to eq false
     end
 
-    it "should set applies to self and applies to descendents" do
+    it "should set applies to self" do
       json = api_call_with_settings(enabled: '1', explicit: '1', applies_to_self: '0')
       override = @account.role_overrides.where(permission: @permission, role_id: @role.id).first
       expect(override).to_not be_nil
@@ -350,7 +350,7 @@ describe "Roles API", type: :request do
       expect(override.applies_to_descendants).to eq true
     end
 
-    it "should set applies to self and applies to descendents" do
+    it "should require at least applies to self or applies to descendents" do
       options = {controller: 'role_overrides', action: 'add_role', format: 'json', account_id: @account.id.to_s}
       settings = {locked: '1', applies_to_descendants: '0', applies_to_self: '0'}
       parameters = {role: @role_name, permissions: {@permission => settings}}
@@ -429,7 +429,7 @@ describe "Roles API", type: :request do
 
       @role = Role.find_by_id(json["id"])
 
-      expect(@account.role_overrides(true).size).to eq @initial_count + 1 # not 2
+      expect(@account.role_overrides.reload.size).to eq @initial_count + 1 # not 2
       override = @account.role_overrides.where(:permission => restricted_permission, :role_id => @role.id).first
       expect(override).to be_nil
 

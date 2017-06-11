@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -23,11 +23,11 @@ describe "/gradebooks/speed_grader" do
   before do
     course_with_student
     view_context
-    assigns[:students] = [@user]
-    assigns[:assignment] = @course.assignments.create!(:title => "some assignment")
-    assigns[:submissions] = []
-    assigns[:assessments] = []
-    assigns[:body_classes] = []
+    assign(:students, [@user])
+    assign(:assignment, @course.assignments.create!(:title => "some assignment"))
+    assign(:submissions, [])
+    assign(:assessments, [])
+    assign(:body_classes, [])
   end
 
   it "should render" do

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2014 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -134,8 +134,8 @@ require 'atom'
 #     }
 #
 class GroupsController < ApplicationController
-  before_filter :get_context
-  before_filter :require_user, :only => %w[index accept_invitation activity_stream activity_stream_summary]
+  before_action :get_context
+  before_action :require_user, :only => %w[index accept_invitation activity_stream activity_stream_summary]
 
   include Api::V1::Attachment
   include Api::V1::Group
@@ -707,7 +707,7 @@ class GroupsController < ApplicationController
       feed.entries << entry.to_atom(:context => @context)
     end
     respond_to do |format|
-      format.atom { render :text => feed.to_xml }
+      format.atom { render :plain => feed.to_xml }
     end
   end
 

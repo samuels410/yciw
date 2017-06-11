@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016 Instructure, Inc.
+# Copyright (C) 2016 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -37,10 +37,10 @@ describe Canvas::Plugins::Validators::MathmanValidator do
     end
 
     it 'should return provided settings when base_url is a valid url' do
-      expect(validator).to eq settings
+      expect(validator).to eq settings.with_indifferent_access
     end
 
-    context 'when base_rul is invalid' do
+    context 'when base_url is invalid' do
       let(:settings) do
         {
           base_url: 'wooper'

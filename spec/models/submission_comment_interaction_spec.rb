@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -27,8 +27,7 @@ describe SubmissionCommentInteraction do
       comment = sub.add_comment(comment: 'hi', author: @teacher)
       res = SubmissionCommentInteraction.in_course_between(@course, @teacher, @student)
       expect(res.length).to eq 1
-      expect(res[[@student.id.to_s, @teacher.id]].to_i).to eq comment.created_at.to_i
-
+      expect(res[[@student.id, @teacher.id]].to_i).to eq comment.created_at.to_i
     end
   end
 end

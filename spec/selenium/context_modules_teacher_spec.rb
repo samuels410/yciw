@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/helpers/context_modules_common')
 require File.expand_path(File.dirname(__FILE__) + '/helpers/public_courses_context')
 
@@ -140,12 +157,10 @@ describe "context modules" do
       f('.add_completion_criterion_link').click
       wait_for_animations
       fj(".assignment_picker:visible option[value='#{content_tag_1.id}']").click
-      wait_for_js # the action above might be changing the element underneath between finding and clicking
       fj('.assignment_requirement_picker:visible option[value="min_score"]').click
       expect(f("body")).to contain_jqcss(".points_possible_parent:visible")
 
       fj(".assignment_picker:visible option[value='#{content_tag_2.id}']").click
-      wait_for_js # the action above might be changing the element underneath between finding and clicking
       fj('.assignment_requirement_picker:visible option[value="min_score"]').click
       expect(f("body")).not_to contain_jqcss(".points_possible_parent:visible")
     end
@@ -655,17 +670,15 @@ describe "context modules" do
     context "module item cog focus management", priority: "1" do
 
       before :each do
+        create_modules(1)[0].add_item({id: @assignment.id, type: 'assignment'})
         get "/courses/#{@course.id}/modules"
-        add_existing_module_item('#assignments_select', 'Assignment', @assignment.title)
         @tag = ContentTag.last
         f("#context_module_item_#{@tag.id} .al-trigger").click
       end
 
       it "should return focus to the cog menu when closing the edit dialog for an item" do
         hover_and_click("#context_module_item_#{@tag.id} .edit_item_link")
-        cancel_buttons = ff('.cancel_button.ui-button')
-        expect(cancel_buttons).to have_size(2)
-        cancel_buttons[1].click
+        f('.cancel_button.ui-button').click
         check_element_has_focus(fj("#context_module_item_#{@tag.id} .al-trigger"))
       end
 

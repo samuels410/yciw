@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 module Services
   class AddressBook
     # regarding these methods' parameters or options, generally:
@@ -13,56 +30,56 @@ module Services
 
     # which of the users does the sender know, and what contexts do they and
     # the sender have in common?
-    def self.common_contexts(sender, users)
-      recipients(sender: sender, user_ids: users).common_contexts
+    def self.common_contexts(sender, users, ignore_result=false)
+      recipients(sender: sender, user_ids: users, ignore_result: ignore_result).common_contexts
     end
 
     # which of the users have roles in the context and what are those roles?
-    def self.roles_in_context(context, users)
+    def self.roles_in_context(context, users, ignore_result=false)
       context = context.course if context.is_a?(CourseSection)
-      recipients(context: context, user_ids: users).common_contexts
+      recipients(context: context, user_ids: users, ignore_result: ignore_result).common_contexts
     end
 
     # which users:
     #
     #  - does the sender know in the context and what are their roles in that
-    #    context? (is_admin=false)
+    #    context? (sender present)
     #
     #      --OR--
     #
-    #  - have roles in the context and what are those roles? (is_admin=true)
+    #  - have roles in the context and what are those roles? (sender absent;
+    #    admin view)
     #
-    def self.known_in_context(sender, context, is_admin=false)
-      params = { context: context }
-      params[:sender] = sender unless is_admin
+    def self.known_in_context(sender, context, user_ids=nil, ignore_result=false)
+      params = { sender: sender, context: context, ignore_result: ignore_result }
+      params[:user_ids] = user_ids if user_ids
       response = recipients(params)
       [response.user_ids, response.common_contexts]
     end
 
     # how many users does the sender know in the context?
-    def self.count_in_context(sender, context)
-      count_recipients(sender: sender, context: context)
+    def self.count_in_context(sender, context, ignore_result=false)
+      count_recipients(sender: sender, context: context, ignore_result: ignore_result)
     end
 
     # of the users who are not in `exclude_ids` and whose name matches the
     # `search` term, if any, which:
     #
     #  - does the sender know, and what are their common contexts with the
-    #    sender? (no context provided)
+    #    sender? (no context provided, sender must be)
     #
     #  - does the sender know in the context and what are their roles in that
-    #    context? (context provided but not is_admin)
+    #    context? (context provided with sender)
     #
     #      --OR--
     #
     #  - have roles in the context and what are those roles? (context provided
-    #    and is_admin true)
+    #    without sender; admin view)
     #
-    def self.search_users(sender, options, service_options={})
+    def self.search_users(sender, options, service_options, ignore_result=false)
       params = options.slice(:search, :context, :exclude_ids, :weak_checks)
-
-      # include sender only if not admin
-      params[:sender] = sender unless options[:context] && options[:is_admin]
+      params[:ignore_result] = ignore_result
+      params[:sender] = sender
 
       # interpret pagination as specified in service_options
       params[:per_page] = service_options[:per_page] if service_options[:per_page]
@@ -93,11 +110,9 @@ module Services
     class << self
       private
       def setting(key)
-        settings = Canvas::DynamicSettings.from_cache("address-book", expires_in: 5.minutes)
+        settings = Canvas::DynamicSettings.from_cache("address-book", expires_in: 5.minutes, use_env: false)
         settings[key]
-      rescue Faraday::ConnectionFailed,
-             Faraday::ClientError,
-             Canvas::DynamicSettings::ConsulError => e
+      rescue Imperium::TimeoutError => e
         Canvas::Errors.capture_exception(:address_book, e)
         nil
       end
@@ -115,16 +130,21 @@ module Services
         url = app_host + path
         url += '?' + params.to_query unless params.empty?
         fallback = { "records" => [] }
-        Canvas.timeout_protection("address_book") do
+        timeout_service_name = params[:ignore_result] == 1 ?
+          "address_book_performance_tap" :
+          "address_book"
+        Canvas.timeout_protection(timeout_service_name) do
           response = CanvasHttp.get(url, 'Authorization' => "Bearer #{jwt}")
-          if response.code.to_i == 200
-            return JSON.parse(response.body)
-          else
+          if ![200, 202].include?(response.code.to_i)
             Canvas::Errors.capture(CanvasHttp::InvalidResponseCodeError.new(response.code.to_i), {
               extra: { url: url, response: response.body },
               tags: { type: 'address_book_fault' }
             })
             return fallback
+          elsif params[:ignore_result] == 1
+            return fallback
+          else
+            return JSON.parse(response.body)
           end
         end || fallback
       end
@@ -135,20 +155,29 @@ module Services
         query_params[:cursor] = params[:cursor] if params[:cursor]
         query_params[:per_page] = params[:per_page] if params[:per_page]
         query_params[:search] = params[:search] if params[:search]
-        query_params[:for_sender] = serialize_user(params[:sender]) if params[:sender]
+        if params[:sender]
+          sender = params[:sender]
+          sender = User.find(sender) unless sender.is_a?(User)
+          visible_accounts = sender.associated_accounts.select{ |account| account.grants_right?(sender, :read_roster) }
+          restricted_courses = sender.all_courses.reject{ |course| course.grants_right?(sender, :send_messages) }
+          query_params[:for_sender] = serialize_item(sender)
+          query_params[:visible_account_ids] = serialize_list(visible_accounts) unless visible_accounts.empty?
+          query_params[:restricted_course_ids] = serialize_list(restricted_courses) unless restricted_courses.empty?
+        end
         query_params[:in_context] = serialize_context(params[:context]) if params[:context]
-        query_params[:user_ids] = serialize_users(params[:user_ids]) if params[:user_ids]
-        query_params[:exclude_ids] = serialize_users(params[:exclude_ids]) if params[:exclude_ids]
+        query_params[:user_ids] = serialize_list(params[:user_ids]) if params[:user_ids]
+        query_params[:exclude_ids] = serialize_list(params[:exclude_ids]) if params[:exclude_ids]
         query_params[:weak_checks] = 1 if params[:weak_checks]
+        query_params[:ignore_result] = 1 if params[:ignore_result]
         query_params
       end
 
-      def serialize_user(user)
-        Shard.global_id_for(user)
+      def serialize_item(item)
+        Shard.global_id_for(item)
       end
 
-      def serialize_users(users)
-        users.map{ |user| serialize_user(user) }.join(',')
+      def serialize_list(list) # can be either IDs or objects (e.g. User)
+        list.map{ |item| serialize_item(item) }.join(',')
       end
 
       def serialize_context(context)
@@ -156,7 +185,7 @@ module Services
           context.global_asset_string
         else
           context_type, context_id, scope = context.split('_', 3)
-          global_context_id = Shard.global_id_for(context_id)
+          global_context_id = serialize_item(context_id)
           asset_string = "#{context_type}_#{global_context_id}"
           asset_string += "_#{scope}" if scope
           asset_string

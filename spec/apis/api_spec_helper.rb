@@ -52,23 +52,6 @@ def api_call(method, path, params, body_params = {}, headers = {}, opts = {})
   raw_api_call(method, path, params, body_params, headers, opts)
   if opts[:expected_status]
     assert_status(opts[:expected_status])
-  else
-    unless response.success?
-      error_message = response.body
-      begin
-        json = JSON.parse(response.body)
-        error_report_id = json['error_report_id']
-        error_report = ErrorReport.find_by(id: error_report_id) if error_report_id
-        if error_report
-          error_message << "\n"
-          error_message << error_report.message
-          error_message << "\n"
-          error_message << error_report.backtrace
-        end
-      rescue JSON::ParserError
-      end
-    end
-    expect(response).to be_success, error_message
   end
 
   if response.headers['Link']
@@ -76,14 +59,9 @@ def api_call(method, path, params, body_params = {}, headers = {}, opts = {})
     Api.parse_pagination_links(response.headers['Link'])
   end
 
-  if jsonapi_call?(headers) && method == :delete
-    assert_status(204)
-    return
-  end
-
   case params[:format]
   when 'json'
-    expect(response.header[content_type_key]).to eq 'application/json; charset=utf-8'
+    raise "got non-json" unless response.header[content_type_key] == 'application/json; charset=utf-8'
 
     body = response.body
     if body.respond_to?(:call)
@@ -112,7 +90,7 @@ def api_call_as_user(user, method, path, params, body_params = {}, headers = {},
   headers['Authorization'] = "Bearer #{token}"
   account = opts[:domain_root_account] || Account.default
   user.pseudonyms.reload
-  account.pseudonyms.create!(:unique_id => "#{user.id}@example.com", :user => user) unless user.find_pseudonym_for_account(account, true)
+  account.pseudonyms.create!(:unique_id => "#{user.id}@example.com", :user => user) unless SisPseudonym.for(user, account, type: :implicit, require_sis: false)
   Pseudonym.any_instance.stubs(:works_for_account?).returns(true)
   api_call(method, path, params, body_params, headers, opts)
 end
@@ -133,7 +111,7 @@ def raw_api_call(method, path, params, body_params = {}, headers = {}, opts = {}
   enable_forgery_protection do
     route_params = params_from_with_nesting(method, path)
     route_params.each do |key, value|
-      expect(params[key].to_s).to eq(value.to_s), lambda{ "Expected value of params[\'#{key}\'] to equal #{value}, actual: #{params[key]}"}
+      raise "Expected value of params[\'#{key}\'] to equal #{value}, actual: #{params[key]}" unless params[key].to_s == value.to_s
     end
     if @use_basic_auth
       user_session(@user)
@@ -144,7 +122,7 @@ def raw_api_call(method, path, params, body_params = {}, headers = {}, opts = {}
         headers['HTTP_AUTHORIZATION'] = "Bearer #{token}"
         account = opts[:domain_root_account] || Account.default
         Pseudonym.any_instance.stubs(:works_for_account?).returns(true)
-        account.pseudonyms.create!(:unique_id => "#{@user.id}@example.com", :user => @user) unless @user.all_active_pseudonyms(:reload) && @user.find_pseudonym_for_account(account, true)
+        account.pseudonyms.create!(:unique_id => "#{@user.id}@example.com", :user => @user) unless @user.all_active_pseudonyms(:reload) && SisPseudonym.for(@user, account, type: :implicit, require_sis: false)
       end
     end
     LoadAccount.stubs(:default_domain_root_account).returns(opts[:domain_root_account]) if opts.has_key?(:domain_root_account)

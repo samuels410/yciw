@@ -11,31 +11,6 @@
   </component>
   <component name="ModuleRunConfigurationManager">
     <shared>
-      <configuration default="false" name="Development: yciw" type="RailsRunConfigurationType" factoryName="Rails">
-        <predefined_log_file id="RUBY_RAILS_SERVER" enabled="true" />
-        <module name="yciw" />
-        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="RUBY_ARGS" VALUE="-e $stdout.sync=true;$stderr.sync=true;load($0=ARGV.shift)" />
-        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="WORK DIR" VALUE="$MODULE_DIR$" />
-        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="SHOULD_USE_SDK" VALUE="false" />
-        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="ALTERN_SDK_NAME" VALUE="" />
-        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="myPassParentEnvs" VALUE="true" />
-        <envs />
-        <EXTENSION ID="BundlerRunConfigurationExtension" bundleExecEnabled="false" />
-        <EXTENSION ID="JRubyRunConfigurationExtension" NailgunExecEnabled="false" />
-        <EXTENSION ID="RubyCoverageRunConfigurationExtension" enabled="false" sample_coverage="true" track_test_folders="true" runner="rcov">
-          <COVERAGE_PATTERN ENABLED="true">
-            <PATTERN REGEXPS="/.rvm/" INCLUDED="false" />
-          </COVERAGE_PATTERN>
-        </EXTENSION>
-        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="SCRIPT_ARGS" VALUE="" />
-        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="PORT" VALUE="4000" />
-        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="IP" VALUE="0.0.0.0" />
-        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="DUMMY_APP" VALUE="test/dummy" />
-        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="RAILS_SERVER_TYPE" VALUE="default" />
-        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="ENVIRONMENT_TYPE" VALUE="development" />
-        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="LAUNCH_JS" VALUE="false" />
-        <method />
-      </configuration>
       <configuration default="false" name="Production: yciw" type="RailsRunConfigurationType" factoryName="Rails">
         <predefined_log_file id="RUBY_RAILS_SERVER" enabled="true" />
         <module name="yciw" />
@@ -109,6 +84,31 @@
         <RAKE_RUN_CONFIG_SETTINGS_ID NAME="RAKE_TASK_OPTION_PREREQS" VALUE="false" />
         <method />
       </configuration>
+      <configuration default="false" name="Development: yciw" type="RailsRunConfigurationType" factoryName="Rails">
+        <predefined_log_file id="RUBY_RAILS_SERVER" enabled="true" />
+        <module name="yciw" />
+        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="RUBY_ARGS" VALUE="-e $stdout.sync=true;$stderr.sync=true;load($0=ARGV.shift)" />
+        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="WORK DIR" VALUE="$MODULE_DIR$" />
+        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="SHOULD_USE_SDK" VALUE="false" />
+        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="ALTERN_SDK_NAME" VALUE="" />
+        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="myPassParentEnvs" VALUE="true" />
+        <envs />
+        <EXTENSION ID="BundlerRunConfigurationExtension" bundleExecEnabled="false" />
+        <EXTENSION ID="JRubyRunConfigurationExtension" NailgunExecEnabled="false" />
+        <EXTENSION ID="RubyCoverageRunConfigurationExtension" enabled="false" sample_coverage="true" track_test_folders="true" runner="rcov">
+          <COVERAGE_PATTERN ENABLED="true">
+            <PATTERN REGEXPS="/.rvm/" INCLUDED="false" />
+          </COVERAGE_PATTERN>
+        </EXTENSION>
+        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="SCRIPT_ARGS" VALUE="" />
+        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="PORT" VALUE="3000" />
+        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="IP" VALUE="0.0.0.0" />
+        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="DUMMY_APP" VALUE="test/dummy" />
+        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="RAILS_SERVER_TYPE" VALUE="default" />
+        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="ENVIRONMENT_TYPE" VALUE="development" />
+        <RAILS_SERVER_CONFIG_SETTINGS_ID NAME="LAUNCH_JS" VALUE="false" />
+        <method />
+      </configuration>
     </shared>
     <local />
   </component>
@@ -120,10 +120,10 @@
       <excludeFolder url="file://$MODULE_DIR$/public/system" />
       <excludeFolder url="file://$MODULE_DIR$/tmp" />
     </content>
-    <orderEntry type="jdk" jdkName="RVM: ruby-2.3.1 [greatlearning]" jdkType="RUBY_SDK" />
+    <orderEntry type="jdk" jdkName="RVM: ruby-2.4.0 [greatlearning]" jdkType="RUBY_SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module-library">
-      <library name="academic_benchmark (v1.1.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/plugins/academic_benchmark) [path][gem]">
+      <library name="academic_benchmark (v1.1.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/plugins/academic_benchmark/app" />
           <root url="file://$MODULE_DIR$/gems/plugins/academic_benchmark/lib" />
@@ -137,7 +137,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="account_reports (v1.1.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/plugins/account_reports) [path][gem]">
+      <library name="account_reports (v1.1.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/plugins/account_reports/app" />
           <root url="file://$MODULE_DIR$/gems/plugins/account_reports/lib" />
@@ -151,7 +151,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="activesupport-suspend_callbacks (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/activesupport-suspend_callbacks) [path][gem]">
+      <library name="activesupport-suspend_callbacks (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/activesupport-suspend_callbacks/lib" />
         </CLASSES>
@@ -161,7 +161,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="acts_as_list (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/acts_as_list) [path][gem]">
+      <library name="acts_as_list (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/acts_as_list/lib" />
         </CLASSES>
@@ -171,7 +171,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="adheres_to_policy (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/adheres_to_policy) [path][gem]">
+      <library name="adheres_to_policy (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/adheres_to_policy/lib" />
         </CLASSES>
@@ -181,7 +181,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="attachment_fu (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/attachment_fu) [path][gem]">
+      <library name="attachment_fu (v1.0.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/attachment_fu/lib" />
         </CLASSES>
@@ -191,7 +191,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="autoextend (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/autoextend) [path][gem]">
+      <library name="autoextend (v1.0.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/autoextend/lib" />
         </CLASSES>
@@ -201,7 +201,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="bookmarked_collection (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/bookmarked_collection) [path][gem]">
+      <library name="bookmarked_collection (v1.0.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/bookmarked_collection/lib" />
         </CLASSES>
@@ -211,7 +211,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="broadcast_policy (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/broadcast_policy) [path][gem]">
+      <library name="broadcast_policy (v1.0.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/broadcast_policy/lib" />
         </CLASSES>
@@ -221,7 +221,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="canvas_breach_mitigation (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_breach_mitigation) [path][gem]">
+      <library name="canvas_breach_mitigation (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/canvas_breach_mitigation/lib" />
         </CLASSES>
@@ -231,7 +231,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="canvas_cassandra (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_cassandra) [path][gem]">
+      <library name="canvas_cassandra (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/canvas_cassandra/lib" />
         </CLASSES>
@@ -241,7 +241,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="canvas_color (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_color) [path][gem]">
+      <library name="canvas_color (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/canvas_color/lib" />
         </CLASSES>
@@ -251,7 +251,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="canvas_crummy (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_crummy) [path][gem]">
+      <library name="canvas_crummy (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/canvas_crummy/lib" />
         </CLASSES>
@@ -261,7 +261,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="canvas_ext (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_ext) [path][gem]">
+      <library name="canvas_ext (v1.0.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/canvas_ext/lib" />
         </CLASSES>
@@ -271,7 +271,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="canvas_http (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_http) [path][gem]">
+      <library name="canvas_http (v1.0.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/canvas_http/lib" />
         </CLASSES>
@@ -281,7 +281,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="canvas_kaltura (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_kaltura) [path][gem]">
+      <library name="canvas_kaltura (v1.0.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/canvas_kaltura/lib" />
         </CLASSES>
@@ -291,7 +291,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="canvas_mimetype_fu (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_mimetype_fu) [path][gem]">
+      <library name="canvas_mimetype_fu (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/canvas_mimetype_fu/lib" />
         </CLASSES>
@@ -301,7 +301,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="canvas_panda_pub (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_panda_pub) [path][gem]">
+      <library name="canvas_panda_pub (v1.0.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/canvas_panda_pub/lib" />
         </CLASSES>
@@ -311,7 +311,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="canvas_partman (v2.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_partman) [path][gem]">
+      <library name="canvas_partman (v2.0.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/canvas_partman/lib" />
         </CLASSES>
@@ -321,7 +321,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="canvas_quiz_statistics (v0.1.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_quiz_statistics) [path][gem]">
+      <library name="canvas_quiz_statistics (v0.1.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/canvas_quiz_statistics/lib" />
         </CLASSES>
@@ -331,7 +331,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="canvas_sanitize (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_sanitize) [path][gem]">
+      <library name="canvas_sanitize (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/canvas_sanitize/lib" />
         </CLASSES>
@@ -341,7 +341,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="canvas_slug (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_slug) [path][gem]">
+      <library name="canvas_slug (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/canvas_slug/lib" />
         </CLASSES>
@@ -351,7 +351,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="canvas_sort (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_sort) [path][gem]">
+      <library name="canvas_sort (v1.0.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/canvas_sort/lib" />
         </CLASSES>
@@ -361,7 +361,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="canvas_stringex (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_stringex) [path][gem]">
+      <library name="canvas_stringex (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/canvas_stringex/lib" />
         </CLASSES>
@@ -371,7 +371,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="canvas_text_helper (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_text_helper) [path][gem]">
+      <library name="canvas_text_helper (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/canvas_text_helper/lib" />
           <root url="file://$MODULE_DIR$/gems/canvas_text_helper/config" />
@@ -383,7 +383,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="canvas_time (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_time) [path][gem]">
+      <library name="canvas_time (v1.0.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/canvas_time/lib" />
         </CLASSES>
@@ -393,7 +393,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="canvas_unzip (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/canvas_unzip) [path][gem]">
+      <library name="canvas_unzip (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/canvas_unzip/lib" />
         </CLASSES>
@@ -403,7 +403,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="csv_diff (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/csv_diff) [path][gem]">
+      <library name="csv_diff (v1.0.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/csv_diff/lib" />
         </CLASSES>
@@ -413,7 +413,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="diigo (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/diigo) [path][gem]">
+      <library name="diigo (v1.0.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/diigo/lib" />
         </CLASSES>
@@ -423,7 +423,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="event_stream (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/event_stream) [path][gem]">
+      <library name="event_stream (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/event_stream/lib" />
         </CLASSES>
@@ -433,7 +433,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="google_drive (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/google_drive) [path][gem]">
+      <library name="google_drive (v1.0.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/google_drive/lib" />
         </CLASSES>
@@ -443,17 +443,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="handlebars_tasks (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/handlebars_tasks) [path][gem]">
-        <CLASSES>
-          <root url="file://$MODULE_DIR$/gems/handlebars_tasks/lib" />
-        </CLASSES>
-        <SOURCES>
-          <root url="file://$MODULE_DIR$/gems/handlebars_tasks/lib" />
-        </SOURCES>
-      </library>
-    </orderEntry>
-    <orderEntry type="module-library">
-      <library name="html_text_helper (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/html_text_helper) [path][gem]">
+      <library name="html_text_helper (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/html_text_helper/lib" />
         </CLASSES>
@@ -463,7 +453,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="i18n_extraction (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/i18n_extraction) [path][gem]">
+      <library name="i18n_extraction (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/i18n_extraction/lib" />
         </CLASSES>
@@ -473,7 +463,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="i18n_tasks (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/i18n_tasks) [path][gem]">
+      <library name="i18n_tasks (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/i18n_tasks/lib" />
         </CLASSES>
@@ -483,7 +473,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="incoming_mail_processor (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/incoming_mail_processor) [path][gem]">
+      <library name="incoming_mail_processor (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/incoming_mail_processor/lib" />
         </CLASSES>
@@ -493,7 +483,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="json_token (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/json_token) [path][gem]">
+      <library name="json_token (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/json_token/lib" />
         </CLASSES>
@@ -503,7 +493,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="linked_in (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/linked_in) [path][gem]">
+      <library name="linked_in (v1.0.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/linked_in/lib" />
         </CLASSES>
@@ -513,7 +503,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="live_events (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/live_events) [path][gem]">
+      <library name="live_events (v1.0.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/live_events/lib" />
         </CLASSES>
@@ -523,7 +513,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="lti_outbound (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/lti_outbound) [path][gem]">
+      <library name="lti_outbound (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/lti_outbound/lib" />
         </CLASSES>
@@ -533,7 +523,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="moodle_importer (v[path], /Users/samuelsanthosh/dev/c/dev/yciw/gems/plugins/moodle_importer) [path][gem]">
+      <library name="moodle_importer (v[path]) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/plugins/moodle_importer/lib" />
           <root url="file://$MODULE_DIR$/gems/plugins/moodle_importer/spec_canvas" />
@@ -545,7 +535,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="multipart (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/multipart) [path][gem]">
+      <library name="multipart (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/multipart/lib" />
         </CLASSES>
@@ -555,7 +545,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="paginated_collection (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/paginated_collection) [path][gem]">
+      <library name="paginated_collection (v1.0.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/paginated_collection/lib" />
         </CLASSES>
@@ -565,7 +555,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="qti_exporter (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/plugins/qti_exporter) [path][gem]">
+      <library name="qti_exporter (v1.0.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/plugins/qti_exporter/app" />
           <root url="file://$MODULE_DIR$/gems/plugins/qti_exporter/lib" />
@@ -579,7 +569,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="respondus_soap_endpoint (v1.1.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/plugins/respondus_soap_endpoint) [path][gem]">
+      <library name="respondus_soap_endpoint (v1.1.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/plugins/respondus_soap_endpoint/app" />
           <root url="file://$MODULE_DIR$/gems/plugins/respondus_soap_endpoint/lib" />
@@ -593,7 +583,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="rubocop-canvas (v[path], /Users/samuelsanthosh/dev/c/dev/yciw/gems/rubocop-canvas) [path][gem]">
+      <library name="rubocop-canvas (v[path]) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/rubocop-canvas/lib" />
           <root url="file://$MODULE_DIR$/gems/rubocop-canvas/config" />
@@ -605,7 +595,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="selinimum (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/selinimum) [path][gem]">
+      <library name="selinimum (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/selinimum/bin" />
           <root url="file://$MODULE_DIR$/gems/selinimum/lib" />
@@ -619,7 +609,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="simply_versioned (v[path], /Users/samuelsanthosh/dev/c/dev/yciw/gems/plugins/simply_versioned) [path][gem]">
+      <library name="simply_versioned (v[path]) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/plugins/simply_versioned/lib" />
           <root url="file://$MODULE_DIR$/gems/plugins/simply_versioned/spec_canvas" />
@@ -631,7 +621,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="stringify_ids (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/stringify_ids) [path][gem]">
+      <library name="stringify_ids (v1.0.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/stringify_ids/lib" />
         </CLASSES>
@@ -641,7 +631,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="twitter (v1.0.0, /Users/samuelsanthosh/dev/c/dev/yciw/gems/twitter) [path][gem]">
+      <library name="twitter (v1.0.0) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/twitter/lib" />
         </CLASSES>
@@ -651,7 +641,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="utf8_cleaner (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/utf8_cleaner) [path][gem]">
+      <library name="utf8_cleaner (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/utf8_cleaner/lib" />
         </CLASSES>
@@ -661,7 +651,7 @@
       </library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library name="workflow (v0.0.1, /Users/samuelsanthosh/dev/c/dev/yciw/gems/workflow) [path][gem]">
+      <library name="workflow (v0.0.1) [path][gem]">
         <CLASSES>
           <root url="file://$MODULE_DIR$/gems/workflow/lib" />
         </CLASSES>
@@ -670,239 +660,223 @@
         </SOURCES>
       </library>
     </orderEntry>
-    <orderEntry type="library" scope="PROVIDED" name="academic_benchmarks (v0.0.8, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="actionmailer (v4.2.7.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="actionpack (v4.2.7.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="actionview (v4.2.7.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="active_model-better_errors (v1.6.7, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="active_model_serializers (v0.9.0.alpha1@61882e, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="activejob (v4.2.7.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="activemodel (v4.2.7.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="activerecord (v4.2.7.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="activesupport (v4.2.7.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="activesupport-json_encoder (v1.1.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="addressable (v2.3.8, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="adobe_connect (v1.0.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="after_transaction_commit (v1.1.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="airbrussh (v1.0.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="arel (v6.0.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="aroi (v0.0.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="ast (v2.3.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="authlogic (v3.5.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="autoparse (v0.3.3, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="aws-sdk (v2.6.7, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="aws-sdk-core (v2.6.7, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="aws-sdk-resources (v2.6.7, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="barby (v0.6.5, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="bcrypt (v3.1.11, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="bindata (v2.3.5, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="bluecloth (v2.2.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="brakeman (v3.5.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="builder (v3.2.3, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="bundler (v1.12.5, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="byebug (v9.0.6, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="canvas_connect (v0.3.10, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="canvas_statsd (v1.0.8, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="canvas_webex (v0.17, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="capistrano (v3.6.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="capistrano-bundler (v1.2.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="capistrano-harrow (v0.5.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="capistrano-passenger (v0.2.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="capistrano-rails (v1.2.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="cassandra-cql (v1.2.2@beed72, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="childprocess (v0.5.9, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="chunky_png (v1.3.8, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="coderay (v1.1.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="coffee-script (v2.4.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="coffee-script-source (v1.6.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="colored (v1.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="colorize (v0.8.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="concurrent-ruby (v1.0.5, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="connection_pool (v2.2.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="crack (v0.4.3, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="crocodoc-ruby (v0.0.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="daemons (v1.2.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="diff-lcs (v1.3, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="diplomat (v1.0.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="docile (v1.1.5, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="dress_code (v1.0.2@574382, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="dynamic_form (v1.1.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="encrypted_cookie_store-instructure (v1.2.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="erubis (v2.7.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="escape_code (v0.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="eventmachine (v1.2.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="execjs (v2.7.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="extlib (v0.9.16, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="faraday (v0.9.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="faraday_middleware (v0.11.0.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="ffi (v1.9.14, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="ffi-compiler (v1.0.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="ffi-icu (v0.1.10, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="folio-pagination (v0.0.11, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="formatador (v0.2.5, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="gepub (v0.6.9.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="gergich (v0.1.10, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="globalid (v0.3.7, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="globby (v0.1.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="google-api-client (v0.8.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="guard (v2.14.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="hairtrigger (v0.2.17, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="hashdiff (v0.3.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="hashery (v2.1.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="headless (v2.3.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="hey (v1.3.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="highline (v1.7.8, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="httparty (v0.14.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="i18n (v0.7.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="i18nliner (v0.0.12, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="icalendar (v1.5.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="iconv (v1.0.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="ims-lti (v2.1.0.beta.3, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="inst-jobs (v0.11.6, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="instructure-happymapper (v0.5.10, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="iso8601 (v0.9.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="jira_ref_parser (v1.0.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="jmespath (v1.3.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="json-jwt (v1.6.5, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="jwt (v1.2.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="launchy (v2.4.3, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="letter_opener (v1.4.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="listen (v3.1.5, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="loofah (v2.0.3, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="lumberjack (v1.0.11, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="mail (v2.6.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="marginalia (v1.4.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="metaclass (v0.0.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="method_source (v0.8.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="mime-types (v1.25.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="mini_magick (v4.2.7, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="mini_portile (v0.6.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="minitest (v5.10.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="mocha (v1.1.0@bb8813, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="moodle2cc (v0.2.37, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="multi_json (v1.12.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="multi_xml (v0.6.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="multipart-post (v2.0.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="mustache (v1.0.3, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="nenv (v0.3.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="net-http-persistent (v3.0.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="net-ldap (v0.10.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="net-scp (v1.2.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="net-ssh (v3.2.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="netaddr (v1.5.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="nokogiri (v1.6.6.2.20150813143452@d47e53, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="nokogiri-xmlsec-me-harder (v0.9.3pre@57d071, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="notiffany (v0.1.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="oauth-instructure (v0.4.10, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="oauth2 (v1.0.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="oj (v2.17.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="oj_mimic_json (v1.0.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="once-ler (v0.1.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="open4 (v1.3.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="parallel (v1.10.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="parser (v2.4.0.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="pg (v0.19.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="powerpack (v0.1.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="pry (v0.10.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="pygments.rb (v1.1.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rack (v1.6.5, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rack-test (v0.6.3, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rails (v4.2.7.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rails-deprecated_sanitizer (v1.0.3, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rails-dom-testing (v1.0.7, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rails-html-sanitizer (v1.0.3, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rails-observers (v0.1.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rails-patch-json-encode (v0.0.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="railties (v4.2.7.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rainbow (v2.2.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rake (v12.0.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="ratom-nokogiri (v0.10.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rb-fsevent (v0.9.8, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rb-inotify (v0.9.7, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rdiscount (v1.6.8, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="redcarpet (v3.3.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="redis (v3.3.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="redis-actionpack (v4.0.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="redis-activesupport (v4.1.5, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="redis-rack (v1.5.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="redis-rails (v4.0.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="redis-scripting (v1.0.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="redis-store (v1.1.4@72db36, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="request_store (v1.3.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="retriable (v1.4.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="ritex (v1.0.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rotp (v3.3.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rqrcode (v0.10.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rspec (v3.5.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rspec-collection_matchers (v1.1.3, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rspec-core (v3.5.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rspec-expectations (v3.5.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rspec-mocks (v3.5.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rspec-rails (v3.5.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rspec-support (v3.5.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rspec_around_all (v0.2.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rubocop (v0.46.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rubocop-rspec (v1.8.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="ruby-duration (v3.2.3, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="ruby-progressbar (v1.8.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="ruby-saml-mod (v0.3.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="ruby2ruby (v2.0.8, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="ruby_dep (v1.5.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="ruby_parser (v3.8.3, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rubycas-client (v2.3.9, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rubyzip (v1.2.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="rufus-scheduler (v3.2.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="safe_yaml (v1.0.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="saml2 (v1.0.7, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="sanitize (v2.1.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="scrypt (v3.0.3, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="securecompare (v1.0.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="selenium-webdriver (v2.53.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="sentry-raven (v0.15.6, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="sexp_processor (v4.4.5, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="shackles (v1.3.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="shellany (v0.0.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="shoulda-matchers (v3.1.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="signet (v0.6.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="simple_oauth (v0.2.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="simple_uuid (v0.4.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="simplecov (v0.9.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="simplecov-html (v0.9.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="simplecov-rcov (v0.2.3, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="slop (v3.6.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="soap4r-middleware (v0.8.3, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="soap4r-ruby1.9 (v2.0.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="spring (v2.0.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="spring-commands-rspec (v1.0.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="sprockets (v3.7.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="sprockets-rails (v3.2.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="sqlite3 (v1.3.13, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="sshkit (v1.11.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="statsd-ruby (v1.3.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="switchman (v1.9.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="test-queue (v0.2.13@57d31b, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="test_after_commit (v1.1.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="testingbot (v0.1.7, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="testrail_client (v0.0.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="testrailtagging (v0.3.7, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="thin (v1.7.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="thor (v0.19.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="thread_safe (v0.3.6, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="thrift (v0.8.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="thrift_client (v0.8.4, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="timecop (v0.8.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="twilio-ruby (v4.2.1, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="tzinfo (v1.2.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="unicode-display_width (v1.1.3, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="url_safe_base64 (v0.2.2, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="useragent (v0.16.8, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="vericite_api (v1.2.0, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="webmock (v1.22.3, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="websocket (v1.2.3, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="will_paginate (v3.1.5, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="ya2yaml (v0.31, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="yard (v0.9.5, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
-    <orderEntry type="library" scope="PROVIDED" name="yard-appendix (v0.1.8, RVM: ruby-2.3.1 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="academic_benchmarks (v0.0.9, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="actionmailer (v4.2.8, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="actionpack (v4.2.8, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="actionview (v4.2.8, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="active_model-better_errors (v1.6.7, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="active_model_serializers (v0.9.0.alpha1@61882e, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="activejob (v4.2.8, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="activemodel (v4.2.8, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="activerecord (v4.2.8, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="activesupport (v4.2.8, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="activesupport-json_encoder (v1.1.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="addressable (v2.5.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="adobe_connect (v1.0.5, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="after_transaction_commit (v1.1.2, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="airbrussh (v1.2.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="arel (v6.0.4, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="aroi (v0.0.4, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="ast (v2.3.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="authlogic (v3.5.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="autoparse (v0.3.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="aws-sdk (v2.6.7, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="aws-sdk-core (v2.6.7, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="aws-sdk-resources (v2.6.7, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="barby (v0.6.5, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="bcrypt (v3.1.11, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="bindata (v2.4.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="bluecloth (v2.2.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="brakeman (v3.6.2, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="builder (v3.2.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="bundler (v1.13.6, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="byebug (v9.0.6, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="canvas_connect (v0.3.10, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="canvas_statsd (v2.0.4, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="canvas_webex (v0.17, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="capistrano (v3.8.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="capistrano-bundler (v1.2.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="capistrano-passenger (v0.2.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="capistrano-rails (v1.2.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="cassandra-cql (v1.2.2@fa9e42, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="childprocess (v0.5.9, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="chunky_png (v1.3.8, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="colored (v1.2, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="colorize (v0.8.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="concurrent-ruby (v1.0.5, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="connection_pool (v2.2.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="crack (v0.4.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="crocodoc-ruby (v0.0.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="diff-lcs (v1.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="docile (v1.1.5, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="dotenv (v2.2.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="dress_code (v1.0.2@574382, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="dynamic_form (v1.1.4, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="encrypted_cookie_store-instructure (v1.2.4, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="erubis (v2.7.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="escape_code (v0.2, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="et-orbi (v1.0.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="extlib (v0.9.16, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="faraday (v0.9.2, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="faraday_middleware (v0.11.0.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="ffi (v1.9.14, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="ffi-compiler (v1.0.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="ffi-icu (v0.1.10, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="folio-pagination (v0.0.12, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="gepub (v0.7.0beta3@7cea2f, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="gergich (v0.1.13, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="globalid (v0.4.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="globby (v0.1.2, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="google-api-client (v0.8.2, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="hashdiff (v0.3.2, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="hashery (v2.1.2, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="headless (v2.3.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="hey (v1.3.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="highline (v1.7.8, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="httparty (v0.14.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="httpclient (v2.8.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="i18n (v0.7.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="i18nliner (v0.0.12, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="icalendar (v1.5.4, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="iconv (v1.0.4, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="imperium (v0.1.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="ims-lti (v2.1.2, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="inst-jobs (v0.13.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="instructure-happymapper (v0.5.10, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="iso8601 (v0.9.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="jira_ref_parser (v1.0.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="jmespath (v1.3.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="json (v2.0.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="json-jwt (v1.6.5, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="jwt (v1.2.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="launchy (v2.4.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="letter_opener (v1.4.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="loofah (v2.0.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="mail (v2.6.4, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="marginalia (v1.4.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="metaclass (v0.0.4, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="mime-types (v1.25.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="mini_magick (v4.2.7, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="mini_portile2 (v2.1.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="minitest (v5.10.2, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="mocha (v1.1.0@bb8813, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="moodle2cc (v0.2.37, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="multi_json (v1.12.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="multi_xml (v0.6.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="multipart-post (v2.0.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="mustache (v1.0.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="net-http-persistent (v3.0.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="net-ldap (v0.10.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="net-scp (v1.2.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="net-ssh (v4.1.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="netaddr (v1.5.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="nokogiri (v1.7.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="nokogiri-xmlsec-me-harder (v0.9.3pre@57d071, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="oauth-instructure (v0.4.10, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="oauth2 (v1.0.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="oj (v2.17.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="oj_mimic_json (v1.0.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="once-ler (v0.1.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="open4 (v1.3.4, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="parallel (v1.10.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="parser (v2.4.0.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="pg (v0.19.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="powerpack (v0.1.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="public_suffix (v2.0.5, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="puma (v3.8.2, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="pygments.rb (v1.1.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rack (v1.6.5, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rack-test (v0.6.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rails (v4.2.8, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rails-deprecated_sanitizer (v1.0.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rails-dom-testing (v1.0.8, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rails-html-sanitizer (v1.0.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rails-observers (v0.1.3.alpha@3fe157, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rails-patch-json-encode (v0.0.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="railties (v4.2.8, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rainbow (v2.2.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rake (v12.0.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="ratom-nokogiri (v0.10.5, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rdiscount (v1.6.8, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="redcarpet (v3.4.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="redis (v3.3.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="redis-actionpack (v4.0.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="redis-activesupport (v4.1.5, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="redis-rack (v1.5.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="redis-rails (v4.0.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="redis-scripting (v1.0.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="redis-store (v1.1.4@72db36, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="request_store (v1.3.2, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="retriable (v1.4.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="ritex (v1.0.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rotp (v3.3.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rqrcode (v0.10.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rspec (v3.5.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rspec-collection_matchers (v1.1.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rspec-core (v3.5.4, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rspec-expectations (v3.5.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rspec-mocks (v3.5.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rspec-rails (v3.5.2, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rspec-support (v3.5.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rspec_around_all (v0.2.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rubocop (v0.47.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rubocop-rspec (v1.10.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="ruby-duration (v3.2.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="ruby-progressbar (v1.8.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="ruby-saml-mod (v0.3.5, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="ruby2ruby (v2.3.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="ruby_parser (v3.8.4, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rubycas-client (v2.3.9, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rubyzip (v1.2.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="rufus-scheduler (v3.4.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="safe_yaml (v1.0.4, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="saml2 (v1.0.10, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="sanitize (v2.1.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="scrypt (v3.0.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="securecompare (v1.0.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="selenium-webdriver (v2.53.4, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="sentry-raven (v0.15.6, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="sexp_processor (v4.4.5, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="shackles (v1.3.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="shoulda-matchers (v3.1.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="signet (v0.6.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="simple_oauth (v0.2.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="simple_uuid (v0.4.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="simplecov (v0.14.1@78c117, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="simplecov-html (v0.10.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="simplecov-rcov (v0.2.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="soap4r-middleware (v0.8.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="soap4r-ruby1.9 (v2.0.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="spring (v2.0.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="spring-commands-rspec (v1.0.4, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="sprockets (v3.7.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="sprockets-rails (v3.2.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="sqlite3 (v1.3.13, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="sshkit (v1.13.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="statsd-ruby (v1.4.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="switchman (v1.9.9, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="test-queue (v0.2.13@1b92eb, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="test_after_commit (v1.1.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="testingbot (v0.1.7, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="testrail_client (v0.0.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="testrailtagging (v0.3.7, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="thor (v0.19.4, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="thread_safe (v0.3.6, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="thrift (v0.8.0, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="thrift_client (v0.8.4, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="timecop (v0.8.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="twilio-ruby (v4.2.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="tzinfo (v1.2.2, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="unicode-display_width (v1.2.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="url_safe_base64 (v0.2.2, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="useragent (v0.16.8, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="vericite_api (v1.5.1, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="webmock (v2.3.2, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="websocket (v1.2.3, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="will_paginate (v3.1.5, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="ya2yaml (v0.31, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="yard (v0.9.5, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
+    <orderEntry type="library" scope="PROVIDED" name="yard-appendix (v0.1.8, RVM: ruby-2.4.0 [greatlearning]) [gem]" level="application" />
   </component>
   <component name="RModuleSettingsStorage">
     <LOAD_PATH number="0" />

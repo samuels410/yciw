@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2014 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -31,6 +31,7 @@ class GradeCalculator
     Rails.logger.info("GRADES: calc args: opts=#{opts.inspect}")
 
     @course = course.is_a?(Course) ? course : Course.find(course)
+
     @groups = @course.assignment_groups.active
     @grading_period = opts[:grading_period]
     # if we're updating an overall course score (no grading period specified), we
@@ -39,11 +40,13 @@ class GradeCalculator
     # if we're updating a grading period score, we also need to update the
     # overall course score
     @update_course_score = @grading_period.present? && opts[:update_course_score]
-    @assignments = @course.assignments.published.gradeable.to_a
+    @assignments = opts[:assignments] || @course.assignments.published.gradeable.to_a
+
     @user_ids = Array(user_ids).map { |id| Shard.relative_id_for(id, Shard.current, @course.shard) }
     @current_updates = {}
     @final_updates = {}
     @ignore_muted = opts[:ignore_muted]
+    @effective_due_dates = opts[:effective_due_dates]
   end
 
   # recomputes the scores and saves them to each user's Enrollment
@@ -65,33 +68,16 @@ class GradeCalculator
 
   def compute_scores
     @submissions = @course.submissions.
-        except(:order, :select).
-        for_user(@user_ids).
-        where(assignment_id: @assignments).
-        select("submissions.id, user_id, assignment_id, score, excused, submissions.workflow_state")
-    submissions_by_user = @submissions.group_by(&:user_id)
-
-    result = []
+      except(:order, :select).
+      for_user(@user_ids).
+      where(assignment_id: @assignments).
+      select("submissions.id, user_id, assignment_id, score, excused, submissions.workflow_state")
+    scores_and_group_sums = []
     @user_ids.each_slice(100) do |batched_ids|
-      load_assignment_visibilities_for_users(batched_ids)
-      batched_ids.each do |user_id|
-        user_submissions = submissions_by_user[user_id] || []
-        user_submissions.select!{|s| assignment_ids_visible_to_user(user_id).include?(s.assignment_id)}
-        current, current_groups = calculate_current_score(user_id, user_submissions)
-        final, final_groups = calculate_final_score(user_id, user_submissions)
-
-        scores = {
-          current: current,
-          current_groups: current_groups,
-          final: final,
-          final_groups: final_groups
-        }
-
-        result << scores
-      end
-      clear_assignment_visibilities_cache
+      scores_and_group_sums_batch = compute_scores_and_group_sums_for_batch(batched_ids)
+      scores_and_group_sums.concat(scores_and_group_sums_batch)
     end
-    result
+    scores_and_group_sums
   end
 
   def compute_and_save_scores
@@ -103,8 +89,123 @@ class GradeCalculator
 
   private
 
+  def effective_due_dates
+    @effective_due_dates ||= EffectiveDueDates.for_course(@course, @assignments)
+  end
+
+  def compute_scores_and_group_sums_for_batch(user_ids)
+    user_ids.map do |user_id|
+      group_sums = compute_group_sums_for_user(user_id)
+      scores = compute_scores_for_user(user_id, group_sums)
+      update_changes_hash_for_user(user_id, scores)
+      {
+        current: scores[:current],
+        current_groups: group_sums[:current].index_by { |group| group[:id] },
+        final: scores[:final],
+        final_groups: group_sums[:final].index_by { |group| group[:id] }
+      }
+    end
+  end
+
+  def assignment_visible_to_student?(assignment_id, user_id)
+    effective_due_dates.find_effective_due_date(user_id, assignment_id).key?(:due_at)
+  end
+
+  def compute_group_sums_for_user(user_id)
+    user_submissions = submissions_by_user.fetch(user_id, []).select do |submission|
+      assignment_visible_to_student?(submission.assignment_id, user_id)
+    end
+
+    {
+      current: create_group_sums(user_submissions, user_id, ignore_ungraded: true),
+      final: create_group_sums(user_submissions, user_id, ignore_ungraded: false)
+    }
+  end
+
+  def compute_scores_for_user(user_id, group_sums)
+    if compute_course_scores_from_weighted_grading_periods?
+      scores = calculate_total_from_weighted_grading_periods(user_id)
+    else
+      scores = {
+        current: calculate_total_from_group_scores(group_sums[:current]),
+        final: calculate_total_from_group_scores(group_sums[:final])
+      }
+    end
+    Rails.logger.info "GRADES: calculated: #{scores.inspect}"
+    scores
+  end
+
+  def update_changes_hash_for_user(user_id, scores)
+    @current_updates[user_id] = scores[:current][:grade]
+    @final_updates[user_id] = scores[:final][:grade]
+  end
+
+  def calculate_total_from_weighted_grading_periods(user_id)
+    enrollment = enrollments_by_user[user_id].first
+    grading_period_ids = grading_periods_for_course.map(&:id)
+    # using Enumberable#select because the scores are preloaded
+    grading_period_scores = enrollment.scores.select do |score|
+      grading_period_ids.include?(score.grading_period_id)
+    end
+    scores = apply_grading_period_weights_to_scores(grading_period_scores)
+    scale_and_round_scores(scores, grading_period_scores)
+  end
+
+  def apply_grading_period_weights_to_scores(grading_period_scores)
+    grading_period_scores.each_with_object(
+      { current: { full_weight: 0.0, grade: 0.0 }, final: { full_weight: 0.0, grade: 0.0 } }
+    ) do |score, scores|
+      weight = grading_period_weights[score.grading_period_id] || 0.0
+      scores[:final][:full_weight] += weight
+      scores[:current][:full_weight] += weight if score.current_score
+      scores[:current][:grade] += (score.current_score || 0.0) * (weight / 100.0)
+      scores[:final][:grade] += (score.final_score || 0.0) * (weight / 100.0)
+    end
+  end
+
+  def scale_and_round_scores(scores, grading_period_scores)
+    [:current, :final].each_with_object({ current: {}, final: {} }) do |score_type, adjusted_scores|
+      score = scores[score_type][:grade]
+      full_weight = scores[score_type][:full_weight]
+      score = scale_score_up(score, full_weight) if full_weight < 100
+      if score == 0.0 && score_type == :current && grading_period_scores.none?(&:current_score)
+        score = nil
+      end
+      adjusted_scores[score_type][:grade] = score ? score.round(2) : score
+    end
+  end
+
+  def scale_score_up(score, weight)
+    return 0.0 if weight.zero?
+    (score * 100.0) / weight
+  end
+
+  def compute_course_scores_from_weighted_grading_periods?
+    return @compute_from_weighted_periods if @compute_from_weighted_periods.present?
+
+    if @grading_period || grading_periods_for_course.empty?
+      @compute_from_weighted_periods = false
+    else
+      @compute_from_weighted_periods = grading_periods_for_course.first.grading_period_group.weighted?
+    end
+  end
+
+  def grading_periods_for_course
+    @periods ||= GradingPeriod.for(@course)
+  end
+
+  def grading_period_weights
+    @grading_period_weights ||= grading_periods_for_course.each_with_object({}) do |period, weights|
+        weights[period.id] = period.weight
+    end
+  end
+
+  def submissions_by_user
+    @submissions_by_user ||= @submissions.group_by {|s| Shard.relative_id_for(s.user_id, Shard.current, @course.shard) }
+  end
+
   def calculate_grading_period_scores
-    GradingPeriod.for(@course).each do |grading_period|
+    grading_periods_for_course.each do |grading_period|
       # update this grading period score, and do not
       # update any other scores (grading period or course)
       # after this one
@@ -113,8 +214,19 @@ class GradeCalculator
         @course,
         update_all_grading_period_scores: false,
         update_course_score: false,
-        grading_period: grading_period
+        grading_period: grading_period,
+        assignments: @assignments,
+        effective_due_dates: effective_due_dates
       ).compute_and_save_scores
+    end
+
+    # delete any grading period scores that are no longer relevant
+    grading_period_ids = grading_periods_for_course.empty? ? nil : grading_periods_for_course.map(&:id)
+    @course.shard.activate do
+      Score.active.joins(:enrollment).
+        where(enrollments: {user_id: @user_ids, course_id: @course.id}).
+        where.not(grading_period_id: grading_period_ids).
+        update_all(workflow_state: :deleted)
     end
   end
 
@@ -125,18 +237,20 @@ class GradeCalculator
       @user_ids,
       @course,
       update_all_grading_period_scores: false,
-      update_course_score: false
+      update_course_score: false,
+      effective_due_dates: effective_due_dates
     ).compute_and_save_scores
   end
 
   def enrollments
-    @enrollments ||= Enrollment.shard(@course).active.
+    @enrollments ||= Enrollment.shard(@course.shard).active.
       where(user_id: @user_ids, course_id: @course.id).
-      select(:id, :user_id)
+      select(:id, :user_id).preload(:scores)
   end
 
   def joined_enrollment_ids
-    @joined_enrollment_ids ||= enrollments.map(&:id).join(',')
+    # use local_id because we'll exec the query on the enrollment's shard
+    @joined_enrollment_ids ||= enrollments.map(&:local_id).join(',')
   end
 
   def enrollments_by_user
@@ -165,85 +279,66 @@ class GradeCalculator
     updated_at = Score.sanitize(Time.now.utc)
 
     Score.transaction do
-      # Construct upsert statement to update existing Scores or create them if needed.
-      Score.connection.execute("
-        UPDATE #{Score.quoted_table_name}
-            SET
-              current_score = CASE enrollment_id
-                #{@current_updates.map do |user_id, score|
-                  enrollments_by_user[user_id].map do |enrollment|
-                    "WHEN #{enrollment.id} THEN #{number_or_null(score)}"
-                  end.join(' ')
-                end.join(' ')}
-                ELSE current_score
-              END,
-              final_score = CASE enrollment_id
-                #{@final_updates.map do |user_id, score|
-                  enrollments_by_user[user_id].map do |enrollment|
-                    "WHEN #{enrollment.id} THEN #{number_or_null(score)}"
-                  end.join(' ')
-                end.join(' ')}
-                ELSE final_score
-              END,
-              updated_at = #{updated_at},
-              -- if workflow_state was previously deleted for some reason, update it to active
-              workflow_state = COALESCE(NULLIF(workflow_state, 'deleted'), 'active')
-            WHERE
-              enrollment_id IN (#{joined_enrollment_ids}) AND
-              grading_period_id #{@grading_period ? "= #{@grading_period.id}" : 'IS NULL'};
-        INSERT INTO #{Score.quoted_table_name}
-            (enrollment_id, grading_period_id, current_score, final_score, created_at, updated_at)
-            SELECT
-              enrollments.id as enrollment_id,
-              #{@grading_period.try(:id) || 'NULL'} as grading_period_id,
-              CASE enrollments.id
-                #{@current_updates.map do |user_id, score|
-                  enrollments_by_user[user_id].map do |enrollment|
-                    "WHEN #{enrollment.id} THEN #{number_or_null(score)}"
-                  end.join(' ')
-                end.join(' ')}
-                ELSE NULL
-              END :: float AS current_score,
-              CASE enrollments.id
-                #{@final_updates.map do |user_id, score|
-                  enrollments_by_user[user_id].map do |enrollment|
-                    "WHEN #{enrollment.id} THEN #{number_or_null(score)}"
-                  end.join(' ')
-                end.join(' ')}
-                ELSE NULL
-              END :: float AS final_score,
-              #{updated_at} as created_at,
-              #{updated_at} as updated_at
-            FROM #{Enrollment.quoted_table_name} enrollments
-            LEFT OUTER JOIN #{Score.quoted_table_name} scores on
-              scores.enrollment_id = enrollments.id AND
-              scores.grading_period_id #{@grading_period ? "= #{@grading_period.id}" : 'IS NULL'}
-            WHERE
-              enrollments.id IN (#{joined_enrollment_ids}) AND
-              scores.id IS NULL;
-      ")
+      @course.shard.activate do
+        # Construct upsert statement to update existing Scores or create them if needed.
+        Score.connection.execute("
+          UPDATE #{Score.quoted_table_name}
+              SET
+                current_score = CASE enrollment_id
+                  #{@current_updates.map do |user_id, score|
+                    enrollments_by_user[user_id].map do |enrollment|
+                      "WHEN #{enrollment.id} THEN #{number_or_null(score)}"
+                    end.join(' ')
+                  end.join(' ')}
+                  ELSE current_score
+                END,
+                final_score = CASE enrollment_id
+                  #{@final_updates.map do |user_id, score|
+                    enrollments_by_user[user_id].map do |enrollment|
+                      "WHEN #{enrollment.id} THEN #{number_or_null(score)}"
+                    end.join(' ')
+                  end.join(' ')}
+                  ELSE final_score
+                END,
+                updated_at = #{updated_at},
+                -- if workflow_state was previously deleted for some reason, update it to active
+                workflow_state = COALESCE(NULLIF(workflow_state, 'deleted'), 'active')
+              WHERE
+                enrollment_id IN (#{joined_enrollment_ids}) AND
+                grading_period_id #{@grading_period ? "= #{@grading_period.id}" : 'IS NULL'};
+          INSERT INTO #{Score.quoted_table_name}
+              (enrollment_id, grading_period_id, current_score, final_score, created_at, updated_at)
+              SELECT
+                enrollments.id as enrollment_id,
+                #{@grading_period.try(:id) || 'NULL'} as grading_period_id,
+                CASE enrollments.id
+                  #{@current_updates.map do |user_id, score|
+                    enrollments_by_user[user_id].map do |enrollment|
+                      "WHEN #{enrollment.id} THEN #{number_or_null(score)}"
+                    end.join(' ')
+                  end.join(' ')}
+                  ELSE NULL
+                END :: float AS current_score,
+                CASE enrollments.id
+                  #{@final_updates.map do |user_id, score|
+                    enrollments_by_user[user_id].map do |enrollment|
+                      "WHEN #{enrollment.id} THEN #{number_or_null(score)}"
+                    end.join(' ')
+                  end.join(' ')}
+                  ELSE NULL
+                END :: float AS final_score,
+                #{updated_at} as created_at,
+                #{updated_at} as updated_at
+              FROM #{Enrollment.quoted_table_name} enrollments
+              LEFT OUTER JOIN #{Score.quoted_table_name} scores on
+                scores.enrollment_id = enrollments.id AND
+                scores.grading_period_id #{@grading_period ? "= #{@grading_period.id}" : 'IS NULL'}
+              WHERE
+                enrollments.id IN (#{joined_enrollment_ids}) AND
+                scores.id IS NULL;
+        ")
+      end
     end
-  end
-
-  # The score ignoring unsubmitted assignments
-  def calculate_current_score(user_id, submissions)
-    calculate_score(submissions, user_id, true)
-  end
-
-  # The final score for the class, so unsubmitted assignments count as zeros
-  def calculate_final_score(user_id, submissions)
-    calculate_score(submissions, user_id, false)
-  end
-
-  def calculate_score(submissions, user_id, ignore_ungraded)
-    group_sums = create_group_sums(submissions, user_id, ignore_ungraded)
-    info = calculate_total_from_group_scores(group_sums)
-    Rails.logger.info "GRADES: calculated: #{info.inspect}"
-
-    updates_hash = ignore_ungraded ? @current_updates : @final_updates
-    updates_hash[user_id] = info[:grade]
-
-    [info, group_sums.index_by { |s| s[:id] }]
   end
 
   # returns information about assignments groups in the form:
@@ -256,14 +351,18 @@ class GradeCalculator
   #    :weight   => 50},
   #   ...]
   # each group
-  def create_group_sums(submissions, user_id, ignore_ungraded=true)
-    visible_assignments = @assignments
-    visible_assignments = visible_assignments.select{|a| assignment_ids_visible_to_user(user_id).include?(a.id)}
+  def create_group_sums(submissions, user_id, ignore_ungraded: true)
+    visible_assignments = @assignments.select { |assignment| assignment_visible_to_student?(assignment.id, user_id) }
 
     if @grading_period
-      user = User.find(user_id)
-      visible_assignments = @grading_period.assignments_for_student(visible_assignments, user)
+      visible_assignments.select! do |assignment|
+        effective_due_dates.grading_period_id_for(
+          student_id: user_id,
+          assignment_id: assignment.id
+        ) == Shard.relative_id_for(@grading_period.id, Shard.current, @course.shard)
+      end
     end
+
     assignments_by_group_id = visible_assignments.group_by(&:assignment_group_id)
     submissions_by_assignment_id = Hash[
       submissions.map { |s| [s.assignment_id, s] }
@@ -316,25 +415,6 @@ class GradeCalculator
         Rails.logger.info "GRADES: calculated #{group_grade_info.inspect}"
       }
     end
-  end
-
-  def load_assignment_visibilities_for_users(user_ids)
-    @assignment_ids_visible_to_user ||= begin
-      AssignmentStudentVisibility.shard(@course)
-        .visible_assignment_ids_in_course_by_user(
-          course_id: @course.id,
-          user_id: user_ids.map { |u| Shard.global_id_for(u) }, # hack to always find cross-shard enrollments
-          use_global_id: true
-        )
-    end
-  end
-
-  def clear_assignment_visibilities_cache
-    @assignment_ids_visible_to_user = nil
-  end
-
-  def assignment_ids_visible_to_user(user_id)
-    @assignment_ids_visible_to_user[Shard.global_id_for(user_id)]
   end
 
   # see comments for dropAssignments in grade_calculator.coffee

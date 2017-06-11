@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'jquery'
   'underscore'
@@ -29,13 +46,13 @@ define [
         title: @apptGroup.title
         contexts: @contexts
         appointment_group: @appointment_group,
-        num_minutes: '<input type="number" name="duration" value="30" style="width: 40px"
+        num_minutes: '<input type="number" pattern="[0-9]" name="duration" value="30" style="width: 40px"
               aria-label="' + htmlEscape(I18n.t('Minutes per slot')) + '" />'
-        num_participants: '<input type="number" name="participants_per_appointment"
+        num_participants: '<input type="number" pattern="[0-9]" name="participants_per_appointment"
                 value="' + htmlEscape(@appointment_group.participants_per_appointment) + '" min="1"
                 style="width: 40px;"
                 aria-label="' + htmlEscape(I18n.t('Max users/groups per appointment')) + '" />'
-        num_appointments: '<input type="number" name="max_appointments_per_participant"
+        num_appointments: '<input type="number" pattern="[0-9]" name="max_appointments_per_participant"
               value="' + htmlEscape(@appointment_group.max_appointments_per_participant) +  '" min="1"
               style="width: 40px"
               aria-label="' + htmlEscape(I18n.t('Maximum number of appointments a participant can attend')) + '" />'
@@ -256,7 +273,7 @@ define [
           contextCode = contextCodes[0]
           text = @contextsHash[contextCode].name
           if contextCodes.length > 1
-            text += " " + I18n.t('and_n_contexts', 'and %{n} others', n: contextCodes.length - 1)
+            text += " " + I18n.t('and_n_contexts', 'and %{n} others', n: I18n.n(contextCodes.length - 1))
           @form.find('.ag_contexts_selector').text(text)
         if sectionCodes.length > 0
           sectionCode = sectionCodes[0]
@@ -267,7 +284,7 @@ define [
                      .value()
           text = section.name
           if sectionCodes.length > 1
-            text += " " + I18n.t('and_n_sectionCodes', 'and %{n} others', n: sectionCodes.length - 1)
+            text += " " + I18n.t('and_n_sectionCodes', 'and %{n} others', n: I18n.n(sectionCodes.length - 1))
           @form.find('.ag_contexts_selector').text(text)
 
       # group selector

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -17,16 +17,15 @@
 #
 
 class OauthProxyController < ApplicationController
-  skip_before_filter :require_user
-  skip_before_filter :load_user
+  skip_before_action :load_user
 
   def redirect_proxy
     reject! t("The state parameter is required") and return unless params[:state]
     begin
       json = Canvas::Security.decode_jwt(params[:state])
       url = URI.parse(json['redirect_uri'])
-      filtered_params = params.keep_if { |k, _| %w(state code).include?(k) }
-      url.query = url.query.blank? ? filtered_params.to_query : "#{url.query}&#{filtered_params.to_query}"
+      filtered_params = params.permit(:state, :code)
+      url.query = url.query.blank? ? filtered_params.to_h.to_query : "#{url.query}&#{filtered_params.to_h.to_query}"
       redirect_to url.to_s
     rescue JSON::JWT::InvalidFormat, Canvas::Security::InvalidToken
       reject! t("Invalid state parameter") and return

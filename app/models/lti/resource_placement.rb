@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2014 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -26,6 +26,8 @@ module Lti
     POST_GRADES = 'post_grades'
     RESOURCE_SELECTION = 'resource_selection'
     SIMILARITY_DETECTION = 'similarity_detection'
+
+    SIMILARITY_DETECTION_LTI2 = 'Canvas.placements.similarityDetection'
 
     DEFAULT_PLACEMENTS = [ASSIGNMENT_SELECTION, LINK_SELECTION].freeze
 
@@ -59,7 +61,7 @@ module Lti
       'Canvas.placements.courseNavigation' => COURSE_NAVIGATION,
       'Canvas.placements.linkSelection' => LINK_SELECTION,
       'Canvas.placements.postGrades' => POST_GRADES,
-      'Canvas.placements.similarityDetection' => SIMILARITY_DETECTION,
+      SIMILARITY_DETECTION_LTI2 => SIMILARITY_DETECTION,
     }.freeze
 
     belongs_to :message_handler, class_name: 'Lti::MessageHandler'

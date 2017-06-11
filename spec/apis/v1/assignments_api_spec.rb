@@ -108,6 +108,24 @@ describe AssignmentsApiController, type: :request do
       expect(json.first).to have_key('due_date_required')
     end
 
+    it "includes name_length_required in returned json with default value" do
+      @course.assignments.create!(title: "Example Assignment")
+      json = api_get_assignments_index_from_course(@course)
+      expect(json.first['max_name_length']).to eq(255)
+    end
+
+    it "includes name_length_required in returned json with custom value" do
+      a = @course.account
+      a.settings[:sis_syncing] = {value: true}
+      a.settings[:sis_assignment_name_length] = {value: true}
+      a.enable_feature!(:new_sis_integrations)
+      a.settings[:sis_assignment_name_length_input] = {value: 20}
+      a.save!
+      @course.assignments.create!(title: "Example Assignment", post_to_sis: true)
+      json = api_get_assignments_index_from_course(@course)
+      expect(json.first['max_name_length']).to eq(20)
+    end
+
     it "sorts the returned list of assignments" do
       # the API returns the assignments sorted by
       # [assignment_groups.position, assignments.position]
@@ -1135,6 +1153,7 @@ describe AssignmentsApiController, type: :request do
     end
 
     it "sets the configuration LTI 2 tool in account context" do
+      AssignmentConfigurationToolLookup.any_instance.stubs(:create_subscription).returns true
       account = @course.account
       product_family = Lti::ProductFamily.create(
         vendor_code: '123',
@@ -1181,6 +1200,7 @@ describe AssignmentsApiController, type: :request do
     end
 
     it "sets the configuration an LTI 2 tool in course context" do
+      AssignmentConfigurationToolLookup.any_instance.stubs(:create_subscription).returns true
       account = @course.account
       product_family = Lti::ProductFamily.create(
         vendor_code: '123',
@@ -1459,7 +1479,7 @@ describe AssignmentsApiController, type: :request do
         api_call_to_update_adhoc_override(student_ids: [@student.id])
 
         ao = @assignment.assignment_overrides.where(set_type: 'ADHOC').first
-        expect(AssignmentOverrideStudent.count ==1)
+        expect(AssignmentOverrideStudent.count).to eq 1
       end
 
       it 'allows the update of an adhoc override with different student' do
@@ -1605,7 +1625,7 @@ describe AssignmentsApiController, type: :request do
       end
     end
 
-    context "with multiple grading periods enabled" do
+    context "with grading periods" do
       def call_create(params, expected_status)
         api_call_as_user(
           @current_user,
@@ -1627,7 +1647,6 @@ describe AssignmentsApiController, type: :request do
       end
 
       before :once do
-        @course.root_account.enable_feature!(:multiple_grading_periods)
         grading_period_group = Factories::GradingPeriodGroupHelper.new.create_for_account(@course.root_account)
         term = @course.enrollment_term
         term.grading_period_group = grading_period_group
@@ -2062,12 +2081,17 @@ describe AssignmentsApiController, type: :request do
         before :once do
           student_in_course(:course => @course, :active_enrollment => true)
           @assignment = @course.assignments.create!
+          @group_category = @assignment.context.group_categories.create!(name: "foo")
+          @assignment.group_category = @group_category
+          @assignment.save!
+          @group = group_model(:context => @course, :group_category => @assignment.group_category)
           @adhoc_due_at = 5.days.from_now
           @section_due_at = 7.days.from_now
+          @group_due_at = 3.days.from_now
           @user = @teacher
         end
 
-        before :each do
+        let(:update_assignment) do
           api_update_assignment_call(@course,@assignment,{
             'name' => 'Assignment With Overrides',
             'assignment_overrides' => {
@@ -2081,6 +2105,12 @@ describe AssignmentsApiController, type: :request do
                 'due_at' => @section_due_at.iso8601
               },
               '2' => {
+                'title' => 'Group override',
+                'set_id' => @group_category.id,
+                'group_id' => @group.id,
+                'due_at' => @group_due_at.iso8601
+              },
+              '3' => {
                 'title' => 'Helpful Tag',
                 'noop_id' => 999
               }
@@ -2090,7 +2120,8 @@ describe AssignmentsApiController, type: :request do
         end
 
         it "updates any ADHOC overrides" do
-          expect(@assignment.assignment_overrides.count).to eq 3
+          update_assignment
+          expect(@assignment.assignment_overrides.count).to eq 4
           @adhoc_override = @assignment.assignment_overrides.where(set_type: 'ADHOC').first
           expect(@adhoc_override).not_to be_nil
           expect(@adhoc_override.set).to eq [@student]
@@ -2099,6 +2130,7 @@ describe AssignmentsApiController, type: :request do
         end
 
         it "updates any CourseSection overrides" do
+          update_assignment
           @section_override = @assignment.assignment_overrides.where(set_type: 'CourseSection').first
           expect(@section_override).not_to be_nil
           expect(@section_override.set).to eq @course.default_section
@@ -2106,7 +2138,17 @@ describe AssignmentsApiController, type: :request do
           expect(@section_override.due_at.to_i).to eq @section_due_at.to_i
         end
 
+        it "updates any Group overrides" do
+          update_assignment
+          @group_override = @assignment.assignment_overrides.where(set_type: 'Group').first
+          expect(@group_override).not_to be_nil
+          expect(@group_override.set).to eq @group
+          expect(@group_override.due_at_overridden).to be_truthy
+          expect(@group_override.due_at.to_i).to eq @group_due_at.to_i
+        end
+
         it "updates any Noop overrides" do
+          update_assignment
           @noop_override = @assignment.assignment_overrides.where(set_type: 'Noop').first
           expect(@noop_override).not_to be_nil
           expect(@noop_override.set).to be_nil
@@ -2114,6 +2156,60 @@ describe AssignmentsApiController, type: :request do
           expect(@noop_override.set_id).to eq 999
           expect(@noop_override.title).to eq 'Helpful Tag'
           expect(@noop_override.due_at_overridden).to be_falsey
+        end
+
+        it 'overrides the assignment for the user' do
+          @assignment.update!(due_at: 1.day.from_now)
+          response = api_update_assignment_call(@course, @assignment,
+            assignment_overrides: {
+              0 => {
+                course_section_id: @course.default_section.id,
+                due_at: @section_due_at.iso8601
+              }
+            }
+          )
+          expect(response['due_at']).to eq(@section_due_at.iso8601)
+        end
+
+        it 'does not override the assignment for the user if passed false for override_dates' do
+          @assignment.update!(due_at: 1.day.from_now)
+          response = api_update_assignment_call(@course, @assignment,
+            override_dates: false,
+            assignment_overrides: {
+              0 => {
+                course_section_id: @course.default_section.id,
+                due_at: @section_due_at.iso8601
+              }
+            }
+          )
+          expect(response['due_at']).to eq(@assignment.due_at.iso8601)
+        end
+
+        it 'does not override the assignment if restricted by master course' do
+          other_course = Account.default.courses.create!
+          template = MasterCourses::MasterTemplate.set_as_master_course(other_course)
+          original_assmt = other_course.assignments.create!(:title => "blah", :description => "bloo")
+          tag = template.create_content_tag_for!(original_assmt, :restrictions => {:content => true, :due_dates => true})
+
+          @assignment.update_attribute(:migration_id, tag.migration_id)
+
+          api_call(:put, "/api/v1/courses/#{@course.id}/assignments/#{@assignment.id}.json",
+            {
+              :controller => 'assignments_api',
+              :action => 'update',
+              :format => 'json',
+              :course_id => @course.id.to_s,
+              :id => @assignment.id.to_s
+            },
+            { :assignment => {assignment_overrides: {0 => {course_section_id: @course.default_section.id, due_at: @section_due_at.iso8601}}} },
+            {}, {:expected_status => 403})
+          expect(@assignment.assignment_overrides).to_not be_exists
+
+          tag.update_attribute(:restrictions, {:content => true}) # unrestrict due_dates
+
+          api_update_assignment_call(@course, @assignment,
+            assignment_overrides: {0 => {course_section_id: @course.default_section.id, due_at: @section_due_at.iso8601}})
+          expect(@assignment.assignment_overrides).to be_exists
         end
       end
 
@@ -2460,7 +2556,7 @@ describe AssignmentsApiController, type: :request do
       end
     end
 
-    context "with multiple grading periods enabled" do
+    context "with grading periods" do
       def create_assignment(attr)
         @course.assignments.create!({ name: "Example Assignment", submission_types: "points" }.merge(attr))
       end
@@ -2493,7 +2589,6 @@ describe AssignmentsApiController, type: :request do
       end
 
       before :once do
-        @course.root_account.enable_feature!(:multiple_grading_periods)
         grading_period_group = Factories::GradingPeriodGroupHelper.new.create_for_account(@course.root_account)
         term = @course.enrollment_term
         term.grading_period_group = grading_period_group
@@ -2946,7 +3041,7 @@ describe AssignmentsApiController, type: :request do
           'locked_for_user' => false,
           'root_topic_id' => @topic.root_topic_id,
           'podcast_url' => nil,
-          'podcast_has_student_posts' => nil,
+          'podcast_has_student_posts' => false,
           'read_state' => 'unread',
           'unread_count' => 0,
           'user_can_see_posts' => @topic.user_can_see_posts?(@user),
@@ -2962,9 +3057,9 @@ describe AssignmentsApiController, type: :request do
           'discussion_type' => 'side_comment',
           'group_category_id' => nil,
           'can_group' => true,
-          'allow_rating' => nil,
-          'only_graders_can_rate' => nil,
-          'sort_by_rating' => nil,
+          'allow_rating' => false,
+          'only_graders_can_rate' => false,
+          'sort_by_rating' => false,
         })
       end
 
@@ -3228,7 +3323,6 @@ describe AssignmentsApiController, type: :request do
           @tool_tag.save!
           @assignment.submission_types = 'external_tool'
           @assignment.save!
-          expect(@assignment.external_tool_tag).not_to be_nil
         end
 
         before :each do

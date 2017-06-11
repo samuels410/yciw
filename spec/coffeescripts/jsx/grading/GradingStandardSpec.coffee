@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'react'
   'react-dom'
@@ -6,7 +23,7 @@ define [
   'jsx/grading/gradingStandard'
 ], (React, ReactDOM, {Simulate}, $, GradingStandard) ->
 
-  module 'GradingStandard not being edited',
+  QUnit.module 'GradingStandard not being edited',
     setup: ->
       @props =
         key: 1
@@ -74,7 +91,7 @@ define [
   test 'does not show the cancel button', ->
     deepEqual @gradingStandard.refs.cancelButton, undefined
 
-  module "GradingStandard without 'manage' permissions",
+  QUnit.module "GradingStandard without 'manage' permissions",
     setup: ->
       props =
         key: 1
@@ -106,7 +123,7 @@ define [
   test 'disables edit and delete buttons', ->
     ok @gradingStandard.refs.disabledButtons
 
-  module "GradingStandard being edited",
+  QUnit.module "GradingStandard being edited",
     setup: ->
       @props =
         key: 1
@@ -194,7 +211,7 @@ define [
     @gradingStandard.changeRowName(2, "Q")
     deepEqual @gradingStandard.state.editingStandard.data[2], ["Q", 0.00]
 
-  module "GradingStandard being edited with blank names",
+  QUnit.module "GradingStandard being edited with blank names",
     setup: ->
       props =
         key: 1
@@ -231,7 +248,7 @@ define [
     deepEqual @gradingStandard.refs.invalidStandardAlert.textContent,
       "Cannot have duplicate or empty row names. Fix the names and try clicking 'Save' again."
 
-  module "GradingStandard being edited with duplicate names",
+  QUnit.module "GradingStandard being edited with duplicate names",
     setup: ->
       props =
         key: 1
@@ -268,7 +285,7 @@ define [
     deepEqual @gradingStandard.refs.invalidStandardAlert.textContent,
       "Cannot have duplicate or empty row names. Fix the names and try clicking 'Save' again."
 
-  module "GradingStandard being edited with empty values",
+  QUnit.module "GradingStandard being edited with empty values",
     setup: ->
       props =
         key: 1
@@ -305,7 +322,7 @@ define [
     deepEqual @gradingStandard.refs.invalidStandardAlert.textContent,
       "Cannot have overlapping or empty ranges. Fix the ranges and try clicking 'Save' again."
 
-  module "GradingStandard being edited with duplicate values",
+  QUnit.module "GradingStandard being edited with duplicate values",
     setup: ->
       props =
         key: 1
@@ -342,7 +359,7 @@ define [
     deepEqual @gradingStandard.refs.invalidStandardAlert.textContent,
       "Cannot have overlapping or empty ranges. Fix the ranges and try clicking 'Save' again."
 
-  module "GradingStandard being edited with values that round to the same number",
+  QUnit.module "GradingStandard being edited with values that round to the same number",
     setup: ->
       props =
         key: 1
@@ -379,7 +396,7 @@ define [
     deepEqual @gradingStandard.refs.invalidStandardAlert.textContent,
       "Cannot have overlapping or empty ranges. Fix the ranges and try clicking 'Save' again."
 
-  module "GradingStandard being edited with overlapping values",
+  QUnit.module "GradingStandard being edited with overlapping values",
     setup: ->
       props =
         key: 1

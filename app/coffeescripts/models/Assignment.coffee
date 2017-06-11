@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'jquery'
   'underscore'
@@ -11,7 +28,9 @@ define [
   'i18n!assignments'
   'jsx/grading/helpers/GradingPeriodsHelper'
   'timezone'
-], ($, _, {Model}, DefaultUrlMixin, TurnitinSettings, VeriCiteSettings, DateGroup, AssignmentOverrideCollection, DateGroupCollection, I18n, GradingPeriodsHelper, tz) ->
+  'jsx/shared/helpers/numberHelper'
+], ($, _, {Model}, DefaultUrlMixin, TurnitinSettings, VeriCiteSettings, DateGroup, AssignmentOverrideCollection,
+    DateGroupCollection, I18n, GradingPeriodsHelper, tz, numberHelper) ->
 
   isAdmin = () ->
     _.contains(ENV.current_user_roles, 'admin')
@@ -84,7 +103,12 @@ define [
 
     pointsPossible: (points) =>
       return @get('points_possible') || 0 unless arguments.length > 0
-      @set 'points_possible', points
+      # if the incoming value is valid, set the field to the numeric value
+      # if not, set to the incoming string and let validation handle it later
+      if(numberHelper.validate(points))
+        @set 'points_possible', numberHelper.parse(points)
+      else
+        @set 'points_possible', points
 
     secureParams: =>
       @get('secure_params')
@@ -94,7 +118,7 @@ define [
       @set 'assignment_group_id', assignment_group_id
 
     canFreeze: =>
-      @get('frozen_attributes')? && !@frozen()
+      @get('frozen_attributes')? && !@frozen() && !@isQuizLTIAssignment()
 
     canDelete: =>
       not @inClosedGradingPeriod() and not @frozen()
@@ -306,6 +330,21 @@ define [
     postToSISEnabled: =>
       return ENV.POST_TO_SIS
 
+    postToSISName: =>
+      return ENV.SIS_NAME
+
+    sisIntegrationSettingsEnabled: =>
+      return ENV.SIS_INTEGRATION_SETTINGS_ENABLED
+
+    maxNameLength: =>
+      return ENV.MAX_NAME_LENGTH
+
+    maxNameLengthRequiredForAccount: =>
+      return ENV.MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT
+
+    dueDateRequiredForAccount: =>
+      return ENV.DUE_DATE_REQUIRED_FOR_ACCOUNT
+
     defaultDates: =>
       group = new DateGroup
         due_at:    @get("due_at")
@@ -351,6 +390,9 @@ define [
     is_quiz_assignment: =>
       @get('is_quiz_assignment')
 
+    isQuizLTIAssignment: =>
+      @get('is_quiz_lti_assignment')
+
     toView: =>
       fields = [
         'name', 'dueAt', 'description', 'pointsPossible', 'lockAt', 'unlockAt',
@@ -368,14 +410,15 @@ define [
         'labelId', 'position', 'postToSIS', 'multipleDueDates', 'nonBaseDates',
         'allDates', 'hasDueDate', 'hasPointsPossible', 'singleSectionDueDate',
         'moderatedGrading', 'postToSISEnabled', 'isOnlyVisibleToOverrides',
-        'omitFromFinalGrade', 'is_quiz_assignment', 'secureParams',
-        'inClosedGradingPeriod', 'dueDateRequired'
+        'omitFromFinalGrade', 'is_quiz_assignment', 'isQuizLTIAssignment',
+        'secureParams', 'inClosedGradingPeriod', 'dueDateRequired'
       ]
 
       hash =
         id: @get('id'),
-        is_master_course_content: @get('is_master_course_content'),
-        restricted_by_master_course: @get('restricted_by_master_course')
+        is_master_course_child_content: @get('is_master_course_child_content'),
+        restricted_by_master_course: @get('restricted_by_master_course'),
+        master_course_restrictions: @get('master_course_restrictions')
       for field in fields
         hash[field] = @[field]()
       hash
@@ -474,3 +517,6 @@ define [
     isOnlyVisibleToOverrides: (override_flag) ->
       return @get('only_visible_to_overrides') || false unless arguments.length > 0
       @set 'only_visible_to_overrides', override_flag
+
+    isRestrictedByMasterCourse: ->
+      @get('is_master_course_child_content') && @get('restricted_by_master_course')

@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/../common')
 
 describe "admin settings tab" do
@@ -11,7 +28,6 @@ describe "admin settings tab" do
 
   def get_settings_page(account)
     get "/accounts/#{account.id}/settings"
-    wait_for_ajaximations
   end
 
   def set_checkbox(id,checked)
@@ -32,14 +48,9 @@ describe "admin settings tab" do
   end
 
   def click_submit
-    f("#account_settings button[type=submit]").click
-    wait_for_ajaximations
-  end
-
-  def go_to_feature_options(account)
-    get_settings_page(account)
-    f("#tab-features-link").click
-    wait_for_ajaximations
+    expect_new_page_load do
+      f("#account_settings button[type=submit]").click
+    end
   end
 
   context "SIS Agent Token Authentication" do
@@ -53,13 +64,9 @@ describe "admin settings tab" do
       expect(f("#add_sis_app_token")).to be_displayed
       expect(f("#account_settings_sis_app_token")).to be_displayed
       f("#account_settings_sis_app_token").send_keys(sis_token)
-      f(".Button--primary").click
+      click_submit
       token = f("#account_settings_sis_app_token")
       expect(token).to have_value(sis_token)
-
-      account.disable_feature!(:post_grades)
-      refresh_page
-      expect(f("#account_settings")).to contain_css("#account_settings_sis_app_token")
     end
 
     it "should test SIS Agent Token Authentication with post_grades feature disabled", priority: "2", test_id: 132578 do
@@ -68,13 +75,9 @@ describe "admin settings tab" do
       expect(f("#add_sis_app_token")).to be_displayed
       expect(f("#account_settings_sis_app_token")).to be_displayed
       f("#account_settings_sis_app_token").send_keys(sis_token)
-      f(".Button--primary").click
+      click_submit
       token = f("#account_settings_sis_app_token")
       expect(token).to have_value(sis_token)
-
-      account.disable_feature!(:post_grades)
-      refresh_page
-      expect(f("#account_settings")).to contain_css("#account_settings_sis_app_token")
     end
   end
 
@@ -88,11 +91,13 @@ describe "admin settings tab" do
     let(:assignment_name_length) { "#account_settings_sis_assignment_name_length_value" }
     let(:assignment_name_length_input) { "#account_settings_sis_assignment_name_length_input_value" }
 
-    def test_checkbox_on_off(id)
+    def test_checkbox_on(id)
       set_checkbox_via_label(id,true)
       click_submit
       expect(get_checkbox(id)).to be_truthy
+    end
 
+    def test_checkbox_off(id)
       set_checkbox_via_label(id,false)
       click_submit
       expect(get_checkbox(id)).to be_falsey
@@ -101,14 +106,20 @@ describe "admin settings tab" do
     context ":new_sis_integrations => false" do
       before do
         account.set_feature_flag! :new_sis_integrations, 'off'
-        get_settings_page(account)
       end
 
-      it "persists SIS import settings on refresh" do
-        test_checkbox_on_off(allow_sis_import)
+      it "persists SIS import settings is on" do
+        get_settings_page(account)
+        test_checkbox_on(allow_sis_import)
+      end
+
+      it "persists SIS import setting is off" do
+        get_settings_page(account)
+        test_checkbox_off(allow_sis_import)
       end
 
       it "does not display SIS syncing setting" do
+        get_settings_page(account)
         expect(f("body")).not_to contain_css(sis_syncing)
       end
 
@@ -118,7 +129,7 @@ describe "admin settings tab" do
           get_settings_page(account)
         end
 
-        it "does not display 'Post Grades to SIS'" do
+        it "does not display 'Sync Grades to SIS'" do
           expect(f("body")).not_to contain_css(default_grade_export)
         end
       end
@@ -129,8 +140,12 @@ describe "admin settings tab" do
           get_settings_page(account)
         end
 
-        it "persists 'Post Grades to SIS' on refresh" do
-          test_checkbox_on_off(default_grade_export)
+        it "persists 'Sync Grades to SIS' on" do
+          test_checkbox_on(default_grade_export)
+        end
+
+        it "persists 'Sync Grades to SIS' off" do
+          test_checkbox_off(default_grade_export)
         end
       end
     end
@@ -151,32 +166,40 @@ describe "admin settings tab" do
     context ":new_sis_integrations => true (root account)" do
       before do
         account.set_feature_flag! :new_sis_integrations, 'on'
-        get_settings_page(account)
       end
 
       it "should persist custom SIS name" do
+        get_settings_page(account)
         custom_sis_name = "PowerSchool"
         f(sis_name).send_keys(custom_sis_name)
-        f(".Button--primary").click
-        name = f(sis_name)
-        keep_trying_until do
-          expect(name.attribute("value")).to eq custom_sis_name
-        end
         click_submit
-        expect(name.attribute("value")).to eq(custom_sis_name)
+        expect(f(sis_name)).to have_value(custom_sis_name)
       end
 
-      it "persists SIS import settings on refresh" do
-        test_checkbox_on_off(allow_sis_import)
+      it "persists SIS import setting is on" do
+        get_settings_page(account)
+        test_checkbox_on(allow_sis_import)
+      end
+
+      it "persists SIS import setting is off" do
+        get_settings_page(account)
+        test_checkbox_off(allow_sis_import)
       end
 
       context "persists SIS syncing settings on refresh" do
         before do
           account.set_feature_flag! 'post_grades', 'on'
-          get_settings_page(account)
         end
 
-        it { test_checkbox_on_off(sis_syncing) }
+        it "persists SIS import setting is on" do
+          get_settings_page(account)
+          test_checkbox_on(sis_syncing)
+        end
+
+        it "persists SIS import setting is off" do
+          get_settings_page(account)
+          test_checkbox_off(sis_syncing)
+        end
 
         context "SIS syncing => true" do
           before do
@@ -185,33 +208,36 @@ describe "admin settings tab" do
             get_settings_page(account)
           end
 
-          it { test_checkbox_on_off(sis_syncing_locked) }
-          it "toggles require assignment due date" do
-             set_checkbox_via_label(default_grade_export,true)
-             click_submit
-             test_checkbox_on_off(require_assignment_due_date)
+          it { test_checkbox_off(sis_syncing_locked) }
+          it { test_checkbox_on(sis_syncing_locked) }
+
+          it "toggles require assignment due date on" do
+            set_checkbox_via_label(default_grade_export,true)
+            test_checkbox_on(require_assignment_due_date)
           end
 
-          it "toggles assignment name length" do
+          it "toggles require assignment due date off" do
             set_checkbox_via_label(default_grade_export,true)
-            click_submit
-            test_checkbox_on_off(assignment_name_length)
+            test_checkbox_off(require_assignment_due_date)
+          end
+
+          it "toggles assignment name length on" do
+            set_checkbox_via_label(default_grade_export,true)
+            test_checkbox_on(assignment_name_length)
+          end
+
+          it "toggles assignment name length off" do
+            set_checkbox_via_label(default_grade_export,true)
+            test_checkbox_off(assignment_name_length)
           end
 
           it "should test sis assignment name length" do
             set_checkbox_via_label(default_grade_export,true)
-            click_submit
             set_checkbox_via_label(assignment_name_length,true)
-            click_submit
             name_length = 123
             f("#account_settings_sis_assignment_name_length_input_value").send_keys(name_length)
-            f(".Button--primary").click
-            length = f("#account_settings_sis_assignment_name_length_input_value")
-            keep_trying_until do
-              expect(length.attribute("value")).to eq name_length.to_s
-            end
-            refresh_page
-            expect(length.attribute("value")).to eq(name_length.to_s)
+            click_submit
+            expect(f("#account_settings_sis_assignment_name_length_input_value")).to have_value(name_length.to_s)
           end
         end
       end
@@ -226,7 +252,7 @@ describe "admin settings tab" do
           expect(f("body")).not_to contain_css(sis_syncing)
         end
 
-        it "does not display the 'Post Grades to SIS' option" do
+        it "does not display the 'Sync Grades to SIS' option" do
           expect(f("body")).not_to contain_css(default_grade_export)
         end
       end
@@ -243,7 +269,7 @@ describe "admin settings tab" do
             get_settings_page(account)
           end
 
-          it "does not display the 'Post Grades to SIS' option" do
+          it "does not display the 'Sync Grades to SIS' option" do
             expect(f(default_grade_export)).not_to be_displayed
           end
         end
@@ -255,8 +281,12 @@ describe "admin settings tab" do
             get_settings_page(account)
           end
 
-          it "persists 'Post Grades to SIS' settings on refresh" do
-            test_checkbox_on_off(default_grade_export)
+          it "persists 'Sync Grades to SIS' on" do
+            test_checkbox_on(default_grade_export)
+          end
+
+          it "persists 'Sync Grades to SIS' off" do
+            test_checkbox_off(default_grade_export)
           end
         end
       end

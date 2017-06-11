@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -38,7 +38,7 @@ describe ConversationMessage do
 
       @conversation = @teacher.initiate_conversation(@initial_students)
       user = User.find(@conversation.user_id)
-      @account = Account.find(user.account)
+      @account = Account.find(user.account.id)
       add_message # need initial message for add_participants to not barf
     end
 

@@ -1,9 +1,28 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'INST'
   'i18n!assignment'
   'compiled/views/ValidatedFormView'
   'underscore'
   'jquery'
+  'jsx/shared/helpers/numberHelper'
+  'compiled/util/round'
   'jsx/shared/rce/RichContentEditor'
   'jst/assignments/EditView'
   'compiled/userSettings'
@@ -18,16 +37,17 @@ define [
   'compiled/views/editor/KeyboardShortcuts'
   'jsx/shared/conditional_release/ConditionalRelease'
   'compiled/util/deparam'
+  'compiled/util/SisValidationHelper'
   'jsx/assignments/AssignmentConfigurationTools'
   'jqueryui/dialog'
   'jquery.toJSON'
   'compiled/jquery.rails_flash_notifications'
   'compiled/behaviors/tooltip'
-], (INST, I18n, ValidatedFormView, _, $, RichContentEditor, EditViewTemplate,
+], (INST, I18n, ValidatedFormView, _, $, numberHelper, round, RichContentEditor, EditViewTemplate,
   userSettings, TurnitinSettings, VeriCiteSettings, TurnitinSettingsDialog,
   preventDefault, MissingDateDialog, AssignmentGroupSelector,
   GroupCategorySelector, toggleAccessibly, RCEKeyboardShortcuts,
-  ConditionalRelease, deparam, SimilarityDetectionTools) ->
+  ConditionalRelease, deparam, SisValidationHelper, SimilarityDetectionTools) ->
 
   RichContentEditor.preloadRemoteModule()
 
@@ -137,6 +157,8 @@ define [
       if ENV.CONDITIONAL_RELEASE_SERVICE_ENABLED
         @gradingTypeSelector.on 'change:gradingType', @onChange
 
+      @lockedItems = options.lockedItems || {};
+
     handleCancel: (ev) =>
       ev.preventDefault()
       @redirectAfterCancel()
@@ -149,6 +171,10 @@ define [
 
     handlePointsChange:(ev) =>
       ev.preventDefault()
+      if (numberHelper.validate(@$assignmentPointsPossible.val()))
+        newPoints = round(numberHelper.parse(@$assignmentPointsPossible.val()), 2)
+        @$assignmentPointsPossible.val(I18n.n(newPoints))
+
       if @assignment.hasSubmittedSubmissions()
         @$pointsChangeWarning.toggleAccessibly(@$assignmentPointsPossible.val() != "#{@assignment.pointsPossible()}")
 
@@ -206,9 +232,8 @@ define [
             if setting_from_cache && (!@assignment.get(setting)? || @assignment.get(setting)?.length == 0)
               @assignment.set(setting, setting_from_cache)
           )
-        else
-          @assignment.set('submission_type','online')
-          @assignment.set('submission_types',['online'])
+        if @assignment.submissionTypes().length == 0
+          @assignment.submissionTypes(['online'])
 
     cacheAssignmentSettings: =>
       new_assignment_settings = _.pick(@getFormData(), @settingsToCache()...)
@@ -303,15 +328,20 @@ define [
 
     toJSON: =>
       data = @assignment.toView()
+
       _.extend data,
         kalturaEnabled: ENV?.KALTURA_ENABLED or false
         postToSISEnabled: ENV?.POST_TO_SIS or false
+        postToSISName: ENV.SIS_NAME
         isLargeRoster: ENV?.IS_LARGE_ROSTER or false
         submissionTypesFrozen: _.include(data.frozenAttributes, 'submission_types')
         conditionalReleaseServiceEnabled: ENV?.CONDITIONAL_RELEASE_SERVICE_ENABLED or false
+        lockedItems: @lockedItems
 
 
     _attachEditorToDescription: =>
+      return if @lockedItems.content
+
       RichContentEditor.initSidebar()
       RichContentEditor.loadNewEditor(@$description, { focus: true, manageParent: true })
 
@@ -343,6 +373,8 @@ define [
       data.only_visible_to_overrides = !@dueDateOverrideView.overridesContainDefault()
       data.assignment_overrides = @dueDateOverrideView.getOverrides()
       data.published = true if @shouldPublish
+      data.points_possible = round(numberHelper.parse(data.points_possible), 2)
+      data.peer_review_count = numberHelper.parse(data.peer_review_count) if data.peer_review_count
       return data
 
     saveFormData: =>
@@ -383,6 +415,12 @@ define [
       @submit(event)
 
     onSaveFail: (xhr) =>
+      response_text = JSON.parse(xhr.responseText)
+      if response_text.errors
+        subscription_errors = response_text.errors.plagiarism_tool_subscription
+        if subscription_errors && subscription_errors.length > 0
+          $.flashError(subscription_errors[0].message)
+
       @shouldPublish = false
       @disableWhileLoadingOpts = {}
       super(xhr)
@@ -443,7 +481,8 @@ define [
       errors = @_validatePointsRequired(data, errors)
       errors = @_validateExternalTool(data, errors)
       data2 =
-        assignment_overrides: @dueDateOverrideView.getAllDates()
+        assignment_overrides: @dueDateOverrideView.getAllDates(),
+        postToSIS: data.post_to_sis == '1'
       errors = @dueDateOverrideView.validateBeforeSave(data2,errors)
       if ENV.CONDITIONAL_RELEASE_SERVICE_ENABLED
         crErrors = @conditionalReleaseEditor.validateBeforeSave()
@@ -453,13 +492,25 @@ define [
     _validateTitle: (data, errors) =>
       return errors if _.contains(@model.frozenAttributes(), "title")
 
+      post_to_sis = data.post_to_sis == '1'
+      max_name_length = 256
+      if post_to_sis && ENV.MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT && data.grading_type != 'not_graded'
+        max_name_length = ENV.MAX_NAME_LENGTH
+
+      validationHelper = new SisValidationHelper({
+        postToSIS: post_to_sis
+        maxNameLength: max_name_length
+        name: data.name
+        maxNameLengthRequired: ENV.MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT
+      })
+
       if !data.name or $.trim(data.name.toString()).length == 0
         errors["name"] = [
           message: I18n.t 'name_is_required', 'Name is required!'
         ]
-      else if $.trim(data.name.toString()).length > 255
+      else if validationHelper.nameTooLong()
         errors["name"] = [
-          message: I18n.t 'name_too_long', 'Name is too long'
+          message: I18n.t("Name is too long, must be under %{length} characters", length: max_name_length + 1)
         ]
       errors
 
@@ -488,8 +539,9 @@ define [
 
     _validatePointsPossible: (data, errors) =>
       return errors if _.contains(@model.frozenAttributes(), "points_possible")
+      return errors if this.lockedItems.points
 
-      if data.points_possible and isNaN(parseFloat(data.points_possible))
+      if typeof data.points_possible != 'number' or isNaN(data.points_possible)
         errors["points_possible"] = [
           message: I18n.t 'points_possible_number', 'Points possible must be a number'
         ]
@@ -500,7 +552,7 @@ define [
     _validatePointsRequired: (data, errors) =>
       return errors unless _.include ['percent','letter_grade','gpa_scale'], data.grading_type
 
-      if parseInt(data.points_possible,10) < 0 or isNaN(parseFloat(data.points_possible))
+      if typeof data.points_possible != 'number' or data.points_possible < 0 or isNaN(data.points_possible)
         errors["points_possible"] = [
           message: I18n.t("Points possible must be 0 or more for selected grading type")
         ]

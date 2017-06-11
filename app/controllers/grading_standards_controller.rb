@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -20,9 +20,9 @@ class GradingStandardsController < ApplicationController
   JSON_METHODS =
     [:display_name, :context_code, :assessed_assignment?, :context_name].freeze
 
-  before_filter :require_context
+  before_action :require_context
   add_crumb(proc { t '#crumbs.grading_standards', "Grading" }) { |c| c.send :named_context_url, c.instance_variable_get("@context"), :context_grading_standards_url }
-  before_filter { |c| c.active_tab = "grading_standards" }
+  before_action { |c| c.active_tab = "grading_standards" }
 
   def index
     if authorized_action(@context, @current_user, :manage_grades)
@@ -30,7 +30,7 @@ class GradingStandardsController < ApplicationController
         GRADING_STANDARDS_URL: context_url(@context, :context_grading_standards_url),
         GRADING_PERIOD_SETS_URL: api_v1_account_grading_period_sets_url(@context),
         ENROLLMENT_TERMS_URL: api_v1_enrollment_terms_url(@context),
-        MULTIPLE_GRADING_PERIODS: multiple_grading_periods?,
+        HAS_GRADING_PERIODS: grading_periods?,
         DEFAULT_GRADING_STANDARD_DATA: GradingStandard.default_grading_standard,
         CONTEXT_SETTINGS_URL: context_url(@context, :context_settings_url)
       }
@@ -44,6 +44,7 @@ class GradingStandardsController < ApplicationController
         view_path = 'account_index'
       else
         client_env[:GRADING_PERIODS_URL] = api_v1_course_grading_periods_url(@context)
+        client_env[:GRADING_PERIODS_WEIGHTED] = @context.weighted_grading_periods?
         view_path = 'course_index'
       end
 

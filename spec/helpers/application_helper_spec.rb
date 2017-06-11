@@ -1,6 +1,6 @@
 # coding: utf-8
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -185,22 +185,6 @@ describe ApplicationHelper do
 
     it "throws an argument error for a foolish format" do
       expect{ accessible_date_format('nonsense') }.to raise_error(ArgumentError)
-    end
-  end
-
-  describe "cache_if" do
-    it "should cache the fragment if the condition is true" do
-      enable_cache do
-        cache_if(true, "t1", :expires_in => 15.minutes, :no_locale => true) { output_buffer.concat "blargh" }
-        expect(@controller.read_fragment("t1")).to eq "blargh"
-      end
-    end
-
-    it "should not cache if the condition is false" do
-      enable_cache do
-        cache_if(false, "t1", :expires_in => 15.minutes, :no_locale => true) { output_buffer.concat "blargh" }
-        expect(@controller.read_fragment("t1")).to be_nil
-      end
     end
   end
 
@@ -451,42 +435,6 @@ describe ApplicationHelper do
     end
   end
 
-  describe "hidden dialogs" do
-    before do
-      expect(hidden_dialogs).to be_empty
-    end
-
-    it "should generate empty string when there are no dialogs" do
-      str = render_hidden_dialogs
-      expect(str).to eq ''
-    end
-
-    it "should work with one hidden_dialog" do
-      hidden_dialog('my_test_dialog') { "Hello there!" }
-      str = render_hidden_dialogs
-      expect(str).to eq "<div id='my_test_dialog' style='display: none;''>Hello there!</div>"
-    end
-
-    it "should work with more than one hidden dialog" do
-      hidden_dialog('first_dialog') { "first" }
-      hidden_dialog('second_dialog') { "second" }
-      str = render_hidden_dialogs
-      expect(str).to eq "<div id='first_dialog' style='display: none;''>first</div><div id='second_dialog' style='display: none;''>second</div>"
-    end
-
-    it "should raise an error when a dialog with conflicting content is added" do
-      hidden_dialog('dialog_id') { 'content' }
-      expect { hidden_dialog('dialog_id') { 'different content' } }.to raise_error
-    end
-
-    it "should only render a dialog once when it has been added multiple times" do
-      hidden_dialog('dialog_id') { 'content' }
-      hidden_dialog('dialog_id') { 'content' }
-      str = render_hidden_dialogs
-      expect(str).to eq "<div id='dialog_id' style='display: none;''>content</div>"
-    end
-  end
-
   describe "collection_cache_key" do
     it "should generate a cache key, changing when an element cache_key changes" do
       collection = [user_factory, user_factory, user_factory]
@@ -693,18 +641,8 @@ describe ApplicationHelper do
     before :each do
       helper.stubs(:js_bundles).returns([[:some_bundle], [:some_plugin_bundle, :some_plugin], [:another_bundle, nil]])
     end
-    it "creates the correct javascript tags" do
-      helper.stubs(:use_webpack?).returns(false)
-      base_url = helper.use_optimized_js? ? '/optimized' : '/javascripts'
-      expect(helper.include_js_bundles).to eq %{
-<script src="#{base_url}/compiled/bundles/some_bundle.js"></script>
-<script src="#{base_url}/plugins/some_plugin/compiled/bundles/some_plugin_bundle.js"></script>
-<script src="#{base_url}/compiled/bundles/another_bundle.js"></script>
-      }.strip
-    end
 
-    it "creates the correct javascript tags with webpack enabled" do
-      helper.stubs(:use_webpack?).returns(true)
+    it "creates the correct javascript tags" do
       helper.stubs(:js_env).returns({
         BIGEASY_LOCALE: 'nb_NO',
         MOMENT_LOCALE: 'nb',
@@ -713,9 +651,9 @@ describe ApplicationHelper do
       })
       base_url = helper.use_optimized_js? ? 'dist/webpack-production' : 'dist/webpack-dev'
       Canvas::Cdn::RevManifest.stubs(:webpack_url_for).with(base_url + '/vendor.js').returns('vendor_url')
-      Canvas::Cdn::RevManifest.stubs(:webpack_url_for).with(base_url + '/vendor/timezone/America/La_Paz.js').returns('La_Paz_url')
-      Canvas::Cdn::RevManifest.stubs(:webpack_url_for).with(base_url + '/vendor/timezone/America/Denver.js').returns('Denver_url')
-      Canvas::Cdn::RevManifest.stubs(:webpack_url_for).with(base_url + '/vendor/timezone/nb_NO.js').returns('nb_NO_url')
+      Canvas::Cdn::RevManifest.stubs(:revved_url_for).with('javascripts/vendor/timezone/America/La_Paz.js').returns('La_Paz_url')
+      Canvas::Cdn::RevManifest.stubs(:revved_url_for).with('javascripts/vendor/timezone/America/Denver.js').returns('Denver_url')
+      Canvas::Cdn::RevManifest.stubs(:revved_url_for).with('javascripts/vendor/timezone/nb_NO.js').returns('nb_NO_url')
       Canvas::Cdn::RevManifest.stubs(:webpack_url_for).with(base_url + '/moment/locale/nb.js').returns('nb_url')
       Canvas::Cdn::RevManifest.stubs(:webpack_url_for).with(base_url + '/appBootstrap.js').returns('app_bootstrap_url')
       Canvas::Cdn::RevManifest.stubs(:webpack_url_for).with(base_url + '/common.js').returns('common_url')
@@ -766,4 +704,53 @@ describe ApplicationHelper do
     end
   end
 
+  describe "tutorials_enabled?" do
+    before(:each) do
+      @domain_root_account = Account.default
+    end
+    context "with new_users_tutorial feature flag enabled" do
+      before(:each) do
+        @domain_root_account.enable_feature! :new_user_tutorial
+        @current_user = User.create!
+      end
+
+      it "returns true if the user has the flag enabled" do
+        @current_user.enable_feature!(:new_user_tutorial_on_off)
+        expect(tutorials_enabled?).to be true
+      end
+
+      it "returns false if the user has the flag disabled" do
+        @current_user.disable_feature!(:new_user_tutorial_on_off)
+        expect(tutorials_enabled?).to be false
+      end
+    end
+
+    context "with new_users_tutorial feature flag disabled" do
+      it "returns false" do
+        expect(tutorials_enabled?).to be false
+      end
+    end
+  end
+
+  describe "planner_enabled?" do
+    before(:each) do
+      @domain_root_account = Account.default
+    end
+
+    context "with student_planner feature flag enabled" do
+      before(:each) do
+        @domain_root_account.enable_feature! :student_planner
+      end
+
+      it "return true" do
+        expect(planner_enabled?).to be true
+      end
+    end
+
+    context "with student_planner feature flag disabled" do
+      it "returns false" do
+        expect(planner_enabled?).to be false
+      end
+    end
+  end
 end

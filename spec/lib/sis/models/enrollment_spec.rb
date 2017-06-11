@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/../../../spec_helper.rb')
 
 describe SIS::Models::Enrollment do
@@ -77,6 +94,7 @@ describe SIS::Models::Enrollment do
     subject.end_date = 'end_date'
     subject.associated_user_id = 'associated_user_id'
     subject.root_account_id = 'root_account_id'
+    subject.limit_section_privileges = 'limit_section_privileges'
     expect(subject.to_a).to eq ['course_id', 'section_id', 'user_id', 'role',
                                 'role_id', 'status', 'start_date', 'end_date',
                                 'associated_user_id', 'root_account_id']

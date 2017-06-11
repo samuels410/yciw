@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_relative '../common'
 require_relative '../helpers/quizzes_common'
 
@@ -5,10 +22,14 @@ describe "quizzes questions" do
   include_context "in-process server selenium tests"
   include QuizzesCommon
 
-  before(:each) do
-    course_with_teacher_logged_in
+  before(:once) do
+    course_with_teacher(active_all: true)
     @student = user_with_pseudonym(:active_user => true, :username => 'student@example.com', :password => 'qwertyuiop')
     @course.enroll_user(@student, "StudentEnrollment", :enrollment_state => 'active')
+  end
+
+  before(:each) do
+    user_session(@teacher)
   end
 
   context "as a teacher" do
@@ -128,136 +149,27 @@ describe "quizzes questions" do
     end
 
     it "should calculate correct quiz question points total", priority: "1", test_id: 209953 do
-      get "/courses/#{@course.id}/quizzes"
-      expect_new_page_load { f('.new-quiz-link').click }
-      @question_count = 0
-      @points_total = 0
+      quiz = quiz_model(course: @course)
+      quiz.quiz_questions.create!(question_data: multiple_choice_question_data)
+      open_quiz_edit_form
 
-      add_quiz_question('1')
-      add_quiz_question('2')
-      add_quiz_question('3')
-      add_quiz_question('4')
-
-      click_save_settings_button
-      wait_for_ajax_requests
-      quiz = Quizzes::Quiz.last
-      quiz.reload
-      expect(quiz.quiz_questions.length).to eq @question_count
+      expect(f(".points_possible").text).to eq '50'
+      add_quiz_question('10')
+      expect(f(".points_possible").text).to eq '60'
     end
 
-    it "should round published quiz points correctly on main quiz page", priority: "2", test_id: 209954 do
-      skip("bug 7402 - Quiz points not rounding correctly")
-      q = @course.quizzes.create!(:title => "new quiz")
-      75.times do
-        q.quiz_questions.create!(:question_data => {:name => "Quiz Question 1", :question_type => 'essay_question', :question_text => 'qq1', 'answers' => [], :points_possible => 1.33})
-      end
-      q.generate_quiz_data
-      q.workflow_state = 'available'
-      q.save
-      q.reload
+    it "should round published quiz points correctly on main quiz page", priority: "2", test_id: 209954
 
-      get "/courses/#{@course.id}/quizzes/#{Quizzes::Quiz.last.id}"
-      expect(fj('.summary td:eq(2)').text).to eq "99.75%"
-    end
-
-    it "should round numeric questions the same when created and taking a quiz", priority: "1", test_id: 209955 do
+    it "should round numeric questions when creating a quiz", priority: "1", test_id: 209955 do
       start_quiz_question
       question = fj(".question_form:visible")
       click_option('.question_form:visible .question_type', 'Numerical Answer')
-      wait_for_ajaximations
 
       type_in_tiny '.question:visible textarea.question_content', 'This is a numerical question.'
 
-      answers = question.find_elements(:css, ".form_answers > .answer")
-      answers[0].find_element(:name, 'answer_exact').send_keys('0.000675')
-      driver.execute_script <<-JS
-      $('input[name=answer_exact]').trigger('change');
-      JS
-      answers[0].find_element(:name, 'answer_error_margin').send_keys('0')
-      submit_form(question)
-      wait_for_ajaximations
-
-      expect_new_page_load do
-        f('.save_quiz_button').click
-      end
-
-      user_session(@student)
-      get "/courses/#{@course.id}/quizzes/#{Quizzes::Quiz.last.id}"
-
-      expect_new_page_load do
-        f("#take_quiz_link").click
-        wait_for_ajaximations
-      end
-
-      input = f('input[type=text]')
-      input.click
-      input.send_keys('0.000675')
-      driver.execute_script <<-JS
-      $('input[type=text]').trigger('change');
-      JS
-      f('#submit_quiz_button').click
-      wait_for_ajax_requests
-      expect(f('.score_value').text.strip).to eq '1'
-      user_session(@user)
-    end
-  end
-
-  context "select element behavior" do
-    before(:each) do
-      @context = @course
-      bank = @course.assessment_question_banks.create!(:title => 'Test Bank')
-      q = quiz_model
-      b = bank.assessment_questions.create!
-      quest2 = q.quiz_questions.create!(:assessment_question => b)
-      quest2.write_attribute(:question_data,
-                             {
-                                 :neutral_comments => "",
-                                 :question_text => "<p>My hair is [x] and my wife's is [y].</p>",
-                                 :points_possible => 1, :question_type => "multiple_dropdowns_question",
-                                 :answers =>
-                                     [{
-                                          :comments => "",
-                                          :weight => 100,
-                                          :blank_id => "x",
-                                          :text => "brown",
-                                          :id => 2624
-                                      },
-                                      {
-                                          :comments => "",
-                                          :weight => 0,
-                                          :blank_id => "x",
-                                          :text => "black",
-                                          :id => 3085
-                                      },
-                                      {
-                                          :comments => "",
-                                          :weight => 100,
-                                          :blank_id => "y",
-                                          :text => "brown",
-                                          :id => 5780
-                                      },
-                                      {
-                                          :comments => "",
-                                          :weight => 0,
-                                          :blank_id => "y",
-                                          :text => "red",
-                                          :id => 8840
-                                      }],
-                                 :correct_comments => "",
-                                 :name => "Question",
-                                 :question_name => "Question",
-                                 :incorrect_comments => "",
-                                 :assessment_question_id => b.id
-                             })
-      quest2.save!
-      q.generate_quiz_data
-      q.save!
-      get "/courses/#{@course.id}/quizzes/#{q.id}/edit"
-      f('.quiz-publish-button')
-      get "/courses/#{@course.id}/quizzes/#{q.id}/take?user_id=#{@user.id}"
-      f("#take_quiz_link").click
-
-      wait_for_ajax_requests
+      answer_exact = fj('[name=answer_exact]')
+      answer_exact.send_keys('0.000675', :tab)
+      expect(answer_exact).to have_value('0.0007')
     end
   end
 end

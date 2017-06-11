@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/common')
 
 describe "dashboard" do
@@ -33,11 +50,12 @@ describe "dashboard" do
 
       get "/"
 
-      f('#dashboardToggleButton').click
-      #verify assignment changed notice is in messages
+      f('#DashboardOptionsMenu_Container button').click
+      fj('span[role="menuitemradio"]:contains("Recent Activity")').click
+      # verify assignment changed notice is in messages
       f('.stream-assignment .stream_header').click
       expect(f('#assignment-details')).to include_text('Assignment Due Date Changed')
-      #verify assignment is in to do list
+      # verify assignment is in to do list
       expect(f('.to-do-list > li')).to include_text(assignment.submission_action_string)
       expect(f('.coming_up')).to include_text(assignment.title)
     end

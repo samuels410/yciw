@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2014 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -44,7 +44,6 @@ class Pseudonym < ActiveRecord::Base
 
   before_save :set_password_changed
   before_validation :infer_defaults, :verify_unique_sis_user_id
-  after_save :update_passwords_on_related_pseudonyms
   after_save :update_account_associations_if_account_changed
   has_a_broadcast_policy
 
@@ -175,10 +174,6 @@ class Pseudonym < ActiveRecord::Base
     self.sis_user_id = nil if self.sis_user_id.blank?
   end
 
-  def update_passwords_on_related_pseudonyms
-    return if @dont_update_passwords_on_related_pseudonyms || !self.user || self.password_auto_generated
-  end
-
   def login_assertions_for_user
     if !self.persistence_token || self.persistence_token == ''
       # Some pseudonyms can end up without a persistence token if they were created
@@ -209,12 +204,6 @@ class Pseudonym < ActiveRecord::Base
     true
   end
 
-  def save_without_updating_passwords_on_related_pseudonyms
-    @dont_update_passwords_on_related_pseudonyms = true
-    self.save
-    @dont_update_passwords_on_related_pseudonyms = false
-  end
-
   def <=>(other)
     self.position <=> other.position
   end
@@ -227,6 +216,7 @@ class Pseudonym < ActiveRecord::Base
     if (!self.account || self.account.email_pseudonyms) && !self.deleted?
       unless self.unique_id.present? && self.unique_id.match(/\A([^@\s]+)@((?:[-a-z0-9]+\.)+[a-z]{2,})\Z/i)
         self.errors.add(:unique_id, "not_email")
+        throw :abort unless CANVAS_RAILS4_2
         return false
       end
     end
@@ -237,6 +227,7 @@ class Pseudonym < ActiveRecord::Base
         if existing_pseudo && existing_pseudo.id != self.id
           self.errors.add(:unique_id, :taken,
             message: t("ID already in use for this account and authentication provider"))
+          throw :abort unless CANVAS_RAILS4_2
           return false
         end
       end
@@ -248,7 +239,10 @@ class Pseudonym < ActiveRecord::Base
     return true unless self.sis_user_id
     existing_pseudo = Pseudonym.where(account_id: self.account_id, sis_user_id: self.sis_user_id.to_s).first
     return true if !existing_pseudo || existing_pseudo.id == self.id
-    self.errors.add(:sis_user_id, t('#errors.sis_id_in_use', "SIS ID \"%{sis_id}\" is already in use", :sis_id => self.sis_user_id))
+    self.errors.add(:sis_user_id, :taken,
+      message: t('#errors.sis_id_in_use', "SIS ID \"%{sis_id}\" is already in use", :sis_id => self.sis_user_id)
+    )
+    throw :abort unless CANVAS_RAILS4_2
     false
   end
 
@@ -498,9 +492,15 @@ class Pseudonym < ActiveRecord::Base
     return [] if credentials[:unique_id].blank? ||
                  credentials[:password].blank?
     too_many_attempts = false
-    associated_shards = associated_shards(credentials[:unique_id])
+    begin
+      associated_shards = associated_shards(credentials[:unique_id])
+    rescue => e
+      # global lookups is just an optimization anyway; log an error, but continue
+      # by searching all accounts the slow way
+      Canvas::Errors.capture(e)
+    end
     pseudonyms = Shard.partition_by_shard(account_ids) do |account_ids|
-      next if GlobalLookups.enabled? && !associated_shards.include?(Shard.current)
+      next if GlobalLookups.enabled? && associated_shards && !associated_shards.include?(Shard.current)
       active.
         by_unique_id(credentials[:unique_id]).
         where(:account_id => account_ids).

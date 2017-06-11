@@ -1,11 +1,29 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'underscore'
   'Backbone'
   'compiled/util/Popover'
   'compiled/models/grade_summary/Outcome'
   'd3'
+  'i18n!outcomes'
   'jst/outcomes/outcomePopover'
-], (_, {View}, Popover, Outcome, d3, popover_template) ->
+], (_, {View}, Popover, Outcome, d3, I18n, popover_template) ->
 
   class OutcomeColumnView extends View
 
@@ -125,7 +143,7 @@ define [
           return "middle" if distanceToPi < Math.PI/6
           if angle > Math.PI then "hanging" else "auto"
         )
-        .text((d, i) => @data[i].percent+'%' )
+        .text((d, i) => I18n.n(@data[i].percent, { percentage: true }))
 
     getAngleInfo: (d, sideways) ->
       angle = (d.endAngle + d.startAngle) / 2

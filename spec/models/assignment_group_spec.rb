@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2016 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -33,6 +33,13 @@ describe AssignmentGroup do
 
   it "should act as list" do
     expect(AssignmentGroup).to be_respond_to(:acts_as_list)
+  end
+
+  it "should convert NaN group weight values to 0 on save" do
+    ag = @course.assignment_groups.create!(@valid_attributes)
+    ag.group_weight = 0/0.0
+    ag.save!
+    expect(ag.group_weight).to eq 0
   end
 
   context "visible assignments" do
@@ -170,19 +177,15 @@ describe AssignmentGroup do
     end
 
     context "to delete" do
-      before(:each) do
-        @course.root_account.enable_feature!(:multiple_grading_periods)
-      end
-
-      context "when multiple grading periods is disabled" do
+      context "without grading periods" do
         it "is true for admins" do
-          @course.root_account.disable_feature!(:multiple_grading_periods)
-          expect(@assignment_group.reload.grants_right?(@admin, :delete)).to eql(true)
+          @course.stubs(:grading_periods?).returns false
+          expect(@assignment_group.reload.grants_right?(@admin, :delete)).to be true
         end
 
         it "is false for teachers" do
-          @course.root_account.disable_feature!(:multiple_grading_periods)
-          expect(@assignment_group.reload.grants_right?(@teacher, :delete)).to eql(true)
+          @course.stubs(:grading_periods?).returns false
+          expect(@assignment_group.reload.grants_right?(@teacher, :delete)).to be true
         end
       end
 

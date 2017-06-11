@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -19,6 +19,6 @@
 class AlertCriterion < ActiveRecord::Base
   belongs_to :alert
 
-  validates_numericality_of :threshold, :only_integer => true, :greater_than_or_equal_to => 0
+  validates_numericality_of :threshold, :greater_than_or_equal_to => 0
 
 end

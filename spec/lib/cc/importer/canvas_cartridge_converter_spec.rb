@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/../cc_spec_helper')
 
 require 'nokogiri'
@@ -742,6 +759,8 @@ describe "Canvas Cartridge importing" do
     hash = @converter.parse_canvas_assignment_data(meta_doc, html_doc)
     hash = hash.with_indifferent_access
     #import
+    @copy_to.expects(:turnitin_enabled?).at_least(1).returns(true)
+    @copy_to.expects(:vericite_enabled?).at_least(1).returns(true)
     Importers::AssignmentImporter.import_from_migration(hash, @copy_to, @migration)
 
     asmnt_2 = @copy_to.assignments.where(migration_id: migration_id).first
@@ -849,7 +868,6 @@ XML
     expect(dt_2.title).to eq dt.title
     expect(dt_2.message).to eq body_with_link % @copy_to.id
     expect(dt_2.delayed_post_at.to_i).to eq dt.delayed_post_at.to_i
-    expect(dt_2.posted_at.to_i).to eq orig_posted_at.to_i
     expect(dt_2.type).to eq dt.type
   end
 

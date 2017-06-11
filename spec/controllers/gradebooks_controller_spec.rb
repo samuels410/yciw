@@ -1,6 +1,6 @@
 # encoding: utf-8
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -35,12 +35,6 @@ describe GradebooksController do
 
   it "uses GradebooksController" do
     expect(controller).to be_an_instance_of(GradebooksController)
-  end
-
-  describe "GET 'index'" do
-    before(:each) do
-      Course.expects(:find).returns(['a course'])
-    end
   end
 
   describe "GET 'grade_summary'" do
@@ -172,7 +166,7 @@ describe GradebooksController do
       expect(assigns[:courses_with_grades]).to be_nil
     end
 
-    it "assigns values for grade calculator to ENV" do
+    it "assigns assignment group values for grade calculator to ENV" do
       user_session(@teacher)
       get 'grade_summary', :course_id => @course.id, :id => @student.id
       expect(assigns[:js_env][:submissions]).not_to be_nil
@@ -315,9 +309,16 @@ describe GradebooksController do
       end
     end
 
-    context "Multiple Grading Periods" do
+    context "with grading periods" do
+      let(:group_helper)  { Factories::GradingPeriodGroupHelper.new }
+      let(:period_helper) { Factories::GradingPeriodHelper.new }
+
       before :once do
-        @course.root_account.enable_feature!(:multiple_grading_periods)
+        @grading_period_group = group_helper.create_for_account(@course.root_account, weighted: true)
+        term = @course.enrollment_term
+        term.grading_period_group = @grading_period_group
+        term.save!
+        @grading_periods = period_helper.create_presets_for_group(@grading_period_group, :past, :current, :future)
       end
 
       it "does not display totals if 'All Grading Periods' is selected" do
@@ -327,10 +328,49 @@ describe GradebooksController do
         expect(assigns[:exclude_total]).to eq true
       end
 
+      it "assigns grading period values for grade calculator to ENV" do
+        user_session(@teacher)
+        all_grading_periods_id = 0
+        get 'grade_summary', :course_id => @course.id, :id => @student.id, grading_period_id: all_grading_periods_id
+        expect(assigns[:js_env][:submissions]).not_to be_nil
+        expect(assigns[:js_env][:grading_periods]).not_to be_nil
+      end
+
       it "displays totals if any grading period other than 'All Grading Periods' is selected" do
         user_session(@student)
         get 'grade_summary', :course_id => @course.id, :id => @student.id, grading_period_id: 1
         expect(assigns[:exclude_total]).to eq false
+      end
+
+      it "includes the grading period group (as 'set') in the ENV" do
+        user_session(@teacher)
+        get :grade_summary, { course_id: @course.id, id: @student.id }
+        grading_period_set = assigns[:js_env][:grading_period_set]
+        expect(grading_period_set[:id]).to eq @grading_period_group.id
+      end
+
+      it "includes grading periods within the group" do
+        user_session(@teacher)
+        get :grade_summary, { course_id: @course.id, id: @student.id }
+        grading_period_set = assigns[:js_env][:grading_period_set]
+        expect(grading_period_set[:grading_periods].count).to eq 3
+        period = grading_period_set[:grading_periods][0]
+        expect(period).to have_key(:is_closed)
+        expect(period).to have_key(:is_last)
+      end
+
+      it "includes necessary keys with each grading period" do
+        user_session(@teacher)
+        get :grade_summary, { course_id: @course.id, id: @student.id }
+        periods = assigns[:js_env][:grading_period_set][:grading_periods]
+        periods.each do |period|
+          expect(period).to have_key(:id)
+          expect(period).to have_key(:start_date)
+          expect(period).to have_key(:end_date)
+          expect(period).to have_key(:close_date)
+          expect(period).to have_key(:is_closed)
+          expect(period).to have_key(:is_last)
+        end
       end
     end
 
@@ -514,6 +554,30 @@ describe GradebooksController do
       assert_unauthorized
     end
 
+    context 'includes data needed by the Gradebook Action menu in ENV' do
+      before do
+        user_session(@teacher)
+
+        get 'show', course_id: @course.id
+
+        @gradebook_env = assigns[:js_env][:GRADEBOOK_OPTIONS]
+      end
+
+      it 'includes the context_allows_gradebook_uploads key in ENV' do
+        actual_value = @gradebook_env[:context_allows_gradebook_uploads]
+        expected_value = @course.allows_gradebook_uploads?
+
+        expect(actual_value).to eq(expected_value)
+      end
+
+      it 'includes the gradebook_import_url key in ENV' do
+        actual_value = @gradebook_env[:gradebook_import_url]
+        expected_value = new_course_gradebook_upload_path(@course)
+
+        expect(actual_value).to eq(expected_value)
+      end
+    end
+
     context "includes student context card info in ENV" do
       before { user_session(@teacher) }
 
@@ -532,6 +596,63 @@ describe GradebooksController do
         @course.root_account.enable_feature! :student_context_cards
         get :show, course_id: @course.id
         expect(assigns[:js_env][:STUDENT_CONTEXT_CARDS_ENABLED]).to eq true
+      end
+    end
+
+    context "includes relevant account settings in ENV" do
+      before { user_session(@teacher) }
+      let(:custom_login_id) { 'FOOBAR' }
+
+      it 'includes login_handle_name' do
+        @course.account.update!(login_handle_name: custom_login_id)
+        get :show, course_id: @course.id
+
+        login_handle_name = assigns[:js_env][:GRADEBOOK_OPTIONS][:login_handle_name]
+
+        expect(login_handle_name).to eq(custom_login_id)
+      end
+    end
+
+    context "with grading periods" do
+      let(:group_helper)  { Factories::GradingPeriodGroupHelper.new }
+      let(:period_helper) { Factories::GradingPeriodHelper.new }
+
+      before :once do
+        @grading_period_group = group_helper.create_for_account(@course.root_account)
+        term = @course.enrollment_term
+        term.grading_period_group = @grading_period_group
+        term.save!
+        @grading_periods = period_helper.create_presets_for_group(@grading_period_group, :past, :current, :future)
+      end
+
+      before { user_session(@teacher) }
+
+      it "includes the grading period group (as 'set') in the ENV" do
+        get :show, { course_id: @course.id }
+        grading_period_set = assigns[:js_env][:GRADEBOOK_OPTIONS][:grading_period_set]
+        expect(grading_period_set[:id]).to eq @grading_period_group.id
+      end
+
+      it "includes grading periods within the group" do
+        get :show, { course_id: @course.id }
+        grading_period_set = assigns[:js_env][:GRADEBOOK_OPTIONS][:grading_period_set]
+        expect(grading_period_set[:grading_periods].count).to eq 3
+        period = grading_period_set[:grading_periods][0]
+        expect(period).to have_key(:is_closed)
+        expect(period).to have_key(:is_last)
+      end
+
+      it "includes necessary keys with each grading period" do
+        get :show, { course_id: @course.id }
+        periods = assigns[:js_env][:GRADEBOOK_OPTIONS][:grading_period_set][:grading_periods]
+        periods.each do |period|
+          expect(period).to have_key(:id)
+          expect(period).to have_key(:start_date)
+          expect(period).to have_key(:end_date)
+          expect(period).to have_key(:close_date)
+          expect(period).to have_key(:is_closed)
+          expect(period).to have_key(:is_last)
+        end
       end
     end
   end
@@ -921,6 +1042,7 @@ describe GradebooksController do
   describe '#external_tool_detail' do
     let(:tool) do
       {
+        definition_id: 123,
         name: 'test lti',
         placements: {
           post_grades: {
@@ -934,12 +1056,60 @@ describe GradebooksController do
 
     it 'maps a tool to launch details' do
       expect(@controller.external_tool_detail(tool)).to eql(
+        id: 123,
         data_url: 'http://example.com/lti/post_grades',
         name: 'test lti',
         type: :lti,
         data_width: 100,
         data_height: 100
       )
+    end
+  end
+
+  describe '#post_grades_ltis' do
+    it 'maps #external_tools with #external_tool_detail' do
+      expect(@controller).to receive(:external_tools).and_return([0,1,2,3,4,5,6,7,8,9])
+      expect(@controller).to receive(:external_tool_detail).exactly(10).times
+
+      @controller.post_grades_ltis
+    end
+
+    it 'memoizes' do
+      expect(@controller).to receive(:external_tools).and_return([]).once
+
+      expect(@controller.post_grades_ltis).to eq(@controller.post_grades_ltis)
+    end
+  end
+
+  describe '#post_grades_feature?' do
+    it 'returns false when :post_grades feature disabled for context' do
+      context = object_double(@course, feature_enabled?: false)
+      @controller.instance_variable_set(:@context, context)
+
+      expect(@controller.post_grades_feature?).to eq(false)
+    end
+
+    it 'returns false when context does not allow grade publishing by user' do
+      context = object_double(@course, feature_enabled?: true, allows_grade_publishing_by: false)
+      @controller.instance_variable_set(:@context, context)
+
+      expect(@controller.post_grades_feature?).to eq(false)
+    end
+
+    it 'returns false when #can_do is false' do
+      context = object_double(@course, feature_enabled?: true, allows_grade_publishing_by: true)
+      @controller.instance_variable_set(:@context, context)
+      allow(@controller).to receive(:can_do).and_return(false)
+
+      expect(@controller.post_grades_feature?).to eq(false)
+    end
+
+    it 'returns true when all conditions are met' do
+      context = object_double(@course, feature_enabled?: true, allows_grade_publishing_by: true)
+      @controller.instance_variable_set(:@context, context)
+      allow(@controller).to receive(:can_do).and_return(true)
+
+      expect(@controller.post_grades_feature?).to eq(true)
     end
   end
 end

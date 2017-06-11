@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -315,8 +315,8 @@
 #     }
 #
 class ContextModulesApiController < ApplicationController
-  before_filter :require_context
-  before_filter :find_student, :only => [:index, :show]
+  before_action :require_context
+  before_action :find_student, :only => [:index, :show]
   include Api::V1::ContextModule
 
   # @API List modules

@@ -1,5 +1,5 @@
-/**
- * Copyright (C) 2011 Instructure, Inc.
+/*
+ * Copyright (C) 2011 - present Instructure, Inc.
  *
  * This file is part of Canvas.
  *
@@ -12,8 +12,8 @@
  * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
  * details.
  *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 define([
@@ -28,11 +28,12 @@ define([
 
 $(document).ready(function(event) {
   var state = 'nothing';
-  
+
   $("#batch_mode").change(function(event) {
-    $("#batch_mode_term_id").showIf($(this).attr('checked'));
+    $('#batch_mode_term_id_label').showIf($(this).attr('checked'));
+    $('#batch_mode_term_id').showIf($(this).attr('checked'));
   }).change();
-  
+
   var $override_sis_stickiness = $("#override_sis_stickiness");
   var $add_sis_stickiness = $("#add_sis_stickiness");
   var $clear_sis_stickiness = $("#clear_sis_stickiness");
@@ -76,7 +77,7 @@ $(document).ready(function(event) {
     if(!(batch.data && batch.data.counts)){
       return '';
     }
-    output = "<ul><li>" + htmlEscape(I18n.t('headers.imported_items', "Imported Items")) + "<ul>";
+    var output = "<ul><li>" + htmlEscape(I18n.t('headers.imported_items', "Imported Items")) + "<ul>";
     output += "<li>" + htmlEscape(I18n.t('import_counts.accounts', "Accounts: %{account_count}", {account_count: batch.data.counts.accounts})) + "</li>";
     output += "<li>" + htmlEscape(I18n.t('import_counts.terms', "Terms: %{term_count}", {term_count: batch.data.counts.terms})) + "</li>";
     output += "<li>" + htmlEscape(I18n.t('import_counts.courses', "Courses: %{course_count}", {course_count: batch.data.counts.courses})) + "</li>";
@@ -130,7 +131,7 @@ $(document).ready(function(event) {
           $(".copy_progress").progressbar('option', 'value', 100);
           $(".progress_message").html($.raw(htmlEscape(I18n.t('messages.import_complete_success', "The import is complete and all records were successfully imported.")) + createCountsHtml(sis_batch)));
         } else if(sis_batch.workflow_state == 'failed') {
-          code = "sis_batch_" + sis_batch.id;
+          var code = "sis_batch_" + sis_batch.id;
           $(".progress_bar_holder").hide();
           $("#sis_importer").hide();
           var message = I18n.t('errors.import_failed_code', "There was an error importing your SIS data. No records were imported.  Please notify your system administrator and give them the following code: \"%{code}\"", {code: code});

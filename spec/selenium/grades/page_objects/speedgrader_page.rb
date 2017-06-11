@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 class Speedgrader
   class << self
     include SeleniumDependencies
@@ -83,6 +100,18 @@ class Speedgrader
       f('#submission_to_view')
     end
 
+    def attachment_button
+      f('#add_attachment')
+    end
+
+    def attachment_input
+      f('#comment_attachments input')
+    end
+
+    def attachment_link
+      f('.display_name')
+    end
+
     # action
     def visit(course_id, assignment_id)
       get "/courses/#{course_id}/gradebook/speed_grader?assignment_id=#{assignment_id}"
@@ -125,6 +154,11 @@ class Speedgrader
     def add_comment_and_submit(comment)
       replace_content(comment_text_area, comment)
       comment_submit_button.click
+    end
+
+    def add_comment_attachment(file_path)
+      attachment_button.click
+      attachment_input.send_keys(file_path)
     end
 
     def click_submissions_to_view

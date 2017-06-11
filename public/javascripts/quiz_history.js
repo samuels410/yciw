@@ -1,3 +1,21 @@
+/*
+ * Copyright (C) 2012 - present Instructure, Inc.
+ *
+ * This file is part of Canvas.
+ *
+ * Canvas is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, version 3 of the License.
+ *
+ * Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 define([
   'jquery' /* $ */,
   'jquery.instructure_misc_plugins' /* fragmentChange */,
@@ -47,7 +65,7 @@ define([
     $quizBody: null,
 
     jumpPosition: function(question_id) {
-      $question = $("#question_" + question_id);
+      var $question = $("#question_" + question_id);
       if($question.length > 0) {
         return $question.offset().top - 110;
       } else {
@@ -295,9 +313,9 @@ define([
       var qNum = 1;
       var qArray = gradingForm.questions();
       var docScroll = $(document).scrollTop();
-      $questions = $('.question')
+      var $questions = $('.question')
       for(var t = 0; t <= qArray.length; t++) {
-        $question = $($questions[t])
+        var $question = $($questions[t])
         var currentQuestionNum = t + 1;
         if ( (docScroll > qArray[t] && docScroll < qArray[t+1])  || ( t == (qArray.length - 1) && docScroll > qArray[t])) {
           qNum = currentQuestionNum;
@@ -347,7 +365,7 @@ define([
           quizNavBar.index = maxStartingIndex + quizNavBar.windowScrollLength();
         }
 
-        endingIndex = startingIndex + quizNavBar.windowSize - 1;
+        var endingIndex = startingIndex + quizNavBar.windowSize - 1;
         quizNavBar.showQuestionsInWindow(startingIndex, endingIndex);
       }
     },

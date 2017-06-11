@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_relative 'common'
 require_relative 'helpers/announcements_common'
 require_relative 'helpers/conferences_common'
@@ -268,7 +285,7 @@ describe "groups" do
         get files_page
         add_folder
         delete(0, :cog_icon)
-        expect(all_files_folders.count).to eq 0
+        expect(f("body")).not_to contain_css('.ef-item-row')
       end
 
       it "should allow group members to move a folder", priority: "1", test_id: 273632 do
@@ -290,7 +307,7 @@ describe "groups" do
         expect(all_files_folders.count).to eq 1
         # Now try to delete the other one using toolbar menu
         delete(0, :toolbar_menu)
-        expect(all_files_folders.count).to eq 0
+        expect(f("body")).not_to contain_css('.ef-item-row')
       end
 
       it "should allow group members to move a file", priority: "1", test_id: 273633 do
@@ -327,6 +344,21 @@ describe "groups" do
         get conferences_page
         expect(f('.new-conference-btn')).to be_displayed
         verify_no_course_user_access(conferences_page)
+      end
+
+      it "should not allow inviting users with inactive enrollments" do
+        inactive_student = @students.first
+        inactive_student.update_attribute(:name, "inactivee")
+        inactive_student.enrollments.first.deactivate
+        active_student = @students.last
+        active_student.update_attribute(:name, "imsoactive")
+
+        get conferences_page
+        f('.new-conference-btn').click
+        f('.all_users_checkbox').click
+
+        expect(f('#members_list')).to_not include_text(inactive_student.name)
+        expect(f('#members_list')).to include_text(active_student.name)
       end
     end
     #-------------------------------------------------------------------------------------------------------------------
@@ -368,6 +400,15 @@ describe "groups" do
         @students.each do |student|
           expect(users).not_to contain_jqcss("li:contains(#{student.sortable_name}) .icon-user")
         end
+      end
+
+      it 'cannot invite students with inactive enrollments' do
+        inactive_student = @students.first
+        inactive_student.update_attribute(:name, "inactivee")
+        inactive_student.enrollments.first.deactivate
+
+        get collaborations_page
+        expect(f(".available-users")).not_to contain_jqcss("li:contains(#{inactive_student.sortable_name}) .icon-user")
       end
 
       it "should only allow group members to access the group collaborations page", priority: "1", test_id: 319904 do

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -18,7 +18,7 @@
 
 module UserNotesHelper
   def pageless(total_pages, url=nil)
-    opts = {
+    js_env :user_note_list_pageless_options => {
       :totalPages => total_pages,
       :url        => url,
       :loaderHtml => '
@@ -27,11 +27,5 @@ module UserNotesHelper
   <img src="/images/load.gif" title="load" alt="' + t('#user_notes.tooltips.loading_more', "loading more results") + '" style="margin: 10px auto" />
 </div>'
     }
-    
-    javascript_tag("
-      $(function(){
-        $('#user_note_list').pageless(#{opts.to_json});
-      });
-    ")
   end
 end

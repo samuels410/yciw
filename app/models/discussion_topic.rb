@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright (C) 2011 - 2013 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -37,9 +37,9 @@ class DiscussionTopic < ActiveRecord::Base
   restrict_columns :content, [:title, :message]
   restrict_columns :settings, [:delayed_post_at, :require_initial_post, :discussion_type,
                                :lock_at, :pinned, :locked, :allow_rating, :only_graders_can_rate, :sort_by_rating]
-  restrict_columns :settings, Assignment::RESTRICTED_SETTINGS
+  restrict_assignment_columns
 
-  attr_accessor :user_has_posted, :saved_by
+  attr_accessor :user_has_posted, :saved_by, :total_root_discussion_entries
 
   module DiscussionTypes
     SIDE_COMMENT = 'side_comment'
@@ -120,6 +120,12 @@ class DiscussionTopic < ActiveRecord::Base
     if self.has_group_category?
       self.subtopics_refreshed_at ||= Time.parse("Jan 1 2000")
     end
+
+    [
+      :could_be_locked, :podcast_enabled, :podcast_has_student_posts,
+      :require_initial_post, :pinned, :locked, :allow_rating,
+      :only_graders_can_rate, :sort_by_rating
+    ].each { |attr| self[attr] = false if self[attr].nil? }
   end
   protected :default_values
 
@@ -227,10 +233,14 @@ class DiscussionTopic < ActiveRecord::Base
     # transition from graded to ungraded) we acknowledge that the users that
     # have posted have contributed to the topic
     if self.assignment_id && self.assignment_id_changed?
-      posters.each{ |user| self.context_module_action(user, :contributed) }
+      recalculate_context_module_actions!
     end
   end
   protected :update_assignment
+
+  def recalculate_context_module_actions!
+    posters.each{ |user| self.context_module_action(user, :contributed) }
+  end
 
   def is_announcement; false end
 
@@ -382,7 +392,7 @@ class DiscussionTopic < ActiveRecord::Base
   def subscription_hold(user, context_enrollment, session)
     return nil unless user
     case
-    when initial_post_required?(user, context_enrollment, session)
+    when initial_post_required?(user, session)
       :initial_post_required
     when root_topic? && !child_topic_for(user)
       :not_in_group_set
@@ -564,7 +574,7 @@ class DiscussionTopic < ActiveRecord::Base
   def comments_disabled?
     !!(self.is_a?(Announcement) &&
       self.context.is_a?(Course) &&
-      self.context.settings[:lock_all_announcements])
+      self.context.lock_all_announcements)
   end
 
   def lock(opts = {})
@@ -580,12 +590,6 @@ class DiscussionTopic < ActiveRecord::Base
     save! unless opts[:without_save]
   end
   alias_method :unlock!, :unlock
-
-  # deprecated with draft state: use publish+available_[from|until] machinery instead
-  # you probably want available?
-  def locked?
-    locked.nil? ? workflow_state == 'locked' : locked
-  end
 
   def published?
     return false if workflow_state == 'unpublished'
@@ -617,9 +621,9 @@ class DiscussionTopic < ActiveRecord::Base
 
     student_ids = context.all_real_student_enrollments.select(:user_id)
     topic_ids_with_entries = DiscussionEntry.active.where(discussion_topic_id: topics).
-      where(:user_id => student_ids).uniq.pluck(:discussion_topic_id)
+      where(:user_id => student_ids).distinct.pluck(:discussion_topic_id)
     topic_ids_with_entries += DiscussionTopic.where("root_topic_id IS NOT NULL").
-      where(:id => topic_ids_with_entries).uniq.pluck(:root_topic_id)
+      where(:id => topic_ids_with_entries).distinct.pluck(:root_topic_id)
 
     topics.each do |topic|
       if topic.assignment_id
@@ -673,15 +677,16 @@ class DiscussionTopic < ActiveRecord::Base
   end
 
   def user_ids_who_have_posted_and_admins
-    scope = DiscussionEntry.active.select(:user_id).uniq.where(:discussion_topic_id => self)
+    scope = DiscussionEntry.active.select(:user_id).distinct.where(:discussion_topic_id => self)
     ids = scope.pluck(:user_id)
-    ids += self.context.admin_enrollments.active.pluck(:user_id) if self.context.respond_to?(:admin_enrollments)
+    ids += self.course.admin_enrollments.active.pluck(:user_id) if self.course.is_a?(Course)
     ids
   end
 
-  def user_can_see_posts?(user, session=nil)
+  def user_can_see_posts?(user, session=nil, associated_user_ids=[])
     return false unless user
-    !self.require_initial_post? || self.grants_right?(user, session, :update) || user_ids_who_have_posted_and_admins.member?(user.id)
+    !self.require_initial_post? || self.grants_right?(user, session, :update) ||
+      (([user.id] + associated_user_ids) & user_ids_who_have_posted_and_admins).any?
   end
 
   def reply_from(opts)
@@ -760,8 +765,10 @@ class DiscussionTopic < ActiveRecord::Base
   end
 
   def initialize_last_reply_at
-    self.posted_at ||= Time.now.utc
-    self.last_reply_at ||= Time.now.utc unless [:migration, :after_migration].include?(self.saved_by)
+    unless [:migration, :after_migration].include?(self.saved_by)
+      self.posted_at ||= Time.now.utc
+      self.last_reply_at ||= Time.now.utc
+    end
   end
 
   set_policy do
@@ -823,7 +830,7 @@ class DiscussionTopic < ActiveRecord::Base
 
   def context_allows_user_to_create?(user)
     return true unless context.respond_to?(:allow_student_discussion_topics)
-    return true unless context.user_is_student?(user)
+    return true if context.user_is_admin?(user)
     context.allow_student_discussion_topics
   end
 
@@ -922,8 +929,7 @@ class DiscussionTopic < ActiveRecord::Base
   def active_participants_include_tas_and_teachers(include_observers=false)
     participants = active_participants(include_observers)
     if self.context.is_a?(Group) && !self.context.course.nil?
-      participants += self.context.course.teachers
-      participants += self.context.course.tas
+      participants += self.context.course.participating_instructors_by_date
       participants = participants.compact.uniq
     end
     participants
@@ -1199,14 +1205,10 @@ class DiscussionTopic < ActiveRecord::Base
     end.compact
   end
 
-  def initial_post_required?(user, enrollment, session)
+  def initial_post_required?(user, session=nil)
     if require_initial_post?
-      # check if the user, or the user being observed can see the posts
-      if enrollment && enrollment.respond_to?(:associated_user) && enrollment.associated_user
-        return true if !user_can_see_posts?(enrollment.associated_user)
-      elsif !user_can_see_posts?(user, session)
-        return true
-      end
+      associated_user_ids = user.observer_enrollments.active.where(course_id: self.course).pluck(:associated_user_id).compact
+      return !user_can_see_posts?(user, session, associated_user_ids)
     end
     false
   end

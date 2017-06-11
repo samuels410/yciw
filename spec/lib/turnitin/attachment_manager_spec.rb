@@ -1,10 +1,27 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/turnitin_spec_helper')
 require 'turnitin_api'
 module Turnitin
   describe AttachmentManager do
     include_context "shared_tii_lti"
     before(:each) do
-      TiiClient.stubs(:new).returns(tii_client)
+      TiiClient.stubs(:new).with(lti_student, lti_assignment, tool, outcome_response_json).returns(tii_client)
     end
 
     describe '.create_attachment' do
@@ -28,16 +45,26 @@ module Turnitin
 
     describe '.update_attachment' do
       let(:submission) do
-        lti_assignment.submit_homework(
+        sub = lti_assignment.submit_homework(
           lti_student,
           attachments: [attachment],
-          submission_type: 'online_upload'
+          submission_type: 'online_upload',
         )
+        sub.turnitin_data = {attachment.asset_string => {outcome_response: outcome_response_json}}
+        sub.save!
+        sub
       end
 
       it 'updates the submission' do
-        submission.turnitin_data[attachment.asset_string] = {outcome_response: {}}
-        updated_attachment = subject.class.update_attachment(submission, attachment)
+        updated_attachment = Turnitin::AttachmentManager.update_attachment(submission, attachment)
+        expect(updated_attachment.display_name).to eq filename
+      end
+
+      it 'works when there is only a url in the content_tag' do
+        tag = lti_assignment.external_tool_tag
+        tag.content_id = nil
+        tag.save!
+        updated_attachment = Turnitin::AttachmentManager.update_attachment(submission, attachment)
         expect(updated_attachment.display_name).to eq filename
       end
 

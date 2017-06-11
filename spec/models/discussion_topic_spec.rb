@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -22,6 +22,74 @@ describe DiscussionTopic do
   before :once do
     course_with_teacher(:active_all => true)
     student_in_course(:active_all => true)
+  end
+
+  describe "default values for boolean attributes" do
+    before(:once) do
+      @topic = @course.discussion_topics.create!
+    end
+
+    let(:values) do
+      DiscussionTopic.where(id: @topic).pluck(
+        :could_be_locked,
+        :podcast_enabled,
+        :podcast_has_student_posts,
+        :require_initial_post,
+        :pinned,
+        :locked,
+        :allow_rating,
+        :only_graders_can_rate,
+        :sort_by_rating
+      ).first
+    end
+
+    it "saves boolean attributes as false if they are set to nil" do
+      @topic.update!(
+        could_be_locked: nil,
+        podcast_enabled: nil,
+        podcast_has_student_posts: nil,
+        require_initial_post: nil,
+        pinned: nil,
+        locked: nil,
+        allow_rating: nil,
+        only_graders_can_rate: nil,
+        sort_by_rating: nil
+      )
+
+      expect(values).to eq([false] * values.length)
+    end
+
+    it "saves boolean attributes as false if they are set to false" do
+      @topic.update!(
+        could_be_locked: false,
+        podcast_enabled: false,
+        podcast_has_student_posts: false,
+        require_initial_post: false,
+        pinned: false,
+        locked: false,
+        allow_rating: false,
+        only_graders_can_rate: false,
+        sort_by_rating: false
+      )
+
+      expect(values).to eq([false] * values.length)
+    end
+
+    it "saves boolean attributes as true if they are set to true" do
+      @topic.update!(
+        could_be_locked: true,
+        podcast_enabled: true,
+        podcast_has_student_posts: true,
+        require_initial_post: true,
+        pinned: true,
+        locked: true,
+        allow_rating: true,
+        only_graders_can_rate: true,
+        sort_by_rating: true
+      )
+
+      expect(values).to eq([true] * values.length)
+    end
   end
 
   it "should santize message" do
@@ -421,6 +489,7 @@ describe DiscussionTopic do
     it "should allow students to create topics by default" do
       expect(@topic.check_policy(@teacher)).to include :create
       expect(@topic.check_policy(@student)).to include :create
+      expect(@topic.check_policy(@course.student_view_student)).to include :create
     end
 
     it "should disallow students from creating topics" do
@@ -429,6 +498,7 @@ describe DiscussionTopic do
       @topic.reload
       expect(@topic.check_policy(@teacher)).to include :create
       expect(@topic.check_policy(@student)).not_to include :create
+      expect(@topic.check_policy(@course.student_view_student)).not_to include :create
     end
 
   end
@@ -905,6 +975,15 @@ describe DiscussionTopic do
       expect(@topic.user_can_see_posts?(@teacher)).to eq true
     end
 
+    it "should allow course admins to see posts in concluded group topics without posting" do
+      group_category = @course.group_categories.create(:name => "category")
+      @group = @course.groups.create(:name => "group", :group_category => group_category)
+      @topic.update_attribute(:group_category, group_category)
+      subtopic = @topic.child_topics.first
+      @course.complete!
+      expect(subtopic.user_can_see_posts?(@teacher)).to eq true
+    end
+
     it "should only allow active admins to see posts without posting" do
       @ta_enrollment = course_with_ta(:course => @course, :active_enrollment => true)
       # TA should be able to see
@@ -918,7 +997,7 @@ describe DiscussionTopic do
       expect(@topic.user_can_see_posts?(@ta)).to eq false
     end
 
-    it "shouldn't allow student (and observer) who hasn't posted to see" do
+    it "shouldn't allow student who hasn't posted to see" do
       expect(@topic.user_can_see_posts?(@student)).to eq false
     end
 
@@ -934,7 +1013,7 @@ describe DiscussionTopic do
       expect { @topic.reply_from(:user => @student, :text => "hai") }.to raise_error(IncomingMail::Errors::ReplyToDeletedDiscussion)
     end
 
-    it "should allow student (and observer) who has posted to see" do
+    it "should allow student who has posted to see" do
       @topic.reply_from(:user => @student, :text => 'hai')
       expect(@topic.user_can_see_posts?(@student)).to eq true
     end
@@ -949,6 +1028,33 @@ describe DiscussionTopic do
       ct.reply_from(user: @student, text: 'ohai')
       ct.user_ids_who_have_posted_and_admins
       expect(ct.user_can_see_posts?(@student)).to be_truthy
+    end
+
+    describe "observers" do
+      before :once do
+        @other_student = user_factory(:active_all => true)
+        @course.enroll_student(@other_student, :enrollment_state => 'active')
+        @course.enroll_user(@observer, 'ObserverEnrollment',
+                            :associated_user_id => @student, :enrollment_state => 'active')
+        @course.enroll_user(@observer, 'ObserverEnrollment',
+                            :associated_user_id => @other_student, :enrollment_state => 'active')
+      end
+
+      it "does not allow observers to see replies to a discussion linked students haven't posted in" do
+        expect(@topic.initial_post_required?(@observer)).to be
+      end
+
+      # previously this worked for exactly one observer enrollment, whichever became @context_enrollment
+      # so test both ways
+      it "allows observers to see replies in a discussion a linked student has posted in (1/2)" do
+        @topic.reply_from(:user => @student, :text => 'wat')
+        expect(@topic.initial_post_required?(@observer)).not_to be
+      end
+
+      it "allows observers to see replies in a discussion a linked student has posted in (2/2)" do
+        @topic.reply_from(:user => @other_student, :text => 'wat')
+        expect(@topic.initial_post_required?(@observer)).not_to be
+      end
     end
   end
 
@@ -1444,7 +1550,11 @@ describe DiscussionTopic do
     end
 
     it "should sync unread state with the stream item" do
-      @stream_item = @topic.stream_item(true)
+      if CANVAS_RAILS4_2
+        @stream_item = @topic.stream_item(true)
+      else
+        @stream_item = @topic.reload_stream_item
+      end
       expect(@stream_item.stream_item_instances.detect{|sii| sii.user_id == @teacher.id}).to be_read
       expect(@stream_item.stream_item_instances.detect{|sii| sii.user_id == @student.id}).to be_unread
 
@@ -1720,6 +1830,13 @@ describe DiscussionTopic do
       expect(announcement.reload.comments_disabled?).to be_truthy
     end
 
+    it "should reflect account setting for when lock_all_announcements is enabled" do
+      announcement = @course.announcements.create!(message: "Lock this")
+      expect(announcement.comments_disabled?).to be_falsey
+      @course.account.tap{|a| a.settings[:lock_all_announcements] = {:value => true, :locked => true}; a.save!}
+      expect(announcement.reload.comments_disabled?).to be_truthy
+    end
+
     it "should not allow replies from students to topics locked based on date" do
       course_with_teacher(:active_all => true)
       discussion_topic_model(:context => @course)
@@ -1728,38 +1845,6 @@ describe DiscussionTopic do
       @topic.reply_from(:user => @teacher, :text => "reply") # should not raise error
       student_in_course(:course => @course).accept!
       expect { @topic.reply_from(:user => @student, :text => "reply") }.to raise_error(IncomingMail::Errors::ReplyToLockedTopic)
-    end
-  end
-
-  describe "locked flag" do
-    before :once do
-      discussion_topic_model
-    end
-
-    it "should ignore workflow_state if the flag is set" do
-      @topic.locked = true
-      @topic.workflow_state = 'active'
-      expect(@topic.locked?).to be_truthy
-      @topic.locked = false
-      @topic.workflow_state = 'locked'
-      expect(@topic.locked?).to be_falsey
-    end
-
-    it "should fall back to the workflow_state if the flag is nil" do
-      @topic.locked = nil
-      @topic.workflow_state = 'active'
-      expect(@topic.locked?).to be_falsey
-      @topic.workflow_state = 'locked'
-      expect(@topic.locked?).to be_truthy
-    end
-
-    it "should fix up a 'locked' workflow_state" do
-      @topic.workflow_state = 'locked'
-      @topic.locked = nil
-      @topic.save!
-      @topic.unlock!
-      expect(@topic.workflow_state).to eql 'active'
-      expect(@topic.locked?).to be_falsey
     end
   end
 
@@ -1944,5 +2029,15 @@ describe DiscussionTopic do
         expect(topic.messages_sent["New Discussion Topic"]).to be_blank
       end
     end
+  end
+
+  it "should let course admins reply to concluded topics" do
+    course_with_teacher(:active_all => true)
+    topic = @course.discussion_topics.create!
+    group_model(:context => @course)
+    group_topic = @group.discussion_topics.create!
+    @course.complete!
+    expect(topic.grants_right?(@teacher, :reply)).to be_truthy
+    expect(group_topic.grants_right?(@teacher, :reply)).to be_truthy
   end
 end

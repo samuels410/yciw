@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -111,14 +111,6 @@ describe Announcement do
         @a.message = "<a href='#' onclick='alert(12);'>only this should stay</a>"
         @a.save!
         expect(@a.message).to eql("<a href=\"#\">only this should stay</a>")
-      end
-
-      it "should sanitize objects in a message" do
-        @a.message = "<object data=\"http://www.youtube.com/test\"></object>"
-        @a.save!
-        dom = Nokogiri(@a.message)
-        expect(dom.css('object').length).to eql(1)
-        expect(dom.css('object')[0]['data']).to eql("http://www.youtube.com/test")
       end
 
       it "should sanitize objects in a message" do

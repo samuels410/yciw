@@ -1,5 +1,5 @@
-/**
- * Copyright (C) 2011 Instructure, Inc.
+/*
+ * Copyright (C) 2011 - present Instructure, Inc.
  *
  * This file is part of Canvas.
  *
@@ -12,8 +12,8 @@
  * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
  * details.
  *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 define([
@@ -34,6 +34,7 @@ define([
     );
   }
 
+  /*global messageStudents*/
   window.messageStudents = function(settings) {
     currentSettings = settings;
     $message_students_dialog.find(".message_types").empty();
@@ -173,22 +174,12 @@ define([
       }
     };
 
-    var focusOnCutoffScore = function() {
-      var idx = parseInt($message_students_dialog.find("select").val(), 10) || 0;
-      var option = currentSettings.options[idx];
-      if (option.cutoff) {
-        $(".cutoff_score").focus();
-      }
-    };
-
     var closeDialog = function() {
       $message_students_dialog.dialog('close');
     };
 
     $message_students_dialog.find(".cancel_button").click(closeDialog);
-    $message_students_dialog.find("select").change(showStudentsMessageSentTo)
-      .change(focusOnCutoffScore)
-      .change(checkSendable);
+    $message_students_dialog.find("select").change(showStudentsMessageSentTo).change(checkSendable);
     $message_students_dialog.find(".cutoff_score").bind('change blur keyup', showStudentsMessageSentTo)
       .bind('change blur keyup', checkSendable);
     $message_students_dialog.find("#body").bind('change blur keyup', checkSendable);

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2012 Instructure, Inc.
+# Copyright (C) 2014 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -236,7 +236,7 @@
 class Quizzes::QuizStatisticsController < ApplicationController
   include ::Filters::Quizzes
 
-  before_filter :require_user, :require_context, :require_quiz, :prepare_service
+  before_action :require_user, :require_context, :require_quiz, :prepare_service
 
   # @API Fetching the latest quiz statistics
   # @beta

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -108,10 +108,8 @@ class ConversationMessage < ActiveRecord::Base
   end
 
   def after_participants_created_broadcast
-    conversation_message_participants(true) # reload this association so we get latest data
-    skip_broadcasts = false
+    CANVAS_RAILS4_2 ? conversation_message_participants(true) : conversation_message_participants.reload # reload this association so we get latest data
     @re_send_message = true
-    set_broadcast_flags
     broadcast_notifications
     queue_create_stream_items
     generate_user_note!

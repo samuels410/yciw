@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/common')
 require File.expand_path(File.dirname(__FILE__) + '/helpers/files_common')
 
@@ -78,7 +95,7 @@ describe "better_file_browsing, folders" do
 
     it "should delete folder from toolbar", priority: "1", test_id: 133105 do
       delete(0, :toolbar_menu)
-      expect(all_files_folders.count).to eq 0
+      expect(f("body")).not_to contain_css('.ef-item-row')
     end
 
     it "should be able to create and view a new folder with uri characters", priority: "2", test_id: 193153 do

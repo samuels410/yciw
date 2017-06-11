@@ -1,5 +1,22 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
-  'vendor/timezone/Europe/London'
+  'timezone/Europe/London'
   'timezone'
   'compiled/util/coupleTimeFields'
   'compiled/widget/DatetimeField'
@@ -20,7 +37,7 @@ define [
   tomorrow = new Date(fixed)
   tomorrow.setDate(tomorrow.getDate() + 1)
 
-  module 'initial coupling',
+  QUnit.module 'initial coupling',
     setup: ->
       @$start = $('<input type="text">')
       @$end = $('<input type="text">')
@@ -78,7 +95,7 @@ define [
     equal @start.datetime.getDate(), tomorrow.getDate()
     equal @end.datetime.getDate(), tomorrow.getDate()
 
-  module 'post coupling',
+  QUnit.module 'post coupling',
     setup: ->
       @$start = $('<input type="text">')
       @$end = $('<input type="text">')
@@ -176,7 +193,7 @@ define [
     # check that the end datetime has not been changed
     equal +@end.datetime, endTime
 
-  module 'with date field',
+  QUnit.module 'with date field',
     setup: ->
       @$start = $('<input type="text">')
       @$end = $('<input type="text">')

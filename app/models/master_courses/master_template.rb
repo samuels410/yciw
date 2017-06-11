@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 class MasterCourses::MasterTemplate < ActiveRecord::Base
   # NOTE: at some point we can use this model if we decide to allow collections of objects within a course to be pushed out
   # instead of the entire course, but for now that's what we'll roll with
@@ -10,6 +27,7 @@ class MasterCourses::MasterTemplate < ActiveRecord::Base
   belongs_to :active_migration, :class_name => "MasterCourses::MasterMigration"
 
   serialize :default_restrictions, Hash
+  serialize :default_restrictions_by_type, Hash
   validate :require_valid_restrictions
 
   attr_accessor :child_course_count
@@ -22,7 +40,16 @@ class MasterCourses::MasterTemplate < ActiveRecord::Base
 
   scope :for_full_course, -> { where(:full_course => true) }
 
+  before_create :set_defaults
+
   after_save :invalidate_course_cache
+  after_update :sync_default_restrictions
+
+  def set_defaults
+    unless self.default_restrictions.present?
+      self.default_restrictions = {:content => true}
+    end
+  end
 
   def invalidate_course_cache
     if self.workflow_state_changed?
@@ -30,9 +57,33 @@ class MasterCourses::MasterTemplate < ActiveRecord::Base
     end
   end
 
+  def sync_default_restrictions
+    if self.use_default_restrictions_by_type
+      if self.use_default_restrictions_by_type_changed? || self.default_restrictions_by_type_changed?
+        MasterCourses::RESTRICTED_OBJECT_TYPES.each do |type|
+          self.master_content_tags.where(:use_default_restrictions => true, :content_type => type).
+            update_all(:restrictions => self.default_restrictions_by_type[type] || {})
+        end
+      end
+    else
+      if self.default_restrictions_changed?
+        self.master_content_tags.where(:use_default_restrictions => true).update_all(:restrictions => self.default_restrictions)
+      end
+    end
+  end
+
   def require_valid_restrictions
-    if self.default_restrictions_changed? && (self.default_restrictions.keys - MasterCourses::LOCK_TYPES).any?
-      self.errors.add(:default_restrictions, "Invalid settings")
+    if self.default_restrictions_changed?
+      if (self.default_restrictions.keys - MasterCourses::LOCK_TYPES).any?
+        self.errors.add(:default_restrictions, "Invalid settings")
+      end
+    end
+    if self.default_restrictions_by_type_changed?
+      if (self.default_restrictions_by_type.keys - MasterCourses::RESTRICTED_OBJECT_TYPES).any?
+        self.errors.add(:default_restrictions_by_type, "Invalid content type")
+      elsif self.default_restrictions_by_type.values.any?{|k, v| (k.keys - MasterCourses::LOCK_TYPES).any?}
+        self.errors.add(:default_restrictions_by_type, "Invalid settings")
+      end
     end
   end
 
@@ -49,7 +100,16 @@ class MasterCourses::MasterTemplate < ActiveRecord::Base
 
   def self.set_as_master_course(course)
     self.unique_constraint_retry do
-      course.master_course_templates.active.for_full_course.first_or_create
+      template = course.master_course_templates.for_full_course.first_or_create
+      template.undestroy unless template.active?
+      template
+    end
+  end
+
+  def self.remove_as_master_course(course)
+    self.unique_constraint_retry do
+      template = course.master_course_templates.active.for_full_course.first
+      template.destroy && template if template.present?
     end
   end
 
@@ -68,20 +128,29 @@ class MasterCourses::MasterTemplate < ActiveRecord::Base
     end
   end
 
+  def self.migration_id_prefix(shard_id, id)
+    "#{MasterCourses::MIGRATION_ID_PREFIX}#{shard_id}_#{id}_"
+  end
+
   def migration_id_for(obj, prepend="")
     if obj.is_a?(Assignment) && submittable = obj.submittable_object
       obj = submittable # i.e. use the same migration id as the topic on a graded topic's assignment - same restrictions
     end
     key = obj.is_a?(ActiveRecord::Base) ? obj.global_asset_string : obj.to_s
-    "#{MasterCourses::MIGRATION_ID_PREFIX}#{self.shard.id}_#{self.id}_#{Digest::MD5.hexdigest(prepend + key)}"
+    "#{self.class.migration_id_prefix(self.shard.id, self.id)}#{Digest::MD5.hexdigest(prepend + key)}"
   end
 
-  def add_child_course!(child_course)
+  def add_child_course!(child_course_or_id)
     MasterCourses::ChildSubscription.unique_constraint_retry do |retry_count|
-      child_sub = nil
-      child_sub = self.child_subscriptions.active.where(:child_course_id => child_course).first if retry_count > 0
-      child_sub ||= self.child_subscriptions.create!(:child_course => child_course)
+      child_sub = self.child_subscriptions.where(:child_course_id => child_course_or_id).first_or_create!
+      child_sub.undestroy if child_sub.deleted?
       child_sub
+    end
+  end
+
+  def child_course_scope
+    self.shard.activate do
+      Course.shard(self.shard).not_deleted.where(:id => self.child_subscriptions.active.select(:child_course_id))
     end
   end
 
@@ -106,15 +175,8 @@ class MasterCourses::MasterTemplate < ActiveRecord::Base
   def ensure_tag_on_export(obj)
     # even if there are no default restrictions we should still create the tags initially so know to touch the content if we lock it later
     load_tags! # does nothing if already loaded
-    content_tag_for(obj, {:restrictions => self.default_restrictions}) # set the restrictions on create if a new tag
+    content_tag_for(obj)
     # TODO: make a thing if we change the defaults at some point and want to force them on all the existing tags
-  end
-
-  def ensure_attachment_tags_on_export
-    # because attachments don't get "added" to the export
-    self.course.attachments.where("file_state <> 'deleted'").each do |att|
-      ensure_tag_on_export(att)
-    end
   end
 
   def preload_restrictions!
@@ -129,5 +191,32 @@ class MasterCourses::MasterTemplate < ActiveRecord::Base
 
   def find_preloaded_restriction(migration_id)
     @preloaded_restrictions[migration_id]
+  end
+
+  def deletions_since_last_export
+    return {} unless last_export_started_at
+    deletions_by_type = {}
+    MasterCourses::ALLOWED_CONTENT_TYPES.each do |klass|
+      item_scope = case klass
+      when 'Attachment'
+        course.attachments.where(:file_state => 'deleted')
+      when 'WikiPage'
+        course.wiki.wiki_pages.where(:workflow_state => 'deleted')
+      else
+        klass.constantize.where(:context_id => course, :context_type => 'Course', :workflow_state => 'deleted')
+      end
+      item_scope = item_scope.where('updated_at>?', last_export_started_at).select(:id)
+      deleted_mig_ids = content_tags.where(content_type: klass, content_id: item_scope).pluck(:migration_id)
+      deletions_by_type[klass] = deleted_mig_ids if deleted_mig_ids.any?
+    end
+    deletions_by_type
+  end
+
+  def default_restrictions_for(object)
+    if self.use_default_restrictions_by_type
+      self.default_restrictions_by_type[object.class.base_class.name] || {}
+    else
+      self.default_restrictions
+    end
   end
 end

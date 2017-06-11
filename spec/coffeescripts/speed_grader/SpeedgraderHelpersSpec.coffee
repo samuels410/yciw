@@ -1,9 +1,26 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'speed_grader_helpers'
   'underscore'
 ], (SpeedgraderHelpers, _)->
 
-  module "SpeedGrader",
+  QUnit.module "SpeedGrader",
     setup: ->
       fixtures = document.getElementById('fixtures')
       fixtures.innerHTML = """
@@ -59,7 +76,7 @@ define [
     container = SpeedgraderHelpers.urlContainer(submission, defaultContainer, reportContainer)
     equal container, reportContainer
 
-  module "SpeedgraderHelpers#buildIframe",
+  QUnit.module "SpeedgraderHelpers#buildIframe",
     setup: ->
       @buildIframe = SpeedgraderHelpers.buildIframe
 
@@ -81,7 +98,7 @@ define [
     }
     equal @buildIframe("path", options), expected
 
-  module "SpeedgraderHelpers#determineGradeToSubmit",
+  QUnit.module "SpeedgraderHelpers#determineGradeToSubmit",
     setup: ->
       @determineGrade = SpeedgraderHelpers.determineGradeToSubmit
       @student =
@@ -97,7 +114,7 @@ define [
   test "returns existing submission when use_existing_score is true", ->
     equal @determineGrade(true, @student, @grade), "89"
 
-  module "SpeedgraderHelpers#iframePreviewVersion",
+  QUnit.module "SpeedgraderHelpers#iframePreviewVersion",
     setup: ->
       @previewVersion = SpeedgraderHelpers.iframePreviewVersion
 
@@ -161,7 +178,7 @@ define [
       ]
     equal @previewVersion(submission), "&version=1"
 
-  module "SpeedgraderHelpers#setRightBarDisabled",
+  QUnit.module "SpeedgraderHelpers#setRightBarDisabled",
     setup: ->
       @fixtureNode = document.getElementById("fixtures")
       @testArea = document.createElement('div')
@@ -182,7 +199,7 @@ define [
     SpeedgraderHelpers.setRightBarDisabled(false)
     equal(@testArea.innerHTML, @startingHTML)
 
-  module "SpeedgraderHelpers#classNameBasedOnStudent",
+  QUnit.module "SpeedgraderHelpers#classNameBasedOnStudent",
     setup: ->
       @student =
         submission_state: null,
@@ -213,7 +230,7 @@ define [
     state = SpeedgraderHelpers.classNameBasedOnStudent(@student)
     deepEqual(state, raw: 'resubmitted', formatted: 'graded, then resubmitted (Oct 13, 2016 at 12:22pm)')
 
-  module "SpeedgraderHelpers#submissionState",
+  QUnit.module "SpeedgraderHelpers#submissionState",
     setup: ->
       @student =
         submission:

@@ -1,5 +1,23 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 class LiveEventsObserver < ActiveRecord::Observer
-  observe :course,
+  observe :content_export,
+          :course,
           :discussion_entry,
           :discussion_topic,
           :enrollment,
@@ -19,6 +37,12 @@ class LiveEventsObserver < ActiveRecord::Observer
     changes = obj.changes
     obj.class.connection.after_transaction_commit do
     case obj
+    when ContentExport
+      if obj.quizzes2_export? && changes["workflow_state"]
+        if obj.workflow_state == "exported"
+          Canvas::LiveEvents.quiz_export_complete(obj)
+        end
+      end
     when Course
       if changes["syllabus_body"]
         Canvas::LiveEvents.course_syllabus_updated(obj, changes["syllabus_body"].first)
@@ -28,6 +52,10 @@ class LiveEventsObserver < ActiveRecord::Observer
       Canvas::LiveEvents.enrollment_updated(obj)
     when EnrollmentState
       Canvas::LiveEvents.enrollment_state_updated(obj)
+    when Group
+      Canvas::LiveEvents.group_updated(obj)
+    when GroupMembership
+      Canvas::LiveEvents.group_membership_updated(obj)
     when WikiPage
       if changes["title"] || changes["body"]
         Canvas::LiveEvents.wiki_page_updated(obj, changes["title"] ? changes["title"].first : nil,

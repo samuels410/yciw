@@ -1,10 +1,27 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'compiled/models/Assignment'
   'compiled/models/AssignmentGroup'
   'helpers/fakeENV'
 ], (Assignment, AssignmentGroup, fakeENV) ->
 
-  module "AssignmentGroup"
+  QUnit.module "AssignmentGroup"
 
   test "#hasRules returns true if group has regular rules", ->
     ag = new AssignmentGroup rules: { drop_lowest: 1 }
@@ -54,7 +71,7 @@ define [
     ag = new AssignmentGroup
     strictEqual ag.hasIntegrationData(), false
 
-  module "AssignmentGroup#canDelete as admin",
+  QUnit.module "AssignmentGroup#canDelete as admin",
     setup: ->
       fakeENV.setup({
         current_user_roles: ['admin']
@@ -90,7 +107,7 @@ define [
     group.set 'any_assignment_in_closed_grading_period', false
     deepEqual group.canDelete(), true
 
-  module "AssignmentGroup#canDelete as non admin",
+  QUnit.module "AssignmentGroup#canDelete as non admin",
     setup: ->
       fakeENV.setup({
         current_user_roles: ['teacher']
@@ -126,7 +143,7 @@ define [
     group.set 'any_assignment_in_closed_grading_period', true
     equal group.canDelete(), false
 
-  module "AssignmentGroup#hasFrozenAssignments"
+  QUnit.module "AssignmentGroup#hasFrozenAssignments"
 
   test "returns true if AssignmentGroup has frozen assignments", ->
     assignment = new Assignment name: 'cheese'
@@ -134,7 +151,7 @@ define [
     group = new AssignmentGroup name: 'taco', assignments: [ assignment ]
     deepEqual group.hasFrozenAssignments(), true
 
-  module "AssignmentGroup#anyAssignmentInClosedGradingPeriod"
+  QUnit.module "AssignmentGroup#anyAssignmentInClosedGradingPeriod"
 
   test "returns the value of 'any_assignment_in_closed_grading_period'", ->
     group = new AssignmentGroup name: 'taco', assignments: []

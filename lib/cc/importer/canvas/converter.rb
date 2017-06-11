@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -69,6 +69,9 @@ module CC::Importer::Canvas
 
       read_external_content
 
+      # for master course sync
+      @course[:deletions] = @settings[:deletions] if @settings[:deletions].present?
+
       #close up shop
       save_to_file
       set_progress(90)
@@ -97,3 +100,4 @@ module CC::Importer::Canvas
     end
   end
 end
+SafeYAML.whitelist_class!(CC::Importer::Canvas::Converter)

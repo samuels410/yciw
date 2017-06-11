@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2014 Instructure, Inc.
+# Copyright (C) 2014 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -59,7 +59,7 @@
 #     }
 class Quizzes::CourseQuizExtensionsController < ApplicationController
 
-  before_filter :require_user, :require_context
+  before_action :require_user, :require_context
 
   # @API Set extensions for student quiz submissions
   # @beta

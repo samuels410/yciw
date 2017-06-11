@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require 'spec_helper'
 
 RSpec.describe GradingPeriodSetsController, type: :controller do
@@ -9,8 +26,6 @@ RSpec.describe GradingPeriodSetsController, type: :controller do
     let(:valid_session) { {} }
 
     before do
-      root_account.allow_feature!(:multiple_grading_periods)
-      root_account.enable_feature!(:multiple_grading_periods)
       request.accept = 'application/json'
       @root_user = root_account.users.create! do |user|
         user.accept_terms
@@ -44,7 +59,7 @@ RSpec.describe GradingPeriodSetsController, type: :controller do
         post :create, {
           account_id: root_account.to_param,
           enrollment_term_ids: [enrollment_term.to_param],
-          grading_period_set: group_helper.valid_attributes
+          grading_period_set: group_helper.valid_attributes(weighted: true)
         }, valid_session
       end
 
@@ -58,6 +73,7 @@ RSpec.describe GradingPeriodSetsController, type: :controller do
           set_json = json_parse.fetch('grading_period_set')
           expect(response.status).to eql Rack::Utils.status_code(:created)
           expect(set_json["title"]).to eql group_helper.valid_attributes[:title]
+          expect(set_json["weighted"]).to be true
         end
       end
 
@@ -87,7 +103,7 @@ RSpec.describe GradingPeriodSetsController, type: :controller do
     end
 
     describe "PATCH #update" do
-      let(:new_attributes) { { title: 'An updated title!' } }
+      let(:new_attributes) { { title: 'An updated title!', weighted: false } }
       let(:grading_period_set) { group_helper.create_for_account(root_account) }
 
       context "with valid params" do
@@ -104,11 +120,25 @@ RSpec.describe GradingPeriodSetsController, type: :controller do
           patch_update
           grading_period_set.reload
           expect(grading_period_set.title).to eql new_attributes.fetch(:title)
+          expect(grading_period_set.weighted).to eql new_attributes.fetch(:weighted)
         end
 
         it "returns no content" do
           patch_update
           expect(response.status).to eql Rack::Utils.status_code(:no_content)
+        end
+
+        it 'recomputes grades when an enrollment term is removed from the set' do
+          term = root_account.enrollment_terms.create!
+          root_account.courses.create!(enrollment_term: term)
+          grading_period_set.enrollment_terms << term
+          Enrollment.expects(:recompute_final_score).once
+          patch :update, {
+            account_id: root_account.to_param,
+            id: grading_period_set.to_param,
+            enrollment_term_ids: [],
+            grading_period_set: new_attributes
+          }, valid_session
         end
       end
 

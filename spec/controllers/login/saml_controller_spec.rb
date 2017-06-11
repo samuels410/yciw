@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2015 Instructure, Inc.
+# Copyright (C) 2015 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -48,6 +48,7 @@ describe Login::SamlController do
            process: nil,
            issuer: "saml_entity",
            saml_attributes: {},
+           used_key: nil
           )
     )
 
@@ -90,7 +91,8 @@ describe Login::SamlController do
              session_index: nil,
              process: nil,
              issuer: "such a lie",
-             saml_attributes: {}
+             saml_attributes: {},
+             used_key: nil
         )
     )
 
@@ -117,7 +119,8 @@ describe Login::SamlController do
            session_index: nil,
            process: nil,
            issuer: "saml_entity",
-           saml_attributes: {}
+           saml_attributes: {},
+           used_key: nil
           )
     )
 
@@ -169,7 +172,8 @@ describe Login::SamlController do
            session_index: nil,
            process: nil,
            issuer: "saml_entity",
-           saml_attributes: { 'eduPersonNickname' => 'Cody Cutrer' }
+           saml_attributes: { 'eduPersonNickname' => 'Cody Cutrer' },
+           used_key: nil
           ))
 
     # We dont want to log them out of everything.
@@ -204,7 +208,8 @@ describe Login::SamlController do
            session_index: nil,
            process: nil,
            issuer: "saml_entity",
-           saml_attributes: { 'eduPersonNickname' => 'Cody Cutrer' })
+           saml_attributes: { 'eduPersonNickname' => 'Cody Cutrer' },
+           used_key: nil)
     )
     LoadAccount.stubs(:default_domain_root_account).returns(account)
 
@@ -235,7 +240,8 @@ describe Login::SamlController do
              session_index: nil,
              process: nil,
              issuer: "such a lie",
-             saml_attributes: {}
+             saml_attributes: {},
+             used_key: nil
         )
     )
 
@@ -268,7 +274,8 @@ describe Login::SamlController do
           sp_name_qualifier: nil,
           session_index: nil,
           process: nil,
-          saml_attributes: {}
+          saml_attributes: {},
+          used_key: nil
       }
     end
 
@@ -319,6 +326,7 @@ describe Login::SamlController do
         session_index: nil,
         process: nil,
         saml_attributes: {},
+        used_key: nil
       }
     end
 
@@ -389,10 +397,6 @@ describe Login::SamlController do
         )
         controller.request.env['canvas.domain_root_account'] = @account
         post :create, :SAMLResponse => "foo", :RelayState => "/courses"
-
-        expect(response).to redirect_to(courses_url)
-        expect(session[:saml_unique_id]).to eq @unique_id
-        expect(session[:login_aac]).to eq @aac2.id
       end
 
       describe '#destroy' do
@@ -504,7 +508,8 @@ SAML
              issuer: "saml_entity",
              saml_attributes: {
                  'eduPersonPrincipalName' => "#{@unique_id}@example.edu"
-             }
+             },
+             used_key: nil
             )
       )
 
@@ -529,7 +534,8 @@ SAML
              session_index: nil,
              process: nil,
              issuer: "saml_entity",
-             saml_attributes: {}
+             saml_attributes: {},
+             used_key: nil
             )
       )
 
@@ -565,7 +571,8 @@ SAML
            issuer: "saml_entity",
            saml_attributes: {
              'eduPersonPrincipalName' => "#{unique_id}@example.edu"
-           }
+           },
+           used_key: nil
           )
     )
 
@@ -594,7 +601,8 @@ SAML
            session_index: nil,
            process: nil,
            issuer: "saml_entity",
-           saml_attributes: {}
+           saml_attributes: {},
+           used_key: nil
           )
     )
 

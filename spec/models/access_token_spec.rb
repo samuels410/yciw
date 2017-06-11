@@ -1,5 +1,5 @@
- #
-# Copyright (C) 2012 Instructure, Inc.
+#
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -105,7 +105,7 @@ describe AccessToken do
       expect(AccessToken.authenticate(@token_string)).to be_nil
     end
 
-    it "should authenticate via crypted_token" do
+    it "should authenticate via crypted_refresh_token" do
       expect(AccessToken.authenticate_refresh_token(@refresh_token_string)).to eq @at
     end
 

@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/common')
 
 describe "courses" do
@@ -118,7 +135,7 @@ describe "courses" do
         get "/courses/#{@course.id}"
         f(".wizard_popup_link").click()
         expect(f(".ic-wizard-box")).to be_displayed
-        wait_for_ajaximations(500)
+        wait_for_ajaximations
       end
 
       def check_if_item_complete(item)
@@ -141,7 +158,7 @@ describe "courses" do
         f("#wizard_home_page").click
         f(".ic-wizard-box__message-button a").click
         wait_for_ajaximations
-        modal = f("#edit_course_home_content_form")
+        modal = fj("h3:contains('Choose Home Page')")
         expect(modal).to be_displayed
       end
 
@@ -414,7 +431,7 @@ describe "courses" do
 
       create_session(@student.pseudonym)
       get "/courses/#{@course.id}"
-      assert_flash_notice_message /Invitation accepted!/
+      assert_flash_notice_message "Invitation accepted!"
       expect(f("#content")).not_to contain_css(".ic-notification button[name='accept'] ")
     end
 
@@ -424,7 +441,7 @@ describe "courses" do
       create_session(@student.pseudonym)
       get "/courses/#{@course.id}"
       f(".ic-notification button[name='accept'] ").click
-      assert_flash_notice_message /Invitation accepted!/
+      assert_flash_notice_message "Invitation accepted!"
     end
 
     it "should reject a course invitation" do
@@ -433,7 +450,7 @@ describe "courses" do
       create_session(@student.pseudonym)
       get "/courses/#{@course.id}"
       f(".ic-notification button[name=reject]").click
-      assert_flash_notice_message /Invitation canceled./
+      assert_flash_notice_message "Invitation canceled."
     end
 
     it "should display user groups on courses page" do
@@ -502,6 +519,10 @@ describe "courses" do
 
     expect(element_exists?('#announcements_on_home_page')).to be_falsey
 
+    text = "here's some html or whatever"
+    html = "<p>#{text}</p>"
+    @course.announcements.create!(:title => "something", :message => html)
+
     @course.default_view = "wiki"
     @course.show_announcements_on_home_page = true
     @course.home_page_announcement_limit = 5
@@ -511,5 +532,10 @@ describe "courses" do
     get "/courses/#{@course.id}"
 
     expect(f('#announcements_on_home_page')).to be_displayed
+    expect(f('#announcements_on_home_page')).to contain_css("button")
+    f('#announcements_on_home_page button').click
+
+    expect(f('#announcements_on_home_page')).to include_text(text)
+    expect(f('#announcements_on_home_page')).to_not include_text(html)
   end
 end

@@ -1,8 +1,26 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
+  'jquery'
   'compiled/gradebook/GradebookHelpers'
   'jsx/gradebook/shared/constants'
-], (GradebookHelpers, GradebookConstants) ->
-  module "GradebookHelpers#noErrorsOnPage",
+], ($, GradebookHelpers, GradebookConstants) ->
+  QUnit.module "GradebookHelpers#noErrorsOnPage",
     setup: ->
       @mockFind = @mock($, "find")
 
@@ -16,7 +34,7 @@ define [
 
     notOk GradebookHelpers.noErrorsOnPage()
 
-  module "GradebookHelpers#textareaIsGreaterThanMaxLength"
+  QUnit.module "GradebookHelpers#textareaIsGreaterThanMaxLength"
 
   test "textareaIsGreaterThanMaxLength is false at exactly the max allowed length", ->
     notOk GradebookHelpers.textareaIsGreaterThanMaxLength(GradebookConstants.MAX_NOTE_LENGTH)
@@ -24,7 +42,7 @@ define [
   test "textareaIsGreaterThanMaxLength is true at greater than the max allowed length", ->
     ok GradebookHelpers.textareaIsGreaterThanMaxLength(GradebookConstants.MAX_NOTE_LENGTH + 1)
 
-  module "GradebookHelpers#maxLengthErrorShouldBeShown",
+  QUnit.module "GradebookHelpers#maxLengthErrorShouldBeShown",
     setup: ->
       @mockFind = @mock($, "find")
 

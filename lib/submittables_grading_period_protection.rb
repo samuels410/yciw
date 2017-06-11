@@ -1,8 +1,25 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 module SubmittablesGradingPeriodProtection
   def grading_periods_allow_submittable_create?(submittable, submittable_params, flash_message: false)
     apply_grading_params(submittable, submittable_params)
     return true unless submittable.graded?
-    return true unless context_grading_periods_enabled? && !current_user_is_context_admin?
+    return true unless grading_periods? && !current_user_is_context_admin?
     return true if submittable_params[:only_visible_to_overrides]
 
     submittable.due_at = submittable_params[:due_at]
@@ -18,13 +35,13 @@ module SubmittablesGradingPeriodProtection
     submittable.only_visible_to_overrides =
       submittable_params[:only_visible_to_overrides] if submittable_params.key?(:only_visible_to_overrides)
     submittable.due_at = submittable_params[:due_at] if submittable_params.key?(:due_at)
-    return true unless submittable.only_visible_to_overrides_changed? || submittable.due_at_changed?
-    return true unless context_grading_periods_enabled? && !current_user_is_context_admin?
+    return true unless submittable.only_visible_to_overrides_changed? || due_at_changed?(submittable)
+    return true unless grading_periods? && !current_user_is_context_admin?
 
     in_closed_grading_period = date_in_closed_grading_period?(submittable.due_at_was)
 
     if in_closed_grading_period && !submittable.only_visible_to_overrides_was
-      if submittable.due_at_changed?
+      if due_at_changed?(submittable)
         apply_error(submittable, :due_at, ERROR_MESSAGES[:change_due_at_in_closed], flash_message)
       else
         message = ERROR_MESSAGES[:change_only_visible_to_overrides]
@@ -42,7 +59,7 @@ module SubmittablesGradingPeriodProtection
   end
 
   def grading_periods_allow_assignment_overrides_batch_create?(submittable, overrides, flash_message: false)
-    return true unless context_grading_periods_enabled? && !current_user_is_context_admin?
+    return true unless grading_periods? && !current_user_is_context_admin?
     return true unless overrides.any? {|override| date_in_closed_grading_period?(override[:due_at])}
 
     apply_error(submittable, :due_at, ERROR_MESSAGES[:set_override_due_at_in_closed], flash_message)
@@ -50,13 +67,17 @@ module SubmittablesGradingPeriodProtection
   end
 
   def grading_periods_allow_assignment_overrides_batch_update?(submittable, prepared_batch, flash_message: false)
-    return true unless context_grading_periods_enabled? && !current_user_is_context_admin?
+    return true unless grading_periods? && !current_user_is_context_admin?
     can_create_overrides?(submittable, prepared_batch[:overrides_to_create], flash_message: flash_message) &&
       can_update_overrides?(submittable, prepared_batch[:overrides_to_update], flash_message: flash_message) &&
       can_delete_overrides?(submittable, prepared_batch[:overrides_to_delete], flash_message: flash_message)
   end
 
   private
+
+  def due_at_changed?(submittable)
+    submittable.due_at_was.to_i != submittable.due_at.to_i
+  end
 
   def apply_grading_params(submittable, submittable_params)
     case submittable

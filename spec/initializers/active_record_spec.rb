@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path('../spec_helper', File.dirname( __FILE__ ))
 
 module ActiveRecord
@@ -109,14 +126,14 @@ module ActiveRecord
         it "should not use a temp table for a plain query" do
           User.create!
           User.find_in_batches do |batch|
-            expect { User.connection.select_value("SELECT COUNT(*) FROM users_find_in_batches_temp_table_#{User.all.to_sql.hash.abs.to_s(36)}") }.to raise_error
+            expect { User.connection.select_value("SELECT COUNT(*) FROM users_find_in_batches_temp_table_#{User.all.to_sql.hash.abs.to_s(36)}") }.to raise_error(ActiveRecord::StatementInvalid)
           end
         end
 
         it "should not use a temp table for a select with id" do
           User.create!
           User.select(:id).find_in_batches do |batch|
-            expect { User.connection.select_value("SELECT COUNT(*) FROM users_find_in_batches_temp_table_#{User.select(:id).to_sql.hash.abs.to_s(36)}") }.to raise_error
+            expect { User.connection.select_value("SELECT COUNT(*) FROM users_find_in_batches_temp_table_#{User.select(:id).to_sql.hash.abs.to_s(36)}") }.to raise_error(ActiveRecord::StatementInvalid)
           end
         end
 
@@ -216,13 +233,11 @@ module ActiveRecord
         end
 
         it "uses FOR UPDATE on a normal exclusive lock" do
-          scope.expects(:lock_without_exclusive_smarts).with(true)
-          scope.lock(true)
+          expect(scope.lock(true).lock_value).to eq true
         end
 
         it "substitutes 'FOR NO KEY UPDATE' if specified" do
-          scope.expects(:lock_without_exclusive_smarts).with("FOR NO KEY UPDATE")
-          scope.lock(:no_key_update)
+          expect(scope.lock(:no_key_update).lock_value).to eq "FOR NO KEY UPDATE"
         end
       end
 
@@ -232,13 +247,11 @@ module ActiveRecord
         end
 
         it "uses FOR UPDATE on a normal exclusive lock" do
-          scope.expects(:lock_without_exclusive_smarts).with(true)
-          scope.lock(true)
+          expect(scope.lock(true).lock_value).to eq true
         end
 
         it "ignores 'FOR NO KEY UPDATE' if specified" do
-          scope.expects(:lock_without_exclusive_smarts).with(true)
-          scope.lock(:no_key_update)
+          expect(scope.lock(:no_key_update).lock_value).to eq true
         end
       end
     end
@@ -246,18 +259,20 @@ module ActiveRecord
     describe "union" do
       shared_examples_for "query creation" do
         it "should include conditions after the union inside of the subquery" do
-          wheres = base.active.where(id:99).union(User.where(id:1)).where_values
+          scope = base.active.where(id:99).union(User.where(id:1))
+          wheres = CANVAS_RAILS4_2 ? scope.where_values : scope.where_clause.send(:predicates)
           expect(wheres.count).to eq 1
           sql_before_union, sql_after_union = wheres.first.split("UNION ALL")
-          expect(sql_before_union.include?("99")).to be_falsey
-          expect(sql_after_union.include?("99")).to be_truthy
+          expect(sql_before_union.include?('"id" = 99')).to be_falsey
+          expect(sql_after_union.include?('"id" = 99')).to be_truthy
         end
 
         it "should include conditions prior to the union outside of the subquery" do
-          wheres = base.active.union(User.where(id:1)).where(id:99).where_values
+          scope = base.active.union(User.where(id:1)).where(id:99)
+          wheres = CANVAS_RAILS4_2 ? scope.where_values : scope.where_clause.send(:predicates)
           expect(wheres.count).to eq 2
           union_where = wheres.detect{|w| w.is_a?(String) && w.include?("UNION ALL")}
-          expect(union_where.include?("99")).to be_falsey
+          expect(union_where.include?('"id" = 99')).to be_falsey
         end
       end
 

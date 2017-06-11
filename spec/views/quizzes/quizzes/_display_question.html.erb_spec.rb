@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -37,7 +37,7 @@ describe "/quizzes/quizzes/_display_question" do
     @submission.submission_data = { "question_#{@quiz.quiz_data[0][:id]}" => "42.0" }
     Quizzes::SubmissionGrader.new(@submission).grade_submission
 
-    assigns[:quiz] = @quiz
+    assign(:quiz, @quiz)
     q = @quiz.stored_questions.first
     q[:answers][0].delete(:margin) # sometimes this is missing; see #10785
     render :partial => "quizzes/quizzes/display_question", :object => q, :locals => {

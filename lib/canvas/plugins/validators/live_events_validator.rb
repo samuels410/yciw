@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2013 Instructure, Inc.
+# Copyright (C) 2015 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -23,6 +23,7 @@ module Canvas::Plugins::Validators::LiveEventsValidator
     if settings.map(&:last).all?(&:blank?)
       {}
     else
+      return settings if settings[:use_consul]
       err = false
 
       if settings[:kinesis_stream_name].blank?
@@ -49,7 +50,7 @@ module Canvas::Plugins::Validators::LiveEventsValidator
 
       return false if err
 
-      settings = settings.slice(:kinesis_stream_name, :aws_access_key_id, :aws_secret_access_key, :aws_region, :aws_endpoint)
+      settings = settings.permit(:kinesis_stream_name, :aws_access_key_id, :aws_secret_access_key, :aws_region, :aws_endpoint).to_h.with_indifferent_access
       temp_settings = settings.dup
       temp_settings[:aws_secret_access_key_dec] = temp_settings.delete(:aws_secret_access_key)
       unless LiveEvents::Client.new(temp_settings).valid?

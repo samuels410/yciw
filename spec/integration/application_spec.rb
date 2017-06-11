@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -200,6 +200,18 @@ describe "site-wide" do
     it "returns an html error page even for non-html requests" do
       Canvas::Errors.expects(:capture).once.returns({})
       get "/courses/blah.png"
+    end
+  end
+
+  context "stringifying ids" do
+    it "stringifies ids when objects are passed to render" do
+      course_with_teacher_logged_in
+      user_with_pseudonym :username => 'blah'
+      post "/courses/#{@course.id}/user_lists.json",
+           { :user_list => ['blah'], :search_type => 'unique_id', :v2 => true },
+           { 'Accept' => 'application/json+canvas-string-ids' }
+      json = JSON.parse response.body
+      expect(json['users'][0]['user_id']).to be_a String
     end
   end
 end

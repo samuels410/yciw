@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011-2012 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -122,12 +122,12 @@
 #     }
 #
 class CollaborationsController < ApplicationController
-  before_filter :require_context, :except => [:members]
-  before_filter :require_collaboration_and_context, :only => [:members]
-  before_filter :require_collaborations_configured
-  before_filter :reject_student_view_student
+  before_action :require_context, :except => [:members]
+  before_action :require_collaboration_and_context, :only => [:members]
+  before_action :require_collaborations_configured
+  before_action :reject_student_view_student
 
-  before_filter { |c| c.active_tab = "collaborations" }
+  before_action { |c| c.active_tab = "collaborations" }
 
   include Api::V1::Collaborator
   include Api::V1::Collaboration
@@ -153,6 +153,8 @@ class CollaborationsController < ApplicationController
            :CAN_MANAGE_GROUPS => @context.grants_right?(@current_user, session, :manage_groups),
            :collaboration_types => Collaboration.collaboration_types,
            :POTENTIAL_COLLABORATORS_URL => polymorphic_url([:api_v1, @context, :potential_collaborators])
+
+    set_tutorial_js_env
   end
 
   # @API List collaborations
@@ -240,6 +242,8 @@ class CollaborationsController < ApplicationController
         :context_asset_string => parent_context.try(:asset_string)
       }
     end
+
+    set_tutorial_js_env
 
     render :text => "".html_safe, :layout => true
   end

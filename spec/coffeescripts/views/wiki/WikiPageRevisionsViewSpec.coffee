@@ -1,10 +1,27 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'jquery'
   'compiled/collections/WikiPageRevisionsCollection'
   'compiled/views/wiki/WikiPageRevisionsView'
 ], ($, WikiPageRevisionsCollection, WikiPageRevisionsView) ->
 
-  module 'WikiPageRevisionsView',
+  QUnit.module 'WikiPageRevisionsView',
     setup: ->
     teardown: ->
       document.getElementById("fixtures").innerHTML = ""
@@ -46,13 +63,13 @@ define [
   test 'toJSON - CAN.FETCH_PREV', ->
     collection = new WikiPageRevisionsCollection
     view = new WikiPageRevisionsView collection: collection
-    @stub(collection, 'canFetch', (arg) -> arg == 'prev')
+    @stub(collection, 'canFetch').callsFake((arg) -> arg == 'prev')
 
     strictEqual view.toJSON().CAN?.FETCH_PREV, true, 'can fetch previous'
 
   test 'toJSON - CAN.FETCH_NEXT', ->
     collection = new WikiPageRevisionsCollection
     view = new WikiPageRevisionsView collection: collection
-    @stub(collection, 'canFetch', (arg) -> arg == 'next')
+    @stub(collection, 'canFetch').callsFake((arg) -> arg == 'next')
 
     strictEqual view.toJSON().CAN?.FETCH_NEXT, true, 'can fetch next'

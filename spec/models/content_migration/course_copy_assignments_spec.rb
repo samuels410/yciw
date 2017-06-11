@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/course_copy_helper.rb')
 
 describe ContentMigration do
@@ -153,6 +170,12 @@ describe ContentMigration do
       assignment_model(:course => @copy_from, :points_possible => 40, :submission_types => 'file_upload', :grading_type => 'points')
       @assignment.turnitin_enabled = true
       @assignment.vericite_enabled = true
+      @assignment.vericite_settings = {
+          :originality_report_visibility => "after_grading",
+          :exclude_quoted => '1',
+          :exclude_self_plag => '0',
+          :store_in_index => '1'
+      }
       @assignment.peer_reviews = true
       @assignment.peer_review_count = 2
       @assignment.automatic_peer_reviews = true
@@ -165,7 +188,10 @@ describe ContentMigration do
 
       @assignment.save!
 
-      attrs = [:turnitin_enabled, :vericite_enabled, :peer_reviews,
+      @copy_to.any_instantiation.expects(:turnitin_enabled?).at_least(1).returns(true)
+      @copy_to.any_instantiation.expects(:vericite_enabled?).at_least(1).returns(true)
+
+      attrs = [:turnitin_enabled, :vericite_enabled, :turnitin_settings, :peer_reviews,
           :automatic_peer_reviews, :anonymous_peer_reviews,
           :grade_group_students_individually, :allowed_extensions,
           :position, :peer_review_count, :muted, :omit_from_final_grade]
@@ -174,9 +200,29 @@ describe ContentMigration do
 
       new_assignment = @copy_to.assignments.where(migration_id: mig_id(@assignment)).first
       attrs.each do |attr|
-        expect(@assignment[attr]).to eq new_assignment[attr]
+        if @assignment[attr].class == Hash
+          expect(@assignment[attr].stringify_keys).to eq new_assignment[attr].stringify_keys
+        else
+          expect(@assignment[attr]).to eq new_assignment[attr]
+        end
       end
       expect(new_assignment.only_visible_to_overrides).to be_falsey
+    end
+
+    it "shouldn't copy turnitin/vericite_enabled if it's not enabled on the copyee's account" do
+      assignment_model(:course => @copy_from, :points_possible => 40, :submission_types => 'file_upload', :grading_type => 'points')
+      @assignment.turnitin_enabled = true
+      @assignment.vericite_enabled = true
+      @assignment.save!
+
+      @copy_to.any_instantiation.expects(:turnitin_enabled?).at_least(1).returns(false)
+      @copy_to.any_instantiation.expects(:vericite_enabled?).at_least(1).returns(false)
+
+      run_course_copy
+
+      new_assignment = @copy_to.assignments.where(migration_id: mig_id(@assignment)).first
+      expect(new_assignment[:turnitin_enabled]).to be_falsey
+      expect(new_assignment[:vericite_enabled]).to be_falsey
     end
 
     it "should copy group assignment setting" do
@@ -385,8 +431,8 @@ describe ContentMigration do
         run_course_copy(warnings)
 
         asmnt_2 = @copy_to.assignments.where(migration_id: mig_id(@asmnt)).first
-        expect(asmnt_2.freeze_on_copy).to be_nil
-        expect(asmnt_2.copied).to be_nil
+        expect(asmnt_2.freeze_on_copy).to be false
+        expect(asmnt_2.copied).to be false
       end
     end
 

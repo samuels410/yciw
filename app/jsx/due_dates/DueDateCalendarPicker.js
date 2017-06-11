@@ -1,0 +1,148 @@
+/*
+ * Copyright (C) 2015 - present Instructure, Inc.
+ *
+ * This file is part of Canvas.
+ *
+ * Canvas is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, version 3 of the License.
+ *
+ * Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+import $ from 'jquery'
+import React from 'react'
+import accessibleDateFormat from 'jsx/shared/helpers/accessibleDateFormat'
+import tz from 'timezone'
+import 'jquery.instructure_forms'
+import cx from 'classnames'
+
+const { string, func, bool, instanceOf, oneOfType } = React.PropTypes;
+
+  var DueDateCalendarPicker = React.createClass({
+
+    propTypes: {
+      dateType: string.isRequired,
+      handleUpdate: func.isRequired,
+      rowKey: string.isRequired,
+      labelledBy: string.isRequired,
+      inputClasses: string.isRequired,
+      disabled: bool.isRequired,
+      isFancyMidnight: bool.isRequired,
+      dateValue: oneOfType([instanceOf(Date), string]).isRequired,
+      labelText: string.isRequired,
+      readonly: bool
+    },
+
+    getDefaultProps () {
+      return {
+        readonly: false
+      };
+    },
+
+    // ---------------
+    //    Lifecycle
+    // ---------------
+
+    componentDidMount() {
+      var dateInput = this.refs.dateInput
+
+      $(dateInput).datetime_field().change( (e) => {
+        var trimmedInput = $.trim(e.target.value)
+
+        var newDate = $(dateInput).data('unfudged-date')
+        newDate     = (trimmedInput === "") ? null : newDate
+        newDate     = this.changeToFancyMidnightIfNeeded(newDate)
+
+        this.props.handleUpdate(newDate)
+      })
+    },
+
+    // ensure jquery UI updates (as react doesn't know about it)
+    componentDidUpdate() {
+      var dateInput = this.refs.dateInput
+      $(dateInput).val(this.formattedDate())
+    },
+
+    changeToFancyMidnightIfNeeded(date) {
+      if (this.props.isFancyMidnight && tz.isMidnight(date)) {
+        return tz.changeToTheSecondBeforeMidnight(date);
+      }
+
+      return date;
+    },
+    // ---------------
+    //    Rendering
+    // ---------------
+
+    formattedDate() {
+      return $.datetimeString(this.props.dateValue)
+    },
+
+    wrapperClassName() {
+      return this.props.dateType == "due_at" ?
+        "DueDateInput__Container" :
+        "DueDateRow__LockUnlockInput"
+    },
+
+    render() {
+      if (this.props.disabled || this.props.readonly) {
+        const className = cx('ic-Form-control', {readonly: this.props.readonly});
+        return (
+          <div className={className}>
+            <label className="ic-Label" htmlFor={this.props.dateType}>{this.props.labelText}</label>
+            <div className="ic-Input-group">
+              <input
+                id={this.props.dateType}
+                readOnly
+                type="text"
+                className={`ic-Input ${this.props.inputClasses}`}
+                defaultValue={this.formattedDate()}
+              />
+              {
+                this.props.readonly ? null :
+                <div className="ic-Input-group__add-on" role="presentation" aria-hidden="true" tabIndex="-1">
+                  <button className="Button Button--icon-action disabled" aria-disabled="true" type="button">
+                    <i className="icon-calendar-month" role="presentation" />
+                  </button>
+                </div>
+              }
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div>
+          <label
+            id={this.props.labelledBy}
+            className="Date__label"
+          >{this.props.labelText}</label>
+          <div
+            ref="datePickerWrapper"
+            className={this.wrapperClassName()}
+          >
+            <input
+              type            = "text"
+              ref             = "dateInput"
+              title           = {accessibleDateFormat()}
+              data-tooltip    = ""
+              className       = {this.props.inputClasses}
+              aria-labelledby = {this.props.labelledBy}
+              data-row-key    = {this.props.rowKey}
+              data-date-type  = {this.props.dateType}
+              defaultValue    = {this.formattedDate()}
+            />
+          </div>
+        </div>
+      )
+    }
+  });
+
+export default DueDateCalendarPicker

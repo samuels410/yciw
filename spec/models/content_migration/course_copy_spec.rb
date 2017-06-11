@@ -1,4 +1,20 @@
 # coding: utf-8
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
 
 require File.expand_path(File.dirname(__FILE__) + '/course_copy_helper.rb')
 
@@ -182,6 +198,17 @@ describe ContentMigration do
 
       mod3_to = @copy_to.context_modules.where(migration_id: mig_id(mod3)).first
       expect(mod3_to.position).to eq 3 # put at end
+    end
+
+    it "shan't interweave module order when restoring deleting modules in the destination course neither" do
+      ['A', 'B'].map { |name| @copy_to.context_modules.create!(:name => name) }
+      ['C', 'D'].map { |name| @copy_from.context_modules.create!(:name => name) }
+      run_course_copy
+      expect(@copy_to.context_modules.order(:position).pluck(:name)).to eq(['A', 'B', 'C', 'D'])
+
+      @copy_to.context_modules.where(name: ['C', 'D']).map(&:destroy)
+      run_course_copy
+      expect(@copy_to.context_modules.order(:position).pluck(:name)).to eq(['A', 'B', 'C', 'D'])
     end
 
     it "should be able to copy links to files in folders with html entities and unicode in path" do
@@ -376,7 +403,7 @@ describe ContentMigration do
       @copy_from.default_wiki_editing_roles = 'teachers'
       @copy_from.allow_student_organized_groups = false
       @copy_from.show_announcements_on_home_page = false
-      @copy_from.home_page_announcement_limit = nil
+      @copy_from.home_page_announcement_limit = 3
       @copy_from.default_view = 'modules'
       @copy_from.open_enrollment = true
       @copy_from.storage_quota = 444

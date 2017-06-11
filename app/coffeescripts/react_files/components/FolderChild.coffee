@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'underscore'
   'i18n!react_files'
@@ -42,7 +59,11 @@ define [
                                     document.activeElement
 
       setTimeout () =>
-        ReactDOM.findDOMNode(@refs.newName)?.focus()
+        input = @refs.newName
+        if input
+          ext = input.value.lastIndexOf('.')
+          input.setSelectionRange(0, if ext < 0 then input.value.length else ext)
+          input.focus()
       , 0
 
     focusNameLink: ->

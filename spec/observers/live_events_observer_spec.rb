@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015 Instructure, Inc.
+# Copyright (C) 2015 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -105,21 +105,46 @@ describe LiveEventsObserver do
   end
 
   describe "group" do
-    it "posts create events for groups, group_categories, and group_memberships" do
-      course_model
-      student1 = @course.enroll_student(user_model).user
-      student2 = @course.enroll_student(user_model).user
-
+    it "posts create events for group_categories" do
+      course = course_model
       Canvas::LiveEvents.expects(:group_category_created).once
-      category = @course.group_categories.create!(name: "project A", create_group_count: 2)
+      course.group_categories.create!(name: "project A", create_group_count: 2)
+    end
 
+    it "posts create events for groups" do
+      course = course_model
       Canvas::LiveEvents.expects(:group_created).twice
-      group1 = category.groups.create!(name: "Group 1", context: @course)
-      group2 = category.groups.create!(name: "Group 2", context: @course)
+      course.groups.create!(name: "Group 1")
+      course.groups.create!(name: "Group 2")
+    end
 
+    it "posts update events for groups" do
+      course = course_model
+      group = course.groups.create!(name: "Group 1")
+      Canvas::LiveEvents.expects(:group_updated).once
+      group.name = "New Group Name"
+      group.save
+    end
+
+    it "posts create events for group_memberships" do
+      course = course_model
+      student1 = course.enroll_student(user_model).user
+      student2 = course.enroll_student(user_model).user
+      group1 = course.groups.create!(name: "Group 1")
+      group2 = course.groups.create!(name: "Group 2")
       Canvas::LiveEvents.expects(:group_membership_created).twice
       group1.add_user(student1)
       group2.add_user(student2)
+    end
+
+    it "posts update events for group_memberships" do
+      course = course_model
+      student = course.enroll_student(user_model).user
+      group = course.groups.create!(name: "Group 1")
+      membership = group.add_user(student, 'invited')
+      Canvas::LiveEvents.expects(:group_membership_updated).once
+      membership.accept
+      membership.save
     end
   end
 
@@ -203,6 +228,35 @@ describe LiveEventsObserver do
     it "posts create events" do
       Canvas::LiveEvents.expects(:account_notification_created).once
       account_notification
+    end
+  end
+
+  describe "quiz_export_complete" do
+    it "posts update events for quizzes2" do
+      Canvas::LiveEvents.expects(:quiz_export_complete).once
+      Account.default.enable_feature!(:quizzes2_exporter)
+      course = Account.default.courses.create!
+      Account.default.context_external_tools.create!(
+        name: 'Quizzes.Next',
+        consumer_key: 'test_key',
+        shared_secret: 'test_secret',
+        tool_id: 'Quizzes 2',
+        url: 'http://example.com/launch'
+      )
+      quiz = course.quizzes.create!(:title => 'quiz1')
+      ce = course.content_exports.create!(
+        :export_type => ContentExport::QUIZZES2,
+        :selected_content => quiz.id,
+        :user => user_model
+      )
+      ce.export_without_send_later
+    end
+
+    it "does not post for other ContentExport types" do
+      Canvas::LiveEvents.expects(:quiz_export_complete).never
+      course = Account.default.courses.create!
+      ce = course.content_exports.create!
+      ce.export_without_send_later
     end
   end
 end

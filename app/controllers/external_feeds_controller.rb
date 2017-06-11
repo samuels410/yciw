@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -70,7 +70,7 @@
 class ExternalFeedsController < ApplicationController
   include Api::V1::ExternalFeeds
 
-  before_filter :require_context
+  before_action :require_context
 
   # @API List external feeds
   #

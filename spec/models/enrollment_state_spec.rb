@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_relative "../spec_helper"
 
 describe EnrollmentState do
@@ -120,30 +137,6 @@ describe EnrollmentState do
 
       EnrollmentState.expects(:update_enrollment).at_least_once.with {|e| e.course == @course}
 
-      @course.start_at = 4.days.ago
-      ended_at = 3.days.ago
-      @course.conclude_at = ended_at
-      @course.save!
-
-      enroll_state.reload
-      expect(enroll_state.state_is_current?).to be_falsey
-
-      enroll_state.ensure_current_state
-      expect(enroll_state.state).to eq 'completed'
-      expect(enroll_state.state_started_at).to eq ended_at
-    end
-
-    it "should invalidate enrollments even if they have null lock versions (i.e. already exist before db migration)" do
-      course_factory(active_all: true)
-      @course.restrict_enrollments_to_course_dates = true
-      @course.save!
-      enroll = student_in_course(:course => @course)
-      enroll_state = enroll.enrollment_state
-      EnrollmentState.where(:enrollment_id => enroll_state).update_all(:lock_version => nil)
-
-      EnrollmentState.expects(:update_enrollment).at_least_once.with {|e| e.course == @course}
-
-      @course.reload
       @course.start_at = 4.days.ago
       ended_at = 3.days.ago
       @course.conclude_at = ended_at

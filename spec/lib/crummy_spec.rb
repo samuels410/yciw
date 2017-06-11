@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2013 Instructure, Inc.
+# Copyright (C) 2013 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -31,7 +31,7 @@ describe "CrummyController" do
       @filter_blocks ||= []
     end
 
-    def self.before_filter(*filters, &block)
+    def self.before_action(*filters, &block)
       filter_blocks.push block
     end
 

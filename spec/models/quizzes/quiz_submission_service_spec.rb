@@ -1,6 +1,6 @@
 # encoding: UTF-8
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2013 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -285,7 +285,7 @@ describe Quizzes::QuizSubmissionService do
 
     context 'as a teacher' do
       before :each do
-        expect(qs).to receive(:grants_right?).with(participant.user, :update_scores).and_return true
+        allow(qs).to receive(:grants_right?).with(participant.user, :update_scores).and_return true
       end
 
       def expect_version_object
@@ -373,7 +373,7 @@ describe Quizzes::QuizSubmissionService do
 
     context 'as someone else' do
       before :each do
-        expect(qs).to receive(:grants_right?).with(participant.user, :update_scores).and_return false
+        allow(qs).to receive(:grants_right?).with(participant.user, :update_scores).and_return false
       end
 
       it 'should deny access' do

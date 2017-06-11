@@ -1,9 +1,27 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require 'spec_helper'
 
 describe MasterCourses::MasterMigration do
   before :once do
     course_factory
     @template = MasterCourses::MasterTemplate.set_as_master_course(@course)
+    user_factory
   end
 
   before :each do
@@ -12,7 +30,6 @@ describe MasterCourses::MasterMigration do
 
   describe "start_new_migration!" do
     it "should queue a migration" do
-      user_factory
       MasterCourses::MasterMigration.any_instance.expects(:queue_export_job).once
       mig = MasterCourses::MasterMigration.start_new_migration!(@template, @user)
       expect(mig.id).to be_present
@@ -28,7 +45,7 @@ describe MasterCourses::MasterMigration do
 
       MasterCourses::MasterMigration.any_instance.expects(:queue_export_job).never
       expect {
-        MasterCourses::MasterMigration.start_new_migration!(@template)
+        MasterCourses::MasterMigration.start_new_migration!(@template, @user)
       }.to raise_error("cannot start new migration while another one is running")
     end
 
@@ -39,12 +56,12 @@ describe MasterCourses::MasterMigration do
 
       Timecop.freeze(2.days.from_now) do
         MasterCourses::MasterMigration.any_instance.expects(:queue_export_job).once
-        MasterCourses::MasterMigration.start_new_migration!(@template)
+        MasterCourses::MasterMigration.start_new_migration!(@template, @user)
       end
     end
 
     it "should queue a job" do
-      expect { MasterCourses::MasterMigration.start_new_migration!(@template) }.to change(Delayed::Job, :count).by(1)
+      expect { MasterCourses::MasterMigration.start_new_migration!(@template, @user) }.to change(Delayed::Job, :count).by(1)
       MasterCourses::MasterMigration.any_instance.expects(:perform_exports).once
       run_jobs
     end
@@ -191,54 +208,119 @@ describe MasterCourses::MasterMigration do
       expect(cm2.migration_settings[:imported_assets]["WikiPage"]).to eq page_to.id.to_s
     end
 
-    it "should create master content tags with default restrictions on export" do
+    it "syncs deletions in incremental updates (excepting items modified downstream)" do
       @copy_to = course_factory
-      @sub = @template.add_child_course!(@copy_to)
+      @template.add_child_course!(@copy_to)
 
-      restrictions = {:content => true, :settings => false}
-      @template.default_restrictions = restrictions
-      @template.save!
-
-      att = Attachment.create!(:filename => '1.txt', :uploaded_data => StringIO.new('1'), :folder => Folder.root_folders(@copy_from).first, :context => @copy_from)
-      Attachment.where(:id => att).update_all(:updated_at => 5.seconds.ago)
+      assmt = @copy_from.assignments.create!
+      topic = @copy_from.discussion_topics.create!(:message => "hi", :title => "discussion title")
+      ann = @copy_from.announcements.create!(:message => "goodbye")
+      page = @copy_from.wiki.wiki_pages.create!(:title => "wiki", :body => "ohai")
+      page2 = @copy_from.wiki.wiki_pages.create!(:title => "wiki", :body => "bluh")
+      quiz = @copy_from.quizzes.create!
+      quiz2 = @copy_from.quizzes.create!
+      bank = @copy_from.assessment_question_banks.create!(:title => 'bank')
+      aq = bank.assessment_questions.create!(:question_data => {'question_name' => 'test question', 'question_type' => 'essay_question'})
+      file = @copy_from.attachments.create!(:filename => 'blah', :uploaded_data => default_uploaded_data)
+      event = @copy_from.calendar_events.create!(:title => 'thing', :description => 'blargh', :start_at => 1.day.from_now)
+      tool = @copy_from.context_external_tools.create!(:name => "new tool", :consumer_key => "key",
+        :shared_secret => "secret", :custom_fields => {'a' => '1', 'b' => '2'}, :url => "http://www.example.com")
 
       run_master_migration
 
-      att_tag = @template.master_content_tags.polymorphic_where(:content => att).first
-      expect(att_tag.restrictions).to eq restrictions
-      att_tag.update_attribute(:restrictions, {}) # unset them
+      assmt_to = @copy_to.assignments.where(:migration_id => mig_id(assmt)).first
+      topic_to = @copy_to.discussion_topics.where(:migration_id => mig_id(topic)).first
+      ann_to = @copy_to.announcements.where(:migration_id => mig_id(ann)).first
+      page_to = @copy_to.wiki.wiki_pages.where(:migration_id => mig_id(page)).first
+      page2_to = @copy_to.wiki.wiki_pages.where(:migration_id => mig_id(page2)).first
+      quiz_to = @copy_to.quizzes.where(:migration_id => mig_id(quiz)).first
+      quiz2_to = @copy_to.quizzes.where(:migration_id => mig_id(quiz2)).first
+      bank_to = @copy_to.assessment_question_banks.where(:migration_id => mig_id(bank)).first
+      file_to = @copy_to.attachments.where(:migration_id => mig_id(file)).first
+      event_to = @copy_to.calendar_events.where(:migration_id => mig_id(event)).first
+      tool_to = @copy_to.context_external_tools.where(:migration_id => mig_id(tool)).first
 
-      page = @copy_from.wiki.wiki_pages.create!(:title => "another title")
+      Timecop.freeze(10.minutes.from_now) do
+        page2_to.update_attribute(:body, 'changed!')
+        quiz2_to.update_attribute(:title, 'blargh!')
 
-      run_master_migration
-      page_tag = @template.master_content_tags.polymorphic_where(:content => page).first
-      expect(page_tag.restrictions).to eq restrictions
-      expect(att_tag.reload.restrictions).to be_blank # should have left the old one alone
+        assmt.destroy
+        topic.destroy
+        ann.destroy
+        page.destroy
+        page2.destroy
+        quiz.destroy
+        quiz2.destroy
+        bank.destroy
+        file.destroy
+        event.destroy
+        tool.destroy
+      end
+
+      Timecop.travel(20.minutes.from_now) do
+        mm = run_master_migration
+
+        deletions = mm.export_results[:selective][:deleted]
+        expect(deletions.keys).to match_array(["AssessmentQuestionBank", "Assignment", "Attachment", "CalendarEvent", "DiscussionTopic", "ContextExternalTool", "Quizzes::Quiz", "WikiPage"])
+        expect(deletions['Assignment']).to match_array([mig_id(assmt)])
+        expect(deletions['Attachment']).to match_array([mig_id(file)])
+        expect(deletions['WikiPage']).to match_array([mig_id(page), mig_id(page2)])
+        expect(deletions['Quizzes::Quiz']).to match_array([mig_id(quiz), mig_id(quiz2)])
+
+        skips = mm.import_results[mm.import_results.keys.first][:skipped]
+        expect(skips).to match_array([mig_id(quiz2), mig_id(page2)])
+
+        expect(assmt_to.reload).to be_deleted
+        expect(topic_to.reload).to be_deleted
+        expect(ann_to.reload).to be_deleted
+        expect(page_to.reload).to be_deleted
+        expect(page2_to.reload).not_to be_deleted
+        expect(quiz_to.reload).to be_deleted
+        expect(quiz2_to.reload).not_to be_deleted
+        expect(bank_to.reload).to be_deleted
+        expect(file_to.reload).to be_deleted
+        expect(event_to.reload).to be_deleted
+        expect(tool_to.reload).to be_deleted
+      end
     end
 
-    it "should not overwrite with default restrictions on export" do
+    it "tracks creations and updates in selective migrations" do
       @copy_to = course_factory
-      @sub = @template.add_child_course!(@copy_to)
+      @template.add_child_course!(@copy_to)
 
-      restrictions = {:content => true, :settings => false}
-      @template.default_restrictions = restrictions
-      @template.save!
-
-      att = Attachment.create!(:filename => '1.txt', :uploaded_data => StringIO.new('1'), :folder => Folder.root_folders(@copy_from).first, :context => @copy_from)
-      Attachment.where(:id => att).update_all(:updated_at => 5.seconds.ago)
+      assmt = @copy_from.assignments.create!
+      topic = @copy_from.discussion_topics.create!(:message => "hi", :title => "discussion title")
+      page = nil
+      file = nil
 
       run_master_migration
 
-      att_tag = @template.master_content_tags.polymorphic_where(:content => att).first
-      expect(att_tag.restrictions).to eq restrictions
-      att_tag.update_attribute(:restrictions, {}) # unset them
+      Timecop.freeze(10.minutes.from_now) do
+        assmt.update_attribute(:title, 'new title eh')
+        page = @copy_from.wiki.wiki_pages.create!(:title => "wiki", :body => "ohai")
+        file = @copy_from.attachments.create!(:filename => 'blah', :uploaded_data => default_uploaded_data)
+      end
 
-      page = @copy_from.wiki.wiki_pages.create!(:title => "another title")
+      Timecop.travel(20.minutes.from_now) do
+        mm = run_master_migration
+        expect(mm.export_results[:selective][:created]['WikiPage']).to eq([mig_id(page)])
+        expect(mm.export_results[:selective][:created]['Attachment']).to eq([mig_id(file)])
+        expect(mm.export_results[:selective][:updated]['Assignment']).to eq([mig_id(assmt)])
+      end
+    end
 
+    it "limits the number of items to track" do
+      Setting.set('master_courses_history_count', '2')
+
+      @copy_to = course_factory
+      @template.add_child_course!(@copy_to)
       run_master_migration
-      page_tag = @template.master_content_tags.polymorphic_where(:content => page).first
-      expect(page_tag.restrictions).to eq restrictions
-      expect(att_tag.reload.restrictions).to be_blank # should have left the old one alone
+
+      Timecop.travel(10.minutes.from_now) do
+        3.times { |x| @copy_from.wiki.wiki_pages.create! :title => "Page #{x}" }
+        mm = run_master_migration
+        expect(mm.export_results[:selective][:created]['WikiPage'].length).to eq 2
+      end
     end
 
     it "should create two exports (one selective and one full) if needed" do
@@ -388,6 +470,7 @@ describe MasterCourses::MasterMigration do
       [page, assignment].each {|c| c.class.where(:id => c).update_all(:updated_at => 2.seconds.from_now)}
 
       run_master_migration # re-copy all the content but don't actually overwrite the downstream change
+      expect(@migration.import_results.values.first[:skipped]).to match_array([mig_id(assignment), mig_id(page)])
 
       expect(copied_page.reload.body).to eq new_child_text # should have been left alone
       expect(copied_page.title).to eq old_title # even the title
@@ -403,6 +486,7 @@ describe MasterCourses::MasterMigration do
       end
 
       run_master_migration # re-copy all the content but this time overwrite the downstream change because we locked it
+      expect(@migration.import_results.values.first[:skipped]).to be_empty
 
       expect(copied_assignment.reload.description).to eq new_master_text
       expect(copied_assignment.title).to eq new_master_title
@@ -533,7 +617,7 @@ describe MasterCourses::MasterMigration do
       [quiz, topic].each do |c|
         mtag = @template.content_tag_for(c)
         Timecop.freeze(2.seconds.from_now) do
-          mtag.update_attribute(:restrictions, {:settings => true}) # lock the quiz/topic master tags
+          mtag.update_attribute(:restrictions, {:due_dates => true}) # lock the quiz/topic master tags
         end
       end
 
@@ -564,7 +648,7 @@ describe MasterCourses::MasterMigration do
         master_parent_folder = Folder.root_folders(@copy_from).first.sub_folders.create!(:name => "parent", :context => @copy_from)
         master_sub_folder = master_parent_folder.sub_folders.create!(:name => "child", :context => @copy_from)
         att = Attachment.create!(:filename => 'file.txt', :uploaded_data => StringIO.new('1'), :folder => master_sub_folder, :context => @copy_from)
-        att_tag = @template.create_content_tag_for!(att, :restrictions => {:content => true, :settings => true})
+        att_tag = @template.create_content_tag_for!(att, :restrictions => {:all => true})
 
         run_master_migration
 
@@ -575,6 +659,47 @@ describe MasterCourses::MasterMigration do
         Folder.connection.expects(:select_values).never # should have already been cached in migration
         expect(MasterCourses::FolderLockingHelper.locked_folder_ids_for_course(@copy_to)).to match_array(expected_ids)
       end
+    end
+
+    it "should baleet assignment overrides when an admin pulls a bait-n-switch with date restrictions" do
+      @copy_to = course_factory
+      sub = @template.add_child_course!(@copy_to)
+
+      topic = @copy_from.discussion_topics.new
+      topic.assignment = @copy_from.assignments.build
+      topic.save!
+      topic_assmt = topic.assignment
+      normal_assmt = @copy_from.assignments.create!
+
+      run_master_migration
+
+      copied_topic = @copy_to.discussion_topics.where(:migration_id => mig_id(topic)).first
+      copied_topic_assmt = copied_topic.assignment
+      copied_normal_assmt = @copy_to.assignments.where(:migration_id => mig_id(normal_assmt)).first
+
+      topic_override = create_section_override_for_assignment(copied_topic_assmt)
+      normal_override = create_section_override_for_assignment(copied_normal_assmt)
+
+      new_title = "new master title"
+      topic.update_attribute(:title, new_title)
+      normal_assmt.update_attribute(:title, new_title)
+      [topic, normal_assmt].each {|c| c.class.where(:id => c).update_all(:updated_at => 2.seconds.from_now)} # ensure it gets copied
+
+      run_master_migration
+
+      expect(copied_topic_assmt.reload.title).to eq new_title
+      expect(copied_normal_assmt.reload.title).to eq new_title
+      [topic_override, normal_override].each { |ao| expect(ao.reload).to be_active } # leave the overrides alone
+
+      [topic, normal_assmt].each do |c|
+        Timecop.freeze(3.seconds.from_now) do
+          @template.content_tag_for(c).update_attributes(:restrictions => {:content => true, :availability_dates => true}) # tightening the restrictions should touch it by default
+        end
+      end
+
+      run_master_migration
+
+      [topic_override, normal_override].each { |ao| expect(ao.reload).to be_deleted }
     end
 
     context "master courses + external migrations" do

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2016 Instructure, Inc.
+# Copyright (C) 2015 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -19,12 +19,13 @@
 require_relative './common'
 require_relative './helpers/gradebook_common'
 
-describe "interaction with multiple grading periods" do
+describe "interaction with grading periods" do
   include_context "in-process server selenium tests"
   include GradebookCommon
 
   let(:group_helper) { Factories::GradingPeriodGroupHelper.new }
   let(:get_gradebook) { get "/courses/#{@course.id}/gradebook" }
+  let(:now) { Time.zone.now }
 
   context "gradebook" do
     before :once do
@@ -56,7 +57,7 @@ describe "interaction with multiple grading periods" do
       expect(f('.grading-period-select-button')).to include_text(current_period.title)
     end
 
-    context "using multiple grading period dropdown" do
+    context "using grading period dropdown" do
       it 'should display current grading period on load', test_id: 2528634, priority: "2" do
         get_gradebook
         element = ff('.slick-header-column a').select { |a| a.text == 'assignment three' }
@@ -89,21 +90,17 @@ describe "interaction with multiple grading periods" do
   context 'grading schemes' do
     let(:account) { Account.default }
     let(:admin) { account_admin_user(:account => account) }
-    let!(:enable_mgp_flag) { account.enable_feature!(:multiple_grading_periods) }
     let(:test_course) { account.courses.create!(name: 'New Course') }
 
-    it 'is still editable with grading periods flag turned on and disable ' \
-      'adding during edit mode', priority: "1", test_id: 545585 do
+    it 'should disable adding during edit mode on course page', priority: "1", test_id: 545585 do
       user_session(admin)
       get "/courses/#{test_course.id}/grading_standards"
-      f('#react_grading_tabs a[href="#grading-standards-tab"]').click
       f('button.add_standard_button').click
       expect(f('input.scheme_name')).not_to be_nil
       expect(f('button.add_standard_button')).to have_class('disabled')
     end
 
-    it 'is still editable with grading periods flag turned on and disable ' \
-      'adding during edit mode', priority: "1" do
+    it 'should disable adding during edit mode on account page', priority: "1" do
       user_session(admin)
       get "/accounts/#{account.id}/grading_standards"
       f('#react_grading_tabs a[href="#grading-standards-tab"]').click
@@ -116,36 +113,41 @@ describe "interaction with multiple grading periods" do
       let(:account) { Account.default }
       let(:teacher) { user_factory(active_all: true) }
       let!(:enroll_teacher) { test_course.enroll_user(teacher, 'TeacherEnrollment', enrollment_state: 'active') }
-      let!(:enable_mgp_flag) { account.enable_feature!(:multiple_grading_periods) }
-      let!(:enable_course_mgp_flag) { test_course.enable_feature!(:multiple_grading_periods) }
       let!(:grading_period_group) { group_helper.legacy_create_for_course(test_course) }
       let!(:course_grading_period_current) do
         grading_period_group.grading_periods.create!(
           title: 'Course Grading Period 1',
-          start_date: Time.zone.now,
-          end_date: 4.weeks.from_now
+          start_date: 1.day.ago(now),
+          end_date: 4.weeks.from_now(now)
         )
       end
       let!(:course_grading_period_past) do
         grading_period_group.grading_periods.create!(
           title: 'Course Grading Period 2',
-          start_date: 4.weeks.ago,
-          end_date: 1.day.ago
+          start_date: 4.weeks.ago(now),
+          end_date: 1.day.ago(now)
         )
       end
-      let!(:assignment) { test_course.assignments.create!(title: 'Assignment 1', due_at: 1.day.ago, points_possible: 10) }
+      let!(:assignment) do
+        test_course.assignments.create!(
+          title: 'Assignment 1',
+          due_at: 1.day.ago(now),
+          points_possible: 10,
+          workflow_state: 'published'
+        )
+      end
 
       it 'should list an assignment from a previous grading period', priority: "2", test_course: 381145 do
         user_session(teacher)
         get "/courses/#{test_course.id}/assignments"
-        expect(fj("#assignment_#{assignment.id} a.ig-title")).to include_text('Assignment 1')
+        expect(f("#assignment_#{assignment.id} a.ig-title")).to include_text('Assignment 1')
       end
 
       it 'should list an assignment from a current grading period when due date is updated', priority: "2", test_course: 576764 do
-        assignment.update_attributes(due_at: 3.days.from_now)
+        assignment.update_attributes(due_at: 3.days.from_now(now))
         user_session(teacher)
         get "/courses/#{test_course.id}/assignments"
-        expect(fj("#assignment_#{assignment.id} a.ig-title")).to include_text('Assignment 1')
+        expect(f("#assignment_#{assignment.id} a.ig-title")).to include_text('Assignment 1')
       end
     end
   end
@@ -157,25 +159,23 @@ describe "interaction with multiple grading periods" do
     let(:teacher) { user_factory(active_all: true) }
     let!(:enroll_teacher) { test_course.enroll_teacher(teacher) }
     let!(:enroll_student) { test_course.enroll_user(student, 'StudentEnrollment', enrollment_state: 'active') }
-    let!(:enable_mgp_flag) { account.enable_feature!(:multiple_grading_periods) }
-    let!(:enable_course_mgp_flag) { test_course.enable_feature!(:multiple_grading_periods) }
     let!(:grading_period_group) { group_helper.legacy_create_for_course(test_course) }
     let!(:course_grading_period_1) do
       grading_period_group.grading_periods.create!(
         title: 'Course Grading Period 1',
-        start_date: Time.zone.now,
-        end_date: 3.weeks.from_now
+        start_date: 1.day.ago(now),
+        end_date: 3.weeks.from_now(now)
       )
     end
     let!(:course_grading_period_2) do
       grading_period_group.grading_periods.create!(
         title: 'Course Grading Period 2',
-        start_date: 4.weeks.from_now,
-        end_date: 7.weeks.from_now
+        start_date: 4.weeks.from_now(now),
+        end_date: 7.weeks.from_now(now)
       )
     end
-    let!(:assignment1) { test_course.assignments.create!(title: 'Assignment 1', due_at: 3.days.from_now, points_possible: 10) }
-    let!(:assignment2) { test_course.assignments.create!(title: 'Assignment 2', due_at: 6.weeks.from_now, points_possible: 10) }
+    let!(:assignment1) { test_course.assignments.create!(title: 'Assignment 1', due_at: 3.days.from_now(now), points_possible: 10) }
+    let!(:assignment2) { test_course.assignments.create!(title: 'Assignment 2', due_at: 6.weeks.from_now(now), points_possible: 10) }
     let!(:grade_assignment1) { assignment1.grade_student(student, grade: 8, grader: teacher) }
 
     before(:each) do
@@ -194,7 +194,7 @@ describe "interaction with multiple grading periods" do
       expect(fj("#submission_#{assignment2.id} th a")).to include_text('Assignment 2')
     end
 
-    it 'should update assignments when a different period is selected in grades page', priority: "1", test_id: 571756 do
+    it 'should update assignments when a all periods are selected in grades page', priority: "1", test_id: 571756 do
       fj(".grading_periods_selector option:nth-child(1)").click
       expect(fj("#submission_#{assignment1.id} th a")).to include_text('Assignment 1')
       expect(fj("#submission_#{assignment2.id} th a")).to include_text('Assignment 2')

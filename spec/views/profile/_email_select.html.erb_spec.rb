@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -24,7 +24,7 @@ describe "/profile/_email_select" do
     course_with_student
     view_context
     cc = @user.communication_channels.create!(:path => 'user@example.com')
-    assigns[:email_channels] = [cc]
+    assign(:email_channels, [cc])
 
     render :partial => "profile/email_select", :object => cc
     expect(response).not_to be_nil

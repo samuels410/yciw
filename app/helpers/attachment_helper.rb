@@ -1,19 +1,19 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
-# Canvas is free software: you can redistribute it and/or modify it under the
-# terms of the GNU Affero General Public License as published by the Free
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
 # Software Foundation, version 3 of the License.
 #
 # Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
-# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-# FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
 # details.
 #
-# You should have received a copy of the GNU Affero General Public License
-# along with this program. If not, see <http://www.gnu.org/licenses/>.
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
 module AttachmentHelper
@@ -56,4 +56,40 @@ module AttachmentHelper
       crocodoc_session_url: attachment.crocodoc_url(@current_user),
     }
   end
+
+  def render_or_redirect_to_stored_file(attachment:, verifier: nil, inline: false, redirect_to_s3: false)
+    set_cache_header(attachment)
+    if safer_domain_available?
+      redirect_to safe_domain_file_url(attachment, @safer_domain_host, verifier, !inline)
+    elsif Attachment.local_storage?
+      @headers = false if @files_domain
+      send_file(attachment.full_filename, :type => attachment.content_type_with_encoding, :disposition => (inline ? 'inline' : 'attachment'), :filename => attachment.display_name)
+    elsif redirect_to_s3
+      redirect_to(inline ? attachment.inline_url : attachment.download_url)
+    else
+      send_file_headers!( :length=> attachment.s3object.content_length, :filename=>attachment.filename, :disposition => 'inline', :type => attachment.content_type_with_encoding)
+      render :status => 200, :text => attachment.s3object.get.body.read
+    end
+  end
+
+  # checks if for the current root account there's a 'files' domain
+  # defined and tried to use that.  This way any files that we stream through
+  # a canvas URL are at least on a separate subdomain and the javascript
+  # won't be able to access or update data with AJAX requests.
+  def safer_domain_available?
+    if !@files_domain && request.host_with_port != HostUrl.file_host(@domain_root_account, request.host_with_port)
+      @safer_domain_host = HostUrl.file_host_with_shard(@domain_root_account, request.host_with_port)
+    end
+    !!@safer_domain_host
+  end
+
+  def set_cache_header(attachment)
+    unless attachment.content_type.match(/\Atext/) || attachment.extension == '.html' || attachment.extension == '.htm'
+      cancel_cache_buster
+      #set cache to expoire in 1 day, max-age take seconds, and Expires takes a date
+      response.headers["Cache-Control"] = "private, max-age=86400"
+      response.headers["Expires"] = 1.day.from_now.httpdate
+    end
+  end
+
 end

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -99,14 +99,14 @@ describe DiscussionEntriesController do
       assignment_model(:course => @course)
       @topic.assignment = @assignment
       @topic.save
-      expect(@student.submissions).to be_empty
+      expect(@student.submissions.not_placeholder).to be_empty
 
       post 'create', :course_id => @course.id, :discussion_entry => {:discussion_topic_id => @topic.id, :message => "yo"}
       expect(response).to be_redirect
 
       @student.reload
-      expect(@student.submissions.size).to eq 1
-      expect(@student.submissions.first.submission_type).to eq 'discussion_topic'
+      expect(@student.submissions.not_placeholder.size).to eq 1
+      expect(@student.submissions.not_placeholder.first.submission_type).to eq 'discussion_topic'
     end
   end
   
@@ -133,7 +133,7 @@ describe DiscussionEntriesController do
       expect(assigns[:entry].attachment).not_to be_nil
     end
     
-    it "should replace the file to the entry" do
+    it "should replace the file on the entry" do
       user_session(@teacher)
       @a = @course.attachments.create!(:uploaded_data => default_uploaded_data)
       @entry.attachment = @a
@@ -146,7 +146,7 @@ describe DiscussionEntriesController do
       expect(assigns[:entry].attachment).not_to eql(@a)
     end
     
-    it "should replace the file to the entry" do
+    it "should remove the file from the entry" do
       user_session(@teacher)
       @a = @course.attachments.create!(:uploaded_data => default_uploaded_data)
       @entry.attachment = @a

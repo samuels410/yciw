@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'jsx/shared/rce/Sidebar',
   'jsx/shared/rce/serviceRCELoader',
@@ -6,7 +23,7 @@ define [
   'helpers/editorUtils'
 ], (Sidebar, RCELoader, wikiSidebar, fakeENV, editorUtils) ->
 
-  module 'Sidebar - init',
+  QUnit.module 'Sidebar - init',
     setup: ->
       # in case other specs left it not fresh
       editorUtils.resetRCE()
@@ -27,10 +44,10 @@ define [
   test 'loads remote sidebar when feature flag on', ->
     ENV.RICH_CONTENT_SERVICE_ENABLED = true
     remoteSidebar = {is_a: 'remote_sidebar'}
-    sinon.stub(RCELoader, "loadSidebarOnTarget").callsArgWith(1, remoteSidebar)
+    @stub(RCELoader, "loadSidebarOnTarget").callsArgWith(1, remoteSidebar)
+    Sidebar.pendingShow = false
     Sidebar.init()
     equal Sidebar.instance, remoteSidebar
-    RCELoader.loadSidebarOnTarget.restore()
 
   test 'repeated calls only init instance once', ->
     ENV.RICH_CONTENT_SERVICE_ENABLED = false
@@ -41,7 +58,7 @@ define [
     ok wikiSidebar.init.calledOnce
     wikiSidebar.init.restore()
 
-  module 'Sidebar - show',
+  QUnit.module 'Sidebar - show',
     setup: ->
       fakeENV.setup()
       ENV.RICH_CONTENT_SERVICE_ENABLED = false
@@ -78,7 +95,7 @@ define [
     ok cb1.notCalled
     ok cb2.called
 
-  module 'Sidebar - hide',
+  QUnit.module 'Sidebar - hide',
     setup: ->
       fakeENV.setup()
       ENV.RICH_CONTENT_SERVICE_ENABLED = false

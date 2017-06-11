@@ -1,24 +1,43 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
+  'jquery'
   'ember'
   'timezone'
   '../start_app'
   '../shared_ajax_fixtures'
-  'helpers/fakeENV'
-], (Ember, tz, startApp, fixtures, fakeENV) ->
+], ($, Ember, tz, startApp, fixtures) ->
 
   {run} = Ember
 
   setType = null
 
-  module 'grading_cell',
+  QUnit.module 'grading_cell',
     setup: ->
-      fakeENV.setup()
+      window.ENV = {}
       fixtures.create()
       App = startApp()
       @component = App.GradingCellComponent.create()
 
-      ENV.GRADEBOOK_OPTIONS.multiple_grading_periods_enabled = true
-      ENV.GRADEBOOK_OPTIONS.latest_end_date_of_admin_created_grading_periods_in_the_past = "2013-10-01T10:00:00Z"
+      ENV.GRADEBOOK_OPTIONS.grading_period_set =
+        id: '1'
+        weighted: false
+        display_totals_for_all_grading_periods: false
       ENV.current_user_roles = []
 
       setType = (type) =>
@@ -44,7 +63,7 @@ define [
       run =>
         @component.destroy()
         App.destroy()
-        fakeENV.teardown()
+        window.ENV = {}
 
   test "setting value on init", ->
     component = App.GradingCellComponent.create()

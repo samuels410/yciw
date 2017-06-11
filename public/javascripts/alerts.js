@@ -1,5 +1,5 @@
-/**
- * Copyright (C) 2011 Instructure, Inc.
+/*
+ * Copyright (C) 2011 - present Instructure, Inc.
  *
  * This file is part of Canvas.
  *
@@ -12,8 +12,8 @@
  * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
  * details.
  *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 define([
@@ -76,7 +76,7 @@ define([
 
     // xsslint jqueryObject.function createRecipient createCriterion
     var createRecipient = function(recipient, element) {
-      $element = createElement(recipient, element, 'label', ENV.ALERTS.POSSIBLE_RECIPIENTS);
+      var $element = createElement(recipient, element, 'label', ENV.ALERTS.POSSIBLE_RECIPIENTS);
       if(element == 'li') {
         $element.prepend($("<input type='hidden' name='alert[recipients][]' />").attr('value', recipient));
       }
@@ -90,7 +90,7 @@ define([
         threshold = criterion.threshold;
         id = criterion.id;
       }
-      $element = createElement(criterion_type, element, element == 'li' ? 'label' : 'option', ENV.ALERTS.POSSIBLE_CRITERIA)
+      var $element = createElement(criterion_type, element, element == 'li' ? 'label' : 'option', ENV.ALERTS.POSSIBLE_CRITERIA)
       if (element == 'li') {
         if (!threshold) {
           threshold = ENV.ALERTS.POSSIBLE_CRITERIA[criterion_type].default_threshold;

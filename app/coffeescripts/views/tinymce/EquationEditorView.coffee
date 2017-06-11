@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'i18n!editor'
   'jquery'
@@ -38,7 +55,10 @@ define [
 
         # Get alt attributes from IMG nodes
         else if elem.nodeName is 'IMG' && elem.className is 'equation_image'
-          elem.alt
+          if elem.dataset.equationContent
+            elem.dataset.equationContent
+          else
+            elem.alt
 
         # Traverse everything else, except comment nodes
         else if elem.nodeType isnt 8
@@ -173,12 +193,14 @@ define [
       event.preventDefault()
 
       text = @getEquation()
+      altText = "LaTeX: #{ text }"
       url = "/equation_images/#{ encodeURIComponent escape text }"
       $img = $(document.createElement('img')).attr
         src: url
-        alt: text
+        alt: altText
         title: text
         class: 'equation_image'
+        'data-equation-content': text
       $div = $(document.createElement('div')).append($img)
 
       @restoreCaret()

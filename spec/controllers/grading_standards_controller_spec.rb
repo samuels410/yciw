@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015 Instructure, Inc.
+# Copyright (C) 2015 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -48,6 +48,8 @@ describe GradingStandardsController do
         title: 'New Grading Standard!',
         data: [['A', 0.61], ['F', 0.00]]
       }
+      # send the request as JSON, so that the nested arrays are preserved
+      request.content_type = 'application/json' unless CANVAS_RAILS4_2
       post 'create', course_id: @course.id, grading_standard: standard, format: 'json'
       expect(json_response).to eq(standard[:data])
     end

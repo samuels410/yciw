@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2014 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -80,7 +80,7 @@ module CanvasSanitize #:nodoc:
           'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8',
           'del', 'ins', 'iframe', 'font',
           'colgroup', 'dd', 'div', 'dl', 'dt', 'em', 'figure', 'figcaption', 'i', 'img', 'li', 'ol', 'p', 'pre',
-          'q', 'small', 'source', 'span', 'strike', 'strong', 'sub', 'sup', 'table', 'tbody', 'td',
+          'q', 'small', 'source', 'span', 'strike', 'strong', 'sub', 'sup', 'abbr', 'table', 'tbody', 'td',
           'tfoot', 'th', 'thead', 'tr', 'u', 'ul', 'object', 'embed', 'param', 'video', 'track', 'audio',
           # MathML
           'annotation', 'annotation-xml', 'maction', 'maligngroup', 'malignmark', 'math',
@@ -156,7 +156,7 @@ module CanvasSanitize #:nodoc:
           'source' => ['src', 'type'].freeze,
           'embed' => ['name', 'src', 'type', 'allowfullscreen', 'pluginspage', 'wmode',
                       'allowscriptaccess', 'width', 'height'].freeze,
-          'video' => ['name', 'src', 'allowfullscreen', 'muted', 'poster', 'width', 'height', 'controls'].freeze,
+          'video' => ['name', 'src', 'allowfullscreen', 'muted', 'poster', 'width', 'height', 'controls', 'playsinline'].freeze,
           'track' => ['default', 'kind', 'label', 'src', 'srclang'].freeze,
           'audio' => ['name', 'src', 'muted'].freeze,
           'font' => ['face', 'color', 'size'].freeze,

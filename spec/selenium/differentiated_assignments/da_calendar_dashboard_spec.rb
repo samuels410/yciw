@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2014 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/../helpers/assignments_common')
 require File.expand_path(File.dirname(__FILE__) + '/../helpers/differentiated_assignments')
 
@@ -27,7 +44,8 @@ describe "interaction with differentiated assignments on the dashboard and calen
       it "should not show inaccessible assignments in Recent activity" do
         create_section_override_for_assignment(@da_assignment, course_section: @section1)
         get "/"
-        f('#dashboardToggleButton').click
+        f('#DashboardOptionsMenu_Container button').click
+        fj('span[role="menuitemradio"]:contains("Recent Activity")').click
         expect(f("#not_right_side .no_recent_messages")).to include_text("No Recent Messages")
       end
     end
@@ -91,7 +109,8 @@ describe "interaction with differentiated assignments on the dashboard and calen
       it "should not show inaccessible assignments in Recent activity" do
         create_section_override_for_assignment(@da_assignment, course_section: @section1)
         get "/"
-        f('#dashboardToggleButton').click
+        f('#DashboardOptionsMenu_Container button').click
+        fj('span[role="menuitemradio"]:contains("Recent Activity")').click
         expect(f("#not_right_side .no_recent_messages")).to include_text("No Recent Messages")
       end
     end

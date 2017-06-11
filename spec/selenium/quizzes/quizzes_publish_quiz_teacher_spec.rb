@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require_relative '../common'
 require_relative '../helpers/quizzes_common'
 
@@ -14,14 +31,18 @@ describe 'publishing a quiz' do
     end
 
     context 'when on the quiz show page' do
-      before(:each) do
+      it 'publishes a quiz' do
         get "/courses/#{@course.id}/quizzes/#{@quiz.id}"
+        expect_new_page_load { f('#quiz-publish-link').click }
+        expect { @quiz.reload.workflow_state }.to become('available')
       end
 
-      context 'after the ajax calls finish' do
+      context 'after the quiz is published' do
         before(:each) do
+          @quiz.workflow_state = 'available'
+          @quiz.save!
+          get "/courses/#{@course.id}/quizzes/#{@quiz.id}"
           wait_for_quiz_publish_button_to_populate
-          f('#quiz-publish-link').click
         end
 
         it 'changes the button\'s text to \'Published\'', priority: "1", test_id: 140649 do
@@ -46,17 +67,12 @@ describe 'publishing a quiz' do
         end
 
         it 'displays both |Preview| buttons', priority: "1", test_id: 398939 do
-          expect(ff('#preview_quiz_button').count).to eq 2
+          expect(ff('#preview_quiz_button')).to have_size 2
         end
 
         context 'when clicking the cog menu tool' do
-          before(:each) do
-            wait_for_ajaximations
-            f('.header-group-right a.al-trigger').click
-            wait_for_ajaximations
-          end
-
           it 'shows updated options', priority: "1", test_id: 398940 do
+            f('.header-group-right a.al-trigger').click
             items = ff('ul#toolbar-1 li.ui-menu-item')
             items_text = []
             items.each { |i| items_text << i.text.split("\n")[0] }

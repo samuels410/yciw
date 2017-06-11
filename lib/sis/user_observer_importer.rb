@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016 Instructure, Inc.
+# Copyright (C) 2016 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -32,7 +32,7 @@ module SIS
       end
 
       importer.user_observers_to_update_sis_batch_ids.in_groups_of(1000, false) do |batch|
-        UserObserver.where(id: batch).update_all(sis_batch_id: @batch)
+        UserObserver.where(id: batch).update_all(sis_batch_id: @batch.id)
       end if @batch
 
       User.update_account_associations(importer.users_to_update_account_associations.to_a)

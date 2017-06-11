@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 - 2014 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -162,8 +162,8 @@
 #     }
 #
 class AccountReportsController < ApplicationController
-  before_filter :require_user
-  before_filter :get_context
+  before_action :require_user
+  before_action :get_context
 
   include Api::V1::Account
   include Api::V1::AccountReport
@@ -206,7 +206,7 @@ class AccountReportsController < ApplicationController
       results = []
 
       available_reports.each do |key, value|
-        last_run = @account.account_reports.where(:report_type => key).order('created_at DESC').first
+        last_run = @account.account_reports.active.where(:report_type => key).order('created_at DESC').first
         last_run = account_report_json(last_run, @current_user, session) if last_run
         report = {
           :title => value.title,
@@ -268,7 +268,7 @@ class AccountReportsController < ApplicationController
   def index
     if authorized_action(@context, @current_user, :read_reports)
 
-      reports = Api.paginate(type_scope.order('id DESC'), self, url_for({:action => :index, :controller => :account_reports}))
+      reports = Api.paginate(type_scope.active.order('id DESC'), self, url_for({action: :index, controller: :account_reports}))
 
       render :json => account_reports_json(reports, @current_user, session)
     end
@@ -286,7 +286,7 @@ class AccountReportsController < ApplicationController
   def show
     if authorized_action(@context, @current_user, :read_reports)
 
-      report = type_scope.find(params[:id])
+      report = type_scope.active.find(params[:id])
       render :json => account_report_json(report, @current_user, session)
     end
   end
@@ -303,7 +303,7 @@ class AccountReportsController < ApplicationController
 #
   def destroy
     if authorized_action(@context, @current_user, :read_reports)
-      report = type_scope.find(params[:id])
+      report = type_scope.active.find(params[:id])
 
       report.destroy
       if report.destroy

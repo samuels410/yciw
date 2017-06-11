@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path(File.dirname(__FILE__) + '/../common')
 
 module WikiAndTinyCommon
@@ -114,16 +131,13 @@ module WikiAndTinyCommon
 
   def activate_editor_embed_image(el)
     el.find_element(:css, "div[aria-label='Embed Image'] button").click
-    ff('.ui-dialog').reverse.detect(&:displayed?)
+    fj('.ui-dialog:visible')
   end
 
   def add_canvas_image(el, folder, filename)
     dialog = activate_editor_embed_image(el)
-    scroll_into_view('a[href="#tabUploaded"]')
-    f('a[href="#tabUploaded"]', dialog).click
-    expect(f('.treeLabel', dialog)).to be_displayed
-    folder_el = ff('.treeLabel', dialog).detect { |e| e.text == folder }
-    expect(folder_el).not_to be_nil
+    fj('a[href="#tabUploaded"]:visible').click
+    folder_el = fj(".treeLabel:contains(#{folder.inspect})")
     folder_el.click unless folder_el['class'].split.include?('expanded')
     expect(f('.treeFile', dialog)).to be_displayed
     file_el = f(".treeFile[title=\"#{filename}\"]", dialog)

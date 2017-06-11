@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2014 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -27,7 +27,7 @@ describe DataFixup::PopulateGroupCategoryOnDiscussionTopics do
 
     assignment1 = course_factory.assignments.create!(:submission_types => 'discussion_topic', :title => 'a1')
     # bypass validation
-    Assignment.where(id: assignment1).update_all(group_category_id: group_category)
+    Assignment.where(id: assignment1).update_all(group_category_id: group_category.id)
     assignment1.reload
     topic1 = @course.discussion_topics.create!(:title => "topic 1")
     topic1.assignment = assignment1

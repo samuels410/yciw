@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -28,9 +28,12 @@ class DeveloperKey < ActiveRecord::Base
   has_many :page_views
   has_many :access_tokens
 
+  has_one :tool_consumer_profile, :class_name => 'Lti::ToolConsumerProfile'
+
   before_create :generate_api_key
   before_create :set_auto_expire_tokens
   before_save :nullify_empty_icon_url
+  before_save :protect_default_key
   after_save :clear_cache
 
   validates_as_url :redirect_uri, allowed_schemes: nil
@@ -68,6 +71,10 @@ class DeveloperKey < ActiveRecord::Base
     errors.add :redirect_uris, 'is not a valid URI'
   end
 
+  def protect_default_key
+    raise "Please never delete the default developer key" if workflow_state != 'active' && self == self.class.default
+  end
+
   alias_method :destroy_permanently!, :destroy
   def destroy
     self.workflow_state = 'deleted'
@@ -97,6 +104,10 @@ class DeveloperKey < ActiveRecord::Base
 
   def account_name
     account.try(:name)
+  end
+
+  def last_used_at
+    self.access_tokens.maximum(:last_used_at)
   end
 
   class << self

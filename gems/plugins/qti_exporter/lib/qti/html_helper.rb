@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require 'nokogiri'
 require 'sanitize'
 
@@ -108,8 +125,12 @@ module Qti
       is_html = (html_node && @flavor == Qti::Flavors::CANVAS) ? true : false
       # heuristic for detecting html: the sanitized html node is more than just a container for a single text node
       sanitized = sanitize_html!(html_node ? Nokogiri::HTML::DocumentFragment.parse(node.text) : node, true) { |s| is_html ||= !(s.children.size == 1 && s.children.first.is_a?(Nokogiri::XML::Text)) }
-      if is_html && sanitized.present?
-        html = sanitized
+      if sanitized.present?
+        if is_html
+          html = sanitized
+        else
+          text = sanitized.gsub(/\s+/, " ").strip
+        end
       end
       [text, html]
     end

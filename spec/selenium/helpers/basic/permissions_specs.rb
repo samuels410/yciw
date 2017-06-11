@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 shared_examples_for "permission tests" do
   include_context "in-process server selenium tests"
 
@@ -32,10 +49,6 @@ shared_examples_for "permission tests" do
 
   def select_default(permission_name, role)
     select_permission_option(permission_name, role, 4) # 3 is Disabled and locked
-  end
-
-  def select_default_and_lock(permission_name, role)
-    select_permission_option(permission_name, role, 5) # 3 is Disabled and locked
   end
 
   def add_new_account_role(role_name)
@@ -229,16 +242,6 @@ shared_examples_for "permission tests" do
           expect(role_override.nil?).to be_truthy
         end
       end
-
-      it "sets a permission to default and locked" do
-        select_default_and_lock(permission_name, role)
-
-        keep_trying_until do
-          role_override = RoleOverride.where(:role_id => role.id).first
-          expect(role_override.enabled).to eq true
-          expect(role_override.locked).to eq true
-        end
-      end
     end
 
     context "when managing course roles" do
@@ -304,16 +307,6 @@ shared_examples_for "permission tests" do
         keep_trying_until do
           role_override = RoleOverride.where(:role_id => role.id).first
           expect(role_override.nil?).to be_truthy
-        end
-      end
-
-      it "sets a permission to default and locked" do
-        select_default_and_lock(permission_name, role)
-
-        keep_trying_until do
-          role_override = RoleOverride.where(:role_id => role.id).first
-          expect(role_override.enabled).to eq true
-          expect(role_override.locked).to eq true
         end
       end
 

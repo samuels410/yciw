@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016-2017 Instructure, Inc.
+# Copyright (C) 2016 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -38,12 +38,30 @@ class MustViewModuleProgressor
     end
   end
 
+  def current_progress
+    progress = {}
+    modules.each do |mod|
+      progress[mod.id] =
+        if (progression = mod.find_or_create_progression(user)&.evaluate)
+          { status: progression.workflow_state }
+        elsif mod.grants_right?(user, :read)
+          { status: 'unlocked' }
+        else
+          { status: 'locked' }
+        end
+      progress[mod.id][:items] = items_current_progress(mod, progression)
+    end
+    progress
+  end
+
   private
 
   def always_skippable?(item)
     return true unless item.visible_to_user?(user)
 
     progression = item.context_module.find_or_create_progression(user)
+    # unenrolled users don't have progressions and can always skip
+    return true if progression.nil?
     return true if progression.finished_item?(item)
 
     content = item.content
@@ -81,6 +99,14 @@ class MustViewModuleProgressor
 
   def progress_item(item)
     item.context_module_action(user, :read)
+  end
+
+  def items_current_progress(mod, progression)
+    progress = {}
+    mod.content_tags.each do |item|
+      progress[item.id] = (progression&.finished_item?(item) || false)
+    end
+    progress
   end
 
 end

@@ -1,8 +1,26 @@
+/*
+ * Copyright (C) 2013 - present Instructure, Inc.
+ *
+ * This file is part of Canvas.
+ *
+ * Canvas is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, version 3 of the License.
+ *
+ * Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 define([
   "jquery",
   "underscore",
   "require",
-  "vendor/timezone",
+  "timezone/index",
   "i18nObj",
   "moment",
   "moment_formats"
@@ -10,7 +28,7 @@ define([
   // start with the bare vendor-provided tz() function
   var currentLocale = "en_US" // default to US locale
   var momentLocale = "en"
-  var _preloadedData = {};
+  var _preloadedData = window.__PRELOADED_TIMEZONE_DATA__ || (window.__PRELOADED_TIMEZONE_DATA__ = {});
 
   // wrap it up in a set of methods that will always call the most up-to-date
   // version. each method is intended to act as a subset of bigeasy's generic
@@ -131,6 +149,22 @@ define([
       var datetime = tz.parse(value);
       if (datetime == null) return null;
 
+      format = tz.adjustFormat(format);
+
+      // try and apply the format string to the datetime. if it succeeds, we'll
+      // get a string; otherwise we'll get the (non-string) date back.
+      var formatted = null;
+      if (usingOtherZone){
+        formatted = localTz(datetime, format, otherZone);
+      } else {
+        formatted = localTz(datetime, format);
+      }
+
+      if (typeof formatted !== 'string') return null;
+      return formatted;
+    },
+
+    adjustFormat: function(format) {
       // translate recognized 'date.formats.*' and 'time.formats.*' to
       // appropriate format strings according to locale.
       if (format.match(/^(date|time)\.formats\./)) {
@@ -170,17 +204,7 @@ define([
       }
       format = format.split("").reverse().join("");
 
-      // try and apply the format string to the datetime. if it succeeds, we'll
-      // get a string; otherwise we'll get the (non-string) date back.
-      var formatted = null;
-      if (usingOtherZone){
-        formatted = localTz(datetime, format, otherZone);
-      } else {
-        formatted = localTz(datetime, format);
-      }
-
-      if (typeof formatted !== 'string') return null;
-      return formatted;
+      return format;
     },
 
     hasMeridian: function() {
@@ -273,18 +297,11 @@ define([
       } else if (_preloadedData[name]) {
         return _preloadedData[name];
       } else {
-        return new Promise(function(resolve, reject){
-          if (window.USE_WEBPACK && process.env.NODE_ENV !== 'test') {
-            return reject(
-              new Error('In webpack, loading timezones on-demand is not supported unless in test mode. "' +
-                        name + '" should already be script tagged onto the page from Rails.')
-            )
-          } else {
-            require(['vendor/timezone/' + name], function (data){
-              _preloadedData[name] = data;
-              resolve(data);
-            });
-          }
+        return new Promise(function (resolve, reject) {
+          return reject(new Error(
+            'In webpack, loading timezones on-demand is not supported. ' +
+            name + '" should already be script-tagged onto the page from Rails.'
+          ))
         });
       }
     },

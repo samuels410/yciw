@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -97,7 +97,7 @@ class ExternalContentController < ApplicationController
       @return_url = nil unless uri.is_a?(URI::HTTP)
     end
     if @return_url.blank?
-      render :nothing => true, :status => 400
+      head :bad_request
     end
     @headers = false
   end

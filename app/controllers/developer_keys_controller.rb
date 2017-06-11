@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -17,8 +17,8 @@
 #
 
 class DeveloperKeysController < ApplicationController
-  before_filter :set_key, only: [:update, :destroy ]
-  before_filter :require_manage_developer_keys
+  before_action :set_key, only: [:update, :destroy ]
+  before_action :require_manage_developer_keys
 
   include Api::V1::DeveloperKey
 
@@ -88,6 +88,6 @@ class DeveloperKeysController < ApplicationController
   end
 
   def developer_key_params
-    params.require(:developer_key).permit(:api_key, :name, :icon_url, :redirect_uri, :redirect_uris, :email, :auto_expire_tokens)
+    params.require(:developer_key).permit(:api_key, :name, :icon_url, :redirect_uri, :redirect_uris, :email, :auto_expire_tokens, :notes, :access_token_count)
   end
 end

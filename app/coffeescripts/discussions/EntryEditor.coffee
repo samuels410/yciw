@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'i18n!editor'
   'jquery'
@@ -27,6 +44,7 @@ define [
       super @getEditingElement(),
         switchViews: true
       @cancelButton = @createCancelButton()
+      @$delAttachmentButton = @createDeleteAttachmentButton()
       @done.addClass 'btn-small'
 
     ##
@@ -37,28 +55,59 @@ define [
     display: (opts) ->
       super opts
       @cancelButton.detach()
+      @$delAttachmentButton.detach()
       if opts?.cancel isnt true
+        if @remove_attachment
+          @view.model.set('attachments', null)
+          @view.model.set('attachment', null)
+
         @view.model.set('updated_at', (new Date).toISOString())
         @view.model.set('editor', ENV.current_user)
+
         @view.model.save
-          messageNotification: I18n.t('saving', 'Saving...')
+          messageNotification: I18n.t('Saving...')
           message: @content
         ,
           success: @onSaveSuccess
           error: @onSaveError
+      else
+        @getAttachmentElement().show()  # may have been hidden if user deleted attachment then cancelled
 
     createCancelButton: ->
       $('<a/>')
-        .text(I18n.t('cancel', 'Cancel'))
+        .text(I18n.t('Cancel'))
         .css(marginLeft: '5px')
         .attr('href', 'javascript:')
         .addClass('cancel_button')
         .click => @display cancel: true
 
+    createDeleteAttachmentButton: ->
+      $('<a/>')
+        .attr('href', 'javascript:')
+        .text('x')
+        .addClass('cancel_button')
+        .attr('aria-label', I18n.t('Remove Attachment'))
+        # fontSize copied from discussions_edit so it looks like the main topic
+        .css(
+          float: 'none'
+          marginLeft: '.5em'
+          fontSize: '20px'
+          fontSize: '1.25rem'
+        )
+        .click => @delAttachment()
+
     edit: ->
       @editingElement(@getEditingElement())
       super
       @cancelButton.insertAfter @done
+      @getAttachmentElement().append(@$delAttachmentButton)
+
+    ##
+    # sets a flag telling us to remove the entry's attachment
+    # then hides the attachment's UI bits. We do this in lieu of removing
+    delAttachment: ->
+      @remove_attachment = true
+      @getAttachmentElement().hide()
 
     ##
     # Get the jQueryEl element on the discussion entry to edit.
@@ -66,6 +115,13 @@ define [
     # @api private
     getEditingElement: ->
       @view.$('.message:first')
+
+    ##
+    # Get the jQuery element on the attachment as shown in the entry
+    #
+    # @api private
+    getAttachmentElement: ->
+      @view.$('article:first .comment_attachments > div')
 
     ##
     # Overrides EditorToggle::getContent to get the content from the model
@@ -82,6 +138,7 @@ define [
     # @api private
     onSaveSuccess: =>
       @view.model.set 'messageNotification', ''
+      @view.render()
 
     ##
     # Called when the model fails to save, provides user feedback
@@ -89,5 +146,5 @@ define [
     # @api private
     onSaveError: =>
       @view.model.set
-        messageNotification: I18n.t('save_failed', 'Failed to save, please try again later')
+        messageNotification: I18n.t('Failed to save, please try again later')
       @edit()

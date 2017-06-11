@@ -1,9 +1,26 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'underscore'
   'i18n!outcomes'
+  'jsx/shared/helpers/numberFormat'
   'compiled/underscore-ext/sum'
-], (_, I18n) ->
-
+], (_, I18n, numberFormat) ->
   class DecayingAverage
     constructor: (@weight, @range) ->
       @rest = @range[..-2]
@@ -65,13 +82,13 @@ define [
         calculationIntLabel: I18n.t("Last Item: ")
         calculationIntDescription: I18n.t('Between 1% and 99%')
         exampleText: I18n.t(
-          "Most recent result counts as %{calculation_int}% of mastery weight, average of all other results count as %{remainder}% of weight. If there is only one result, the single score will be returned.", {
-            calculation_int: @calculation_int
-            remainder: 100 - @calculation_int
+          "Most recent result counts as %{calculation_int} of mastery weight, average of all other results count as %{remainder} of weight. If there is only one result, the single score will be returned.", {
+            calculation_int: I18n.n(@calculation_int, { percentage: true }),
+            remainder: I18n.n(100 - @calculation_int, { percentage: true })
           }
         ),
         exampleScores: @exampleScoreIntegers().join(', '),
-        exampleResult: @decayingAverage()
+        exampleResult: numberFormat.outcomeScore(@decayingAverage())
       n_mastery:
         method: I18n.t({
           one: "Achieve mastery one time",
@@ -90,16 +107,16 @@ define [
               count: @calculation_int
           }),
         exampleScores: @exampleScoreIntegers().join(', '),
-        exampleResult: @nMastery()
+        exampleResult: numberFormat.outcomeScore(@nMastery())
       latest:
         method: I18n.t("Latest Score")
         friendlyCalculationMethod: I18n.t("Most Recent Score")
         exampleText: I18n.t("Mastery score reflects the most recent graded assignment or quiz."),
         exampleScores: @exampleScoreIntegers()[..3].join(', '),
-        exampleResult: _.last(@exampleScoreIntegers()[..3])
+        exampleResult: numberFormat.outcomeScore(_.last(@exampleScoreIntegers()[..3]))
       highest:
         method: I18n.t("Highest Score")
         friendlyCalculationMethod: I18n.t("Highest Score")
         exampleText: I18n.t("Mastery score reflects the highest score of a graded assignment or quiz."),
         exampleScores: @exampleScoreIntegers()[..3].join(', '),
-        exampleResult: _.max(@exampleScoreIntegers()[..3])
+        exampleResult: numberFormat.outcomeScore(_.max(@exampleScoreIntegers()[..3]))

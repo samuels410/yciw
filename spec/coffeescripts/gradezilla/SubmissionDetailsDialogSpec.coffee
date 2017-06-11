@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'jquery'
   'compiled/models/Assignment'
@@ -7,13 +24,12 @@ define [
   'jst/SubmissionDetailsDialog'
 ], ($, Assignment, SubmissionDetailsDialog, _, tz) ->
 
-  module 'SubmissionDetailsDialog',
+  QUnit.module 'SubmissionDetailsDialog',
     setup: ->
       defaults =
         current_user_roles: [ "teacher" ]
         GRADEBOOK_OPTIONS:
-          multiple_grading_periods_enabled: true
-          latest_end_date_of_admin_created_grading_periods_in_the_past: 'Thu Jul 30 2015 00:00:00 GMT-0700 (PDT)'
+          has_grading_periods: true
       @previousWindowENV = window.ENV
 
       _.extend(window.ENV, defaults)
@@ -49,13 +65,19 @@ define [
 
     ok dialog.dialog.find('.submission-details').text().match('LATE')
 
-  module '_submission_detail',
+  test 'calls the onClose callback when closing', ->
+    onClose = @spy()
+    dialog = new SubmissionDetailsDialog(@assignment, @user, {speed_grader_enabled: true, change_grade_url: ':assignment/:student', onClose})
+    dialog.open()
+    dialog.dialog.trigger('dialogclose')
+    equal(onClose.callCount, 1)
+
+  QUnit.module '_submission_detail',
     setup: ->
       defaults =
         current_user_roles: [ "teacher" ]
         GRADEBOOK_OPTIONS:
-          multiple_grading_periods_enabled: true
-          latest_end_date_of_admin_created_grading_periods_in_the_past: 'Thu Jul 30 2015 00:00:00 GMT-0700 (PDT)'
+          has_grading_periods: true
       @previousWindowENV = window.ENV
 
       _.extend(window.ENV, defaults)
@@ -81,13 +103,12 @@ define [
 
     equal dialog.dialog.find('.submisison-attachment').length, 3
 
-  module '_grading_box',
+  QUnit.module '_grading_box',
     setup: ->
       defaults =
         current_user_roles: [ "teacher" ]
         GRADEBOOK_OPTIONS:
-          multiple_grading_periods_enabled: true
-          latest_end_date_of_admin_created_grading_periods_in_the_past: '2013-10-01T10:00:00Z'
+          has_grading_periods: true
       @previousWindowENV = window.ENV
 
       _.extend(window.ENV, defaults)

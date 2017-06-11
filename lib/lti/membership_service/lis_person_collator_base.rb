@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2016 Instructure, Inc.
+# Copyright (C) 2016 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -32,7 +32,7 @@ module Lti
       end
 
       def memberships
-        @memberships ||= users.slice(0, @per_page).map do |user|
+        @memberships ||= users.to_a.slice(0, @per_page).map do |user|
           generate_membership(user)
         end
       end

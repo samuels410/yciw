@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path('spec/selenium/common')
 
 describe "Sessions Timeout" do
@@ -22,7 +39,7 @@ describe "Sessions Timeout" do
         f("#plugin_setting_disabled").click
         f('#settings_session_timeout').send_keys('19')
         expect_new_page_load{ f('.save_button').click }
-        assert_flash_error_message /There was an error saving the plugin settings/
+        assert_flash_error_message "There was an error saving the plugin settings"
       end
     end
   end
@@ -37,7 +54,7 @@ describe "Sessions Timeout" do
     Timecop.travel(Time.now + 1.minute) do
       get "/courses"
 
-      assert_flash_warning_message(/You must be logged in to access this page/)
+      assert_flash_warning_message("You must be logged in to access this page")
     end
   end
 end

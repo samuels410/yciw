@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011-2012 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -138,6 +138,7 @@ describe Collaboration do
     end
 
     it "allows course admins (and group members) to be added to a group collaboration" do
+      @users.each{|u| u.student_enrollments.first.accept!}
       gc = @groups.first.collaborations.create! :title => 'derp', :user => @teacher
       gc.update_members([@teacher, @users.first, @users.last])
       users = gc.reload.collaborators.pluck(:user_id)

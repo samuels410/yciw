@@ -1,21 +1,40 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'compiled/gradebook/SubmissionCell'
   'str/htmlEscape'
   'jquery'
-], (SubmissionCell, htmlEscape, $) ->
+  'jsx/shared/helpers/numberHelper'
+], (SubmissionCell, htmlEscape, $, numberHelper) ->
 
   dangerousHTML= '"><img src=/ onerror=alert(document.cookie);>'
   escapedDangerousHTML = htmlEscape dangerousHTML
 
-  module "SubmissionCell",
+  QUnit.module "SubmissionCell",
     setup: ->
+      @pointsPossible = 100
       @opts =
         item:
-            'whatever': {}
+          'whatever': {}
         column:
-            field: 'whatever'
-            object:
-              points_possible: 100
+          field: 'whatever'
+          object:
+            points_possible: @pointsPossible
         container: $('#fixtures')[0]
       @cell = new SubmissionCell @opts
     teardown: -> $('#fixtures').empty()
@@ -33,6 +52,21 @@ define [
     @cell.applyValue(@opts.item, '150')
     ok flashWarningStub.calledOnce
 
+  test "#applyValue calls numberHelper with points possible", ->
+    numberHelperStub = @stub(numberHelper, 'parse').withArgs(@pointsPossible)
+    @stub @cell, 'postValue'
+    @cell.applyValue(@opts.item, '10')
+
+    strictEqual numberHelperStub.callCount, 1
+
+  test "#applyValue calls numberHelper with state", ->
+    state = '10'
+    numberHelperStub = @stub(numberHelper, 'parse').withArgs(state)
+    @stub @cell, 'postValue'
+    @cell.applyValue(@opts.item, state)
+
+    strictEqual numberHelperStub.callCount, 1
+
   test "#loadValue escapes html", ->
     @opts.item.whatever.grade = dangerousHTML
     @cell.loadValue()
@@ -40,7 +74,7 @@ define [
     equal @cell.$input[0].defaultValue, escapedDangerousHTML
 
   test "#class.formatter rounds numbers if they are numbers", ->
-    @stub(SubmissionCell.prototype, 'cellWrapper').withArgs(0.67).returns('ok')
+    @stub(SubmissionCell.prototype, 'cellWrapper').withArgs('0.67').returns('ok')
     formattedResponse = SubmissionCell.formatter(0, 0, { grade: 0.666 }, {}, {})
     equal formattedResponse, 'ok'
 
@@ -177,7 +211,7 @@ define [
     submissionCellResponse = SubmissionCell.pass_fail.formatter(0, 0, { grade: "complete" }, {}, {}, { tooltip: "dora_the_explorer" })
     ok submissionCellResponse.indexOf("dora_the_explorer") > -1
 
-  module "Pass/Fail SubmissionCell",
+  QUnit.module "Pass/Fail SubmissionCell",
     setup: ->
       opts =
         item:

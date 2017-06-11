@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2016 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'select_content_dialog',
   'jquery',
@@ -7,7 +24,7 @@ define [
   fixtures = null
   clickEvent = {}
 
-  module "SelectContentDialog",
+  QUnit.module "SelectContentDialog",
     setup: ->
       fixtures = document.getElementById('fixtures')
       fixtures.innerHTML = '<div id="context_external_tools_select">
@@ -33,7 +50,7 @@ define [
 
   test "it creates a confirm alert before closing the modal", ()->
     l = document.getElementById('test-tool')
-    @stub(window, "confirm", -> true )
+    @stub(window, "confirm").returns(true)
     SelectContentDialog.Events.onContextExternalToolSelect.bind(l)(clickEvent)
     $dialog = $("#resource_selection_dialog")
     $dialog.dialog('close')

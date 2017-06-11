@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2014 Instructure, Inc.
+# Copyright (C) 2014 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -25,6 +25,14 @@ class CustomData < ActiveRecord::Base
         instance_variable_set("@#{k}", v)
       end
       super 'write conflict for custom_data hash'
+    end
+
+    def as_json
+      {
+        conflict_scope: conflict_scope,
+        type_at_conflict: type_at_conflict,
+        value_at_conflict: value_at_conflict
+      }
     end
   end
 

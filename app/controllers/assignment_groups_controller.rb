@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2016 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -92,7 +92,7 @@
 #     }
 #
 class AssignmentGroupsController < ApplicationController
-  before_filter :require_context
+  before_action :require_context
 
   include Api::V1::AssignmentGroup
 
@@ -115,14 +115,14 @@ class AssignmentGroupsController < ApplicationController
   #
   # @argument grading_period_id [Integer]
   #   The id of the grading period in which assignment groups are being requested
-  #   (Requires the Multiple Grading Periods feature turned on.)
+  #   (Requires grading periods to exist.)
   #
   # @argument scope_assignments_to_student [Boolean]
   #   If true, all assignments returned will apply to the current user in the
   #   specified grading period. If assignments apply to other students in the
   #   specified grading period, but not the current user, they will not be
-  #   returned. (Requires the grading_period_id argument and the Multiple Grading
-  #   Periods feature turned on. In addition, the current user must be a student.)
+  #   returned. (Requires the grading_period_id argument and grading periods to
+  #   exist. In addition, the current user must be a student.)
   #
   # @returns [AssignmentGroup]
   def index
@@ -160,12 +160,12 @@ class AssignmentGroupsController < ApplicationController
     @group = @context.assignment_groups.find(params[:assignment_group_id])
     if authorized_action(@group, @current_user, :update)
       order = params[:order].split(',').map{|id| id.to_i }
-      group_ids = ([@group.id] + (order.empty? ? [] : @context.assignments.where(id: order).uniq.except(:order).pluck(:assignment_group_id)))
+      group_ids = ([@group.id] + (order.empty? ? [] : @context.assignments.where(id: order).distinct.except(:order).pluck(:assignment_group_id)))
       assignments = @context.active_assignments.where(id: order)
 
       return render_unauthorized_action unless can_reorder_assignments?(assignments, @group)
 
-      assignments.update_all(assignment_group_id: @group)
+      assignments.update_all(assignment_group_id: @group.id)
       @group.assignments.first.update_order(order) unless @group.assignments.empty?
       groups = AssignmentGroup.where(id: group_ids)
       groups.touch_all
@@ -267,7 +267,7 @@ class AssignmentGroupsController < ApplicationController
   end
 
   def assignment_group_params
-    params.require(:assignment_group).
+    result = params.require(:assignment_group).
       permit(:assignment_weighting_scheme,
              :default_assignment_name,
              :group_weight,
@@ -276,6 +276,8 @@ class AssignmentGroupsController < ApplicationController
              :rules,
              :sis_source_id,
              :integration_data => strong_anything)
+    result[:integration_data] = nil if result[:integration_data] == ''
+    result
   end
 
   def include_params
@@ -295,8 +297,7 @@ class AssignmentGroupsController < ApplicationController
   end
 
   def filter_by_grading_period?
-    return false if all_grading_periods_selected?
-    params[:grading_period_id].present? && multiple_grading_periods?
+    params[:grading_period_id].present? && !all_grading_periods_selected?
   end
 
   def all_grading_periods_selected?
@@ -330,6 +331,10 @@ class AssignmentGroupsController < ApplicationController
         EffectiveDueDates.for_course(context, assignments).to_hash([:in_closed_grading_period])
     end
 
+    if assignments.any? && context.grants_right?(current_user, session, :manage_assignments)
+      mc_status = setup_master_course_restrictions(assignments, context)
+    end
+
     groups.map do |group|
       group.context = context
       group_assignments = assignments_by_group[group.id] || []
@@ -343,7 +348,8 @@ class AssignmentGroupsController < ApplicationController
         exclude_response_fields: assignment_excludes,
         include_overrides: include_overrides,
         submissions: submissions,
-        closed_grading_period_hash: closed_grading_period_hash
+        closed_grading_period_hash: closed_grading_period_hash,
+        master_course_status: mc_status
       }
 
       assignment_group_json(group, current_user, session, params[:include], options)
@@ -385,7 +391,7 @@ class AssignmentGroupsController < ApplicationController
 
     assignments = assignments.with_student_submission_count.all
 
-    if params[:grading_period_id].present? && multiple_grading_periods?
+    if filter_by_grading_period?
       assignments = filter_assignments_by_grading_period(assignments, context)
     end
 
@@ -406,10 +412,6 @@ class AssignmentGroupsController < ApplicationController
       assignments.each { |a| a.has_no_overrides = true if a.assignment_overrides.size == 0 }
     end
 
-    if master_courses? && context.grants_right?(@current_user, session, :manage_assignments)
-      MasterCourses::Restrictor.preload_restrictions(assignments)
-    end
-
     assignments
   end
 
@@ -426,7 +428,7 @@ class AssignmentGroupsController < ApplicationController
   end
 
   def can_reorder_assignments?(assignments, group)
-    return true unless @context.feature_enabled?(:multiple_grading_periods)
+    return true unless @context.grading_periods?
     return true if @context.account_membership_allows(@current_user)
 
     effective_due_dates = EffectiveDueDates.for_course(@context, assignments)

@@ -1,4 +1,22 @@
 <%
+# Copyright (C) 2011 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+%>
+
+<%
   @active_tab = "settings"
   add_crumb t(:settings_crumb, "Settings")
   js_bundle :account_settings
@@ -53,7 +71,7 @@
     <% if !@available_reports.blank? %>
       <li><a href="#tab-reports" id="tab-reports-link"><%= t(:tab_reports, "Reports") %></a></li>
     <% end %>
-    <% if can_do(@context, @current_user, :manage_account_settings) %>
+    <% if can_do(@context, @current_user, :read_as_admin) %>
       <li><a href="#tab-tools" id="tab-tools-link"><%= t(:tab_external_tools, "Apps") %></a></li>
     <% end %>
     <% if @context.root_account.settings[:enable_alerts] && can_do(@context, @current_user, :manage_interaction_alerts) %>
@@ -248,7 +266,7 @@ TEXT
                   <% disabled = hash[:locked] && hash[:inherited] %>
                   <tr>
                     <td colspan="2"><%= r.check_box :value, :checked => hash[:value], :disabled => disabled %>
-                      <%= r.label :lock_all_announcements, :en => "Disable comments on announcements" %>
+                      <%= r.label :value, :en => "Disable comments on announcements" %>
                     </td>
                   </tr>
                   <% unless disabled %>
@@ -259,6 +277,17 @@ TEXT
                       </td>
                     </tr>
                   <% end %>
+                <% end %>
+
+                <%= settings.fields_for :enable_offline_web_export do |r| %>
+                  <% hash = @account.enable_offline_web_export %>
+                  <% disabled = hash[:locked] && hash[:inherited] %>
+                  <tr>
+                    <td colspan="2">
+                      <%= r.check_box :value, checked: hash[:value], disabled: disabled %>
+                      <%= r.label :value, t("Allow students to download course content and view offline") %>
+                    </td>
+                  </tr>
                 <% end %>
               <% end %>
             <% end %>
@@ -726,7 +755,7 @@ acknowledge that you have read and agreed to the
         <h2><%= t(:add_admin_title, "Add Account Admins") %></h2>
         <div style="margin-top: 5px;">
           <div>
-            <%= label_tag :role_id, :en => "Add More" %>
+            <%= label_tag :role_id, t("Add More") %>
             <select name="role_id" id="admin_role_id">
             <% available_roles.each do |role| %>
               <option value="<%= role.id %>"><%= AccountUser.readable_type(role.name) %></option>
@@ -764,6 +793,12 @@ acknowledge that you have read and agreed to the
             <div class="notification_account_content">
               <div class="ic-notification__content">
                 <div class="ic-notification__message">
+                  <h4 class="ic-notification__title notification_subject">
+                    <%= announcement.subject %>
+                  </h4>
+                  <span class="notification_message">
+                    <%= user_content(announcement.message) %>
+                  </span>
                   <% if can_do(@account, @current_user, :manage_alerts) %>
                     <div class="ic-notification__admin-actions">
                       <button
@@ -772,21 +807,15 @@ acknowledge that you have read and agreed to the
                         aria-controls="<%= "edit_notification_form_#{announcement.id}" %>"
                         data-edit-toggle-id="<%= announcement.id %>"
                       >
-                        <span class="screenreader-only"><%= t("Edit this Announcement") %></span>
+                        <span class="screenreader-only"><%= t("Edit announcement %{title}", :title => announcement.subject) %></span>
                         <i class="icon-edit"></i>
                       </button>
-                      <a href="#" rel="<%= context_url(@account, :context_account_notification_url, announcement) %>" class="Button Button--icon-action delete_notification_link" title="<%= t("Delete this Announcement") %>">
-                        <span class="screenreader-only"><%= t("Delete this Announcement") %></span>
+                      <a href="#" rel="<%= context_url(@account, :context_account_notification_url, announcement) %>" class="Button Button--icon-action delete_notification_link" title="<%= t("Delete announcement %{title}", :title => announcement.subject) %>">
+                        <span class="screenreader-only"><%= t("Delete announcement %{title}", :title => announcement.subject) %></span>
                         <i class="icon-trash"></i>
                       </a>
                     </div>
                   <% end %>
-                  <h4 class="ic-notification__title notification_subject">
-                    <%= announcement.subject %>
-                  </h4>
-                  <span class="notification_message">
-                    <%= user_content(announcement.message) %>
-                  </span>
                 </div>
               </div>
               <span class="notification_account_content_text">
@@ -1090,7 +1119,7 @@ acknowledge that you have read and agreed to the
       </table>
     </div>
   <% end %>
-  <% if can_do(@context, @current_user, :manage_account_settings) %>
+  <% if can_do(@context, @current_user, :read_as_admin) %>
       <div id="tab-tools">
         <%= render :partial => 'external_tools/external_tools', :object => @context.context_external_tools.active %>
       </div>

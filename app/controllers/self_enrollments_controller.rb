@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012 Instructure, Inc.
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -17,7 +17,7 @@
 #
 
 class SelfEnrollmentsController < ApplicationController
-  before_filter :infer_signup_info, :only => [:new]
+  before_action :infer_signup_info, :only => [:new]
 
   include Api::V1::Course
 
@@ -31,7 +31,7 @@ class SelfEnrollmentsController < ApplicationController
 
     if !@current_user && @domain_root_account.delegated_authentication? && !(params[:authentication_provider] == 'canvas')
       store_location
-      return redirect_to login_url(params.slice(:authentication_provider))
+      return redirect_to login_url(params.permit(:authentication_provider))
     end
   end
 

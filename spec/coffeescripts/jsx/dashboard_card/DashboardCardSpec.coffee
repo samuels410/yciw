@@ -1,4 +1,22 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
+  'jquery'
   'react'
   'react-dom'
   'react-addons-test-utils'
@@ -6,9 +24,9 @@ define [
   'jsx/dashboard_card/DashboardCard'
   'jsx/dashboard_card/CourseActivitySummaryStore',
   'helpers/assertions'
-], (React, ReactDOM, TestUtils, _, DashboardCard, CourseActivitySummaryStore, assertions) ->
+], ($, React, ReactDOM, TestUtils, _, DashboardCard, CourseActivitySummaryStore, assertions) ->
 
-  module 'DashboardCard',
+  QUnit.module 'DashboardCard',
     setup: ->
       @stream = [{
         "type": "DiscussionTopic",
@@ -21,24 +39,26 @@ define [
       }]
       @props = {
         shortName: 'Bio 101',
+        originalName: 'Biology',
         assetString: 'foo',
         href: '/courses/1',
         courseCode: '101',
-        id: 1,
+        id: '1',
+        backgroundColor: '#EF4437',
         image: null,
         imagesEnabled: false
       }
-      @stub(CourseActivitySummaryStore, 'getStateForCourse', -> {})
+      @stub(CourseActivitySummaryStore, 'getStateForCourse').returns({})
 
     teardown: ->
       localStorage.clear()
-      ReactDOM.unmountComponentAtNode(@component.getDOMNode().parentNode)
+      ReactDOM.unmountComponentAtNode(ReactDOM.findDOMNode(@component).parentNode)
       @wrapper.remove() if @wrapper
 
   test 'render', ->
     DashCard = React.createElement(DashboardCard, @props)
     @component = TestUtils.renderIntoDocument(DashCard)
-    $html = $(@component.getDOMNode())
+    $html = $(ReactDOM.findDOMNode(@component))
     ok $html.attr('class').match(/DashboardCard/)
 
     renderSpy = @spy(@component, 'render')

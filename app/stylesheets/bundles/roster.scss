@@ -1,3 +1,21 @@
+/*
+ * Copyright (C) 2015 - present Instructure, Inc.
+ *
+ * This file is part of Canvas.
+ *
+ * Canvas is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, version 3 of the License.
+ *
+ * Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 @import "base/environment";
 @import "components/context_search";
 
@@ -44,12 +62,7 @@
   li {
     @include name_bubbles;
     clear: left;
-  }
-}
-
-#edit_sections {
-  a.browser {
-    background: transparent url(/images/messages/context-search-sprite.png) 0 0 no-repeat;
+    margin-top: $ic-sp/2;
   }
 }
 
@@ -74,20 +87,11 @@
     .peoplesearch__instructions {
       margin: 1.5em 0;
       text-align: center;
-      i.icon-user {
-        display:block;
-        height: 50px;
+      .usericon {
         margin: 0 auto;
-      }
-      i.icon-user::before {
         font-size: 48px;
+        line-height: 50px;
       }
-    }
-
-
-    /* need a little space between inline inst-ui <RadioInput>s */
-    label[for^='peoplesearch_radio'] {
-        margin-right: 1em;
     }
   }
   .namelist {

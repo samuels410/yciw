@@ -1,19 +1,13 @@
 <td role="gridcell">
   <a href="{{html_url}}" class="wiki-page-link{{#if CAN.PUBLISH}} {{#unless published}}un{{/unless}}published{{/if}}">{{title}}</a>
-  {{#if front_page}} <span class="front-page label">{{#t 'labels.front_page'}}Front Page{{/t}}</span>{{/if}}
+  {{#if front_page}}
+    <span class="front-page label">{{#t 'labels.front_page'}}Front Page{{/t}}</span>
+  {{/if}}
 </td>
 <td role="gridcell">{{tDateToString created_at "medium"}}</td>
 <td role="gridcell">{{tDateToString updated_at "medium"}}{{#if last_edited_by.display_name}} by {{last_edited_by.display_name}}{{/if}}</td>
 {{#if CAN.MANAGE}}
-  <td role="gridcell" class="master-course-cell">
-    {{#if is_master_course_content}}
-      {{#if restricted_by_master_course}}
-        <i class="icon-lock"></i>
-      {{else}}
-        <i class="icon-unlock icon-Line"></i>
-      {{/if}}
-    {{/if}}
-  </td>
+  <td role="gridcell" class="master-content-lock-cell"></td>
   {{#if CAN.PUBLISH}}
     <td role="gridcell" class="publish-cell"></td>
   {{/if}}
@@ -24,7 +18,7 @@
         <span class="screenreader-only">{{#t 'menu.settings'}}Settings{{/t}}</span>
       </a>
       <ul class="al-options">
-        {{#unless restricted_by_master_course}}
+        {{#unless cannot_edit_by_master_course}}
           <li><a href="#" class="icon-edit edit-menu-item" title="{{#t 'menu.edit'}}Edit{{/t}}">{{#t 'menu.edit'}}Edit{{/t}}</a></li>
           <li><a href="#" class="icon-trash delete-menu-item{{#unless deletable}} disabled{{/unless}}" title="{{#t 'menu.delete'}}Delete{{/t}}" {{#unless deletable}}aria-disabled="true"{{/unless}}>{{#t 'menu.delete'}}Delete{{/t}}</a></li>
         {{/unless}}

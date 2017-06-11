@@ -1,6 +1,6 @@
 # encoding: UTF-8
 #
-# Copyright (C) 2011 Instructure, Inc.
+# Copyright (C) 2014 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -248,6 +248,13 @@ EOS
     it "should convert relative links to absolute links" do
       original_html = %q{ <a href="/relative/link">Relative link</a> }
       html          = th.html_to_simple_html(original_html, base_url: 'http://example.com')
+
+      expect(html).to match(%r{http://example.com/relative/link})
+    end
+
+    it "should resolve doubleslashes" do
+      original_html = %q{ <a href="/relative/link">Relative link</a> }
+      html          = th.html_to_simple_html(original_html, base_url: 'http://example.com/')
 
       expect(html).to match(%r{http://example.com/relative/link})
     end

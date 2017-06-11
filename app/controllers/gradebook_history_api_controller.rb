@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2013 Instructure, Inc.
+# Copyright (C) 2013 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -206,8 +206,8 @@
 #     }
 #
  class GradebookHistoryApiController < ApplicationController
-  before_filter :require_context
-  before_filter :require_manage_grades
+  before_action :require_context
+  before_action :require_manage_grades
 
   include Api::V1::GradebookHistory
 
@@ -302,7 +302,7 @@
     indexed_versions = indexed_versions.where(:user_id => student) if student
 
     # paginate the indexed scope and then convert to actual Version records
-    path = api_v1_gradebook_history_feed_url(@context, params)
+    path = api_v1_gradebook_history_feed_url(@context, params.permit(:course_id, :assignment_id, :user_id, :ascending, :format))
     indexed_versions = Api.paginate(indexed_versions, self, path)
     ActiveRecord::Associations::Preloader.new.preload(indexed_versions, :version)
     versions = indexed_versions.map(&:version).compact

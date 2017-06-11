@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 module CC::Exporter::Epub
   class Book
     include CC::Exporter::Epub::Converters
@@ -39,7 +56,7 @@ module CC::Exporter::Epub
 
     def epub
       @_epub ||= GEPUB::Book.new.tap do |b|
-        b.set_primary_identifier(pub_id)
+        b.primary_identifier(pub_id)
         b.language = I18n.locale
         b.add_title(title, nil, GEPUB::TITLE_TYPE::MAIN) do |title|
           title.file_as = "#{title} ePub"

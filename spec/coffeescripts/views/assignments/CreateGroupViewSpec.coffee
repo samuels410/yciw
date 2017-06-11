@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'underscore'
   'Backbone'
@@ -31,7 +48,7 @@ define [
 
     new CreateGroupView(args)
 
-  module 'CreateGroupView',
+  QUnit.module 'CreateGroupView',
     setup: ->
       fakeENV.setup()
     teardown: ->
@@ -60,7 +77,7 @@ define [
     ok _.isEmpty(errors)
 
   test 'it should create a new assignment group', ->
-    @stub(CreateGroupView.prototype, 'close', -> )
+    @stub(CreateGroupView.prototype, 'close')
 
     view = createView(newGroup: true)
     view.render()
@@ -69,7 +86,7 @@ define [
 
   test 'it should edit an existing assignment group', ->
     view = createView()
-    save_spy = @stub(view.model, "save", -> $.Deferred().resolve())
+    save_spy = @stub(view.model, "save").returns($.Deferred().resolve())
     view.render()
     view.open()
     #the selector uses 'new' for id because this model hasn't been saved yet
@@ -86,7 +103,7 @@ define [
 
   test 'it should not save drop rules when none are given', ->
     view = createView()
-    save_spy = @stub(view.model, "save", -> $.Deferred().resolve())
+    save_spy = @stub(view.model, "save").returns($.Deferred().resolve())
     view.render()
     view.open()
     view.$("#ag_new_drop_lowest").val("")
@@ -136,6 +153,20 @@ define [
     ok errors
     equal _.keys(errors).length, 1
 
+  test 'it should not allow NaN values for group weight', ->
+    view = createView()
+    assignments = view.assignmentGroup.get('assignments')
+
+    data =
+      name: "Assignments"
+      drop_highest: "0"
+      drop_lowest: "0"
+      group_weight: "the weighting is the hardest part"
+
+    errors = view.validateFormData(data)
+    ok errors
+    equal _.keys(errors).length, 1
+
   test 'it should trigger a render event on save success when editing', ->
     triggerSpy = @spy(AssignmentGroupCollection::, 'trigger')
     view = createView()
@@ -149,7 +180,7 @@ define [
     equal view.render.callCount, 1
 
   test 'it shows a success message', ->
-    @stub(CreateGroupView.prototype, 'close', -> )
+    @stub(CreateGroupView.prototype, 'close')
     @spy($, 'flashMessage')
     clock = sinon.useFakeTimers()
 

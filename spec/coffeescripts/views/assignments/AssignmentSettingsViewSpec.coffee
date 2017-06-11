@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 define [
   'Backbone'
   'compiled/collections/AssignmentGroupCollection'
@@ -28,7 +45,7 @@ define [
     view.open()
     view
 
-  module 'AssignmentSettingsView',
+  QUnit.module 'AssignmentSettingsView',
     setup: -> fakeENV.setup()
     teardown: -> fakeENV.teardown()
 
@@ -95,7 +112,7 @@ define [
     equal view.assignmentGroups.last().get('group_weight'), 80
     view.remove()
 
-  module 'AssignmentSettingsView with an assignment in a closed grading period',
+  QUnit.module 'AssignmentSettingsView with an assignment in a closed grading period',
     setup: -> fakeENV.setup()
     teardown: -> fakeENV.teardown()
 
@@ -167,6 +184,17 @@ define [
     notOk view.saveFormData.called
     notOk view.cancel.called
     view.remove()
+
+  test 'does not allow NaN values to be saved', ->
+    closed_group = group(any_assignment_in_closed_grading_period: true)
+    groups = new AssignmentGroupCollection([group(), closed_group])
+    view = createView(weighted: true, assignmentGroups: groups)
+    weight_input = view.$el.find('.group_weight_value')[0]
+    $(weight_input).val('weight for it')
+
+    errors = view.validateFormData()
+    ok errors
+    equal _.keys(errors).length, 1
 
   test 'calculates the total weight', ->
     closed_group = group(any_assignment_in_closed_grading_period: true, group_weight: 35)

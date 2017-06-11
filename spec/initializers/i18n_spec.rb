@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+
 require File.expand_path('../spec_helper', File.dirname( __FILE__ ))
 
 describe I18n do
@@ -44,6 +61,26 @@ describe I18n do
     end
   end
 
+  describe "numbers" do
+    it "formats count" do
+      expect(I18n.t({one: "1 thing", other: "%{count} things"}, {count: 1500})).to eq '1,500 things'
+    end
+
+    it "formats interpolated numbers" do
+      expect(I18n.t("user count: %{foo}", {foo: 1500})).to eq "user count: 1,500"
+    end
+
+    it "does not format numbery strings" do
+      expect(I18n.t("user count: %{foo}", {foo: "1500"})).to eq "user count: 1500"
+    end
+
+    it "does not mutate the options" do
+      options = {foo: 1500}
+      I18n.t("user count: %{foo}", options)
+      expect(options[:foo]).to eq 1500
+    end
+  end
+
   describe ".n" do
     before do
       format = {
@@ -84,6 +121,10 @@ describe I18n do
 
       it "formats with precision" do
         expect(I18n.n(76.6, precision: 2, percentage: true)).to eq "76,60 %"
+      end
+
+      it "has a max precision of 5 by default" do
+        expect(I18n.n(100.567891, percentage: true)).to eq "100,56789 %"
       end
     end
   end
