@@ -161,8 +161,8 @@
       <file leaf-file-name="deploy.rb" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/config/deploy.rb">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="200">
-              <caret line="16" column="0" lean-forward="true" selection-start-line="16" selection-start-column="0" selection-end-line="16" selection-end-column="0" />
+            <state relative-caret-position="-99">
+              <caret line="8" column="9" lean-forward="false" selection-start-line="8" selection-start-column="5" selection-end-line="8" selection-end-column="9" />
               <folding />
             </state>
           </provider>
@@ -222,10 +222,6 @@
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>conflict</find>
-      <find>n</find>
-      <find>no</find>
-      <find>nom</find>
       <find>nom r</find>
       <find>nom ru</find>
       <find>nom run</find>
@@ -246,6 +242,16 @@
       <find>files</find>
       <find>node_modules</find>
       <find>linked_dirs</find>
+      <find>canvas</find>
+      <find>compile</find>
+      <find>compile_assets</find>
+      <find>canvasuser_permission</find>
+      <find>deploy</find>
+      <find>handle_compile_assets</find>
+      <find>stop_nginx</find>
+      <find>reload_delayed_jobs</find>
+      <find>monit</find>
+      <find>user</find>
     </findStrings>
     <dirStrings>
       <dir>$PROJECT_DIR$/Gemfile.d</dir>
@@ -1318,7 +1324,7 @@
       <workItem from="1496578077397" duration="60000" />
       <workItem from="1496982500762" duration="3783000" />
       <workItem from="1497166966328" duration="1652000" />
-      <workItem from="1497245947377" duration="770000" />
+      <workItem from="1497245947377" duration="2721000" />
     </task>
     <task id="LOCAL-00001" summary="Merge branch 'stable' of https://github.com/instructure/canvas-lms into merge-01-11-16&#10;&#10;# Conflicts:&#10;#&#9;app/stylesheets/pages/login/_login_legacy.scss&#10;#&#9;app/views/layouts/application.html.erb&#10;#&#9;config/locales/en-AU.yml&#10;#&#9;config/locales/en-GB.yml&#10;#&#9;config/locales/generated/en.yml&#10;#&#9;public/locales/en.yml&#10;">
       <created>1478149185653</created>
@@ -1338,7 +1344,7 @@
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="51394000" />
+    <option name="totallyTimeSpent" value="53345000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="0" y="23" width="1280" height="716" extended-state="6" />
@@ -1786,8 +1792,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/config/deploy.rb">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="200">
-          <caret line="16" column="0" lean-forward="true" selection-start-line="16" selection-start-column="0" selection-end-line="16" selection-end-column="0" />
+        <state relative-caret-position="-99">
+          <caret line="8" column="9" lean-forward="false" selection-start-line="8" selection-start-column="5" selection-end-line="8" selection-end-column="9" />
           <folding />
         </state>
       </provider>

@@ -24,10 +24,13 @@ set :linked_files, %w{config/database.yml config/delayed_jobs.yml config/cache_s
 #db:migrate will be executed only when there is new migration file(s) in the db/migrate folder.
 set :conditionally_migrate, true
 
+set :passenger_restart_with_touch, true
+
 #Custom hooks in the deployment steps.
 before 'bundler:install', 'canvas:clone_analytics_gem'
 after 'deploy:migrate', 'canvas:handle_compile_assets'
 after 'passenger:restart', 'canvas:reload_delayed_jobs'
+before 'deploy:cleanup', 'canvas:cleanup_permissions'
 
 ## Canavs-specific tasks
 namespace :canvas do
@@ -141,7 +144,7 @@ namespace :canvas do
           sudo "chown -R #{fetch(:passenger_user)} #{current_path}/public/assets"
           sudo "chown -R #{fetch(:passenger_user)} #{current_path}/public/stylesheets/compiled"
           sudo "chown -R #{fetch(:passenger_user)} #{current_path}/app"
-          sudo "chown -R #{fetch(:passenger_user)}:#{fetch(:user)} #{release_path}/tmp"
+          sudo "chown -R #{fetch(:passenger_user)}:#{fetch(:user)} #{release_path}/tmp/"
 
           sudo "chmod 777 -R #{release_path}/tmp/cache"
         end
@@ -175,6 +178,28 @@ namespace :canvas do
     invoke 'canvas:load_notifications'
     invoke 'canvas:restart_jobs'
   end
+
+
+  desc 'Set permissions on old releases before cleanup'
+  task :cleanup_permissions do
+    on release_roles :all do |host|
+      releases = capture(:ls, '-x', releases_path).split
+      if releases.count >= fetch(:keep_releases)
+        info "Cleaning permissions on old releases"
+        directories = (releases - releases.last(1))
+        if directories.any?
+          directories.each do |release|
+            within releases_path.join(release) do
+              execute :sudo, :chown, '-R', fetch(:user), '.'
+            end
+          end
+        else
+          info t(:no_old_releases, host: host.to_s, keep_releases: fetch(:keep_releases))
+        end
+      end
+    end
+  end
+
 end
 
 #Monit tasks
