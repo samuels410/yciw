@@ -1,5 +1,5 @@
 # config valid only for current version of Capistrano
-lock '3.6.1'
+lock '3.8.1'
 
 set :application,   'yciw'
 set :deploy_to,     '/var/deploy/capistrano/yciw'
@@ -15,7 +15,7 @@ set :pty, true
 set :keep_releases, 5
 set :bundle_flags, '--without=sqlite mysql --binstubs'
 
-set :linked_dirs, %w{log tmp node_modules tmp/files}
+set :linked_dirs, %w{log tmp node_modules}
 set :linked_files, %w{config/database.yml config/delayed_jobs.yml config/cache_store.yml
                       config/logging.yml config/security.yml config/domain.yml
                       config/outgoing_mail.yml config/file_store.yml config/redis.yml

@@ -2,7 +2,8 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="81b4503f-f276-4c93-90d4-773695d75f46" name="Default" comment="">
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/config/deploy/production.rb" afterPath="$PROJECT_DIR$/config/deploy/production.rb" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/config/deploy.rb" afterPath="$PROJECT_DIR$/config/deploy.rb" />
     </list>
     <ignored path="yciw.iws" />
     <ignored path=".idea/workspace.xml" />
@@ -102,57 +103,47 @@
   </component>
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file leaf-file-name="js.rake" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/lib/tasks/js.rake">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="615">
-              <caret line="41" column="8" lean-forward="false" selection-start-line="41" selection-start-column="8" selection-end-line="41" selection-end-column="8" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
       <file leaf-file-name="yciw.public.users" pinned="false" current-in-tab="false">
         <entry file="dbDummy://dbtable:/41d0cce4/d3bc9edf-7a17-40a2-8c99-19cf785fadfc/yciw.public.users">
-          <provider selected="true" editor-type-id="com.intellij.database.editor.DatabaseTableFileEditorProvider">
-            <state>
-              <filtering enabled="true" />
-            </state>
-          </provider>
           <provider editor-type-id="text-editor">
             <state relative-caret-position="0">
               <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
               <folding />
+            </state>
+          </provider>
+          <provider selected="true" editor-type-id="com.intellij.database.editor.DatabaseTableFileEditorProvider">
+            <state>
+              <filtering enabled="true" />
             </state>
           </provider>
         </entry>
       </file>
       <file leaf-file-name="yciw.public.brand_configs" pinned="false" current-in-tab="false">
         <entry file="dbDummy://dbtable:/41d0cce4/d3bc9edf-7a17-40a2-8c99-19cf785fadfc/yciw.public.brand_configs">
-          <provider selected="true" editor-type-id="com.intellij.database.editor.DatabaseTableFileEditorProvider">
-            <state>
-              <filtering enabled="true" />
-            </state>
-          </provider>
           <provider editor-type-id="text-editor">
             <state relative-caret-position="0">
               <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
               <folding />
+            </state>
+          </provider>
+          <provider selected="true" editor-type-id="com.intellij.database.editor.DatabaseTableFileEditorProvider">
+            <state>
+              <filtering enabled="true" />
             </state>
           </provider>
         </entry>
       </file>
       <file leaf-file-name="yciw.public.accounts" pinned="false" current-in-tab="false">
         <entry file="dbDummy://dbtable:/41d0cce4/d3bc9edf-7a17-40a2-8c99-19cf785fadfc/yciw.public.accounts">
-          <provider selected="true" editor-type-id="com.intellij.database.editor.DatabaseTableFileEditorProvider">
-            <state>
-              <filtering enabled="true" />
-            </state>
-          </provider>
           <provider editor-type-id="text-editor">
             <state relative-caret-position="0">
               <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
               <folding />
+            </state>
+          </provider>
+          <provider selected="true" editor-type-id="com.intellij.database.editor.DatabaseTableFileEditorProvider">
+            <state>
+              <filtering enabled="true" />
             </state>
           </provider>
         </entry>
@@ -160,28 +151,38 @@
       <file leaf-file-name=".gitignore" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/.gitignore">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="329">
-              <caret line="47" column="16" lean-forward="true" selection-start-line="47" selection-start-column="16" selection-end-line="47" selection-end-column="16" />
+            <state relative-caret-position="705">
+              <caret line="47" column="16" lean-forward="false" selection-start-line="47" selection-start-column="16" selection-end-line="47" selection-end-column="16" />
               <folding />
             </state>
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="deploy.rb" pinned="false" current-in-tab="false">
+      <file leaf-file-name="deploy.rb" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/config/deploy.rb">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="264">
-              <caret line="23" column="64" lean-forward="true" selection-start-line="23" selection-start-column="64" selection-end-line="23" selection-end-column="64" />
+            <state relative-caret-position="200">
+              <caret line="16" column="0" lean-forward="true" selection-start-line="16" selection-start-column="0" selection-end-line="16" selection-end-column="0" />
               <folding />
             </state>
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="production.rb" pinned="false" current-in-tab="true">
+      <file leaf-file-name="production.rb" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/config/deploy/production.rb">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="90">
-              <caret line="6" column="31" lean-forward="false" selection-start-line="6" selection-start-column="31" selection-end-line="6" selection-end-column="31" />
+            <state relative-caret-position="225">
+              <caret line="15" column="45" lean-forward="false" selection-start-line="15" selection-start-column="45" selection-end-line="15" selection-end-column="45" />
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="_before.rb" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/Gemfile.d/_before.rb">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="317">
+              <caret line="35" column="17" lean-forward="false" selection-start-line="35" selection-start-column="17" selection-end-line="35" selection-end-column="17" />
               <folding />
             </state>
           </provider>
@@ -190,7 +191,7 @@
       <file leaf-file-name="delayed_job.rb" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/config/initializers/delayed_job.rb">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="338">
+            <state relative-caret-position="2100">
               <caret line="140" column="0" lean-forward="false" selection-start-line="140" selection-start-column="0" selection-end-line="140" selection-end-column="0" />
               <folding />
             </state>
@@ -211,7 +212,7 @@
         <entry file="file://$PROJECT_DIR$/config/domain.yml">
           <provider selected="true" editor-type-id="text-editor">
             <state relative-caret-position="180">
-              <caret line="12" column="0" lean-forward="true" selection-start-line="12" selection-start-column="0" selection-end-line="12" selection-end-column="0" />
+              <caret line="12" column="0" lean-forward="false" selection-start-line="12" selection-start-column="0" selection-end-line="12" selection-end-column="0" />
               <folding />
             </state>
           </provider>
@@ -238,7 +239,17 @@
       <find>public/dist/</find>
       <find>public/javascripts</find>
       <find>public/optimized</find>
+      <find>r</find>
+      <find>ru</find>
+      <find>rub</find>
+      <find>ruby</find>
+      <find>files</find>
+      <find>node_modules</find>
+      <find>linked_dirs</find>
     </findStrings>
+    <dirStrings>
+      <dir>$PROJECT_DIR$/Gemfile.d</dir>
+    </dirStrings>
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
@@ -268,12 +279,12 @@
         <option value="$PROJECT_DIR$/Gemfile.d/capistrano.rb" />
         <option value="$PROJECT_DIR$/Capfile" />
         <option value="$PROJECT_DIR$/lib/tasks/css.rake" />
-        <option value="$PROJECT_DIR$/config/deploy.rb" />
         <option value="$PROJECT_DIR$/lib/feature.rb" />
         <option value="$PROJECT_DIR$/.rvmrc" />
         <option value="$PROJECT_DIR$/config/initializers/delayed_job.rb" />
         <option value="$PROJECT_DIR$/.gitignore" />
         <option value="$PROJECT_DIR$/config/deploy/production.rb" />
+        <option value="$PROJECT_DIR$/config/deploy.rb" />
       </list>
     </option>
   </component>
@@ -291,88 +302,701 @@
     <option name="CUSTOM_FILTER" />
   </component>
   <component name="NodeModulesDirectoryManager">
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/accepts/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/acorn-dynamic-import/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/autoprefixer-core/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/babel-cli/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/babel-polyfill/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/babel-register/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/babel-runtime/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/body-parser/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/brandable_css/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/canvas-planner/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/chalk/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/coffee-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/color/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/colorguard/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/commoner/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/connect/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/core-js-builder/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/create-hash/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/create-hmac/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/css-rule-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/css-selector-tokenizer/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/css-tokenize/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/cssstyle/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/dashdash/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/detective/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/directory-encoder/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/doiuse/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/dom-serializer/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/duplexer2/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/end-of-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/engine.io-client/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/engine.io-parser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/engine.io/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/enhanced-resolve/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/envify/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/enzyme/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/escodegen/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/eslint-module-utils/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/eslint-plugin-import/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/eslint-plugin-react/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/eslint/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/espree/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/esrecurse/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/expand-braces/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/exports-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/extract-zip/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/finalhandler/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/fsevents/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/getpass/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/glob-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/glob-watcher/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/globule/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/gulp-util/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/gulp/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/handlebars-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/handlebars/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/happypack/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/has-binary/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/http-errors/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/istanbul/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/jsonfilter/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/jsprim/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/jstransform/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/karma-coverage/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/karma-firework-reporter/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/karma-webpack/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/karma/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/ldjson-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/locate-path/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/log4js/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/mkdirp/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/node-libs-browser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/optionator/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/path-to-regexp/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/pbkdf2/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/phantomjs-prebuilt/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/postcss-cli/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/postcss-modules-extract-imports/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/postcss-modules-local-by-default/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/postcss-modules-scope/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/postcss-modules-values/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/raf/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/randomatic/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/randombytes/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/raw-body/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/react-crop/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/react-tinymce/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/react-tools/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/react/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/recast/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/regjsparser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/request/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/scss-tokenizer/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/shelljs/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/sinon/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/socket.io-adapter/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/socket.io-client/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/socket.io-parser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/socket.io/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/split2/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/sshpk/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/stream-browserify/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/style-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/stylehacks/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/stylelint/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/svgo/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/synesthesia/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/table/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/temp/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/tough-cookie/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/uglify-js/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/useragent/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/util/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/vinyl-file/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/vinyl-fs/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/watchpack/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/webpack-cleanup-plugin/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/webpack-core/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/webpack-dev-middleware/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/webpack-parallel-uglify-plugin/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/webpack/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/yargs-parser/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/javascripts/symlink_to_node_modules/yargs/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/accepts/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/acorn-dynamic-import/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/acorn-globals/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/autoprefixer-core/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/babel-cli/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/body-parser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/chalk/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/coffee-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/color/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/colorguard/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/commoner/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/connect/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/core-js-builder/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/cosmiconfig/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/create-hash/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/css-rule-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/css-selector-tokenizer/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/css-tokenize/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/cssstyle/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/dashdash/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/detective/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/directory-encoder/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/doiuse/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/dom-serializer/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/duplexer2/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/end-of-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/engine.io-client/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/engine.io-parser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/engine.io/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/enhanced-resolve/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/envify/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/enzyme/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/escodegen/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/eslint-module-utils/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/eslint/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/espree/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/esrecurse/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/expand-braces/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/exports-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/extract-zip/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/fbjs/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/finalhandler/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/fs-extra-promise/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/fsevents/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/getpass/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/glob-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/glob-watcher/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/globule/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/gulp-util/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/gulp/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/handlebars-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/handlebars/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/has-binary/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/http-errors/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/i18nliner-handlebars/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/instructure-ui/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/istanbul/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/jsonfilter/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/jstransform/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/karma-coverage/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/karma-firework-reporter/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/karma-webpack/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/karma/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/ldjson-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/log4js/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/meow/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/node-libs-browser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/optionator/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/path-to-regexp/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/phantomjs-prebuilt/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/postcss-cli/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/postcss-modules-local-by-default/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/postcss-modules-scope/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/react-crop/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/react-overlays/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/react-tools/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/recast/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/regjsparser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/request/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/shelljs/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/socket.io-adapter/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/socket.io-client/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/socket.io-parser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/socket.io/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/split2/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/sshpk/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/stream-browserify/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/style-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/stylehacks/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/stylelint/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/svgo/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/synesthesia/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/table/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/temp/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/tough-cookie/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/uglify-js/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/useragent/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/util/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/vinyl-file/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/vinyl-fs/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/watchpack/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/webpack-core/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/webpack-dev-middleware/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/webpack-manifest-plugin/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/webpack/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/xmlbuilder/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/vendor/canvas_public/optimized/symlink_to_node_modules/yargs-parser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/accepts/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/acorn-dynamic-import/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/autoprefixer-core/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/babel-cli/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/babel-polyfill/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/babel-register/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/babel-runtime/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/body-parser/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/brandable_css/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/canvas-planner/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/chalk/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/coffee-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/color/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/colorguard/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/commoner/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/connect/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/core-js-builder/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/create-hash/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/create-hmac/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/css-rule-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/css-selector-tokenizer/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/css-tokenize/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/cssstyle/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/dashdash/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/detective/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/directory-encoder/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/doiuse/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/dom-serializer/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/duplexer2/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/end-of-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/engine.io-client/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/engine.io-parser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/engine.io/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/enhanced-resolve/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/envify/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/enzyme/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/escodegen/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/eslint-module-utils/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/eslint-plugin-import/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/eslint-plugin-react/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/eslint/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/espree/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/esrecurse/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/expand-braces/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/exports-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/extract-zip/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/finalhandler/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/fsevents/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/getpass/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/glob-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/glob-watcher/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/globule/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/gulp-util/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/gulp/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/handlebars-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/handlebars/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/happypack/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/has-binary/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/http-errors/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/istanbul/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/jsonfilter/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/jsprim/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/jstransform/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/karma-coverage/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/karma-firework-reporter/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/karma-webpack/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/karma/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/ldjson-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/locate-path/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/log4js/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/mkdirp/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/node-libs-browser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/optionator/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/path-to-regexp/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/pbkdf2/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/phantomjs-prebuilt/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/postcss-cli/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/postcss-modules-extract-imports/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/postcss-modules-local-by-default/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/postcss-modules-scope/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/postcss-modules-values/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/raf/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/randomatic/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/randombytes/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/raw-body/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/react-crop/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/react-tinymce/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/react-tools/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/react/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/recast/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/regjsparser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/request/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/scss-tokenizer/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/shelljs/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/sinon/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/socket.io-adapter/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/socket.io-client/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/socket.io-parser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/socket.io/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/split2/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/sshpk/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/stream-browserify/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/style-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/stylehacks/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/stylelint/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/svgo/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/synesthesia/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/table/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/temp/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/tough-cookie/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/uglify-js/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/useragent/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/util/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/vinyl-file/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/vinyl-fs/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/watchpack/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/webpack-cleanup-plugin/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/webpack-core/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/webpack-dev-middleware/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/webpack-parallel-uglify-plugin/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/webpack/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/yargs-parser/node_modules" />
     <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/javascripts/symlink_to_node_modules/yargs/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/accepts/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/acorn-dynamic-import/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/acorn-globals/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/autoprefixer-core/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/babel-cli/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/body-parser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/chalk/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/coffee-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/color/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/colorguard/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/commoner/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/connect/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/core-js-builder/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/cosmiconfig/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/create-hash/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/css-rule-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/css-selector-tokenizer/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/css-tokenize/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/cssstyle/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/dashdash/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/detective/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/directory-encoder/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/doiuse/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/dom-serializer/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/duplexer2/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/end-of-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/engine.io-client/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/engine.io-parser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/engine.io/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/enhanced-resolve/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/envify/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/enzyme/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/escodegen/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/eslint-module-utils/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/eslint/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/espree/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/esrecurse/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/expand-braces/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/exports-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/extract-zip/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/fbjs/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/finalhandler/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/fs-extra-promise/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/fsevents/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/getpass/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/glob-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/glob-watcher/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/globule/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/gulp-util/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/gulp/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/handlebars-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/handlebars/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/has-binary/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/http-errors/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/i18nliner-handlebars/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/instructure-ui/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/istanbul/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/jsonfilter/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/jstransform/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/karma-coverage/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/karma-firework-reporter/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/karma-webpack/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/karma/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/ldjson-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/log4js/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/meow/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/node-libs-browser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/optionator/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/path-to-regexp/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/phantomjs-prebuilt/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/postcss-cli/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/postcss-modules-local-by-default/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/postcss-modules-scope/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/react-crop/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/react-overlays/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/react-tools/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/recast/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/regjsparser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/request/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/shelljs/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/socket.io-adapter/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/socket.io-client/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/socket.io-parser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/socket.io/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/split2/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/sshpk/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/stream-browserify/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/style-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/stylehacks/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/stylelint/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/svgo/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/synesthesia/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/table/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/temp/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/tough-cookie/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/uglify-js/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/useragent/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/util/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/vinyl-file/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/vinyl-fs/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/watchpack/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/webpack-core/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/webpack-dev-middleware/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/webpack-manifest-plugin/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/webpack/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/xmlbuilder/node_modules" />
+    <handled-path value="$PROJECT_DIR$/client_apps/canvas_quizzes/www/vendor/canvas_public/optimized/symlink_to_node_modules/yargs-parser/node_modules" />
     <handled-path value="$PROJECT_DIR$/gems/canvas_i18nliner/node_modules" />
     <handled-path value="$PROJECT_DIR$/gems/selinimum/node_modules" />
     <handled-path value="$PROJECT_DIR$/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/accepts/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/acorn-dynamic-import/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/autoprefixer-core/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/babel-cli/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/babel-polyfill/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/babel-register/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/babel-runtime/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/body-parser/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/brandable_css/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/canvas-planner/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/chalk/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/coffee-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/color/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/colorguard/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/commoner/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/connect/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/core-js-builder/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/create-hash/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/create-hmac/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/css-rule-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/css-selector-tokenizer/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/css-tokenize/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/cssstyle/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/dashdash/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/detective/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/directory-encoder/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/doiuse/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/dom-serializer/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/duplexer2/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/end-of-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/engine.io-client/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/engine.io-parser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/engine.io/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/enhanced-resolve/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/envify/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/enzyme/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/escodegen/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/eslint-module-utils/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/eslint-plugin-import/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/eslint-plugin-react/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/eslint/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/espree/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/esrecurse/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/expand-braces/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/exports-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/extract-zip/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/finalhandler/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/fsevents/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/getpass/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/glob-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/glob-watcher/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/globule/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/gulp-util/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/gulp/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/handlebars-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/handlebars/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/happypack/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/has-binary/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/http-errors/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/istanbul/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/jsonfilter/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/jsprim/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/jstransform/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/karma-coverage/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/karma-firework-reporter/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/karma-webpack/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/karma/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/ldjson-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/locate-path/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/log4js/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/mkdirp/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/node-libs-browser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/optionator/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/path-to-regexp/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/pbkdf2/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/phantomjs-prebuilt/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/postcss-cli/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/postcss-modules-extract-imports/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/postcss-modules-local-by-default/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/postcss-modules-scope/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/postcss-modules-values/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/raf/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/randomatic/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/randombytes/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/raw-body/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/react-crop/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/react-tinymce/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/react-tools/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/react/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/recast/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/regjsparser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/request/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/scss-tokenizer/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/shelljs/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/sinon/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/socket.io-adapter/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/socket.io-client/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/socket.io-parser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/socket.io/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/split2/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/sshpk/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/stream-browserify/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/style-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/stylehacks/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/stylelint/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/svgo/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/synesthesia/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/table/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/temp/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/tough-cookie/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/uglify-js/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/useragent/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/util/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/vinyl-file/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/vinyl-fs/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/watchpack/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/webpack-cleanup-plugin/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/webpack-core/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/webpack-dev-middleware/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/webpack-parallel-uglify-plugin/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/webpack/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/yargs-parser/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/javascripts/symlink_to_node_modules/yargs/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/accepts/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/acorn-dynamic-import/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/acorn-globals/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/autoprefixer-core/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/babel-cli/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/body-parser/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/chalk/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/coffee-loader/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/color/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/colorguard/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/commoner/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/connect/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/core-js-builder/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/cosmiconfig/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/create-hash/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/css-rule-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/css-selector-tokenizer/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/css-tokenize/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/cssstyle/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/dashdash/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/detective/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/directory-encoder/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/doiuse/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/dom-serializer/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/duplexer2/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/end-of-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/engine.io-client/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/engine.io-parser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/engine.io/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/enhanced-resolve/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/envify/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/enzyme/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/escodegen/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/eslint-module-utils/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/eslint/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/espree/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/esrecurse/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/expand-braces/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/exports-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/extract-zip/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/fbjs/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/finalhandler/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/fs-extra-promise/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/fsevents/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/getpass/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/glob-stream/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/glob-watcher/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/globule/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/gulp-util/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/gulp/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/handlebars-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/handlebars/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/has-binary/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/http-errors/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/i18nliner-handlebars/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/instructure-ui/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/istanbul/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/jsonfilter/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/jstransform/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/karma-coverage/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/karma-firework-reporter/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/karma-webpack/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/karma/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/ldjson-stream/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/log4js/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/meow/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/node-libs-browser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/optionator/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/path-to-regexp/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/phantomjs-prebuilt/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/postcss-cli/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/postcss-modules-local-by-default/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/postcss-modules-scope/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/react-crop/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/react-overlays/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/react-tools/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/recast/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/regjsparser/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/request/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/shelljs/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/socket.io-adapter/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/socket.io-client/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/socket.io-parser/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/socket.io/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/split2/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/sshpk/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/stream-browserify/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/style-loader/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/stylehacks/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/stylelint/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/svgo/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/synesthesia/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/table/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/temp/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/tough-cookie/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/uglify-js/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/useragent/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/util/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/vinyl-file/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/vinyl-fs/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/watchpack/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/webpack-core/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/webpack-dev-middleware/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/webpack-manifest-plugin/node_modules" />
     <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/webpack/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/xmlbuilder/node_modules" />
+    <handled-path value="$PROJECT_DIR$/public/optimized/symlink_to_node_modules/yargs-parser/node_modules" />
   </component>
   <component name="ProjectFrameBounds">
     <option name="y" value="23" />
@@ -397,7 +1021,7 @@
       <foldersAlwaysOnTop value="true" />
     </navigator>
     <panes>
-      <pane id="RailsProjectView" />
+      <pane id="Scratches" />
       <pane id="ProjectPane">
         <subPane>
           <PATH>
@@ -427,7 +1051,7 @@
         </subPane>
       </pane>
       <pane id="Scope" />
-      <pane id="Scratches" />
+      <pane id="RailsProjectView" />
     </panes>
   </component>
   <component name="PropertiesComponent">
@@ -693,7 +1317,8 @@
       <workItem from="1491930678739" duration="754000" />
       <workItem from="1496578077397" duration="60000" />
       <workItem from="1496982500762" duration="3783000" />
-      <workItem from="1497166966328" duration="1542000" />
+      <workItem from="1497166966328" duration="1652000" />
+      <workItem from="1497245947377" duration="770000" />
     </task>
     <task id="LOCAL-00001" summary="Merge branch 'stable' of https://github.com/instructure/canvas-lms into merge-01-11-16&#10;&#10;# Conflicts:&#10;#&#9;app/stylesheets/pages/login/_login_legacy.scss&#10;#&#9;app/views/layouts/application.html.erb&#10;#&#9;config/locales/en-AU.yml&#10;#&#9;config/locales/en-GB.yml&#10;#&#9;config/locales/generated/en.yml&#10;#&#9;public/locales/en.yml&#10;">
       <created>1478149185653</created>
@@ -713,16 +1338,17 @@
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="50514000" />
+    <option name="totallyTimeSpent" value="51394000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="0" y="23" width="1280" height="716" extended-state="6" />
     <editor active="true" />
     <layout>
-      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.23182553" sideWeight="0.5" order="0" side_tool="false" content_ui="combo" />
+      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.23505655" sideWeight="0.5" order="0" side_tool="false" content_ui="combo" />
       <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33014354" sideWeight="0.5" order="6" side_tool="false" content_ui="tabs" />
       <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="7" side_tool="true" content_ui="tabs" />
       <window_info id="Database" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32956383" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
+      <window_info id="Find" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3923445" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32535884" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Structure" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
@@ -736,7 +1362,6 @@
       <window_info id="Application Servers" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Inspection" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.4" sideWeight="0.5" order="5" side_tool="false" content_ui="tabs" />
       <window_info id="Hierarchy" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="2" side_tool="false" content_ui="combo" />
-      <window_info id="Find" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.3923445" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Ant Build" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
     </layout>
     <layout-to-restore>
@@ -792,13 +1417,6 @@
     <watches-manager />
   </component>
   <component name="editorHistoryManager">
-    <entry file="file://$PROJECT_DIR$/app/observers/conditional_release_observer.rb">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="135">
-          <caret line="9" column="27" lean-forward="false" selection-start-line="9" selection-start-column="27" selection-end-line="9" selection-end-column="27" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/app/jsx/shared/conditional_release/ConditionalRelease.jsx" />
     <entry file="file://$PROJECT_DIR$/app/coffeescripts/bundles/assignment_edit.coffee" />
     <entry file="file://$PROJECT_DIR$/app/models/conditional_release/service.rb">
@@ -893,26 +1511,26 @@
       </provider>
     </entry>
     <entry file="dbDummy://dbtable:/41d0cce4/d3bc9edf-7a17-40a2-8c99-19cf785fadfc/yciw.public.settings">
-      <provider selected="true" editor-type-id="com.intellij.database.editor.DatabaseTableFileEditorProvider">
-        <state>
-          <filtering enabled="true" />
-        </state>
-      </provider>
       <provider editor-type-id="text-editor">
         <state relative-caret-position="0">
           <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+        </state>
+      </provider>
+      <provider selected="true" editor-type-id="com.intellij.database.editor.DatabaseTableFileEditorProvider">
+        <state>
+          <filtering enabled="true" />
         </state>
       </provider>
     </entry>
     <entry file="dbDummy://dbtable:/41d0cce4/d3bc9edf-7a17-40a2-8c99-19cf785fadfc/yciw.public.shared_brand_configs">
-      <provider selected="true" editor-type-id="com.intellij.database.editor.DatabaseTableFileEditorProvider">
-        <state>
-          <filtering enabled="true" />
-        </state>
-      </provider>
       <provider editor-type-id="text-editor">
         <state relative-caret-position="0">
           <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+        </state>
+      </provider>
+      <provider selected="true" editor-type-id="com.intellij.database.editor.DatabaseTableFileEditorProvider">
+        <state>
+          <filtering enabled="true" />
         </state>
       </provider>
     </entry>
@@ -1033,7 +1651,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="8370">
           <caret line="558" column="7" lean-forward="false" selection-start-line="558" selection-start-column="7" selection-end-line="558" selection-end-column="7" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -1041,7 +1658,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="45">
           <caret line="3" column="5" lean-forward="false" selection-start-line="3" selection-start-column="5" selection-end-line="3" selection-end-column="5" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -1049,9 +1665,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="10365">
           <caret line="691" column="52" lean-forward="false" selection-start-line="691" selection-start-column="52" selection-end-line="691" selection-end-column="52" />
-          <folding>
-            <marker date="1496579225000" expanded="true" signature="109526:109532" ph="do ... end" />
-          </folding>
         </state>
       </provider>
     </entry>
@@ -1059,7 +1672,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="14985">
           <caret line="999" column="60" lean-forward="false" selection-start-line="999" selection-start-column="60" selection-end-line="999" selection-end-column="60" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -1067,10 +1679,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="270">
           <caret line="18" column="13" lean-forward="false" selection-start-line="18" selection-start-column="13" selection-end-line="18" selection-end-column="13" />
-          <folding>
-            <marker date="1496580278000" expanded="true" signature="21661:24013" ph=" ... end" />
-            <marker date="1496580278000" expanded="true" signature="22474:22493" ph="..." />
-          </folding>
         </state>
       </provider>
     </entry>
@@ -1078,7 +1686,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="90">
           <caret line="6" column="0" lean-forward="false" selection-start-line="6" selection-start-column="0" selection-end-line="6" selection-end-column="0" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -1091,47 +1698,47 @@
       </provider>
     </entry>
     <entry file="dbDummy://dbtable:/41d0cce4/d3bc9edf-7a17-40a2-8c99-19cf785fadfc/yciw.public.users">
-      <provider selected="true" editor-type-id="com.intellij.database.editor.DatabaseTableFileEditorProvider">
-        <state>
-          <filtering enabled="true" />
-        </state>
-      </provider>
       <provider editor-type-id="text-editor">
         <state relative-caret-position="0">
           <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding />
+        </state>
+      </provider>
+      <provider selected="true" editor-type-id="com.intellij.database.editor.DatabaseTableFileEditorProvider">
+        <state>
+          <filtering enabled="true" />
         </state>
       </provider>
     </entry>
     <entry file="dbDummy://dbtable:/41d0cce4/d3bc9edf-7a17-40a2-8c99-19cf785fadfc/yciw.public.brand_configs">
-      <provider selected="true" editor-type-id="com.intellij.database.editor.DatabaseTableFileEditorProvider">
-        <state>
-          <filtering enabled="true" />
-        </state>
-      </provider>
       <provider editor-type-id="text-editor">
         <state relative-caret-position="0">
           <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding />
+        </state>
+      </provider>
+      <provider selected="true" editor-type-id="com.intellij.database.editor.DatabaseTableFileEditorProvider">
+        <state>
+          <filtering enabled="true" />
         </state>
       </provider>
     </entry>
     <entry file="dbDummy://dbtable:/41d0cce4/d3bc9edf-7a17-40a2-8c99-19cf785fadfc/yciw.public.accounts">
-      <provider selected="true" editor-type-id="com.intellij.database.editor.DatabaseTableFileEditorProvider">
-        <state>
-          <filtering enabled="true" />
-        </state>
-      </provider>
       <provider editor-type-id="text-editor">
         <state relative-caret-position="0">
           <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding />
+        </state>
+      </provider>
+      <provider selected="true" editor-type-id="com.intellij.database.editor.DatabaseTableFileEditorProvider">
+        <state>
+          <filtering enabled="true" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/config/initializers/delayed_job.rb">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="338">
+        <state relative-caret-position="2100">
           <caret line="140" column="0" lean-forward="false" selection-start-line="140" selection-start-column="0" selection-end-line="140" selection-end-column="0" />
           <folding />
         </state>
@@ -1148,31 +1755,39 @@
     <entry file="file://$PROJECT_DIR$/config/domain.yml">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="180">
-          <caret line="12" column="0" lean-forward="true" selection-start-line="12" selection-start-column="0" selection-end-line="12" selection-end-column="0" />
+          <caret line="12" column="0" lean-forward="false" selection-start-line="12" selection-start-column="0" selection-end-line="12" selection-end-column="0" />
           <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/.gitignore">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="329">
-          <caret line="47" column="16" lean-forward="true" selection-start-line="47" selection-start-column="16" selection-end-line="47" selection-end-column="16" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/config/deploy.rb">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="264">
-          <caret line="23" column="64" lean-forward="true" selection-start-line="23" selection-start-column="64" selection-end-line="23" selection-end-column="64" />
+        <state relative-caret-position="705">
+          <caret line="47" column="16" lean-forward="false" selection-start-line="47" selection-start-column="16" selection-end-line="47" selection-end-column="16" />
           <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/config/deploy/production.rb">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="90">
-          <caret line="6" column="31" lean-forward="false" selection-start-line="6" selection-start-column="31" selection-end-line="6" selection-end-column="31" />
+        <state relative-caret-position="225">
+          <caret line="15" column="45" lean-forward="false" selection-start-line="15" selection-start-column="45" selection-end-line="15" selection-end-column="45" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Gemfile.d/_before.rb">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="317">
+          <caret line="35" column="17" lean-forward="false" selection-start-line="35" selection-start-column="17" selection-end-line="35" selection-end-column="17" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/config/deploy.rb">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="200">
+          <caret line="16" column="0" lean-forward="true" selection-start-line="16" selection-start-column="0" selection-end-line="16" selection-end-column="0" />
           <folding />
         </state>
       </provider>
