@@ -445,7 +445,7 @@ class ApplicationController < ActionController::Base
     # are typically embedded in an iframe in canvas, but the hostname is
     # different
     if !files_domain? && Setting.get('block_html_frames', 'true') == 'true' && !@embeddable
-      headers['X-Frame-Options'] = 'SAMEORIGIN'
+      headers['X-Frame-Options'] = 'ALLOWALL'
     end
     RequestContextGenerator.store_request_meta(request, @context)
     true
