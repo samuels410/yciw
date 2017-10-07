@@ -33,6 +33,7 @@ class DiscussionTopic < ActiveRecord::Base
   include ContextModuleItem
   include SearchTermHelper
   include Submittable
+  include Plannable
   include MasterCourses::Restrictor
   restrict_columns :content, [:title, :message]
   restrict_columns :settings, [:delayed_post_at, :require_initial_post, :discussion_type,
@@ -380,7 +381,7 @@ class DiscussionTopic < ActiveRecord::Base
     environment = lock ? :master : :slave
     Shackles.activate(environment) do
       topic_participant = discussion_topic_participants.where(user_id: current_user).select(:unread_entry_count).lock(lock).first
-      topic_participant.try(:unread_entry_count) || self.default_unread_count
+      topic_participant&.unread_entry_count || self.default_unread_count
     end
   end
 
@@ -480,6 +481,22 @@ class DiscussionTopic < ActiveRecord::Base
     topic_participant
   end
 
+  scope :not_ignored_by, -> (user, purpose) do
+    where("NOT EXISTS (?)", Ignore.where(asset_type: 'DiscussionTopic', user_id: user, purpose: purpose).
+      where("asset_id=discussion_topics.id"))
+  end
+
+  scope :todo_date_between, -> (starting, ending) do
+    where("(discussion_topics.type = 'Announcement' AND posted_at BETWEEN :start_at and :end_at)
+           OR todo_date BETWEEN :start_at and :end_at", {start_at: starting, end_at: ending})
+  end
+  scope :for_courses_and_groups, -> (course_ids, group_ids) do
+    where("(discussion_topics.context_type = 'Course'
+          AND discussion_topics.context_id IN (?))
+          OR (discussion_topics.context_type = 'Group'
+          AND discussion_topics.context_id IN (?))", course_ids, group_ids)
+  end
+
   scope :recent, -> { where("discussion_topics.last_reply_at>?", 2.weeks.ago).order("discussion_topics.last_reply_at DESC") }
   scope :only_discussion_topics, -> { where(:type => nil) }
   scope :for_subtopic_refreshing, -> { where("discussion_topics.subtopics_refreshed_at IS NOT NULL AND discussion_topics.subtopics_refreshed_at<discussion_topics.updated_at").order("discussion_topics.subtopics_refreshed_at") }
@@ -493,11 +510,28 @@ class DiscussionTopic < ActiveRecord::Base
   scope :by_last_reply_at, -> { order("discussion_topics.last_reply_at DESC, discussion_topics.created_at DESC, discussion_topics.id DESC") }
 
   scope :by_posted_at, -> { order(<<-SQL)
-      COALESCE(discussion_topics.delayed_post_at, discussion_topics.posted_at) DESC,
+      COALESCE(discussion_topics.delayed_post_at, discussion_topics.posted_at, discussion_topics.created_at) DESC,
       discussion_topics.created_at DESC,
       discussion_topics.id DESC
     SQL
   }
+
+  scope :read_for, lambda { |user|
+    eager_load(:discussion_topic_participants).
+    where("discussion_topic_participants.id IS NOT NULL
+          AND (discussion_topic_participants.user_id = :user
+            AND discussion_topic_participants.workflow_state = 'read')",
+          user: user)
+  }
+  scope :unread_for, lambda { |user|
+    joins(sanitize_sql(["LEFT OUTER JOIN #{DiscussionTopicParticipant.quoted_table_name} ON
+            discussion_topic_participants.discussion_topic_id=discussion_topics.id AND
+            discussion_topic_participants.user_id=?", user.id])).
+    where("discussion_topic_participants IS NULL
+          OR discussion_topic_participants.workflow_state <> 'read'
+          OR discussion_topic_participants.unread_entry_count > 0")
+  }
+  scope :published, -> { where("discussion_topics.workflow_state = 'active'") }
 
   alias_attribute :available_from, :delayed_post_at
   alias_attribute :unlock_at, :delayed_post_at
@@ -873,7 +907,7 @@ class DiscussionTopic < ActiveRecord::Base
   end
 
   def ensure_submission(user)
-    submission = Submission.where(assignment_id: self.assignment_id, user_id: user).first
+    submission = Submission.active.where(assignment_id: self.assignment_id, user_id: user).first
     unless submission && submission.submission_type == 'discussion_topic' && submission.workflow_state != 'unsubmitted'
       submission = self.assignment.submit_homework(user, :submission_type => 'discussion_topic')
     end
@@ -894,7 +928,7 @@ class DiscussionTopic < ActiveRecord::Base
       else
         self.context
       end
-    notification_context.available? && !notification_context.concluded?
+    notification_context.available?
   end
 
   has_a_broadcast_policy
@@ -914,7 +948,7 @@ class DiscussionTopic < ActiveRecord::Base
 
   def participants(include_observers=false)
     participants = [ self.user ]
-    participants += context.participants(include_observers: include_observers)
+    participants += context.participants(include_observers: include_observers, by_date: true)
     participants.compact.uniq
   end
 

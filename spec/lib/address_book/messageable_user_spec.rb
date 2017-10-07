@@ -273,18 +273,20 @@ describe AddressBook::MessageableUser do
     end
   end
 
-  describe "count_in_context" do
-    it "limits to known users in context" do
+  describe "count_in_contexts" do
+    it "limits to known users in contexts" do
       enrollment = ta_in_course(active_all: true, limit_privileges_to_course_section: true)
       ta = enrollment.user
       course = enrollment.course
       section1 = course.default_section
       section2 = course.course_sections.create!
-      student_in_course(section: section1, active_all: true).user
-      student_in_course(section: section2, active_all: true).user
+      student_in_course(section: section1, active_all: true)
+      student_in_course(section: section2, active_all: true)
       # includes teacher, ta, and student in section1, but excludes student in section2
       address_book = AddressBook::MessageableUser.new(ta)
-      expect(address_book.count_in_context(course.asset_string)).to eql(3)
+      expect(address_book.count_in_contexts([course.asset_string])).to eql({
+        course.asset_string => 3
+      })
     end
   end
 
@@ -391,10 +393,10 @@ describe AddressBook::MessageableUser do
     it "avoids db query with rails cache" do
       teacher = teacher_in_course(active_all: true).user
       student = student_in_course(active_all: true, name: 'Bob').user
-      Rails.cache.expects(:fetch).
-        with(regexp_matches(/address_book_preload/)).
-        returns(MessageableUser.where(id: student).to_a)
-      teacher.expects(:load_messageable_users).never
+      expect(Rails.cache).to receive(:fetch).
+        with(match(/address_book_preload/)).
+        and_return(MessageableUser.where(id: student).to_a)
+      expect(teacher).to receive(:load_messageable_users).never
       AddressBook::MessageableUser.new(teacher).preload_users([student])
     end
 

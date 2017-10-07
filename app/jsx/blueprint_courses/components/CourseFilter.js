@@ -18,20 +18,20 @@
 
 import I18n from 'i18n!blueprint_settings'
 import React from 'react'
+import PropTypes from 'prop-types'
 import TextInput from 'instructure-ui/lib/components/TextInput'
 import Select from 'instructure-ui/lib/components/Select'
 import ScreenReaderContent from 'instructure-ui/lib/components/ScreenReaderContent'
 import Grid, {GridCol, GridRow} from 'instructure-ui/lib/components/Grid'
 import propTypes from '../propTypes'
 
-const { func } = React.PropTypes
+const { func } = PropTypes
 const MIN_SEACH = 3 // min search term length for API
 
 export default class CourseFilter extends React.Component {
   static propTypes = {
     onChange: func,
     onActivate: func,
-    onDeactivate: func,
     terms: propTypes.termList.isRequired,
     subAccounts: propTypes.accountList.isRequired,
   }
@@ -39,7 +39,6 @@ export default class CourseFilter extends React.Component {
   static defaultProps = {
     onChange: () => {},
     onActivate: () => {},
-    onDeactivate: () => {},
   }
 
   constructor (props) {
@@ -52,13 +51,19 @@ export default class CourseFilter extends React.Component {
     }
   }
 
+  componentDidUpdate (prevProps, prevState) {
+    if (prevState.search !== this.state.search ||
+        prevState.term !== this.state.term ||
+        prevState.subAccount !== this.state.subAccount) {
+      this.props.onChange(this.state)
+    }
+  }
+
   onChange = () => {
     this.setState({
       search: this.getSearchText(),
       term: this.termInput.value,
       subAccount: this.subAccountInput.value,
-    }, () => {
-      this.props.onChange(this.state)
     })
   }
 
@@ -89,8 +94,6 @@ export default class CourseFilter extends React.Component {
         if (isEmpty && !this.wrapper.contains(document.activeElement)) {
           this.setState({
             isActive: false,
-          }, () => {
-            this.props.onDeactivate()
           })
         }
       }

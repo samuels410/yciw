@@ -39,6 +39,8 @@ class ContentMigration < ActiveRecord::Base
 
   attr_accessor :imported_migration_items, :outcome_to_id_map, :attachment_path_id_lookup, :attachment_path_id_lookup_lower, :last_module_position, :skipped_master_course_items
 
+  has_a_broadcast_policy
+
   workflow do
     state :created
     state :queued
@@ -72,14 +74,6 @@ class ContentMigration < ActiveRecord::Base
         self.finished_at ||= Time.now.utc
       end
     end
-  end
-
-  # the stream item context is decided by calling asset.context(user), i guess
-  # to differentiate from the normal asset.context() call that may not give us
-  # the context we want. in this case, they're one and the same.
-  alias_method :original_context, :context
-  def context(user = nil)
-    self.original_context
   end
 
   def quota_context
@@ -273,6 +267,7 @@ class ContentMigration < ActiveRecord::Base
     self.workflow_state = :failed
     job_progress.fail if job_progress && !skip_job_progress
     save
+    self.update_master_migration('failed') if for_master_course_import?
     resolve_content_links! # don't leave placeholders
   end
 
@@ -410,6 +405,7 @@ class ContentMigration < ActiveRecord::Base
     if !self.migration_settings.has_key?(:overwrite_quizzes)
       self.migration_settings[:overwrite_quizzes] = for_course_copy? || for_master_course_import? || (self.migration_type && self.migration_type == 'canvas_cartridge_importer')
     end
+    self.migration_settings.reverse_merge!(:prefer_existing_tools => true) if self.migration_type == 'common_cartridge_importer' # default to true
 
     check_quiz_id_prepender
   end
@@ -543,14 +539,17 @@ class ContentMigration < ActiveRecord::Base
   end
   alias_method :import_content_without_send_later, :import_content
 
+  def master_migration
+    @master_migration ||= MasterCourses::MasterMigration.find(self.migration_settings[:master_migration_id])
+  end
+
   def update_master_migration(state)
-    master_migration = MasterCourses::MasterMigration.find(self.migration_settings[:master_migration_id])
     master_migration.update_import_state!(self, state)
   end
 
   def master_course_subscription
     return unless self.for_master_course_import?
-    @master_course_subscription ||= MasterCourses::ChildSubscription.find(self.migration_settings[:child_subscription_id])
+    @master_course_subscription ||= MasterCourses::ChildSubscription.find(self.child_subscription_id)
   end
 
   def prepare_data(data)
@@ -587,8 +586,6 @@ class ContentMigration < ActiveRecord::Base
       next unless MasterCourses::ALLOWED_CONTENT_TYPES.include?(klass)
       mig_ids = deletions[klass]
       item_scope = case klass
-      when 'WikiPage'
-        self.context.wiki.wiki_pages.not_deleted.where(migration_id: mig_ids)
       when 'Attachment'
         self.context.attachments.not_deleted.where(migration_id: mig_ids)
       else
@@ -602,6 +599,7 @@ class ContentMigration < ActiveRecord::Base
           add_skipped_item(child_tag)
         else
           Rails.logger.debug("syncing deletion of #{content.asset_string} from master course")
+          content.skip_downstream_changes!
           content.destroy
         end
       end
@@ -893,4 +891,38 @@ class ContentMigration < ActiveRecord::Base
       end
     end
   end
+
+  def notification_link_anchor
+    "!/blueprint/blueprint_subscriptions/#{self.child_subscription_id}/#{id}"
+  end
+
+  set_broadcast_policy do |p|
+    p.dispatch :blueprint_content_added
+    p.to { context.participating_admins }
+    p.whenever { |record|
+      record.changed_state_to(:imported) && record.for_master_course_import? &&
+        record.master_migration && record.master_migration.send_notification?
+    }
+  end
+
+  def self.expire_days
+    Setting.get('content_migrations_expire_after_days', '30').to_i
+  end
+
+  def self.expire?
+    ContentMigration.expire_days > 0
+  end
+
+  def expired?
+    return false unless ContentMigration.expire?
+    created_at < ContentMigration.expire_days.days.ago
+  end
+
+  scope :expired, -> {
+    if ContentMigration.expire?
+      where('created_at < ?', ContentMigration.expire_days.days.ago)
+    else
+      none
+    end
+  }
 end

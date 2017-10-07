@@ -27,6 +27,7 @@ module Canvas::Migration::Helpers
             ['discussion_topics', -> { I18n.t('lib.canvas.migration.discussion_topics', 'Discussion Topics') }],
             ['wiki_pages', -> { I18n.t('lib.canvas.migration.wikis', 'Wiki Pages') }],
             ['context_external_tools', -> { I18n.t('lib.canvas.migration.external_tools', 'External Tools') }],
+            ['tool_profiles', -> { I18n.t('lib.canvas.migration.tool_profiles', 'Tool Profiles') }],
             ['announcements', -> { I18n.t('lib.canvas.migration.announcements', 'Announcements') }],
             ['calendar_events', -> { I18n.t('lib.canvas.migration.calendar_events', 'Calendar Events') }],
             ['rubrics', -> { I18n.t('lib.canvas.migration.rubrics', 'Rubrics') }],
@@ -223,7 +224,7 @@ module Canvas::Migration::Helpers
             when 'attachments'
               course_attachments_data(content_list, source)
             when 'wiki_pages'
-              source.wiki.wiki_pages.not_deleted.select("id, title, assignment_id").each do |item|
+              source.wiki_pages.not_deleted.select("id, title, assignment_id").each do |item|
                 content_list << course_item_hash(type, item)
               end
             when 'discussion_topics'
@@ -232,6 +233,10 @@ module Canvas::Migration::Helpers
               end
             when 'learning_outcomes'
               source.linked_learning_outcomes.active.select('learning_outcomes.id,short_description').each do |item|
+                content_list << course_item_hash(type, item)
+              end
+            when 'tool_profiles'
+              source.tool_proxies.active.select("id, name").each do |item|
                 content_list << course_item_hash(type, item)
               end
             else
@@ -266,12 +271,12 @@ module Canvas::Migration::Helpers
             next if type == 'groups'
 
             count = 0
-            if type == 'wiki_pages'
-              count = source.wiki.wiki_pages.not_deleted.count
-            elsif type == 'discussion_topics'
+            if type == 'discussion_topics'
               count = source.discussion_topics.active.only_discussion_topics.count
             elsif type == 'learning_outcomes'
               count = source.linked_learning_outcomes.count
+            elsif type == 'tool_profiles'
+              count = source.tool_proxies.active.count
             elsif source.respond_to?(type) && source.send(type).respond_to?(:count)
               scope = source.send(type).except(:preload)
               if scope.klass.respond_to?(:not_deleted)

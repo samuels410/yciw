@@ -47,7 +47,7 @@ module Lti
       end
 
       it "associates the DeveloperKey with the product_family when creating" do
-        dev_key = DeveloperKey.create(api_key:'testapikey')
+        dev_key = DeveloperKey.create(api_key:'testapikey', vendor_code: 'acme.com')
         tool_proxy = tool_proxy_service.process_tool_proxy_json(
           json: tool_proxy_fixture,
           context: account,
@@ -76,7 +76,7 @@ module Lti
       end
 
       it "matches DeveloperKeys when looking for matching product family" do
-        dev_key = DeveloperKey.create(api_key:'testapikey')
+        dev_key = DeveloperKey.create(api_key:'testapikey', vendor_code: 'acme.com')
         pf = ProductFamily.new
         pf.vendor_code = 'acme.com'
         pf.product_code = 'assessment-tool-no-dev-key'
@@ -156,6 +156,26 @@ module Lti
         expect(tool_proxy.tool_settings.first.custom).to eq({"customerId"=>"394892759526"})
       end
 
+      it 'updates a tool setting for the tool proxy if custom is defined' do
+        tool_proxy = tool_proxy_service.process_tool_proxy_json(json: tool_proxy_fixture, context: account, guid: tool_proxy_guid)
+        tp = IMS::LTI::Models::ToolProxy.new.from_json(tool_proxy_fixture)
+        tp.custom = {"customerId"=>"bar"}
+        expect{
+          tool_proxy_service.process_tool_proxy_json(json: tp.to_json, context: account, guid: tool_proxy_guid, tool_proxy_to_update: tool_proxy)
+        }.to change{tool_proxy.reload.tool_settings.first.custom}.from({"customerId"=>"394892759526"}).to({"customerId"=>"bar"})
+      end
+
+      it 'updates a tool setting  by merging' do
+        tool_proxy = tool_proxy_service.process_tool_proxy_json(json: tool_proxy_fixture, context: account, guid: tool_proxy_guid)
+        tp = IMS::LTI::Models::ToolProxy.new.from_json(tool_proxy_fixture)
+        tp.custom = {"foo"=>"bar"}
+        expect{
+          tool_proxy_service.process_tool_proxy_json(json: tp.to_json, context: account, guid: tool_proxy_guid, tool_proxy_to_update: tool_proxy)
+        }.to change{tool_proxy.reload.tool_settings.first.custom}
+               .from({"customerId"=>"394892759526"})
+               .to({"customerId"=>"394892759526", "foo"=>"bar"})
+      end
+
       it 'does not create a tool setting for the tool proxy if custom is not defined' do
         tool_proxy = JSON.parse(tool_proxy_fixture)
         tool_proxy.delete('custom')
@@ -164,7 +184,7 @@ module Lti
       end
 
       it 'creates a tool_proxy' do
-        SecureRandom.stubs(:uuid).returns('my_uuid')
+        allow(SecureRandom).to receive(:uuid).and_return('my_uuid')
         tool_proxy = tool_proxy_service.process_tool_proxy_json(json: tool_proxy_fixture, context: account, guid: tool_proxy_guid)
         expect(tool_proxy.shared_secret).to eq 'ThisIsASecret!'
         expect(tool_proxy.guid).to eq tool_proxy_guid
@@ -224,7 +244,7 @@ module Lti
           tp_json['tool_profile']['resource_handler'][0]['message'][0]['enabled_capability'] = ['Canvas.placements.invalid']
           begin
             tool_proxy = tool_proxy_service.process_tool_proxy_json(json: tp_json.to_json, context: account, guid: tool_proxy_guid)
-          rescue Lti::ToolProxyService::InvalidToolProxyError => proxy_error
+          rescue Lti::Errors::InvalidToolProxyError => proxy_error
             puts proxy_error.message
           end
           expect(tool_proxy).to eq nil
@@ -236,8 +256,8 @@ module Lti
       it 'rejects tool proxies that have extra capabilities' do
         tp = IMS::LTI::Models::ToolProxy.new.from_json(tool_proxy_fixture)
         tp.tool_profile.resource_handlers.first.messages.first.enabled_capability = ['extra_capability']
-        expect { tool_proxy_service.process_tool_proxy_json(json: tp.as_json, context: account, guid: tool_proxy_guid) }.to raise_error(ToolProxyService::InvalidToolProxyError, 'Invalid Capabilities') do |exception|
-          expect(JSON.parse(exception.to_json)).to eq({"invalid_capabilities"=>["extra_capability"], "error"=>"Invalid Capabilities"})
+        expect { tool_proxy_service.process_tool_proxy_json(json: tp.as_json, context: account, guid: tool_proxy_guid) }.to raise_error(Lti::Errors::InvalidToolProxyError, 'Invalid Capabilities') do |exception|
+          expect(exception.as_json).to eq({invalid_capabilities: ["extra_capability"], "error" => "Invalid Capabilities"})
         end
 
       end
@@ -245,24 +265,104 @@ module Lti
       it 'rejects tool proxies that have extra services' do
         tp = IMS::LTI::Models::ToolProxy.new.from_json(tool_proxy_fixture)
         tp.security_contract.services.first.action = ['DELETE']
-        expect { tool_proxy_service.process_tool_proxy_json(json: tp.as_json, context: account, guid: tool_proxy_guid) }.to raise_error(ToolProxyService::InvalidToolProxyError, 'Invalid Services') do |exception|
-          expect(JSON.parse(exception.to_json)).to eq({"invalid_services"=>[{"id"=>"ToolProxy.collection", "actions"=>["DELETE"]}], "error"=>"Invalid Services"})
+        expect { tool_proxy_service.process_tool_proxy_json(json: tp.as_json, context: account, guid: tool_proxy_guid) }.to raise_error(Lti::Errors::InvalidToolProxyError, 'Invalid Services') do |exception|
+          expect(exception.as_json).to eq({invalid_services: [{id: "ToolProxy.collection", actions: ["DELETE"]}], "error" => "Invalid Services"})
         end
       end
 
       it 'rejects tool proxies that have extra variables' do
         tp = IMS::LTI::Models::ToolProxy.new.from_json(tool_proxy_fixture)
         tp.tool_profile.resource_handlers.first.messages.first.parameter = [IMS::LTI::Models::Parameter.new(name:'extra_test', variable: 'Custom.Variable')]
-        expect { tool_proxy_service.process_tool_proxy_json(json: tp.as_json, context: account, guid: tool_proxy_guid) }.to raise_error(ToolProxyService::InvalidToolProxyError, 'Invalid Capabilities')do |exception|
-          expect(JSON.parse(exception.to_json)).to eq({"invalid_capabilities"=>["Custom.Variable"], "error"=>"Invalid Capabilities"})
+        expect { tool_proxy_service.process_tool_proxy_json(json: tp.as_json, context: account, guid: tool_proxy_guid) }.to raise_error(Lti::Errors::InvalidToolProxyError, 'Invalid Capabilities')do |exception|
+          expect(exception.as_json).to eq({invalid_capabilities: ["Custom.Variable"], "error" => "Invalid Capabilities"})
         end
       end
 
       it 'rejects tool proxies that are missing a shared secret' do
         tp = IMS::LTI::Models::ToolProxy.new.from_json(tool_proxy_fixture)
         tp.security_contract.shared_secret = nil
-        expect { tool_proxy_service.process_tool_proxy_json(json: tp.as_json, context: account, guid: tool_proxy_guid) }.to raise_error(ToolProxyService::InvalidToolProxyError, 'Invalid SecurityContract')do |exception|
-          expect(JSON.parse(exception.to_json)).to eq({"invalid_security_contract"=>["shared_secret"], "error"=>"Invalid SecurityContract"})
+        expect { tool_proxy_service.process_tool_proxy_json(json: tp.as_json, context: account, guid: tool_proxy_guid) }.to raise_error(Lti::Errors::InvalidToolProxyError, 'Invalid SecurityContract')do |exception|
+          expect(exception.as_json).to eq({invalid_security_contract: [:shared_secret], "error" => "Invalid SecurityContract"})
+        end
+      end
+
+      context 'vendor developer keys' do
+        let(:valid_dev_key) { DeveloperKey.create!(vendor_code: 'acme.com') }
+        let(:mismatch_dev_key) { DeveloperKey.create!(vendor_code: 'different_vendor') }
+
+        it 'rejects tool proxies if vendor has developer key but does not use it in registration' do
+          valid_dev_key
+          tp = IMS::LTI::Models::ToolProxy.new.from_json(tool_proxy_fixture)
+          expect do
+            tool_proxy_service.process_tool_proxy_json(json: tp.as_json,
+                                                       context: account,
+                                                       guid: tool_proxy_guid)
+          end.to raise_error(Lti::Errors::InvalidToolProxyError, 'Developer key mismatch')
+        end
+
+        it 'rejects tool proxies if vendor has developer key but uses a different developer key' do
+          tp = IMS::LTI::Models::ToolProxy.new.from_json(tool_proxy_fixture)
+          expect do
+            valid_dev_key
+            tool_proxy_service.process_tool_proxy_json(json: tp.as_json,
+                                                       context: account,
+                                                       guid: tool_proxy_guid,
+                                                       developer_key: mismatch_dev_key)
+          end.to raise_error(Lti::Errors::InvalidToolProxyError, 'Developer key mismatch')
+        end
+
+        it 'rejects tool proxies if vendor does not match the developer key being used' do
+          valid_dev_key
+          mismatch_dev_key
+          tp = IMS::LTI::Models::ToolProxy.new.from_json(tool_proxy_fixture)
+          tp.tool_profile.product_instance.product_info.product_family.vendor.code = 'different_vendor'
+          expect do
+            tool_proxy_service.process_tool_proxy_json(json: tp.as_json,
+                                                       context: account,
+                                                       guid: tool_proxy_guid,
+                                                       developer_key: valid_dev_key)
+          end.to raise_error(Lti::Errors::InvalidToolProxyError, 'Developer key mismatch')
+        end
+
+        it 'rejects tool proxies if vendor does not have a developer key but attempts to use one' do
+          valid_dev_key
+          tp = IMS::LTI::Models::ToolProxy.new.from_json(tool_proxy_fixture)
+          tp.tool_profile.product_instance.product_info.product_family.vendor.code = 'different_vendor'
+          expect do
+            tool_proxy_service.process_tool_proxy_json(json: tp.as_json,
+                                                       context: account,
+                                                       guid: tool_proxy_guid,
+                                                       developer_key: valid_dev_key)
+          end.to raise_error(Lti::Errors::InvalidToolProxyError, 'Developer key mismatch')
+        end
+
+        it 'accepts tool proxies if vendor has no developer key and no developer key is provided' do
+          valid_dev_key
+          tp = IMS::LTI::Models::ToolProxy.new.from_json(tool_proxy_fixture)
+          tp.tool_profile.product_instance.product_info.product_family.vendor.code = 'different_vendor'
+          expect do
+            tool_proxy_service.process_tool_proxy_json(json: tp.as_json,
+                                                       context: account,
+                                                       guid: tool_proxy_guid)
+          end.not_to raise_error
+        end
+
+        it 'accepts tool proxies if vendor has developer key and it is used in registration' do
+          valid_dev_key
+          tp = IMS::LTI::Models::ToolProxy.new.from_json(tool_proxy_fixture)
+          expect do
+            tool_proxy_service.process_tool_proxy_json(json: tp.as_json,
+                                                       context: account,
+                                                       guid: tool_proxy_guid,
+                                                       developer_key: valid_dev_key)
+          end.not_to raise_error
+        end
+
+        it 'gives a descriptive error message if there is a developer key mismatch' do
+          tp = IMS::LTI::Models::ToolProxy.new.from_json(tool_proxy_fixture)
+          expect { tool_proxy_service.process_tool_proxy_json(json: tp.as_json, context: account, guid: tool_proxy_guid, developer_key: mismatch_dev_key) }.to raise_error do |e|
+            expect(e.as_json).to eq({"error" =>"Developer key mismatch"})
+          end
         end
       end
 
@@ -295,24 +395,20 @@ module Lti
         tp.security_contract.shared_secret = nil
         tp.security_contract.tp_half_shared_secret = tp_half_secret
         expect { tool_proxy_service.process_tool_proxy_json(json: tp.as_json, context: account, guid: tool_proxy_guid) }
-          .to raise_error(ToolProxyService::InvalidToolProxyError, 'Invalid SecurityContract') do |exception|
-          expect(JSON.parse(exception.to_json)).to eq({
-                                                        "invalid_security_contract" => [
-                                                          "shared_secret",
-                                                          "tp_half_shared_secret"
+          .to raise_error(Lti::Errors::InvalidToolProxyError, 'Invalid SecurityContract') do |exception|
+          expect(exception.as_json).to eq({
+                                                        invalid_security_contract:  [
+                                                          :shared_secret,
+                                                          :tp_half_shared_secret
                                                         ],
-                                                        "error"=>"Invalid SecurityContract"
+                                                        "error" => "Invalid SecurityContract"
                                                       })
         end
       end
     end
 
     describe '#delete_subscriptions' do
-      let(:course) do
-        course_with_student_submissions(active_all: true)
-        @course
-      end
-      let(:assignment) { course.assignments.first }
+      let(:assignment) { course.assignments.create!(name: 'banana') }
       let(:assignment_two) do
         assignment_two = assignment.dup
         assignment_two.update_attributes(lti_context_id: SecureRandom.uuid)

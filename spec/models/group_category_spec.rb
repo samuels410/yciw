@@ -316,7 +316,7 @@ describe GroupCategory do
       group = category.groups.create(:name => "Group 1", :context => @course)
       student = @course.enroll_student(user_model).user
 
-      DueDateCacher.expects(:recompute_course).with(@course.id, [assignment2.id])
+      expect(DueDateCacher).to receive(:recompute_course).with(@course.id, [assignment2.id])
       category.distribute_members_among_groups([student], [group])
     end
   end
@@ -475,11 +475,11 @@ describe GroupCategory do
         calc = GroupCategory::GroupBySectionCalculator.new(nil)
         mock_users_by_section = {}
         section_counts.each_with_index do |u_count, idx|
-          mock_users_by_section[idx] = stub(:count => u_count)
+          mock_users_by_section[idx] = double(:count => u_count)
         end
         calc.users_by_section_id = mock_users_by_section
         calc.user_count = section_counts.sum
-        calc.groups = stub(:count => group_count)
+        calc.groups = double(:count => group_count)
         dist = calc.determine_group_distribution
         dist.sort_by{|k, v| k}.map(&:last)
       end
@@ -566,6 +566,26 @@ describe GroupCategory do
         expect(users_to_section[u1]).to eq users_to_section[u2] # should be in same section
       end
       expect(groups.map(&:users).flatten).to match_array users_to_section.keys # should have distributed everybody
+    end
+
+    it "should catch errors and fail the current progress" do
+      expect_any_instantiation_of(@category).to receive(:distribute_members_among_groups_by_section).and_raise("oh noes")
+      @category.assign_unassigned_members_in_background(true)
+      run_jobs
+
+      progress = @category.progresses.last
+      expect(progress).to be_failed
+      expect(progress.message).to include("oh noes")
+    end
+
+    it "should not explode when there are more groups than students" do
+      student_in_course(:course => @course)
+
+      groups = []
+      2.times { |i| groups << @category.groups.create(:name => "Group #{i}", :context => @course) }
+
+      expect(@category.distribute_members_among_groups_by_section).to be_truthy
+      expect(groups.map(&:users).flatten).to eq [@student]
     end
   end
 end

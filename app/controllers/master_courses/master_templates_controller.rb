@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
-# @API Blueprint Templates
+# @API Blueprint Courses
 # @beta
 # Configure blueprint courses
 #
@@ -56,8 +56,14 @@
 #         "format": "int64"
 #       },
 #       "template_id": {
-#         "description": "The ID of the template the migration belongs to.",
+#         "description": "The ID of the template the migration belongs to. Only present when querying a blueprint course.",
 #         "example": 2,
+#         "type": "integer",
+#         "format": "int64"
+#       },
+#       "subscription_id": {
+#         "description": "The ID of the associated course's blueprint subscription. Only present when querying a course associated with a blueprint.",
+#         "example": 101,
 #         "type": "integer",
 #         "format": "int64"
 #       },
@@ -194,14 +200,17 @@
 #   }
 class MasterCourses::MasterTemplatesController < ApplicationController
   before_action :require_master_courses
-  before_action :get_template, :except => :migration_details
-  before_action :require_course_level_manage_rights, :except => :migration_details
+  before_action :get_course
+  before_action :get_template, :except => [:import_details, :imports_index, :imports_show]
+  before_action :get_subscription, :only => [:import_details, :imports_index, :imports_show]
+  before_action :require_course_level_manage_rights
   before_action :require_account_level_manage_rights, :only => [:update_associations]
 
   include Api::V1::Course
   include Api::V1::MasterCourses
 
   # @API Get blueprint information
+  # @subtopic Blueprint Management
   #
   # Using 'default' as the template_id should suffice for the current implmentation (as there should be only one template per course).
   # However, using specific template ids may become necessary in the future
@@ -217,6 +226,7 @@ class MasterCourses::MasterTemplatesController < ApplicationController
   end
 
   # @API Get associated course information
+  # @subtopic Blueprint Management
   #
   # Returns a list of courses that are configured to receive updates from this blueprint
   #
@@ -243,6 +253,7 @@ class MasterCourses::MasterTemplatesController < ApplicationController
   end
 
   # @API Update associated courses
+  # @subtopic Blueprint Management
   #
   # Send a list of course ids to add or remove new associations for the template.
   # Cannot add courses that do not belong to the blueprint course's account. Also cannot add
@@ -299,17 +310,25 @@ class MasterCourses::MasterTemplatesController < ApplicationController
   end
 
   # @API Begin a migration to push to associated courses
+  # @subtopic Blueprint Management
   #
   # Begins a migration to push recently updated content to all associated courses.
   # Only one migration can be running at a time.
   #
   # @argument comment [Optional, String]
   #     An optional comment to be included in the sync history.
+  # @argument send_notification [Optional, Boolean]
+  #     Send a notification to the calling user when the sync completes.
+  #
+  # @argument copy_settings [Optional, Boolean]
+  #     Whether course settings should be copied over to associated courses.
+  #     Defaults to true for newly associated courses.
   #
   # @example_request
   #     curl https://<canvas>/api/v1/courses/1/blueprint_templates/default/migrations \
   #     -X POST \
   #     -F 'comment=Fixed spelling in question 3 of midterm exam' \
+  #     -F 'send_notification=true' \
   #     -H 'Authorization: Bearer <token>'
   #
   # @returns BlueprintMigration
@@ -320,42 +339,15 @@ class MasterCourses::MasterTemplatesController < ApplicationController
       return render :json => {:message => "No associated courses to migrate to"}, :status => :bad_request
     end
 
-    options = params.permit(:comment)
+    options = params.permit(:comment, :send_notification).to_unsafe_h
+    options[:copy_settings] = value_to_boolean(params[:copy_settings]) if params.has_key?(:copy_settings)
 
     migration = MasterCourses::MasterMigration.start_new_migration!(@template, @current_user, options)
     render :json => master_migration_json(migration, @current_user, session)
   end
 
-  # @API List blueprint migrations
-  #
-  # Shows migrations for the template, starting with the most recent
-  #
-  # @example_request
-  #     curl https://<canvas>/api/v1/courses/1/blueprint_templates/default/migrations \
-  #     -H 'Authorization: Bearer <token>'
-  #
-  # @returns [BlueprintMigration]
-  def migrations_index
-    # sort id desc
-    migrations = Api.paginate(@template.master_migrations.order("id DESC"), self, api_v1_course_blueprint_migrations_url)
-    render :json => migrations.map{|migration| master_migration_json(migration, @current_user, session) }
-  end
-
-  # @API Show a blueprint migration
-  #
-  # Shows the status of a migration
-  #
-  # @example_request
-  #     curl https://<canvas>/api/v1/courses/1/blueprint_templates/default/migrations/:id \
-  #     -H 'Authorization: Bearer <token>'
-  #
-  # @returns BlueprintMigration
-  def migrations_show
-    migration = @template.master_migrations.find(params[:id])
-    render :json => master_migration_json(migration, @current_user, session)
-  end
-
   # @API Set or remove restrictions on a blueprint course object
+  # @subtopic Blueprint Management
   #
   # If a blueprint course object is restricted, editing will be limited for copies in associated courses.
   #
@@ -391,8 +383,6 @@ class MasterCourses::MasterTemplatesController < ApplicationController
 
     scope =
       case content_type
-      when 'wiki_page'
-        @course.wiki.wiki_pages.not_deleted
       when 'external_tool'
         @course.context_external_tools.active
       when 'attachment'
@@ -406,7 +396,7 @@ class MasterCourses::MasterTemplatesController < ApplicationController
     end
     mc_tag = @template.content_tag_for(item)
     if value_to_boolean(params[:restricted])
-      custom_restrictions = params[:restrictions] && Hash[params[:restrictions].map{|k, v| [k.to_sym, value_to_boolean(v)]}]
+      custom_restrictions = params[:restrictions] && Hash[params[:restrictions].to_unsafe_h.map{|k, v| [k.to_sym, value_to_boolean(v)]}]
       mc_tag.restrictions = custom_restrictions || @template.default_restrictions_for(item)
       mc_tag.use_default_restrictions = !custom_restrictions
     else
@@ -421,53 +411,8 @@ class MasterCourses::MasterTemplatesController < ApplicationController
     end
   end
 
-  # @API Get migration details
-  #
-  # Show the changes that were propagated in a blueprint migration. This endpoint can be called on a
-  # blueprint course or an associated course; when called on an associated course, the exceptions
-  # field will only include records for that course (and not other courses associated with the blueprint).
-  #
-  # @example_request
-  #     curl https://<canvas>/api/v1/courses/1/blueprint_templates/default/migrations/2/details \
-  #     -H 'Authorization: Bearer <token>'
-  #
-  # @returns [ChangeRecord]
-  def migration_details
-    @course = api_find(Course, params[:course_id])
-    return unless authorized_action(@course, @current_user, :manage)
-    @mm = MasterCourses::MasterMigration.find(params[:id])
-
-    return render :json => [] unless @mm.export_results.has_key?(:selective)
-
-    subscriptions = @mm.master_template.child_subscriptions.where(:id => @mm.export_results[:selective][:subscriptions])
-    if @mm.master_template.course == @course
-      # enumerate objects in the blueprint
-      tag_association = @mm.master_template.content_tags
-    else
-      # enumerate objects in the target minion course
-      subscriptions = subscriptions.where(child_course_id: @course).to_a
-      raise ActiveRecord::RecordNotFound if subscriptions.empty?
-      tag_association = subscriptions.first.content_tags
-    end
-
-    changes = []
-    exceptions = get_exceptions_by_subscription(subscriptions)
-
-    [:created, :updated, :deleted].each do |action|
-      migration_ids = @mm.export_results[:selective][action].values.flatten
-      tags = tag_association.where(:migration_id => migration_ids).preload(:content).to_a
-      restricted_ids = find_restricted_ids(tags)
-      tags.each do |tag|
-        next if tag.content_type == 'AssignmentGroup' # these are noise, since they're touched with each assignment
-        changes << changed_asset_json(tag.content, action, restricted_ids.include?(tag.migration_id),
-                                      tag.migration_id, exceptions)
-      end
-    end
-
-    render :json => changes
-  end
-
   # @API Get unsynced changes
+  # @subtopic Blueprint Management
   #
   # Retrieve a list of learning objects that have changed since the last blueprint sync operation.
   #
@@ -483,10 +428,10 @@ class MasterCourses::MasterTemplatesController < ApplicationController
       item_scope = case klass
       when 'Attachment'
         @course.attachments
-      when 'WikiPage'
-        @course.wiki.wiki_pages
       when 'Assignment'
         @course.assignments.include_submittables
+      when 'DiscussionTopic'
+        @course.discussion_topics.only_discussion_topics
       else
         klass.constantize.where(:context_id => @course, :context_type => 'Course')
       end
@@ -514,6 +459,124 @@ class MasterCourses::MasterTemplatesController < ApplicationController
     render :json => changes
   end
 
+  # @API List blueprint migrations
+  # @subtopic Blueprint Course History
+  #
+  # Shows migrations for the template, starting with the most recent. This endpoint can be called on a
+  # blueprint course. See also {api:MasterCourses::MasterTemplatesController#imports_index the associated course side}.
+  #
+  # @example_request
+  #     curl https://<canvas>/api/v1/courses/1/blueprint_templates/default/migrations \
+  #     -H 'Authorization: Bearer <token>'
+  #
+  # @returns [BlueprintMigration]
+  def migrations_index
+    # sort id desc
+    migrations = Api.paginate(@template.master_migrations.order("id DESC"), self, api_v1_course_blueprint_migrations_url)
+    render :json => migrations.map{|migration| master_migration_json(migration, @current_user, session) }
+  end
+
+  # @API Show a blueprint migration
+  # @subtopic Blueprint Course History
+  #
+  # Shows the status of a migration. This endpoint can be called on a blueprint course. See also
+  # {api:MasterCourses::MasterTemplatesController#imports_show the associated course side}.
+  #
+  # @example_request
+  #     curl https://<canvas>/api/v1/courses/1/blueprint_templates/default/migrations/:id \
+  #     -H 'Authorization: Bearer <token>'
+  #
+  # @returns BlueprintMigration
+  def migrations_show
+    migration = @template.master_migrations.find(params[:id])
+    render :json => master_migration_json(migration, @current_user, session)
+  end
+
+  # @API Get migration details
+  # @subtopic Blueprint Course History
+  #
+  # Show the changes that were propagated in a blueprint migration. This endpoint can be called on a
+  # blueprint course. See also {api:MasterCourses::MasterTemplatesController#import_details the associated course side}.
+  #
+  # @example_request
+  #     curl https://<canvas>/api/v1/courses/1/blueprint_templates/default/migrations/2/details \
+  #     -H 'Authorization: Bearer <token>'
+  #
+  # @returns [ChangeRecord]
+  def migration_details
+    @mm = @template.master_migrations.where(:id => params[:id]).first!
+    return render :json => [] unless @mm.export_results.has_key?(:selective)
+
+    subscriptions = @template.child_subscriptions.where(:id => @mm.export_results[:selective][:subscriptions])
+    tag_association = @template.content_tags
+
+    return render_changes(tag_association, subscriptions)
+  end
+
+  # @API List blueprint imports
+  # @subtopic Associated Course History
+  #
+  # Shows migrations imported into a course associated with a blueprint, starting with the most recent. See also
+  # {api:MasterCourses::MasterTemplatesController#migrations_index the blueprint course side}.
+  #
+  # Use 'default' as the subscription_id to use the currently active blueprint subscription.
+  #
+  # @example_request
+  #     curl https://<canvas>/api/v1/courses/2/blueprint_subscriptions/default/migrations \
+  #     -H 'Authorization: Bearer <token>'
+  #
+  # @returns [BlueprintMigration]
+  def imports_index
+    # maybe add child_subscription_id as a column if we expect people to use this endpoint
+    migrations = @course.content_migrations.
+      where(:migration_type => 'master_course_import', :child_subscription_id => @subscription).
+      order('id DESC')
+    migrations = Api.paginate(migrations, self, api_v1_course_blueprint_imports_url)
+    render :json => migrations.map{ |migration| master_migration_json(migration.master_migration, @current_user,
+                                                                      session, :child_migration => migration,
+                                                                      :subscription => @subscription) }
+  end
+
+  # @API Show a blueprint import
+  # @subtopic Associated Course History
+  #
+  # Shows the status of an import into a course associated with a blueprint. See also
+  # {api:MasterCourses::MasterTemplatesController#migrations_show the blueprint course side}.
+  #
+  # @example_request
+  #     curl https://<canvas>/api/v1/courses/2/blueprint_subscriptions/default/migrations/:id \
+  #     -H 'Authorization: Bearer <token>'
+  #
+  # @returns BlueprintMigration
+  def imports_show
+    migration = @course.content_migrations.
+      where(:migration_type => 'master_course_import', :child_subscription_id => @subscription).
+      find(params[:id])
+    render :json => master_migration_json(migration.master_migration, @current_user, session,
+                                          :child_migration => migration, :subscription => @subscription)
+  end
+
+  # @API Get import details
+  # @subtopic Associated Course History
+  #
+  # Show the changes that were propagated to a course associated with a blueprint.  See also
+  # {api:MasterCourses::MasterTemplatesController#migration_details the blueprint course side}.
+  #
+  # @example_request
+  #     curl https://<canvas>/api/v1/courses/2/blueprint_subscriptions/default/7/details \
+  #     -H 'Authorization: Bearer <token>'
+  #
+  # @returns [ChangeRecord]
+  def import_details
+    migration = @course.content_migrations.where(:migration_type => 'master_course_import', :id => params[:id]).first!
+    @mm = migration.master_migration
+    return render :json => [] unless @mm.export_results.has_key?(:selective) && @mm.export_results[:selective][:subscriptions].include?(@subscription.id)
+
+    tag_association = @subscription.content_tags
+
+    return render_changes(tag_association, [@subscription])
+  end
+
   protected
   def require_master_courses
     render_unauthorized_action unless master_courses?
@@ -527,8 +590,11 @@ class MasterCourses::MasterTemplatesController < ApplicationController
     !!authorized_action(@course, @current_user, :manage)
   end
 
-  def get_template
+  def get_course
     @course = api_find(Course, params[:course_id])
+  end
+
+  def get_template
     mc_scope = @course.master_course_templates.active
     template_id = params[:template_id]
     if template_id == 'default'
@@ -539,22 +605,52 @@ class MasterCourses::MasterTemplatesController < ApplicationController
     end
   end
 
+  def get_subscription
+    subscription_scope = @course.master_course_subscriptions
+    subscription_id = params[:subscription_id]
+    @subscription = if subscription_id == 'default'
+      subscription_scope.active.first!
+    else
+      subscription_scope.find(subscription_id)
+    end
+  end
+
   def get_exceptions_by_subscription(subscriptions)
-    import_ids = @mm.import_results.keys
-    import_ids_by_course = ContentMigration.where(id: import_ids).pluck(:context_id, :id).to_h
+    results = @mm.import_results.present? ?
+      @mm.import_results.values.index_by{|h| h[:subscription_id]} :
+      Hash[@mm.migration_results.where(:child_subscription_id => subscriptions).where.not(:results => nil).pluck(:child_subscription_id, :results)]
 
     exceptions = {}
     subscriptions.each do |sub|
-      import_id = import_ids_by_course[sub.child_course_id]
-      next unless import_id
-      sub.content_tags.where(:migration_id => @mm.import_results[import_id][:skipped]).each do |child_tag|
+      next unless result = results[sub.id]
+      skipped_items = result[:skipped]
+      next unless skipped_items.present?
+      sub.content_tags.where(:migration_id => skipped_items).each do |child_tag|
         exceptions[child_tag.migration_id] ||= []
         exceptions[child_tag.migration_id] << { :course_id => sub.child_course_id,
-                                                :conflicting_changes => change_classes(
-                                                  child_tag.content_type.constantize, child_tag.downstream_changes) }
+          :conflicting_changes => change_classes(
+            child_tag.content_type.constantize, child_tag.downstream_changes) }
       end
     end
     exceptions
+  end
+
+  def render_changes(tag_association, subscriptions)
+    changes = []
+    exceptions = get_exceptions_by_subscription(subscriptions)
+
+    [:created, :updated, :deleted].each do |action|
+      migration_ids = @mm.export_results[:selective][action].values.flatten
+      tags = tag_association.where(:migration_id => migration_ids).preload(:content).to_a
+      restricted_ids = find_restricted_ids(tags)
+      tags.each do |tag|
+        next if tag.content_type == 'AssignmentGroup' # these are noise, since they're touched with each assignment
+        changes << changed_asset_json(tag.content, action, restricted_ids.include?(tag.migration_id),
+                                      tag.migration_id, exceptions)
+      end
+    end
+
+    render :json => changes
   end
 
   def find_restricted_ids(tags)

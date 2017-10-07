@@ -130,7 +130,9 @@ class Quizzes::QuizzesController < ApplicationController
       :FLAGS => {
         question_banks: feature_enabled?(:question_banks),
         post_to_sis_enabled: Assignment.sis_grade_export_enabled?(@context),
-        migrate_quiz_enabled:  @domain_root_account.feature_enabled?(:quizzes2_exporter)
+        migrate_quiz_enabled:
+          @domain_root_account.feature_enabled?(:quizzes2_exporter) &&
+          @context.quiz_lti_tool.present?
       },
       :quiz_menu_tools => external_tools_display_hashes(:quiz_menu),
       :SIS_NAME => sis_name,
@@ -702,6 +704,7 @@ class Quizzes::QuizzesController < ApplicationController
           @current_version = (@current_submission.version_number == @submission.version_number)
           @version_number = "current" if @current_version
         end
+        @submission.submission&.mark_read(@current_user) if @submission
         log_asset_access(@quiz, "quizzes", 'quizzes')
 
         if @quiz.require_lockdown_browser? && @quiz.require_lockdown_browser_for_results? && params[:viewing]

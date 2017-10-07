@@ -65,8 +65,8 @@ class Account < ActiveRecord::Base
 
   has_many :account_reports
   has_many :grading_standards, -> { where("workflow_state<>'deleted'") }, as: :context, inverse_of: :context
-  has_many :assessment_questions, :through => :assessment_question_banks
   has_many :assessment_question_banks, -> { preload(:assessment_questions, :assessment_question_bank_users) }, as: :context, inverse_of: :context
+  has_many :assessment_questions, :through => :assessment_question_banks
   has_many :roles
   has_many :all_roles, :class_name => 'Role', :foreign_key => 'root_account_id'
   has_many :progresses, :as => :context, :inverse_of => :context
@@ -131,6 +131,9 @@ class Account < ActiveRecord::Base
   are_sis_sticky :name
 
   include FeatureFlags
+  def feature_flag_cache
+    MultiCache.cache
+  end
 
   def default_locale(recurse = false)
     result = read_attribute(:default_locale)
@@ -372,8 +375,7 @@ class Account < ActiveRecord::Base
 
     if self.root_account?
       self.errors.add(:sis_source_id, t('#account.root_account_cant_have_sis_id', "SIS IDs cannot be set on root accounts"))
-      throw :abort unless CANVAS_RAILS4_2
-      return false
+      throw :abort
     end
 
     scope = root_account.all_accounts.where(sis_source_id:  self.sis_source_id)
@@ -382,8 +384,7 @@ class Account < ActiveRecord::Base
     return true unless scope.exists?
 
     self.errors.add(:sis_source_id, t('#account.sis_id_in_use', "SIS ID \"%{sis_id}\" is already in use", :sis_id => self.sis_source_id))
-    throw :abort unless CANVAS_RAILS4_2
-    false
+    throw :abort
   end
 
   def update_account_associations_if_changed
@@ -528,7 +529,7 @@ class Account < ActiveRecord::Base
     return unless id
     default_id = Shard.relative_id_for(id, Shard.current, Shard.default)
     Shard.default.activate do
-      Rails.cache.delete(account_lookup_cache_key(default_id)) if default_id
+      MultiCache.delete(account_lookup_cache_key(default_id)) if default_id
     end
   rescue
     nil
@@ -828,7 +829,7 @@ class Account < ActiveRecord::Base
   end
 
   def membership_for_user(user)
-    self.account_users.where(user_id: user).first if user
+    self.account_users.active.where(user_id: user).first if user
   end
 
   def available_custom_account_roles(include_inactive=false)
@@ -939,7 +940,7 @@ class Account < ActiveRecord::Base
         @account_users_cache[user.global_id] ||= begin
           all_site_admin_account_users_hash = MultiCache.fetch("all_site_admin_account_users3") do
             # this is a plain ruby hash to keep the cached portion as small as possible
-            self.account_users.inject({}) { |result, au| result[au.user_id] ||= []; result[au.user_id] << [au.id, au.role_id]; result }
+            self.account_users.active.inject({}) { |result, au| result[au.user_id] ||= []; result[au.user_id] << [au.id, au.role_id]; result }
           end
           (all_site_admin_account_users_hash[user.id] || []).map do |(id, role_id)|
             au = AccountUser.new
@@ -958,7 +959,7 @@ class Account < ActiveRecord::Base
         if account_chain_ids == [Account.site_admin.id]
           Account.site_admin.account_users_for(user)
         else
-          AccountUser.where(:account_id => account_chain_ids, :user_id => user).to_a
+          AccountUser.where(:account_id => account_chain_ids, :user_id => user).active.to_a
         end
       end
     end
@@ -966,12 +967,12 @@ class Account < ActiveRecord::Base
     @account_users_cache[user.global_id]
   end
 
-  # returns all account users for this entire account tree
+  # returns all active account users for this entire account tree
   def all_account_users_for(user)
     raise "must be a root account" unless self.root_account?
     Shard.partition_by_shard(account_chain(include_site_admin: true).uniq) do |accounts|
       next unless user.associated_shards.include?(Shard.current)
-      AccountUser.eager_load(:account).where("user_id=? AND (root_account_id IN (?) OR account_id IN (?))", user, accounts, accounts)
+      AccountUser.active.eager_load(:account).where("user_id=? AND (root_account_id IN (?) OR account_id IN (?))", user, accounts, accounts)
     end
   end
 
@@ -1172,7 +1173,7 @@ class Account < ActiveRecord::Base
   def self.find_cached(id)
     default_id = Shard.relative_id_for(id, Shard.current, Shard.default)
     Shard.default.activate do
-      Rails.cache.fetch(account_lookup_cache_key(default_id)) do
+      MultiCache.fetch(account_lookup_cache_key(default_id)) do
         begin
           account = Account.find(default_id)
         rescue ActiveRecord::RecordNotFound => e
@@ -1364,7 +1365,7 @@ class Account < ActiveRecord::Base
       tabs = []
       if user && self.grants_right?(user, :read_roster)
         if feature_enabled?(:course_user_search)
-          tabs << { :id => TAB_SEARCH, :label => t("Search"), :css_class => 'search', :href => :account_course_user_search_path }
+          tabs << { :id => TAB_SEARCH, :label => t("Courses & People"), :css_class => 'search', :href => :account_course_user_search_path }
         else
           tabs << { :id => TAB_USERS, :label => t('#account.tab_users', "Users"), :css_class => 'users', :href => :account_users_path }
         end
@@ -1377,7 +1378,7 @@ class Account < ActiveRecord::Base
     else
       tabs = []
       if feature_enabled?(:course_user_search)
-        tabs << { :id => TAB_SEARCH, :label => t("Search"), :css_class => 'search', :href => :account_path } if user && (grants_right?(user, :read_course_list) || grants_right?(user, :read_roster))
+        tabs << { :id => TAB_SEARCH, :label => t("Courses & People"), :css_class => 'search', :href => :account_path } if user && (grants_right?(user, :read_course_list) || grants_right?(user, :read_roster))
       else
         tabs << { :id => TAB_COURSES, :label => t('#account.tab_courses', "Courses"), :css_class => 'courses', :href => :account_path } if user && self.grants_right?(user, :read_course_list)
         tabs << { :id => TAB_USERS, :label => t('#account.tab_users', "Users"), :css_class => 'users', :href => :account_users_path } if user && self.grants_right?(user, :read_roster)
@@ -1435,13 +1436,15 @@ class Account < ActiveRecord::Base
           link[:type] = 'custom'
         end
       end
+      links = HelpLinks.map_default_links(links)
     end
 
-    if settings[:new_custom_help_links]
-      links || Account::HelpLinks.default_links
+    result = if settings[:new_custom_help_links]
+      links || HelpLinks.default_links
     else
-      Account::HelpLinks.default_links + (links || [])
+      HelpLinks.default_links + (links || [])
     end
+    HelpLinks.instantiate_links(result)
   end
 
   def set_service_availability(service, enable)
@@ -1647,5 +1650,9 @@ class Account < ActiveRecord::Base
     end
     return work.call if Rails.env.test?
     self.class.connection.after_transaction_commit(&work)
+  end
+
+  def migrate_to_canvadocs?
+    Canvadocs.hijack_crocodoc_sessions? && feature_enabled?(:new_annotations)
   end
 end

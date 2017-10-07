@@ -35,7 +35,7 @@ module AccountReports
 
       #if both dates are specified use them or change the start date if range is over 2 week
       if start_at && end_at
-        if end_at - start_at > 2.weeks
+        if end_at - start_at > 2.weeks.to_i
           @start = end_at - 2.weeks
           @account_report.parameters["start_at"] = @start
         end
@@ -117,6 +117,7 @@ module AccountReports
                              AND a.context_type = 'Course'
                            WHERE s.user_id = p.user_id
                              AND a.context_id = courses.id
+                             AND s.workflow_state <> 'deleted'
                            #{time_span_join})")
 
       no_subs = no_subs.where(e: {workflow_state: enrollment_states}) if enrollment_states

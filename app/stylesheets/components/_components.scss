@@ -24,9 +24,6 @@
 }
 
 // List View
-
-$ic-brand-course-nav-link--active: $ic-brand-primary;
-
 .list-view {
   overflow: auto;
   & > header,
@@ -95,13 +92,13 @@ $ic-brand-course-nav-link--active: $ic-brand-primary;
   }
 
   a.active {
-    background-color: $ic-brand-course-nav-link--active;
+    background-color: var(--ic-brand-primary);
     font-weight: bold;
     color: $ic-color-light;
-    &:hover, &:focus { background-color: $ic-brand-primary; }
+    &:hover, &:focus { background-color: var(--ic-brand-primary); }
     .nav-badge {
       background: $ic-color-light;
-      color: $ic-brand-primary;
+      color: var(--ic-brand-primary);
     }
   }
 }
@@ -131,7 +128,7 @@ $ic-brand-course-nav-link--active: $ic-brand-primary;
     border-bottom: 1px solid $ic-border-light;
 
     &:hover, &:focus {
-      color: $ic-link-color;
+      color: var(--ic-link-color);
     }
 
     @if $use_high_contrast { text-decoration: none; }

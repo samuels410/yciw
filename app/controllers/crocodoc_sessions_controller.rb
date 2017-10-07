@@ -34,7 +34,8 @@ class CrocodocSessionsController < ApplicationController
       crocodoc = attachment.crocodoc_document
       url = crocodoc.session_url(:user => @current_user,
                                  :annotations => annotations,
-                                 :crocodoc_ids => blob["crocodoc_ids"])
+                                 :enable_annotations => blob["enable_annotations"],
+                                 :moderated_grading_whitelist => blob["moderated_grading_whitelist"])
 
       # For the purposes of reporting student viewership, we only
       # care if the original attachment owner is looking

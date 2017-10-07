@@ -34,9 +34,7 @@ describe "Standard Common Cartridge importing" do
     @course = course_factory
     @migration = ContentMigration.create(:context => @course)
     @migration.migration_settings[:migration_ids_to_import] = {:copy => {}}
-    enable_cache do
-      Importers::CourseContentImporter.import_content(@course, @course_data, nil, @migration)
-    end
+    Importers::CourseContentImporter.import_content(@course, @course_data, nil, @migration)
   end
 
   it "should import webcontent" do
@@ -233,14 +231,12 @@ describe "Standard Common Cartridge importing" do
     end
 
     it "should import webcontent" do
-      expect(@course.attachments.count).to eq 20
       expect(@course.attachments.active.count).to eq 10
       mig_ids = %w{I_00001_R I_00006_Media I_media_R f3 f4 I_00003_R_IMAGERESOURCE 7acb90d1653008e73753aa2cafb16298 6a35b0974f59819404dc86d48fe39fc3}
       mig_ids.each do |mig_id|
         atts = @course.attachments.where(migration_id: mig_id).to_a
-        expect(atts.length).to eq 2
-        expect(atts.any?{|a|a.file_state = 'deleted'}).to eq true
-        expect(atts.any?{|a|a.file_state = 'available'}).to eq true
+        expect(atts.length).to eq 1
+        expect(atts.first.file_state).to eq 'available'
       end
     end
 
@@ -297,7 +293,7 @@ describe "Standard Common Cartridge importing" do
       expect(@course.context_external_tools.first.migration_id).to eq "I_00011_R"
       expect(@course.context_modules.count).to eq 1
       expect(@course.context_modules.first.migration_id).to eq 'I_00000'
-      expect(@course.wiki.wiki_pages.count).to eq 0
+      expect(@course.wiki_pages.count).to eq 0
       expect(@course.discussion_topics.count).to eq 1
       expect(@course.discussion_topics.first.migration_id).to eq 'I_00006_R'
     end
@@ -454,10 +450,10 @@ describe "More Standard Common Cartridge importing" do
     @copy_to.course_code = "alt name"
 
     @migration = Object.new
-    @migration.stubs(:to_import).returns(nil)
-    @migration.stubs(:context).returns(@copy_to)
-    @migration.stubs(:import_object?).returns(true)
-    @migration.stubs(:add_imported_item)
+    allow(@migration).to receive(:to_import).and_return(nil)
+    allow(@migration).to receive(:context).and_return(@copy_to)
+    allow(@migration).to receive(:import_object?).and_return(true)
+    allow(@migration).to receive(:add_imported_item)
   end
 
   it "should properly handle top-level resource references" do
@@ -607,9 +603,7 @@ describe "LTI tool combination" do
     @migration = ContentMigration.create(:context => @course)
     @migration.migration_type = "common_cartridge_importer"
     @migration.migration_settings[:migration_ids_to_import] = {:copy => {}}
-    enable_cache do
-      Importers::CourseContentImporter.import_content(@course, @course_data, nil, @migration)
-    end
+    Importers::CourseContentImporter.import_content(@course, @course_data, nil, @migration)
   end
 
   it "should combine lti tools in cc packages when possible" do
@@ -647,9 +641,7 @@ describe "other cc files" do
       :base_download_dir=>unzipped_file_path, :content_migration => @migration)
     converter.export
     @course_data = converter.course.with_indifferent_access
-    enable_cache do
-      Importers::CourseContentImporter.import_content(@course, @course_data, nil, @migration)
-    end
+    Importers::CourseContentImporter.import_content(@course, @course_data, nil, @migration)
   end
 
   describe "cc assignment extensions" do

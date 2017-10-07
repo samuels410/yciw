@@ -75,7 +75,8 @@ module Api::V1::Course
   #     "hide_final_grades" => false,
   #     "apply_assignment_group_weights" => false,
   #     "calendar" => { "ics" => "http://localhost:3000/feeds/calendars/course_Y6uXZZPu965ziva2pqI7c0QR9v1yu2QZk9X0do2D.ics" },
-  #     "permissions" => { :create_discussion_topic => true }
+  #     "permissions" => { :create_discussion_topic => true },
+  #     "uuid" => "WvAHhY5FINzq5IyRIJybGeiXyFkG3SqHUPb7jZY5"
   #   }
   #
   def course_json(course, user, session, includes, enrollments)
@@ -95,6 +96,7 @@ module Api::V1::Course
       hash['teachers'] = course.teachers.map { |teacher| user_display_json(teacher) } if includes.include?('teachers')
       hash['tabs'] = tabs_available_json(course, user, session, ['external']) if includes.include?('tabs')
       hash['locale'] = course.locale unless course.locale.nil?
+      hash['subaccount_name'] = course.account.name if includes.include?('subaccount')
       add_helper_dependant_entries(hash, course, builder)
       apply_nickname(hash, course, user) if user
 

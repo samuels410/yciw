@@ -26,7 +26,7 @@ module Lti
   describe CapabilitiesHelper do
     let(:root_account) { Account.new(lti_guid: 'test-lti-guid') }
     let(:account) { Account.new(root_account: root_account) }
-    let(:course) { Course.new(account: account) }
+    let(:course) { Course.new(account: account, sis_source_id: 12) }
     let(:group_category) { course.group_categories.new(name: 'Category') }
     let(:group) { course.groups.new(name: 'Group', group_category: group_category) }
     let(:user) { User.new }
@@ -38,33 +38,33 @@ module Lti
         url: 'http://www.example.com'
       )
     end
-    let(:substitution_helper) { stub_everything }
+    let(:substitution_helper) { double.as_null_object }
     let(:right_now) { DateTime.now }
     let(:tool) do
-      m = mock('tool')
-      m.stubs(:id).returns(1)
-      m.stubs(:context).returns(root_account)
-      shard_mock = mock('shard')
-      shard_mock.stubs(:settings).returns({encription_key: 'abc'})
-      m.stubs(:shard).returns(shard_mock)
-      m.stubs(:opaque_identifier_for).returns("6cd2e0d65bd5aef3b5ee56a64bdcd595e447bc8f")
+      m = double('tool')
+      allow(m).to receive(:id).and_return(1)
+      allow(m).to receive(:context).and_return(root_account)
+      shard_mock = double('shard')
+      allow(shard_mock).to receive(:settings).and_return({encription_key: 'abc'})
+      allow(m).to receive(:shard).and_return(shard_mock)
+      allow(m).to receive(:opaque_identifier_for).and_return("6cd2e0d65bd5aef3b5ee56a64bdcd595e447bc8f")
       m
     end
     let(:controller) do
-      request_mock = mock('request')
-      request_mock.stubs(:url).returns('https://localhost')
-      request_mock.stubs(:host).returns('/my/url')
-      request_mock.stubs(:scheme).returns('https')
-      m = mock('controller')
-      m.stubs(:css_url_for).with(:common).returns('/path/to/common.scss')
-      m.stubs(:request).returns(request_mock)
-      m.stubs(:logged_in_user).returns(user)
-      m.stubs(:named_context_url).returns('url')
-      m.stubs(:polymorphic_url).returns('url')
-      view_context_mock = mock('view_context')
-      view_context_mock.stubs(:stylesheet_path)
-        .returns(URI.parse(request_mock.url).merge(m.css_url_for(:common)).to_s)
-      m.stubs(:view_context).returns(view_context_mock)
+      request_mock = double('request')
+      allow(request_mock).to receive(:url).and_return('https://localhost')
+      allow(request_mock).to receive(:host).and_return('/my/url')
+      allow(request_mock).to receive(:scheme).and_return('https')
+      m = double('controller')
+      allow(m).to receive(:css_url_for).with(:common).and_return('/path/to/common.scss')
+      allow(m).to receive(:request).and_return(request_mock)
+      allow(m).to receive(:logged_in_user).and_return(user)
+      allow(m).to receive(:named_context_url).and_return('url')
+      allow(m).to receive(:polymorphic_url).and_return('url')
+      view_context_mock = double('view_context')
+      allow(view_context_mock).to receive(:stylesheet_path)
+        .and_return(URI.parse(request_mock.url).merge(m.css_url_for(:common)).to_s)
+      allow(m).to receive(:view_context).and_return(view_context_mock)
       m
     end
 
@@ -86,8 +86,20 @@ module Lti
          Message.documentTarget
          Message.locale
          Context.id
-         vnd.Canvas.root_account.uuid)
+         CourseOffering.sourcedId
+         com.instructure.File.id
+         com.instructure.OriginalityReport.id
+         com.instructure.Submission.id
+         com.instructure.contextLabel
+         vnd.Canvas.root_account.uuid
+         vnd.Canvas.OriginalityReport.url
+         vnd.Canvas.submission.history.url
+         vnd.Canvas.submission.url
+         Context.title
+         com.instructure.Assignment.lti.id
+         com.instructure.PostMessageToken)
     }
+
     describe '#supported_capabilities' do
       it 'returns all supported capabilities asociated with launch params' do
         expect(CapabilitiesHelper.supported_capabilities).to match_array(supported_capabilities)
@@ -114,14 +126,18 @@ module Lti
         expect(params_hash.keys).not_to include(*invalid_enabled_caps)
       end
 
-      it 'does include a valid name (key) for valid capabilities' do
-        params_hash = CapabilitiesHelper.capability_params_hash(invalid_enabled_caps + valid_enabled_caps, variable_expander)
-        expect(params_hash.keys).to include(*valid_keys)
-      end
+      context 'in a course' do
+        let(:variable_expander) { VariableExpander.new(root_account, course, controller, current_user: user, tool: tool) }
 
-      it 'does include a value for each valid capability' do
-        params_hash = CapabilitiesHelper.capability_params_hash(invalid_enabled_caps + valid_enabled_caps, variable_expander)
-        expect(params_hash.values.length).to eq valid_keys.length
+        it 'does include a valid name (key) for valid capabilities' do
+          params_hash = CapabilitiesHelper.capability_params_hash(invalid_enabled_caps + valid_enabled_caps, variable_expander)
+          expect(params_hash.keys).to include(*valid_keys)
+        end
+
+        it 'does include a value for each valid capability' do
+          params_hash = CapabilitiesHelper.capability_params_hash(invalid_enabled_caps + valid_enabled_caps, variable_expander)
+          expect(params_hash.values.length).to eq valid_keys.length
+        end
       end
     end
   end

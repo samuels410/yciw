@@ -127,7 +127,16 @@ describe 'Screenreader Gradebook grading' do
     it 'on late submissions', priority: "2", test_id: 615701 do
       login_to_srgb
       srgb_page.select_assignment(assignment_1)
-      expect(f('p.late.muted em')).to include_text('This submission was late.')
+      expect(f('.late-pill')).to include_text('LATE')
+      expect(f('.submission_late_penalty')).to include_text('Late Penalty')
+      expect(f('.submission_final_grade')).to include_text('Final Grade')
+    end
+
+    it 'on missing submissions', priority: "2", test_id: 3308516 do
+      assignment_1.submissions.find_by(user: student).update!(late_policy_status: 'missing')
+      login_to_srgb
+      srgb_page.select_assignment(assignment_1)
+      expect(f('.missing-pill')).to include_text('MISSING')
     end
 
     it 'on dropped assignments', priority: "2", test_id: 615700 do
@@ -186,7 +195,8 @@ describe 'Screenreader Gradebook grading' do
       assignment = @course.assignments.create!(due_at: 13.days.ago, title: "assign in ended")
       SRGB.visit(@course.id)
       SRGB.select_grading_period(@gp_ended.title)
-      SRGB.select_student(student)
+      SRGB.visit(@course.id) # TODO: delete this line when fixing CNVS-37376
+      SRGB.select_student(@student)
       SRGB.select_assignment(assignment)
       SRGB.enter_grade(8)
 
@@ -198,7 +208,8 @@ describe 'Screenreader Gradebook grading' do
       assignment = @course.assignments.create!(due_at: 18.days.ago, title: "assign in closed")
       SRGB.visit(@course.id)
       SRGB.select_grading_period(@gp_closed.title)
-      SRGB.select_student(student)
+      SRGB.visit(@course.id) # TODO: delete this line when fixing CNVS-37376
+      SRGB.select_student(@student)
       SRGB.select_assignment(assignment)
 
       expect(SRGB.grading_enabled?).to be false

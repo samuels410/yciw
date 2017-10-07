@@ -236,7 +236,7 @@ class ContextController < ApplicationController
       end
     elsif @context.is_a?(Group)
       if @context.grants_right?(@current_user, :read_as_admin)
-        @users = @context.participating_users.uniq.order_by_sortable_name
+        @users = @context.participating_users.distinct.order_by_sortable_name
       else
         @users = @context.participating_users_in_context(sort: true).distinct.order_by_sortable_name
       end
@@ -374,17 +374,14 @@ class ContextController < ApplicationController
 
   WORKFLOW_TYPES = [
     :all_discussion_topics, :assignments, :assignment_groups,
-    :enrollments, :rubrics, :collaborations, :quizzes, :context_modules
+    :enrollments, :rubrics, :collaborations, :quizzes, :context_modules, :wiki_pages
   ].freeze
-  ITEM_TYPES = WORKFLOW_TYPES + [
-    :wiki_pages, :attachments
-  ].freeze
+  ITEM_TYPES = WORKFLOW_TYPES + [:attachments].freeze
   def undelete_index
     if authorized_action(@context, @current_user, :manage_content)
       @item_types = WORKFLOW_TYPES.select { |type| @context.class.reflections.key?(type.to_s) }.
           map { |type| @context.association(type).reader }
 
-      @item_types << @context.wiki.wiki_pages if @context.respond_to? :wiki
       @deleted_items = []
       @item_types.each do |scope|
         @deleted_items += scope.where(:workflow_state => 'deleted').limit(25).to_a

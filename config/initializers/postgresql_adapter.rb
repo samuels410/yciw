@@ -90,7 +90,8 @@ module PostgreSQLAdapterExtensions
   # postgres doesn't support limit on text columns, but it does on varchars. assuming we don't exceed
   # the varchar limit, change the type. otherwise drop the limit. not a big deal since we already
   # have max length validations in the models.
-  def type_to_sql(type, limit = nil, *args)
+  def type_to_sql(type, *args)
+    limit = CANVAS_RAILS5_0 ? args.shift : args.first[:limit]
     if type == :text && limit
       if limit <= 10485760
         type = :string
@@ -98,7 +99,7 @@ module PostgreSQLAdapterExtensions
         limit = nil
       end
     end
-    super(type, limit, *args)
+    CANVAS_RAILS5_0 ? super(type, limit, *args) : super(type, args.first.merge(:limit => limit))
   end
 
   def func(name, *args)
@@ -174,37 +175,11 @@ module PostgreSQLAdapterExtensions
     [index_name, index_type, index_columns, index_options, algorithm, using]
   end
 
-  # Force things with (approximate) integer representations (Floats,
-  # BigDecimals, Times, etc.) into those representations. Raise
-  # ActiveRecord::StatementInvalid for any other non-integer things.
-  def quote(value, column = nil)
+  def quote(*args)
+    value = args.first
     return value if value.is_a?(QuotedValue)
 
-    if CANVAS_RAILS4_2
-      if column && column.type == :integer && !value.respond_to?(:quoted_id)
-        case value
-          when String, ActiveSupport::Multibyte::Chars, nil, true, false
-            # these already have branches for column.type == :integer (or don't
-            # need one)
-            super(value, column)
-          else
-            if value.respond_to?(:to_i)
-              # quote the value in its integer representation
-              value.to_i.to_s
-            else
-              # doesn't have a (known) integer representation, can't quote it
-              # for an integer column
-              raise ActiveRecord::StatementInvalid, "#{value.inspect} cannot be interpreted as an integer"
-            end
-        end
-      else
-        super
-      end
-    else
-      # rails 5 doesn't have a column argument; when we remove rails 4.2 support, just a regular
-      # super call will work
-      super(value)
-    end
+    super
   end
 
   def extension_installed?(extension)

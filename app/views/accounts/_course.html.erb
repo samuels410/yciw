@@ -20,14 +20,14 @@
 <% if !course || !course.deleted? %>
 
 <% master_template = course && @master_template_index && @master_template_index[course.id] %>
-<% teacher_names = course && !master_template && (course.teacher_names || course.teachers.uniq.map(&:name)) %>
+<% teacher_names = course && !master_template && (course.teacher_names || course.teachers.distinct.map(&:name)) %>
 <% student_count = course && !master_template && (course.student_count || course.students.where("enrollments.type <> ?", "StudentViewEnrollment").count) %>
 
 <li class="course" id="course_<%= course ? course.id : "blank" %>" style="<%= hidden unless course %>">
   <div class="course <%= 'unpublished' if course && course.read_attribute(:workflow_state) && (course.created? || course.claimed?) %>">
     <div class="name">
       <a href="<%= course_path(course ? course.id : "{{ id }}") %>" class="name"><%= (course && course.name) || nbsp %></a>
-      <i class="icon-unpublish" title="<%= t(:course_unpublished_title, "This course hasn't been published yet") %>" style="<%= (course && course.read_attribute(:workflow_state) && (course.created? || course.claimed?) ? "" : "display: none;") %>"></i>
+      <i class="icon-unpublished" title="<%= t(:course_unpublished_title, "This course hasn't been published yet") %>" style="<%= (course && course.read_attribute(:workflow_state) && (course.created? || course.claimed?) ? "" : "display: none;") %>"></i>
     </div>
     <% if course %>
     <div class="details ellipsis">

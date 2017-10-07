@@ -92,7 +92,8 @@ module Importers
     def run
       return unless options.importable?
       [:migration_id, :title, :discussion_type, :position, :pinned,
-       :require_initial_post, :allow_rating, :only_graders_can_rate, :sort_by_rating].each do |attr|
+       :require_initial_post, :allow_rating, :only_graders_can_rate,
+       :sort_by_rating].each do |attr|
         next if options[attr].nil? && item.class.columns_hash[attr.to_s].type == :boolean
         item.send("#{attr}=", options[attr])
       end
@@ -105,7 +106,12 @@ module Importers
       end
 
       item.delayed_post_at = Canvas::Migration::MigratorHelper.get_utc_time_from_timestamp(options.delayed_post_at)
-      item.lock_at         = Canvas::Migration::MigratorHelper.get_utc_time_from_timestamp(options[:lock_at])
+      if options[:assignment]
+        options[:assignment][:lock_at] ||= options[:lock_at]
+      else
+        item.lock_at         = Canvas::Migration::MigratorHelper.get_utc_time_from_timestamp(options[:lock_at])
+      end
+      item.todo_date       = Canvas::Migration::MigratorHelper.get_utc_time_from_timestamp(options[:todo_date])
       item.last_reply_at   = nil if item.new_record?
 
       if options[:workflow_state].present?

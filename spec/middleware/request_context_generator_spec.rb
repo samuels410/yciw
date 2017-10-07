@@ -19,8 +19,8 @@ require File.expand_path(File.dirname(__FILE__) + '/../spec_helper.rb')
 
 describe "RequestContextGenerator" do
   let(:env) { {} }
-  let(:request) { stub('Rack::Request', path_parameters: { controller: 'users', action: 'index' }) }
-  let(:context) { stub('Course', class: 'Course', id: 15) }
+  let(:request) { double('Rack::Request', path_parameters: { controller: 'users', action: 'index' }) }
+  let(:context) { double('Course', class: 'Course', id: 15) }
 
   it "should generate the X-Canvas-Meta response header" do
     _, headers, _ = RequestContextGenerator.new(->(env) {
@@ -114,15 +114,16 @@ describe "RequestContextGenerator" do
     before(:each) do
       Thread.current[:context] = nil
       Canvas::DynamicSettings.reset_cache!
-      Canvas::DynamicSettings.cache['canvas'] = {
-        timetamp: Time.zone.now.to_i,
-        value: { "signing-secret" =>  shared_secret }
+      Canvas::DynamicSettings.fallback_data = {
+        canvas: {
+          'signing-secret' => shared_secret
+        }
       }
       env['HTTP_X_REQUEST_CONTEXT_ID'] = Canvas::Security.base64_encode(remote_request_context_id)
       env['HTTP_X_REQUEST_CONTEXT_SIGNATURE'] = Canvas::Security.base64_encode(remote_signature)
     end
 
-    after(:each){ Canvas::DynamicSettings.reset_cache! }
+    after(:each){ Canvas::DynamicSettings.fallback_data = {} }
 
     def run_middleware
       _, headers, _msg = RequestContextGenerator.new(->(_){ [200, {}, []] }).call(env)

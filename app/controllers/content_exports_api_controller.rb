@@ -48,7 +48,7 @@
 #           }
 #         },
 #         "attachment": {
-#           "description": "attachment api object for the export package (not present before the export completes or after it expires)",
+#           "description": "attachment api object for the export package (not present before the export completes or after it becomes unavailable for download.)",
 #           "example": {"url": "https://example.com/api/v1/attachments/789?download_frd=1&verifier=bG9sY2F0cyEh"},
 #           "$ref": "File"
 #         },
@@ -141,7 +141,7 @@ class ContentExportsApiController < ApplicationController
       export.settings[:skip_notifications] = true if value_to_boolean(params[:skip_notifications])
 
       # ZipExporter accepts unhashed asset strings, to avoid having to instantiate all the files and folders
-      selected_content = ContentMigration.process_copy_params(params[:select]&.to_hash, true, params[:export_type] == ContentExport::ZIP) if params[:select]
+      selected_content = ContentMigration.process_copy_params(params[:select]&.to_unsafe_h, true, params[:export_type] == ContentExport::ZIP) if params[:select]
       case params[:export_type]
       when 'qti'
         export.export_type = ContentExport::QTI
@@ -167,7 +167,7 @@ class ContentExportsApiController < ApplicationController
       # recheck, since the export type influences permissions (e.g., students can download zips of non-locked files, but not common cartridges)
       return unless authorized_action(export, @current_user, :create)
 
-      opts = params.slice(:version).to_hash.with_indifferent_access
+      opts = params.permit(:version).to_unsafe_h
       export.progress = 0
       if export.save
         export.queue_api_job(opts)

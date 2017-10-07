@@ -21,22 +21,38 @@ describe MathMan do
   let(:latex) do
     '\sqrt{25}+12^{12}'
   end
-  let(:service_url) { 'http://www.mml-service.com' }
+  # we explicitly don't want a trailing slash here for the url tests
+  let(:service_url) { 'http://www.mml-service.com/beta' }
   let(:use_for_mml) { false }
   let(:use_for_svg) { false }
 
   before do
-    PluginSetting.create(
+    @original_fallback = Canvas::DynamicSettings.fallback_data
+    Canvas::DynamicSettings.fallback_data = {
+      'math-man': {
+        base_url: service_url,
+      }
+    }
+    PluginSetting.create!(
       name: 'mathman',
       settings: {
-        base_url: service_url,
         use_for_mml: use_for_mml,
         use_for_svg: use_for_svg
-      }
+      }.with_indifferent_access
     )
   end
 
+  after do
+    Canvas::DynamicSettings.fallback_data = @original_fallback
+  end
+
   describe '.url_for' do
+    it 'must retain the path from base_url setting' do
+      url = MathMan.url_for(latex: latex, target: :mml)
+      parsed = Addressable::URI.parse(url)
+      expect(parsed.path).to eq ('/beta/mml')
+    end
+
     it 'should include target string in generated url' do
       expect(MathMan.url_for(latex: latex, target: :mml)).to match(/mml/)
       expect(MathMan.url_for(latex: latex, target: :svg)).to match(/svg/)
@@ -44,7 +60,12 @@ describe MathMan do
   end
 
   describe '.use_for_mml?' do
-    it 'returns false when not appropriately configured' do
+    it 'returns false when set to false' do
+      expect(MathMan.use_for_mml?).to be_falsey
+    end
+
+    it 'returns false when PluginSetting is missing' do
+      PluginSetting.where(name: 'mathman').first.destroy
       expect(MathMan.use_for_mml?).to be_falsey
     end
 
@@ -58,7 +79,12 @@ describe MathMan do
   end
 
   describe '.use_for_svg?' do
-    it 'returns false when not appropriately configured' do
+    it 'returns false when set to false' do
+      expect(MathMan.use_for_svg?).to be_falsey
+    end
+
+    it 'returns false when PluginSetting is missing' do
+      PluginSetting.where(name: 'mathman').first.destroy
       expect(MathMan.use_for_svg?).to be_falsey
     end
 

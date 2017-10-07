@@ -19,12 +19,8 @@
 # our #time_zone_options_for_select method on ActionView::Helpers::InstanceTag
 class I18nTimeZone < ActiveSupport::TimeZone
   # this initialization doesn't get inherited, apparently
-  if CANVAS_RAILS4_2
-    @lazy_zones_map = ThreadSafe::Cache.new
-  else
-    @lazy_zones_map = Concurrent::Map.new
-    @country_zones = Concurrent::Map.new
-  end
+  @lazy_zones_map = Concurrent::Map.new
+  @country_zones = Concurrent::Map.new
 
   def to_s
     translated_name = I18n.send(:translate, keyify) || name
@@ -33,5 +29,10 @@ class I18nTimeZone < ActiveSupport::TimeZone
 
   def keyify
     "time_zones.#{name.gsub(/(\W|\s)/,'').underscore}"
+  end
+
+  def self.us_zones
+    # only include specially named zones
+    super.select { |zone| ActiveSupport::TimeZone::MAPPING.include?(zone.name) }
   end
 end

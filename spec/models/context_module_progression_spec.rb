@@ -186,7 +186,7 @@ describe ContextModuleProgression do
 
     it 'does not raise a stale object error during catastrophic evaluate!' do
       progression = stale_progression
-      progression.stubs(:save).at_least_once.raises(ActiveRecord::StaleObjectError.new(progression, 'Save'))
+      allow(progression).to receive(:save).at_least(:once).and_raise(ActiveRecord::StaleObjectError.new(progression, 'Save'))
 
       new_progression = nil
       expect { new_progression = progression.evaluate! }.to_not raise_error
@@ -252,7 +252,74 @@ describe ContextModuleProgression do
     progression.reload
     expect(progression).to be_started
 
-    @topic.any_instantiation.expects(:recalculate_context_module_actions!).never # doesn't recalculate unless it's a new requirement
+    expect_any_instantiation_of(@topic).to receive(:recalculate_context_module_actions!).never # doesn't recalculate unless it's a new requirement
     @module.update_attribute(:completion_requirements, {@tag1.id => {:type => 'must_submit'}, @tag2.id => {:type => 'must_contribute'}})
+  end
+
+  context "assignment muting" do
+    it "should work with muted assignments" do
+      assignment = @course.assignments.create(:title => "some assignment", :points_possible => 100, :submission_types => "online_text_entry")
+      assignment.mute!
+      tag = @module.add_item({:id => assignment.id, :type => 'assignment'})
+      @module.completion_requirements = {tag.id => {:type => 'min_score', :min_score => 90}}
+      @module.save!
+
+      progression = @module.evaluate_for(@user)
+      expect(progression).to be_unlocked
+
+      assignment.submit_homework(@user, :body => "blah")
+      assignment.grade_student(@user, :score => 85, :grader => @teacher)
+      expect(progression.reload).to be_started
+      expect(progression.requirements_met).to be_blank
+      assignment.grade_student(@user, :score => 95, :grader => @teacher)
+      expect(progression.reload).to be_started
+      expect(progression.requirements_met).to be_blank
+
+      assignment.unmute!
+      expect(progression.reload).to be_completed
+    end
+
+    it "should work with muted quiz assignments" do
+      quiz = @course.quizzes.create(:title => "some quiz", :quiz_type => "assignment", :scoring_policy => 'keep_highest', :workflow_state => 'available')
+      quiz.assignment.mute!
+      tag = @module.add_item({:id => quiz.id, :type => 'quiz'})
+      @module.completion_requirements = {tag.id => {:type => 'min_score', :min_score => 90}}
+      @module.save!
+
+      progression = @module.evaluate_for(@user)
+      expect(progression).to be_unlocked
+
+      quiz_sub = quiz.generate_submission(@user)
+      quiz_sub.update_attributes(:score => 100, :workflow_state => 'complete', :submission_data => nil)
+      quiz_sub.with_versioning(&:save)
+      expect(progression.reload).to be_started
+
+      quiz.assignment.unmute!
+      expect(progression.reload).to be_completed
+    end
+
+    it "should work with muted discussion assignments" do
+      topic = @course.discussion_topics.create(:title => "some topic")
+      assignment = assignment_model(:course => @course, :points_possible => 100)
+      topic.assignment = assignment
+      topic.save!
+      assignment.reload
+
+      assignment.mute!
+      tag = @module.add_item({:id => topic.id, :type => 'discussion_topic'})
+      @module.completion_requirements = {tag.id => {:type => 'min_score', :min_score => 90}}
+      @module.save!
+
+      progression = @module.evaluate_for(@user)
+      expect(progression).to be_unlocked
+
+      entry = topic.reply_from(:user => @user, :text => "entry")
+      expect(progression.reload).to be_started
+      assignment.grade_student(@user, :score => 100, :grader => @teacher)
+      expect(progression.reload).to be_started
+
+      assignment.unmute!
+      expect(progression.reload).to be_completed
+    end
   end
 end

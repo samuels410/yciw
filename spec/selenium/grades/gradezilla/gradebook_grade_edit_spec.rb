@@ -13,19 +13,22 @@
 # details.
 #
 # You should have received a copy of the GNU Affero General Public License along
-# with this program. If not, see <http://www.gnu.org/licenses/>.
+# with this program. If not, see <http://www.gnu.org/licenses/>
 #
 
 require_relative '../../helpers/gradezilla_common'
 require_relative '../page_objects/gradezilla_page'
 require_relative '../page_objects/grading_curve_page'
+require_relative '../setup/gradebook_setup'
 
 describe "Gradezilla editing grades" do
   include_context "in-process server selenium tests"
   include GradezillaCommon
+  include GradebookSetup
 
   before(:once) do
     gradebook_data_setup
+    show_sections_filter(@teacher)
   end
 
   before(:each) do
@@ -34,25 +37,6 @@ describe "Gradezilla editing grades" do
 
   after(:each) do
     clear_local_storage
-  end
-
-  context 'submission details dialog', priority: "1", test_id: 220305 do
-    it 'successfully grades a submission' do
-      skip_if_chrome('issue with set_value')
-      Gradezilla.visit(@course)
-      open_comment_dialog(0, 0)
-      grade_box = f("form.submission_details_grade_form input.grading_value")
-      expect(grade_box).to have_value @assignment_1_points
-      set_value(grade_box, 7)
-      f("form.submission_details_grade_form button").click
-
-      # wait for the request to complete and the dialog to close
-      wait_for_ajax_requests
-
-      input = f('#gradebook_grid .container_1 .slick-cell.active input')
-      expect(input.attribute("value")).to eql "7"
-      expect(final_score_for_row(0)).to eq "80%"
-    end
   end
 
   it "updates a graded quiz and have the points carry over to the quiz attempts page", priority: "1", test_id: 220310 do
@@ -69,40 +53,6 @@ describe "Gradezilla editing grades" do
     get "/courses/#{@course.id}/quizzes/#{q.id}/history?quiz_submission_id=#{qs.id}"
     expect(f('.score_value')).to include_text points.to_s
     expect(f('#after_fudge_points_total')).to include_text points.to_s
-  end
-
-  it "treats ungraded as 0s when asked, and ignore when not", priority: "1", test_id: 164222 do
-    Gradezilla.visit(@course)
-
-    # make sure it shows like it is not treating ungraded as 0's by default
-    expect(is_checked('#include_ungraded_assignments')).to be_falsey
-    expect(final_score_for_row(0)).to eq @student_1_total_ignoring_ungraded
-    expect(final_score_for_row(1)).to eq @student_2_total_ignoring_ungraded
-
-    # set the "treat ungraded as 0's" option in the header
-
-    f('#gradebook_settings').click
-    f('label[for="include_ungraded_assignments"]').click
-
-    # now make sure that the grades show as if those ungraded assignments had a '0'
-    expect(is_checked('#include_ungraded_assignments')).to be_truthy
-    expect(final_score_for_row(0)).to eq @student_1_total_treating_ungraded_as_zeros
-    expect(final_score_for_row(1)).to eq @student_2_total_treating_ungraded_as_zeros
-
-    # reload the page and make sure it remembered the setting
-    Gradezilla.visit(@course)
-    expect(is_checked('#include_ungraded_assignments')).to be_truthy
-    expect(final_score_for_row(0)).to eq @student_1_total_treating_ungraded_as_zeros
-    expect(final_score_for_row(1)).to eq @student_2_total_treating_ungraded_as_zeros
-
-    # NOTE: gradebook1 does not handle 'remembering' the `include_ungraded_assignments` setting
-
-    # check that reverting back to unchecking 'include_ungraded_assignments' also reverts grades
-    f('#gradebook_settings').click
-    f('label[for="include_ungraded_assignments"]').click
-    expect(is_checked('#include_ungraded_assignments')).to be_falsey
-    expect(final_score_for_row(0)).to eq @student_1_total_ignoring_ungraded
-    expect(final_score_for_row(1)).to eq @student_2_total_ignoring_ungraded
   end
 
   it "validates initial grade totals are correct", priority: "1", test_id: 220311 do
@@ -133,9 +83,12 @@ describe "Gradezilla editing grades" do
     Gradezilla.visit(@course)
 
     edit_grade('#gradebook_grid .container_1 .slick-row:nth-child(1) .l4', 'A-')
+
     expect(f('#gradebook_grid .container_1 .slick-row:nth-child(1) .l4')).to include_text('A-')
     expect(@assignment.submissions.where('grade is not null').count).to eq 1
+
     sub = @assignment.submissions.where('grade is not null').first
+
     expect(sub.grade).to eq 'A-'
     expect(sub.score).to eq 0.0
   end
@@ -146,7 +99,7 @@ describe "Gradezilla editing grades" do
     Gradezilla.visit(@course)
     switch_to_section(@other_section)
 
-    Gradezilla.open_assignment_options(2)
+    Gradezilla.click_assignment_header_menu(@third_assignment.id)
     set_default_grade(2, 13)
     @other_section.users.each { |u| expect(u.submissions.map(&:grade)).to include '13' }
     @course.default_section.users.each { |u| expect(u.submissions.map(&:grade)).not_to include '13' }
@@ -174,11 +127,11 @@ describe "Gradezilla editing grades" do
   end
 
   it "displays dropped grades correctly after editing a grade", priority: "1", test_id: 220316 do
-    @course.assignment_groups.first.update_attribute :rules, 'drop_lowest:1'
+    @course.assignment_groups.first.update!(rules: 'drop_lowest:1')
     Gradezilla.visit(@course)
 
-    assignment_1_sel = '#gradebook_grid .container_1 .slick-row:nth-child(1) .l2'
-    assignment_2_sel = '#gradebook_grid .container_1 .slick-row:nth-child(1) .l3'
+    assignment_1_sel = '#gradebook_grid .container_1 .slick-row:nth-child(1) .l2 .gradebook-cell'
+    assignment_2_sel = '#gradebook_grid .container_1 .slick-row:nth-child(1) .l3 .gradebook-cell'
     a1 = f(assignment_1_sel)
     a2 = f(assignment_2_sel)
     expect(a1).to have_class 'dropped'
@@ -209,8 +162,8 @@ describe "Gradezilla editing grades" do
 
     Gradezilla.visit(@course)
 
-    Gradezilla.open_assignment_options(0)
-    f('[data-menu-item-id="curve-grades"]').click
+    Gradezilla.click_assignment_header_menu(@first_assignment.id)
+    Gradezilla.click_assignment_header_menu_element("curve grades")
     curve_form = GradingCurvePage.new
     curve_form.edit_grade_curve(curved_grade_text)
     curve_form.curve_grade_submit
@@ -223,8 +176,8 @@ describe "Gradezilla editing grades" do
 
     edit_grade('#gradebook_grid .container_1 .slick-row:nth-child(2) .l1', '')
 
-    Gradezilla.open_assignment_options(0)
-    f('[data-menu-item-id="curve-grades"]').click
+    Gradezilla.click_assignment_header_menu(@first_assignment.id)
+    Gradezilla.click_assignment_header_menu_element("curve grades")
 
     f('#assign_blanks').click
     fj('.ui-dialog-buttonpane button:visible').click
@@ -247,7 +200,7 @@ describe "Gradezilla editing grades" do
   it "validates setting default grade for an assignment", priority: "1", test_id: 220383 do
     expected_grade = "45"
     Gradezilla.visit(@course)
-    Gradezilla.open_assignment_options(2)
+    Gradezilla.click_assignment_header_menu(@third_assignment.id)
     set_default_grade(2, expected_grade)
     grade_grid = f('#gradebook_grid .container_1')
     StudentEnrollment.count.times do |n|
@@ -257,7 +210,7 @@ describe "Gradezilla editing grades" do
 
   it "displays an error on failed updates", priority: "1", test_id: 220384 do
     # forces a 400
-    SubmissionsApiController.any_instance.expects(:get_user_considering_section).returns(nil)
+    expect_any_instance_of(SubmissionsApiController).to receive(:get_user_considering_section).and_return(nil)
     Gradezilla.visit(@course)
     edit_grade('#gradebook_grid .container_1 .slick-row:nth-child(1) .l2', 0)
     expect_flash_message :error, "refresh"
@@ -288,19 +241,21 @@ describe "Gradezilla editing grades" do
 
     context 'for assignments with at least one due date in a closed grading period' do
       before(:each) do
-        get "/courses/#{@course.id}/gradebook?grading_period_id=0"
-
-        Gradezilla.assignment_header_menu(@first_assignment.name).click
+        show_grading_periods_filter(@teacher)
+        Gradezilla.visit(@course)
+        Gradezilla.select_grading_period('All Grading Periods')
+        Gradezilla.click_assignment_header_menu(@first_assignment.id)
       end
 
       describe 'the Curve Grades menu item' do
         before(:each) do
-          @curve_grades_menu_item = Gradezilla.assignment_header_menu_item('Curve Grades')
+          @curve_grades_menu_item = Gradezilla.assignment_header_menu_item_selector('Curve Grades')
         end
 
-        it 'is disabled' do
-          expect(@curve_grades_menu_item[:class]).to include('ui-state-disabled')
-        end
+        # TODO: refactor and add back when InstUI changes are applied
+        # it 'is disabled' do
+        #   expect(@curve_grades_menu_item[:class]).to include('ui-state-disabled')
+        # end
 
         it 'gives an error when clicked' do
           @curve_grades_menu_item.click
@@ -311,12 +266,13 @@ describe "Gradezilla editing grades" do
 
       describe 'the Set Default Grade menu item' do
         before(:each) do
-          @set_default_grade_menu_item = Gradezilla.assignment_header_menu_item('Set Default Grade')
+          @set_default_grade_menu_item = Gradezilla.assignment_header_menu_item_selector('Set Default Grade')
         end
 
-        it 'is disabled' do
-          expect(@set_default_grade_menu_item[:class]).to include('ui-state-disabled')
-        end
+        # TODO: refactor and add back when InstUI changes are applied
+        # it 'is disabled' do
+        #   expect(@set_default_grade_menu_item[:class]).to include('[ui-state-disabled]')
+        # end
 
         it 'gives an error when clicked' do
           @set_default_grade_menu_item.click

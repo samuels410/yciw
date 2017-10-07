@@ -55,13 +55,14 @@ class AssignmentsController < ApplicationController
       set_tutorial_js_env
       hash = {
         WEIGHT_FINAL_GRADES: @context.apply_group_weights?,
-        POST_TO_SIS_DEFAULT: @context.account.sis_default_grade_export[:value],
+        POST_TO_SIS_DEFAULT: Assignment.sis_grade_export_enabled?(@context),
         SIS_INTEGRATION_SETTINGS_ENABLED: sis_integration_settings_enabled,
         SIS_NAME: sis_name,
         MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT: max_name_length_required_for_account,
         MAX_NAME_LENGTH: max_name_length,
+        HAS_ASSIGNMENTS: @context.active_assignments.count > 0,
         QUIZ_LTI_ENABLED: @context.quiz_lti_tool.present?,
-        DUE_DATE_REQUIRED_FOR_ACCOUNT: due_date_required_for_account
+        DUE_DATE_REQUIRED_FOR_ACCOUNT: due_date_required_for_account,
       }
       js_env(hash)
 
@@ -123,8 +124,6 @@ class AssignmentsController < ApplicationController
         elsif @context.feature_enabled?(:conditional_release) && @assignment.wiki_page? &&
           @assignment.wiki_page.grants_right?(@current_user, session, :read)
           return redirect_to named_context_url(@context, :context_wiki_page_url, @assignment.wiki_page.id)
-        elsif @assignment.submission_types == 'attendance'
-          return redirect_to named_context_url(@context, :context_attendance_url, :anchor => "assignment/#{@assignment.id}")
         elsif @assignment.submission_types == 'external_tool' && @assignment.external_tool_tag && @unlocked
           tag_type = params[:module_item_id].present? ? :modules : :assignments
           return content_tag_redirect(@context, @assignment.external_tool_tag, :context_url, tag_type)
@@ -161,6 +160,8 @@ class AssignmentsController < ApplicationController
       @assignment_menu_tools = external_tools_display_hashes(:assignment_menu)
 
       @mark_done = MarkDonePresenter.new(self, @context, params["module_item_id"], @current_user, @assignment)
+
+      @similarity_pledge = pledge_text
 
       respond_to do |format|
         format.html { render }
@@ -564,5 +565,11 @@ class AssignmentsController < ApplicationController
 
   def index_edit_params
     params.permit(:title, :due_at, :points_possible, :assignment_group_id, :return_to)
+  end
+
+  def pledge_text
+    (@assignment.turnitin_enabled? && @context.turnitin_pledge) ||
+    (@assignment.vericite_enabled? && @context.vericite_pledge) ||
+    @assignment.course.account.closest_turnitin_pledge
   end
 end

@@ -1205,12 +1205,13 @@ $ic-Input-border: lighten($ic-color-dark, 65);
 
 $ic-Input-standard-height: 38px;
 
-@mixin ic-input-variant($border-color: $ic-Input-border, $color: $ic-brand-primary) {
+@mixin ic-input-variant($border-color, $color, $outline-color: rgba($color, 0.2)) {
   border-color: $border-color;
   &:focus {
-    border-color: lighten($color, 10%);
     border-color: $color;
-    @if $use_high_contrast == false { outline-color: rgba($color, 0.2); }
+    @if not $use_high_contrast {
+      outline-color: $outline-color;
+    }
   }
 }
 
@@ -1253,7 +1254,7 @@ input[type="tel"], input[type="color"], .uneditable-input {
     // Remove the webkit gloss in iOS
     -webkit-appearance: none;
 
-    @include ic-input-variant;
+    @include ic-input-variant($ic-Input-border, var(--ic-brand-primary), var(--ic-brand-primary-lightened-15));
 
     @if $use_high_contrast {
       outline-style: dotted;
@@ -1695,14 +1696,14 @@ form.ic-Form-group { margin: 0; }
     ~ .ic-Label { vertical-align: baseline; }
 
     &:not([disabled]):hover {
-      ~ .ic-Label:before { border-color: $ic-brand-primary; }
+      ~ .ic-Label:before { border-color: var(--ic-brand-primary); }
     }
 
     &:checked {
       ~ .ic-Label:before {
-        border-color: $ic-brand-primary;
+        border-color: var(--ic-brand-primary);
         box-shadow: inset 0 0 0 3px $ic-color-light;
-        background: $ic-brand-primary;
+        background: var(--ic-brand-primary);
       }
     }
 
@@ -1710,8 +1711,8 @@ form.ic-Form-group { margin: 0; }
       ~ .ic-Label {
         @include high-contrast-focus;
         &:before {
-          box-shadow: inset 0 0 0 2px rgba($ic-brand-primary, 0.3), inset 0 0 0 4px $ic-color-light;
-          background: $ic-brand-primary;
+          box-shadow: inset 0 0 0 2px var(--ic-brand-primary-lightened-15), inset 0 0 0 4px $ic-color-light;
+          background: var(--ic-brand-primary);
         }
       }
     }
@@ -1754,8 +1755,8 @@ form.ic-Form-group { margin: 0; }
     input[type="radio"] {
       &:checked {
         ~ .ic-Label {
-          border-color: $ic-brand-primary;
-          color: $ic-brand-primary;
+          border-color: var(--ic-brand-primary);
+          color: var(--ic-brand-primary);
         }
       }
       &:focus {
@@ -1767,7 +1768,7 @@ form.ic-Form-group { margin: 0; }
           }
           @else {
             box-shadow:
-              inset 0 0 0 3px rgba($ic-brand-primary, 0.3);
+              inset 0 0 0 3px var(--ic-brand-primary-lightened-15);
           }
 
         }
@@ -1837,16 +1838,16 @@ form.ic-Form-group { margin: 0; }
     top: 0; left: 0;
 
     &:not([disabled]):hover {
-      ~ .ic-Label:before { border-color: $ic-brand-primary; }
+      ~ .ic-Label:before { border-color: var(--ic-brand-primary); }
     }
 
     &:focus {
       ~ .ic-Label {
         @include high-contrast-focus;
         &:before {
-          border-color: $ic-brand-primary;
+          border-color: var(--ic-brand-primary);
           outline-offset: -3px;
-          outline-color: rgba($ic-brand-primary, 0.2);
+          outline-color: var(--ic-brand-primary-lightened-15);
         }
 
       }
@@ -1855,9 +1856,9 @@ form.ic-Form-group { margin: 0; }
     &:checked {
       ~ .ic-Label {
         &:before {
-          background-color: $ic-brand-primary;
+          background-color: var(--ic-brand-primary);
           background-position: center -1px;
-          border-color: $ic-brand-primary;
+          border-color: var(--ic-brand-primary);
         }
       }
       &:focus {

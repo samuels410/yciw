@@ -35,9 +35,8 @@ class Message < ActiveRecord::Base
 
 
   # Associations
-  belongs_to :asset_context, :polymorphic => true
   belongs_to :communication_channel
-  belongs_to :context, :polymorphic => true
+  belongs_to :context, polymorphic: [], exhaustive: false
   include NotificationPreloader
   belongs_to :user
   belongs_to :root_account, :class_name => 'Account'
@@ -51,7 +50,6 @@ class Message < ActiveRecord::Base
   before_save :infer_defaults
   before_save :move_dashboard_messages
   before_save :move_messages_for_deleted_users
-  before_save :set_asset_context_code
 
   # Validations
   validates :body, length: {maximum: maximum_text_length}, allow_nil: true, allow_blank: true
@@ -144,8 +142,6 @@ class Message < ActiveRecord::Base
   end
 
   # Named scopes
-  scope :for_asset_context_codes, lambda { |context_codes| where(:asset_context_code => context_codes) }
-
   scope :for, lambda { |context| where(:context_type => context.class.base_class.to_s, :context_id => context) }
 
   scope :after, lambda { |date| where("messages.created_at>?", date) }
@@ -262,11 +258,15 @@ class Message < ActiveRecord::Base
   def link_root_account
     @root_account ||= begin
       context = self.context
-      context = self.asset_context if context.is_a?(CommunicationChannel) && self.asset_context
+      if context.is_a?(CommunicationChannel) && @data&.root_account_id
+        root_account = Account.where(id: @data.root_account_id).first
+        context = root_account if root_account
+      end
 
       context = context.assignment if context.respond_to?(:assignment) && context.assignment
       context = context.rubric_association.context if context.respond_to?(:rubric_association) && context.rubric_association
       context = context.appointment_group.contexts.first if context.respond_to?(:appointment_group) && context.appointment_group
+      context = context.master_template.course if context.respond_to?(:master_template) && context.master_template
       context = context.context if context.respond_to?(:context)
       context = context.account if context.respond_to?(:account)
       context = context.root_account if context.respond_to?(:root_account)
@@ -498,22 +498,17 @@ class Message < ActiveRecord::Base
     # (temporarily) override course name with user's nickname for the course
     hacked_course = apply_course_nickname_to_asset(self.context, self.user)
 
-    # Ensure we have a path_type
-    path_type = 'dashboard' if to == 'summary'
-    unless path_type
-      path_type = communication_channel.try(:path_type) || 'email'
-    end
-
+    path_type ||= communication_channel.try(:path_type) || 'email'
 
     # Determine the message template file to be used in the message
     filename = template_filename(path_type)
     message_body_template = get_template(filename)
 
-    context, asset, user, delayed_messages, asset_context, data = [self.context,
-      self.context, self.user, @delayed_messages, self.asset_context, @data]
+    context, asset, user, delayed_messages, data = [self.context,
+      self.context, self.user, @delayed_messages, @data]
 
     link_root_account.shard.activate do
-      if message_body_template.present? && path_type.present?
+      if message_body_template.present?
         populate_body(message_body_template, path_type, binding, filename)
 
         # Set the subject and url
@@ -557,7 +552,8 @@ class Message < ActiveRecord::Base
       return nil
     end
 
-    if user && user.account.feature_enabled?(:notification_service) && path_type != "yo"
+    check_acct = (user && user.account) || Account.site_admin
+    if check_acct.feature_enabled?(:notification_service) && path_type != "yo"
       enqueue_to_sqs
     else
       send(delivery_method)
@@ -588,25 +584,6 @@ class Message < ActiveRecord::Base
     self.transmission_errors = error_string
     self.errored_dispatch
     raise
-  end
-
-  class RemoteConfigurationError < StandardError; end
-  # Public: Determine the remote configuration for notification_service
-  #
-  # Returns string remote configuration (eventually a hash).
-  def remote_configuration
-    case path_type
-    when "email"
-      return "email.amazonaws.com"
-    when "push"
-      return "push.com"
-    when "twitter"
-      return 'twitter'
-    when "sms"
-      return if to =~ /^\+[0-9]+$/ ? "Twilio.com" : "email.amazonaws.com"
-    else
-      raise RemoteConfigurationError, "No matching path types for notification service"
-    end
   end
 
   # Public: Determines the message body for a notification endpoint
@@ -689,6 +666,24 @@ class Message < ActiveRecord::Base
     current_context.root_account
   end
 
+  # This is a dumb name, but it's the context (course/group/account/user) of
+  # the message.context (which should really be message.asset)
+  def context_context
+    @context_context ||= begin
+      unbounded_loop_paranoia_counter = 10
+      current_context = context
+
+      until current_context&.is_a_context?
+        return nil if unbounded_loop_paranoia_counter <= 0 || current_context.nil?
+        return nil unless current_context.respond_to?(:context)
+        current_context = current_context.context
+        unbounded_loop_paranoia_counter -= 1
+      end
+
+      current_context
+    end
+  end
+
   def custom_logo
     context_root_account && context_root_account.settings[:email_logo]
   end
@@ -711,7 +706,7 @@ class Message < ActiveRecord::Base
     self.root_account_id ||= root_account.try(:id)
 
     self.from_name = infer_from_name
-    self.reply_to_name = message_context.reply_to_name
+    self.reply_to_name = name_helper.reply_to_name
 
     true
   end
@@ -763,21 +758,12 @@ class Message < ActiveRecord::Base
     end
   end
 
-  # Public: Before save, set the proper asset_context_code for the model.
-  #
-  # Returns an asset_context_code string or nil.
-  def set_asset_context_code
-    self.asset_context_code = "#{context_type.underscore}_#{context_id}"
-  rescue
-    nil
-  end
-
   # Public: Return the message as JSON filtered to selected fields and
   # flattened appropriately.
   #
   # Returns json hash.
   def as_json(options = {})
-    super(:only => [:id, :created_at, :sent_at, :workflow_state, :from, :to, :reply_to, :subject, :body, :html_body])['message']
+    super(:only => [:id, :created_at, :sent_at, :workflow_state, :from, :from_name, :to, :reply_to, :subject, :body, :html_body])['message']
   end
 
   protected
@@ -831,7 +817,7 @@ class Message < ActiveRecord::Base
   # Returns nothing.
   def deliver_via_twitter
     twitter_service = user.user_services.where(service: 'twitter').first
-    host = HostUrl.short_host(self.asset_context)
+    host = HostUrl.context_host(link_root_account)
     msg_id = AssetSignature.generate(self)
     Twitter::Messenger.new(self, twitter_service, host, msg_id).deliver
     complete_dispatch
@@ -910,10 +896,8 @@ class Message < ActiveRecord::Base
 
   private
   def infer_from_name
-    if asset_context
-      return message_context.from_name if message_context.from_name.present?
-      return asset_context.name if can_use_asset_name_for_from?
-    end
+    return name_helper.from_name if name_helper.from_name.present?
+    return context_context.nickname_for(user) if can_use_name_for_from?(context_context)
 
     if root_account && root_account.settings[:outgoing_email_default_name]
       return root_account.settings[:outgoing_email_default_name]
@@ -922,12 +906,13 @@ class Message < ActiveRecord::Base
     HostUrl.outgoing_email_default_name
   end
 
-  def can_use_asset_name_for_from?
-    !asset_context.is_a?(Account) && asset_context.name && notification.dashboard? rescue false
+  def can_use_name_for_from?(c)
+    c && !c.is_a?(Account) && notification&.dashboard? &&
+      c.respond_to?(:name) && c.name.present?
   end
 
-  def message_context
-    @_message_context ||= Messages::AssetContext.new(context, notification_name)
+  def name_helper
+    @name_helper ||= Messages::NameHelper.new(context, notification_name)
   end
 
   def apply_course_nickname_to_asset(asset, user)

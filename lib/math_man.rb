@@ -15,9 +15,13 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
+require "addressable/uri"
+
 module MathMan
   def self.url_for(latex:, target:)
-    "#{base_url}/#{target}?tex=#{latex}"
+    uri = base_url.join(target.to_s)
+    uri.query = "tex=#{latex}"
+    uri.to_s
   end
 
   def self.use_for_mml?
@@ -36,15 +40,27 @@ module MathMan
     end
   end
 
-  private
-  def self.base_url
-    with_plugin_settings do |plugin_settings|
-      plugin_settings[:base_url].sub(/\/$/, '')
-    end
-  end
+  class << self
+    private
 
-  def self.with_plugin_settings
-    plugin_settings = Canvas::Plugin.find(:mathman).settings
-    yield plugin_settings
+    def base_url
+      with_plugin_settings do |plugin_settings|
+        Addressable::URI.parse(plugin_settings[:base_url]).tap do |uri|
+          uri.path << '/' unless uri.path.end_with?('/')
+        end
+      end
+    end
+
+    def with_plugin_settings
+      dynamic_settings = Canvas::DynamicSettings.find('math-man')
+      plugin_settings = Canvas::Plugin.find(:mathman).settings
+      raise "math-man not properly configured in consul" if !dynamic_settings[:base_url] && Rails.env.production?
+      settings = {
+        base_url: dynamic_settings[:base_url],
+        use_for_mml: plugin_settings[:use_for_mml],
+        use_for_svg: plugin_settings[:use_for_svg]
+      }
+      yield settings
+    end
   end
 end

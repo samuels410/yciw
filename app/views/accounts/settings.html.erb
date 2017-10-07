@@ -111,7 +111,9 @@
               <td><%= f.blabel :default_locale, :default_language, :en => "Default Language" %></td>
               <td>
                 <% no_language = t(:no_language_preference, "Not set (defaults to %{language})", :language => available_locales[infer_locale(:context => @context.parent_account)]) %>
-                <%= f.select :default_locale, [[no_language, nil]] + available_locales.invert.sort, {:selected => @context.default_locale}, {:class => 'locale'} %>
+                <%= f.select :default_locale,
+                             [[no_language, nil]] + available_locales.invert.sort_by { |desc, _| Canvas::ICU.collation_key(desc) },
+                             {:selected => @context.default_locale}, {:class => 'locale'} %>
                 <%= render :partial => 'shared/locale_warning' %>
                 <p class="unbreakable"><%= mt :transifex_message, <<-TEXT, :transifex_url => "https://www.transifex.com/instructure/canvas-crowdsource/"
 Join the [Canvas Translation Community](%{transifex_url})
@@ -512,6 +514,23 @@ TEXT
             <% end %>
           </fieldset>
 
+          <% if @account.feature_enabled?(:plagiarism_detection_platform) || @account.settings[:enable_turnitin] %>
+            <fieldset id="turnitin_settings">
+              <legend><%= t("Similarity Detection Platform") %></legend>
+              <table class="formtable">
+                <tr>
+                  <td><%= f.blabel :turnitin_pledge, en: "Similarity Pledge" %></td>
+                  <td>
+                    <span style="font-size: 0.9em;">
+                      <%= t(:turnitin_pledge_help, "students must check a box acknowledging that they agree with this pledge") %>
+                    </span>
+                    <%= f.text_area :turnitin_pledge, :style => "width: 90%; height: 50px;" %>
+                  </td>
+                </tr>
+              </table>
+            </fieldset>
+          <% end %>
+
           <% if @account.settings[:enable_turnitin] %>
             <fieldset id="turnitin_settings">
               <legend><%= t(:turnitin_settings_title, "Turnitin Settings") %></legend>
@@ -541,13 +560,6 @@ TEXT
                   <td>
                     <span style="font-size: 0.9em;"><%= t(:turnitin_comments_help, "these comments will be shown to students when submitting a Turnitin-enabled assignment") %></span>
                     <%= f.text_area :turnitin_comments, :style => "width: 90%; height: 50px;" %>
-                  </td>
-                </tr>
-                <tr>
-                  <td><%= f.blabel :turnitin_pledge, :en => "Turnitin Pledge" %></td>
-                  <td>
-                    <span style="font-size: 0.9em;"><%= t(:turnitin_pledge_help, "students must check a box acknowledging that they agree with this pledge") %></span>
-                    <%= f.text_area :turnitin_pledge, :style => "width: 90%; height: 50px;" %>
                   </td>
                 </tr>
                 <tr>
@@ -652,7 +664,7 @@ acknowledge that you have read and agreed to the
               </tr>
               <tr>
                 <td><%= t 'notifications.subject', 'Subject' %></td>
-                <td><%= t 'notifications.sample_subject', 'Grade Changed: Check In Survey, Testing Course' %></td>
+                <td><%= t 'notifications.sample_subject', 'Recent Canvas Notifications' %></td>
               </tr>
               <tr>
                 <td><%= t 'notifications.email_date', 'Date' %></td>
@@ -692,7 +704,7 @@ acknowledge that you have read and agreed to the
               </tr>
               <tr>
                 <td><%= t 'notifications.subject', 'Subject' %></td>
-                <td><%= t 'notifications.sample_subject', 'Grade Changed: Check In Survey, Testing Course' %></td>
+                <td><%= t 'notifications.sample_subject', 'Recent Canvas Notifications' %></td>
               </tr>
               <tr>
                 <td><%= t 'notifications.email_date', 'Date' %></td>

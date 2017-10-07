@@ -30,8 +30,6 @@
   font-size: 1.5em;
 }
 
-.ic-notification + .recent-activity-header { margin-top: $ic-sp*2; }
-
 .recent_activity > li {
   position: relative;
   border-bottom: 1px solid #ddd;
@@ -43,7 +41,7 @@
   }
   .unread-count {
     display: block;
-    background: $ic-brand-primary;
+    background: var(--ic-brand-primary);
     border-radius: 15px;
     width: 10px;
     height: 10px;
@@ -60,7 +58,7 @@
     width: 10px;
     height: 10px;
     margin-left: -15px;
-    background-color: $ic-brand-primary;
+    background-color: var(--ic-brand-primary);
     border-radius: 5px;
   }
 }
@@ -162,7 +160,7 @@ $ignore-col-width: 50px;
 }
 
 .fake-link {
-  color: $ic-link-color;
+  color: var(--ic-link-color);
   &:hover {
     text-decoration: underline;
   }

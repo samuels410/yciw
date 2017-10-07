@@ -19,10 +19,10 @@
 module ContextModulesHelper
   include Api::V1::ContextModule
 
-  def cache_if_module(context_module, editable, user, context, &block)
+  def cache_if_module(context_module, editable, is_student, can_view_unpublished, user, context, &block)
     if context_module
       visible_assignments = user ? user.assignment_and_quiz_visibilities(context) : []
-      cache_key_items = ['context_module_render_18_', context_module.cache_key, editable, true, Time.zone, Digest::MD5.hexdigest(visible_assignments.to_s)]
+      cache_key_items = ['context_module_render_20_', context_module.cache_key, editable, is_student, can_view_unpublished, true, Time.zone, Digest::MD5.hexdigest(visible_assignments.to_s)]
       cache_key = cache_key_items.join('/')
       cache_key = add_menu_tools_to_cache_key(cache_key)
       cache_key = add_mastery_paths_to_cache_key(cache_key, context, context_module, user)
@@ -40,7 +40,7 @@ module ContextModulesHelper
   end
 
   def add_mastery_paths_to_cache_key(cache_key, context, module_or_modules, user)
-    if ConditionalRelease::Service.enabled_in_context?(context)
+    if user && ConditionalRelease::Service.enabled_in_context?(context)
       if context.user_is_student?(user)
         items = Rails.cache.fetch("visible_content_tags_for/#{cache_key}") do
           Array.wrap(module_or_modules).map{ |m| m.content_tags_visible_to(user, :is_teacher => false) }.flatten

@@ -41,6 +41,7 @@ define [
       'click .edit-menu-item': 'editPage'
       'click .delete-menu-item': 'deletePage'
       'click .use-as-front-page-menu-item': 'useAsFrontPage'
+      'click .duplicate-wiki-page': 'duplicateWikiPage'
 
     @optionProperty 'indexView'
     @optionProperty 'collection'
@@ -124,7 +125,7 @@ define [
       return unless @model.get('deletable')
 
       $curCog = $(ev.target).parents('td').children().find('.al-trigger')
-      $allCogs =  $('.collectionViewItems').children().find('.al-trigger')
+      $allCogs = $('.collectionViewItems').children().find('.al-trigger')
       curIndex = $allCogs.index($curCog)
       newIndex = curIndex - 1
       if (newIndex < 0)
@@ -138,6 +139,19 @@ define [
         focusOnCancel: $curCog
         focusOnDelete: $focusOnDelete
       deleteDialog.open()
+
+    duplicateWikiPage: (ev) ->
+      ev?.preventDefault()
+      collection = @collection
+      model = @model
+
+      handleResponse = (response) ->
+        placeToAdd = collection.indexOf(model) + 1
+        collection.add(response, { at: placeToAdd })
+        $("#wiki_page_index_item_title_#{response.page_id}").focus()
+
+      @model.duplicate(ENV.COURSE_ID, handleResponse)
+      return
 
     useAsFrontPage: (ev) ->
       ev?.preventDefault()

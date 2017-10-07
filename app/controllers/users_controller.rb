@@ -379,6 +379,12 @@ class UsersController < ApplicationController
   #   administrative users will search on SIS ID, login ID, name, or email
   #   address; non-administrative queries will only be compared against name.
   #
+  # @argument sort [String, "username"|"email"|"sis_id"|"last_login"]
+  #   The column to sort results by.
+  #
+  # @argument order [String, "asc"|"desc"]
+  #   The order to sort the given column by.
+  #
   #  @example_request
   #    curl https://<canvas>/api/v1/accounts/self/users?search_term=<search value> \
   #       -X GET \
@@ -408,10 +414,12 @@ class UsersController < ApplicationController
           search_term = params[:search_term].presence
           page_opts = {}
           if search_term
-            users = UserSearch.for_user_in_context(search_term, @context, @current_user, session)
+            users = UserSearch.for_user_in_context(search_term, @context, @current_user, session,
+              {order: params[:order], sort: params[:sort], role_filter_id: params[:role_filter_id]})
             page_opts[:total_entries] = nil # doesn't calculate a total count
           else
-            users = UserSearch.scope_for(@context, @current_user)
+            users = UserSearch.scope_for(@context, @current_user,
+              {order: params[:order], sort: params[:sort], role_filter_id: params[:role_filter_id]})
           end
 
           includes = (params[:include] || []) & %w{avatar_url email last_login time_zone}
@@ -461,12 +469,36 @@ class UsersController < ApplicationController
       return_url = session[:masquerade_return_to]
       session.delete(:masquerade_return_to)
       @current_user.associate_with_shard(@user.shard, :shadow) if PageView.db?
-      return return_to(return_url, request.referer || dashboard_url)
+      if request.referer =~ /.*\/users\/#{@user.id}\/masquerade/
+        return return_to(return_url, dashboard_url)
+      else
+        return return_to(return_url, request.referer || dashboard_url)
+      end
+    else
+      js_bundle :act_as_modal
+      css_bundle :act_as_modal
+
+      @page_title = t('Act as %{user_name}', user_name: @user.short_name)
+      js_env act_as_user_data: {
+        user: {
+          name: @user.name,
+          short_name: @user.short_name,
+          id: @user.id,
+          avatar_image_url: @user.avatar_image_url,
+          sortable_name: @user.sortable_name,
+          email: @user.email,
+          login_id: @user.pseudonym.login,
+          sis_id: @user.pseudonym.sis_user_id,
+          integration_id: @user.pseudonym.integration_id
+        }
+      }
+      render :text => '<div id="act_as_modal"></div>'.html_safe, :layout => 'layouts/bare'
     end
   end
 
   helper_method :show_planner?
   def show_planner?
+    return false unless @current_user && @current_user.preferences
     if @current_user.preferences[:dashboard_view]
       @current_user.preferences[:dashboard_view] == 'planner'
     else
@@ -475,6 +507,11 @@ class UsersController < ApplicationController
   end
 
   def user_dashboard
+    if planner_enabled?
+      js_env :DEBUG_PLANNER => Rails.env.development? || Rails.env.test?
+      js_bundle :react_todo_sidebar
+      css_bundle :react_todo_sidebar
+    end
     session.delete(:parent_registration) if session[:parent_registration]
     check_incomplete_registration
     get_context
@@ -498,7 +535,8 @@ class UsersController < ApplicationController
         :custom_colors => @current_user.custom_colors,
         :show_planner => show_planner?
       },
-      :STUDENT_PLANNER_ENABLED => planner_enabled?
+      :STUDENT_PLANNER_ENABLED => planner_enabled?,
+      :STUDENT_PLANNER_COURSES => planner_enabled? && map_courses_for_menu(@current_user.courses_with_primary_enrollment, :include_section_tabs => true)
     })
 
     @announcements = AccountNotification.for_user_and_account(@current_user, @domain_root_account)
@@ -518,7 +556,7 @@ class UsersController < ApplicationController
       :expires_in => 3.minutes) do
       assignments = upcoming_events.select{ |e| e.is_a?(Assignment) }
       Shard.partition_by_shard(assignments) do |shard_assignments|
-        Submission.
+        Submission.active.
           select([:id, :assignment_id, :score, :grade, :workflow_state, :updated_at]).
           where(:assignment_id => shard_assignments, :user_id => user)
       end
@@ -900,19 +938,42 @@ class UsersController < ApplicationController
   # @argument user_id
   #   the student's ID
   #
+  # @argument include[] [String, "planner_overrides"|"course"]
+  #   "planner_overrides":: Optionally include the assignment's associated planner override, if it exists, for the current user.
+  #                         These will be returned under a +planner_override+ key
+  #   "course":: Optionally include the assignments' courses
+  #
   # @returns [Assignment]
   def missing_submissions
     user = api_find(User, params[:user_id])
     return render_unauthorized_action unless @current_user && user.grants_right?(@current_user, :read)
 
-    assignments = []
+    submissions = []
     Shackles.activate(:slave) do
-      preloaded_submitted_assignment_ids = user.submissions.pluck(:assignment_id)
-      assignments = user.assignments_needing_submitting due_before: Time.zone.now
-      assignments.reject {|as| preloaded_submitted_assignment_ids.include? as.id }
+      course_ids = user.participating_student_course_ids
+      Shard.partition_by_shard(course_ids) do |shard_course_ids|
+        submissions = Submission.active.preload(:assignment).
+                      missing.
+                      where(user_id: user.id,
+                            assignments: {context_id: shard_course_ids}).
+                      merge(Assignment.published).
+                      order(:cached_due_date)
+      end
+    end
+    assignments = Api.paginate(submissions, self, api_v1_user_missing_submissions_url).map(&:assignment)
+
+    includes = Array(params[:include])
+    planner_overrides = includes.include?('planner_overrides')
+    include_course = includes.include?('course')
+    ActiveRecord::Associations::Preloader.new.preload(assignments, :context) if include_course
+
+    json = assignments.map do |as|
+      assmt_json = assignment_json(as, user, session, include_planner_override: planner_overrides)
+      assmt_json['course'] = course_json(as.context, user, session, [], nil) if include_course
+      assmt_json
     end
 
-    render json: assignments.map {|as| assignment_json(as, user, session) }
+    render json: json
   end
 
   def ignore_item
@@ -1578,7 +1639,7 @@ class UsersController < ApplicationController
       end
     end
 
-    user.dashboard_positions = user.dashboard_positions.merge(params[:dashboard_positions])
+    user.dashboard_positions = user.dashboard_positions.merge(params[:dashboard_positions].to_unsafe_h)
 
     respond_to do |format|
       format.json do
@@ -1704,6 +1765,8 @@ class UsersController < ApplicationController
           'Invalid date or invalid datetime for birthdate')}}, :status => 400)
       end
 
+      @user.sortable_name_explicitly_set = user_params[:sortable_name].present?
+
       respond_to do |format|
         if @user.update_attributes(user_params)
           @user.avatar_state = (old_avatar_state == :locked ? old_avatar_state : 'approved') if admin_avatar_update
@@ -1712,11 +1775,7 @@ class UsersController < ApplicationController
           session.delete(:require_terms)
           flash[:notice] = t('user_updated', 'User was successfully updated.')
           unless params[:redirect_to_previous].blank?
-            if CANVAS_RAILS4_2
-              return redirect_to :back
-            else
-              return redirect_back fallback_location: user_url(@user)
-            end
+            return redirect_back fallback_location: user_url(@user)
           end
           format.html { redirect_to user_url(@user) }
           format.json {
@@ -1875,7 +1934,7 @@ class UsersController < ApplicationController
       @entries.concat context.assignments.active.where("updated_at>?", cutoff)
       @entries.concat context.calendar_events.active.where("updated_at>?", cutoff)
       @entries.concat context.discussion_topics.active.where("updated_at>?", cutoff)
-      @entries.concat context.wiki.wiki_pages.not_deleted.where("updated_at>?", cutoff)
+      @entries.concat context.wiki_pages.not_deleted.where("updated_at>?", cutoff)
     end
     @entries.each do |entry|
       feed.entries << entry.to_atom(:include_context => true, :context => @context)
@@ -2244,6 +2303,7 @@ class UsersController < ApplicationController
     sis_user_id = nil
     integration_id = nil
     params[:pseudonym] ||= {}
+    params[:pseudonym][:unique_id].strip! if params[:pseudonym][:unique_id].is_a?(String)
 
     if @context.grants_right?(@current_user, session, :manage_sis)
       sis_user_id = params[:pseudonym].delete(:sis_user_id)

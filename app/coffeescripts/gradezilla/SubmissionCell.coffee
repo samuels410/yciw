@@ -52,12 +52,12 @@ define [
         "EX"
       else
         submission = @opts.item[@opts.column.field]
-        grade = submission.grade || ""
+        grade = submission.entered_grade || submission.grade || ""
         formattedGrade = GradeFormatHelper.formatGrade(grade, { gradingType: submission.gradingType })
         @val = htmlEscape(formattedGrade)
       @$input.val(@val)
       @$input[0].defaultValue = @val
-      @$input.select()
+      @$input.select() if @$input.get(0) == document.activeElement
 
     serializeValue: () ->
       @$input.val()
@@ -97,6 +97,7 @@ define [
     validate: () ->
       { valid: true, msg: null }
 
+    # default formatter (points, percent)
     @formatter: (row, col, submission, assignment, student, opts = {}) ->
       if submission.excused
         grade = "EX"
@@ -130,26 +131,26 @@ define [
       }, options)
       opts.submission ||= @opts.item[@opts.column.field]
       opts.assignment ||= @opts.column.object
-      submission_type = opts.submission.submission_type if opts.submission?.submission_type || null
-      specialClasses = SubmissionCell.classesBasedOnSubmission(opts.submission, opts.assignment)
-      specialClasses.push("grayed-out") if opts.student.isInactive || opts.student.isConcluded || opts.isLocked
-      specialClasses.push("cannot_edit") if opts.student.isConcluded || opts.isLocked
-      specialClasses.push(opts.tooltip) if opts.tooltip
       opts.editable = false if opts.student.isConcluded
+      submission_type = opts.submission.submission_type if opts.submission?.submission_type || null
+      styles = SubmissionCell.styles(opts.submission, opts.assignment)
+
+      styles.push("grayed-out") if opts.student.isInactive || opts.student.isConcluded || opts.isLocked
+      styles.push("cannot_edit") if opts.student.isConcluded || opts.isLocked
+      if opts.tooltip
+        styles.push(opts.tooltip)
+        tooltips.push(opts.tooltip)
 
       opts.classes += ' no_grade_yet ' unless opts.submission.grade && opts.submission.workflow_state != 'pending_review'
       innerContents = null if opts.submission.workflow_state == 'pending_review' && !isNaN(innerContents)
       innerContents ?= if submission_type then SubmissionCell.submissionIcon(submission_type) else '-'
 
       if turnitin = extractDataTurnitin(opts.submission)
-        specialClasses.push('turnitin')
+        styles.push('turnitin')
         innerContents += "<span class='gradebook-cell-turnitin #{htmlEscape turnitin.state}-score' />"
 
-      tooltipText = $.map(specialClasses, (c)-> GRADEBOOK_TRANSLATIONS["submission_tooltip_#{c}"]).join ', '
-
       """
-      #{$.raw if tooltipText then '<div class="gradebook-tooltip">'+ htmlEscape(tooltipText) + '</div>' else ''}
-      <div class="gradebook-cell #{htmlEscape if opts.editable then 'gradebook-cell-editable focus' else ''} #{htmlEscape opts.classes} #{htmlEscape specialClasses.join(' ')}">
+      <div class="gradebook-cell #{htmlEscape if opts.editable then 'gradebook-cell-editable focus' else ''} #{htmlEscape opts.classes} #{htmlEscape styles.join(' ')}">
         #{$.raw innerContents}
       </div>
       """
@@ -161,10 +162,21 @@ define [
       else
         ""
 
-    @classesBasedOnSubmission: (submission={}, assignment={}) ->
+    @styles: (submission = {}, assignment = {}) ->
       classes = []
-      classes.push('resubmitted') if submission.grade_matches_current_submission == false
-      classes.push('late') if submission.late
+
+      # only one of these can be present for styling
+      if submission.drop
+        classes.push('dropped')
+      else if submission.excused
+        classes.push('excused')
+      else if submission.grade_matches_current_submission == false
+        classes.push('resubmitted')
+      else if submission.missing
+        classes.push('missing')
+      else if submission.late
+        classes.push('late')
+
       classes.push('ungraded') if ''+assignment.submission_types is "not_graded"
       classes.push('muted') if assignment.muted
       classes.push(submission.submission_type) if submission.submission_type
@@ -208,6 +220,7 @@ define [
       @$input = @$wrapper.find('input').focus().select()
 
   class SubmissionCell.letter_grade extends SubmissionCell
+    # Letter Grade formatter
     @formatter: (row, col, submission, assignment, student, opts={}) ->
       innerContents = if submission.excused
         "EX"
@@ -219,6 +232,7 @@ define [
       SubmissionCell.prototype.cellWrapper(innerContents, {submission: submission, assignment: assignment, editable: false, student: student, isLocked: !!opts.isLocked, tooltip: opts.tooltip})
 
   class SubmissionCell.gpa_scale extends SubmissionCell
+    # GPA Scale formatter
     @formatter: (row, col, submission, assignment, student, opts={}) ->
       innerContents = if submission.excused
         "EX"
@@ -234,16 +248,18 @@ define [
       else GRADEBOOK_TRANSLATIONS["submission_#{text}"]
 
   iconClassFromSubmission = (submission) ->
-    { pass: 'icon-check', complete: 'icon-check', fail: 'icon-x', incomplete: 'icon-x' }[submission.grade] || 'icon-undefined'
+    { pass: 'icon-check', complete: 'icon-check', fail: 'icon-x', incomplete: 'icon-x' }[submission.rawGrade] || 'icon-undefined'
 
   class SubmissionCell.pass_fail extends SubmissionCell
 
     states = ['pass', 'fail', '']
     classFromSubmission = (submission) ->
       if submission.excused
+        # this can never occur, since excused submissions have no grade
+        # and ungraded submissions do not use htmlFromSubmission
         "EX"
       else
-        { pass: 'pass', complete: 'pass', fail: 'fail', incomplete: 'fail' }[submission.grade] || ''
+        { pass: 'pass', complete: 'pass', fail: 'fail', incomplete: 'fail' }[submission.rawGrade] || ''
 
     checkboxButtonTemplate = (iconClass) ->
       if _.isEmpty(iconClass)
@@ -253,6 +269,8 @@ define [
         <i class="#{htmlEscape iconClass}" role="presentation"></i>
         """
 
+    # Complete/Incomplete (pass_fail) cell formatter and editor
+    # only used by formatter for graded submissions
     htmlFromSubmission: (options={}) ->
       cssClass = classFromSubmission(options.submission)
       iconClass = iconClassFromSubmission(options.submission)
@@ -268,6 +286,7 @@ define [
           aria-label="#{htmlEscape cssClass}"><span class="screenreader-only">#{htmlEscape(passFailMessage(cssClass))}</span>#{checkboxButtonTemplate(iconClass)}</button>
         """, options)
 
+    # Complete/Incomplete (pass_fail) formatter
     @formatter: (row, col, submission, assignment, student, opts={}) ->
       return SubmissionCell.formatter.apply(this, arguments) unless submission.grade?
       pass_fail::htmlFromSubmission({ submission, assignment, editable: false, isLocked: opts.isLocked, tooltip: opts.tooltip })
@@ -298,15 +317,16 @@ define [
     transitionValue: (newValue) ->
       @$input
         .removeClass('gradebook-checkbox-pass gradebook-checkbox-fail')
-        .addClass('gradebook-checkbox-' + classFromSubmission(grade: newValue))
+        .addClass('gradebook-checkbox-' + classFromSubmission(rawGrade: newValue))
         .attr('aria-label', passFailMessage(newValue))
         .data('value', newValue)
       @$input.find('i')
         .removeClass()
-        .addClass(iconClassFromSubmission(grade: newValue))
+        .addClass(iconClassFromSubmission(rawGrade: newValue))
 
     loadValue: () ->
-      @val = @opts.item[@opts.column.field].grade || ""
+      submission = @opts.item[@opts.column.field]
+      @val = submission.entered_grade || submission.grade || ""
 
     serializeValue: () ->
       @$input.data('value')

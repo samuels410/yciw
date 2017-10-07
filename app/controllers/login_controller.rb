@@ -23,9 +23,9 @@ class LoginController < ApplicationController
 
   before_action :forbid_on_files_domain, except: :clear_file_session
   before_action :run_login_hooks, only: :new
-  before_action :check_sa_delegated_cookie, only: :new
   before_action :fix_ms_office_redirects, only: :new
   skip_before_action :require_reacceptance_of_terms
+  before_action :require_user, only: :session_token
 
   def new
     if @current_user &&
@@ -79,8 +79,8 @@ class LoginController < ApplicationController
 
     unless flash[:delegated_message]
       return redirect_to url_for({ controller: "login/#{auth_type}", action: :new }
-                                     .merge(params.slice(:id))
-                                     .merge(params.slice(:pseudonym_session)))
+                                     .merge(params.permit(:id).to_unsafe_h)
+                                     .merge(params.permit(pseudonym_session: :unique_id).to_unsafe_h))
     end
 
     # we had an error from an SSO - we need to show it
@@ -101,9 +101,7 @@ class LoginController < ApplicationController
     if session[:login_aac]
       # The AAC could have been deleted since the user logged in
       aac = AccountAuthorizationConfig.where(id: session[:login_aac]).first
-      if aac && aac.respond_to?(:user_logout_redirect)
-        redirect = aac.user_logout_redirect(self, @current_user)
-      end
+      redirect = aac.try(:user_logout_redirect, self, @current_user)
     end
 
     redirect ||= login_url
@@ -114,8 +112,35 @@ class LoginController < ApplicationController
   end
 
   # GET /logout
-  def logout_confirm
-    redirect_to login_url unless @current_user
+  def logout_landing
+    # logged in; ask them to log out
+    return render :logout_confirm if @current_user
+    # not logged in at all; send them to login
+    return redirect_to login_url unless flash[:logged_out]
+    # just barely logged out. render a landing page asking them to log in again.
+    # render :logout_landing
+  end
+
+  # POST /login/session_token
+  def session_token
+    # must be used from API
+    return render_unauthorized_action unless @access_token
+
+    # verify that we're sending them back to a host from the same instance
+    return_to = URI.parse(params[:return_to] || request.referer || root_url)
+    return render_unauthorized_action unless return_to.absolute?
+    host = return_to.host
+    return render_unauthorized_action unless host == request.host
+
+    login_pseudonym = @real_current_pseudonym || @current_pseudonym
+    token = SessionToken.new(login_pseudonym.global_id,
+                             current_user_id: @real_current_user ? @current_user.global_id : nil,
+                             used_remember_me_token: true).to_s
+    return_to.query.concat('&') if return_to.query
+    return_to.query = '' unless return_to.query
+    return_to.query.concat("session_token=#{token}")
+
+    render json: { session_url: return_to.to_s }
   end
 
   def clear_file_session

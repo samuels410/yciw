@@ -19,6 +19,7 @@
 require_relative '../../helpers/gradezilla_common'
 require_relative '../setup/gradebook_setup'
 require_relative '../page_objects/gradezilla_page'
+require_relative '../page_objects/gradezilla_cells_page'
 
 describe "Gradezilla - concluded courses and enrollments" do
   include_context "in-process server selenium tests"
@@ -35,30 +36,28 @@ describe "Gradezilla - concluded courses and enrollments" do
       conclude_student_1
       expect(@course.students.count).to eq @all_students.size - 1
       expect(@course.all_students.count).to eq @all_students.size
+
       Gradezilla.visit(@course)
+
       expect(ff('.student-name')).to have_size @course.students.count
     end
 
-    it "shows concluded enrollments when checked in column header", priority: "1", test_id: 164223 do
+    it "shows concluded enrollments when checked in column header", priority: "1", test_id: 3253331 do
       conclude_student_1
       Gradezilla.visit(@course)
 
-      expect_new_page_load do
-        Gradezilla.open_student_column_menu
-        Gradezilla.select_menu_item 'concluded'
-      end
+      Gradezilla.click_student_header_menu_show_option('Concluded enrollments')
+
       expect(ff('.student-name')).to have_size @course.all_students.count
     end
 
-    it "hides concluded enrollments when unchecked in column header", priority: "1", test_id: 3101103 do
+    it "hides concluded enrollments when unchecked in column header", priority: "1", test_id: 3253332 do
       conclude_student_1
       display_concluded_enrollments
       Gradezilla.visit(@course)
 
-      expect_new_page_load do
-        Gradezilla.open_student_column_menu
-        Gradezilla.select_menu_item 'concluded'
-      end
+      Gradezilla.click_student_header_menu_show_option('Concluded enrollments')
+
       expect(ff('.student-name')).to have_size @course.students.count
     end
 
@@ -66,30 +65,28 @@ describe "Gradezilla - concluded courses and enrollments" do
       deactivate_student_1
       expect(@course.students.count).to eq @all_students.size - 1
       expect(@course.all_students.count).to eq @all_students.size
+
       Gradezilla.visit(@course)
+
       expect(ff('.student-name')).to have_size @course.students.count
     end
 
-    it "shows inactive enrollments when checked in column header", priority: "1", test_id: 1102066 do
+    it "shows inactive enrollments when checked in column header", priority: "1", test_id: 3253329 do
       deactivate_student_1
       Gradezilla.visit(@course)
 
-      expect_new_page_load do
-        Gradezilla.open_student_column_menu
-        Gradezilla.select_menu_item 'inactive'
-      end
+      Gradezilla.click_student_header_menu_show_option('Inactive enrollments')
+
       expect(ff('.student-name')).to have_size @course.all_students.count
     end
 
-    it "hides inactive enrollments when unchecked in column header", priority: "1", test_id: 3101104 do
+    it "hides inactive enrollments when unchecked in column header", priority: "1", test_id: 3253330 do
       deactivate_student_1
       display_inactive_enrollments
       Gradezilla.visit(@course)
 
-      expect_new_page_load do
-        Gradezilla.open_student_column_menu
-        Gradezilla.select_menu_item 'inactive'
-      end
+      Gradezilla.click_student_header_menu_show_option('Inactive enrollments')
+
       expect(ff('.student-name')).to have_size @course.students.count
     end
   end
@@ -98,10 +95,10 @@ describe "Gradezilla - concluded courses and enrollments" do
     it "does not allow editing grades", priority: "1", test_id: 210027 do
       @course.complete!
       Gradezilla.visit(@course)
-      cell = Gradezilla.grading_cell
-      expect(cell).to include_text '10'
-      cell.click
-      expect(cell).not_to contain_css('.grade') # no input box for entry
+
+      expect(Gradezilla::Cells.get_grade(@student_1, @first_assignment)).to eq '10'
+      cell = Gradezilla::Cells.grading_cell(@student_1, @first_assignment)
+      expect(cell).to contain_css(Gradezilla::Cells.ungradable_selector)
     end
   end
 end

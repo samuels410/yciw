@@ -25,8 +25,8 @@ class CourseSection < ActiveRecord::Base
   belongs_to :enrollment_term
   has_many :enrollments, -> { preload(:user).where("enrollments.workflow_state<>'deleted'") }, dependent: :destroy
   has_many :all_enrollments, :class_name => 'Enrollment'
-  has_many :students, :through => :student_enrollments, :source => :user
   has_many :student_enrollments, -> { where("enrollments.workflow_state NOT IN ('deleted', 'completed', 'rejected', 'inactive')").preload(:user) }, class_name: 'StudentEnrollment'
+  has_many :students, :through => :student_enrollments, :source => :user
   has_many :all_student_enrollments, -> { where("enrollments.workflow_state<>'deleted'").preload(:user) }, class_name: 'StudentEnrollment'
   has_many :instructor_enrollments, -> { where(type: ['TaEnrollment', 'TeacherEnrollment']) }, class_name: 'Enrollment'
   has_many :admin_enrollments, -> { where(type: ['TaEnrollment', 'TeacherEnrollment', 'DesignerEnrollment']) }, class_name: 'Enrollment'
@@ -126,8 +126,7 @@ class CourseSection < ActiveRecord::Base
   def touch_all_enrollments
     return if new_record?
     self.enrollments.touch_all
-    User.where(id: all_enrollments.select(:user_id)).
-        update_all(updated_at: Time.now.utc)
+    User.where(id: all_enrollments.select(:user_id)).touch_all
   end
 
   set_policy do
@@ -179,8 +178,7 @@ class CourseSection < ActiveRecord::Base
     return true unless scope.exists?
 
     self.errors.add(:sis_source_id, t('sis_id_taken', "SIS ID \"%{sis_id}\" is already in use", :sis_id => self.sis_source_id))
-    throw :abort unless CANVAS_RAILS4_2
-    false
+    throw :abort
   end
 
   alias_method :parent_event_context, :course

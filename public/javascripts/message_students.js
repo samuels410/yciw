@@ -16,14 +16,13 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-define([
-  'i18n!message_students',
-  'jquery' /* $ */,
-  'jsx/shared/helpers/numberHelper',
-  'jquery.instructure_forms' /* formSubmit */,
-  'jqueryui/dialog',
-  'jquery.instructure_misc_plugins', /* showIf */
-], function (I18n, $, numberHelper) {
+import I18n from 'i18n!message_students'
+import $ from 'jquery'
+import numberHelper from 'jsx/shared/helpers/numberHelper'
+import './jquery.instructure_forms' /* formSubmit */
+import 'jqueryui/dialog'
+import './jquery.instructure_misc_plugins' /* showIf */
+
   var $message_students_dialog = $("#message_students_dialog");
   var $sendButton = $message_students_dialog.find(".send_button");
   var currentSettings = {};
@@ -96,7 +95,10 @@ define([
     $message_students_dialog.dialog({
       width: 600,
       modal: true
-    }).dialog('open').dialog('option', 'title', I18n.t("message_student", "Message Students for %{course_name}", {course_name: title}));
+    })
+    .dialog('open')
+    .dialog('option', 'title', I18n.t('message_student', 'Message Students for %{course_name}', {course_name: title}))
+    .on('dialogclose', settings.onClose);
   };
 
   $(document).ready(function() {
@@ -198,5 +200,4 @@ define([
     disableButtons(disabled, $sendButton);
   }
 
-  return messageStudents;
-});
+export default messageStudents;

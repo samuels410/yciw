@@ -42,8 +42,8 @@ describe Canvas::LiveEvents do
           :context_id => context_id,
           :context_type => context_type,
           :root_account_id => root_account_id,
-          :root_account_uuid => root_account_uuid,
-          :root_account_lti_guid => root_account_lti_guid
+          :root_account_uuid => root_account_uuid.to_s,
+          :root_account_lti_guid => root_account_lti_guid.to_s
         }
       )
     end
@@ -131,7 +131,7 @@ describe Canvas::LiveEvents do
   describe ".wiki_page_updated" do
     before(:each) do
       course_with_teacher
-      @page = @course.wiki.wiki_pages.create(:title => "old title", :body => "old body")
+      @page = @course.wiki_pages.create(:title => "old title", :body => "old body")
     end
 
     def wiki_page_updated
@@ -179,9 +179,9 @@ describe Canvas::LiveEvents do
     let(:course_context) do
       hash_including(
         root_account_uuid: @course.root_account.uuid,
-        root_account_id: @course.root_account.global_id,
-        root_account_lti_guid: @course.root_account.lti_guid,
-        context_id: @course.global_id,
+        root_account_id: @course.root_account.global_id.to_s,
+        root_account_lti_guid: @course.root_account.lti_guid.to_s,
+        context_id: @course.global_id.to_s,
         context_type: 'Course'
       )
     end
@@ -346,7 +346,7 @@ describe Canvas::LiveEvents do
         hash_including(
           user_id: @student.global_id.to_s,
           assignment_id: submission.global_assignment_id.to_s,
-          lti_assignment_id: submission.assignment.lti_context_id
+          lti_assignment_id: submission.assignment.lti_context_id.to_s
         ))
       Canvas::LiveEvents.submission_created(submission)
     end
@@ -361,7 +361,7 @@ describe Canvas::LiveEvents do
         hash_including(
           user_id: @student.global_id.to_s,
           assignment_id: submission.global_assignment_id.to_s,
-          lti_assignment_id: submission.assignment.lti_context_id
+          lti_assignment_id: submission.assignment.lti_context_id.to_s
         ))
       Canvas::LiveEvents.submission_updated(submission)
     end
@@ -375,7 +375,7 @@ describe Canvas::LiveEvents do
         hash_including(
           user_id: @student.global_id.to_s,
           assignment_id: submission.global_assignment_id.to_s,
-          lti_assignment_id: submission.assignment.lti_context_id
+          lti_assignment_id: submission.assignment.lti_context_id.to_s
         ))
       Canvas::LiveEvents.plagiarism_resubmit(submission)
     end
@@ -489,14 +489,36 @@ describe Canvas::LiveEvents do
         fake_export_context,
         hash_including({
           :context_type => "Course",
-          :context_id => content_export.context.global_id,
-          :root_account_id => content_export.context.root_account.global_id,
+          :context_id => content_export.context.global_id.to_s,
+          :root_account_id => content_export.context.root_account.global_id.to_s,
           :root_account_uuid => content_export.context.root_account.uuid,
-          :root_account_lti_guid => content_export.context.root_account.lti_guid,
+          :root_account_lti_guid => content_export.context.root_account.lti_guid.to_s,
         })
       ).once
 
       Canvas::LiveEvents.quiz_export_complete(content_export)
+    end
+  end
+
+  describe '.logged_in' do
+    it 'triggers a live event with user details' do
+      user_with_pseudonym
+
+      session = { return_to: 'http://www.canvaslms.com/' }
+      context = {
+        user_id: @user.global_id.to_s,
+        user_login: @pseudonym.unique_id,
+        user_account_id: @pseudonym.global_account_id.to_s,
+        user_sis_id: @pseudonym.sis_user_id
+      }
+
+      expect_event(
+        'logged_in',
+        { :redirect_url => 'http://www.canvaslms.com/' },
+        hash_including(context)
+      ).once
+
+      Canvas::LiveEvents.logged_in(session, @user, @pseudonym)
     end
   end
 end

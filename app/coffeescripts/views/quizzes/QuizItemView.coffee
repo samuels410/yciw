@@ -74,7 +74,7 @@ define [
           content_id: @model.get('id'),
           content_type: 'quiz'
         })
-        if @model.postToSIS() != null && @model.attributes.published
+        if @model.postToSISEnabled() && @model.postToSIS() != null && @model.attributes.published
           @sisButtonView = new SisButtonView
             model: @model
             sisName: @model.postToSISName()
@@ -111,9 +111,9 @@ define [
       @$el.disableWhileLoading dfd
       $.when(dfd)
         .done (response, status, deferred) =>
-          $.flashMessage I18n.t('Migration successful')
+          $.flashMessage I18n.t('Migration in progress')
         .fail =>
-          $.flashError I18n.t("An error occurred while migrating.")
+          $.flashError I18n.t('An error occurred while migrating.')
 
     canDelete: ->
       @model.get('permissions').delete

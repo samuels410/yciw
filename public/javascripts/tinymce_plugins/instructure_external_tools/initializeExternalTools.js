@@ -16,17 +16,15 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-define([
-  'i18n!editor',
-  'jquery',
-  'str/htmlEscape',
-  'tinymce_plugins/instructure_external_tools/TinyMCEContentItem',
-  'tinymce_plugins/instructure_external_tools/ExternalToolsHelper',
-  'jsx/shared/rce/RceCommandShim',
-  'jquery.instructure_misc_helpers',
-  'jqueryui/dialog',
-  'jquery.instructure_misc_plugins'
-], function (I18n, $, htmlEscape, TinyMCEContentItem, ExternalToolsHelper, RceCommandShim) {
+import I18n from 'i18n!editor'
+import $ from 'jquery'
+import htmlEscape from '../../str/htmlEscape'
+import TinyMCEContentItem from 'tinymce_plugins/instructure_external_tools/TinyMCEContentItem'
+import ExternalToolsHelper from 'tinymce_plugins/instructure_external_tools/ExternalToolsHelper'
+import {send} from 'jsx/shared/rce/RceCommandShim'
+import '../../jquery.instructure_misc_helpers'
+import 'jqueryui/dialog'
+import '../../jquery.instructure_misc_plugins'
 
   var TRANSLATIONS = {
     embed_from_external_tool: I18n.t('embed_from_external_tool', '"Embed content from External Tool"'),
@@ -89,7 +87,23 @@ define([
         $dialog = $(dialogHTML)
           .hide()
           .html("<div class='teaser' style='width: 800px; margin-bottom: 10px; display: none;'></div>" +
-            "<iframe id='external_tool_button_frame' style='width: 800px; height: " + frameHeight +"px; border: 0;' src='/images/ajax-loader-medium-444.gif' borderstyle='0' tabindex='0'/>")
+            '<div class="before_external_content_info_alert screenreader-only" tabindex="0">' +
+              '<div class="ic-flash-info">' +
+                '<div class="ic-flash__icon" aria-hidden="true">' +
+                  '<i class="icon-info"></i>' +
+                '</div>' +
+                htmlEscape(I18n.t('The following content is partner provided')) +
+              '</div>' +
+            '</div>' +
+            "<iframe id='external_tool_button_frame' style='width: 800px; height: " + frameHeight +"px; border: 0;' src='/images/ajax-loader-medium-444.gif' borderstyle='0' tabindex='0'/>" +
+            '<div class="after_external_content_info_alert screenreader-only" tabindex="0">' +
+              '<div class="ic-flash-info">' +
+                '<div class="ic-flash__icon" aria-hidden="true">' +
+                  '<i class="icon-info"></i>' +
+                '</div>' +
+                htmlEscape(I18n.t('The preceding content is partner provided')) +
+              '</div>' +
+            '</div>')
           .appendTo('body')
           .dialog({
             autoOpen: false,
@@ -115,21 +129,32 @@ define([
             });
           })
 
-          var tabHelperHeight = 35;
-          $dialog.append(
-          $('<div/>',
-            {id: 'tab-helper', style: 'height: ' + tabHelperHeight + 'px;padding:5px', tabindex: '0'}
-          ).focus(function () {
-            $(this).height(tabHelperHeight + 'px')
-            var joke = document.createTextNode(I18n.t('Q: What goes black, white, black, white?  A: A panda rolling down a hill.'))
-            this.appendChild(joke)
-            var currentHeight = $dialog.dialog('option', 'height');
-            $dialog.dialog('option', 'height', currentHeight + tabHelperHeight)
-          }).blur(function () {
-            $(this).html('').height('0px');
-            var currentHeight = $dialog.dialog('option', 'height');
-            $dialog.dialog('option', 'height', currentHeight - tabHelperHeight)
-          }))
+          const $external_content_info_alerts = $dialog
+            .find('.before_external_content_info_alert, .after_external_content_info_alert');
+
+          const $iframe = $dialog.find('iframe');
+
+          $external_content_info_alerts.on('focus', function(e) {
+            var iframeWidth = $iframe.outerWidth(true);
+            var iframeHeight = $iframe.outerHeight(true);
+            $iframe.css('border', '2px solid #008EE2');
+            $(this).removeClass('screenreader-only');
+            var alertHeight = $(this).outerHeight(true);
+            $iframe.css('height', (iframeHeight - alertHeight - 4) + 'px')
+              .css('width', (iframeWidth - 4) + 'px');
+            $dialog.scrollLeft(0).scrollTop(0)
+          });
+
+          $external_content_info_alerts.on('blur', function(e) {
+            var iframeWidth = $iframe.outerWidth(true);
+            var iframeHeight = $iframe.outerHeight(true);
+            var alertHeight = $(this).outerHeight(true);
+            $dialog.find('iframe').css('border', 'none');
+            $(this).addClass('screenreader-only');
+            $iframe.css('height', (iframeHeight + alertHeight) + 'px')
+              .css('width', iframeWidth + 'px');
+            $dialog.scrollLeft(0).scrollTop(0)
+          });
       }
 
       $(window).unbind("externalContentReady");
@@ -141,7 +166,7 @@ define([
 
         for(var i = 0; i < itemLength; i++){
           codePayload = TinyMCEContentItem.fromJSON(contentItems[i]).codePayload;
-          RceCommandShim.send($("#" + editor.id), 'insert_code', codePayload)
+          send($("#" + editor.id), 'insert_code', codePayload)
         }
         $dialog.find('iframe').attr('src', 'about:blank');
         $dialog.off("dialogbeforeclose", ExternalToolsPlugin.dialogCancelHandler);
@@ -180,5 +205,4 @@ define([
 
 
 
-  return ExternalToolsPlugin
-});
+export default ExternalToolsPlugin

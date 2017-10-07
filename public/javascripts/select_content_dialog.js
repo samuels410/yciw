@@ -16,25 +16,24 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-define([
-  'INST' /* INST */,
-  'i18n!select_content_dialog',
-  'jquery' /* $ */,
-  'react',
-  'react-dom',
-  'jsx/context_modules/FileSelectBox',
-  'underscore',
-  'jquery.instructure_date_and_time' /* datetime_field */,
-  'jquery.ajaxJSON' /* ajaxJSON */,
-  'jquery.instructure_forms' /* formSubmit, ajaxJSONFiles, getFormData, errorBox */,
-  'jqueryui/dialog',
-  'compiled/jquery/fixDialogButtons' /* fix dialog formatting */,
-  'jquery.instructure_misc_helpers' /* replaceTags, getUserServices, findLinkForService */,
-  'jquery.instructure_misc_plugins' /* showIf */,
-  'jquery.keycodes' /* keycodes */,
-  'jquery.loadingImg' /* loadingImage */,
-  'jquery.templateData' /* fillTemplateData */
-], function(INST, I18n, $, React, ReactDOM, FileSelectBox, _) {
+import INST from './INST'
+import I18n from 'i18n!select_content_dialog'
+import $ from 'jquery'
+import React from 'react'
+import ReactDOM from 'react-dom'
+import FileSelectBox from 'jsx/context_modules/FileSelectBox'
+import _ from 'underscore'
+import htmlEscape from 'str/htmlEscape'
+import './jquery.instructure_date_and_time' /* datetime_field */
+import './jquery.ajaxJSON'
+import './jquery.instructure_forms' /* formSubmit, ajaxJSONFiles, getFormData, errorBox */
+import 'jqueryui/dialog'
+import 'compiled/jquery/fixDialogButtons'
+import './jquery.instructure_misc_helpers' /* replaceTags, getUserServices, findLinkForService */
+import './jquery.instructure_misc_plugins' /* showIf */
+import './jquery.keycodes'
+import './jquery.loadingImg'
+import './jquery.templateData'
 
   var SelectContentDialog = {};
 
@@ -73,6 +72,14 @@ define([
         };
         if($dialog.length == 0) {
           $dialog = $("<div/>", {id: 'resource_selection_dialog', style: 'padding: 0; overflow-y: hidden;'});
+          $dialog.append(`<div class="before_external_content_info_alert screenreader-only" tabindex="0">
+            <div class="ic-flash-info">
+              <div class="ic-flash__icon" aria-hidden="true">
+                <i class="icon-info"></i>
+              </div>
+              ${htmlEscape(I18n.t('The following content is partner provided'))}
+            </div>
+          </div>`)
           $dialog.append($("<iframe/>", {
             id: 'resource_selection_iframe',
             style: 'width: 800px; height: ' + frameHeight + 'px; border: 0;',
@@ -80,21 +87,41 @@ define([
             borderstyle: '0',
             tabindex: '0'
           }));
-          var tabHelperHeight = 35;
-          $dialog.append(
-            $('<div/>',
-              {id: 'tab-helper', style: 'height: ' + tabHelperHeight + 'px;padding:5px', tabindex: '0'}
-            ).focus(function () {
-              $(this).height(tabHelperHeight + 'px')
-              var joke = document.createTextNode(I18n.t('Q: What goes black, white, black, white?  A: A panda rolling down a hill.'))
-              this.appendChild(joke)
-              var currentHeight = $dialog.dialog('option', 'height');
-              $dialog.dialog('option', 'height', currentHeight + tabHelperHeight)
-            }).blur(function () {
-              $(this).html('').height('0px');
-              var currentHeight = $dialog.dialog('option', 'height');
-              $dialog.dialog('option', 'height', currentHeight - tabHelperHeight)
-            }))
+          $dialog.append(`<div class="after_external_content_info_alert screenreader-only" tabindex="0">
+            <div class="ic-flash-info">
+              <div class="ic-flash__icon" aria-hidden="true">
+                <i class="icon-info"></i>
+              </div>
+              ${htmlEscape(I18n.t('The preceding content is partner provided'))}
+            </div>
+          </div>`)
+
+          const $external_content_info_alerts = $dialog
+            .find('.before_external_content_info_alert, .after_external_content_info_alert');
+
+          const $iframe = $dialog.find('iframe');
+
+          $external_content_info_alerts.on('focus', function(e) {
+            const iframeWidth = $iframe.outerWidth(true);
+            const iframeHeight = $iframe.outerHeight(true);
+            $iframe.css('border', '2px solid #008EE2');
+            $(this).removeClass('screenreader-only');
+            const alertHeight = $(this).outerHeight(true);
+            $iframe.css('height', `${(iframeHeight - alertHeight - 4)}px`)
+              .css('width', `${(iframeWidth - 4)}px`);
+            $dialog.scrollLeft(0).scrollTop(0)
+          });
+
+          $external_content_info_alerts.on('blur', function(e) {
+            var iframeWidth = $iframe.outerWidth(true);
+            var iframeHeight = $iframe.outerHeight(true);
+            var alertHeight = $(this).outerHeight(true);
+            $dialog.find('iframe').css('border', 'none');
+            $(this).addClass('screenreader-only');
+            $iframe.css('height', `${(iframeHeight + alertHeight)}px`)
+              .css('width', `${iframeWidth}px`);
+            $dialog.scrollLeft(0).scrollTop(0)
+          });
 
           $("body").append($dialog.hide());
           $dialog.on("dialogbeforeclose", dialogCancelHandler);
@@ -152,7 +179,7 @@ define([
           .dialog('open');
         $dialog.triggerHandler('dialogresize');
         var url = $.replaceTags($("#select_content_resource_selection_url").attr('href'), 'id', tool.definition_id);
-        url = url + '?placement=' + placement_type;
+        url = url + '?placement=' + placement_type + '&secure_params=' + $('#secure_params').val();
         $dialog.find("iframe").attr('src', url);
         $(window).on('beforeunload', beforeUnloadHandler);
       } else {
@@ -170,7 +197,6 @@ define([
   $(document).ready(function() {
     var external_services = null;
     var $dialog = $("#select_context_content_dialog");
-    INST = INST || {};
     INST.selectContentDialog = function(options) {
       var options = options || {};
       var for_modules = options.for_modules;
@@ -354,6 +380,11 @@ define([
               submit(item_data);
             };
 
+            //Force the new assignment to set post_to_sis to false so that possible
+            //account validations do not prevent saving
+            if(item_data['item[type]'] == 'assignment') {
+              data['assignment[post_to_sis]'] = false
+            }
             if(item_data['item[type]'] == 'attachment') {
               data['duplicate_handling'] = 'rename';
               $.ajaxJSONFiles(url, 'POST', data, $("#module_attachment_uploaded_data"), function(data) {
@@ -440,5 +471,4 @@ define([
     });
   });
 
-  return SelectContentDialog;
-});
+export default SelectContentDialog;

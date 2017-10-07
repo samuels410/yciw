@@ -133,6 +133,7 @@ module Importers
       Importers::ExternalFeedImporter.process_migration(data, migration); migration.update_import_progress(56)
       Importers::GradingStandardImporter.process_migration(data, migration); migration.update_import_progress(58)
       Importers::ContextExternalToolImporter.process_migration(data, migration); migration.update_import_progress(60)
+      Importers::ToolProfileImporter.process_migration(data, migration); migration.update_import_progress(61)
       Importers::QuizImporter.process_migration(data, migration, question_data); migration.update_import_progress(65)
       Importers::DiscussionTopicImporter.process_migration(data, migration); migration.update_import_progress(70)
       Importers::WikiPageImporter.process_migration(data, migration); migration.update_import_progress(75)
@@ -151,7 +152,7 @@ module Importers
       if course.wiki.has_no_front_page
         if migration.for_course_copy? && (source = migration.source_course || Course.where(id: migration.migration_settings[:source_course_id]).first)
           mig_id = CC::CCHelper.create_key(source.wiki.front_page)
-          if new_front_page = course.wiki.wiki_pages.where(migration_id: mig_id).first
+          if new_front_page = course.wiki_pages.where(migration_id: mig_id).first
             course.wiki.set_front_page_url!(new_front_page.url)
           end
         end
@@ -200,6 +201,7 @@ module Importers
             event.saved_by = :after_migration
             event.delayed_post_at = shift_date(event.delayed_post_at, shift_options)
             event.lock_at = shift_date(event.lock_at, shift_options)
+            event.todo_date = shift_date(event.todo_date, shift_options)
             event.save_without_broadcasting
           end
 
@@ -236,6 +238,12 @@ module Importers
             event.save
           end
 
+          migration.imported_migration_items_by_class(WikiPage).each do |event|
+            event.reload
+            event.todo_date = shift_date(event.todo_date, shift_options)
+            event.save_without_broadcasting
+          end
+
           course.set_course_dates_if_blank(shift_options)
         else
           (migration.imported_migration_items_by_class(Announcement) +
@@ -268,6 +276,9 @@ module Importers
     end
 
     def self.import_syllabus_from_migration(course, syllabus_body, migration)
+      if migration.for_master_course_import?
+        course.updating_master_template_id = migration.master_course_subscription.master_template_id
+      end
       course.syllabus_body = migration.convert_html(syllabus_body, :syllabus, nil, :syllabus)
     end
 
@@ -334,7 +345,7 @@ module Importers
         course.image_url = image_url
         course.image_id = nil
       elsif image_ref = settings[:image_identifier_ref]
-        if image_att = course.attachments.where(:migration_id => image_ref).first
+        if image_att = course.attachments.where(:migration_id => image_ref).active.first
           course.image_id = image_att.id
           course.image_url = nil
         end

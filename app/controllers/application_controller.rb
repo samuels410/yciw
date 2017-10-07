@@ -68,6 +68,7 @@ class ApplicationController < ActionController::Base
   after_action :log_page_view
   after_action :discard_flash_if_xhr
   after_action :cache_buster
+  before_action :initiate_session_from_token
   # Yes, we're calling this before and after so that we get the user id logged
   # on events that log someone in and log someone out.
   after_action :set_user_id_header
@@ -270,20 +271,31 @@ class ApplicationController < ActionController::Base
   helper_method :set_master_course_js_env_data
 
   def load_blueprint_courses_ui
-    return unless @context && @context.is_a?(Course) && master_courses? && @context.grants_right?(@current_user, :manage) && (MasterCourses::MasterTemplate.is_master_course?(@context) || MasterCourses::ChildSubscription.is_child_course?(@context))
+    return unless @context && @context.is_a?(Course) && master_courses? && @context.grants_right?(@current_user, :manage)
+
+    is_child = MasterCourses::ChildSubscription.is_child_course?(@context)
+    is_master = MasterCourses::MasterTemplate.is_master_course?(@context)
+
+    return unless is_master || is_child
 
     js_bundle :blueprint_courses
     css_bundle :blueprint_courses
-    js_env({
-      BLUEPRINT_COURSES_DATA: {
-        isMasterCourse: MasterCourses::MasterTemplate.is_master_course?(@context),
-        isChildCourse: MasterCourses::ChildSubscription.is_child_course?(@context),
-        accountId: @context.account.id,
-        course: @context.slice(:id, :name),
-        subAccounts: @context.account.sub_accounts.pluck(:id, :name).map{|id, name| {id: id, name: name}},
-        terms: @context.account.root_account.enrollment_terms.active.pluck(:id, :name).map{|id, name| {id: id, name: name}}
-      }
-    })
+
+    master_course = is_master ? @context : @context.master_course_subscriptions.active.first.master_template.course
+    js_env :DEBUG_BLUEPRINT_COURSES => Rails.env.development? || Rails.env.test?
+    js_env :BLUEPRINT_COURSES_DATA => {
+      isMasterCourse: is_master,
+      isChildCourse: is_child,
+      accountId: @context.account.id,
+      masterCourse: master_course.slice(:id, :name, :enrollment_term_id),
+      course: @context.slice(:id, :name, :enrollment_term_id),
+      subAccounts: @context.account.sub_accounts.pluck(:id, :name).map{|id, name| {id: id, name: name}},
+      terms: @context.account.root_account.enrollment_terms.active.pluck(:id, :name).map{|id, name| {id: id, name: name}},
+      canManageCourse: MasterCourses::MasterTemplate.is_master_course?(@context) && @context.account.grants_right?(@current_user, :manage_master_courses)
+    }
+    if is_master && js_env.key?(:NEW_USER_TUTORIALS)
+      js_env[:NEW_USER_TUTORIALS][:is_enabled] = false
+    end
   end
   helper_method :load_blueprint_courses_ui
 
@@ -647,7 +659,7 @@ class ApplicationController < ActionController::Base
         @context = api_find(Account, params[:account_id])
         params[:context_id] = @context.id
         params[:context_type] = "Account"
-        @context_enrollment = @context.account_users.where(user_id: @current_user.id).first if @context && @current_user
+        @context_enrollment = @context.account_users.active.where(user_id: @current_user.id).first if @context && @current_user
         @context_membership = @context_enrollment
         @account = @context
       elsif params[:group_id]
@@ -965,6 +977,60 @@ class ApplicationController < ActionController::Base
     # to tell the browser to ALWAYS check back other than to disable caching...
     return true if @cancel_cache_buster || request.xhr? || api_request?
     set_no_cache_headers
+  end
+
+  def initiate_session_from_token
+    # Login from a token generated via API
+    if params[:session_token]
+      token = SessionToken.parse(params[:session_token])
+      if token&.valid?
+        pseudonym = Pseudonym.active.find_by(id: token.pseudonym_id)
+
+        if pseudonym
+          unless pseudonym.works_for_account?(@domain_root_account, true)
+            # if the logged in pseudonym doesn't work, we can only switch to another pseudonym
+            # that does work if it's the same password, and it's not a managed pseudonym
+            alternates = pseudonym.user.all_active_pseudonyms.select { |p|
+              !p.managed_password? &&
+                p.works_for_account?(@domain_root_account, true) &&
+                p.password_salt == pseudonym.password_salt &&
+                p.crypted_password == pseudonym.crypted_password }
+            # prefer a site admin pseudonym, then a pseudonym in this account, and then any old
+            # pseudonym
+            pseudonym = alternates.find { |p| p.account_id == Account.site_admin.id }
+            pseudonym ||= alternates.find { |p| p.account_id == @domain_root_account.id }
+            pseudonym ||= alternates.first
+          end
+          if pseudonym && pseudonym != @current_pseudonym
+            return_to = session.delete(:return_to)
+            reset_session_saving_keys(:oauth2)
+            PseudonymSession.create!(pseudonym)
+            session[:used_remember_me_token] = true if token.used_remember_me_token
+          end
+          if pseudonym && token.current_user_id
+            target_user = User.find(token.current_user_id)
+            session[:become_user_id] = token.current_user_id if target_user.can_masquerade?(pseudonym.user, @domain_root_account)
+          end
+        end
+        return redirect_to return_to if return_to
+        if (oauth = session[:oauth2])
+          provider = Canvas::Oauth::Provider.new(oauth[:client_id], oauth[:redirect_uri], oauth[:scopes], oauth[:purpose])
+          return redirect_to Canvas::Oauth::Provider.confirmation_redirect(self, provider, pseudonym.user)
+        end
+
+        # do one final redirect to get the token out of the URL
+        redirect_to remove_query_params(request.original_url, 'session_token')
+      end
+    end
+  end
+
+  def remove_query_params(url, *params)
+    uri = URI.parse(url)
+    return url unless uri.query
+    qs = Rack::Utils.parse_query(uri.query)
+    qs.except!(*params)
+    uri.query = qs.empty? ? nil : Rack::Utils.build_query(qs)
+    uri.to_s
   end
 
   def set_no_cache_headers
@@ -1458,6 +1524,7 @@ class ApplicationController < ActionController::Base
                                                         current_pseudonym: @current_pseudonym,
                                                         content_tag: @module_tag || tag,
                                                         assignment: @assignment,
+                                                        launch: @lti_launch,
                                                         tool: @tool})
         adapter = Lti::LtiOutboundAdapter.new(@tool, @current_user, @context).prepare_tool_launch(@return_url, variable_expander, opts)
 
@@ -1816,7 +1883,6 @@ class ApplicationController < ActionController::Base
       # file upload forms and s3 upload success redirects -- we'll respond with text instead.
       if options[:as_text] || json_as_text?
         options[:html] = json.html_safe
-        options[:content_type] = "text/html" if CANVAS_RAILS4_2
       else
         options[:json] = json
       end
@@ -2124,6 +2190,10 @@ class ApplicationController < ActionController::Base
     nil
   end
 
+  def self.cluster
+    nil
+  end
+
   def show_request_delete_account
     false
   end
@@ -2143,9 +2213,14 @@ class ApplicationController < ActionController::Base
       ctx[:root_account_lti_guid] = @domain_root_account.lti_guid
     end
 
+    if @current_pseudonym
+      ctx[:user_login] = @current_pseudonym.unique_id
+      ctx[:user_account_id] = @current_pseudonym.global_account_id
+      ctx[:user_sis_id] = @current_pseudonym.sis_user_id
+    end
+
     ctx[:user_id] = @current_user.global_id if @current_user
     ctx[:real_user_id] = @real_current_user.global_id if @real_current_user
-    ctx[:user_login] = @current_pseudonym.unique_id if @current_pseudonym
     ctx[:context_type] = @context.class.to_s if @context
     ctx[:context_id] = @context.global_id if @context
     if @context_membership

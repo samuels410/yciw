@@ -18,6 +18,7 @@
 
 require_relative '../../helpers/gradezilla_common'
 require_relative '../page_objects/gradezilla_page'
+require_relative '../page_objects/gradezilla_cells_page'
 require_relative '../../helpers/groups_common'
 
 describe "Gradezilla" do
@@ -26,9 +27,12 @@ describe "Gradezilla" do
   include GroupsCommon
 
   before(:once) { gradebook_data_setup }
-  before(:each) { user_session(@teacher) }
+  before(:each) do
+    Account.default.set_feature_flag!('new_gradebook', 'on')
+    user_session(@teacher)
+  end
 
-  it "shows unpublished assignments", priority: "1", test_id: 210016 do
+  it "shows unpublished assignments", priority: "1", test_id: 3253281 do
     assignment = @course.assignments.create! title: 'unpublished'
     assignment.unpublish
     Gradezilla.visit(@course)
@@ -42,60 +46,49 @@ describe "Gradezilla" do
   end
 
   it 'filters students', priority: "1", test_id: 210018 do
-    visible_students = -> { ff('.student-name') }
     Gradezilla.visit(@course)
-    expect(visible_students.call).to have_size @all_students.size
-    f('.gradebook_filter input').send_keys 'student 1'
+    expect(Gradezilla.fetch_student_names.size).to eq(@all_students.size)
+    f('.gradebook_filter input').send_keys @course.students[0].name
     sleep 1 # InputFilter has a delay
-    visible_after_filtering = visible_students.call
-    expect(visible_after_filtering).to have_size 1
-    expect(visible_after_filtering[0]).to include_text 'student 1'
+    expect(Gradezilla.fetch_student_names.size).to eq(1)
+    expect(Gradezilla.fetch_student_names[0]).to eq(@course.students[0].name)
   end
 
   it "validates correct number of students showing up in gradebook", priority: "1", test_id: 210019 do
     Gradezilla.visit(@course)
-
-    expect(ff('.student-name')).to have_size @course.students.count
+    expect(Gradezilla.fetch_student_names.size).to eq(@course.students.count)
   end
 
   it "shows students sorted by their sortable_name", priority: "1", test_id: 210022 do
     Gradezilla.visit(@course)
-    dom_names = ff('.student-name').map(&:text)
-    expect(dom_names).to eq @all_students.map(&:name)
+    expect(Gradezilla.fetch_student_names).to eq @all_students.map(&:name)
   end
 
-  it "hides student avatars until they are enabled", priority: "1", test_id: 210023 do
-    Gradezilla.visit(@course)
+  context "muting/un-muting assignment" do
+    before(:each) do
+      Gradezilla.visit(@course)
+      Gradezilla.toggle_assignment_muting(@second_assignment.id)
+    end
 
-    expect(ff('.student-name')).to have_size @all_students.size
-    expect(f("body")).not_to contain_css('.avatar img')
+    it "handles muting correctly", priority: "1", test_id: 164227 do
+      # TODO "change test ids when Gradezilla test cases are created"
+      expect(fj(Gradezilla.assignment_header_mute_icon_selector(@second_assignment.id))).to be_displayed
+      expect(Gradezilla.total_cell_mute_icon_select).to be_displayed
+      expect(@second_assignment.reload).to be_muted
 
-    @account = Account.default
-    @account.enable_service(:avatars)
-    @account.save!
-    expect(@account.service_enabled?(:avatars)).to be_truthy
-    Gradezilla.visit(@course)
+      # reload the page and make sure it remembered the setting
+      Gradezilla.visit(@course)
+      expect(fj(Gradezilla.assignment_header_mute_icon_selector(@second_assignment.id))).to be_displayed
+    end
 
-    expect(ff('.student-name')).to have_size @all_students.size
-    expect(ff('.avatar')).to have_size @all_students.size
-  end
+    it "handles un-muting correctly", priority: "1", test_id: 164227 do
+      # TODO "change test ids when Gradezilla test cases are created"
+      # make sure you can un-mute
+      Gradezilla.toggle_assignment_muting(@second_assignment.id)
 
-  it "handles muting/unmuting correctly", priority: "1", test_id: 164227 do
-    pending('TODO: Refactor this and add it back as part of CNVS-33679')
-    Gradezilla.visit(@course)
-    toggle_muting(@second_assignment)
-    expect(f(".container_1 .slick-header-column[id*='assignment_#{@second_assignment.id}'] .muted")).to be_displayed
-    expect(f('.total-cell .icon-muted')).to be_displayed
-    expect(@second_assignment.reload).to be_muted
-
-    # reload the page and make sure it remembered the setting
-    Gradezilla.visit(@course)
-    expect(fj(".container_1 .slick-header-column[id*='assignment_#{@second_assignment.id}'] .muted")).to be_displayed
-
-    # make sure you can un-mute
-    toggle_muting(@second_assignment)
-    expect(f("#content")).not_to contain_jqcss(".container_1 .slick-header-column[id*='assignment_#{@second_assignment.id}'] .muted")
-    expect(@second_assignment.reload).not_to be_muted
+      expect(Gradezilla.content_selector).not_to contain_jqcss(Gradezilla.assignment_header_mute_icon_selector(@second_assignment.id))
+      expect(@second_assignment.reload).not_to be_muted
+    end
   end
 
   context "unpublished course" do
@@ -112,35 +105,19 @@ describe "Gradezilla" do
     end
   end
 
-  it "validates that gradebook settings is displayed when button is clicked", priority: "1", test_id: 164217 do
-    Gradezilla.visit(@course)
-
-    f('#gradebook_settings').click
-    expect(f('.gradebook_dropdown')).to be_displayed
-  end
-
-  it "View Grading History menu item redirects to grading history page", priority: "2", test_id: 164218 do
-    @course.root_account.enable_feature!(:gradezilla)
-    Gradezilla.visit(@course)
-
-    f('.gradebook-menus [data-component="GradebookMenu"]').click
-    f('[data-menu-item-id="grade-history"]').click
-    expect(driver.current_url).to include("/courses/#{@course.id}/gradebook/history")
-  end
-
   it 'gradebook settings modal is displayed when gradebook settings button is clicked',
-    priority: '1', test_id: 164219 do
+     priority: '1', test_id: 164219 do
     Gradezilla.visit(@course)
 
-    f('#gradebook-settings-button').click
+    Gradezilla.gradebook_settings_btn_select
     expect(f('[aria-label="Gradebook Settings"]')).to be_displayed
   end
 
   it 'late policies tab is selected by default',
-    priority: '1', test_id: 164220 do
+     priority: '1', test_id: 164220 do
     Gradezilla.visit(@course)
 
-    f('#gradebook-settings-button').click
+    Gradezilla.gradebook_settings_btn_select
     expect(f('[aria-label="Gradebook Settings"]')).to be_displayed
     late_policies_tab = fj('[aria-label="Gradebook Settings"] [role="tablist"] [role="tab"]:first')
     expect(late_policies_tab.attribute('aria-selected')).to eq('true')
@@ -149,24 +126,11 @@ describe "Gradezilla" do
   it 'focus is returned to gradebook settings button when modal is closed', priority: '1', test_id: 164221 do
     Gradezilla.visit(@course)
 
-    f('#gradebook-settings-button').click
+    Gradezilla.gradebook_settings_btn_select
     expect(f('[aria-label="Gradebook Settings"]')).to be_displayed
 
     f('#gradebook-settings-cancel-button').click
-    expect(check_element_has_focus(f('#gradebook-settings-button'))).to be
-  end
-
-  it "validates assignment details", priority: "1", test_id: 210048 do
-    submissions_count = @second_assignment.submissions.count.to_s + ' submissions'
-
-    Gradezilla.visit(@course)
-
-    Gradezilla.open_assignment_options(1)
-    f('[data-menu-item-id="show-assignment-details"]').click
-    details_dialog = f('#assignment-details-dialog')
-    expect(details_dialog).to be_displayed
-    table_rows = ff('#assignment-details-dialog-stats-table tr')
-    expect(table_rows[3].find_element(:css, 'td')).to include_text submissions_count
+    expect { driver.switch_to.active_element }.to become(f('#gradebook-settings-button'))
   end
 
   it "includes student view student for grading" do
@@ -189,22 +153,22 @@ describe "Gradezilla" do
   it "excludes non-graded group assignment in group total" do
     gc = group_category
     graded_assignment = @course.assignments.create!({
-                                                        :title => 'group assignment 1',
-                                                        :due_at => (Time.zone.now + 1.week),
-                                                        :points_possible => 10,
-                                                        :submission_types => 'online_text_entry',
-                                                        :assignment_group => @group,
-                                                        :group_category => gc,
-                                                        :grade_group_students_individually => true
+                                                      :title => 'group assignment 1',
+                                                      :due_at => (Time.zone.now + 1.week),
+                                                      :points_possible => 10,
+                                                      :submission_types => 'online_text_entry',
+                                                      :assignment_group => @group,
+                                                      :group_category => gc,
+                                                      :grade_group_students_individually => true
                                                     })
     group_assignment = @course.assignments.create!({
-                                                       :title => 'group assignment 2',
-                                                       :due_at => (Time.zone.now + 1.week),
-                                                       :points_possible => 0,
-                                                       :submission_types => 'not_graded',
-                                                       :assignment_group => @group,
-                                                       :group_category => gc,
-                                                       :grade_group_students_individually => true
+                                                     :title => 'group assignment 2',
+                                                     :due_at => (Time.zone.now + 1.week),
+                                                     :points_possible => 0,
+                                                     :submission_types => 'not_graded',
+                                                     :assignment_group => @group,
+                                                     :group_category => gc,
+                                                     :grade_group_students_individually => true
                                                    })
     project_group = group_assignment.group_category.groups.create!(:name => 'g1', :context => @course)
     project_group.users << @student_1
@@ -220,11 +184,11 @@ describe "Gradezilla" do
 
   it "hides assignment mute warning in total column for 'not_graded', muted assignments" do
     assignment = @course.assignments.create!({
-                                              title: 'Non Graded Assignment',
-                                              due_at: (Time.zone.now + 1.week),
-                                              points_possible: 10,
-                                              submission_types: 'not_graded'
-                                           })
+                                               title: 'Non Graded Assignment',
+                                               due_at: (Time.zone.now + 1.week),
+                                               points_possible: 10,
+                                               submission_types: 'not_graded'
+                                             })
 
     assignment.mute!
     Gradezilla.visit(@course)
@@ -232,28 +196,8 @@ describe "Gradezilla" do
     expect(f("body")).not_to contain_css(".total-cell .icon-muted")
   end
 
-  it "hides and shows student names", priority: "2", test_id: 164220 do
-
-    def toggle_hiding_students
-      f('#gradebook_settings').click
-      student_toggle = f('.student_names_toggle')
-      expect(student_toggle).to be_displayed
-      student_toggle.click
-    end
-
-    Gradezilla.visit(@course)
-
-    toggle_hiding_students
-    expect(f("#content")).not_to contain_jqcss('.student-name:visible')
-    expect(fj('.student-placeholder:visible')).to be
-
-    toggle_hiding_students
-    expect(fj('.student-name:visible')).to be
-    expect(f("#content")).not_to contain_jqcss('.student-placeholder:visible')
-  end
-
   context "downloading and uploading submissions" do
-    it "updates the dropdown menu after downloading and processes submission uploads" do
+    it "updates the dropdown menu after downloading and processes submission uploads", test_id: 3253285, priority: "1" do
       # Given I have a student with an uploaded submission
       a = attachment_model(:context => @student_2, :content_type => 'text/plain')
       @first_assignment.submit_homework(@student_2, :submission_type => 'online_upload', :attachments => [a])
@@ -265,18 +209,16 @@ describe "Gradezilla" do
       make_full_screen
 
       # And I click the dropdown menu on the assignment
-      f(".slick-header-column[id*='assignment_#{@first_assignment.id}'] .Gradebook__ColumnHeaderAction").click
+      Gradezilla.click_assignment_header_menu(@first_assignment.id)
 
       # And I click the download submissions button
-      download_submissions_menu_item = -> { f('[data-menu-item-id="download-submissions"]') }
-      scroll_to(download_submissions_menu_item.call)
-      download_submissions_menu_item.call.click
+      Gradezilla.click_assignment_header_menu_element("download submissions")
 
       # And I close the download submissions dialog
       fj("div:contains('Download Assignment Submissions'):first .ui-dialog-titlebar-close").click
 
       # And I click the dropdown menu on the assignment again
-      f(".slick-header-column[id*='assignment_#{@first_assignment.id}'] .Gradebook__ColumnHeaderAction").click
+      Gradezilla.click_assignment_header_menu(@first_assignment.id)
 
       # And I click the re-upload submissions link
       f('[data-menu-item-id="reupload-submissions"]').click
@@ -308,7 +250,7 @@ describe "Gradezilla" do
 
   it "hides the speedgrader link for large courses", priority: "2", test_id: 210099 do
     pending('TODO: Refactor this and add it back as part of CNVS-32440')
-    @course.stubs(:large_roster?).returns(true)
+    allow(@course).to receive(:large_roster?).and_return(true)
 
     Gradezilla.visit(@course)
 
@@ -372,10 +314,10 @@ describe "Gradezilla" do
 
     it 'displays the quiz icon for file_upload questions', priority: "1", test_id: 498844 do
       file_submission.attachments.create!({
-        :filename => "doc.doc",
-        :display_name => "doc.doc", :user => @user,
-        :uploaded_data => dummy_io
-      })
+                                            :filename => "doc.doc",
+                                            :display_name => "doc.doc", :user => @user,
+                                            :uploaded_data => dummy_io
+                                          })
       file_submission.complete!
       user_session(teacher)
 
@@ -395,6 +337,69 @@ describe "Gradezilla" do
       replace_value('#gradebook_grid input.grade', '10')
       f('#gradebook_grid input.grade').send_keys(:enter)
       expect(f('#gradebook_grid')).not_to contain_css('.icon-quiz')
+    end
+  end
+
+  context 'submission tray assignment navigation' do
+    before(:each) { ENV['GRADEBOOK_DEVELOPMENT'] = 'true' }
+    after(:each) { ENV.delete("GRADEBOOK_DEVELOPMENT") }
+
+    context 'with default ordering' do
+      before(:each) do
+        Gradezilla.visit(@course)
+      end
+
+      it 'clicking the right arrow loads the next assignment in the tray' do
+        Gradezilla::Cells.send_keyboard_shortcut(@student_1, @first_assignment, 'c')
+        expect(Gradezilla.assignment_carousel).to include_text @first_assignment.name
+        Gradezilla.click_submission_tray_right_arrow
+        expect(Gradezilla.assignment_carousel).to include_text @second_assignment.name
+      end
+
+      it 'clicking the left arrow loads the previous assignment in the tray' do
+        Gradezilla::Cells.send_keyboard_shortcut(@student_1, @second_assignment, 'c')
+        expect(Gradezilla.assignment_carousel).to include_text @second_assignment.name
+        Gradezilla.click_submission_tray_left_arrow
+        expect(Gradezilla.assignment_carousel).to include_text @first_assignment.name
+      end
+
+      it 'left arrow button is not present when leftmost assignment is selected' do
+        Gradezilla::Cells.send_keyboard_shortcut(@student_1, @first_assignment, 'c')
+        expect(Gradezilla.body).not_to contain_css(Gradezilla.submission_tray_left_arrow_selector)
+      end
+
+      it 'right arrow button is not present when rightmost assignment is selected' do
+        Gradezilla::Cells.send_keyboard_shortcut(@student_1, @third_assignment, 'c')
+        expect(Gradezilla.body).not_to contain_css(Gradezilla.submission_tray_right_arrow_selector)
+      end
+    end
+
+    context 'when the rightmost column is an assignment column' do
+      before(:each) do
+        unless @teacher.preferences.key?(:gradebook_column_order)
+          @teacher.preferences[:gradebook_column_order] = {}
+        end
+
+        @teacher.preferences[:gradebook_column_order][@course.id] = {
+          sortType: 'custom',
+          customOrder: [
+            "assignment_#{@first_assignment.id}",
+            "assignment_#{@second_assignment.id}",
+            "assignment_group_#{@first_assignment.assignment_group_id}",
+            'total_grade',
+            "assignment_#{@third_assignment.id}"
+          ]
+        }
+        @teacher.save!
+        Gradezilla.visit(@course)
+      end
+
+      it 'clicking the left arrow loads the previous assignment in the tray' do
+        Gradezilla::Cells.send_keyboard_shortcut(@student_1, @third_assignment, 'c')
+        expect(Gradezilla.assignment_carousel).to include_text @third_assignment.name
+        Gradezilla.click_submission_tray_left_arrow
+        expect(Gradezilla.assignment_carousel).to include_text @second_assignment.name
+      end
     end
   end
 end

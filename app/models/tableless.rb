@@ -33,14 +33,12 @@ class Tableless < ActiveRecord::Base
       end
     end
 
-    unless CANVAS_RAILS4_2
-      def columns_hash
-        @columns_hash ||= Hash[columns.map { |c| [c.name, c] }]
-      end
+    def columns_hash
+      @columns_hash ||= Hash[columns.map { |c| [c.name, c] }]
     end
 
     def column(name, sql_type = nil, default = nil, null = true)
-      args = [name.to_s, default, connection.lookup_cast_type(sql_type.to_s),
+      args = [name.to_s, default, connection.send(:lookup_cast_type, sql_type.to_s),
               sql_type.to_s, null]
       columns << ActiveRecord::ConnectionAdapters::Column.new(*args)
     end

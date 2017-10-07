@@ -27,8 +27,8 @@ module Services
         request(:get, "/api/subscriptions/#{subscription_id}", options)
       end
 
-      def tool_proxy_subscriptions(tool_proxy)
-        options = { headers: headers(tool_proxy_jwt_body(tool_proxy)) }
+      def tool_proxy_subscriptions(tool_proxy, optional_headers = {})
+        options = { headers: headers(tool_proxy_jwt_body(tool_proxy), optional_headers) }
         request(:get, '/api/subscriptions', options)
       end
 
@@ -72,7 +72,7 @@ module Services
       end
 
       def settings
-        Canvas::DynamicSettings.from_cache("live-events-subscription-service", expires_in: 5.minutes, use_env: false)
+        Canvas::DynamicSettings.find("live-events-subscription-service", default_ttl: 5.minutes)
       rescue Imperium::TimeoutError => e
         Canvas::Errors.capture_exception(:live_events_subscription, e)
         nil

@@ -23,6 +23,7 @@ for authentication and authorization of the Canvas API.
   - [GET login/oauth2/auth](file.oauth_endpoints.html#get-login-oauth2-auth)
   - [POST login/oauth2/token](file.oauth_endpoints.html#post-login-oauth2-token)
   - [DELETE login/oauth2/token](file.oauth_endpoints.html#delete-login-oauth2-token)
+  - [GET login/session_token](file.oauth_endpoints.html#get-login-session-token)
 
 <a name="storing-access-tokens"></a>
 ## [Storing Tokens](#storing-access-tokens)
@@ -145,10 +146,6 @@ response together.
 If the user doesn't accept the request for access, or if another error
 occurs, Canvas redirects back to your request\_uri with an `error`
 parameter, rather than a `code` parameter, in the query string.
-
-If the user doesn't accept the request for access, or if another error
-occurs, Canvas will add an `error`
-parameter, rather than a `code` parameter, to the query string.
 
 <div class="method_details">
 <h3 class="endpoint">http://www.example.com/oauth2response?error=access_denied</h3>

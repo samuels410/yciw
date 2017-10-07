@@ -35,7 +35,7 @@ module Login::Shared
     setup_live_events_context
     # TODO: Only send this if the current_pseudonym's root account matches the current root
     # account?
-    Canvas::LiveEvents.logged_in(session)
+    Canvas::LiveEvents.logged_in(session, user, pseudonym)
 
     otp_passed ||= user.validate_otp_secret_key_remember_me_cookie(cookies['canvas_otp_remember_me'], request.remote_ip)
     unless otp_passed
@@ -103,13 +103,6 @@ module Login::Shared
       return redirect_to dashboard_url(:host => HostUrl.default_host)
     end
     true
-  end
-
-  def check_sa_delegated_cookie
-    if cookies['canvas_sa_delegated']
-      @real_domain_root_account = @domain_root_account
-      @domain_root_account = Account.site_admin
-    end
   end
 
   include PseudonymSessionsController

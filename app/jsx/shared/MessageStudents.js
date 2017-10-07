@@ -17,6 +17,7 @@
  */
 
 import React from 'react'
+import PropTypes from 'prop-types'
 import I18n from 'i18n!message_students'
 import axios from 'axios'
 import Button from 'instructure-ui/lib/components/Button'
@@ -30,21 +31,21 @@ import Alert from 'instructure-ui/lib/components/Alert'
   class MessageStudents extends React.Component {
     static propTypes = {
       // Data for endpoint
-      body: React.PropTypes.string,
-      bulkMessage: React.PropTypes.bool,
-      contextCode: React.PropTypes.string.isRequired,
-      groupConversation: React.PropTypes.bool,
-      mode: React.PropTypes.string,
-      recipients: React.PropTypes.array,
-      subject: React.PropTypes.string,
+      body: PropTypes.string,
+      bulkMessage: PropTypes.bool,
+      contextCode: PropTypes.string.isRequired,
+      groupConversation: PropTypes.bool,
+      mode: PropTypes.string,
+      recipients: PropTypes.array,
+      subject: PropTypes.string,
 
       // Form display
-      title: React.PropTypes.string,
-      children: React.PropTypes.element,
+      title: PropTypes.string,
+      children: PropTypes.element,
 
       // Callbacks
-      onExited: React.PropTypes.func,
-      onRequestClose: React.PropTypes.func,
+      onExited: PropTypes.func,
+      onRequestClose: PropTypes.func,
     }
 
     static defaultProps = {
@@ -215,7 +216,7 @@ import Alert from 'instructure-ui/lib/components/Alert'
           <div className="MessageStudents__Alert">
             <Alert variant={variant}
               closeButtonLabel={I18n.t('Close')}
-              isDismissable
+              dismissable
               onClose={this.handleAlertClose}
             >
               {message}

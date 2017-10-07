@@ -16,7 +16,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-define(['jquery'], function ($){
+import $ from 'jquery'
   var LTI_MIME_TYPES = [ 'application/vnd.ims.lti.v1.ltilink', 'application/vnd.ims.lti.v1.launch+json'];
 
   function exportPropsToSelf(properties, keyMethod) {
@@ -101,7 +101,11 @@ define(['jquery'], function ($){
           alt: tinyMCEContentItem.text
         }))
       } else {
-        $link.text(selectedText || tinyMCEContentItem.text);
+        let linkText = selectedText;
+        if (!linkText || linkText.trim().length === 0) {
+          linkText = tinyMCEContentItem.text;
+        }
+        $link.text(linkText);
       }
 
       return $linkContainer.html();
@@ -181,5 +185,4 @@ define(['jquery'], function ($){
     return new TinyMCEContentItem(contentItem);
   }
 
-  return TinyMCEContentItem;
-});
+  export default TinyMCEContentItem;

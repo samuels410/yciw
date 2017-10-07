@@ -34,9 +34,9 @@ module SIS
       #  * Course must be imported before Section
       #  * Course and Section must be imported before Xlist
       #  * Course, Section, and User must be imported before Enrollment
-      IMPORTERS = [:account, :term, :abstract_course, :course, :section, :xlist,
-                   :user, :user_observer, :enrollment, :group,
-                   :group_membership, :grade_publishing_results].freeze
+      IMPORTERS = %i{change_sis_id account term abstract_course course section
+                     xlist user enrollment admin group group_membership
+                     grade_publishing_results user_observer}.freeze
 
       def initialize(root_account, opts = {})
         opts = opts.with_indifferent_access
@@ -177,6 +177,7 @@ module SIS
         end
       rescue => e
         if @batch
+          return @batch if @batch.workflow_state == 'aborted'
           message = "Importing CSV for account"\
             ": #{@root_account.id} (#{@root_account.name}) "\
             "sis_batch_id: #{@batch.id}: #{e}"
@@ -186,7 +187,7 @@ module SIS
             during_tests: false
           })[:error_report]
           error_message = I18n.t("Error while importing CSV. Please contact support."\
-                                 " (Error report %{number})", number: err_id)
+                                 " (Error report %{number})", number: err_id.to_s)
           add_error(nil, error_message)
         else
           add_error(nil, "#{e.message}\n#{e.backtrace.join "\n"}")
@@ -235,7 +236,8 @@ module SIS
           if @parallelism > 1
             begin
               SisBatch.transaction do
-                @batch.reload(select: 'data, progress', lock: :no_key_update)
+                @batch.reload(select: 'data, progress, workflow_state', lock: :no_key_update)
+                raise SisBatch::Aborted if @batch.workflow_state == 'aborted'
                 @current_row += @batch.data[:current_row]
                 @batch.data[:current_row] = @current_row
                 @batch.progress = [calculate_progress, 99].min
@@ -273,6 +275,7 @@ module SIS
           importerObject.process(csv)
           run_next_importer(IMPORTERS[IMPORTERS.index(importer) + 1]) if complete_importer(importer)
         rescue => e
+          return @batch if @batch.workflow_state == 'aborted'
           message = "Importing CSV for account: "\
             "#{@root_account.id} (#{@root_account.name}) sis_batch_id: #{@batch.id}: #{e}"
           err_id = Canvas::Errors.capture(e, {
@@ -281,7 +284,7 @@ module SIS
             during_tests: false
           })[:error_report]
           error_message = I18n.t("Error while importing CSV. Please contact support. "\
-                                 "(Error report %{number})", number: err_id)
+                                 "(Error report %{number})", number: err_id.to_s)
           add_error(nil, error_message)
           @batch.processing_errors ||= []
           @batch.processing_warnings ||= []
@@ -297,7 +300,7 @@ module SIS
       private
 
       def run_next_importer(importer)
-        return finish if importer.nil?
+        return finish if importer.nil? || @batch.workflow_state == 'aborted'
         return run_next_importer(IMPORTERS[IMPORTERS.index(importer) + 1]) if @csvs[importer].empty?
         if (importer == :account)
           @csvs[importer].each { |csv| run_single_importer(importer, csv) }

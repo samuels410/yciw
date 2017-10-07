@@ -98,7 +98,7 @@ describe "admin settings tab" do
   end
 
   def click_submit
-    f("#account_settings button[type=submit]").click
+    move_to_click("#account_settings button[type=submit]")
     wait_for_ajax_requests
   end
 
@@ -415,7 +415,8 @@ describe "admin settings tab" do
 
       help_links = Account.default.help_links
       expect(help_links).to include(help_link.merge(:type => "custom"))
-      expect(help_links & Account::HelpLinks.default_links).to eq Account::HelpLinks.default_links
+      expect(help_links & Account::HelpLinks.instantiate_links(Account::HelpLinks.default_links)).to eq(
+        Account::HelpLinks.instantiate_links(Account::HelpLinks.default_links))
 
       get "/accounts/#{Account.default.id}/settings"
 
@@ -426,9 +427,9 @@ describe "admin settings tab" do
       click_submit
 
       new_help_links = Account.default.help_links
-      expect(new_help_links).to_not include(Account::HelpLinks.default_links.first)
-      expect(new_help_links).to include(Account::HelpLinks.default_links.last)
-      expect(new_help_links).to include(help_link.merge(:type => "custom"))
+      expect(new_help_links.map { |x| x[:id] }).to_not include(Account::HelpLinks.default_links.first[:id].to_s)
+      expect(new_help_links.map { |x| x[:id] }).to include(Account::HelpLinks.default_links.last[:id].to_s)
+      expect(new_help_links.last).to include(help_link)
     end
 
     it "adds a custom link" do
@@ -439,9 +440,11 @@ describe "admin settings tab" do
       replace_content fj('#custom_help_link_settings textarea[name$="[subtext]"]:visible'), 'subtext'
       replace_content fj('#custom_help_link_settings input[name$="[url]"]:visible'), 'https://url.example.com'
       f('#custom_help_link_settings button[type="submit"]').click
-      click_submit
+      expect(fj('.ic-Sortable-item:first .ic-Sortable-item__Text')).to include_text('text')
+      form = f('#account_settings')
+      form.submit
       cl = Account.default.help_links.detect { |hl| hl['url'] == 'https://url.example.com' }
-      expect(cl).to eq({"text"=>"text", "subtext"=>"subtext", "url"=>"https://url.example.com", "type"=>"custom", "available_to"=>["user", "student", "teacher", "admin"]})
+      expect(cl).to include({"text"=>"text", "subtext"=>"subtext", "url"=>"https://url.example.com", "type"=>"custom", "available_to"=>["user", "student", "teacher", "admin"]})
     end
 
     it "edits a custom link" do
@@ -452,7 +455,9 @@ describe "admin settings tab" do
       fj('#custom_help_link_settings span:contains("Edit custom-link-text-frd")').find_element(:xpath, '..').click
       replace_content fj('#custom_help_link_settings input[name$="[url]"]:visible'), 'https://whatever.example.com'
       f('#custom_help_link_settings button[type="submit"]').click
-      click_submit
+      expect(fj('.ic-Sortable-item:last .ic-Sortable-item__Text')).to include_text('custom-link-text-frd')
+      form = f('#account_settings')
+      form.submit
       cl = Account.default.help_links.detect { |hl| hl['url'] == 'https://whatever.example.com' }
       expect(cl).not_to be_blank
     end
@@ -464,7 +469,9 @@ describe "admin settings tab" do
       expect(url).to be_disabled
       fj('#custom_help_link_settings fieldset .ic-Label:contains("Teachers"):visible').click
       f('#custom_help_link_settings button[type="submit"]').click
-      click_submit
+      expect(f('.ic-Sortable-item:nth-of-type(3) .ic-Sortable-item__Text')).to include_text('Report a Problem')
+      form = f('#account_settings')
+      form.submit
       cl = Account.default.help_links.detect { |hl| hl['url'] == '#create_ticket' }
       expect(cl['available_to']).not_to include('teacher')
     end
@@ -479,13 +486,13 @@ describe "admin settings tab" do
     end
 
     it "should not display external integration keys if no key types exist" do
-      ExternalIntegrationKey.stubs(:key_types).returns([])
+      allow(ExternalIntegrationKey).to receive(:key_types).and_return([])
       get "/accounts/#{Account.default.id}/settings"
       expect(f("#account_settings")).not_to contain_css("#external_integration_keys")
     end
 
     it "should not display external integration keys if no rights are granted" do
-      ExternalIntegrationKey.any_instance.stubs(:grants_right_for?).returns(false)
+      allow_any_instance_of(ExternalIntegrationKey).to receive(:grants_right_for?).and_return(false)
       get "/accounts/#{Account.default.id}/settings"
       expect(f("#account_settings")).not_to contain_css("#external_integration_keys")
     end

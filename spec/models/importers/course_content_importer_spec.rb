@@ -25,6 +25,8 @@ describe Course do
     end
 
     it "should import a whole json file" do
+      local_storage!
+
       # TODO: pull this out into smaller tests... right now I'm using
       # the whole example JSON from Bracken because the formatting is
       # somewhat in flux
@@ -34,7 +36,7 @@ describe Course do
         'file_path' => File.join(IMPORT_JSON_DIR, 'import_from_migration_small.zip')
       }
       migration = ContentMigration.create!(:context => @course)
-      migration.stubs(:canvas_import?).returns(true)
+      allow(migration).to receive(:canvas_import?).and_return(true)
 
       params = {:copy => {
         :topics => {'1864019689002' => true, '1865116155002' => true},
@@ -60,6 +62,9 @@ describe Course do
       }}.with_indifferent_access
       migration.migration_ids_to_import = params
 
+      # tool profile tests
+      expect(Importers::ToolProfileImporter).to receive(:process_migration)
+
       Importers::CourseContentImporter.import_content(@course, data, params, migration)
       @course.reload
 
@@ -84,9 +89,9 @@ describe Course do
 
       # wiki pages tests
       migration_ids = ["1865116206002", "1865116207002"].sort
-      added_migration_ids = @course.wiki.wiki_pages.map(&:migration_id).uniq.sort
+      added_migration_ids = @course.wiki_pages.map(&:migration_id).uniq.sort
       expect(added_migration_ids).to eq(migration_ids)
-      expect(@course.wiki.wiki_pages.length).to eq(migration_ids.length)
+      expect(@course.wiki_pages.length).to eq(migration_ids.length)
       # front page
       page = @course.wiki.front_page
       expect(page).not_to be_nil
@@ -297,14 +302,14 @@ describe Course do
     end
 
     it "should wait for media objects on canvas cartridge import" do
-      migration = mock(:canvas_import? => true)
-      MediaObject.expects(:add_media_files).with([@attachment], true)
+      migration = double(:canvas_import? => true)
+      expect(MediaObject).to receive(:add_media_files).with([@attachment], true)
       Importers::CourseContentImporter.import_media_objects([@attachment], migration)
     end
 
     it "should not wait for media objects on other import" do
-      migration = mock(:canvas_import? => false)
-      MediaObject.expects(:add_media_files).with([@attachment], false)
+      migration = double(:canvas_import? => false)
+      expect(MediaObject).to receive(:add_media_files).with([@attachment], false)
       Importers::CourseContentImporter.import_media_objects([@attachment], migration)
     end
   end
@@ -355,7 +360,7 @@ describe Course do
       migration.user = @user
       migration.save!
 
-      Auditors::Course.expects(:record_copied).once.with(migration.source_course, @course, migration.user, source: migration.initiated_source)
+      expect(Auditors::Course).to receive(:record_copied).once.with(migration.source_course, @course, migration.user, source: migration.initiated_source)
 
       Importers::CourseContentImporter.import_content(@course, data, params, migration)
     end
@@ -363,6 +368,24 @@ describe Course do
 
   it 'should be able to i18n without keys' do
     expect { Importers::CourseContentImporter.translate('stuff') }.not_to raise_error
+  end
+
+  it "shouldn't create missing link migration issues if the link got sanitized away" do
+    data = {:assignments => [
+      {:migration_id => "broken", :description => "heres a normal bad link <a href='/badness'>blah</a>"},
+      {:migration_id => "kindabroken", :description => "here's a link that's going to go away in a bit <link rel=\"stylesheet\" href=\"/badness\"/>"}
+    ]}.with_indifferent_access
+
+    course_factory
+    migration = @course.content_migrations.create!
+    Importers::CourseContentImporter.import_content(@course, data, {}, migration)
+
+    broken_assmt = @course.assignments.where(:migration_id => "broken").first
+    unbroken_assmt = @course.assignments.where(:migration_id => "kindabroken").first
+    expect(unbroken_assmt.description).to_not include("stylesheet")
+
+    expect(migration.migration_issues.count).to eq 1 # should ignore the sanitized one
+    expect(migration.migration_issues.first.fix_issue_html_url).to eq "/courses/#{@course.id}/assignments/#{broken_assmt.id}"
   end
 end
 

@@ -348,13 +348,13 @@ class CalendarEventsApiController < ApplicationController
       mark_submitted_assignments(user, events)
       includes = Array(params[:include])
       if includes.include?("submission")
-        submissions = Submission.where(assignment_id: events, user_id: user)
+        submissions = Submission.active.where(assignment_id: events, user_id: user)
           .group_by(&:assignment_id)
       end
       # preload data used by assignment_json
       ActiveRecord::Associations::Preloader.new.preload(events, :discussion_topic)
       Shard.partition_by_shard(events) do |shard_events|
-        having_submission = Submission.having_submission.
+        having_submission = Submission.active.having_submission.
             where(assignment_id: shard_events).
             distinct.
             pluck(:assignment_id).to_set
@@ -362,7 +362,7 @@ class CalendarEventsApiController < ApplicationController
           event.has_submitted_submissions = having_submission.include?(event.id)
         end
 
-        having_student_submission = Submission.having_submission.
+        having_student_submission = Submission.active.having_submission.
             where(assignment_id: shard_events).
             where.not(user_id: nil).
             distinct.
@@ -826,7 +826,7 @@ class CalendarEventsApiController < ApplicationController
   def set_course_timetable
     get_context
     if authorized_action(@context, @current_user, :manage_calendar)
-      timetable_data = params[:timetables].to_hash.with_indifferent_access
+      timetable_data = params[:timetables].to_unsafe_h
 
       builders = {}
       updated_section_ids = []
@@ -914,7 +914,7 @@ class CalendarEventsApiController < ApplicationController
       section = api_find(@context.active_course_sections, params[:course_section_id]) if params[:course_section_id]
       builder = Courses::TimetableEventBuilder.new(course: @context, course_section: section)
 
-      event_hashes = params[:events].map{|h| h.to_hash.with_indifferent_access}
+      event_hashes = params[:events].map(&:to_unsafe_h)
       event_hashes.each do |hash|
         [:start_at, :end_at].each do |key|
           hash[key] = CanvasTime.try_parse(hash[key])
@@ -1173,7 +1173,7 @@ class CalendarEventsApiController < ApplicationController
   end
 
   def mark_submitted_assignments(user, assignments)
-    submitted_ids = Submission.where("submission_type IS NOT NULL").
+    submitted_ids = Submission.active.where("submission_type IS NOT NULL").
       where(user_id: user, assignment_id: assignments).
       pluck(:assignment_id)
     assignments.each do |assignment|

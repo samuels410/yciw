@@ -33,10 +33,10 @@ describe CC::CCHelper do
 
   describe CC::CCHelper::HtmlContentExporter do
     before do
-      @kaltura = mock('CanvasKaltura::ClientV3')
-      CanvasKaltura::ClientV3.stubs(:new).returns(@kaltura)
-      @kaltura.stubs(:startSession)
-      @kaltura.stubs(:flavorAssetGetByEntryId).with('abcde').returns([
+      @kaltura = double('CanvasKaltura::ClientV3')
+      allow(CanvasKaltura::ClientV3).to receive(:new).and_return(@kaltura)
+      allow(@kaltura).to receive(:startSession)
+      allow(@kaltura).to receive(:flavorAssetGetByEntryId).with('abcde').and_return([
       {
         :isOriginal => 1,
         :containerFormat => 'mp4',
@@ -57,7 +57,7 @@ describe CC::CCHelper do
         :size => 5,
       },
       ])
-      @kaltura.stubs(:flavorAssetGetOriginalAsset).returns(@kaltura.flavorAssetGetByEntryId('abcde').first)
+      allow(@kaltura).to receive(:flavorAssetGetOriginalAsset).and_return(@kaltura.flavorAssetGetByEntryId('abcde').first)
       course_with_teacher
       @obj = @course.media_objects.create!(:media_id => 'abcde')
     end
@@ -131,8 +131,8 @@ describe CC::CCHelper do
     end
 
     it "should prepend the domain to links outside the course" do
-      HostUrl.stubs(:protocol).returns('http')
-      HostUrl.stubs(:context_host).returns('www.example.com:8080')
+      allow(HostUrl).to receive(:protocol).and_return('http')
+      allow(HostUrl).to receive(:context_host).and_return('www.example.com:8080')
       @exporter = CC::CCHelper::HtmlContentExporter.new(@course, @user, :for_course_copy => false)
       @othercourse = Course.create!
       html = <<-HTML
@@ -146,10 +146,10 @@ describe CC::CCHelper do
     end
 
     it "should copy pages correctly when the title starts with a number" do
-      HostUrl.stubs(:protocol).returns('http')
-      HostUrl.stubs(:context_host).returns('www.example.com:8080')
+      allow(HostUrl).to receive(:protocol).and_return('http')
+      allow(HostUrl).to receive(:context_host).and_return('www.example.com:8080')
       @exporter = CC::CCHelper::HtmlContentExporter.new(@course, @user, :for_course_copy => false)
-      page = @course.wiki.wiki_pages.create(:title => '9000, the level is over')
+      page = @course.wiki_pages.create(:title => '9000, the level is over')
       html = <<-HTML
         <a href="/courses/#{@course.id}/wiki/#{page.url}">This course's wiki page</a>
       HTML
@@ -159,16 +159,30 @@ describe CC::CCHelper do
     end
 
     it "should copy pages correctly when the title consists only of a number" do
-      HostUrl.stubs(:protocol).returns('http')
-      HostUrl.stubs(:context_host).returns('www.example.com:8080')
+      allow(HostUrl).to receive(:protocol).and_return('http')
+      allow(HostUrl).to receive(:context_host).and_return('www.example.com:8080')
       @exporter = CC::CCHelper::HtmlContentExporter.new(@course, @user, :for_course_copy => false)
-      page = @course.wiki.wiki_pages.create(:title => '9000')
+      page = @course.wiki_pages.create(:title => '9000')
       html = <<-HTML
         <a href="/courses/#{@course.id}/wiki/#{page.url}">This course's wiki page</a>
       HTML
       doc = Nokogiri::HTML.parse(@exporter.html_content(html))
       urls = doc.css('a').map{ |attr| attr[:href] }
       expect(urls[0]).to eq "%24WIKI_REFERENCE%24/wiki/#{page.url}"
+    end
+
+    it "uses the key_generator to translate links" do
+      allow(HostUrl).to receive(:protocol).and_return('http')
+      allow(HostUrl).to receive(:context_host).and_return('www.example.com:8080')
+      @assignment = @course.assignments.create!(:name => "Thing")
+      html = <<-HTML
+        <a href="/courses/#{@course.id}/assignments/#{@assignment.id}">Thing</a>
+      HTML
+      keygen = double()
+      expect(keygen).to receive(:create_key).and_return("silly-migration-id")
+      @exporter = CC::CCHelper::HtmlContentExporter.new(@course, @user, :for_course_copy => true, :key_generator => keygen)
+      doc = Nokogiri::HTML.parse(@exporter.html_content(html))
+      expect(doc.at_css("a").attr('href')).to eq "$CANVAS_OBJECT_REFERENCE$/assignments/silly-migration-id"
     end
   end
 end

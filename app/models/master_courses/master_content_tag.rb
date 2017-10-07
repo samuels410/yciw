@@ -19,7 +19,19 @@ class MasterCourses::MasterContentTag < ActiveRecord::Base
   # i want to get off content tag's wild ride
 
   belongs_to :master_template, :class_name => "MasterCourses::MasterTemplate"
-  belongs_to :content, :polymorphic => true
+  belongs_to :content, polymorphic: [:assessment_question_bank,
+                                     :assignment,
+                                     :assignment_group,
+                                     :attachment,
+                                     :calendar_event,
+                                     :context_external_tool,
+                                     :context_module,
+                                     :discussion_topic,
+                                     :learning_outcome,
+                                     :rubric,
+                                     :wiki_page,
+                                     quiz: 'Quizzes::Quiz'
+  ]
   validates_with MasterCourses::TagValidator
 
   serialize :restrictions, Hash
@@ -76,6 +88,10 @@ class MasterCourses::MasterContentTag < ActiveRecord::Base
           #{self.table_name}.content_id=#{ContentTag.table_name}.content_id").
       where(:content_tags => {:id => item_ids}).
       pluck('content_tags.id', :restrictions)
-    Hash[data]
+    hash = Hash[data]
+    (item_ids - hash.keys).each do |missing_id| # populate blank restrictions for all items without mastercontenttags created yet
+      hash[missing_id] = {}
+    end
+    hash
   end
 end

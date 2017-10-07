@@ -39,6 +39,9 @@
 #           "example": "https://example.com/some/path",
 #           "type": "string"
 #         },
+#         // The attachment api object of the report. Only available after the report has completed.
+#         // Abbreviated attachment object File (see files API).
+#         "attachment": {},
 #         "status": {
 #           "description": "The status of the report",
 #           "example": "complete",
@@ -52,7 +55,12 @@
 #         "progress": {
 #           "description": "The progress of the report",
 #           "example": "100",
-#           "type": "string"
+#           "type": "integer"
+#         },
+#         "current_line": {
+#           "description": "This is the current line count being written to the report. It updates every 1000 records.",
+#           "example": "12000",
+#           "type": "integer"
 #         }
 #       }
 #     }
@@ -242,7 +250,7 @@ class AccountReportsController < ApplicationController
     if authorized_action(@context, @current_user, :read_reports)
       available_reports = AccountReport.available_reports.keys
       raise ActiveRecord::RecordNotFound unless available_reports.include? params[:report]
-      parameters = params[:parameters]&.to_hash&.with_indifferent_access
+      parameters = params[:parameters]&.to_unsafe_h
       report = @account.account_reports.build(:user=>@current_user, :report_type=>params[:report], :parameters=>parameters)
       report.workflow_state = :running
       report.progress = 0

@@ -107,8 +107,8 @@ module Lti
     describe '#all_roles' do
 
       it 'converts multiple roles' do
-        subject.stubs(:course_enrollments).returns([StudentEnrollment.new, TeacherEnrollment.new, DesignerEnrollment.new, ObserverEnrollment.new, TaEnrollment.new, AccountUser.new])
-        user.stubs(:roles).returns(['user', 'student', 'teacher', 'admin'])
+        allow(subject).to receive(:course_enrollments).and_return([StudentEnrollment.new, TeacherEnrollment.new, DesignerEnrollment.new, ObserverEnrollment.new, TaEnrollment.new, AccountUser.new])
+        allow(user).to receive(:roles).and_return(['user', 'student', 'teacher', 'admin'])
         roles = subject.all_roles
         expect(roles).to include LtiOutbound::LTIRoles::System::USER
         expect(roles).to include LtiOutbound::LTIRoles::Institution::STUDENT
@@ -123,12 +123,12 @@ module Lti
 
       it "returns none if no user" do
         helper = SubstitutionsHelper.new(course, root_account, nil)
-        expect(helper.all_roles).to eq [LtiOutbound::LTIRoles::System::NONE]
+        expect(helper.all_roles).to eq LtiOutbound::LTIRoles::System::NONE
       end
 
       it 'converts multiple roles for lis 2' do
-        subject.stubs(:course_enrollments).returns([StudentEnrollment.new, TeacherEnrollment.new, DesignerEnrollment.new, ObserverEnrollment.new, TaEnrollment.new, AccountUser.new])
-        user.stubs(:roles).returns(['user', 'student', 'teacher', 'admin'])
+        allow(subject).to receive(:course_enrollments).and_return([StudentEnrollment.new, TeacherEnrollment.new, DesignerEnrollment.new, ObserverEnrollment.new, TaEnrollment.new, AccountUser.new])
+        allow(user).to receive(:roles).and_return(['user', 'student', 'teacher', 'admin'])
         roles = subject.all_roles('lis2')
         expect(roles).to include 'http://purl.imsglobal.org/vocab/lis/v2/system/person#User'
         expect(roles).to include 'http://purl.imsglobal.org/vocab/lis/v2/institution/person#Student'
@@ -143,11 +143,11 @@ module Lti
 
       it "returns none if no user for lis 2" do
         helper = SubstitutionsHelper.new(course, root_account, nil)
-        expect(helper.all_roles('lis2')).to eq ['http://purl.imsglobal.org/vocab/lis/v2/person#None']
+        expect(helper.all_roles('lis2')).to eq 'http://purl.imsglobal.org/vocab/lis/v2/person#None'
       end
 
       it "includes main and subrole for TeachingAssistant" do
-        subject.stubs(:course_enrollments).returns([TaEnrollment.new])
+        allow(subject).to receive(:course_enrollments).and_return([TaEnrollment.new])
         roles = subject.all_roles('lis2')
         expected_roles = ["http://purl.imsglobal.org/vocab/lis/v2/membership/instructor#TeachingAssistant",
                           "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor",

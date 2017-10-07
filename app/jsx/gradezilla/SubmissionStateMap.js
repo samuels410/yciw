@@ -19,14 +19,6 @@
 import _ from 'underscore';
 import GradingPeriodsHelper from 'jsx/grading/helpers/GradingPeriodsHelper';
 
-const TOOLTIP_KEYS = {
-  UNPUBLISHED_ASSIGNMENT: 'unpublished_assignment',
-  NOT_IN_ANY_GP: 'not_in_any_grading_period',
-  IN_ANOTHER_GP: 'in_another_grading_period',
-  IN_CLOSED_GP: 'in_closed_grading_period',
-  NONE: null
-};
-
 function submissionGradingPeriodInformation (assignment, student) {
   const submissionInfo = assignment.effectiveDueDates[student.id] || {};
   return {
@@ -45,30 +37,46 @@ function cellMappingsForMultipleGradingPeriods (assignment, student, selectedGra
   const { gradingPeriodID, inClosedGradingPeriod } = submissionGradingPeriodInformation(assignment, student);
 
   if (specificPeriodSelected && !gradingPeriodID) {
-    return { locked: true, hideGrade: true, tooltip: TOOLTIP_KEYS.NOT_IN_ANY_GP };
+    return { locked: true, hideGrade: true };
   } else if (specificPeriodSelected && selectedGradingPeriodID !== gradingPeriodID) {
-    return { locked: true, hideGrade: true, tooltip: TOOLTIP_KEYS.IN_ANOTHER_GP };
+    return { locked: true, hideGrade: true };
   } else if (!isAdmin && inClosedGradingPeriod) {
-    return { locked: true, hideGrade: false, tooltip: TOOLTIP_KEYS.IN_CLOSED_GP };
+    return { locked: true, hideGrade: false };
   } else {
-    return { locked: false, hideGrade: false, tooltip: TOOLTIP_KEYS.NONE };
+    return { locked: false, hideGrade: false };
   }
 }
 
 
 function cellMapForSubmission (assignment, student, hasGradingPeriods, selectedGradingPeriodID, isAdmin) {
   if (!assignment.published) {
-    return { locked: true, hideGrade: true, tooltip: TOOLTIP_KEYS.UNPUBLISHED_ASSIGNMENT };
+    return { locked: true, hideGrade: true };
   } else if (!visibleToStudent(assignment, student)) {
-    return { locked: true, hideGrade: true, tooltip: TOOLTIP_KEYS.NONE };
+    return { locked: true, hideGrade: true };
   } else if (hasGradingPeriods) {
     return cellMappingsForMultipleGradingPeriods(assignment, student, selectedGradingPeriodID, isAdmin);
   } else {
-    return { locked: false, hideGrade: false, tooltip: TOOLTIP_KEYS.NONE };
+    return { locked: false, hideGrade: false };
   }
 }
 
-class SubmissionState {
+function missingSubmission (student, assignment) {
+  const submission = {
+    assignment_id: assignment.id,
+    user_id: student.id,
+    excused: false,
+    late: false,
+    missing: false,
+    seconds_late: 0
+  };
+  const dueDates = assignment.effectiveDueDates[student.id] || {};
+  if (dueDates.due_at != null && new Date(dueDates.due_at) < new Date()) {
+    submission.missing = true;
+  }
+  return submission;
+}
+
+class SubmissionStateMap {
   constructor ({ hasGradingPeriods, selectedGradingPeriodID, isAdmin }) {
     this.hasGradingPeriods = hasGradingPeriods;
     this.selectedGradingPeriodID = selectedGradingPeriodID;
@@ -87,8 +95,8 @@ class SubmissionState {
     });
   }
 
-  setSubmissionCellState (student, assignment, submission = { assignment_id: assignment.id, user_id: student.id }) {
-    this.submissionMap[student.id][assignment.id] = submission;
+  setSubmissionCellState (student, assignment, submission) {
+    this.submissionMap[student.id][assignment.id] = submission || missingSubmission(student, assignment);
     const params = [
       assignment,
       student,
@@ -109,4 +117,4 @@ class SubmissionState {
   }
 }
 
-export default SubmissionState;
+export default SubmissionStateMap;

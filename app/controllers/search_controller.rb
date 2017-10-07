@@ -79,12 +79,13 @@ class SearchController < ApplicationController
   # @example_response
   #   [
   #     {"id": "group_1", "name": "the group", "type": "context", "user_count": 3},
-  #     {"id": 2, "name": "greg", "common_courses": {}, "common_groups": {"1": ["Member"]}}
+  #     {"id": 2, "name": "greg", "full_name": "greg jones", "common_courses": {}, "common_groups": {"1": ["Member"]}}
   #   ]
   #
   # @response_field id The unique identifier for the user/context. For
   #   groups/courses, the id is prefixed by "group_"/"course_" respectively.
-  # @response_field name The name of the user/context
+  # @response_field name The name of the context or short name of the user
+  # @response_field full_name Only set for users. The full name of the user
   # @response_field avatar_url Avatar image url for the user/context
   # @response_field type ["context"|"course"|"section"|"group"|"user"|null]
   #   Type of recipients to return, defaults to null (all). "context"
@@ -323,37 +324,51 @@ class SearchController < ApplicationController
       }
     end
 
-    result = result.reject{ |context| context[:state] == :inactive } unless options[:include_inactive]
-    result = result.map{ |context|
-      asset_string = "#{context[:type]}_#{context[:id]}"
-      ret = {
-        :id => asset_string,
-        :name => context[:name],
-        :avatar_url => avatar_url,
-        :type => :context,
-        :user_count => @current_user.address_book.count_in_context(asset_string),
-        :permissions => context[:permissions] || {}
-      }
+    # pre-calculate asset strings and permissions
+    result.each do |context|
+      context[:asset_string] = "#{context[:type]}_#{context[:id]}"
       if context[:type] == :section
         # TODO: have load_all_contexts actually return section-level
         # permissions. but before we do that, sections will need to grant many
         # more permission (possibly inherited from the course, like
         # :send_messages_all)
-        ret[:permissions] = course_for_section(context)[:permissions]
+        context[:permissions] = course_for_section(context)[:permissions]
       elsif context[:type] == :group && context[:parent]
         course = course_for_group(context)
         # People have groups in unpublished courses that they use for messaging.
         # We should really train them to use subaccount-level groups.
-        ret[:permissions] = course ? course[:permissions] : {send_messages: true}
+        context[:permissions] = course ? course[:permissions] : {send_messages: true}
+      else
+        context[:permissions] ||= {}
       end
+    end
+
+    # filter out those that are explicitly excluded, inactive, restricted by
+    # permissions, or which don't match the search
+    result.reject! do |context|
+      exclude.include?(context[:asset_string]) ||
+      (!options[:include_inactive] && context[:state] == :inactive) ||
+      (options[:messageable_only] && !context[:permissions].include?(:send_messages)) ||
+      !terms.all?{ |part| context[:name].downcase.include?(part) }
+    end
+
+    # bulk count users in the remainder
+    asset_strings = result.map{ |context| context[:asset_string] }
+    user_counts = @current_user.address_book.count_in_contexts(asset_strings)
+
+    # build up the final representations
+    result.map{ |context|
+      ret = {
+        :id => context[:asset_string],
+        :name => context[:name],
+        :avatar_url => avatar_url,
+        :type => :context,
+        :user_count => user_counts[context[:asset_string]] || 0,
+        :permissions => context[:permissions],
+      }
       ret[:context_name] = context[:context_name] if context[:context_name] && context_name.nil?
       ret
     }
-    result = result.select{ |context| context[:permissions].include? :send_messages } if options[:messageable_only]
-
-    result.reject!{ |context| terms.any?{ |part| !context[:name].downcase.include?(part) } } if terms.present?
-    result.reject!{ |context| exclude.include?(context[:id]) }
-    result
   end
 
   def course_for_section(section)

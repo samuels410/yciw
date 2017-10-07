@@ -58,9 +58,9 @@ describe "submissions" do
       get "/courses/#{@course.id}/assignments/#{@assignment.id}"
 
       f(".submit_assignment_link").click
-      f('button[type="submit"]').click
-
-      expect(fj(".error_text")).to be
+      f("[aria-label='Rich Content Editor'] #submission_body_ifr")
+      f('#submit_assignment_tabs button[type="submit"]').click
+      expect(f(".error_text")).to be
     end
 
     it "should not break when you open and close the media comment dialog", priority: "1", test_id: 237020 do
@@ -434,7 +434,7 @@ describe "submissions" do
 
       it 'indicates as excused on the submission details page', priority: "1", test_id: 201937 do
          get "/courses/#{@course.id}/assignments/#{assignment.id}/submissions/#{@student.id}"
-        expect(f("#content .submission_details .published_grade")).to include_text 'Excused'
+        expect(f("#content .submission_details .entered_grade")).to include_text 'Excused'
       end
     end
 

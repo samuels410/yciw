@@ -161,6 +161,9 @@
 #           "example": "100",
 #           "type": "string"
 #         },
+#         // The errors_attachment api object of the SIS import. Only available if there are errors or warning and import has completed.
+#         // Abbreviated file object File (see files API).
+#         "errors_attachment": {},
 #         "processing_warnings": {
 #           "description": "Only imports that are complete will get this data. An array of CSV_file/warning_message pairs.",
 #           "example": [["students.csv","user John Doe has already claimed john_doe's requested login information, skipping"]],
@@ -220,6 +223,7 @@
 class SisImportsApiController < ApplicationController
   before_action :get_context
   before_action :check_account
+  include Api::V1::SisImport
 
   def check_account
     return render json: {errors: ["SIS imports can only be executed on root accounts"]}, status: :bad_request unless @account.root_account?
@@ -245,7 +249,7 @@ class SisImportsApiController < ApplicationController
         scope = scope.where("created_at > ?", created_since)
       end
       @batches = Api.paginate(scope, self, api_v1_account_sis_imports_url)
-      render :json => ({sis_imports: @batches})
+      render json: {sis_imports: sis_imports_json(@batches, @current_user, session)}
     end
   end
 
@@ -331,13 +335,27 @@ class SisImportsApiController < ApplicationController
   # @argument diffing_data_set_identifier [String]
   #   If set on a CSV import, Canvas will attempt to optimize the SIS import by
   #   comparing this set of CSVs to the previous set that has the same data set
-  #   identifier, and only appliying the difference between the two. See the
+  #   identifier, and only applying the difference between the two. See the
   #   SIS CSV Format documentation for more details.
   #
   # @argument diffing_remaster_data_set [Boolean]
   #   If true, and diffing_data_set_identifier is sent, this SIS import will be
   #   part of the data set, but diffing will not be performed. See the SIS CSV
   #   Format documentation for details.
+  #
+  # @argument change_threshold [Integer]
+  #   If set with batch_mode, the batch cleanup process will not run if the
+  #   number of items deleted is higher than the percentage set. If set to 10
+  #   and a term has 200 enrollments, and batch would delete more than 20 of
+  #   the enrollments the batch will abort before the enrollments are deleted.
+  #   If set with diffing, diffing  will not be performed if the files are
+  #   greater than the threshold as a percent. If set to 5 and the file is more
+  #   than 5% smaller or more than 5% larger than the file that is being
+  #   compared to, diffing will not be performed. If the files are less than 5%,
+  #   diffing will be performed. See the SIS CSV Format documentation for more
+  #   details.
+  #   If set with batch_mode and diffing, the same threshold is used for both
+  #   steps of the import.
   #
   # @returns SisImport
   def create
@@ -407,6 +425,7 @@ class SisImportsApiController < ApplicationController
           batch.batch_mode_term = batch_mode_term
         elsif params[:diffing_data_set_identifier].present?
           batch.enable_diffing(params[:diffing_data_set_identifier],
+                               change_threshold: params[:change_threshold],
                                remaster: value_to_boolean(params[:diffing_remaster_data_set]))
         end
 
@@ -428,7 +447,7 @@ class SisImportsApiController < ApplicationController
         @account.save
       end
 
-      render :json => batch
+      render json: sis_import_json(batch, @current_user, session)
     end
   end
 
@@ -444,13 +463,13 @@ class SisImportsApiController < ApplicationController
   def show
     if authorized_action(@account, @current_user, [:import_sis, :manage_sis])
       @batch = @account.sis_batches.find(params[:id])
-      render json: @batch
+      render json: sis_import_json(@batch, @current_user, session)
     end
   end
 
   # @API Abort SIS import
   #
-  # Abort an already created but not processed or processing SIS import.
+  # Abort a SIS import that has not completed.
   #
   # @example_request
   #   curl https://<canvas>/api/v1/accounts/<account_id>/sis_imports/<sis_import_id>/abort \
@@ -460,10 +479,10 @@ class SisImportsApiController < ApplicationController
   def abort
     if authorized_action(@account, @current_user, [:import_sis, :manage_sis])
       SisBatch.transaction do
-        @batch = @account.sis_batches.not_started.lock.find(params[:id])
+        @batch = @account.sis_batches.not_completed.lock.find(params[:id])
         @batch.abort_batch
       end
-      render json: @batch.reload
+      render json: sis_import_json(@batch.reload, @current_user, session)
     end
   end
 

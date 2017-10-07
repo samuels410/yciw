@@ -32,19 +32,11 @@ const WebpackHooks = require('./webpackHooks')
 const webpackPublicPath = require('./webpackPublicPath')
 const WebpackCleanupPlugin = require('webpack-cleanup-plugin')
 const HappyPack = require('happypack')
+const momentLocaleBundles = require('./momentBundles')
 require('babel-polyfill')
 
 const root = path.resolve(__dirname, '..')
 const USE_BABEL_CACHE = process.env.NODE_ENV !== 'production' && process.env.DISABLE_HAPPYPACK === '1'
-
-const momentLocaleBundles = glob.sync('moment/locale/**/*.js', {cwd: 'node_modules'}).reduce((memo, filename) =>
-  Object.assign(memo, {[filename.replace(/.js$/, '')]: filename})
-, {})
-
-// Put any custom moment locales here:
-momentLocaleBundles['moment/locale/mi-nz'] = 'custom_moment_locales/mi_nz.js'
-momentLocaleBundles['moment/locale/ht-ht'] = 'custom_moment_locales/ht_ht.js'
-
 
 const happypackPlugins = []
 const getHappyThreadPool = (() => {
@@ -160,6 +152,7 @@ module.exports = {
         loaders: ['imports-loader?this=>window']
       },
 
+      // vendor/i18n.js does not export or define anything, it just creates a global
       {
         test: /vendor\/i18n/,
         loaders: ['exports-loader?I18n']
@@ -167,11 +160,17 @@ module.exports = {
       {
         test: /\.js$/,
         include: [
+          path.resolve(__dirname, '../public/javascripts'),
           path.resolve(__dirname, '../app/jsx'),
+          path.resolve(__dirname, '../app/coffeescripts'),
           path.resolve(__dirname, '../spec/javascripts/jsx'),
           /gems\/plugins\/.*\/app\/jsx\//
         ],
-        loaders: happify('jsx', [
+        exclude: [
+          path.resolve(__dirname, '../public/javascripts/vendor/mediaelement-and-player.js'), // remove when we use npm version
+          /bower\//,
+        ],
+        loaders: happify('babel', [
           `babel-loader?cacheDirectory=${USE_BABEL_CACHE}`
         ])
       },
@@ -228,6 +227,16 @@ module.exports = {
 
   plugins: [
 
+    // return a non-zero exit code if there are any warnings so we don't continue compiling assets if webpack fails
+    function () {
+      this.plugin('done', ({compilation}) => {
+        if (compilation.warnings && compilation.warnings.length) {
+          console.error(compilation.warnings)
+          throw new Error('webpack build had warnings. Failing.')
+        }
+      })
+    },
+
     // A lot of our files expect a global `I18n` variable, this will provide it if it is used
     new webpack.ProvidePlugin({I18n: 'vendor/i18n'}),
 
@@ -239,7 +248,7 @@ module.exports = {
     }),
 
     new WebpackCleanupPlugin({
-      exclude: ["selinimum-manifest.json"]
+      exclude: ['selinimum-manifest.json']
     }),
 
     // handles our custom i18n stuff
@@ -256,6 +265,11 @@ module.exports = {
     new BundleExtensionsPlugin(),
 
     new WebpackHooks(),
+
+    // avoids warnings caused by
+    // https://github.com/graphql/graphql-language-service/issues/111, should
+    // be removed when that issue is fixed
+    new webpack.IgnorePlugin(/\.flow$/),
 
   ]
   .concat(process.env.SELINIMUM_RUN || process.env.SELINIMUM_CAPTURE ? [

@@ -17,6 +17,7 @@
  */
 
 import React from 'react'
+import PropTypes from 'prop-types'
 import I18n from 'i18n!custom_help_link'
 import $ from 'jquery'
 import CustomHelpLinkIcons from './CustomHelpLinkIcons'
@@ -31,10 +32,10 @@ import 'compiled/jquery.rails_flash_notifications'
 
   const CustomHelpLinkSettings = React.createClass({
     propTypes: {
-      name: React.PropTypes.string,
-      links: React.PropTypes.arrayOf(CustomHelpLinkPropTypes.link),
-      defaultLinks: React.PropTypes.arrayOf(CustomHelpLinkPropTypes.link),
-      icon: React.PropTypes.string
+      name: PropTypes.string,
+      links: PropTypes.arrayOf(CustomHelpLinkPropTypes.link),
+      defaultLinks: PropTypes.arrayOf(CustomHelpLinkPropTypes.link),
+      icon: PropTypes.string
     },
     getDefaultProps () {
       return {
@@ -50,7 +51,7 @@ import 'compiled/jquery.rails_flash_notifications'
 
         return {
           ...link,
-          id: 'link' + counter,
+          id: link.id || ('link' + counter),
           available_to: link.available_to || [],
           state: link.state || 'active'
         }
@@ -151,7 +152,7 @@ import 'compiled/jquery.rails_flash_notifications'
       counter++;
 
       const links = [...this.state.links];
-      const id = 'link' + counter;
+      const id = link.id || ('link' + counter);
 
       links.splice(0, 0, {
         ...link,

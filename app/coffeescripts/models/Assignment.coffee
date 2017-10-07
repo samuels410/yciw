@@ -393,6 +393,9 @@ define [
     isQuizLTIAssignment: =>
       @get('is_quiz_lti_assignment')
 
+    submissionTypesFrozen: =>
+      _.include(@frozenAttributes(), 'submission_types')
+
     toView: =>
       fields = [
         'name', 'dueAt', 'description', 'pointsPossible', 'lockAt', 'unlockAt',
@@ -411,7 +414,7 @@ define [
         'allDates', 'hasDueDate', 'hasPointsPossible', 'singleSectionDueDate',
         'moderatedGrading', 'postToSISEnabled', 'isOnlyVisibleToOverrides',
         'omitFromFinalGrade', 'is_quiz_assignment', 'isQuizLTIAssignment',
-        'secureParams', 'inClosedGradingPeriod', 'dueDateRequired'
+        'secureParams', 'inClosedGradingPeriod', 'dueDateRequired', 'submissionTypesFrozen'
       ]
 
       hash =
@@ -426,6 +429,7 @@ define [
     toJSON: ->
       data = super
       data = @_filterFrozenAttributes(data)
+      delete data.description if (ENV.MASTER_COURSE_DATA?.is_master_course_child_content && ENV.MASTER_COURSE_DATA?.master_course_restrictions?.content)
       if @alreadyScoped then data else { assignment: data }
 
     inGradingPeriod: (gradingPeriod) ->
@@ -513,6 +517,12 @@ define [
 
     disabledMessage: ->
       I18n.t("Can't unpublish %{name} if there are student submissions", name: @get('name'))
+
+    duplicate: (callback) =>
+      course_id = @courseID()
+      assignment_id = @id
+      $.ajaxJSON "/api/v1/courses/#{course_id}/assignments/#{assignment_id}/duplicate", 'POST',
+        {}, callback
 
     isOnlyVisibleToOverrides: (override_flag) ->
       return @get('only_visible_to_overrides') || false unless arguments.length > 0

@@ -18,75 +18,64 @@
 require_relative '../../helpers/gradezilla_common'
 require_relative '../../helpers/assignment_overrides'
 require_relative '../page_objects/gradezilla_page'
+require_relative '../page_objects/gradezilla_cells_page'
 
-describe "Gradezilla - arrange by assignment group" do
+describe "Gradezilla view menu" do
   include_context "in-process server selenium tests"
   include AssignmentOverridesSeleniumHelper
   include GradezillaCommon
 
-  before(:once) do
-    gradebook_data_setup
-    @assignment = @course.assignments.first
-  end
+  before(:once) { gradebook_data_setup }
+  before(:each) { user_session(@teacher) }
 
-  before(:each) do
-    user_session(@teacher)
-    Gradezilla.visit(@course)
-  end
-
-  it "should default to arrange columns by assignment group", priority: "1", test_id: 220028 do
-    first_row_cells = find_slick_cells(0, f('#gradebook_grid .container_1'))
-    expect(first_row_cells[0]).to include_text @assignment_1_points
-    expect(first_row_cells[1]).to include_text @assignment_2_points
-    expect(first_row_cells[2]).to include_text "-"
-
-    view_menu = Gradezilla.open_gradebook_menu('View')
-    arrange_by_group = Gradezilla.gradebook_menu_group('Arrange By', container: view_menu)
-    arrangement_menu_options = Gradezilla.gradebook_menu_options(arrange_by_group)
-    selected_menu_options = arrangement_menu_options.select do |menu_item|
-      menu_item.attribute('aria-checked') == 'true'
+  context "sort by assignment group order" do
+    before(:each) do
+      Gradezilla.visit(@course)
     end
 
-    expect(selected_menu_options.size).to eq(1)
-    expect(selected_menu_options[0].text.strip).to eq('Default Order')
+    it "defaults arrange by to assignment group in the grid", priority: "1", test_id: 220028 do
+      expect(Gradezilla::Cells.get_grade(@student_1, @first_assignment)).to eq @assignment_1_points
+      expect(Gradezilla::Cells.get_grade(@student_1, @second_assignment)).to eq @assignment_2_points
+      expect(Gradezilla::Cells.get_grade(@student_1, @third_assignment)).to eq "-"
+    end
+
+    it "shows default arrange by in the menu" do
+      Gradezilla.open_view_menu_and_arrange_by_menu
+
+      expect(Gradezilla.popover_menu_item_checked?('Default Order')).to eq 'true'
+    end
+
+    it "validates arrange columns by assignment group option", priority: "1", test_id: 3253267 do
+      Gradezilla.open_view_menu_and_arrange_by_menu
+      Gradezilla.view_arrange_by_submenu_item('Default Order').click
+
+      expect(Gradezilla::Cells.get_grade(@student_1, @first_assignment)).to eq @assignment_1_points
+      expect(Gradezilla::Cells.get_grade(@student_1, @second_assignment)).to eq @assignment_2_points
+      expect(Gradezilla::Cells.get_grade(@student_1, @third_assignment)).to eq "-"
+    end
   end
 
-  it "should validate arrange columns by assignment group option", priority: "1", test_id: 220029 do
-    # since assignment group is the default, sort by due date, then assignment group again
-    view_menu = Gradezilla.open_gradebook_menu('View')
-    Gradezilla.select_gradebook_menu_option('Default Order', container: view_menu)
-
-    first_row_cells = find_slick_cells(0, f('#gradebook_grid .container_1'))
-    expect(first_row_cells[0]).to include_text @assignment_1_points
-    expect(first_row_cells[1]).to include_text @assignment_2_points
-    expect(first_row_cells[2]).to include_text "-"
-
-    view_menu = Gradezilla.open_gradebook_menu('View')
-    arrange_by_group = Gradezilla.gradebook_menu_group('Arrange By', container: view_menu)
-    arrangement_menu_options = Gradezilla.gradebook_menu_options(arrange_by_group)
-    selected_menu_options = arrangement_menu_options.select do |menu_item|
-      menu_item.attribute('aria-checked') == 'true'
+  context "assignment group dropdown" do
+    before(:each) do
+      Gradezilla.visit(@course)
     end
 
-    expect(selected_menu_options.size).to eq(1)
-    expect(selected_menu_options[0].text.strip).to eq('Default Order')
+    it "sorts assignments by grade - Low to High", priority: "1", test_id: 3253345 do
+      Gradezilla.click_assignment_group_header_options(@group.name,'Grade - Low to High')
+      gradebook_student_names = Gradezilla.fetch_student_names
 
-    # Setting should stick (not be messed up) after reload
-    Gradezilla.visit(@course)
-
-    first_row_cells = find_slick_cells(0, f('#gradebook_grid .container_1'))
-    expect(first_row_cells[0]).to include_text @assignment_1_points
-    expect(first_row_cells[1]).to include_text @assignment_2_points
-    expect(first_row_cells[2]).to include_text "-"
-
-    view_menu = Gradezilla.open_gradebook_menu('View')
-    arrange_by_group = Gradezilla.gradebook_menu_group('Arrange By', container: view_menu)
-    arrangement_menu_options = Gradezilla.gradebook_menu_options(arrange_by_group)
-    selected_menu_options = arrangement_menu_options.select do |menu_item|
-      menu_item.attribute('aria-checked') == 'true'
+      expect(gradebook_student_names[0]).to eq(@course.students[1].name)
+      expect(gradebook_student_names[1]).to eq(@course.students[2].name)
+      expect(gradebook_student_names[2]).to eq(@course.students[0].name)
     end
 
-    expect(selected_menu_options.size).to eq(1)
-    expect(selected_menu_options[0].text.strip).to eq('Default Order')
+    it "sorts assignments by grade - High to Low", priority: "1", test_id: 3253346 do
+      Gradezilla.click_assignment_group_header_options(@group.name,'Grade - High to Low')
+      gradebook_student_names = Gradezilla.fetch_student_names
+
+      expect(gradebook_student_names[0]).to eq(@course.students[0].name)
+      expect(gradebook_student_names[1]).to eq(@course.students[2].name)
+      expect(gradebook_student_names[2]).to eq(@course.students[1].name)
+    end
   end
 end

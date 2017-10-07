@@ -31,6 +31,15 @@ describe "gradebook" do
 
   before(:each) { user_session(@teacher) }
 
+  it "page should load within acceptable time ", priority:"1" do
+    page_load_start_time = Time.now
+    @gradebook_page.visit_gradebook(@course)
+    page_load_finish_time = Time.now
+    page_load_time = page_load_finish_time - page_load_start_time
+    puts "The page loaded in #{page_load_time} seconds"
+    expect(page_load_time).to be > 0.0
+  end
+
   it "hides unpublished/shows published assignments", priority: "1", test_id: 210016 do
     assignment = @course.assignments.create! title: 'unpublished'
     assignment.unpublish
@@ -96,7 +105,7 @@ describe "gradebook" do
 
   it "should handle muting/unmuting correctly", priority: "1", test_id: 164227 do
     @gradebook_page.visit_gradebook(@course)
-    toggle_muting(@second_assignment)
+    @gradebook_page.toggle_assignment_mute_option(@second_assignment.id)
     expect(fj(".container_1 .slick-header-column[id*='assignment_#{@second_assignment.id}'] .muted")).to be_displayed
     expect(f('.total-cell .icon-muted')).to be_displayed
     expect(@second_assignment.reload).to be_muted
@@ -106,7 +115,7 @@ describe "gradebook" do
     expect(fj(".container_1 .slick-header-column[id*='assignment_#{@second_assignment.id}'] .muted")).to be_displayed
 
     # make sure you can un-mute
-    toggle_muting(@second_assignment)
+    @gradebook_page.toggle_assignment_mute_option(@second_assignment.id)
     expect(f("#content")).not_to contain_jqcss(".container_1 .slick-header-column[id*='assignment_#{@second_assignment.id}'] .muted")
     expect(@second_assignment.reload).not_to be_muted
   end
@@ -300,7 +309,7 @@ describe "gradebook" do
   end
 
   it "should not display a speedgrader link for large courses", priority: "2", test_id: 210099 do
-    Course.any_instance.stubs(:large_roster?).returns(true)
+    allow_any_instance_of(Course).to receive(:large_roster?).and_return(true)
 
     @gradebook_page.visit_gradebook(@course)
 

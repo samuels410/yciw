@@ -50,7 +50,7 @@ class Attachment < ActiveRecord::Base
   belongs_to :context, exhaustive: false, polymorphic:
       [:account, :assessment_question, :assignment, :attachment,
        :content_export, :content_migration, :course, :eportfolio, :epub_export,
-       :gradebook_upload, :group, :submission,
+       :gradebook_upload, :group, :submission, :purgatory,
        { context_folder: 'Folder', context_sis_batch: 'SisBatch',
          context_user: 'User', quiz: 'Quizzes::Quiz',
          quiz_statistics: 'Quizzes::QuizStatistics',
@@ -60,7 +60,7 @@ class Attachment < ActiveRecord::Base
   belongs_to :user
   has_one :account_report
   has_one :media_object
-  has_many :submissions
+  has_many :submissions, -> { active }
   has_many :attachment_associations
   belongs_to :root_attachment, :class_name => 'Attachment'
   belongs_to :replacement_attachment, :class_name => 'Attachment'
@@ -210,7 +210,7 @@ class Attachment < ActiveRecord::Base
     end
 
     # directly update workflow_state so we don't trigger another save cycle
-    if self.workflow_state_changed?
+    if CANVAS_RAILS5_0 ? self.workflow_state_changed? : self.will_save_change_to_workflow_state?
       self.shard.activate do
         self.class.where(:id => self).update_all(:workflow_state => self.workflow_state)
       end
@@ -312,19 +312,18 @@ class Attachment < ActiveRecord::Base
     progress = Progress.where(context_type: 'Attachment', context_id: self, tag: tag).last
     progress ||= Progress.new context: self, tag: tag
 
-    if progress.new_record?
+    if progress.new_record? || !progress.pending?
       progress.reset!
       progress.process_job(MediaObject, :add_media_files, { :run_at => delay.seconds.from_now, :priority => Delayed::LOWER_PRIORITY, :preserve_method_args => true, :max_attempts => 5 }, self, false) && true
     else
-      progress.completed? && !progress.failed?
+      true
     end
   end
 
   def assert_attachment
     if !self.to_be_zipped? && !self.zipping? && !self.errored? && !self.deleted? && (!filename || !content_type || !downloadable?)
       self.errors.add(:base, t('errors.not_found', "File data could not be found"))
-      throw :abort unless CANVAS_RAILS4_2
-      return false
+      throw :abort
     end
   end
 
@@ -343,6 +342,10 @@ class Attachment < ActiveRecord::Base
     else
       Attachment.where(:root_attachment_id => id)
     end
+  end
+
+  def children_and_self
+    Attachment.where("id=? OR root_attachment_id=?", id, id)
   end
 
   TURNITINABLE_MIME_TYPES = %w[
@@ -405,10 +408,6 @@ class Attachment < ActiveRecord::Base
     res = nil if res == "."
     res ||= ".unknown"
     res.to_s
-  end
-
-  def self.clear_cached_mime_ids
-    @@mime_ids = {}
   end
 
   def default_values
@@ -687,16 +686,18 @@ class Attachment < ActiveRecord::Base
         end
       end
     elsif method == :overwrite && atts.any?
-      Attachment.where(:id => atts).update_all(replacement_attachment_id: self.id) # so we can find the new file in content links
-      copy_access_attributes!(atts)
-      atts.each do |a|
-        # update content tags to refer to the new file
-        ContentTag.where(:content_id => a, :content_type => 'Attachment').update_all(content_id: self.id)
-        # update replacement pointers pointing at the overwritten file
-        context.attachments.where(:replacement_attachment_id => a).update_all(replacement_attachment_id: self.id)
-        # delete the overwritten file (unless the caller is queueing them up)
-        a.destroy unless opts[:caller_will_destroy]
-        deleted_attachments << a
+      shard.activate do
+        Attachment.where(:id => atts).update_all(replacement_attachment_id: self.id) # so we can find the new file in content links
+        copy_access_attributes!(atts)
+        atts.each do |a|
+          # update content tags to refer to the new file
+          ContentTag.where(:content_id => a, :content_type => 'Attachment').update_all(content_id: self.id)
+          # update replacement pointers pointing at the overwritten file
+          context.attachments.where(:replacement_attachment_id => a).update_all(replacement_attachment_id: self.id)
+          # delete the overwritten file (unless the caller is queueing them up)
+          a.destroy unless opts[:caller_will_destroy]
+          deleted_attachments << a
+        end
       end
     end
     return deleted_attachments
@@ -886,12 +887,11 @@ class Attachment < ActiveRecord::Base
         next if recipient_keys.empty?
 
         notification = BroadcastPolicy.notification_finder.by_name(count.to_i > 1 ? 'New Files Added' : 'New File Added')
-        asset_context = record.context
         data = { :count => count }
         DelayedNotification.send_later_if_production_enqueue_args(
             :process,
             { :priority => Delayed::LOW_PRIORITY },
-            record, notification, recipient_keys, asset_context, data)
+            record, notification, recipient_keys, data)
       end
     end
   end
@@ -1232,13 +1232,66 @@ class Attachment < ActiveRecord::Base
 
   # this will delete the content of the attachment but not delete the attachment
   # object. It will replace the attachment content with a file_removed file.
-  def destroy_content_and_replace
-    raise 'must be a root_attachment' if self.root_attachment_id
-    self.destroy_content
-    self.uploaded_data = File.open Rails.root.join('public/file_removed/file_removed.pdf')
-    CrocodocDocument.where(attachment_id: self).delete_all
-    Canvadoc.where(attachment_id: self).delete_all
-    self.save!
+  def destroy_content_and_replace(deleted_by_user = nil)
+    att = self.root_attachment_id? ? self.root_attachment : self
+    return true if Purgatory.where(attachment_id: att).active.exists?
+    att.send_to_purgatory(deleted_by_user)
+    att.destroy_content
+    att.uploaded_data = File.open Rails.root.join('public', 'file_removed', 'file_removed.pdf')
+    CrocodocDocument.where(attachment_id: att.children_and_self.select(:id)).delete_all
+    Canvadoc.where(attachment_id: att.children_and_self.select(:id)).delete_all
+    att.save!
+  end
+
+  # this method does not destroy anything. It copies the content to a new s3object
+  def send_to_purgatory(deleted_by_user = nil)
+    make_rootless
+    if Attachment.s3_storage? && self.s3object.exists?
+      s3object.copy_to(bucket.object(purgatory_filename))
+    elsif Attachment.local_storage?
+      FileUtils.mkdir(local_purgatory_directory) unless File.exist?(local_purgatory_directory)
+      FileUtils.cp full_filename, local_purgatory_file
+    end
+    if Purgatory.where(attachment_id: self).exists?
+      p = Purgatory.where(attachment_id: self).take
+      p.deleted_by_user = deleted_by_user
+      p.old_filename = filename
+      p.workflow_state = 'active'
+      p.save!
+    else
+      Purgatory.create!(attachment: self, old_filename: filename, deleted_by_user: deleted_by_user)
+    end
+  end
+
+  def purgatory_filename
+    File.join('purgatory', global_id.to_s)
+  end
+
+  def local_purgatory_file
+    File.join(local_purgatory_directory, global_id.to_s)
+  end
+
+  def local_purgatory_directory
+    Rails.root.join(attachment_options[:path_prefix].to_s, 'purgatory')
+  end
+
+  def resurrect_from_purgatory
+    p = Purgatory.where(attachment_id: id).take
+    raise 'must have been sent to purgatory first' unless p
+    write_attribute(:filename, p.old_filename)
+    write_attribute(:root_attachment_id, nil)
+
+    if Attachment.s3_storage?
+      old_s3object = self.bucket.object(purgatory_filename)
+      raise Attachment::FileDoesNotExist unless old_s3object.exists?
+      old_s3object.copy_to(bucket.object(full_filename))
+    else
+      raise Attachment::FileDoesNotExist unless File.exist?(local_purgatory_file)
+      FileUtils.mv local_purgatory_file, full_filename
+    end
+    save! if changed?
+    p.workflow_state = 'restored'
+    p.save!
   end
 
   def dmca_file_removal
@@ -1249,7 +1302,7 @@ class Attachment < ActiveRecord::Base
     raise 'must be a root_attachment' if self.root_attachment_id
     return unless self.filename
     if Attachment.s3_storage?
-      self.s3object.delete
+      self.s3object.delete unless ApplicationController.try(:test_cluster?)
     else
       FileUtils.rm full_filename
     end
@@ -1339,10 +1392,9 @@ class Attachment < ActiveRecord::Base
     # ... or crocodoc (this will go away soon)
     return if Attachment.skip_3rd_party_submits?
 
-    submit_to_crocodoc_instead = opts[:force_crocodoc] ||
-                                 (opts[:wants_annotation] &&
-                                  crocodocable? &&
-                                  !Canvadocs.annotations_supported?)
+    submit_to_crocodoc_instead = opts[:wants_annotation] &&
+                                 crocodocable? &&
+                                 !Canvadocs.annotations_supported?
     if submit_to_crocodoc_instead
       # get crocodoc off the canvadocs strand
       # (maybe :wants_annotation was a dumb idea)
@@ -1584,27 +1636,27 @@ class Attachment < ActiveRecord::Base
     "/#{context_url_prefix}/files/#{self.id}/inline_view"
   end
 
-  def canvadoc_url(user)
+  def canvadoc_url(user, opts={})
     return unless canvadocable?
-    "/api/v1/canvadoc_session?#{preview_params(user, "canvadoc")}"
+    "/api/v1/canvadoc_session?#{preview_params(user, 'canvadoc', opts)}"
   end
 
-  def crocodoc_url(user, crocodoc_ids = nil)
+  def crocodoc_url(user, opts={})
+    opts[:enable_annotations] = true
     return unless crocodoc_available?
-    "/api/v1/crocodoc_session?#{preview_params(user, "crocodoc", crocodoc_ids)}"
+    "/api/v1/crocodoc_session?#{preview_params(user, 'crocodoc', opts)}"
   end
 
   def previewable_media?
-    self.content_type && self.content_type.match(/\A(video|audio)/)
+    self.content_type && (self.content_type.match(/\A(video|audio)/) || self.content_type == 'application/x-flash-video')
   end
 
-  def preview_params(user, type, crocodoc_ids = nil)
-    h = {
+  def preview_params(user, type, opts = {})
+    h = opts.merge({
       user_id: user.try(:global_id),
       attachment_id: id,
       type: type
-    }
-    h.merge!(crocodoc_ids: crocodoc_ids) if crocodoc_ids.present?
+    })
     blob = h.to_json
     hmac = Canvas::Security.hmac_sha1(blob)
     "blob=#{URI.encode blob}&hmac=#{URI.encode hmac}"

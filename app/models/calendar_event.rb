@@ -294,7 +294,7 @@ class CalendarEvent < ActiveRecord::Base
   end
 
   def cache_child_event_ranges!
-    events = CANVAS_RAILS4_2 ? child_events(true) : child_events.reload
+    events = child_events.reload
 
     if events.present?
       CalendarEvent.where(:id => self).
@@ -369,7 +369,7 @@ class CalendarEvent < ActiveRecord::Base
       just_created &&
       context == appointment_group.participant_for(@updating_user)
     }
-    data { {:updating_user => @updating_user} }
+    data { {:updating_user_name => @updating_user.name} }
 
     dispatch :appointment_canceled_by_user
     to { appointment_group.instructors +
@@ -382,7 +382,7 @@ class CalendarEvent < ActiveRecord::Base
       context == appointment_group.participant_for(@updating_user)
     }
     data { {
-      :updating_user => @updating_user,
+      :updating_user_name => @updating_user.name,
       :cancel_reason => @cancel_reason
     } }
 
@@ -392,7 +392,7 @@ class CalendarEvent < ActiveRecord::Base
       appointment_group && parent_event &&
       just_created
     }
-    data { {:updating_user => @updating_user} }
+    data { {:updating_user_name => @updating_user.name} }
 
     dispatch :appointment_deleted_for_user
     to { participants(include_observers: true) - [@updating_user] }
@@ -402,7 +402,7 @@ class CalendarEvent < ActiveRecord::Base
       workflow_state_changed?
     }
     data { {
-      :updating_user => @updating_user,
+      :updating_user_name => @updating_user.name,
       :cancel_reason => @cancel_reason
     } }
   end
@@ -455,7 +455,9 @@ class CalendarEvent < ActiveRecord::Base
       participant.lock! # in case two people try to make a reservation for the same participant
 
       if options[:cancel_existing]
+        now = Time.now.utc
         context.reservations_for(participant).lock.each do |reservation|
+          raise ReservationError, "cannot cancel past reservation" if reservation.end_at < Time.now.utc
           reservation.updating_user = user
           reservation.destroy
         end

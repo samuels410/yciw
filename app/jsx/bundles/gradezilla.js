@@ -41,7 +41,8 @@ class GradebookRouter extends Backbone.Router {
     this.views = {}
     ENV.GRADEBOOK_OPTIONS.assignmentOrOutcome = getGradebookTab()
     ENV.GRADEBOOK_OPTIONS.navigate = this.navigate.bind(this)
-    this.views.assignment = new Gradebook(ENV.GRADEBOOK_OPTIONS)
+    this.views.assignment = new Gradebook({ ...ENV.GRADEBOOK_OPTIONS, locale: ENV.LOCALE })
+    this.views.assignment.initialize();
     if (ENV.GRADEBOOK_OPTIONS.outcome_gradebook_enabled) { this.views.outcome = this.initOutcomes() }
 
     return this

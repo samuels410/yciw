@@ -38,6 +38,16 @@ This option will only affect data that has been involved in a previous SIS job
 ID was manually added. Manually created courses with no SIS ID, for example,
 won't be deleted even if they don't appear in the new SIS import.
 
+During a term batch mode may be used often and if a partial file is sent, many
+objects can become deleted. Using `change_threshold=5` will only delete objects
+if the number of objects to delete is less than 5% of the objects for the term.
+For example: If change_threshold set to 5 and the term has 100 courses, and
+batch_mode would delete more than 5 of the courses the batch will abort
+before the courses are deleted.
+The change_threshold can be set to any integer between 1 and 100.
+
+change_threshold also impacts diffing mode.
+
 Diffing Mode
 ------------
 
@@ -95,6 +105,16 @@ rather than applying just the diff.  To enable this mode, set the
 `diffing_remaster_data_set=true` option when creating the import, and it
 will be applied without diffing. The next import for the same data
 set will still diff against that import.
+
+If using automated systems and diffing and there is an issue where the system
+sends a partial or an empty file, diffing would see that all users not included
+should be removed. Using `change_threshold=10` will then not perform diffing if
+the files being compared are greater than 10% different. The threshold can be
+set to help prevent removing objects unintentionally. When set and the file is
+over 10% different it will be the same as if `diffing_remaster_data_set=true`.
+The change_threshold can be set to any integer between 1 and 100.
+
+change_threshold also impacts batch mode.
 
 Stickiness
 ----------
@@ -459,6 +479,16 @@ YYYY-MM-DDTHH:MM:SSZ</td>
 <td></td>
 <td>on_campus, online, blended</td>
 </tr>
+<tr>
+<td>blueprint_course_id</td>
+<td>text</td>
+<td></td>
+<td></td>
+<td>The SIS id of a pre-existing Blueprint course. When provided, 
+the current course will be set up to receive updates from the blueprint course.
+Requires Blueprint Courses feature.
+</td>
+</tr>
 </table>
 
 <p>If the start_date is set, it will override the term start date. If the end_date is set, it will
@@ -489,7 +519,7 @@ sections.csv
 <td>✓</td>
 <td></td>
 <td>A unique identifier used to reference sections in the enrollments data.
-This identifier must not change for the account, and must be globally unique. In the user
+This identifier must not change for the section, and must be globally unique. In the user
 interface, this is called the SIS ID.</td>
 </tr>
 <tr>
@@ -825,4 +855,123 @@ Sample:
 u411208,u411222,active
 u411208,u411295,active
 u413405,u411385,deleted
+</pre>
+
+admins.csv
+---------------
+
+<table class="sis_csv">
+<tr>
+<th>Field Name</th>
+<th>Data Type</th>
+<th>Required</th>
+<th>Sticky</th>
+<th>Description</th>
+</tr>
+<tr>
+<td>user_id</td>
+<td>text</td>
+<td>✓</td>
+<td></td>
+<td>The User identifier from users.csv</td>
+</tr>
+<tr>
+<td>account_id</td>
+<td>text</td>
+<td>✓</td>
+<td></td>
+<td>The account identifier from accounts.csv. Uses the root_account if left blank. The collumn is required even when importing for the root_account and the value is blank.</td>
+</tr>
+<tr>
+<td>role_id</td>
+<td>text</td>
+<td>✓&#42;</td>
+<td></td>
+<td>Uses a role id, either built-in or defined by the account.</td>
+</tr>
+<tr>
+<td>role</td>
+<td>text</td>
+<td>✓&#42;</td>
+<td></td>
+<td>AccountAdmin, or a custom role defined by the account</td>
+</tr>
+<tr>
+<td>status</td>
+<td>enum</td>
+<td>✓</td>
+<td></td>
+<td>active, deleted</td>
+</tr>
+<tr>
+<td>root_account</td>
+<td>text</td>
+<td></td>
+<td></td>
+<td>The domain of the account to search for the user.</td>
+</tr>
+</table>
+
+admins.csv is optional. When importing admins that already exist in canvas the
+admin will become managed by sis. An admin cannot be deleted by running a sis
+import unless the admin is already managed by sis. Batch mode does not apply
+to the admins.csv, but diffing mode does apply to the admins.csv. Admins that
+already exist in the account will receive a notification of the new admin if
+notification preferences are set to receive this type of notification.
+
+Sample:
+
+<pre>user_id,account_id,role,status
+E411208,01103,AccountAdmin,active
+E411208,13834,AccountAdmin,deleted
+E411208,13aa3,CustomAdmin,active
+</pre>
+
+&#42; role or role_id is required.
+
+change_sis_id.csv
+----------
+
+<table class="sis_csv">
+<tr>
+<th>Field Name</th>
+<th>Data Type</th>
+<th>Required</th>
+<th>Sticky</th>
+<th>Description</th>
+</tr>
+<tr>
+<td>old_id</td>
+<td>text</td>
+<td>✓</td>
+<td></td>
+<td>The current sis_id of the object that should be changed.</td>
+</tr>
+<tr>
+<td>new_id</td>
+<td>text</td>
+<td>✓</td>
+<td></td>
+<td>The desired sis_id of the object. This id must be currently unique to the
+object type and the root_account</td>
+</tr>
+<tr>
+<td>type</td>
+<td>text</td>
+<td>✓</td>
+<td></td>
+<td>account, term, course, section, group, user</td>
+</tr>
+</table>
+
+change_sis_id.csv is optional. The goal of change_sis_id.csv is to provide a
+way to change sis_ids of existing objects. If included in a zip file this file
+will process first. All other files should include the new ids.
+
+Sample:
+
+<pre>old_id,new_id,type
+u001,u001a,user
+couse1,old_course1,course
+term1,fall17,term
 </pre>

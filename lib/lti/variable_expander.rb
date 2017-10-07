@@ -40,6 +40,14 @@ module Lti
       @expansions || {}
     end
 
+    def self.expansion_keys
+      self.expansions.keys.map { |c| c.to_s[1..-1] }
+    end
+
+    def self.default_name_expansions
+      self.expansions.values.select { |v| v.default_name.present? }.map(&:name)
+    end
+
     CONTROLLER_GUARD = -> { !!@controller }
     COURSE_GUARD = -> { @context.is_a? Course }
     TERM_START_DATE_GUARD = -> { @context.is_a?(Course) && @context.enrollment_term &&
@@ -57,6 +65,9 @@ module Lti
     MEDIA_OBJECT_ID_GUARD = -> {@attachment && (@attachment.media_object || @attachment.media_entry_id )}
     LTI1_GUARD = -> { @tool.is_a?(ContextExternalTool) }
     MASQUERADING_GUARD = -> { !!@controller && @controller.logged_in_user != @current_user }
+    ATTACHMENT_ASSOCIATION_GUARD = -> { @tool_setting&.context&.is_a?(AttachmentAssociation) }
+    LTI_ASSIGN_ID = -> { @assignment.present? || @tool_setting&.context&.is_a?(AttachmentAssociation) || @secure_params.present? }
+    MESSAGE_TOKEN_GUARD = -> { @post_message_token.present? || @launch&.instance_of?(Lti::Launch) }
 
     def initialize(root_account, context, controller, opts = {})
       @root_account = root_account
@@ -97,10 +108,104 @@ module Lti
     def enabled_capability_params(enabled_capabilities)
       enabled_capabilities.each_with_object({}) do |capability, hash|
         if (expansion = capability.respond_to?(:to_sym) && self.class.expansions["$#{capability}".to_sym])
-          hash[expansion.default_name] = expansion.expand(self) if expansion.default_name.present?
+          value = expansion.expand(self)
+          hash[expansion.default_name] = value if expansion.default_name.present? && value != "$#{capability}"
         end
       end
     end
+
+    # The title of the context
+    # @launch_parameter context_title
+    # @example
+    #   ```
+    #   Example Course
+    #   ```
+    register_expansion 'Context.title', [],
+                       -> { @context.name },
+                       default_name: 'context_title'
+
+    # A token that can be used for frontend communication between an LTI tool
+    # and Canvas via the Window.postMessage API
+    # @launch_parameter com_instructure_post_message_token
+    # @example
+    #   ```
+    #   9ae4170c-6b64-444d-9246-0b7dedd5f560
+    #   ```
+    register_expansion 'com.instructure.PostMessageToken', [],
+                      -> { @post_message_token || @launch.post_message_token },
+                      MESSAGE_TOKEN_GUARD,
+                      default_name: 'com_instructure_post_message_token'
+
+    # The LTI assignment id of an assignment. This value corresponds with
+    # the `ext_lti_assignment_id` send in various launches and webhooks.
+    # @launch_parameter com_instructure_assignment_lti_id
+    # @example
+    #   ```
+    #   9ae4170c-6b64-444d-9246-0b7dedd5f560
+    #   ```
+    register_expansion 'com.instructure.Assignment.lti.id', [],
+                       -> do
+                        if @assignment
+                          @assignment.lti_context_id
+                        elsif @tool_setting&.context&.is_a?(AttachmentAssociation)
+                          @tool_setting.context.context.assignment.lti_context_id
+                        elsif @secure_params.present?
+                          Lti::Security.decoded_lti_assignment_id(@secure_params)
+                        end
+                       end,
+                       LTI_ASSIGN_ID,
+                       default_name: 'com_instructure_assignment_lti_id'
+
+    # The Canvas id of the Originality Report associated
+    # with the launch.
+    # @launch_parameter com_instructure_originality_report_id
+    # @example
+    #   ```
+    #   23
+    #   ```
+    register_expansion 'com.instructure.OriginalityReport.id', [],
+                       -> do
+                        @tool_setting.context.context.originality_reports.find do |r|
+                          r.attachment_id == @tool_setting.context.attachment_id
+                        end.id
+                       end,
+                       ATTACHMENT_ASSOCIATION_GUARD,
+                       default_name: 'com_instructure_originality_report_id'
+
+    # The Canvas id of the submission associated with the
+    # launch.
+    # @launch_parameter com_instructure_submission_id
+    # @example
+    #   ```
+    #   23
+    #   ```
+    register_expansion 'com.instructure.Submission.id', [],
+                      -> { @tool_setting.context.context_id },
+                      ATTACHMENT_ASSOCIATION_GUARD,
+                      default_name: 'com_instructure_submission_id'
+
+    # The Canvas id of the file associated with the submission
+    # in the launch.
+    # @launch_parameter com_instructure_file_id
+    # @example
+    #   ```
+    #   23
+    #   ```
+    register_expansion 'com.instructure.File.id', [],
+                     -> { @tool_setting.context.attachment_id },
+                     ATTACHMENT_ASSOCIATION_GUARD,
+                     default_name: 'com_instructure_file_id'
+
+    # the LIS identifier for the course offering
+    # @launch_parameter lis_course_offering_sourcedid
+    # @example
+    #   ```
+    #   1234
+    #   ```
+    register_expansion 'CourseOffering.sourcedId', [],
+                       -> { @context.sis_source_id },
+                       COURSE_GUARD,
+                       default_name: 'lis_course_offering_sourcedid'
 
     # an opaque identifier that uniquely identifies the context of the tool launch
     # @launch_parameter context_id
@@ -111,6 +216,14 @@ module Lti
     register_expansion 'Context.id', [],
                        -> { Lti::Asset.opaque_identifier_for(@context) },
                        default_name: 'context_id'
+
+    # The sourced Id of the context.
+    # @example
+    #   ```
+    #   1234
+    #   ```
+    register_expansion 'Context.sourcedId', [],
+                       -> { @context.sis_source_id }
 
     # communicates the kind of browser window/frame where the Canvas has launched a tool
     # @launch_parameter launch_presentation_document_target
@@ -703,6 +816,17 @@ module Lti
                        -> { lti_helper.section_sis_ids },
                        ENROLLMENT_GUARD
 
+    # Returns the course code
+    #
+    # @example
+    #   ```
+    #   CS 124
+    #   ```
+    register_expansion 'com.instructure.contextLabel', [],
+                       -> { @context.course_code },
+                       COURSE_GUARD,
+                       default_name: 'context_label'
+
     # Returns the module_id that the module item was launched from.
     #
     # @example
@@ -854,9 +978,51 @@ module Lti
     #   https://<domain>.instructure.com/api/lti/accounts/<account_id>/tool_consumer_profile/<opaque_id>
     #   ```
     register_expansion 'ToolConsumerProfile.url', [],
-                       -> { @controller.polymorphic_url([@tool.context, :tool_consumer_profile], tool_consumer_profile_id: Lti::ToolConsumerProfile::DEFAULT_TCP_UUID)},
+                       -> { @controller.polymorphic_url([@tool.context, :tool_consumer_profile])},
                        CONTROLLER_GUARD,
                        -> { @tool && @tool.is_a?(Lti::ToolProxy) }
+
+    # The originality report LTI2 service endpoint
+    # @launch_parameter vnd_canvas_originality_report_url
+    # @example
+    #   ```
+    #   api/lti/assignments/{assignment_id}/submissions/{submission_id}/originality_report
+    #   ```
+    register_expansion 'vnd.Canvas.OriginalityReport.url', [],
+                        -> do
+                          OriginalityReportsApiController::SERVICE_DEFINITIONS.find do |s|
+                            s[:id] == 'vnd.Canvas.OriginalityReport'
+                          end[:endpoint]
+                        end,
+                        default_name: 'vnd_canvas_originality_report_url'
+
+    # The submission LTI2 service endpoint
+    # @launch_parameter vnd_canvas_submission_url
+    # @example
+    #   ```
+    #   api/lti/assignments/{assignment_id}/submissions/{submission_id}
+    #   ```
+    register_expansion 'vnd.Canvas.submission.url', [],
+                        -> do
+                          SubmissionsApiController::SERVICE_DEFINITIONS.find do |s|
+                            s[:id] == 'vnd.Canvas.submission'
+                          end[:endpoint]
+                        end,
+                        default_name: 'vnd_canvas_submission_url'
+
+    # The submission history LTI2 service endpoint
+    # @launch_parameter vnd_canvas_submission_history_url
+    # @example
+    #   ```
+    #   api/lti/assignments/{assignment_id}/submissions/{submission_id}/history
+    #   ```
+    register_expansion 'vnd.Canvas.submission.history.url', [],
+                        -> do
+                          SubmissionsApiController::SERVICE_DEFINITIONS.find do |s|
+                            s[:id] == 'vnd.Canvas.submission.history'
+                          end[:endpoint]
+                        end,
+                        default_name: 'vnd_canvas_submission_history_url'
 
     register_expansion 'Canvas.file.media.id', [],
                        -> { (@attachment.media_object && @attachment.media_object.media_id) || @attachment.media_entry_id },

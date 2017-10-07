@@ -22,11 +22,7 @@ module Lti
   describe ToolConsumerProfileCreator do
 
     let(:root_account) do
-      mock('root account') do
-        stubs(:lti_guid).returns('my_guid')
-        stubs(:name).returns('root_account_name')
-        stubs(:feature_enabled?).returns(false)
-      end
+      double('root account', lti_guid: 'my_guid', name: 'root_account_name', feature_enabled?: false)
     end
     let(:account) { double('account', id: 3, root_account: root_account, class:Account) }
     let(:tcp_url) { "http://example.instructure.com/tcp/#{ToolConsumerProfile::DEFAULT_TCP_UUID}" }
@@ -117,6 +113,11 @@ module Lti
       end
 
       describe '#capabilities' do
+        it 'includes all variable expansions from the variable expander' do
+          expected_caps = VariableExpander.expansion_keys
+          expect(tcp_creator.create.capability_offered).to include(*expected_caps)
+        end
+
         it 'add the basic_launch capability' do
           expect(tcp_creator.create.capability_offered).to include 'basic-lti-launch-request'
         end
@@ -181,18 +182,14 @@ module Lti
           expect(tcp_creator.create.capability_offered).to include 'Membership.role'
         end
 
-        it 'does not add the OriginalityReport capability if developer_key is false' do
-          expect(tcp_creator.create.capability_offered).not_to include 'vnd.Canvas.OriginalityReport.url'
-        end
-
         it 'does not add the Canvas.placements.similarityDetection if developer key is false' do
           expect(tcp_creator.create.capability_offered).not_to include 'Canvas.placements.similarityDetection'
         end
 
-        it 'adds the ToolProxyReregistrationRequest capability if the feature flag is on' do
-          root_account.stubs(:feature_enabled?).returns(true)
+        it 'adds the ToolProxyUpdateRequest capability if the feature flag is on' do
+          allow(root_account).to receive(:feature_enabled?).and_return(true)
 
-          expected_capability = IMS::LTI::Models::Messages::ToolProxyReregistrationRequest::MESSAGE_TYPE
+          expected_capability = IMS::LTI::Models::Messages::ToolProxyUpdateRequest::MESSAGE_TYPE
           expect(tcp_creator.create.capability_offered).to include expected_capability
         end
 
@@ -206,8 +203,21 @@ module Lti
           it 'adds the oauth2_access_token_ws_security profile' do
             security_profiles = tcp_creator.create.security_profiles
             profile = security_profiles.find{|p| p.security_profile_name == 'oauth2_access_token_ws_security'}
+            expect(profile).to be_present
+          end
+
+          it 'adds the lti_jwt_ws_security' do
+            security_profiles = tcp_creator.create.security_profiles
+            profile = security_profiles.find{|p| p.security_profile_name == 'lti_jwt_ws_security'}
             expect(profile.digest_algorithms).to match_array ['HS256']
           end
+
+          it 'adds the lti_jwt_message_security' do
+            security_profiles = tcp_creator.create.security_profiles
+            profile = security_profiles.find{|p| p.security_profile_name == 'lti_jwt_message_security'}
+            expect(profile.digest_algorithms).to match_array ['HS256']
+          end
+
         end
 
 
@@ -218,7 +228,7 @@ module Lti
 
           let(:dev_key) do
             dev_key = DeveloperKey.create(api_key: 'test-api-key')
-            DeveloperKey.stubs(:find_cached).returns(dev_key)
+            allow(DeveloperKey).to receive(:find_cached).and_return(dev_key)
             dev_key
           end
 

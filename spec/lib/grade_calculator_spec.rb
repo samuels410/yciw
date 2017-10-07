@@ -33,6 +33,37 @@ describe GradeCalculator do
       expect(@user.enrollments.first.computed_final_score).to eql(25.0)
     end
 
+    it "weighted grading periods: gracefully handles (by skipping) enrollments from other courses" do
+      first_course = @course
+      course_with_student active_all: true
+      grading_period_set = @course.root_account.grading_period_groups.create!(weighted: true)
+      grading_period_set.enrollment_terms << @course.enrollment_term
+      grading_period_set.grading_periods.create!(
+        title: "A Grading Period",
+        start_date: 10.days.ago,
+        end_date: 10.days.from_now,
+        weight: 50
+      )
+      expect {
+        GradeCalculator.recompute_final_score(@student.id, first_course.id)
+      }.not_to raise_error
+    end
+
+    it "weighted grading periods: gracefully handles (by skipping) deleted enrollments" do
+      grading_period_set = @course.root_account.grading_period_groups.create!(weighted: true)
+      grading_period_set.enrollment_terms << @course.enrollment_term
+      grading_period_set.grading_periods.create!(
+        title: "A Grading Period",
+        start_date: 10.days.ago,
+        end_date: 10.days.from_now,
+        weight: 50
+      )
+      @user.enrollments.first.destroy
+      expect {
+        GradeCalculator.recompute_final_score(@user.id, @course.id)
+      }.not_to raise_error
+    end
+
     it "can compute scores for users with deleted enrollments when grading periods are used" do
       grading_period_set = @course.root_account.grading_period_groups.create!
       grading_period_set.enrollment_terms << @course.enrollment_term
@@ -1213,6 +1244,21 @@ describe GradeCalculator do
 
         @a2.grade_student(@student, excuse: 1, grader: @teacher)
         expect(enrollment.reload.computed_final_score).to eql(100.0)
+      end
+    end
+
+    context "caches" do
+      it 'calls invalidate caches in #compute_and_save_scores' do
+        gc = GradeCalculator.new(@student.id, @course)
+        expect(gc).to receive(:invalidate_caches).once
+        gc.compute_and_save_scores
+      end
+
+      describe "#invalidate_caches" do
+        it 'calls GradeSummaryPresenter.invalidate_cache' do
+          expect(GradeSummaryPresenter).to receive(:invalidate_cache).once
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+        end
       end
     end
   end

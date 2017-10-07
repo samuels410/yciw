@@ -283,7 +283,7 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
   end
 
   def sanitize_params(params)
-    params = params.to_hash.with_indifferent_access if params.is_a?(ActionController::Parameters) # clear the strong params
+    params = params.to_unsafe_h if params.is_a?(ActionController::Parameters) # clear the strong params
 
     # if the submission has already been graded
     if graded?
@@ -371,7 +371,7 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
     if self.finished_at && self.end_at && self.finished_at > self.end_at
       drift = self.finished_at - self.end_at
 
-      if drift <= GRACEFUL_FINISHED_AT_DRIFT_PERIOD
+      if drift <= GRACEFUL_FINISHED_AT_DRIFT_PERIOD.to_i
         self.finished_at = self.end_at
       end
     end
@@ -517,7 +517,7 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
   end
 
   def less_than_allotted_time?
-    self.started_at && self.end_at && self.quiz && self.quiz.time_limit && (self.end_at - self.started_at) < self.quiz.time_limit.minutes
+    self.started_at && self.end_at && self.quiz && self.quiz.time_limit && (self.end_at - self.started_at) < self.quiz.time_limit.minutes.to_i
   end
 
   def completed?
@@ -640,7 +640,7 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
     params = (params || {}).with_indifferent_access
     self.manually_scored = false
     self.grader_id = params[:grader_id]
-
+    self.submission&.mark_unread(self.user)
     versions = self.versions
     version = versions.current
     version = versions.get(params[:submission_version_number]) if params[:submission_version_number]
@@ -850,24 +850,17 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
     quiz.overridden_for(submission.user, skip_clone: true).due_at
   end
 
-  # TODO: Extract? conceptually similar to Submission::Tardiness#late?
-  def late?
-    return false if finished_at.blank?
-    return false if due_at.blank?
-
-    check_time = finished_at - 60.seconds
-    check_time > due_at
-  end
-
   # same as the instance method, but with a hash of attributes, instead
   # of an instance, so that you can avoid instantiating
   def self.late_from_attributes?(attributes, quiz, submission)
+    return submission.late_policy_status == 'late' if submission&.late_policy_status.present?
     return false if attributes['finished_at'].blank?
+
     due_at = if submission.blank?
-               quiz.due_at
-             else
-               quiz.overridden_for(submission.user, skip_clone: true).due_at
-             end
+      quiz.due_at
+    else
+      quiz.overridden_for(submission.user, skip_clone: true).due_at
+    end
     return false if due_at.blank?
 
     check_time = attributes['finished_at'] - 60.seconds

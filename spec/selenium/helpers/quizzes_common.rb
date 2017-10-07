@@ -267,7 +267,7 @@ module QuizzesCommon
 
   def click_questions_tab
     wait_for_ajaximations
-    fj('#quiz_tabs ul:first a:eq(1)').click
+    f("a[href='#questions_tab']").click
   end
 
   # Locate an anchor using its text() node value. The anchor is expected to
@@ -321,6 +321,18 @@ module QuizzesCommon
     quiz_model
     open_quiz_edit_form
     click_questions_tab
+    click_new_question_button
+    wait_for_ajaximations
+    Quizzes::Quiz.last
+  end
+
+  def rcs_start_quiz_question
+    @context = @course
+    quiz_model
+    open_quiz_edit_form
+    wait_for_ajaximations
+    click_questions_tab
+    wait_for_ajaximations
     click_new_question_button
     wait_for_ajaximations
     Quizzes::Quiz.last
@@ -838,25 +850,23 @@ module QuizzesCommon
 
   def verify_quiz_submission_late_status(late)
     open_student_quiz_submission
-    submission_page_info = fj('.submission_details', '#not_right_side')
-    late_status = '(late)'
+    submission_page_info = f('.submission_details', f('#not_right_side'))
 
     if late
-      expect(submission_page_info).to include_text late_status
+      expect(submission_page_info).to contain_css('.submission-late-pill')
     else
-      expect(submission_page_info).not_to include_text late_status
+      expect(submission_page_info).not_to contain_css('.submission-late-pill')
     end
   end
 
   def verify_quiz_submission_status_in_speedgrader(late)
     open_quiz_in_speedgrader
-    speedgrader_submission_details = fj('#submission_details', '.right_side_content')
-    late_note = 'Note: This submission was LATE'
+    speedgrader_submission_details = f('#submission_details', f('.right_side_content'))
 
     if late
-      expect(speedgrader_submission_details).to include_text late_note
+      expect(speedgrader_submission_details).to contain_css('.submission-late-pill')
     else
-      expect(speedgrader_submission_details).not_to include_text late_note
+      expect(speedgrader_submission_details).not_to contain_css('.submission-late-pill')
     end
   end
 

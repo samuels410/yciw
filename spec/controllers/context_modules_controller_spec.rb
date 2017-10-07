@@ -26,22 +26,36 @@ describe ContextModulesController do
     end
 
     it "should require authorization" do
-      get 'index', :course_id => @course.id
+      get 'index', params: {:course_id => @course.id}
       assert_unauthorized
     end
 
     it "should redirect 'disabled', if disabled by the teacher" do
       user_session(@student)
       @course.update_attribute(:tab_configuration, [{'id'=>10,'hidden'=>true}])
-      get 'index', :course_id => @course.id
+      get 'index', params: {:course_id => @course.id}
       expect(response).to be_redirect
       expect(flash[:notice]).to match(/That page has been disabled/)
     end
 
     it "should assign variables" do
       user_session(@student)
-      get 'index', :course_id => @course.id
+      get 'index', params: {:course_id => @course.id}
       expect(response).to be_success
+    end
+
+    it "should touch modules if necessary" do
+      time = 2.days.ago
+      Timecop.freeze(time) do
+        @mod1 = @course.context_modules.create!(:unlock_at => 1.day.from_now)
+        @mod2 = @course.context_modules.create!(:unlock_at => 1.day.ago)
+        expect(@mod1.updated_at.to_i).to eq time.to_i
+      end
+      user_session(@student)
+      get 'index', params: {:course_id => @course.id}
+      expect(response).to be_success
+      expect(@mod1.reload.updated_at.to_i).to_not eq time.to_i # should be touched in case view for old unlock time was cached
+      expect(@mod2.reload.updated_at.to_i).to eq time.to_i # should not be touched since the unlock_at was already in the past the last time it was updated
     end
 
     context "unpublished modules" do
@@ -54,13 +68,13 @@ describe ContextModulesController do
 
       it "should show all modules for teachers" do
         user_session(@teacher)
-        get 'index', :course_id => @course.id
+        get 'index', params: {:course_id => @course.id}
         expect(assigns[:modules]).to eq [@m1, @m2]
       end
 
       it "should not show unpublished for students" do
         user_session(@student)
-        get 'index', :course_id => @course.id
+        get 'index', params: {:course_id => @course.id}
         expect(assigns[:modules]).to eq [@m2]
       end
     end
@@ -80,27 +94,22 @@ describe ContextModulesController do
     end
 
     it "should publish modules" do
-      put 'update', :course_id => @course.id, :id => @m1.id, :publish => '1'
+      put 'update', params: {:course_id => @course.id, :id => @m1.id, :publish => '1'}
       @m1.reload
       expect(@m1.active?).to eq true
     end
 
     it "should unpublish modules" do
-      put 'update', :course_id => @course.id, :id => @m2.id, :unpublish => '1'
+      put 'update', params: {:course_id => @course.id, :id => @m2.id, :unpublish => '1'}
       @m2.reload
       expect(@m2.unpublished?).to eq true
     end
 
     it "should update the name" do
-      put 'update', :course_id => @course.id, :id => @m1.id, :context_module => {:name => "new name"}
+      put 'update', params: {:course_id => @course.id, :id => @m1.id, :context_module => {:name => "new name"}}
       @m1.reload
       expect(@m1.name).to eq "new name"
     end
-  end
-
-  def use_route(options)
-    options[:use_route] = :course_context_module_first_redirect if CANVAS_RAILS4_2
-    options
   end
 
   describe "GET 'module_redirect'" do
@@ -117,23 +126,20 @@ describe ContextModulesController do
       header2 = @module.add_item :type => 'context_module_sub_header'
 
 
-      # CANVAS_RAILS4_2 remove this silence when we drop Rails 4.2
-      ActiveSupport::Deprecation.silence do
-        get 'module_redirect', use_route(:course_id => @course.id, :context_module_id => @module.id, :first => 1)
-        expect(response).to redirect_to course_assignment_url(@course.id, assignment1.id, :module_item_id => assignmentTag1.id)
+      get 'module_redirect', params: {:course_id => @course.id, :context_module_id => @module.id, :first => 1}
+      expect(response).to redirect_to course_assignment_url(@course.id, assignment1.id, :module_item_id => assignmentTag1.id)
 
-        get 'module_redirect', use_route(:course_id => @course.id, :context_module_id => @module.id, :last => 1)
-        expect(response).to redirect_to course_assignment_url(@course.id, assignment2.id, :module_item_id => assignmentTag2.id)
+      get 'module_redirect', params: {:course_id => @course.id, :context_module_id => @module.id, :last => 1}
+      expect(response).to redirect_to course_assignment_url(@course.id, assignment2.id, :module_item_id => assignmentTag2.id)
 
-        assignmentTag1.destroy
-        assignmentTag2.destroy
+      assignmentTag1.destroy
+      assignmentTag2.destroy
 
-        get 'module_redirect', use_route(:course_id => @course.id, :context_module_id => @module.id, :first => 1)
-        expect(response).to redirect_to course_context_modules_url(@course.id, :anchor => "module_#{@module.id}")
+      get 'module_redirect', params: {:course_id => @course.id, :context_module_id => @module.id, :first => 1}
+      expect(response).to redirect_to course_context_modules_url(@course.id, :anchor => "module_#{@module.id}")
 
-        get 'module_redirect', use_route(:course_id => @course.id, :context_module_id => @module.id, :last => 1)
-        expect(response).to redirect_to course_context_modules_url(@course.id, :anchor => "module_#{@module.id}")
-      end
+      get 'module_redirect', params: {:course_id => @course.id, :context_module_id => @module.id, :last => 1}
+      expect(response).to redirect_to course_context_modules_url(@course.id, :anchor => "module_#{@module.id}")
     end
   end
 
@@ -150,7 +156,7 @@ describe ContextModulesController do
 
       assignmentTag1 = @module.add_item :type => 'assignment', :id => assignment1.id
 
-      get 'item_redirect', :course_id => @course.id, :id => assignmentTag1.id
+      get 'item_redirect', params: {:course_id => @course.id, :id => assignmentTag1.id}
       assert_unauthorized
     end
 
@@ -165,7 +171,7 @@ describe ContextModulesController do
 
       assignmentTag1.unpublish
 
-      get 'item_redirect', :course_id => @course.id, :id => assignmentTag1.id
+      get 'item_redirect', params: {:course_id => @course.id, :id => assignmentTag1.id}
       expect(response).to be_redirect
       expect(response).to redirect_to course_assignment_url(@course, assignment1, :module_item_id => assignmentTag1.id)
     end
@@ -182,7 +188,7 @@ describe ContextModulesController do
       assignmentTag1.unpublish
       @course.complete!
 
-      get 'item_redirect', :course_id => @course.id, :id => assignmentTag1.id
+      get 'item_redirect', params: {:course_id => @course.id, :id => assignmentTag1.id}
       expect(response).to be_redirect
       expect(response).to redirect_to course_assignment_url(@course, assignment1, :module_item_id => assignmentTag1.id)
     end
@@ -198,7 +204,7 @@ describe ContextModulesController do
 
       assignmentTag1.unpublish
 
-      get 'item_redirect', :course_id => @course.id, :id => assignmentTag1.id
+      get 'item_redirect', params: {:course_id => @course.id, :id => assignmentTag1.id}
       assert_unauthorized
     end
 
@@ -217,11 +223,11 @@ describe ContextModulesController do
         expect(tag2.content_id).to eq @tool2.id
         tag2.publish if tag2.unpublished?
 
-        get 'item_redirect', :course_id => @course.id, :id => tag1.id
+        get 'item_redirect', params: {:course_id => @course.id, :id => tag1.id}
         expect(response).not_to be_redirect
         expect(assigns[:tool]).to eq @tool1
 
-        get 'item_redirect', :course_id => @course.id, :id => tag2.id
+        get 'item_redirect', params: {:course_id => @course.id, :id => tag2.id}
         expect(response).not_to be_redirect
         expect(assigns[:tool]).to eq @tool2
       end
@@ -238,7 +244,7 @@ describe ContextModulesController do
         tag = @module.add_item :type => 'context_external_tool', :id => @tool.id, :url => @tool.url
         tag.publish if tag.unpublished?
 
-        get 'item_redirect', :course_id => @course.id, :id => tag.id
+        get 'item_redirect', params: {:course_id => @course.id, :id => tag.id}
         lti_launch = assigns[:lti_launch]
         expect(lti_launch.params['custom_canvas_module_id']).to eq @module.id.to_s
         expect(lti_launch.params['custom_canvas_module_item_id']).to eq tag.id.to_s
@@ -254,7 +260,7 @@ describe ContextModulesController do
         tag1.publish if tag1.unpublished?
         @tool1.update_attribute(:url, 'http://www.example.com')
 
-        get 'item_redirect', :course_id => @course.id, :id => tag1.id
+        get 'item_redirect', params: {:course_id => @course.id, :id => tag1.id}
         expect(response).to be_redirect
         expect(assigns[:tool]).to eq nil
       end
@@ -269,7 +275,7 @@ describe ContextModulesController do
 
       assignmentTag1 = @module.add_item :type => 'assignment', :id => assignment1.id
 
-      get 'item_redirect', :course_id => @course.id, :id => assignmentTag1.id
+      get 'item_redirect', params: {:course_id => @course.id, :id => assignmentTag1.id}
       expect(response).to be_redirect
       expect(response).to redirect_to course_assignment_url(@course, assignment1, :module_item_id => assignmentTag1.id)
     end
@@ -282,7 +288,7 @@ describe ContextModulesController do
 
       topicTag = @module.add_item :type => 'discussion_topic', :id => topic.id
 
-      get 'item_redirect', :course_id => @course.id, :id => topicTag.id
+      get 'item_redirect', params: {:course_id => @course.id, :id => topicTag.id}
       expect(response).to be_redirect
       expect(response).to redirect_to course_discussion_topic_url(@course, topic, :module_item_id => topicTag.id)
     end
@@ -295,7 +301,7 @@ describe ContextModulesController do
 
       page_tag = @module.add_item :type => 'wiki_page', :id => page.id
 
-      get 'item_redirect', :course_id => @course.id, :id => page_tag.id
+      get 'item_redirect', params: {:course_id => @course.id, :id => page_tag.id}
       expect(response).to be_redirect
       expect(response).to redirect_to course_wiki_page_url(@course, page, :module_item_id => page_tag.id)
     end
@@ -310,7 +316,7 @@ describe ContextModulesController do
       tag = @module.add_item :type => 'quiz', :id => quiz.id
       tag.publish if tag.unpublished?
 
-      get 'item_redirect', :course_id => @course.id, :id => tag.id
+      get 'item_redirect', params: {:course_id => @course.id, :id => tag.id}
       expect(response).to be_redirect
       expect(response).to redirect_to course_quiz_url(@course, quiz, :module_item_id => tag.id)
     end
@@ -323,7 +329,7 @@ describe ContextModulesController do
       @module.completion_requirements = { tag.id => { :type => 'must_view' }}
       @module.save!
       expect(@module.evaluate_for(@user)).to be_unlocked
-      get 'item_redirect', :course_id => @course.id, :id => tag.id
+      get 'item_redirect', params: {:course_id => @course.id, :id => tag.id}
       requirements_met = @module.evaluate_for(@user).requirements_met
       expect(requirements_met[0][:type]).to eq 'must_view'
       expect(requirements_met[0][:id]).to eq tag.id
@@ -336,7 +342,7 @@ describe ContextModulesController do
       @module.completion_requirements = { tag.id => { :type => 'must_view' }}
       @module.save!
       expect(@module.evaluate_for(@user)).to be_locked
-      get 'item_redirect', :course_id => @course.id, :id => tag.id
+      get 'item_redirect', params: {:course_id => @course.id, :id => tag.id}
       expect(@module.evaluate_for(@user).requirements_met).to be_blank
     end
 
@@ -348,7 +354,7 @@ describe ContextModulesController do
       @module.completion_requirements = { tag.id => { :type => 'must_view' }}
       @module.save!
       expect(@module.evaluate_for(@user)).to be_locked
-      get 'item_redirect', :course_id => @course.id, :id => tag.id
+      get 'item_redirect', params: {:course_id => @course.id, :id => tag.id}
       expect(@module.evaluate_for(@user).requirements_met).to be_blank
     end
 
@@ -383,7 +389,7 @@ describe ContextModulesController do
       ct1 = make_content_tag(a1, @course, m1)
       ct2 = make_content_tag(a2, @course, m1)
 
-      post 'reorder_items', :course_id => @course.id, :context_module_id => m2.id, :order => "#{ct2.id}"
+      post 'reorder_items', params: {:course_id => @course.id, :context_module_id => m2.id, :order => "#{ct2.id}"}
       ct2.reload
       expect(ct2.context_module).to eq m2
       ct1.reload
@@ -392,18 +398,20 @@ describe ContextModulesController do
 
     it "should reorder unpublished items" do
       course_with_teacher_logged_in(active_all: true)
-      pageA = @course.wiki.wiki_pages.create title: "pageA"
+      pageA = @course.wiki_pages.create title: "pageA"
       pageA.workflow_state = 'unpublished'
       pageA.save
-      pageB = @course.wiki.wiki_pages.create! title: "pageB"
+      pageB = @course.wiki_pages.create! title: "pageB"
       m1 = @course.context_modules.create!
       tagB = m1.add_item({type: "wiki_page", id: pageB.id}, nil, position: 1)
       expect(tagB).to be_published
       tagA = m1.add_item({type: "wiki_page", id: pageA.id}, nil, position: 2)
       expect(tagA).to be_unpublished
       expect(m1.reload.content_tags.order(:position).pluck(:id)).to eq [tagB.id, tagA.id]
-      post 'reorder_items', course_id: @course.id, context_module_id: m1.id, order: "#{tagA.id},#{tagB.id}"
-      expect(m1.reload.content_tags.order(:position).pluck(:id)).to eq [tagA.id, tagB.id]
+      post 'reorder_items', params: {course_id: @course.id, context_module_id: m1.id, order: "#{tagA.id},#{tagB.id}"}
+      tags = m1.reload.content_tags.order(:position).to_a
+      expect(tags.map(&:position)).to eq [1, 2]
+      expect(tags.map(&:id)).to eq [tagA.id, tagB.id]
     end
 
     it "should only touch module once on reorder" do
@@ -417,9 +425,9 @@ describe ContextModulesController do
         tags << make_content_tag(assign, @course, mod)
       end
 
-      ContentTag.expects(:touch_context_modules).once
+      expect(ContentTag).to receive(:touch_context_modules).once
       order = tags.reverse.map(&:id)
-      post 'reorder_items', :course_id => @course.id, :context_module_id => mod.id, :order => order.join(",")
+      post 'reorder_items', params: {:course_id => @course.id, :context_module_id => mod.id, :order => order.join(",")}
       expect(mod.reload.content_tags.map(&:id)).to eq order
     end
   end
@@ -433,16 +441,16 @@ describe ContextModulesController do
     it "should set position" do
       user_session @teacher
       @module.add_item({ :type => 'context_module_sub_header', :title => 'foo!' }, nil, position: 1)
-      post 'add_item', :course_id => @course.id, :context_module_id => @module.id, :item =>
-                         { :type => 'context_module_sub_header', :title => 'bar!', :position => 3 }
+      post 'add_item', params: {:course_id => @course.id, :context_module_id => @module.id, :item =>
+                         { :type => 'context_module_sub_header', :title => 'bar!', :position => 3 }}
       expect(@module.content_tags.map {|tag| [tag.title, tag.position]}).to match_array([['foo!', 1], ['bar!', 3]])
     end
 
     it "shouldn't duplicate an existing position" do
       user_session @teacher
       @module.add_item({ :type => 'context_module_sub_header', :title => 'foo!' }, nil, position: 3)
-      post 'add_item', :course_id => @course.id, :context_module_id => @module.id, :item =>
-                       { :type => 'context_module_sub_header', :title => 'bar!', :position => 3 }
+      post 'add_item', params: {:course_id => @course.id, :context_module_id => @module.id, :item =>
+                       { :type => 'context_module_sub_header', :title => 'bar!', :position => 3 }}
       expect(@module.content_tags.map {|tag| [tag.title, tag.position]}).to match_array([['foo!', 3], ['bar!', 4]])
     end
   end
@@ -462,34 +470,34 @@ describe ContextModulesController do
     end
 
     it "should update the tag title" do
-      put 'update_item', :course_id => @course.id, :id => @assignment_item.id, :content_tag => { :title => 'New Title' }
+      put 'update_item', params: {:course_id => @course.id, :id => @assignment_item.id, :content_tag => { :title => 'New Title' }}
       expect(@assignment_item.reload.title).to eq 'New Title'
     end
 
     it "should update the asset title" do
-      put 'update_item', :course_id => @course.id, :id => @assignment_item.id, :content_tag => { :title => 'New Title' }
+      put 'update_item', params: {:course_id => @course.id, :id => @assignment_item.id, :content_tag => { :title => 'New Title' }}
       expect(@assignment.reload.title).to eq 'New Title'
     end
 
     it "should update indent" do
-      put 'update_item', :course_id => @course.id, :id => @external_url_item.id, :content_tag => { :indent => 2 }
+      put 'update_item', params: {:course_id => @course.id, :id => @external_url_item.id, :content_tag => { :indent => 2 }}
       expect(@external_url_item.reload.indent).to eq 2
     end
 
     it "should update the url for an external url item" do
       new_url = 'http://example.org/new_url'
-      put 'update_item', :course_id => @course.id, :id => @external_url_item.id, :content_tag => { :url => new_url }
+      put 'update_item', params: {:course_id => @course.id, :id => @external_url_item.id, :content_tag => { :url => new_url }}
       expect(@external_url_item.reload.url).to eq new_url
     end
 
     it "should update the url for an external tool item" do
       new_url = 'http://example.org/new_tool'
-      put 'update_item', :course_id => @course.id, :id => @external_tool_item.id, :content_tag => { :url => new_url }
+      put 'update_item', params: {:course_id => @course.id, :id => @external_tool_item.id, :content_tag => { :url => new_url }}
       expect(@external_tool_item.reload.url).to eq new_url
     end
 
     it "should ignore the url for a non-applicable type" do
-      put 'update_item', :course_id => @course.id, :id => @assignment_item.id, :content_tag => { :url => 'http://example.org/new_tool' }
+      put 'update_item', params: {:course_id => @course.id, :id => @assignment_item.id, :content_tag => { :url => 'http://example.org/new_tool' }}
       expect(@assignment_item.reload.url).to be_nil
     end
   end
@@ -512,14 +520,14 @@ describe ContextModulesController do
 
     it "should show unpublished modules for teachers" do
       user_session(@teacher)
-      get 'item_details', :course_id => @course.id, :module_item_id => @topicTag.id, :id => "discussion_topic_#{@topic.id}"
+      get 'item_details', params: {:course_id => @course.id, :module_item_id => @topicTag.id, :id => "discussion_topic_#{@topic.id}"}
       json = JSON.parse response.body.gsub("while(1);",'')
       expect(json["next_module"]["context_module"]["id"]).to eq @m2.id
     end
 
     it "should skip unpublished modules for students" do
       user_session(@student)
-      get 'item_details', :course_id => @course.id, :module_item_id => @topicTag.id, :id => "discussion_topic_#{@topic.id}"
+      get 'item_details', params: {:course_id => @course.id, :module_item_id => @topicTag.id, :id => "discussion_topic_#{@topic.id}"}
       json = JSON.parse response.body.gsub("while(1);",'')
       expect(json["next_module"]["context_module"]["id"]).to eq @m3.id
     end
@@ -531,7 +539,7 @@ describe ContextModulesController do
 
       quiz_tag = @m2.add_item :type => 'quiz', :id => quiz.id
 
-      get 'item_details', :course_id => @course.id, :module_item_id => quiz_tag.id, :id => "quizzes:quiz_#{quiz.id}"
+      get 'item_details', params: {:course_id => @course.id, :module_item_id => quiz_tag.id, :id => "quizzes:quiz_#{quiz.id}"}
       json = JSON.parse response.body.gsub("while(1);",'')
       expect(json['current_item']['content_tag']['content_type']).to eq 'Quizzes::Quiz'
     end
@@ -547,7 +555,7 @@ describe ContextModulesController do
       end
 
       it "returns 'locked' progressions for modules locked by date" do
-        get 'progressions', :course_id => @course.id, :format => 'json'
+        get 'progressions', params: {:course_id => @course.id}, :format => 'json'
         json = JSON.parse response.body.gsub("while(1);",'')
         expect(json).to match_array(
                 [{"context_module_progression"=>
@@ -568,7 +576,7 @@ describe ContextModulesController do
       student_in_course(:active_all => true)
       @module = @course.context_modules.create!(:name => "first module")
       @module.publish
-      @wiki = @course.wiki.wiki_pages.create!(:title => "wiki", :body => 'hi')
+      @wiki = @course.wiki_pages.create!(:title => "wiki", :body => 'hi')
 
       @tag = @module.add_item(:id => @wiki.id, :type => 'wiki_page')
       @module.completion_requirements = {@tag.id => {:type => 'must_view'}}
@@ -580,14 +588,14 @@ describe ContextModulesController do
 
     it "should return all student progressions to teacher" do
       user_session(@teacher)
-      get 'progressions', :course_id => @course.id, :format => "json"
+      get 'progressions', params: {:course_id => @course.id}, :format => "json"
       json = JSON.parse response.body.gsub("while(1);",'')
       expect(json.length).to eq 1
     end
 
     it "should return a single student progression" do
       user_session(@student)
-      get 'progressions', :course_id => @course.id, :format => "json"
+      get 'progressions', params: {:course_id => @course.id}, :format => "json"
       json = JSON.parse response.body.gsub("while(1);",'')
       expect(json.length).to eq 1
     end
@@ -600,14 +608,14 @@ describe ContextModulesController do
 
       it "should return a single student progression" do
         user_session(@student)
-        get 'progressions', :course_id => @course.id, :format => "json"
+        get 'progressions', params: {:course_id => @course.id}, :format => "json"
         json = JSON.parse response.body.gsub("while(1);",'')
         expect(json.length).to eq 1
       end
 
       it "should not return any student progressions to teacher" do
         user_session(@teacher)
-        get 'progressions', :course_id => @course.id, :format => "json"
+        get 'progressions', params: {:course_id => @course.id}, :format => "json"
         json = JSON.parse response.body.gsub("while(1);",'')
         expect(json.length).to eq 0
       end
@@ -623,10 +631,10 @@ describe ContextModulesController do
         @tag = @mod.add_item(type: 'assignment', id: @assign.id)
       end
       enable_cache do
-        get 'content_tag_assignment_data', course_id: @course.id, format: 'json' # precache
+        get 'content_tag_assignment_data', params: {course_id: @course.id}, format: 'json' # precache
         @assign.points_possible = 456
         @assign.save!
-        get 'content_tag_assignment_data', course_id: @course.id, format: 'json'
+        get 'content_tag_assignment_data', params: {course_id: @course.id}, format: 'json'
         json = JSON.parse response.body.gsub("while(1);",'')
         expect(json[@tag.id.to_s]["points_possible"].to_i).to eql 456
       end
@@ -646,9 +654,9 @@ describe ContextModulesController do
         os = override.assignment_override_students.create!(:user => student)
       end
 
-      AssignmentOverrideApplicator.expects(:overrides_for_assignment_and_user).never
+      expect(AssignmentOverrideApplicator).to receive(:overrides_for_assignment_and_user).never
 
-      get 'content_tag_assignment_data', course_id: @course.id, format: 'json' # precache
+      get 'content_tag_assignment_data', params: {course_id: @course.id}, format: 'json' # precache
       json = JSON.parse response.body.gsub("while(1);",'')
       expect(json[@tag.id.to_s]["vdd_tooltip"]).to be_nil
       expect(json[@tag.id.to_s]["has_many_overrides"]).to be_truthy
@@ -670,7 +678,7 @@ describe ContextModulesController do
         os = override.assignment_override_students.create!(:user => student)
       end
 
-      get 'content_tag_assignment_data', course_id: @course.id, format: 'json' # precache
+      get 'content_tag_assignment_data', params: {course_id: @course.id}, format: 'json' # precache
       json = JSON.parse response.body.gsub("while(1);",'')
       expect(json[@tag.id.to_s]["vdd_tooltip"]).to be_nil
       expect(json[@tag.id.to_s]["has_many_overrides"]).to be_truthy
@@ -683,12 +691,12 @@ describe ContextModulesController do
       @tag = @mod.add_item(type: 'assignment', id: @assign.id)
 
       enable_cache do
-        get 'content_tag_assignment_data', course_id: @course.id, format: 'json' # precache
+        get 'content_tag_assignment_data', params: {course_id: @course.id}, format: 'json' # precache
         json = JSON.parse response.body.gsub("while(1);",'')
         expect(json[@tag.id.to_s]["past_due"]).to be_nil
 
         Timecop.freeze(2.weeks.from_now) do
-          get 'content_tag_assignment_data', course_id: @course.id, format: 'json'
+          get 'content_tag_assignment_data', params: {course_id: @course.id}, format: 'json'
           json = JSON.parse response.body.gsub("while(1);",'')
           expect(json[@tag.id.to_s]["past_due"]).to be_truthy
         end
@@ -708,7 +716,7 @@ describe ContextModulesController do
       override.due_at_overridden = true
       override.save!
 
-      get 'content_tag_assignment_data', course_id: @course.id, format: 'json' # precache
+      get 'content_tag_assignment_data', params: {course_id: @course.id}, format: 'json' # precache
       json = JSON.parse response.body.gsub("while(1);",'')
       expect(json[@tag.id.to_s]["vdd_tooltip"]["due_dates"].count).to eq 2
     end
@@ -727,7 +735,7 @@ describe ContextModulesController do
         os = override.assignment_override_students.create!(:user => student)
       end
 
-      get 'content_tag_assignment_data', course_id: @course.id, format: 'json' # precache
+      get 'content_tag_assignment_data', params: {course_id: @course.id}, format: 'json' # precache
       json = JSON.parse response.body.gsub("while(1);",'')
       expect(json[@tag.id.to_s]["vdd_tooltip"]).to be_nil
       expect(json[@tag.id.to_s]["has_many_overrides"]).to be_truthy
@@ -740,7 +748,7 @@ describe ContextModulesController do
       @quiz.publish!
       @tag = @mod.add_item(type: 'quiz', id: @quiz.id)
 
-      get 'content_tag_assignment_data', course_id: @course.id, format: 'json'
+      get 'content_tag_assignment_data', params: {course_id: @course.id}, format: 'json'
       json = JSON.parse response.body.gsub("while(1);",'')
       expect(json[@tag.id.to_s]["past_due"]).to be_present
     end
@@ -754,7 +762,7 @@ describe ContextModulesController do
 
       @quiz.generate_submission(@student).complete!
 
-      get 'content_tag_assignment_data', course_id: @course.id, format: 'json' # precache
+      get 'content_tag_assignment_data', params: {course_id: @course.id}, format: 'json' # precache
       json = JSON.parse response.body.gsub("while(1);",'')
       expect(json[@tag.id.to_s]["past_due"]).to be_blank
     end
@@ -768,7 +776,7 @@ describe ContextModulesController do
     it "should redirect to the module on the index page" do
       @m2 = @course.context_modules.create!(:name => "published hey")
       user_session(@teacher)
-      get 'show', course_id: @course.id, id: @m2.id
+      get 'show', params: {course_id: @course.id, id: @m2.id}
       expect(response).to redirect_to course_context_modules_url(course_id: @course.id, anchor: "module_#{@m2.id}")
     end
 
@@ -778,14 +786,14 @@ describe ContextModulesController do
       @m1.save!
       student_in_course active_all: true
       user_session(@student)
-      get 'show', course_id: @course.id, id: @m1.id
+      get 'show', params: {course_id: @course.id, id: @m1.id}
       assert_unauthorized
     end
   end
 
   describe "GET 'choose_mastery_path'" do
     before :each do
-      ConditionalRelease::Service.stubs(:enabled_in_context?).returns(true)
+      allow(ConditionalRelease::Service).to receive(:enabled_in_context?).and_return(true)
     end
 
     before :once do
@@ -803,16 +811,16 @@ describe ContextModulesController do
     it "should return 404 if no rule matches item assignment" do
       user_session(@student)
 
-      ConditionalRelease::Service.stubs(:rules_for).returns([])
+      allow(ConditionalRelease::Service).to receive(:rules_for).and_return([])
 
-      get 'choose_mastery_path', :course_id => @course.id, :id => @item.id
+      get 'choose_mastery_path', params: {:course_id => @course.id, :id => @item.id}
       assert_response(:missing)
     end
 
     it "should return 404 if matching rule is unlocked but has one selected assignment set" do
       user_session(@student)
 
-      ConditionalRelease::Service.stubs(:rules_for).returns([
+      allow(ConditionalRelease::Service).to receive(:rules_for).and_return([
         {
           trigger_assignment: @assg.id,
           locked: false,
@@ -821,14 +829,14 @@ describe ContextModulesController do
         }
       ])
 
-      get 'choose_mastery_path', :course_id => @course.id, :id => @item.id
+      get 'choose_mastery_path', params: {:course_id => @course.id, :id => @item.id}
       assert_response(:missing)
     end
 
     it "should redirect to context modules page with warning if matching rule is locked" do
       user_session(@student)
 
-      ConditionalRelease::Service.stubs(:rules_for).returns([
+      allow(ConditionalRelease::Service).to receive(:rules_for).and_return([
         {
           trigger_assignment: @assg.id,
           locked: true,
@@ -836,7 +844,7 @@ describe ContextModulesController do
         }
       ])
 
-      get 'choose_mastery_path', :course_id => @course.id, :id => @item.id
+      get 'choose_mastery_path', params: {:course_id => @course.id, :id => @item.id}
       assert(flash[:warning].present?)
       assert_redirected_to(controller: 'context_modules', action: 'index')
     end
@@ -845,7 +853,7 @@ describe ContextModulesController do
       user_session(@student)
       assg1, assg2 = create_assignments(@course.id, 2).map {|id| Assignment.find(id)}
 
-      ConditionalRelease::Service.stubs(:rules_for).returns([
+      allow(ConditionalRelease::Service).to receive(:rules_for).and_return([
         {
           trigger_assignment: @assg.id,
           locked: false,
@@ -856,7 +864,7 @@ describe ContextModulesController do
         }
       ])
 
-      get 'choose_mastery_path', :course_id => @course.id, :id => @item.id
+      get 'choose_mastery_path', params: {:course_id => @course.id, :id => @item.id}
       assert_response(:success)
       mastery_path_data = controller.js_env[:CHOOSE_MASTERY_PATH_DATA]
       expect(mastery_path_data).to include({
@@ -874,7 +882,7 @@ describe ContextModulesController do
     it "should show choose page if matching rule is unlocked and has one unselected assignment set" do
       user_session(@student)
 
-      ConditionalRelease::Service.stubs(:rules_for).returns([
+      allow(ConditionalRelease::Service).to receive(:rules_for).and_return([
         {
           trigger_assignment: @assg.id,
           locked: false,
@@ -882,7 +890,7 @@ describe ContextModulesController do
         }
       ])
 
-      get 'choose_mastery_path', :course_id => @course.id, :id => @item.id
+      get 'choose_mastery_path', params: {:course_id => @course.id, :id => @item.id}
       assert_response(:success)
       mastery_path_data = controller.js_env[:CHOOSE_MASTERY_PATH_DATA]
       expect(mastery_path_data).to include({
@@ -896,7 +904,7 @@ describe ContextModulesController do
       user_session(@student)
       assg1, assg2 = create_assignments(@course.id, 2).map {|id| Assignment.find(id)}
 
-      ConditionalRelease::Service.stubs(:rules_for).returns([
+      allow(ConditionalRelease::Service).to receive(:rules_for).and_return([
         {
           trigger_assignment: @assg.id + 1,
           locked: false,
@@ -915,7 +923,7 @@ describe ContextModulesController do
         }
       ])
 
-      get 'choose_mastery_path', :course_id => @course.id, :id => @item.id
+      get 'choose_mastery_path', params: {:course_id => @course.id, :id => @item.id}
       assert_response(:success)
       options = controller.js_env[:CHOOSE_MASTERY_PATH_DATA][:options]
       expect(options.length).to eq 2
@@ -935,7 +943,7 @@ describe ContextModulesController do
       assg = ag.assignments.create! context: @course
       item = @mod.add_item type: 'assignment', id: assg.id
 
-      get 'item_redirect_mastery_paths', course_id: @course.id, id: item.id
+      get 'item_redirect_mastery_paths', params: {course_id: @course.id, id: item.id}
       assert_redirected_to controller: 'assignments', action: 'edit', id: assg.id, anchor: 'mastery-paths-editor'
     end
 
@@ -943,7 +951,7 @@ describe ContextModulesController do
       quiz = @course.quizzes.create!
       item = @mod.add_item type: 'quiz', id: quiz.id
 
-      get 'item_redirect_mastery_paths', course_id: @course.id, id: item.id
+      get 'item_redirect_mastery_paths', params: {course_id: @course.id, id: item.id}
       assert_redirected_to controller: 'quizzes/quizzes', action: 'edit', id: quiz.id, anchor: 'mastery-paths-editor'
     end
 
@@ -951,15 +959,15 @@ describe ContextModulesController do
       topic = @course.discussion_topics.create!
       item = @mod.add_item type: 'discussion_topic', id: topic.id
 
-      get 'item_redirect_mastery_paths', course_id: @course.id, id: item.id
+      get 'item_redirect_mastery_paths', params: {course_id: @course.id, id: item.id}
       assert_redirected_to controller: 'discussion_topics', action: 'edit', id: topic.id, anchor: 'mastery-paths-editor'
     end
 
     it "should 404 if module item is not a graded type" do
-      page = @course.wiki.wiki_pages.create title: "test"
+      page = @course.wiki_pages.create title: "test"
       item = @mod.add_item type: 'page', id: page.id
 
-      get 'item_redirect_mastery_paths', :course_id => @course.id, :id => item.id
+      get 'item_redirect_mastery_paths', params: {:course_id => @course.id, :id => item.id}
       assert_response :missing
     end
   end

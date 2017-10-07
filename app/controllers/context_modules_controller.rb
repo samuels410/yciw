@@ -42,7 +42,7 @@ class ContextModulesController < ApplicationController
     def modules_cache_key
       @modules_cache_key ||= begin
         visible_assignments = @current_user.try(:assignment_and_quiz_visibilities, @context)
-        cache_key_items = [@context.cache_key, @can_edit, 'all_context_modules_draft_9', collection_cache_key(@modules), Time.zone, Digest::MD5.hexdigest(visible_assignments.to_s)]
+        cache_key_items = [@context.cache_key, @can_edit, @is_student, @can_view_unpublished, 'all_context_modules_draft_10', collection_cache_key(@modules), Time.zone, Digest::MD5.hexdigest(visible_assignments.to_s)]
         cache_key = cache_key_items.join('/')
         cache_key = add_menu_tools_to_cache_key(cache_key)
         cache_key = add_mastery_paths_to_cache_key(cache_key, @context, @modules, @current_user)
@@ -51,14 +51,16 @@ class ContextModulesController < ApplicationController
 
     def load_modules
       @modules = @context.modules_visible_to(@current_user)
+      @modules.each(&:check_for_stale_cache_after_unlocking!)
       @collapsed_modules = ContextModuleProgression.for_user(@current_user).for_modules(@modules).pluck(:context_module_id, :collapsed).select{|cm_id, collapsed| !!collapsed }.map(&:first)
 
       @can_edit = can_do(@context, @current_user, :manage_content)
+      @is_student = @context.grants_right?(@current_user, session, :participate_as_student)
+      @can_view_unpublished = @context.grants_right?(@current_user, session, :read_as_admin)
 
       modules_cache_key
 
-      @is_student = @context.grants_right?(@current_user, session, :participate_as_student)
-      @is_cyoe_on = ConditionalRelease::Service.enabled_in_context?(@context)
+      @is_cyoe_on = @current_user && ConditionalRelease::Service.enabled_in_context?(@context)
       if allow_web_export_download?
         @allow_web_export_download = true
         @last_web_export = @context.web_zip_exports.visible_to(@current_user).order('epub_exports.created_at').last
@@ -312,18 +314,14 @@ class ContextModulesController < ApplicationController
       is_master_course = MasterCourses::MasterTemplate.is_master_course?(@context)
 
       if is_child_course || is_master_course
-        tag_scope = @context.module_items_visible_to(@current_user)
+        tag_scope = @context.module_items_visible_to(@current_user).where(:content_type => %w{Assignment Attachment DiscussionTopic Quizzes::Quiz WikiPage})
         tag_scope = tag_scope.where(:id => params[:tag_id]) if params[:tag_id]
         tag_ids = tag_scope.pluck(:id)
         restriction_info = {}
         if tag_ids.any?
-          if is_child_course
-            MasterCourses::MasterContentTag.fetch_module_item_restrictions_for_child(tag_ids).each do |tag_id, restrictions|
-              restriction_info[tag_id] = restrictions.any?{|k, v| v} ? 'locked' : 'unlocked' # might need to elaborate in the future
-            end
-          elsif is_master_course
-            restriction_info = MasterCourses::MasterContentTag.fetch_module_item_restrictions_for_master(tag_ids)
-          end
+          restriction_info = is_child_course ?
+            MasterCourses::MasterContentTag.fetch_module_item_restrictions_for_child(tag_ids) :
+            MasterCourses::MasterContentTag.fetch_module_item_restrictions_for_master(tag_ids)
         end
         info[:tag_restrictions] = restriction_info
       end
@@ -447,7 +445,7 @@ class ContextModulesController < ApplicationController
       affected_items = []
       items = order.map{|id| tags.detect{|t| t.id == id.to_i } }.compact.uniq
       items.each_with_index do |item, idx|
-        item.position = idx
+        item.position = idx + 1
         item.context_module_id = @module.id
         if item.changed?
           item.skip_touch = true

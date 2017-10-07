@@ -18,13 +18,17 @@
 module LoginAndSessionMethods
   def create_session(pseudonym)
     if caller.grep(/onceler\/recorder.*record!/).present?
-      raise "don't stub sessions in a `before(:once)` block; do it in a `before(:each)` so the stubbing works for all examples and not just the first one"
+      raise "don't double sessions in a `before(:once)` block; do it in a `before(:each)` so the stubbing works for all examples and not just the first one"
     end
-    PseudonymSession.any_instance.stubs(:record).returns { pseudonym.reload }
+    @session_stubbed = true
+    allow_any_instance_of(PseudonymSession).to receive(:record).and_wrap_original do |original|
+      next original.call unless @session_stubbed
+      pseudonym.reload
+    end
   end
 
   def destroy_session
-    PseudonymSession.any_instance.unstub :record
+    @session_stubbed = false
   end
 
   def user_session(user)
@@ -106,8 +110,9 @@ module LoginAndSessionMethods
   end
 
   def masquerade_as(user)
-    get "/users/#{user.id}/masquerade"
-    f('.masquerade_button').click
+    masquerade_url = "/users/#{user.id}/masquerade"
+    get masquerade_url
+    f('a[href="' + masquerade_url + '"]').click
   end
 
   def displayed_username

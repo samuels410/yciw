@@ -306,7 +306,7 @@ describe EnrollmentsApiController, type: :request do
       end
 
       it "should not notify by default" do
-        StudentEnrollment.any_instance.expects(:save_without_broadcasting).at_least_once
+        expect_any_instance_of(StudentEnrollment).to receive(:save_without_broadcasting).at_least(:once)
 
         api_call(:post, @path, @path_options, {
             :enrollment => {
@@ -315,7 +315,7 @@ describe EnrollmentsApiController, type: :request do
       end
 
       it "should optionally send notifications" do
-        StudentEnrollment.any_instance.expects(:save).at_least_once
+        expect_any_instance_of(StudentEnrollment).to receive(:save).at_least(:once)
 
         api_call(:post, @path, @path_options, {
           :enrollment => {
@@ -1227,9 +1227,22 @@ describe EnrollmentsApiController, type: :request do
         expect(json.all?{ |r| r["course_section_id"] == @section.id }).to be_truthy
 
         @path = "/api/v1/sections/#{@section.id}/enrollments"
-        @params = { :controller => "enrollments_api", :action => "index", :section_id => @section.id.to_param, :format => "json" }
+        @params = { controller: "enrollments_api", action: "index", section_id: @section.id.to_param, format: "json" }
         json = api_call(:get, @path, @params)
-        expect(json.length).to eql 0
+        expect(json.length).to be 0
+      end
+
+      it 'should list enrollments in deleted sections as deleted' do
+        enrollment = @student.enrollments.first
+        enrollment.course_section = @section
+        enrollment.save!
+        CourseSection.where(id: @section.id).update_all(workflow_state: 'deleted')
+
+        path = "/api/v1/users/#{@student.id}/enrollments"
+        params = {controller: 'enrollments_api', action: 'index', user_id: @student.id.to_param, format: 'json'}
+        json = api_call(:get, path, params)
+
+        expect(json.first['enrollment_state']).to eql 'deleted'
       end
 
       describe "custom roles" do
@@ -1772,7 +1785,7 @@ describe EnrollmentsApiController, type: :request do
 
       before :each do
         time = Time.now
-        Time.stubs(:now).returns(time)
+        allow(Time).to receive(:now).and_return(time)
       end
 
       context "an authorized user" do

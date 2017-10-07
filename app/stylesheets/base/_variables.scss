@@ -79,7 +79,24 @@ $fire:                      #FC5E13; // orange
 // Default Functional Swatches
 //====================================
 
-@if $use_high_contrast {    $ic-brand-primary: #0770A3; }
+$variables-have-been-defined: false !default;
+@if $use_high_contrast {
+  $ic-brand-primary: #0770A3;
+  $ic-link-color-high-contrast: #0073A7;
+  @if not $variables-have-been-defined { // makes sure this is only output once
+    $variables-have-been-defined: true;
+    :root {
+      --ic-brand-primary: $ic-brand-primary;
+      --ic-brand-primary-darkened-5: darken($ic-brand-primary, 5);
+      --ic-brand-primary-darkened-10: darken($ic-brand-primary, 10);
+      --ic-brand-primary-lightened-15: lighten($ic-brand-primary, 15);
+      --ic-link-color: $ic-link-color-high-contrast;
+      --ic-link-color-darkened-10: darken($ic-link-color-high-contrast, 10);
+      --ic-link-color-lightened-10: darken($ic-link-color-high-contrast, 10);
+    }
+  }
+}
+
 $ic-color-success:          $shamrock;
 $ic-color-action:           $barney;
 $ic-color-danger:           $crimson;
@@ -174,7 +191,7 @@ $ic-font-family-fallback: "Helvetica Neue", Helvetica, Arial, sans-serif;
 
 $ic-font-weight: bold; // we can phase this var out now we're on Lato
 
-$ic-font-size: 14px;
+$ic-font-size: 16px;
 
 $ic-font-size--xlarge:   $ic-font-size + 14;
 $ic-font-size--large:    $ic-font-size + 9;
@@ -196,6 +213,7 @@ $ic-content-padding:            15px;
 $ic-header-background:          #34444f;
 $ic-header-primary-width:       84px;
 $ic-header-primary-expanded-width: $ic-sp*15;
+$ic-right-side-width: $ic-sp*24;
 
 //============================
 // List Functional Variables
@@ -219,11 +237,11 @@ $ic-border-dark:          $heather;
 // Text-color variables
 //=====================
 $ic-font-color-light:     $ic-color-light;
-$ic-font-color-dark:      $ic-brand-font-color-dark;
+$ic-font-color-dark:      var(--ic-brand-font-color-dark);
 @if $use_high_contrast { $ic-font-color-dark: $ic-color-dark; }
-$ic-font-color--subdued:  lighten($ic-font-color-dark, 15);
+$ic-font-color--subdued:  var(--ic-brand-font-color-dark-lightened-15);
 @if $use_high_contrast { $ic-font-color--subdued:  $ic-color-medium-darker; }
-$ic-hint-text:            lighten($ic-font-color-dark, 30);
+$ic-hint-text:            var(--ic-brand-font-color-dark-lightened-30);
 @if $use_high_contrast { $ic-hint-text: $ic-color-medium; }
 
 // textColor is a deprecated Bootstrap 2 variable. Please use $ic-font-color-dark!
@@ -232,23 +250,19 @@ $textColor:               $ic-font-color-dark; // deprecated - do not use
 //=============================
 // Link-color-related variables
 //=============================
-
-@if $use_high_contrast {    $ic-link-color: #0073A7; }
-$ic-link-color-hover:       darken($ic-link-color, 10%);
-
-$ic-icon-link-color-hover: lighten($ic-font-color-dark, 15%);
+$ic-icon-link-color-hover: var(--ic-brand-font-color-dark-lightened-15);
 @if $use_high_contrast {
 $ic-icon-link-color-hover: $ic-font-color-dark;
 }
 
-$ic-icon-link-color:       lighten($ic-font-color-dark, 30%);
+$ic-icon-link-color:       var(--ic-brand-font-color-dark-lightened-30);
 @if $use_high_contrast {
 $ic-icon-link-color:       lighten($ic-font-color-dark, 12%);
 }
 
-// linkColor is a deprecated Bootstrap 2 variable. Please use $ic-link-color!
-$linkColor:                 $ic-link-color; // deprecated - do not use
-$linkColorHover:            $ic-link-color-hover; // deprecated - do not use
+// linkColor is a deprecated Bootstrap 2 variable
+$linkColor:                 var(--ic-link-color); // deprecated - do not use
+$linkColorHover:            var(--ic-link-color-darkened-10); // deprecated - do not use
 
 //=====================
 // Course Nav Variables
@@ -259,7 +273,7 @@ $ic-course-sidenav_list-item--bg-color:               $ic-color-light;
 @if $use_high_contrast {
 $ic-course-sidenav_list-item--bg-color:               $ic-color-dark;
 }
-$ic-course-sidenav_list-item--active-font-color:      $ic-brand-primary;
+$ic-course-sidenav_list-item--active-font-color:      var(--ic-brand-primary);
 @if $use_high_contrast {
 $ic-course-sidenav_list-item--active-font-color:      $ic-color-light;
 }
@@ -276,14 +290,6 @@ $ic-color-icon-disabled:        darken($ic-color-neutral, 60);
 $ic-dim-helper-text:            darken($ic-color-neutral, 45);
 @if $use_high_contrast {
 $ic-dim-helper-text:            darken($ic-color-neutral, 55);
-}
-
-// special handling for button--primary coloring
-$button--primary-text: $ic-brand-button--primary-text;
-$button--primary-bgd: $ic-brand-button--primary-bgd;
-@if $use_high_contrast {
-  $button--primary-bgd: $ic-brand-primary;
-  $button--primary-text: $ic-color-light;
 }
 
 //==========================================================

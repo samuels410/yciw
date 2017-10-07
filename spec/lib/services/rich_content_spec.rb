@@ -21,12 +21,18 @@ require_dependency "services/rich_content"
 module Services
   describe RichContent do
     before do
+      allow(Services::RichContent).to receive(:contextually_on).and_call_original
+      allow(Canvas::DynamicSettings).to receive(:find).with(any_args).and_call_original
       allow(Canvas::DynamicSettings).to receive(:find)
-        .with('rich-content-service', use_env: false)
+        .with('rich-content-service', default_ttl: 5.minutes)
         .and_return({
           "app-host" => "rce-app",
           "cdn-host" => "rce-cdn"
         })
+      allow(Setting).to receive(:get)
+      allow(Setting).to receive(:get)
+        .with('rich_content_service_enabled', 'false')
+        .and_return('true')
     end
 
     describe ".env_for" do
@@ -37,7 +43,7 @@ module Services
       end
 
       it "fills out host values when enabled" do
-        root_account = stub("root_account", feature_enabled?: true)
+        root_account = double("root_account", feature_enabled?: true)
         env = described_class.env_for(root_account)
         expect(env[:RICH_CONTENT_APP_HOST]).to eq("rce-app")
         expect(env[:RICH_CONTENT_CDN_HOST]).to eq("rce-cdn")
@@ -45,9 +51,9 @@ module Services
 
       it "populates hosts with an error signal when consul is down" do
         allow(Canvas::DynamicSettings).to receive(:find)
-          .with('rich-content-service', use_env: false)
+          .with('rich-content-service', default_ttl: 5.minutes)
           .and_raise(Imperium::UnableToConnectError, "can't talk to consul")
-        root_account = stub("root_account", feature_enabled?: true)
+        root_account = double("root_account", feature_enabled?: true)
         env = described_class.env_for(root_account)
         expect(env[:RICH_CONTENT_SERVICE_ENABLED]).to be_truthy
         expect(env[:RICH_CONTENT_APP_HOST]).to eq("error")
@@ -55,10 +61,10 @@ module Services
       end
 
       it "logs errors for later consideration" do
-        Canvas::DynamicSettings.stubs(:find).with("rich-content-service", use_env: false).
-          raises(Canvas::DynamicSettings::ConsulError, "can't talk to consul")
-        root_account = stub("root_account", feature_enabled?: true)
-        Canvas::Errors.expects(:capture_exception).with do |type, e|
+        allow(Canvas::DynamicSettings).to receive(:find).with("rich-content-service", default_ttl: 5.minutes).
+          and_raise(Canvas::DynamicSettings::ConsulError, "can't talk to consul")
+        root_account = double("root_account", feature_enabled?: true)
+        expect(Canvas::Errors).to receive(:capture_exception) do |type, e|
           expect(type).to eq(:rce_flag)
           expect(e.is_a?(Canvas::DynamicSettings::ConsulError)).to be_truthy
         end
@@ -66,90 +72,58 @@ module Services
       end
 
       it "includes a generated JWT for the domain, user, context, and workflwos" do
-        root_account = stub("root_account", feature_enabled?: true)
-        user = stub("user", global_id: 'global id')
-        domain = stub("domain")
-        ctx = stub("ctx", grants_any_right?: true)
-        jwt = stub("jwt")
-        Canvas::Security::ServicesJwt.stubs(:for_user).with(domain, user, all_of(
-          has_entry(workflows: [:rich_content, :ui]),
-          has_entry(context: ctx)
-        )).returns(jwt)
+        root_account = double("root_account", feature_enabled?: true)
+        user = double("user", global_id: 'global id')
+        domain = double("domain")
+        ctx = double("ctx", grants_any_right?: true)
+        jwt = double("jwt")
+        allow(Canvas::Security::ServicesJwt).to receive(:for_user).with(domain, user,
+          include(workflows: [:rich_content, :ui],
+            context: ctx)
+        ).and_return(jwt)
         env = described_class.env_for(root_account, user: user, domain: domain, context: ctx)
         expect(env[:JWT]).to eql(jwt)
       end
 
       it "includes a masquerading user if provided" do
-        root_account = stub("root_account", feature_enabled?: true)
-        user = stub("user", global_id: 'global id')
-        masq_user = stub("masq_user", global_id: 'other global id')
-        domain = stub("domain")
-        jwt = stub("jwt")
-        Canvas::Security::ServicesJwt.stubs(:for_user).with(
+        root_account = double("root_account", feature_enabled?: true)
+        user = double("user", global_id: 'global id')
+        masq_user = double("masq_user", global_id: 'other global id')
+        domain = double("domain")
+        jwt = double("jwt")
+        allow(Canvas::Security::ServicesJwt).to receive(:for_user).with(
           domain,
           user,
-          has_entry(real_user: masq_user),
-        ).returns(jwt)
+          include(real_user: masq_user),
+        ).and_return(jwt)
         env = described_class.env_for(root_account,
           user: user, domain: domain, real_user: masq_user)
         expect(env[:JWT]).to eql(jwt)
       end
 
       it "does not allow file uploading without context" do
-        root_account = stub("root_account", feature_enabled?: true)
-        user = stub("user", global_id: 'global id')
+        root_account = double("root_account", feature_enabled?: true)
+        user = double("user", global_id: 'global id')
         env = described_class.env_for(root_account, user: user)
         expect(env[:RICH_CONTENT_CAN_UPLOAD_FILES]).to eq(false)
       end
 
       it "lets context decide if uploading is ok" do
-        root_account = stub("root_account", feature_enabled?: true)
-        user = stub("user", global_id: 'global id')
-        context1 = stub("allowed_context", grants_any_right?: true)
-        context2 = stub("forbidden_context", grants_any_right?: false)
+        root_account = double("root_account", feature_enabled?: true)
+        user = double("user", global_id: 'global id')
+        context1 = double("allowed_context", grants_any_right?: true)
+        context2 = double("forbidden_context", grants_any_right?: false)
         env1 = described_class.env_for(root_account, user: user, context: context1)
         env2 = described_class.env_for(root_account, user: user, context: context2)
         expect(env1[:RICH_CONTENT_CAN_UPLOAD_FILES]).to eq(true)
         expect(env2[:RICH_CONTENT_CAN_UPLOAD_FILES]).to eq(false)
       end
 
-      context "with only lowest level flag on" do
-        let(:root_account){ stub("root_account") }
-
-        before(:each) do
-          root_account.stubs(:feature_enabled?).with(:rich_content_service).returns(true)
-          root_account.stubs(:feature_enabled?).with(:rich_content_service_with_sidebar).returns(false)
-          root_account.stubs(:feature_enabled?).with(:rich_content_service_high_risk).returns(false)
-        end
-
-        it "assumes high risk without being specified" do
-          env = described_class.env_for(root_account)
-          expect(env[:RICH_CONTENT_SERVICE_ENABLED]).to be_falsey
-        end
-
-        it "is contextually on for low risk areas" do
-          env = described_class.env_for(root_account, risk_level: :basic)
-          expect(env[:RICH_CONTENT_SERVICE_ENABLED]).to be_truthy
-        end
-
-        it "is contextually off for medium risk areas" do
-          env = described_class.env_for(root_account, risk_level: :sidebar)
-          expect(env[:RICH_CONTENT_SERVICE_ENABLED]).to be_falsey
-        end
-
-        it "is contextually off for high risk areas" do
-          env = described_class.env_for(root_account, risk_level: :highrisk)
-          expect(env[:RICH_CONTENT_SERVICE_ENABLED]).to be_falsey
-        end
-      end
-
       context "with all flags on" do
-        let(:root_account){ stub("root_account") }
+        let(:root_account){double("root_account") }
 
         before(:each) do
-          root_account.stubs(:feature_enabled?).with(:rich_content_service).returns(true)
-          root_account.stubs(:feature_enabled?).with(:rich_content_service_with_sidebar).returns(true)
-          root_account.stubs(:feature_enabled?).with(:rich_content_service_high_risk).returns(true)
+          allow(root_account).to receive(:feature_enabled?).with(:rich_content_service_high_risk).and_return(true)
         end
 
         it "is contextually on for low risk areas" do
@@ -168,11 +142,11 @@ module Services
         end
       end
 
-      context "with all flags off" do
-        let(:root_account){ stub("root_account") }
+      context "with flag off" do
+        let(:root_account){double("root_account") }
 
         before(:each) do
-          root_account.stubs(:feature_enabled?).returns(false)
+          allow(root_account).to receive(:feature_enabled?).and_return(false)
         end
 
         it "is contextually off when no risk specified" do
@@ -180,24 +154,20 @@ module Services
           expect(env[:RICH_CONTENT_SERVICE_ENABLED]).to be_falsey
         end
 
-        it "is contextually off even for low risk areas" do
+        it "is contextually on for low risk areas" do
           env = described_class.env_for(root_account, risk_level: :basic)
-          expect(env[:RICH_CONTENT_SERVICE_ENABLED]).to be_falsey
+          expect(env[:RICH_CONTENT_SERVICE_ENABLED]).to be_truthy
+        end
+
+        it "is contextually on for lower risk areas with sidebar" do
+          env = described_class.env_for(root_account, risk_level: :sidebar)
+          expect(env[:RICH_CONTENT_SERVICE_ENABLED]).to be_truthy
         end
       end
 
-      it "can be totally disabled with the lowest flag" do
-        root_account = stub("root_account")
-        root_account.stubs(:feature_enabled?).with(:rich_content_service).returns(false)
-        root_account.stubs(:feature_enabled?).with(:rich_content_service_with_sidebar).returns(true)
-        root_account.stubs(:feature_enabled?).with(:rich_content_service_high_risk).returns(true)
-        env = described_class.env_for(root_account)
-        expect(env[:RICH_CONTENT_SERVICE_ENABLED]).to be_falsey
-      end
-
       it "treats nil feature values as false" do
-        root_account = stub("root_account")
-        root_account.stubs(:feature_enabled?).with(:rich_content_service).returns(nil)
+        root_account = double("root_account")
+        allow(root_account).to receive(:feature_enabled?).with(:rich_content_service_high_risk).and_return(nil)
         env = described_class.env_for(root_account)
         expect(env[:RICH_CONTENT_SERVICE_ENABLED]).to eq(false)
       end
@@ -205,11 +175,60 @@ module Services
       context "integrating with a real account and feature flags" do
         it "sets all levels to true when all flags set" do
           account = account_model
-          account.enable_feature!(:rich_content_service)
-          account.enable_feature!(:rich_content_service_with_sidebar)
           account.enable_feature!(:rich_content_service_high_risk)
           env = described_class.env_for(account)
           expect(env[:RICH_CONTENT_SERVICE_ENABLED]).to be_truthy
+        end
+
+        it "on for basic if flag is disabled" do
+          account = account_model
+          account.disable_feature!(:rich_content_service_high_risk)
+          env = described_class.env_for(account, risk_level: :basic)
+          expect(env[:RICH_CONTENT_SERVICE_ENABLED]).to be_truthy
+        end
+
+        it "on for sidebar if flag is disabled" do
+          account = account_model
+          account.disable_feature!(:rich_content_service_high_risk)
+          env = described_class.env_for(account, risk_level: :sidebar)
+          expect(env[:RICH_CONTENT_SERVICE_ENABLED]).to be_truthy
+        end
+
+        it "off for high risk if flag is disabled" do
+          account = account_model
+          account.disable_feature!(:rich_content_service_high_risk)
+          env = described_class.env_for(account)
+          expect(env[:RICH_CONTENT_SERVICE_ENABLED]).to be_falsey
+        end
+      end
+
+      context "without rich_content_service_enabled setting true" do
+        before(:each) do
+          allow(Setting).to receive(:get)
+            .with('rich_content_service_enabled', 'false')
+            .and_return(false)
+        end
+
+        it "on for all risk levels if feature flag is enabled" do
+          account = account_model
+          account.enable_feature!(:rich_content_service_high_risk)
+          env = described_class.env_for(account, risk_level: :basic)
+          expect(env[:RICH_CONTENT_SERVICE_ENABLED]).to be_truthy
+          env = described_class.env_for(account, risk_level: :sidebar)
+          expect(env[:RICH_CONTENT_SERVICE_ENABLED]).to be_truthy
+          env = described_class.env_for(account, risk_level: :highrisk)
+          expect(env[:RICH_CONTENT_SERVICE_ENABLED]).to be_truthy
+        end
+
+        it "off for all risk levels if feature flag is not enabled" do
+          account = account_model
+          account.disable_feature!(:rich_content_service_high_risk)
+          env = described_class.env_for(account, risk_level: :basic)
+          expect(env[:RICH_CONTENT_SERVICE_ENABLED]).to be_falsey
+          env = described_class.env_for(account, risk_level: :sidebar)
+          expect(env[:RICH_CONTENT_SERVICE_ENABLED]).to be_falsey
+          env = described_class.env_for(account, risk_level: :highrisk)
+          expect(env[:RICH_CONTENT_SERVICE_ENABLED]).to be_falsey
         end
       end
     end

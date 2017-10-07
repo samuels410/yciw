@@ -37,7 +37,7 @@ module Importers
     def resolve_link!(link)
       case link[:link_type]
       when :wiki_page
-        if linked_wiki_url = context.wiki.wiki_pages.where(migration_id: link[:migration_id]).limit(1).pluck(:url).first
+        if linked_wiki_url = context.wiki_pages.where(migration_id: link[:migration_id]).limit(1).pluck(:url).first
           link[:new_value] = "#{context_path}/pages/#{linked_wiki_url}"
         end
       when :discussion_topic
@@ -169,7 +169,8 @@ module Importers
 
     def resolve_media_comment_data(node, rel_path)
       if file = find_file_in_context(rel_path)
-        if media_id = ((file.media_object && file.media_object.media_id) || file.media_entry_id)
+        media_id = ((file.media_object && file.media_object.media_id) || file.media_entry_id)
+        if media_id && media_id != 'maybe'
           node['id'] = "media_comment_#{media_id}"
           return "/media_objects/#{media_id}"
         end

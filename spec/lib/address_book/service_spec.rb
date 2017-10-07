@@ -19,7 +19,8 @@ require File.expand_path(File.dirname(__FILE__) + '/../../sharding_spec_helper.r
 
 describe AddressBook::Service do
   before do
-    allow(Canvas::DynamicSettings).to receive(:from_cache).
+    allow(Canvas::DynamicSettings).to receive(:find).with(any_args).and_call_original
+    allow(Canvas::DynamicSettings).to receive(:find).
       with("address-book", anything).
       and_return({'app-host' => 'http://test.host'})
 
@@ -321,19 +322,6 @@ describe AddressBook::Service do
         known_users = @address_book.known_in_context(@course.asset_string)
         expect(known_users.map(&:id)).to include(@xshard_recipient.id)
       end
-    end
-  end
-
-  describe "count_in_context" do
-    before do
-      @course = course_model
-      allow(Services::AddressBook).to receive(:count_in_context).
-        with(@sender, @course.global_asset_string, false).
-        and_return(3)
-    end
-
-    it "returns count from service" do
-      expect(@address_book.count_in_context(@course.asset_string)).to eql(3)
     end
   end
 

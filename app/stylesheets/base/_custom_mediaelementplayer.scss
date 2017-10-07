@@ -33,6 +33,16 @@
   }
 }
 
+/* Subtitile upload link */
+.mejs-captions-selector .upload-track {
+  color: white;
+  outline: none;
+}
+
+.mejs-captions-selector .upload-track:focus {
+  color: rgba(33, 248, 248, 1);
+}
+
 //
 // Playback speed control is based on code from an as-yet-unmerged pull request to mediaelement.js
 // See: https://github.com/matthillman/mediaelement/commit/e9efc9473ca38c240b712a11ba4c035651c204d4
@@ -118,4 +128,31 @@ div.mejs-speed-button {
   background-color: rgb(200, 200, 200) !important;
   background-color: rgba(255,255,255,.4) !important;
 }
+
+.mejs-controls .mejs-speed-button .mejs-speed-selector a:focus {
+  outline: none;
+}
+
+.mejs-controls .mejs-speed-button .mejs-speed-selector .focus {
+  background-color: rgb(200, 200, 200) !important;
+  background-color: rgba(255,255,255,.4) !important;
+}
 /* End: Speed */
+
+/* style for taking care of the weird outline of focus on audio comments.
+ * see CNVS-22375 for reference.
+ * this should ultimate be fixed in the mediaelement repo, but simon is
+ * currently making big changes to that. once he's done, we should fix this
+ * issue there with 'outline' style instead of this clever hack
+ */
+
+.mejs-audio:focus .mejs-inner:before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  outline: 5px auto rgb(59,153,252);
+  outline-offset: 1px;
+  content: ' ';
+}

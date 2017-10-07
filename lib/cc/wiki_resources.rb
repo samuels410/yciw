@@ -22,7 +22,7 @@ module CC
       wiki_folder = File.join(@export_dir, CCHelper::WIKI_FOLDER)
       FileUtils::mkdir_p wiki_folder
 
-      scope = @course.wiki.wiki_pages.not_deleted
+      scope = @course.wiki_pages.not_deleted
       WikiPages::ScopedToUser.new(@course, @user, scope).scope.each do |page|
         next unless export_object?(page)
         next if @user && page.locked_for?(@user)
@@ -42,6 +42,7 @@ module CC
           meta_fields[:module_locked] = page.locked_by_module_item?(@user, deep_check_if_needed: true).present?
           meta_fields[:assignment_identifier] =
             page.for_assignment? ? create_key(page.assignment) : nil
+          meta_fields[:todo_date] = page.todo_date
 
           File.open(path, 'w') do |file|
             file << @html_exporter.html_page(page.body, page.title, meta_fields)

@@ -25,6 +25,7 @@ define [
   'compiled/views/wiki/WikiPageReloadView'
   'i18n!pages'
   'compiled/views/editor/KeyboardShortcuts'
+  'jquery.instructure_date_and_time'
 ], ($, Backbone, RichContentEditor, template, ValidatedFormView, WikiPageDeleteDialog, WikiPageReloadView, I18n, KeyboardShortcuts) ->
 
   RichContentEditor.preloadRemoteModule()
@@ -36,12 +37,15 @@ define [
         '.header-bar-outer-container': '$headerBarOuterContainer'
         '.page-changed-alert': '$pageChangedAlert'
         '.help_dialog': '$helpDialog'
+        '#todo_date': '$studentTodoAt'
+        '#todo_date_container': '$studentTodoAtContainer'
 
       events:
         'click a.switch_views': 'switchViews'
         'click .delete_page': 'deleteWikiPage'
         'click .form-actions .cancel': 'cancel'
         'click .form-actions .save_and_publish': 'saveAndPublish'
+        'click #student_planner_checkbox': 'toggleStudentTodo'
 
     template: template
     className: "form-horizontal edit-form validated-form-view"
@@ -108,11 +112,20 @@ define [
         return warning
 
 
+    # handles the toggling of the student todo date picker
+    toggleStudentTodo: (e) =>
+      @$studentTodoAtContainer.toggle()
+
+
     # After the page loads, ensure the that wiki sidebar gets initialized
     # correctly.
     # @api custom backbone override
     afterRender: ->
       super
+      @$studentTodoAt.datetime_field()
+      if !@toJSON().todo_date?
+        @$studentTodoAtContainer.hide()
+
       RichContentEditor.initSidebar()
       RichContentEditor.loadNewEditor(@$wikiPageBody, { focus: true, manageParent: true })
 
@@ -156,10 +169,18 @@ define [
       errors = {}
 
       if data.title == ''
-        errors["title"] = [
+        errors['title'] = [
           {
             type: 'required'
-            message: I18n.t("errors.require_title",'You must enter a title')
+            message: I18n.t('errors.require_title','You must enter a title')
+          }
+        ]
+
+      if data.student_planner_checkbox == '1' && !data.student_todo_at?
+        errors['student_todo_at'] = [
+          {
+            type: 'required'
+            message: I18n.t('You must enter a date')
           }
         ]
 
@@ -206,6 +227,11 @@ define [
       else
         page_data.assignment = @model.createAssignment(set_assignment: '0')
       page_data.set_assignment = page_data.assignment.get('set_assignment')
+      page_data.student_planner_checkbox = planner_checkbox_is_checked = $("#student_planner_checkbox").is(":checked")
+      if page_data.student_planner_checkbox
+        page_data.todo_date = $("#todo_date").val()
+      else
+        page_data.todo_date = null
 
       page_data.published = true if @shouldPublish
       page_data

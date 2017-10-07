@@ -17,12 +17,13 @@
  */
 
 import React from 'react'
+import PropTypes from 'prop-types'
 import I18n from 'i18n!account_course_user_search'
 import $ from 'jquery'
 import EditUserDetailsDialog from 'jsx/shared/EditUserDetailsDialog'
 import 'jquery.instructure_date_and_time'
 
-const { object, string, func, shape, bool } = React.PropTypes
+const { object, string, func, shape, bool } = PropTypes
 
   export default class UsersListRow extends React.Component {
     static propTypes = {
@@ -56,7 +57,7 @@ const { object, string, func, shape, bool } = React.PropTypes
             key="masqueradeLink"
             href={`/users/${id}/masquerade`}
           >
-            <span className="screenreader-only">{I18n.t("Masquerade as %{name}", {name})}</span>
+            <span className="screenreader-only">{I18n.t('Act as %{name}', {name})}</span>
             <i className="icon-masquerade" aria-hidden="true"></i>
           </a>
         );
@@ -125,7 +126,7 @@ const { object, string, func, shape, bool } = React.PropTypes
             {sis_user_id}
           </div>
 
-          <div className="col-xs-3" role='gridcell'>
+          <div className="col-xs-2" role='gridcell'>
             {$.datetimeString(last_login)}
           </div>
 

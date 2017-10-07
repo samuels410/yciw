@@ -20,15 +20,18 @@ define [
   'i18n!gradezilla'
   'jquery'
   'underscore'
+  'react'
+  'react-dom'
   'Backbone'
   'vendor/slickgrid'
   'compiled/gradezilla/OutcomeGradebookGrid'
   'compiled/views/gradezilla/CheckboxView'
-  'compiled/views/gradezilla/SectionMenuView'
+  'compiled/views/gradebook/SectionMenuView'
+  'jsx/gradezilla/default_gradebook/components/SectionFilter'
   'jst/gradezilla/outcome_gradebook'
   'vendor/jquery.ba-tinypubsub'
   'jquery.instructure_misc_plugins'
-], (I18n, $, _, {View}, Slick, Grid, CheckboxView, SectionMenuView, template, cellTemplate) ->
+], (I18n, $, _, React, ReactDOM, {View}, Slick, Grid, CheckboxView, SectionMenuView, SectionFilter, template, cellTemplate) ->
 
   Dictionary =
     exceedsMastery:
@@ -124,7 +127,7 @@ define [
       view.on('togglestate', @_createFilter(name)) for name, view of @checkboxes
       $.subscribe('currentSection/change', Grid.Events.sectionChangeFunction(@grid))
       $.subscribe('currentSection/change', @updateExportLink)
-      @updateExportLink(@gradebook.sectionToShow)
+      @updateExportLink(@gradebook.getFilterRowsBySetting('sectionId'))
 
     # Internal: Listen for events on grid.
     #
@@ -146,7 +149,7 @@ define [
     render: ->
       $.when(@gradebook.hasSections)
         .then(=> super)
-        .then(@_drawSectionMenu)
+        .then(@renderSectionMenu)
       $.when(@hasOutcomes).then(@renderGrid)
       this
 
@@ -160,7 +163,7 @@ define [
       Grid.Util.saveStudents(response.linked.users)
       Grid.Util.saveOutcomePaths(response.linked.outcome_paths)
       Grid.Util.saveSections(@gradebook.sections) # might want to put these into the api results at some point
-      [columns, rows] = Grid.Util.toGrid(response, column: { formatter: Grid.View.cell }, row: { section: @menu.currentSection })
+      [columns, rows] = Grid.Util.toGrid(response, column: { formatter: Grid.View.cell }, row: { section: @gradebook.getFilterRowsBySetting('sectionId') })
       @grid = new Slick.Grid(
         '.outcome-gradebook-wrapper',
         rows,
@@ -179,6 +182,28 @@ define [
         onResize: => @grid.resizeCanvas() if @grid
       })
       $(".post-grades-button-placeholder").hide();
+
+    # Internal: Render Section selector.
+    # Returns nothing.
+    renderSectionMenu: =>
+      sectionList = @gradebook.sectionList()
+      mountPoint = document.querySelector('[data-component="SectionFilter"]')
+      if sectionList.length > 1
+        selectedSectionId = @gradebook.getFilterRowsBySetting('sectionId') || '0'
+        props =
+          items: sectionList
+          onSelect: @updateCurrentSection
+          selectedItemId: selectedSectionId
+          disabled: false
+
+        component = React.createElement(SectionFilter, props)
+        @sectionFilterMenu = ReactDOM.render(component, mountPoint)
+
+    updateCurrentSection: (sectionId) =>
+      @gradebook.updateCurrentSection(sectionId)
+      Grid.Events.sectionChangeFunction(@grid)(sectionId)
+      @updateExportLink(sectionId)
+      @renderSectionMenu()
 
     # Public: Load all outcome results from API.
     #
@@ -224,18 +249,6 @@ define [
       response.rollups = a.rollups.concat(b.rollups)
       response
 
-    # Internal: Initialize the child SectionMenuView. This happens here because
-    #   the menu needs to wait for relevant course sections to load.
-    #
-    # Returns nothing.
-    _drawSectionMenu: =>
-      @menu = new SectionMenuView(
-        sections: @gradebook.sectionList()
-        currentSection: @gradebook.sectionToShow
-        el: $('.section-button-placeholder'),
-      )
-      @menu.render()
-
     # Internal: Create an event listener function used to filter SlickGrid results.
     #
     # name - The class name to toggle on/off (e.g. 'mastery', 'remedial').
@@ -251,5 +264,5 @@ define [
 
     updateExportLink: (section) =>
       url = "#{ENV.GRADEBOOK_OPTIONS.context_url}/outcome_rollups.csv"
-      url += "?section_id=#{section}" if section
+      url += "?section_id=#{section}" if section and section != '0'
       $('.export-content').attr('href', url)

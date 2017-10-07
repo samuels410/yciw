@@ -48,7 +48,7 @@ describe 'Canvadoc' do
   context 'as an admin' do
     before :each do
       site_admin_logged_in
-      Canvadocs::API.any_instance.stubs(:upload).returns "id" => 1234
+      allow_any_instance_of(Canvadocs::API).to receive(:upload).and_return "id" => 1234
     end
 
     it 'should have the annotations checkbox in plugin settings', priority: "1", test_id: 345729 do
@@ -67,7 +67,7 @@ describe 'Canvadoc' do
       turn_on_plugin_settings
       f('.save_button').click
       course_with_teacher_logged_in :account => @account, :active_all => true
-      @course.wiki.wiki_pages.create!(title: 'Page1')
+      @course.wiki_pages.create!(title: 'Page1')
       file = @course.attachments.create!(display_name: 'some test file', uploaded_data: default_uploaded_data)
       file.context = @course
       file.save!

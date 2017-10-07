@@ -25,15 +25,9 @@ module Importers
     def self.process_migration(data, migration)
       assignments = data['assignments'] ? data['assignments']: []
       to_import = migration.to_import 'assignments'
-      assignments.each do |assign|
-        if migration.import_object?("assignments", assign['migration_id'])
-          begin
-            import_from_migration(assign, migration.context, migration)
-          rescue
-            migration.add_import_warning(t('#migration.assignment_type', "Assignment"), assign[:title], $!)
-          end
-        end
-      end
+
+      create_assignments(assignments, migration)
+
       migration_ids = assignments.map{|m| m['assignment_id'] }.compact
       conn = Assignment.connection
       cases = []
@@ -44,6 +38,39 @@ module Importers
       end
     end
 
+    def self.create_assignments(assignments, migration)
+      assignment_records = []
+      context = migration.context
+
+      Assignment.suspend_callbacks(:update_submissions_later) do
+        assignments.each do |assign|
+          if migration.import_object?("assignments", assign['migration_id'])
+            begin
+              assignment_records << import_from_migration(assign, context, migration)
+            rescue
+              migration.add_import_warning(t('#migration.assignment_type', "Assignment"), assign[:title], $!)
+            end
+          end
+        end
+      end
+
+      assignment_records.compact!
+
+      assignment_ids = assignment_records.map(&:id)
+      Submission.suspend_callbacks(:update_assignment, :touch_graders) do
+        # execute this query against the slave, so that it will use a cursor, and not
+        # attempt to order by submissions.id, because in very large dbs that can cause
+        # the postgres planner to prefer to search the submission_pkey index
+        Shackles.activate(:slave) do
+          Submission.where(assignment_id: assignment_ids).find_each do |sub|
+            Shackles.activate(:master) { sub.save! }
+          end
+        end
+      end
+
+      context.touch_admins if context.respond_to?(:touch_admins)
+    end
+
     def self.import_from_migration(hash, context, migration, item=nil, quiz=nil)
       hash = hash.with_indifferent_access
       return nil if hash[:migration_id] && hash[:assignments_to_import] && !hash[:assignments_to_import][hash[:migration_id]]
@@ -52,6 +79,7 @@ module Importers
       item ||= context.assignments.temp_record #new(:context => context)
 
       item.mark_as_importing!(migration)
+      master_migration = migration&.for_master_course_import?  # propagate null dates only for blueprint syncs
 
       item.title = hash[:title]
       item.title = I18n.t('untitled assignment') if item.title.blank?
@@ -158,6 +186,8 @@ module Importers
         assoc.save
 
         item.points_possible ||= rubric.points_possible if item.infer_grading_type == "points"
+      elsif master_migration && item.rubric
+        item.rubric_association.destroy
       end
 
       if hash[:assignment_overrides]
@@ -208,9 +238,11 @@ module Importers
         item.saved_by = :quiz
       end
 
-      hash[:due_at] ||= hash[:due_date]
+      hash[:due_at] ||= hash[:due_date] if hash.has_key?(:due_date)
       [:due_at, :lock_at, :unlock_at, :peer_reviews_due_at].each do |key|
-        item.send"#{key}=", Canvas::Migration::MigratorHelper.get_utc_time_from_timestamp(hash[key]) unless hash[key].nil?
+        if hash.has_key?(key) && (master_migration || hash[key].present?)
+          item.send"#{key}=", Canvas::Migration::MigratorHelper.get_utc_time_from_timestamp(hash[key])
+        end
       end
 
       if hash[:has_group_category]

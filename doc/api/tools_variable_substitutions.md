@@ -38,7 +38,7 @@ richer experience.
 Some substitutions may be used as 'enabled_capabilities' for LTI2 tools. These substitutions have a
 'Launch Parameter' label indicating the parameter name that will be sent in the tool launch if enabled.
 
-For more information on variable substitution, see the [https://www.imsglobal.org/specs/ltiv1p1p1/implementation-guide#toc-9](IMS LTI specification).
+For more information on variable substitution, see the <a href="https://www.imsglobal.org/specs/ltiv1p1p1/implementation-guide#toc-9">IMS LTI specification</a>.
 
 # Usage/Configuration
 Variable substitutions can be configured for a tool in 3 ways:
@@ -108,6 +108,74 @@ particular placement:
 ```
 
 # Supported Substitutions
+## Context.title
+The title of the context.
+
+**Availability**: *always*  
+**Launch Parameter**: *context_title*  
+
+```
+Example Course
+```
+## com.instructure.PostMessageToken
+A token that can be used for frontend communication between an LTI tool
+and Canvas via the Window.postMessage API.
+
+**Availability**: **  
+**Launch Parameter**: *com_instructure_post_message_token*  
+
+```
+9ae4170c-6b64-444d-9246-0b7dedd5f560
+```
+## com.instructure.Assignment.lti.id
+The LTI assignment id of an assignment. This value corresponds with
+the `ext_lti_assignment_id` send in various launches and webhooks.
+
+**Availability**: *always*  
+**Launch Parameter**: *com_instructure_assignment_lti_id*  
+
+```
+9ae4170c-6b64-444d-9246-0b7dedd5f560
+```
+## com.instructure.OriginalityReport.id
+The Canvas id of the Originality Report associated
+with the launch.
+
+**Availability**: **  
+**Launch Parameter**: *com_instructure_originality_report_id*  
+
+```
+23
+```
+## com.instructure.Submission.id
+The Canvas id of the submission associated with the
+launch.
+
+**Availability**: **  
+**Launch Parameter**: *com_instructure_submission_id*  
+
+```
+23
+```
+## com.instructure.File.id
+The Canvas id of the file associated with the submission
+in the launch.
+
+**Availability**: **  
+**Launch Parameter**: *com_instructure_file_id*  
+
+```
+23
+```
+## CourseOffering.sourcedId
+the LIS identifier for the course offering.
+
+**Availability**: *when launched in a course*  
+**Launch Parameter**: *lis_course_offering_sourcedid*  
+
+```
+1234
+```
 ## Context.id
 an opaque identifier that uniquely identifies the context of the tool launch.
 
@@ -116,6 +184,15 @@ an opaque identifier that uniquely identifies the context of the tool launch.
 
 ```
 cdca1fe2c392a208bd8a657f8865ddb9ca359534
+```
+## Context.sourcedId
+The sourced Id of the context.
+
+**Availability**: *always*  
+
+
+```
+1234
 ```
 ## Message.documentTarget
 communicates the kind of browser window/frame where the Canvas has launched a tool.
@@ -672,6 +749,15 @@ Returns a comma separated list of section sis_id's that the user is enrolled in.
 ```
 section_sis_id_1, section_sis_id_2
 ```
+## com.instructure.contextLabel
+Returns the course code.
+
+**Availability**: *when launched in a course*  
+**Launch Parameter**: *context_label*  
+
+```
+CS 124
+```
 ## Canvas.module.id
 Returns the module_id that the module item was launched from.
 
@@ -818,6 +904,33 @@ Only available for LTI 2.0.
 ```
 https://<domain>.instructure.com/api/lti/courses/<course_id>/tool_consumer_profile/<opaque_id>
 https://<domain>.instructure.com/api/lti/accounts/<account_id>/tool_consumer_profile/<opaque_id>
+```
+## vnd.Canvas.OriginalityReport.url
+The originality report LTI2 service endpoint.
+
+**Availability**: *always*  
+**Launch Parameter**: *vnd_canvas_originality_report_url*  
+
+```
+api/lti/assignments/{assignment_id}/submissions/{submission_id}/originality_report
+```
+## vnd.Canvas.submission.url
+The submission LTI2 service endpoint.
+
+**Availability**: *always*  
+**Launch Parameter**: *vnd_canvas_submission_url*  
+
+```
+api/lti/assignments/{assignment_id}/submissions/{submission_id}
+```
+## vnd.Canvas.submission.history.url
+The submission history LTI2 service endpoint.
+
+**Availability**: *always*  
+**Launch Parameter**: *vnd_canvas_submission_history_url*  
+
+```
+api/lti/assignments/{assignment_id}/submissions/{submission_id}/history
 ```
 ## Canvas.file.media.id
 

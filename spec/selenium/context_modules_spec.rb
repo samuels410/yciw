@@ -34,7 +34,7 @@ describe "context modules" do
     end
 
      it 'should add an unpublished page to a module', priority: "1", test_id: 126709 do
-      @unpub_page = @course.wiki.wiki_pages.create!(title: 'Unpublished Page')
+      @unpub_page = @course.wiki_pages.create!(title: 'Unpublished Page')
       @unpub_page.workflow_state = 'unpublished'
       @unpub_page.save!
       @mod.add_item(type: 'wiki_page', id: @unpub_page.id)
@@ -44,7 +44,7 @@ describe "context modules" do
      end
 
     it 'should add a published page to a module', priority: "1", test_id: 126710 do
-      @pub_page = @course.wiki.wiki_pages.create!(title: 'Published Page')
+      @pub_page = @course.wiki_pages.create!(title: 'Published Page')
       @mod.add_item(type: 'wiki_page', id: @pub_page.id)
       go_to_modules
       verify_module_title('Published Page')
@@ -157,20 +157,11 @@ describe "context modules" do
       expect(f('.points_possible_display')).to include_text "10 pts"
     end
 
-    it 'edits due date on a ungraded discussion in a module', priority: "2", test_id: 126717 do
-      skip_if_chrome('Not inputing due_date right')
+    it 'shows the due date on an graded discussion in a module', priority: "2", test_id: 126717 do
       due_at = 3.days.from_now
-      @pub_ungraded_discussion = @course.discussion_topics.create!(title: 'Non-graded Published Discussion')
-      @mod.add_item(type: 'discussion_topic', id: @pub_ungraded_discussion.id)
-      go_to_modules
-      fln('Non-graded Published Discussion').click
-      f('.edit-btn').click
-      make_full_screen
-      wait_for_ajaximations
-      f('input[type=checkbox][name="assignment[set_assignment]"]').click
-      expect(f('.DueDateInput')).to be_displayed
-      f(".date_field[data-date-type='due_at']").send_keys(format_date_for_view(due_at))
-      expect_new_page_load { f('.form-actions button[type=submit]').click }
+      @assignment = @course.assignments.create!(name: "assignemnt", due_at: due_at)
+      @discussion = @course.discussion_topics.create!(title: 'Graded Discussion', assignment: @assignment)
+      @mod.add_item(type: 'discussion_topic', id: @discussion.id)
       go_to_modules
       expect(f('.due_date_display').text).to eq date_string(due_at, :no_words)
     end
@@ -178,8 +169,8 @@ describe "context modules" do
     it 'edits available/until dates on a ungraded discussion in a module', priority: "2", test_id: 126718 do
       available_from = 2.days.from_now
       available_until = 4.days.from_now
-      @pub_ungraded_discussion = @course.discussion_topics.create!(title: 'Non-graded Published Discussion')
-      @mod.add_item(type: 'discussion_topic', id: @pub_ungraded_discussion.id)
+      @discussion = @course.discussion_topics.create!(title: 'Non-graded Published Discussion')
+      @mod.add_item(type: 'discussion_topic', id: @discussion.id)
       go_to_modules
       fln('Non-graded Published Discussion').click
       f('.edit-btn').click
@@ -223,7 +214,7 @@ describe "context modules" do
     end
 
     it 'edit content page module item inline', priority: "2", test_id: 132491 do
-      @edit_page = @course.wiki.wiki_pages.create!(title: 'EditMe Page')
+      @edit_page = @course.wiki_pages.create!(title: 'EditMe Page')
       @mod.add_item(type: 'wiki_page', id: @edit_page.id)
       go_to_modules
       verify_edit_item_form

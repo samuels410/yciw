@@ -18,6 +18,7 @@
 
 import I18n from 'i18n!roster'
 import React from 'react'
+import PropTypes from 'prop-types'
 import {personReadyToEnrollShape} from './shapes'
 import Alert from 'instructure-ui/lib/components/Alert'
 import Table from 'instructure-ui/lib/components/Table'
@@ -25,9 +26,9 @@ import ScreenReaderContent from 'instructure-ui/lib/components/ScreenReaderConte
 
   class PeopleReadyList extends React.Component {
     static propTypes = {
-      nameList: React.PropTypes.arrayOf(React.PropTypes.shape(personReadyToEnrollShape)),
-      defaultInstitutionName: React.PropTypes.string,
-      canReadSIS: React.PropTypes.bool
+      nameList: PropTypes.arrayOf(PropTypes.shape(personReadyToEnrollShape)),
+      defaultInstitutionName: PropTypes.string,
+      canReadSIS: PropTypes.bool
     };
     static defaultProps = {
       nameList: [],
@@ -38,8 +39,8 @@ import ScreenReaderContent from 'instructure-ui/lib/components/ScreenReaderConte
     renderNotice () {
       return (
         this.props.nameList.length > 0
-          ? <Alert variant="success" isDismissable={false}>{I18n.t('The following users are ready to be added to the course.')}</Alert>
-          : <Alert variant="info" isDismissable={false}>{I18n.t('No users were selected to add to the course')}</Alert>
+          ? <Alert variant="success" dismissable={false}>{I18n.t('The following users are ready to be added to the course.')}</Alert>
+          : <Alert variant="info" dismissable={false}>{I18n.t('No users were selected to add to the course')}</Alert>
       );
     }
     renderUserTable () {

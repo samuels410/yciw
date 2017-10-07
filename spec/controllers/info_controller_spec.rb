@@ -29,13 +29,22 @@ describe InfoController do
 
     it "should respond_to json" do
       request.accept = "application/json"
-      Canvas.stubs(:revision).returns("Test Proc")
+      allow(Canvas).to receive(:revision).and_return("Test Proc")
+      allow(Canvas::Cdn::RevManifest).to receive(:gulp_manifest).and_return({test_key: "mock_revved_url"})
       get "health_check"
       expect(response).to be_success
       json = JSON.parse(response.body)
       expect(json).to have_key('installation_uuid')
       json.delete('installation_uuid')
-      expect(json).to eq({ "status" => "canvas ok", "revision" => "Test Proc" })
+      expect(json).to eq({
+        "status" => "canvas ok",
+        "revision" => "Test Proc",
+        "asset_urls" => {
+          "common_css" => "/dist/brandable_css/new_styles_normal_contrast/bundles/common-#{BrandableCSS.cache_for('bundles/common', 'new_styles_normal_contrast')[:combinedChecksum]}.css",
+          "common_js" => ActionController::Base.helpers.javascript_url("#{ENV['USE_OPTIMIZED_JS'] == 'true' ? '/dist/webpack-production' : '/dist/webpack-dev'}/common"),
+          "revved_url" => "mock_revved_url"
+        }
+      })
     end
   end
 
@@ -58,7 +67,7 @@ describe InfoController do
 
     it "should filter the links based on the current user's role" do
       account = Account.create!
-      Account::HelpLinks.stubs(:default_links).returns([
+      allow(Account::HelpLinks).to receive(:default_links).and_return([
         {
           :available_to => ['student'],
           :text => 'Ask Your Instructor a Question',
@@ -81,7 +90,7 @@ describe InfoController do
           :is_default => 'true'
         }
       ])
-      LoadAccount.stubs(:default_domain_root_account).returns(account)
+      allow(LoadAccount).to receive(:default_domain_root_account).and_return(account)
       admin = account_admin_user active_all: true
       user_session(admin)
 

@@ -107,6 +107,29 @@ describe "Rubrics API", type: :request do
     )
   end
 
+  def create_rubric_api_call(context, params={}, type='course')
+    api_call(
+      :post, "/api/v1/#{type}s/#{context.id}/rubrics", {
+        controller: 'rubrics',
+        action: 'create',
+        format: 'json',
+        "#{type}_id": context.id.to_s
+      }.merge(params)
+    )
+  end
+
+  def update_rubric_api_call(context, params={}, type='course')
+    api_call(
+      :put, "/api/v1/#{type}s/#{context.id}/rubrics/#{@rubric.id}", {
+        controller: 'rubrics',
+        action: 'update',
+        id: @rubric.id.to_s,
+        format: 'json',
+        "#{type}_id": context.id.to_s
+      }.merge(params)
+    )
+  end
+
   def raw_rubric_call(context, params={}, type='course')
     raw_api_call(
       :get, "/api/v1/#{type}s/#{context.id}/rubrics/#{@rubric.id}", {
@@ -127,9 +150,9 @@ describe "Rubrics API", type: :request do
     expect(json.length).to eq 3
     links = response.headers['Link'].split(",")
     expect(links.all?{ |l| l =~ /api\/v1\/#{type}s\/#{context.id}\/rubrics/ }).to be_truthy
-    expect(links.find{ |l| l.match(/rel="next"/)}).to match /page=2/
-    expect(links.find{ |l| l.match(/rel="first"/)}).to match /page=1/
-    expect(links.find{ |l| l.match(/rel="last"/)}).to match /page=3/
+    expect(links.find{ |l| l.match(/rel="next"/)}).to match(/page=2/)
+    expect(links.find{ |l| l.match(/rel="first"/)}).to match(/page=1/)
+    expect(links.find{ |l| l.match(/rel="last"/)}).to match(/page=3/)
 
     # get the last page
     json = rubrics_api_call(context, {:per_page => '3', :page => '3'}, type)
@@ -137,12 +160,12 @@ describe "Rubrics API", type: :request do
     expect(json.length).to eq 2
     links = response.headers['Link'].split(",")
     expect(links.all?{ |l| l =~ /api\/v1\/#{type}s\/#{context.id}\/rubrics/ }).to be_truthy
-    expect(links.find{ |l| l.match(/rel="prev"/)}).to match /page=2/
-    expect(links.find{ |l| l.match(/rel="first"/)}).to match /page=1/
-    expect(links.find{ |l| l.match(/rel="last"/)}).to match /page=3/
+    expect(links.find{ |l| l.match(/rel="prev"/)}).to match(/page=2/)
+    expect(links.find{ |l| l.match(/rel="first"/)}).to match(/page=1/)
+    expect(links.find{ |l| l.match(/rel="last"/)}).to match(/page=3/)
   end
 
-  describe "in a course" do
+  describe "course level rubrics" do
     describe "index action" do
       before :once do
         course_with_teacher active_all: true
@@ -257,9 +280,116 @@ describe "Rubrics API", type: :request do
         end
       end
     end
+
+    describe "create action" do
+      before :once do
+        course_with_teacher active_all: true
+      end
+
+      it "creates a rubric" do
+        response = create_rubric_api_call(@course)
+        expect(response['rubric']['user_id']).to eq @user.id
+        expect(response['rubric_association']).to eq nil
+      end
+
+      it "creats a rubric with an association" do
+        assignment = @course.assignments.create
+        response = create_rubric_api_call(@course, {rubric: {title: 'new title'}, rubric_association: {association_id: assignment.id, association_type: 'Assignment'}})
+        expect(response['rubric_association']['association_id']).to eq assignment.id
+      end
+    end
+
+    describe "update action" do
+      before :once do
+        course_with_teacher active_all: true
+        create_rubric(@course)
+      end
+
+      it "updates a rubric" do
+        points = 9000.0
+        new_title = "some new title"
+        awesome = 'Awesome'
+        ratings = {
+          '0': {points: 9000, description: awesome},
+          '1': {points: 100, description: 'not good'}
+        }
+        above = 'above 9000'
+        criteria = {'0': {id: 1, points: points, description: above, long_description: "he's above 9000!", ratings: ratings}}
+        response = update_rubric_api_call(@course, {rubric: {title: new_title, criteria: criteria}})
+        rubric = response['rubric']
+        expect(rubric['title']).to eq new_title
+        expect(rubric['points_possible']).to eq points
+        expect(rubric['criteria'][0]['description']).to eq above
+        expect(rubric['criteria'][0]['ratings'][0]['description']).to eq awesome
+        expect(rubric['criteria'][0]['ratings'][0]['points']).to eq points
+      end
+
+      it "updates a rubric with multiple criteria" do
+        points0 = 5000.0
+        points1 = 2000.0
+        points2 = 2001.0
+        total_points = points0 + points1 + points2
+        criteria1ratings = {
+          '0': {points: points0, description: 'awesome'},
+          '1': {points: 100, description: 'not good'}
+        }
+        criteria2ratings = {
+          '0': {points: points1, description: 'awesome'},
+          '1': {points: 100, description: 'not good'}
+        }
+        criteria3ratings = {
+          '0': {points: points2, description: 'awesome'},
+          '1': {points: 100, description: 'not good'}
+        }
+        criteria = {
+          '0': {id: 1, points: points0, description: 'description', long_description: "long description", ratings: criteria1ratings},
+          '1': {id: 2, points: points1, description: 'description', long_description: "long description", ratings: criteria2ratings},
+          '2': {id: 3, points: points2, description: 'description', long_description: "long description", ratings: criteria3ratings},
+        }
+        response = update_rubric_api_call(@course, {rubric: {criteria: criteria}})
+        rubric = response['rubric']
+        expect(rubric['points_possible']).to eq total_points
+        expect(rubric['criteria'][0]['ratings'][0]['points']).to eq points0
+        expect(rubric['criteria'][1]['ratings'][0]['points']).to eq points1
+        expect(rubric['criteria'][2]['ratings'][0]['points']).to eq points2
+      end
+
+      it "updates a rubric with an outcome criterion" do
+        account = Account.default
+        outcome = account.created_learning_outcomes.create!(
+          :title => "My Outcome",
+          :description => "Description of my outcome",
+          :vendor_guid => "vendorguid9000"
+        )
+        rating = {
+          '0': {points: 9000, description: 'awesome'},
+          '1': {points: 1000, description: 'meh'},
+          '2': {points: 100, description: 'not good'}
+        }
+        criteria = {
+          '0': {id: 1, points: 9000, learning_outcome_id: outcome.id, description: 'description', long_description: "long description", ratings: rating},
+        }
+        response = update_rubric_api_call(@course, {rubric: {criteria: criteria}})
+        expect(response['rubric']['criteria'][0]['learning_outcome_id']).to eq outcome.id
+      end
+
+      it "updates a rubric with an association" do
+        assignment = @course.assignments.create
+        purpose = 'grading'
+        use_for_grading = true
+        hide_score_total = true
+        association_type = 'Assignment'
+        response = update_rubric_api_call(@course, {rubric: {title: 'new title'}, rubric_association: {use_for_grading: use_for_grading, purpose: purpose, hide_score_total: hide_score_total, association_id: assignment.id, association_type: association_type}})
+        expect(response['rubric_association']['association_id']).to eq assignment.id
+        expect(response['rubric_association']['association_type']).to eq association_type
+        expect(response['rubric_association']['purpose']).to eq purpose
+        expect(response['rubric_association']['use_for_grading']).to eq use_for_grading
+        expect(response['rubric_association']['hide_score_total']).to eq hide_score_total
+      end
+    end
   end
 
-  describe "in an account" do
+  describe "account level rubrics" do
     describe "index action" do
       before :once do
         @user = account_admin_user
@@ -323,6 +453,15 @@ describe "Rubrics API", type: :request do
           response = rubric_api_call(@account, {include: "assessments"}, 'account')
           expect(response).to have_key "assessments"
           expect(response["assessments"].length).to eq 2
+        end
+
+        it "returns only rubric assessments a user has permission to read" do
+          course_with_teacher active_all: true
+          assignment = assignment_model(context: @course)
+          ra_params = rubric_association_params_for_assignment(assignment)
+          RubricAssociation.generate(@teacher, @rubric, @course, ra_params)
+          response = rubric_api_call(@course, {include: "assessments"})
+          expect(response).not_to have_key "assessments"
         end
 
         it "returns any rubric assessments used for grading when passed 'graded_assessments'" do

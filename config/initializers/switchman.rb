@@ -144,7 +144,11 @@ Rails.application.config.after_initialize do
 
     scope :in_current_region, -> do
       @current_region_scope ||=
-        if !ApplicationController.region || DatabaseServer.all.all? { |db| !db.config[:region] }
+        if !default.is_a?(self)
+          # sharding isn't set up? maybe we're in tests, or a somehow degraded environment
+          # either way there's only one shard, and we always want to see it
+          [default]
+        elsif !ApplicationController.region || DatabaseServer.all.all? { |db| !db.config[:region] }
           all
         else
           in_region(ApplicationController.region)
@@ -168,7 +172,7 @@ Rails.application.config.after_initialize do
     end
 
     def in_region?(region)
-      !config[:region] || config[:region] == region
+      !config[:region] || (region.is_a?(Array) ? region.include?(config[:region]) : config[:region] == region)
     end
 
     def in_current_region?
@@ -179,11 +183,15 @@ Rails.application.config.after_initialize do
     end
 
     def self.send_in_each_region(klass, method, enqueue_args = {}, *args)
-      klass.send(method, *args)
+      run_current_region_asynchronously = enqueue_args.delete(:run_current_region_asynchronously)
       regions = Set.new
-      regions << Shard.current.database_server.config[:region]
+      unless run_current_region_asynchronously
+        klass.send(method, *args)
+        regions << Shard.current.database_server.config[:region]
+      end
+
       all.each do |db|
-        next if regions.include?(db.config[:region]) || !db.config[:region]
+        next if (regions.include?(db.config[:region]) || !db.config[:region])
         next if db.shards.empty?
         regions << db.config[:region]
         db.shards.first.activate do

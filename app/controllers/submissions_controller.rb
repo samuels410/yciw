@@ -118,6 +118,7 @@ class SubmissionsController < ApplicationController
     @visible_rubric_assessments = @submission.visible_rubric_assessments_for(@current_user)
     @assessment_request = @submission.assessment_requests.where(assessor_id: @current_user).first
     if authorized_action(@submission, @current_user, :read)
+      @submission&.mark_read(@current_user)
       respond_to do |format|
         @submission.limit_comments(@current_user, session)
         format.html
@@ -264,7 +265,7 @@ class SubmissionsController < ApplicationController
     end
 
     respond_to do |format|
-      if @submission.save
+      if @submission.persisted?
         log_asset_access(@assignment, "assignments", @assignment_group, 'submit')
         format.html do
           flash[:notice] = t('assignment_submit_success', 'Assignment successfully submitted.')
@@ -397,7 +398,7 @@ class SubmissionsController < ApplicationController
     # The second check is for multiple submissions and API calls that use the uploaded_data parameter to pass a filename
     if @assignment.allowed_extensions.present?
       if params[:submission][:attachments].any? {|a| !@assignment.allowed_extensions.include?((a.after_extension || '').downcase) } ||
-         params[:attachments].any? do |i, a|
+         params[:attachments].values.any? do |a|
            !a[:uploaded_data].empty? &&
            !@assignment.allowed_extensions.include?((a[:uploaded_data].split('.').last || '').downcase)
          end
@@ -605,7 +606,7 @@ class SubmissionsController < ApplicationController
         }
       end
       begin
-        @submissions = @assignment.update_submission(@user, params[:submission])
+        @submissions = @assignment.update_submission(@user, params[:submission].to_unsafe_h)
       rescue => e
         Canvas::Errors.capture_exception(:submissions, e)
         logger.error(e)

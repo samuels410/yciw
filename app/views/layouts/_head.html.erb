@@ -31,10 +31,11 @@
   <%= favicon_link_tag(favicon) %>
   <%= favicon_link_tag(brand_variable('ic-brand-apple-touch-icon'), rel: 'apple-touch-icon', type: nil) %>
   <%= yield :auto_discovery %>
+  <%= stylesheet_link_tag(active_brand_config_css_url, media: "all") %>
   <%= yield :head %>
   <%=
     # polyfill browsers that don't have a baseline of features we use like Promise or Object.assign
-    polyfill_url = "vendor/ie11-polyfill.js"
+    polyfill_url = "/ie11-polyfill.js"
     if request.user_agent.to_s =~ /Trident\/7.0.*rv:11/i
       # If it looks like IE11, assume they are going to need the polyfill
       # and serve it to them in the more performant way
@@ -47,7 +48,7 @@
       javascript_tag(%(
 !function(){
   var o,s,v;
-  if (!(window.Promise && Object.assign && [].find && [].includes && (o={},s=Symbol(),v={},o[s]=v,o[s]===v) && (function f(){}).bind().name==='bound f')) {
+  if (!(window.Promise && Object.assign && Object.values && [].find && [].includes && (o={},s=Symbol(),v={},o[s]=v,o[s]===v) && (function f(){}).bind().name==='bound f')) {
     s = 's', document.write('<'+s+'cr'+'ipt src="#{javascript_path(polyfill_url)}"></'+s+'c'+'ript>');
   }
 }();
@@ -57,7 +58,7 @@
   <%=
     # Load the fontface observer for lato async and as fast as possible so it doesn't flicker with fallback font.
     # That's why we don't load it in a 'require' at the bottom of the page
-    javascript_include_tag("vendor/lato-fontfaceobserver.js", async: true)
+    javascript_include_tag("/lato-fontfaceobserver.js", async: true)
   %>
   <%= yield :meta_tags %>
   <%= include_custom_meta_tags %>
@@ -85,4 +86,6 @@
     }
     document.addEventListener('click', _earlyClick)
   </script>
+  <%= javascript_include_tag(active_brand_config_js_url, defer: true) %>
+  <%= include_head_js %>
 </head>

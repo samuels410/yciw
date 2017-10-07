@@ -34,6 +34,8 @@ describe ContentMigration do
       topic = @copy_from.discussion_topics.create!(:title => "topic", :message => "<p>bloop</p>",
                                                    :pinned => true, :discussion_type => "threaded",
                                                    :require_initial_post => true)
+      todo_date = 1.day.from_now
+      topic.todo_date = todo_date
       topic.posted_at = 2.days.ago
       topic.position = 2
       topic.save!
@@ -49,6 +51,7 @@ describe ContentMigration do
       expect(new_topic.last_reply_at).to be_nil
       expect(new_topic.allow_rating).to eq false
       expect(new_topic.posted_at).to be_nil
+      expect(new_topic.todo_date.to_i).to eq todo_date.to_i
     end
 
     it "copies rating settings" do
@@ -298,6 +301,17 @@ describe ContentMigration do
 
       @copy_to.reload
       expect(@copy_to.syllabus_body).to be_include("/courses/#{@copy_to.id}/discussion_topics/#{topic2.id}")
+    end
+
+    it "should not copy lock_at directly when on assignment" do
+      graded_discussion_topic
+      @assignment.update_attribute(:lock_at, 3.days.from_now)
+
+      run_course_copy
+
+      topic2 = @copy_to.discussion_topics.where(:migration_id => mig_id(@topic)).first
+      expect(topic2.assignment.lock_at.to_i).to eq @assignment.lock_at.to_i
+      expect(topic2.lock_at).to be_nil
     end
   end
 end

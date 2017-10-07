@@ -31,7 +31,7 @@ define [
   'compiled/views/conversations/AutocompleteView'
   'compiled/views/conversations/CourseSelectionView'
   'compiled/views/conversations/ContextMessagesView'
-  'vendor/jquery.elastic'
+  'jquery.elastic'
 ], (I18n, $, _, {Collection}, DialogBaseView, template, preventDefault, composeTitleBarTemplate, composeButtonBarTemplate, addAttachmentTemplate, Message, AutocompleteView, CourseSelectionView, ContextMessagesView) ->
 
   ##
@@ -71,6 +71,7 @@ define [
       minHeight: 500
       height: 550
       resizable: true
+      title: I18n.t 'Compose Message'
       # Event handler for catching when the dialog is closed.
       # Overridding @close() or @cancel() doesn't work alone since
       # hitting ESC doesn't trigger either of those events.
@@ -127,7 +128,7 @@ define [
 
       @trigger('close')
       if @returnFocusTo
-        @returnFocusTo.focus()
+        $(@returnFocusTo).focus()
         delete @returnFocusTo
 
     sendMessage: (e) ->
@@ -205,10 +206,8 @@ define [
         @courseView.setValue(@defaultCourse)
       if @model
         @courseView.$picker.css('display', 'none')
-        @recipientView.$input.focus()
       else
         @$messageCourseRO.css('display', 'none')
-        @courseView.focus()
 
       if @tokenInput = @$el.find('.recipients').data('token_input')
         # since it doesn't infer percentage widths, just whatever the current pixels are
@@ -289,10 +288,8 @@ define [
           formData.context_code ||= @launchParams?.context || @options.account_context_code
           formData
         onSubmit: (@request, submitData) =>
-          # close dialog after submitting the message
           dfd = $.Deferred()
           @trigger('submitting', dfd)
-          @close()
           # update conversation when message confirmed sent
           # TODO: construct the new message object and pass it to the MessageDetailView which will need to create a MessageItemView for it
           # store @to for the closure in case there are multiple outstanding send requests
@@ -310,6 +307,8 @@ define [
               @trigger('addMessage', message.toJSON().conversation.messages[0], response)
             else
               @trigger('newConversations', response)
+            @close() # close after DOM has been updated, so focus is properly restored
+            # also don't close the dialog on failure, so the user's typed message isn't lost
           $.when(@request).fail ->
             dfd.reject()
 

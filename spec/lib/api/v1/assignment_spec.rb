@@ -54,18 +54,33 @@ describe "Api::V1::Assignment" do
     let(:session) { Object.new }
 
     it "returns json" do
-      assignment.context.stubs(:grants_right?).returns(true)
+      allow(assignment.context).to receive(:grants_right?).and_return(true)
       json = api.assignment_json(assignment, user, session, {override_dates: false})
       expect(json["needs_grading_count"]).to eq(0)
       expect(json["needs_grading_count_by_section"]).to be_nil
     end
 
     it "includes section-based counts when grading flag is passed" do
-      assignment.context.stubs(:grants_right?).returns(true)
+      allow(assignment.context).to receive(:grants_right?).and_return(true)
       json = api.assignment_json(assignment, user, session,
                                  {override_dates: false, needs_grading_count_by_section: true})
       expect(json["needs_grading_count"]).to eq(0)
       expect(json["needs_grading_count_by_section"]).to eq []
+    end
+
+    it "includes an associated planner override when flag is passed" do
+      assignment.context.root_account.enable_feature!(:student_planner)
+      po = planner_override_model(user: user, plannable: assignment)
+      json = api.assignment_json(assignment, user, session,
+                                 {include_planner_override: true})
+      expect(json.key?('planner_override')).to be_present
+      expect(json['planner_override']['id']).to eq po.id
+    end
+
+    it "returns nil for planner override when flag is passed and there is no override" do
+      json = api.assignment_json(assignment, user, session, {include_planner_override: true})
+      expect(json.key?('planner_override')).to be_present
+      expect(json['planner_override']).to be_nil
     end
 
     context "for an assignment" do
@@ -161,7 +176,7 @@ describe "Api::V1::Assignment" do
 
     context "given a user who is an admin" do
       before do
-        course.expects(:account_membership_allows).returns(true)
+        expect(course).to receive(:account_membership_allows).and_return(true)
       end
 
       it "is valid when user is an account admin" do
@@ -171,11 +186,11 @@ describe "Api::V1::Assignment" do
 
     context "given a user who is not an admin" do
       before do
-        assignment.course.expects(:account_membership_allows).returns(false)
+        expect(assignment.course).to receive(:account_membership_allows).and_return(false)
       end
 
       it "is valid when not in a closed grading period" do
-        assignment.expects(:in_closed_grading_period?).returns(false)
+        expect(assignment).to receive(:in_closed_grading_period?).and_return(false)
         is_expected.to be_assignment_editable_fields_valid(assignment, user)
       end
 
@@ -186,7 +201,7 @@ describe "Api::V1::Assignment" do
         end
 
         before do
-          assignment.expects(:in_closed_grading_period?).returns(true)
+          expect(assignment).to receive(:in_closed_grading_period?).and_return(true)
         end
 
         it "is valid when it was not gradeable and is still not gradeable " \

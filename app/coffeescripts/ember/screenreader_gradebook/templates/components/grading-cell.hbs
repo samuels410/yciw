@@ -16,6 +16,27 @@
 {{/if}}
 {{outOfText}}
 
+{{#if submission.late}}
+  <div class="deduction-box">
+    <div class="deduction-box-labels">
+      <div class="submission_late_penalty">
+        {{#t}}Late Penalty{{/t}}
+      </div>
+      <div class="submission_final_grade">
+        {{#t}}Final Grade{{/t}}
+      </div>
+    </div>
+    <div class="deduction-box-values">
+      <div class="submission_late_penalty">
+        <strong>{{late_penalty}}</strong>
+      </div>
+      <div class="submission_final_grade">
+        <strong>{{final_grade}}</strong>
+      </div>
+    </div>
+  </div>
+{{/if}}
+
 {{#unless isPassFail}}
 <div class="checkbox">
   <label class="checkbox">

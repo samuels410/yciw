@@ -16,6 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 require_relative '../page_objects/gradezilla_page'
+require_relative '../page_objects/gradezilla_cells_page'
 require_relative './weighting_setup'
 require_relative './a_gradebook_shared_example'
 
@@ -24,20 +25,21 @@ describe 'gradezilla' do
   include WeightingSetup
 
   let(:total_grade) do
-    grading_period_ids = [0, @gp1.id, @gp2.id]
+    grading_period_names = ["All Grading Periods", @gp1.title, @gp2.title]
     user_session(@teacher)
     Gradezilla.visit(@course)
 
     if @grading_period_index
-      Gradezilla.select_grading_period(grading_period_ids[@grading_period_index])
+      Gradezilla.select_grading_period(grading_period_names[@grading_period_index])
     end
-    Gradezilla.total_score_for_row(1)
+    Gradezilla::Cells.get_total_grade(@student)
   end
 
   let(:individual_view) { false }
 
   before(:once) do
     weighted_grading_setup
+    update_course_preferences(@teacher, selected_view_options_filters: ['gradingPeriods'])
   end
 
   it_behaves_like 'a gradebook'

@@ -57,7 +57,7 @@ describe Api::V1::GradeChangeEvent do
     skip("needs auditors cassandra keyspace configured") unless Auditors::GradeChange::Stream.available?
 
     @request_id = SecureRandom.uuid
-    RequestContextGenerator.stubs( :request_id => @request_id )
+    allow(RequestContextGenerator).to receive_messages( :request_id => @request_id )
 
     @domain_root_account = Account.default
 
@@ -71,7 +71,7 @@ describe Api::V1::GradeChangeEvent do
       })
     }
 
-    PageView.stubs(
+    allow(PageView).to receive_messages(
       :find_by_id => @page_view,
       :find_all_by_id => [ @page_view ]
     )
@@ -103,6 +103,8 @@ describe Api::V1::GradeChangeEvent do
     expect(event[:excused_after]).to eq false
     expect(event[:version_number]).to eq @submission.version_number
     expect(event[:graded_anonymously]).to eq @submission.graded_anonymously
+    expect(event[:points_possible_before]).to eq @event.points_possible_before
+    expect(event[:points_possible_after]).to eq @event.points_possible_after
     expect(event[:links][:assignment]).to eq Shard.relative_id_for(@assignment, Shard.current, Shard.current)
     expect(event[:links][:course]).to eq Shard.relative_id_for(@course, Shard.current, Shard.current)
     expect(event[:links][:student]).to eq Shard.relative_id_for(@student, Shard.current, Shard.current)

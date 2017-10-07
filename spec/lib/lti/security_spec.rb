@@ -39,7 +39,6 @@ describe Lti::Security do
           params,
           consumer_key: consumer_key,
           consumer_secret: consumer_secret,
-          callback: 'about:blank',
           nonce: nonce,
           timestamp: timestamp
         )
@@ -52,6 +51,19 @@ describe Lti::Security do
         expect(signed_params.key?('test')).to eq false
       end
 
+    end
+
+    context '#decoded_lti_assignment_id' do
+      it 'returns nil if secure params are invalid' do
+        expect(Lti::Security.decoded_lti_assignment_id('banana')).to be_nil
+      end
+
+      it 'returns the lti assignment id if secure params are valid' do
+        assignment_id = 12
+        body = {lti_assignment_id: assignment_id}
+        secure_params = Canvas::Security.create_jwt(body).to_s
+        expect(Lti::Security.decoded_lti_assignment_id(secure_params)).to eq assignment_id
+      end
     end
 
     context '.check_and_store_nonce' do

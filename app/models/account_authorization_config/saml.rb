@@ -78,27 +78,31 @@ class AccountAuthorizationConfig::SAML < AccountAuthorizationConfig::Delegated
   def download_metadata
     return unless metadata_uri.present?
     return unless metadata_uri_changed? || idp_entity_id_changed?
-    # someone's trying to cheat; switch to our more efficient implementation
-    self.metadata_uri = InCommon::URN if metadata_uri == InCommon.endpoint
 
-    if metadata_uri == InCommon::URN
-      unless idp_entity_id.present?
-        errors.add(:idp_entity_id, :present)
-        return
-      end
+    Federation.descendants.each do |federation|
+      # someone's trying to cheat; switch to our more efficient implementation
+      self.metadata_uri = federation::URN if metadata_uri == federation.endpoint
 
-      begin
-        entity = InCommon.metadata[idp_entity_id]
-        unless entity
-          errors.add(:idp_entity_id, t("Entity %{entity_id} not found in InCommon Metadata", entity_id: idp_entity_id))
+      if metadata_uri == federation::URN
+        unless idp_entity_id.present?
+          errors.add(:idp_entity_id, :present)
           return
         end
-        populate_from_metadata(entity)
-      rescue => e
-        ::Canvas::Errors.capture_exception(:incommon, e)
-        errors.add(:metadata_uri, e.message)
+
+        begin
+          entity = federation.metadata[idp_entity_id]
+          unless entity
+            errors.add(:idp_entity_id, t("Entity %{entity_id} not found in %{federation_name} Metadata",
+                                         entity_id: idp_entity_id, federation_name: federation.class_name))
+            return
+          end
+          populate_from_metadata(entity)
+        rescue => e
+          ::Canvas::Errors.capture_exception(:saml_federation, e)
+          errors.add(:metadata_uri, e.message)
+        end
+        return
       end
-      return
     end
 
     begin
@@ -130,6 +134,10 @@ class AccountAuthorizationConfig::SAML < AccountAuthorizationConfig::Delegated
     super
   end
 
+  def signing_certificates
+    settings['signing_certificates'] ||= []
+  end
+
   def populate_from_metadata(entity)
     idps = entity.identity_providers
     raise "Must provide exactly one IDPSSODescriptor; found #{idps.length}" unless idps.length == 1
@@ -139,6 +147,7 @@ class AccountAuthorizationConfig::SAML < AccountAuthorizationConfig::Delegated
     self.log_out_url = idp.single_logout_services.find { |ep| ep.binding == SAML2::Endpoint::Bindings::HTTP_REDIRECT }.try(:location)
     self.certificate_fingerprint = (idp.signing_keys.first || idp.keys.first).try(:fingerprint)
     self.identifier_format = (idp.name_id_formats & Onelogin::Saml::NameIdentifiers::ALL_IDENTIFIERS).first
+    self.settings[:signing_certificates] = idp.signing_keys.map(&:x509)
   end
 
   def populate_from_metadata_xml(xml)
@@ -166,7 +175,7 @@ class AccountAuthorizationConfig::SAML < AccountAuthorizationConfig::Delegated
     return nil unless self.auth_type == 'saml'
 
     unless @saml_settings
-      @saml_settings = self.class.saml_settings_for_account(self.account, current_host)
+      @saml_settings = self.class.onelogin_saml_settings_for_account(self.account, current_host)
 
       @saml_settings.idp_sso_target_url = self.log_in_url
       @saml_settings.idp_slo_target_url = self.log_out_url
@@ -179,7 +188,76 @@ class AccountAuthorizationConfig::SAML < AccountAuthorizationConfig::Delegated
     @saml_settings
   end
 
-  def self.saml_settings_for_account(account, current_host=nil)
+  # construct a metadata doc to represent the IdP
+  # TODO: eventually store the actual metadata we got from the IdP
+  def idp_metadata
+    @idp_metadata ||= begin
+       entity = SAML2::Entity.new
+       entity.entity_id = idp_entity_id
+
+       idp = SAML2::IdentityProvider.new
+       if log_out_url.present?
+         idp.single_logout_services << SAML2::Endpoint.new(log_out_url,
+                                                           SAML2::Endpoint::Bindings::HTTP_REDIRECT)
+       end
+       entity.roles << idp
+       entity
+    end
+  end
+
+  def self.sp_metadata(entity_id, hosts)
+    app_config = ConfigFile.load('saml') || {}
+
+    entity = SAML2::Entity.new
+    entity.entity_id = entity_id
+
+    contact = SAML2::Contact.new(SAML2::Contact::Type::TECHNICAL)
+    contact.surname = app_config[:tech_contact_name] || 'Webmaster'
+    contact.email_addresses = Array.wrap(app_config[:tech_contact_email])
+    entity.contacts << contact
+
+    sp = SAML2::ServiceProvider.new
+    sp.single_logout_services << SAML2::Endpoint.new("#{HostUrl.protocol}://#{hosts.first}/login/saml/logout",
+                                                     SAML2::Endpoint::Bindings::HTTP_REDIRECT)
+
+    hosts.each_with_index do |host, i|
+      sp.assertion_consumer_services << SAML2::Endpoint::Indexed.new("#{HostUrl.protocol}://#{host}/login/saml",
+                          i,
+                          i == 0)
+    end
+
+    encryption = app_config[:encryption]
+
+    if encryption.is_a?(Hash) &&
+      (cert_path = resolve_saml_key_path(encryption[:certificate]))
+
+      cert = File.read(cert_path)
+      sp.keys << SAML2::Key.new(cert, SAML2::Key::Type::ENCRYPTION, [SAML2::Key::EncryptionMethod.new])
+      sp.keys << SAML2::Key.new(cert, SAML2::Key::Type::SIGNING)
+    end
+
+    entity.roles << sp
+    entity
+  end
+
+  def self.sp_metadata_for_account(account, current_host = nil)
+    sp_metadata(saml_default_entity_id_for_account(account),HostUrl.context_hosts(account, current_host))
+  end
+
+  def self.config
+    ConfigFile.load('saml') || {}
+  end
+
+  def self.private_keys
+    return [] unless (encryption = config[:encryption])
+    ([encryption[:private_key]] + Array(encryption[:additional_private_keys])).map do |key|
+      path = resolve_saml_key_path(key)
+      next unless path
+      [path, File.read(path)]
+    end.compact.to_h
+  end
+
+  def self.onelogin_saml_settings_for_account(account, current_host=nil)
     app_config = ConfigFile.load('saml') || {}
     domains = HostUrl.context_hosts(account, current_host)
 
@@ -258,25 +336,32 @@ class AccountAuthorizationConfig::SAML < AccountAuthorizationConfig::Delegated
   end
 
   def user_logout_redirect(controller, current_user)
-    settings = saml_settings(controller.request.host_with_port)
     session = controller.session
 
-    saml_request = Onelogin::Saml::LogoutRequest.generate(
-      session[:name_qualifier],
-      session[:sp_name_qualifer],
-      session[:name_id],
-      session[:name_identifier_format],
-      session[:session_index],
-      settings
+    idp = idp_metadata.identity_providers.first
+    return super if idp.single_logout_services.empty?
+
+    logout_request = SAML2::LogoutRequest.initiate(idp,
+      SAML2::NameID.new(entity_id),
+      SAML2::NameID.new(session[:name_id],
+                        session[:name_identifier_format],
+                        name_qualifier: session[:name_qualifier],
+                        sp_name_qualifier: session[:sp_name_qualifier]),
+      session[:session_index]
     )
 
+    # sign the response
+    private_key_data = AccountAuthorizationConfig::SAML.private_keys.first&.last
+    private_key = OpenSSL::PKey::RSA.new(private_key_data) if private_key_data
+    result = SAML2::Bindings::HTTPRedirect.encode(logout_request, private_key: private_key)
+
     if debugging? && debug_get(:logged_in_user_id) == current_user.id
-      debug_set(:logout_request_id, saml_request.id)
-      debug_set(:logout_to_idp_url, saml_request.forward_url)
-      debug_set(:logout_to_idp_xml, saml_request.xml)
+      debug_set(:logout_request_id, logout_request.id)
+      debug_set(:logout_to_idp_url, result)
+      debug_set(:logout_to_idp_xml, logout_request.to_s)
       debug_set(:debugging, t('debug.logout_redirect', "LogoutRequest sent to IdP"))
     end
 
-    saml_request.forward_url
+    result
   end
 end

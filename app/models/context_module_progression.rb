@@ -180,7 +180,7 @@ class ContextModuleProgression < ActiveRecord::Base
 
         calc.check_action!(req, req_met)
       elsif req[:type] == 'min_score'
-        calc.check_action!(req, evaluate_score_requirement_met(req, subs))
+        calc.check_action!(req, evaluate_score_requirement_met(req, subs, tag))
       end
     end
     calc.check_view_requirements
@@ -192,13 +192,13 @@ class ContextModuleProgression < ActiveRecord::Base
     subs = []
     if tag.content_type_quiz?
       subs = Quizzes::QuizSubmission.where(quiz_id: tag.content_id, user_id: user).to_a +
-        Submission.where(assignment_id: tag.content.assignment_id, user_id: user).to_a
+        Submission.active.where(assignment_id: tag.content.assignment_id, user_id: user).to_a
     elsif tag.content_type_discussion?
       if tag.content
-        subs = Submission.where(assignment_id: tag.content.assignment_id, user_id: user).to_a
+        subs = Submission.active.where(assignment_id: tag.content.assignment_id, user_id: user).to_a
       end
     else
-      subs = Submission.where(assignment_id: tag.content_id, user_id: user).to_a
+      subs = Submission.active.where(assignment_id: tag.content_id, user_id: user).to_a
     end
     subs
   end
@@ -232,10 +232,19 @@ class ContextModuleProgression < ActiveRecord::Base
     end
   end
 
-  def evaluate_score_requirement_met(requirement, subs)
+  def evaluate_score_requirement_met(requirement, subs, tag)
     return unless requirement[:type] == "min_score"
     remove_incomplete_requirement(requirement[:id]) # start from a fresh slate so we don't hold onto a max score that doesn't exist anymore
-    subs && subs.any? do |sub|
+    return unless subs && subs.any?
+
+    if tag.assignment && tag.assignment.muted?
+      if subs.any?{|sub| sub.is_a?(Submission) && !sub.unsubmitted? }
+        self.update_incomplete_requirement!(requirement, nil)
+      end
+      return
+    end
+
+    subs.any? do |sub|
       score = get_submission_score(sub)
       requirement_met = (score.present? && score >= requirement[:min_score].to_f)
       if requirement_met
@@ -255,7 +264,7 @@ class ContextModuleProgression < ActiveRecord::Base
     return nil unless requirement
 
     requirement_met = true
-    requirement_met = points && points >= requirement[:min_score].to_f if requirement[:type] == 'min_score'
+    requirement_met = points && points >= requirement[:min_score].to_f && !(tag.assignment && tag.assignment.muted?) if requirement[:type] == 'min_score'
     requirement_met = false if requirement[:type] == 'must_submit' # calculate later; requires the submission
 
     if !requirement_met
@@ -323,7 +332,7 @@ class ContextModuleProgression < ActiveRecord::Base
   def self.prerequisites_satisfied?(user, context_module)
     related_progressions = nil
     (context_module.active_prerequisites || []).all? do |pre|
-      related_progressions ||= ContextModuleProgressions::Finder.find_or_create_for_module_and_user(context_module, user).index_by(&:context_module_id)
+      related_progressions ||= context_module.context.find_or_create_progressions_for_user(user).index_by(&:context_module_id)
       if pre[:type] == 'context_module' && progression = related_progressions[pre[:id]]
         progression.evaluate!(context_module)
         progression.completed?
@@ -418,7 +427,7 @@ class ContextModuleProgression < ActiveRecord::Base
   end
 
   def trigger_reevaluation_of_dependent_progressions(dependent_module_to_skip=nil)
-    progressions = ContextModuleProgressions::Finder.find_or_create_for_module_and_user(context_module, user)
+    progressions = context_module.context.find_or_create_progressions_for_user(user)
 
     # only recalculate progressions related to this module as a prerequisite
     progressions = progressions.select do |progression|

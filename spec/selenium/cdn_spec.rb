@@ -86,7 +86,7 @@ describe 'Stuff related to how we load stuff from CDN and use brandable_css' do
   end
 
   it 'has the right urls for script tag and stylesheets on the login page' do
-    Canvas::Cdn.config.expects(:host).at_least_once.returns(EXAMPLE_CDN_HOST)
+    expect(Canvas::Cdn.config).to receive(:host).at_least(:once).and_return(EXAMPLE_CDN_HOST)
     get '/login/canvas'
 
     ['bundles/common', 'bundles/login'].each { |bundle| check_css(bundle) }
@@ -95,8 +95,8 @@ describe 'Stuff related to how we load stuff from CDN and use brandable_css' do
     js_base_url = optimized_js_flag ? '/dist/webpack-production' : '/dist/webpack-dev'
     expected_js_bundles = [
       "#{js_base_url}/vendor.js",
-      '/javascripts/vendor/timezone/Etc/UTC.js',
-      '/javascripts/vendor/timezone/en_US.js',
+      '/timezone/Etc/UTC.js',
+      '/timezone/en_US.js',
       "#{js_base_url}/appBootstrap.js",
       "#{js_base_url}/common.js",
       "#{js_base_url}/login.js"

@@ -18,19 +18,23 @@
 
 import createStore from './createStore'
 
-  const CoursesStore = createStore({
-    getUrl () {
-      return `/api/v1/accounts/${this.context.accountId}/courses`;
-    },
+const CoursesStore = createStore({
+  getUrl () {
+    return `/api/v1/accounts/${this.context.accountId}/courses`;
+  },
 
-    normalizeParams (params) {
-      const payload = {}
-      if (params.enrollment_term_id) payload.enrollment_term_id = params.enrollment_term_id
-      if (params.search_term) payload.search_term = params.search_term
-      if (params.with_students) payload.enrollment_type = ['student']
-      payload.include = ['total_students', 'teachers']
-      return payload
-    }
-  })
+  normalizeParams (params) {
+    const payload = {}
+    if (params.enrollment_term_id) payload.enrollment_term_id = params.enrollment_term_id
+    if (params.search_term) payload.search_term = params.search_term
+    if (params.with_students) payload.enrollment_type = ['student']
+    if (params.sort) payload.sort = params.sort
+    if (params.order) payload.order = params.order
+    if (params.search_by) payload.search_by = params.search_by
+    payload.include = ['total_students', 'teachers', 'subaccount']
+
+    return payload
+  }
+})
 
 export default CoursesStore

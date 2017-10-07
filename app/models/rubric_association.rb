@@ -45,6 +45,9 @@ class RubricAssociation < ActiveRecord::Base
   after_destroy :update_alignments
   after_save :assert_uniqueness
   after_save :update_alignments
+
+  before_create :touch_association
+  before_destroy :touch_association
   serialize :summary_data
 
   ValidAssociationModels = {
@@ -108,6 +111,14 @@ class RubricAssociation < ActiveRecord::Base
     true
   end
 
+  def touch_association
+    if self.association_type == "Assignment"
+      self.class.connection.after_transaction_commit do
+        self.association_object.touch
+      end
+    end
+  end
+
   def update_old_rubric
     if self.rubric_id_changed? && self.rubric_id_was && self.rubric_id_was != self.rubric_id
       rubric = Rubric.find(self.rubric_id_was)
@@ -149,7 +160,8 @@ class RubricAssociation < ActiveRecord::Base
 
   def update_assignment_points
     if self.use_for_grading && !self.skip_updating_points_possible && self.association_object && self.association_object.respond_to?(:points_possible=) && self.rubric && self.rubric.points_possible && self.association_object.points_possible != self.rubric.points_possible
-      self.association_object.update_attribute(:points_possible, self.rubric.points_possible)
+      self.association_object.points_possible = self.rubric.points_possible
+      self.association_object.save
     end
   end
   protected :update_assignment_points

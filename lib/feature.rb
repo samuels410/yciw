@@ -202,6 +202,27 @@ END
       root_opt_in: true,
       beta: true
     },
+    'new_gradebook' =>
+    {
+      display_name: -> { I18n.t('New Gradebook') },
+      description:  -> { I18n.t(<<-END) },
+New Gradebook enables an early release of new Gradebook enhancements.
+END
+      applies_to: 'Course',
+      state: 'hidden',
+      root_opt_in: true,
+      beta: true,
+
+      custom_transition_proc: ->(user, context, _from_state, transitions) do
+        if context.is_a?(Course)
+          user_may_change_flag = context.account.grants_right?(user, :manage_account_settings)
+          transitions['on']['locked'] = !user_may_change_flag if transitions&.dig('on')
+          transitions['off']['locked'] = !user_may_change_flag if transitions&.dig('off')
+        elsif context.is_a?(Account)
+          transitions['on']['locked'] = true if transitions&.dig('on')
+        end
+      end
+    },
     'k12' =>
     {
       display_name: -> { I18n.t('features.k12', 'K-12 Specific Features') },
@@ -219,15 +240,6 @@ END
       display_name: -> { I18n.t('Recurring Calendar Events') },
       description: -> { I18n.t("Allows the scheduling of recurring calendar events") },
       applies_to: 'Course',
-      state: 'hidden',
-      root_opt_in: true,
-      beta: true
-    },
-    'duplicate_objects' =>
-    {
-      display_name: -> { I18n.t('Duplicate Objects') },
-      description: -> { I18n.t("Allows the duplicating of objects in Canvas") },
-      applies_to: 'Account',
       state: 'hidden',
       root_opt_in: true,
       beta: true
@@ -317,7 +329,15 @@ END
     'new_sis_integrations' =>
     {
       display_name: -> { I18n.t('Enable new SIS integration settings') },
-      description:  -> { I18n.t('Make new settings for SIS integrations visible and active') },
+      description:  -> { I18n.t('new_sis_integrations', <<-END) },
+This feature applies to institutions with an existing SIS Canvas integration.
+Any customers that are currently using grade passback solutions in Canvas or
+partner products should enable this feature for enhanced assignment data
+validation workflows. When enabled, this feature displays the new SIS
+Integration settings for SIS Sync (Assignment Level Grade Passback) in Account
+Settings. The Post to SIS feature option has been incorporated into this new
+setting and will be enabled by default.
+END
       applies_to: 'Account',
       state: 'hidden',
       root_opt_in: true,
@@ -403,33 +423,13 @@ END
       root_opt_in: true,
       touch_context: true
     },
-    'rich_content_service' =>
-    {
-      display_name: -> { I18n.t('Use remote version of Rich Content Editor') },
-      description: -> { I18n.t('In cases where it is available, load the RCE from a canvas rich content service') },
-      applies_to: 'RootAccount',
-      state: 'allowed',
-      beta: true,
-      development: false,
-      root_opt_in: false
-    },
-    'rich_content_service_with_sidebar' =>
-    {
-      display_name: -> { I18n.t('Use remote version of Rich Content Editor AND sidebar') },
-      description: -> { I18n.t('In cases where it is available, load the RCE and the wiki sidebar from a canvas rich content service') },
-      applies_to: 'RootAccount',
-      state: 'hidden',
-      beta: true,
-      development: false,
-      root_opt_in: false
-    },
     'rich_content_service_high_risk' =>
     {
-      display_name: -> { I18n.t('Use remote version of Rich Content Editor AND sidebar in high-risk areas like quizzes') },
-      description: -> { I18n.t('Always load the RCE and Sidebar from a canvas rich content service everywhere') },
+      display_name: -> { I18n.t('Rich Content Editor Sidebar Enhancements') },
+      description: -> { I18n.t('Use new rich content editor with enhanced sidebar everywhere') },
       applies_to: 'RootAccount',
       state: 'hidden',
-      beta: true,
+      beta: false,
       development: false,
       root_opt_in: false
     },
@@ -474,7 +474,13 @@ END
       applies_to: 'Account',
       state: 'hidden',
       beta: true,
-      root_opt_in: true
+      root_opt_in: true,
+      custom_transition_proc: ->(_, _, from_state, transitions) do
+        if from_state == 'on'
+          transitions['off'] = { 'locked' => true, 'message' => I18n.t('This feature cannot be disabled once it has been turned on.') }
+          transitions['allowed'] = { 'locked' => true, 'message' => I18n.t('This feature cannot be disabled once it has been turned on.') }
+        end
+      end
     },
     'plagiarism_detection_platform' =>
     {
@@ -483,17 +489,15 @@ END
       applies_to: 'RootAccount',
       state: 'hidden',
       beta: true,
-      root_opt_in: true,
-      development: true,
+      root_opt_in: true
     },
     'master_courses' =>
     {
       display_name: -> { I18n.t('Blueprint Courses') }, # this won't be confusing at all
       description: -> { I18n.t('Enable the creation of Blueprint Courses') },
       applies_to: 'RootAccount',
-      state: 'hidden',
-      beta: true,
-      development: true,
+      state: 'allowed',
+      beta: false,
       root_opt_in: true,
     },
     'student_context_cards' =>
@@ -505,16 +509,6 @@ END
       beta: true,
       root_opt_in: true,
     },
-    'gradezilla' =>
-    {
-      display_name: -> { I18n.t('Gradezilla') },
-      description: -> { I18n.t('Enable Gradezilla (name is only a placeholder as it will replace Gradebook in the future).') },
-      applies_to: "RootAccount",
-      state: "hidden",
-      beta: true,
-      development: true,
-      root_opt_in: true,
-    },
     'new_gradebook_history' =>
     {
       display_name: -> { I18n.t('New Gradebook History') },
@@ -523,13 +517,6 @@ END
       state: "hidden",
       beta: true,
       development: true,
-    },
-    'modules_home_page' =>
-    {
-      display_name: -> { I18n.t('Modules Home Page') },
-      description: -> { I18n.t('Default to modules for the course home page') },
-      applies_to: "Course",
-      state: "allowed",
     },
     'new_user_tutorial' =>
     {
@@ -540,22 +527,20 @@ END
     },
     'student_planner' =>
     {
-      display_name: -> { I18n.t('Student Planner')},
-      description: -> { I18n.t('Provides users with a planner dashboard option.')},
+      display_name: -> { I18n.t('To Do List Dashboard')},
+      description: -> { I18n.t('Provides users with a To Do List Dashboard option.')},
       applies_to: "RootAccount",
       state: "hidden",
       beta: true,
-      development: false,
-      root_opt_in: true
+      development: false
     },
     'quizzes2_exporter' =>
     {
       display_name: -> { I18n.t('Export to Quizzes 2 format') },
       description: -> { I18n.t('Export an existing quiz to new Quizzes 2 format') },
       applies_to: "RootAccount",
-      state: "hidden",
-      beta: false,
-      development: true,
+      state: "hidden_in_prod",
+      root_opt_in: true
     },
     'lti_2_auth_url_registration' =>
     {
@@ -565,6 +550,15 @@ END
       state: 'hidden',
       beta: false,
       root_opt_in: true
+    },
+    'graphql' =>
+    {
+      display_name: -> { I18n.t("GraphQL API") },
+      description: -> { I18n.t("EXPERIMENTAL GraphQL API.") },
+      applies_to: "RootAccount",
+      state: "hidden",
+      beta: true,
+      development: true,
     },
   )
 

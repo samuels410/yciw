@@ -31,19 +31,19 @@ class CanvadocSessionsController < ApplicationController
 
     if attachment.canvadocable?
       opts = {
-        preferred_plugins: [Canvadocs::RENDER_BOX, Canvadocs::RENDER_CROCODOC]
+        preferred_plugins: [Canvadocs::RENDER_PDFJS, Canvadocs::RENDER_BOX, Canvadocs::RENDER_CROCODOC]
       }
-
-      if attachment.context.try(:account)&.feature_enabled?(:new_annotations)
-        opts[:preferred_plugins].unshift Canvadocs::RENDER_PDFJS
-      end
 
       if @domain_root_account.settings[:canvadocs_prefer_office_online]
         opts[:preferred_plugins].unshift Canvadocs::RENDER_O365
       end
 
+      opts[:enable_annotations] = blob["enable_annotations"]
       attachment.submit_to_canvadocs(1, opts) unless attachment.canvadoc_available?
-      url = attachment.canvadoc.session_url(opts.merge(user: @current_user))
+      url = attachment.canvadoc.session_url(opts.merge({
+        user: @current_user,
+        moderated_grading_whitelist: blob["moderated_grading_whitelist"]
+      }))
 
       # For the purposes of reporting student viewership, we only
       # care if the original attachment owner is looking

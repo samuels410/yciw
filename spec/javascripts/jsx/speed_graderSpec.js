@@ -39,6 +39,7 @@ define([
         GROUP_GRADING_MODE: false,
         points_possible: 10
       };
+      this.originalStudent = SpeedGrader.EG.currentStudent;
       SpeedGrader.EG.currentStudent = {
         id: 4,
         name: 'Guy B. Studying',
@@ -89,6 +90,7 @@ define([
 
     teardown () {
       $('#fixtures').empty();
+      SpeedGrader.EG.currentStudent = this.originalStudent;
       window.jsonData = this.originalWindowJSONData;
       fakeENV.teardown();
     }
@@ -115,6 +117,85 @@ define([
     sinon.assert.calledTwice($.fn.append);
   });
 
+  QUnit.module('SpeedGrader#refreshSubmissionToView', {
+    setup () {
+      fakeENV.setup();
+      this.stub($, 'ajaxJSON');
+      this.spy($.fn, 'append');
+      this.originalWindowJSONData = window.jsonData;
+      window.jsonData = {
+        id: 27,
+        GROUP_GRADING_MODE: false,
+        points_possible: 10
+      };
+      this.originalStudent = SpeedGrader.EG.currentStudent;
+      SpeedGrader.EG.currentStudent = {
+        id: 4,
+        name: 'Guy B. Studying',
+        submission_state: 'not_graded',
+        submission: {
+          score: 7,
+          grade: 70,
+          submission_history: [
+            {
+              submission_type: 'basic_lti_launch',
+              external_tool_url: 'foo'
+            },
+            {
+              submission_type: 'basic_lti_launch',
+              external_tool_url: 'bar'
+            }
+          ]
+        }
+      };
+    },
+
+    teardown () {
+      SpeedGrader.EG.currentStudent = this.originalStudent;
+      fakeENV.teardown();
+    }
+  })
+
+  test('can handle non-nested submission history', () => {
+    SpeedGrader.EG.refreshSubmissionsToView()
+    ok(true, 'should not throw an exception')
+  })
+
+  QUnit.module('SpeedGrader#refreshGrades', {
+    setup () {
+      fakeENV.setup();
+      this.spy($.fn, 'append');
+      this.originalWindowJSONData = window.jsonData;
+      window.jsonData = {
+        id: 27,
+        GROUP_GRADING_MODE: false,
+        points_possible: 10
+      };
+      this.originalStudent = SpeedGrader.EG.currentStudent;
+      SpeedGrader.EG.currentStudent = {
+        id: 4,
+        name: 'Guy B. Studying',
+        submission_state: 'graded',
+        submission: {
+          score: 7,
+          grade: 70
+        }
+      };
+      sinon.stub($, 'getJSON')
+    },
+
+    teardown () {
+      SpeedGrader.EG.currentStudent = this.originalStudent;
+      fakeENV.teardown();
+      $.getJSON.restore()
+    }
+  })
+
+  test('makes request to API', () => {
+    SpeedGrader.EG.refreshGrades()
+    ok($.getJSON.calledWithMatch('submission_history'))
+  })
+
   let commentRenderingOptions;
   QUnit.module('SpeedGrader#renderComment', {
     setup () {
@@ -124,6 +205,7 @@ define([
         id: 27,
         GROUP_GRADING_MODE: false,
       };
+      this.originalStudent = SpeedGrader.EG.currentStudent;
       SpeedGrader.EG.currentStudent = {
         id: 4,
         name: 'Guy B. Studying',
@@ -257,6 +339,7 @@ define([
     },
 
     teardown () {
+      SpeedGrader.EG.currentStudent = this.originalStudent;
       $('#fixtures').empty();
       window.jsonData = this.originalWindowJSONData;
       fakeENV.teardown();
@@ -296,6 +379,74 @@ define([
     equal(submitLinkScreenreaderText, 'Submit comment: test');
   });
 
+  QUnit.module('SpeedGrader#showGrade', {
+    setup () {
+      fakeENV.setup();
+      this.stub($, 'ajaxJSON');
+      this.spy($.fn, 'append');
+      this.originalWindowJSONData = window.jsonData;
+      window.jsonData = {
+        id: 27,
+        GROUP_GRADING_MODE: false,
+        points_possible: 10,
+        studentsWithSubmissions: []
+      };
+      this.originalStudent = SpeedGrader.EG.currentStudent;
+      SpeedGrader.EG.currentStudent = {
+        id: 4,
+        name: 'Guy B. Studying',
+        submission_state: 'not_graded',
+        submission: {
+          score: 7,
+          grade: 'complete',
+          entered_grade: 'A',
+          submission_comments: []
+        }
+      };
+      ENV.SUBMISSION = {
+        grading_role: 'teacher'
+      };
+      ENV.RUBRIC_ASSESSMENT = {
+        assessment_type: 'grading',
+        assessor_id: 1
+      };
+
+      const gradeContainerHtml = `
+        <div id="grade_container">
+          <a class="update_submission_grade_url" href="my_url.com" title="POST"></a>
+          <input class="grading_value" value="56" />
+          <div id="combo_box_container"></div>
+          <div id="comments">
+          </div>
+        </div>
+      `;
+
+      $('#fixtures').html(gradeContainerHtml);
+    },
+
+    teardown () {
+      SpeedGrader.EG.currentStudent = this.originalStudent;
+      $('#fixtures').empty();
+      window.jsonData = this.originalWindowJSONData;
+      fakeENV.teardown();
+    }
+  });
+
+  test('uses submission#grade for pass_fail assignments', function () {
+    this.stub(SpeedGrader.EG, 'updateStatsInHeader');
+    const $grade = this.stub($.fn, 'val');
+    SpeedGrader.EG.showGrade();
+    ok($grade.calledWith('complete'));
+  });
+
+  test('uses submission#entered_grade for other types of assignments', function () {
+    this.stub(SpeedGrader.EG, 'updateStatsInHeader');
+    const $grade = this.stub($.fn, 'val');
+    SpeedGrader.EG.currentStudent.submission.grade = 'B';
+    SpeedGrader.EG.showGrade();
+    ok($grade.calledWith('A'));
+  });
+
   QUnit.module('SpeedGrader#handleGradeSubmit', {
     setup () {
       fakeENV.setup();
@@ -307,6 +458,7 @@ define([
         GROUP_GRADING_MODE: false,
         points_possible: 10
       };
+      this.originalStudent = SpeedGrader.EG.currentStudent;
       SpeedGrader.EG.currentStudent = {
         id: 4,
         name: 'Guy B. Studying',
@@ -356,6 +508,7 @@ define([
     },
 
     teardown () {
+      SpeedGrader.EG.currentStudent = this.originalStudent;
       $('#fixtures').empty();
       window.jsonData = this.originalWindowJSONData;
       fakeENV.teardown();
@@ -505,67 +658,122 @@ define([
 
   QUnit.module('speed_grader#getGradeToShow');
 
-  test('returns an empty string if submission is null', () => {
+  test('returns an empty string for "entered" if submission is null', () => {
     let grade = SpeedGrader.EG.getGradeToShow(null, 'some_role');
-    equal(grade, '');
+    equal(grade.entered, '');
   });
 
-  test('returns an empty string if the submission is undefined', () => {
+  test('returns an empty string for "entered" if the submission is undefined', () => {
     let grade = SpeedGrader.EG.getGradeToShow(undefined, 'some_role');
-    equal(grade, '');
+    equal(grade.entered, '');
   });
 
-  test('returns an empty string if a submission has no excused or grade', () => {
+  test('returns an empty string for "entered" if a submission has no excused or grade', () => {
     let grade = SpeedGrader.EG.getGradeToShow({}, 'some_role');
-    equal(grade, '');
+    equal(grade.entered, '');
   });
 
-  test('returns excused if excused is true', () => {
+  test('returns excused for "entered" if excused is true', () => {
     let grade = SpeedGrader.EG.getGradeToShow({ excused: true }, 'some_role');
-    equal(grade, 'EX');
+    equal(grade.entered, 'EX');
   });
 
-  test('returns excused if excused is true and user is moderator', () => {
+  test('returns excused for "entered" if excused is true and user is moderator', () => {
     let grade = SpeedGrader.EG.getGradeToShow({ excused: true }, 'moderator');
-    equal(grade, 'EX');
+    equal(grade.entered, 'EX');
   });
 
-  test('returns excused if excused is true and user is provisional grader', () => {
+  test('returns excused for "entered" if excused is true and user is provisional grader', () => {
     let grade = SpeedGrader.EG.getGradeToShow({ excused: true }, 'provisional_grader');
-    equal(grade, 'EX');
+    equal(grade.entered, 'EX');
   });
 
-  test('returns grade if submission has no excused and grade is not a float', () => {
-    let grade = SpeedGrader.EG.getGradeToShow({ grade: 'some_grade' }, 'some_role');
-    equal(grade, 'some_grade');
+  test('returns negated points_deducted for "pointsDeducted"', () => {
+    const grade = SpeedGrader.EG.getGradeToShow({
+      points_deducted: 123
+    }, 'some_role');
+    equal(grade.pointsDeducted, '-123');
   });
 
-  test('returns score of submission if user is a moderator', () => {
-    let grade = SpeedGrader.EG.getGradeToShow({ grade: 15, score: 25 }, 'moderator');
-    equal(grade, '25');
+  test('returns values based on grades if submission has no excused and grade is not a float', () => {
+    const grade = SpeedGrader.EG.getGradeToShow({
+      grade: 'some_grade',
+      entered_grade: 'entered_grade'
+    }, 'some_role');
+    equal(grade.entered, 'entered_grade');
+    equal(grade.adjusted, 'some_grade');
   });
 
-  test('returns score of submission if user is a provisional grader', () => {
-    let grade = SpeedGrader.EG.getGradeToShow({ grade: 15, score: 25 }, 'provisional_grader');
-    equal(grade, '25');
+  test('returns values based on scores if user is a moderator', () => {
+    const grade = SpeedGrader.EG.getGradeToShow({
+      grade: 15,
+      score: 25,
+      entered_score: 30
+    }, 'moderator');
+    equal(grade.entered, '30');
+    equal(grade.adjusted, '25');
   });
 
-  test('returns grade of submission if user is neither a moderator or provisional grader', () => {
-    let grade = SpeedGrader.EG.getGradeToShow({ grade: 15, score: 25 }, 'some_role');
-    equal(grade, '15');
+  test('returns values based on scores if user is a provisional grader', () => {
+    const grade = SpeedGrader.EG.getGradeToShow({
+      grade: 15,
+      score: 25,
+      entered_score: 30,
+      points_deducted: 5
+    }, 'provisional_grader');
+    equal(grade.entered, '30');
+    equal(grade.adjusted, '25');
+    equal(grade.pointsDeducted, '-5');
   });
 
-  test('returns grade of submission if user is moderator but score is null', () => {
-    let grade = SpeedGrader.EG.getGradeToShow({ grade: 15 }, 'moderator');
-    equal(grade, '15');
+  test('returns values based on grades if user is neither a moderator or provisional grader', () => {
+    const grade = SpeedGrader.EG.getGradeToShow({
+      grade: 15,
+      score: 25,
+      entered_grade: 30,
+      points_deducted: 15
+    }, 'some_role');
+    equal(grade.entered, '30');
+    equal(grade.adjusted, '15');
+    equal(grade.pointsDeducted, '-15');
   });
 
-  test('returns grade of submission if user is provisional grader but score is null', () => {
-    let grade = SpeedGrader.EG.getGradeToShow({ grade: 15 }, 'provisional_grader');
-    equal(grade, '15');
+  test('returns values based on grades if user is moderator but score is null', () => {
+    const grade = SpeedGrader.EG.getGradeToShow({
+      grade: 15,
+      entered_grade: 20,
+      points_deducted: 5
+    }, 'moderator');
+    equal(grade.entered, '20');
+    equal(grade.adjusted, '15');
+    equal(grade.pointsDeducted, '-5');
   });
 
-  QUnit.module('speed_grader#getStudentNameAndGrade');
+  test('returns values based on grades if user is provisional grader but score is null', () => {
+    const grade = SpeedGrader.EG.getGradeToShow({
+      grade: 15,
+      entered_grade: 20,
+      points_deducted: 5
+    }, 'provisional_grader');
+    equal(grade.entered, '20');
+    equal(grade.adjusted, '15');
+    equal(grade.pointsDeducted, '-5');
+  });
+
+  QUnit.module('speed_grader#getStudentNameAndGrade', {
+    setup () {
+      this.originalStudent = SpeedGrader.EG.currentStudent;
+      SpeedGrader.EG.currentStudent = {
+        id: 4,
+        name: 'Guy B. Studying',
+        submission_state: 'not_graded'
+      };
+    },
+
+    teardown () {
+      SpeedGrader.EG.currentStudent = this.originalStudent;
+    }
+  });
 
   test('returns name and status', () => {
     let result = SpeedGrader.EG.getStudentNameAndGrade();
@@ -583,6 +791,7 @@ define([
     setup() {
       fakeENV.setup();
       this.originalWindowJSONData = window.jsonData;
+      this.originalStudent = SpeedGrader.EG.currentStudent;
       SpeedGrader.EG.currentStudent = {
         id: 4,
         name: "Guy B. Studying",
@@ -624,6 +833,7 @@ define([
     },
 
     teardown() {
+      SpeedGrader.EG.currentStudent = this.originalStudent;
       fakeENV.teardown();
       window.jsonData = this.originalWindowJSONData;
     }
@@ -774,5 +984,56 @@ define([
     equal(natcompare.strings.callCount, 2);
     ok(natcompare.strings.calledWith(studentA.sortable_name, studentB.sortable_name));
     equal(order, 1);
+  });
+
+  QUnit.module('SpeedGrader - gateway timeout', {
+    setup () {
+      fakeENV.setup();
+      this.server = sinon.fakeServer.create({ respondImmediately: true });
+      this.server.respondWith(
+        'GET',
+        `${window.location.pathname}.json${window.location.search}`,
+        [504, { 'Content-Type': 'application/json' }, '']
+      );
+      $('#fixtures').html('<div id="speed_grader_timeout_alert"></div>');
+    },
+    teardown () {
+      $('#fixtures').empty();
+      this.server.restore();
+      fakeENV.teardown();
+    }
+  });
+
+  test('shows an error when the gateway times out', function () {
+    this.stub(SpeedGrader.EG, 'domReady');
+    ENV.assignment_title = 'Assignment Title';
+    SpeedGrader.setup();
+    const message = 'Something went wrong. Please try refreshing the page. If the problem persists, there may be too many records on "Assignment Title" to load SpeedGrader.';
+    strictEqual($('#speed_grader_timeout_alert').text(), message);
+  });
+
+  QUnit.module('SpeedGrader - no gateway timeout', {
+    setup () {
+      fakeENV.setup();
+      this.server = sinon.fakeServer.create({ respondImmediately: true });
+      this.server.respondWith(
+        'GET',
+        `${window.location.pathname}.json${window.location.search}`,
+        [200, { 'Content-Type': 'application/json' }, '{ hello: "world"}']
+      );
+      $('#fixtures').html('<div id="speed_grader_timeout_alert"></div>');
+    },
+    teardown () {
+      $('#fixtures').empty();
+      this.server.restore();
+      fakeENV.teardown();
+    }
+  });
+
+  test('does not show an error when the gateway times out', function () {
+    this.stub(SpeedGrader.EG, 'domReady');
+    ENV.assignment_title = 'Assignment Title';
+    SpeedGrader.setup();
+    strictEqual($('#speed_grader_timeout_alert').text(), '');
   });
 });

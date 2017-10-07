@@ -24,19 +24,17 @@ end
 
 module ActiveSupport::Cache
   module RailsCacheShim
-    class_eval <<-RUBY, __FILE__, __LINE__ + 1
-      def #{CANVAS_RAILS4_2 ? 'namespaced_key' : 'normalize_key'}(key, options)
-        result = super
-        if options && options.has_key?(:use_new_rails) ? options[:use_new_rails] : !CANVAS_RAILS4_2
-          result = "rails5:\#{result}"
-        end
-        result
+    def normalize_key(key, options)
+      result = super
+      if options && options.has_key?(:use_new_rails) ? options[:use_new_rails] : !CANVAS_RAILS5_0
+        result = "rails51:#{result}"
       end
-RUBY
+      result
+    end
 
     def delete(key, options = nil)
-      r1 = super(key, (options || {}).merge(use_new_rails: !CANVAS_RAILS4_2)) # prefer rails 3 if on rails 3 and vis versa
-      r2 = super(key, (options || {}).merge(use_new_rails: CANVAS_RAILS4_2))
+      r1 = super(key, (options || {}).merge(use_new_rails: !CANVAS_RAILS5_0)) # prefer rails 3 if on rails 3 and vis versa
+      r2 = super(key, (options || {}).merge(use_new_rails: CANVAS_RAILS5_0))
       r1 || r2
     end
   end
@@ -45,24 +43,14 @@ end
 
 module IgnoreMonkeyPatchesInDeprecations
   def extract_callstack(callstack)
-    return _extract_callstack(callstack) if !CANVAS_RAILS4_2 && callstack.first.is_a?(String)
+    return _extract_callstack(callstack) if callstack.first.is_a?(String)
 
     offending_line = callstack.find { |frame|
       # pass the whole frame to the filter function, so we can ignore specific methods
       !ignored_callstack(frame)
     } || callstack.first
 
-    if CANVAS_RAILS4_2
-      if offending_line
-        if md = offending_line.match(/^(.+?):(\d+)(?::in `(.*?)')?/)
-          md.captures
-        else
-          offending_line
-        end
-      end
-    else
-      [offending_line.path, offending_line.lineno, offending_line.label]
-    end
+    [offending_line.path, offending_line.lineno, offending_line.label]
   end
 
   def ignored_callstack(frame)
@@ -86,13 +74,19 @@ module IgnoreMonkeyPatchesInDeprecations
     return true if label == 'redirect_to' && path&.end_with?("application_controller.rb")
 
     return false unless path
-    if CANVAS_RAILS4_2
-      rails_gem_root = File.expand_path('..', Gem.loaded_specs['activesupport'].full_gem_path) + "/"
-      path.start_with?(rails_gem_root)
-    else
-      puts ActiveSupport::Deprecation::Reporting::RAILS_GEM_ROOT
-      super(path)
-    end
+    super(path)
   end
 end
 ActiveSupport::Deprecation.prepend(IgnoreMonkeyPatchesInDeprecations)
+unless CANVAS_RAILS5_0
+  ::Rails.logger.warn("Temporarily silencing deprecations because there are a lot - especially here https://github.com/rails/rails/blob/5-1-stable/activerecord/lib/active_record/attribute_methods/dirty.rb#L250-L256")
+  ActiveSupport::Deprecation.silenced = true
+end
+
+module RaiseErrorOnDurationCoercion
+  def coerce(other)
+    ::Rails.logger.error("Implicit numeric calculations on a duration are getting changed in Rails 5.1 - e.g. `240 / 2.minutes` will return `120` instead of `2` - so please make the duration explicit with to_i")
+    raise # i'd raise the message but it gets swallowed up in a TypeError
+  end
+end
+ActiveSupport::Duration.prepend(RaiseErrorOnDurationCoercion)

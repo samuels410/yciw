@@ -96,12 +96,12 @@ module CCHelper
   ASSIGNMENT_XML = 'assignment.xml'
   EXTERNAL_CONTENT_FOLDER = 'external_content'
 
-  def ims_date(date=nil)
-    CCHelper.ims_date(date)
+  def ims_date(date=nil,default=Time.now)
+    CCHelper.ims_date(date, default)
   end
 
-  def ims_datetime(date=nil)
-    CCHelper.ims_datetime(date)
+  def ims_datetime(date=nil,default=Time.now)
+    CCHelper.ims_datetime(date, default)
   end
 
   def self.create_key(object, prepend="")
@@ -113,13 +113,15 @@ module CCHelper
     "i" + Digest::MD5.hexdigest(prepend + key)
   end
 
-  def self.ims_date(date=nil)
-    date ||= Time.now
+  def self.ims_date(date=nil,default=Time.now)
+    date ||= default
+    return nil unless date
     date.respond_to?(:utc) ? date.utc.strftime(IMS_DATE) : date.strftime(IMS_DATE)
   end
 
-  def self.ims_datetime(date=nil)
-    date ||= Time.now
+  def self.ims_datetime(date=nil,default=Time.now)
+    date ||= default
+    return nil unless date
     date.respond_to?(:utc) ? date.utc.strftime(IMS_DATETIME) : date.strftime(IMS_DATETIME)
   end
 
@@ -226,9 +228,9 @@ module CCHelper
         # WikiPagesController allows loosely-matching URLs; fix them before exporting
         if match.obj_id.present?
           url_or_title = match.obj_id
-          page = @course.wiki.wiki_pages.deleted_last.where(url: url_or_title).first ||
-                 @course.wiki.wiki_pages.deleted_last.where(url: url_or_title.to_url).first ||
-                 @course.wiki.wiki_pages.where(id: url_or_title.to_i).first
+          page = @course.wiki_pages.deleted_last.where(url: url_or_title).first ||
+                 @course.wiki_pages.deleted_last.where(url: url_or_title.to_url).first ||
+                 @course.wiki_pages.where(id: url_or_title.to_i).first
         end
         if page
           "#{WIKI_TOKEN}/#{match.type}/#{page.url}"
@@ -240,7 +242,7 @@ module CCHelper
       @rewriter.set_handler('pages', &wiki_handler)
       @rewriter.set_handler('items') do |match|
         item = ContentTag.find(match.obj_id)
-        migration_id = CCHelper.create_key(item)
+        migration_id = @key_generator.create_key(item)
         new_url = "#{COURSE_TOKEN}/modules/#{match.type}/#{migration_id}"
       end
       @rewriter.set_default_handler do |match|
@@ -250,7 +252,7 @@ module CCHelper
           if obj && (@rewriter.user_can_view_content?(obj) || @for_epub_export)
             # for all other types,
             # create a migration id for the object, and use that as the new link
-            migration_id = CCHelper.create_key(obj)
+            migration_id = @key_generator.create_key(obj)
             new_url = "#{OBJECT_TOKEN}/#{match.type}/#{migration_id}"
           end
         elsif match.obj_id
@@ -281,8 +283,6 @@ module CCHelper
       %{<html>\n<head>\n<meta http-equiv="Content-Type" content="text/html; charset=utf-8">\n<title>#{title}</title>\n#{meta_html}</head>\n<body>\n#{content}\n</body>\n</html>}
     end
 
-    UrlAttributes = CanvasSanitize::SANITIZE[:protocols].inject({}) { |h,(k,v)| h[k] = v.keys; h }
-
     def html_content(html)
       html = @rewriter.translate_content(html)
       return html if html.blank? || @for_course_copy
@@ -295,7 +295,7 @@ module CCHelper
         next unless anchor['id']
         media_id = anchor['id'].gsub(/^media_comment_/, '')
         obj = MediaObject.by_media_id(media_id).first
-        if obj && migration_id = CCHelper.create_key(obj)
+        if obj && migration_id = @key_generator.create_key(obj)
           @used_media_objects << obj
           info = CCHelper.media_object_info(obj, nil, media_object_flavor)
           @media_object_infos[obj.id] = info
@@ -307,7 +307,7 @@ module CCHelper
       # (those in the course are already "$CANVAS_COURSE_REFERENCE$/...", but links
       #  outside the course need a domain to be meaningful in the export)
       # see also Api#api_user_content, which does a similar thing
-      UrlAttributes.each do |tag, attributes|
+      Api::Html::Content::URL_ATTRIBUTES.each do |tag, attributes|
         doc.css(tag).each do |element|
           attributes.each do |attribute|
             url_str = element[attribute]

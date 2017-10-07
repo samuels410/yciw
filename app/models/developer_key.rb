@@ -16,7 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-require 'aws-sdk'
+require 'aws-sdk-sns'
 
 class DeveloperKey < ActiveRecord::Base
   include CustomValidations
@@ -119,10 +119,17 @@ class DeveloperKey < ActiveRecord::Base
         end
       end
     end
+
+    def by_cached_vendor_code(vendor_code)
+      MultiCache.fetch("developer_keys/#{vendor_code}") do
+        DeveloperKey.shard([Shard.current, Account.site_admin.shard].uniq).where(vendor_code: vendor_code).to_a
+      end
+    end
   end
 
   def clear_cache
     MultiCache.delete("developer_key/#{global_id}")
+    MultiCache.delete("developer_keys/#{vendor_code}") if vendor_code.present?
   end
 
   def self.get_special_key(default_key_name)

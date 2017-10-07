@@ -23,6 +23,7 @@ module Api::V1::Assignment
   include Api::V1::Locked
   include Api::V1::AssignmentOverride
   include SubmittablesGradingPeriodProtection
+  include Api::V1::PlannerOverride
 
   API_ALLOWED_ASSIGNMENT_OUTPUT_FIELDS = {
     :only => %w(
@@ -99,7 +100,8 @@ module Api::V1::Assignment
       include_all_dates: false,
       override_dates: true,
       needs_grading_count_by_section: false,
-      exclude_response_fields: []
+      exclude_response_fields: [],
+      include_planner_override: false
     )
 
     if opts[:override_dates] && !assignment.new_record?
@@ -279,15 +281,19 @@ module Api::V1::Assignment
     end
 
     if opts[:include_module_ids]
-      thing_in_module = case assignment.submission_types
-                        when "online_quiz" then assignment.quiz
-                        when "discussion_topic" then assignment.discussion_topic
-                        else assignment
-                        end
-      hash['module_ids'] = thing_in_module.context_module_tags.map(&:context_module_id) if thing_in_module
+      modulable = case assignment.submission_types
+                  when 'online_quiz' then assignment.quiz
+                  when 'discussion_topic' then assignment.discussion_topic
+                  else assignment
+                  end
+
+      if modulable
+        hash['module_ids'] = modulable.context_module_tags.map(&:context_module_id)
+        hash['module_positions'] = modulable.context_module_tags.map(&:position)
+      end
     end
 
-    hash['published'] = ! assignment.unpublished?
+    hash['published'] = !assignment.unpublished?
     if can_manage
       hash['unpublishable'] = assignment.can_unpublish?
     end
@@ -318,6 +324,11 @@ module Api::V1::Assignment
 
     if opts[:master_course_status]
       hash.merge!(assignment.master_course_api_restriction_data(opts[:master_course_status]))
+    end
+
+    if opts[:include_planner_override]
+      override = assignment.planner_override_for(user)
+      hash['planner_override'] = planner_override_json(override, user, session)
     end
 
     hash
@@ -405,12 +416,11 @@ module Api::V1::Assignment
     return false unless prepared_create[:valid]
 
     assignment.quiz_lti! if assignment_params.key?(:quiz_lti)
-
-    if prepared_create[:overrides]
+    if prepared_create[:overrides].present?
       create_api_assignment_with_overrides(prepared_create, user)
     else
       prepared_create[:assignment].save!
-      :success
+      return :created
     end
   rescue ActiveRecord::RecordInvalid
     false
@@ -429,7 +439,7 @@ module Api::V1::Assignment
       update_api_assignment_with_overrides(prepared_update, user)
     else
       prepared_update[:assignment].save!
-      :success
+      :ok
     end
   rescue ActiveRecord::RecordInvalid
     false
@@ -609,11 +619,11 @@ module Api::V1::Assignment
     end
 
     post_to_sis = assignment_params.key?('post_to_sis') ? value_to_boolean(assignment_params['post_to_sis']) : nil
-    if assignment.new_record? && (post_to_sis.nil? || !Assignment.sis_grade_export_enabled?(context))
+    if !post_to_sis.nil?
+      assignment.post_to_sis = post_to_sis
+    elsif assignment.new_record? && !Assignment.sis_grade_export_enabled?(context)
       # set the default setting if it is not included.
       assignment.post_to_sis = context.account.sis_default_grade_export[:value]
-    elsif !post_to_sis.nil?
-      assignment.post_to_sis = post_to_sis
     end
 
     if assignment_params.key?('moderated_grading')
@@ -628,19 +638,19 @@ module Api::V1::Assignment
   end
 
   def turnitin_settings_hash(assignment_params)
-    turnitin_settings = assignment_params.delete("turnitin_settings").slice(*API_ALLOWED_TURNITIN_SETTINGS)
+    turnitin_settings = assignment_params.delete("turnitin_settings").permit(*API_ALLOWED_TURNITIN_SETTINGS)
     turnitin_settings['exclude_type'] = case turnitin_settings['exclude_small_matches_type']
       when nil; '0'
       when 'words'; '1'
       when 'percent'; '2'
     end
     turnitin_settings['exclude_value'] = turnitin_settings['exclude_small_matches_value']
-    turnitin_settings.to_hash.with_indifferent_access
+    turnitin_settings.to_unsafe_h
   end
 
   def vericite_settings_hash(assignment_params)
-    vericite_settings = assignment_params.delete("vericite_settings").slice(*API_ALLOWED_VERICITE_SETTINGS)
-    vericite_settings.to_hash.with_indifferent_access
+    vericite_settings = assignment_params.delete("vericite_settings").permit(*API_ALLOWED_VERICITE_SETTINGS)
+    vericite_settings.to_unsafe_h
   end
 
   def submissions_hash(include_params, assignments, submissions_for_user=nil)
@@ -723,12 +733,13 @@ module Api::V1::Assignment
     return :forbidden unless grading_periods_allow_assignment_overrides_batch_create?(assignment, overrides)
 
     assignment.transaction do
+      assignment.validate_overrides_for_sis(overrides)
       assignment.save_without_broadcasting!
       batch_update_assignment_overrides(assignment, overrides, user)
     end
 
     assignment.do_notifications!(prepared_update[:old_assignment], prepared_update[:notify_of_update])
-    :success
+    return :created
   end
 
   def update_api_assignment_with_overrides(prepared_update, user)
@@ -742,12 +753,13 @@ module Api::V1::Assignment
     return :forbidden unless grading_periods_allow_assignment_overrides_batch_update?(assignment, prepared_batch)
 
     assignment.transaction do
+      assignment.validate_overrides_for_sis(prepared_batch)
       assignment.save_without_broadcasting!
       perform_batch_update_assignment_overrides(assignment, prepared_batch)
     end
 
     assignment.do_notifications!(prepared_update[:old_assignment], prepared_update[:notify_of_update])
-    :success
+    :ok
   end
 
   def pull_overrides_from_params(assignment_params)

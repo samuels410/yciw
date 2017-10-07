@@ -28,6 +28,7 @@ class Quizzes::Quiz < ActiveRecord::Base
   include ContextModuleItem
   include DatesOverridable
   include SearchTermHelper
+  include Plannable
   include Canvas::DraftStateValidations
 
   attr_readonly :context_id, :context_type
@@ -89,8 +90,7 @@ class Quizzes::Quiz < ActiveRecord::Base
     :anonymous_submissions, :scoring_policy, :allowed_attempts, :hide_results,
     :one_time_results, :show_correct_answers, :show_correct_answers_last_attempt,
     :hide_correct_answers_at, :one_question_at_a_time, :cant_go_back, :access_code,
-    :ip_filter, :require_lockdown_browser, :require_lockdown_browser_for_results,
-    :lock_at, :unlock_at
+    :ip_filter, :require_lockdown_browser, :require_lockdown_browser_for_results
   ]
   restrict_assignment_columns
 
@@ -219,18 +219,23 @@ class Quizzes::Quiz < ActiveRecord::Base
     end
   end
 
-  def current_points_possible
-    entries = self.root_entries
-    possible = 0
+  def self.count_points_possible(entries)
+    util = Quizzes::QuizQuestion::AnswerSerializers::Util
+    possible = BigDecimal('0.0')
     entries.each do |e|
-      if e[:question_points]
-        possible += (e[:question_points].to_f * e[:pick_count])
+      if e[:question_points] # QuizGroup
+        possible += (util.to_decimal(e[:question_points].to_s) * util.to_decimal(e[:pick_count].to_s))
       else
-        possible += e[:points_possible].to_f unless e[:unsupported]
+        possible += util.to_decimal(e[:points_possible].to_s) unless e[:unsupported]
       end
     end
-    possible = self.assignment.points_possible if entries.empty? && self.assignment
-    possible
+    possible.to_f
+  end
+
+  def current_points_possible
+    entries = self.root_entries
+    return self.assignment.points_possible if entries.empty? && self.assignment
+    self.class.count_points_possible(entries)
   end
 
   def set_unpublished_question_count
@@ -691,23 +696,17 @@ class Quizzes::Quiz < ActiveRecord::Base
   # be held in Quizzes::Quiz.quiz_data
   def generate_quiz_data(opts={})
     entries = self.root_entries(true)
-    possible = 0
     t = Time.now
     entries.each do |e|
-      if e[:question_points] #QuizGroup
-        possible += (e[:question_points].to_f * e[:pick_count])
-      else
-        possible += e[:points_possible].to_f
-      end
       e[:published_at] = t
     end
-    possible = 0 if possible < 0
     data = entries
     if opts[:persist] != false
       self.quiz_data = data
 
       if !self.survey?
-        self.points_possible = possible
+        possible = self.class.count_points_possible(data)
+        self.points_possible = [possible, 0].max
       end
       self.allowed_attempts ||= 1
       check_if_submissions_need_review
@@ -844,7 +843,9 @@ class Quizzes::Quiz < ActiveRecord::Base
     old_version = self.versions.get(version_number).model
 
     needs_review = false
-    needs_review = true if old_version.points_possible != self.points_possible
+    # Allow for floating point rounding error comparing to versions created before BigDecimal was used
+    needs_review = true if [old_version.points_possible, self.points_possible].select(&:present?).count == 1 ||
+      ((old_version.points_possible || 0) - (self.points_possible || 0)).abs > 0.0001
     needs_review = true if (old_version.quiz_data || []).length != (self.quiz_data || []).length
     if !needs_review
       new_data = self.quiz_data
@@ -854,30 +855,6 @@ class Quizzes::Quiz < ActiveRecord::Base
       end
     end
     @significant_version[version_number] = needs_review
-  end
-
-  def migrate_content_links_by_hand(user)
-    self.quiz_questions.active.each do |question|
-      data = Quizzes::QuizQuestion.migrate_question_hash(question.question_data, :context => self.context, :user => user)
-      question.write_attribute(:question_data, data)
-      question.save
-    end
-    data = self.quiz_data
-    if data
-      data.each_with_index do |obj, idx|
-        if obj[:answers]
-          data[idx] = Quizzes::QuizQuestion.migrate_question_hash(data[idx], :context => self.context, :user => user)
-        elsif val.questions
-          questions = []
-          obj[:questions].each do |question|
-            questions << Quizzes::QuizQuestion.migrate_question_hash(question, :context => self.context, :user => user)
-          end
-          obj[:questions] = questions
-          data[idx] = obj
-        end
-      end
-    end
-    self.quiz_data = data
   end
 
   def validate_quiz_type
@@ -1076,6 +1053,7 @@ class Quizzes::Quiz < ActiveRecord::Base
   scope :active, -> { where("quizzes.workflow_state<>'deleted'") }
   scope :not_for_assignment, -> { where(:assignment_id => nil) }
   scope :available, -> { where("quizzes.workflow_state = 'available'") }
+  scope :for_course, lambda { |course_id| where(:context_type => 'Course', :context_id => course_id) }
 
   # NOTE: only use for courses with differentiated assignments on
   scope :visible_to_students_in_course_with_da, lambda {|student_ids, course_ids|

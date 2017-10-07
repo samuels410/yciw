@@ -194,6 +194,18 @@ module ActiveRecord
       end
     end
 
+    describe "update_all with limit" do
+      it "does the right thing with a join and a limit" do
+        u1 = User.create!(name: 'u1')
+        e1 = u1.eportfolios.create!(name: 'e1')
+        u2 = User.create!(name: 'u2')
+        e2 = u2.eportfolios.create!(name: 'e2')
+        Eportfolio.joins(:user).order(:id).limit(1).update_all(name: 'changed')
+        expect(e1.reload.name).to eq 'changed'
+        expect(e2.reload.name).not_to eq 'changed'
+      end
+    end
+
     describe "parse_asset_string" do
       it "parses simple asset strings" do
         expect(ActiveRecord::Base.parse_asset_string("course_123")).to eql(["Course", 123])
@@ -229,7 +241,7 @@ module ActiveRecord
 
       context "with postgres 90300" do
         before do
-          scope.connection.stubs(:postgresql_version).returns(90300)
+          allow(scope.connection).to receive(:postgresql_version).and_return(90300)
         end
 
         it "uses FOR UPDATE on a normal exclusive lock" do
@@ -243,7 +255,7 @@ module ActiveRecord
 
       context "with postgres 90299" do
         before do
-          scope.connection.stubs(:postgresql_version).returns(90299)
+          allow(scope.connection).to receive(:postgresql_version).and_return(90299)
         end
 
         it "uses FOR UPDATE on a normal exclusive lock" do
@@ -260,7 +272,7 @@ module ActiveRecord
       shared_examples_for "query creation" do
         it "should include conditions after the union inside of the subquery" do
           scope = base.active.where(id:99).union(User.where(id:1))
-          wheres = CANVAS_RAILS4_2 ? scope.where_values : scope.where_clause.send(:predicates)
+          wheres = scope.where_clause.send(:predicates)
           expect(wheres.count).to eq 1
           sql_before_union, sql_after_union = wheres.first.split("UNION ALL")
           expect(sql_before_union.include?('"id" = 99')).to be_falsey
@@ -269,7 +281,7 @@ module ActiveRecord
 
         it "should include conditions prior to the union outside of the subquery" do
           scope = base.active.union(User.where(id:1)).where(id:99)
-          wheres = CANVAS_RAILS4_2 ? scope.where_values : scope.where_clause.send(:predicates)
+          wheres = scope.where_clause.send(:predicates)
           expect(wheres.count).to eq 2
           union_where = wheres.detect{|w| w.is_a?(String) && w.include?("UNION ALL")}
           expect(union_where.include?('"id" = 99')).to be_falsey

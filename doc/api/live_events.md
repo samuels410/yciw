@@ -49,6 +49,8 @@ event originated as part of a web request:
 | `producer` | String | The name of the producer of an event. Will always be 'canvas' when an event is originating in canvas. |
 | `request_id` | String | The identifier for this request. |
 | `session_id` | String | The session identifier for this request. Can be used to correlate events in the same session for a user. |
+| `user_account_id` | String | The Canvas id of the account that the current user belongs to. |
+| `user_sis_id` | String | The SIS id of the user. |
 
 For events originating as part of an asynchronous job, the following
 fields may be set:
@@ -80,6 +82,7 @@ what's described in this document. Those fields are subject to change.
 | Field | Description |
 | ----- | ----------- |
 | `course_id` | The Canvas id of the created course. |
+| `uuid` | The unique id of the course. |
 | `account_id` | The Account id of the created course. |
 | `name` | The name the created course. |
 | `created_at` | The time at which this course was created. |
@@ -141,6 +144,7 @@ what's described in this document. Those fields are subject to change.
 | Field | Description |
 | ----- | ----------- |
 | `group_id` | The Canvas id of the group. |
+| `uuid` | The unique id of the group. |
 | `group_name` | The name of the group. |
 | `group_category_id` | The Canvas id of the group category. |
 | `group_category_name` | The name of the group category. |
@@ -379,6 +383,7 @@ by `asset_type` and `asset_id`.
 | Field | Description |
 | ----- | ----------- |
 | `user_id` | The Canvas id of user. |
+| `uuid` | Unique user id. |
 | `name` | Name of user. |
 | `short_name` | Short name of user. |
 | `workflow_state` | State of the user. |
@@ -469,6 +474,7 @@ by `asset_type` and `asset_id`.
 | ----- | ----------- |
 | `user_id` | The Canvas id of the user for this association. |
 | `account_id` | The Canvas id of the account for this association. |
+| `account_uuid` | The unique id of the account for this association.|
 | `created_at` | The time at which this association was created. |
 | `updated_at` | The time at which this association was last modified. |
 | `roles` | The roles the user has in the account. |

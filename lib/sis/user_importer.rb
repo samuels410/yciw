@@ -101,7 +101,7 @@ module SIS
                 next
               end
               if pseudo_by_login && (pseudo != pseudo_by_login && status_is_active ||
-                !ActiveRecord::Base.connection.select_value("SELECT 1 FROM #{Pseudonym.quoted_table_name} WHERE #{Pseudonym.to_lower_column(Pseudonym.sanitize(pseudo.unique_id))}=#{Pseudonym.to_lower_column(Pseudonym.sanitize(user_row.login_id))} LIMIT 1"))
+                !ActiveRecord::Base.connection.select_value("SELECT 1 FROM #{Pseudonym.quoted_table_name} WHERE #{Pseudonym.to_lower_column(Pseudonym.connection.quote(pseudo.unique_id))}=#{Pseudonym.to_lower_column(Pseudonym.connection.quote(user_row.login_id))} LIMIT 1"))
                 id_message = pseudo_by_login.sis_user_id ? 'SIS ID' : 'Canvas ID'
                 user_id = pseudo_by_login.sis_user_id || pseudo_by_login.user_id
                 @messages << I18n.t("An existing Canvas user with the %{user_id} has already claimed %{other_user_id}'s user_id requested login information, skipping", user_id: "#{id_message} #{user_id.to_s}", other_user_id: user_row.user_id)
@@ -140,6 +140,10 @@ module SIS
             should_update_account_associations = false
 
             if !status_is_active && !user.new_record?
+              if user.id == @batch&.user_id
+                @messages << "Can't remove yourself user_id '#{user_row.user_id}'"
+                next
+              end
               # if this user is deleted, we're just going to make sure the user isn't enrolled in anything in this root account and
               # delete the pseudonym.
               enrollment_ids = @root_account.enrollments.active.where(user_id: user).where.not(:workflow_state => 'deleted').pluck(:id)
@@ -150,9 +154,9 @@ module SIS
 
               d = enrollment_ids.count
               d += @root_account.all_group_memberships.active.where(user_id: user).update_all(updated_at: Time.now.utc, workflow_state: 'deleted')
-              d += user.account_users.shard(@root_account).where(account_id: @root_account.all_accounts).delete_all
-              d += user.account_users.shard(@root_account).where(account_id: @root_account).delete_all
-              if 0 < d
+              d += user.account_users.shard(@root_account).where(account_id: @root_account.all_accounts).update_all(updated_at: Time.now.utc, workflow_state: 'deleted')
+              d += user.account_users.shard(@root_account).where(account_id: @root_account).update_all(updated_at: Time.now.utc, workflow_state: 'deleted')
+              if d > 0
                 should_update_account_associations = true
               end
             end
@@ -183,7 +187,7 @@ module SIS
               user_id = pseudo_by_integration.sis_user_id || pseudo_by_integration.user_id
               @messages << I18n.t("An existing Canvas user with the %{user_id} has already claimed %{other_user_id}'s requested integration_id, skipping", user_id: "#{id_message} #{user_id.to_s}", other_user_id: user_row.user_id)
             end
-            pseudo.integration_id = user_row.integration_id
+            pseudo.integration_id = user_row.integration_id if user_row.integration_id
             pseudo.account = @root_account
             pseudo.workflow_state = status_is_active ? 'active' : 'deleted'
             if pseudo.new_record? && status_is_active
@@ -276,6 +280,7 @@ module SIS
                   raise ImportError, msg
                 end
                 user.touch unless user_touched
+                user.clear_email_cache!
               end
               pseudo.sis_communication_channel_id = pseudo.communication_channel_id = cc.id
 

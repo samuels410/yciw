@@ -22,7 +22,7 @@ end
 module ArbitraryStrongishParams
   ANYTHING = Object.new.freeze
 
-  def initialize(attributes = (CANVAS_RAILS4_2 ? nil : {}))
+  def initialize(attributes = {})
     @anythings = {}.with_indifferent_access
     super
   end
@@ -41,12 +41,8 @@ module ArbitraryStrongishParams
 
       if filter[key] == ActionController::Parameters::EMPTY_ARRAY
         # Declaration { comment_ids: [] }.
-        if CANVAS_RAILS4_2
-          array_of_permitted_scalars_filter(params, key)
-        else
-          array_of_permitted_scalars?(self[key]) do |val|
-            params[key] = val
-          end
+        array_of_permitted_scalars?(self[key]) do |val|
+          params[key] = val
         end
       elsif filter[key] == ANYTHING
         if filtered = recursive_arbitrary_filter(value)
@@ -97,19 +93,6 @@ module ArbitraryStrongishParams
       duplicate.instance_variable_set(:@anythings, @anythings.dup)
     end
   end
-
-  # when dropping Rails 4.2, remove this block so that we can start addressing these
-  # deprecation warnings
-  unless CANVAS_RAILS4_2
-    def method_missing(method_sym, *args, &block)
-      if @parameters.respond_to?(method_sym)
-        # DON'T warn about params not inheriting from Hash anymore
-        @parameters.public_send(method_sym, *args, &block)
-      else
-        super
-      end
-    end
-  end
 end
 ActionController::Parameters.prepend(ArbitraryStrongishParams)
 
@@ -121,4 +104,37 @@ end
 
 ActionController::ParameterMissing.class_eval do
   def skip_error_report?; true; end
+end
+
+if CANVAS_RAILS5_0
+  module RaiseOnDeprecateHashMethods
+    def raise_deprecation_error(method)
+      raise "The method '#{method}' is going away for `params` in Rails 5.1 because ActionController::Parameters will no longer inherit from Hash - Use #to_unsafe_h if needed"
+    end
+
+    def method_missing(method_sym, *args, &block)
+      if @parameters.respond_to?(method_sym)
+        raise_deprecation_error(method_sym)
+      else
+        super
+      end
+    end
+
+    def ==(other)
+      if !other.respond_to?(:permitted?) && other.is_a?(Hash)
+        raise_deprecation_error("==")
+      else
+        super
+      end
+    end
+
+    def to_hash
+      if !self.class.raise_on_unfiltered_parameters
+        raise_deprecation_error("to_hash")
+      else
+        super
+      end
+    end
+  end
+  ActionController::Parameters.prepend(RaiseOnDeprecateHashMethods)
 end

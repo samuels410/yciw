@@ -42,6 +42,10 @@ class ActiveRecord::Base
       # transactions due to spec fixtures are _not_in the callstack, so we only need to find 1
       !!caller.find { |s| s =~ transaction_regex && !s.include?('spec_helper.rb') }
     end
+
+    def default_scope(*)
+      raise "please don't ever use default_scope. it may seem like a great solution, but I promise, it isn't"
+    end
   end
 
   def read_or_initialize_attribute(attr_name, default_value)
@@ -394,7 +398,10 @@ class ActiveRecord::Base
         @collkey = connection.extension_installed?(:pg_collkey)
       end
       if @collkey
-        "#{@collkey}.collkey(#{col}, '#{Canvas::ICU.locale_for_collation}', false, 0, true)"
+        # The collation level of 3 is the default, but is explicitly specified here and means that
+        # case, accents and base characters are all taken into account when creating a collation key
+        # for a string - more at https://pgxn.org/dist/pg_collkey/0.5.1/
+        "#{@collkey}.collkey(#{col}, '#{Canvas::ICU.locale_for_collation}', false, 3, true)"
       else
         "CAST(LOWER(replace(#{col}, '\\', '\\\\')) AS bytea)"
       end
@@ -484,6 +491,10 @@ class ActiveRecord::Base
   #   belongs_to :context, polymorphic: [:course, :account]
   def self.belongs_to(name, scope = nil, options={})
     options = scope if scope.is_a?(Hash)
+    if options[:polymorphic] == true
+      raise "Please pass an array of valid types for polymorphic associations. Use exhaustive: false if you really don't want to validate them"
+    end
+
     polymorphic_prefix = options.delete(:polymorphic_prefix)
     exhaustive = options.delete(:exhaustive)
 
@@ -626,10 +637,10 @@ module UsefulFindInBatches
   def find_in_batches(options = {}, &block)
     # already in a transaction (or transactions don't matter); cursor is fine
     if can_use_cursor? && !options[:start]
-      self.activate { find_in_batches_with_cursor(options, &block) }
+      self.activate { |r| r.find_in_batches_with_cursor(options, &block) }
     elsif find_in_batches_needs_temp_table?
       raise ArgumentError.new("GROUP and ORDER are incompatible with :start, as is an explicit select without the primary key") if options[:start]
-      self.activate { find_in_batches_with_temp_table(options, &block) }
+      self.activate { |r| r.find_in_batches_with_temp_table(options, &block) }
     else
       super
     end
@@ -659,6 +670,10 @@ ActiveRecord::Relation.class_eval do
   def where!(*args)
     raise "where!.not doesn't work in Rails 4.2" if args.empty?
     super
+  end
+
+  def uniq(*args)
+    raise "use #distinct instead of #uniq on relations (Rails 5.1 will delegate uniq to to_a)"
   end
 
   def select_values_necessitate_temp_table?
@@ -938,31 +953,23 @@ module UpdateAndDeleteWithJoins
   def update_all(updates, *args)
     return super if joins_values.empty?
 
-    stmt = CANVAS_RAILS4_2 ? Arel::UpdateManager.new(arel.engine) : Arel::UpdateManager.new
+    stmt = Arel::UpdateManager.new
 
     stmt.set Arel.sql(@klass.send(:sanitize_sql_for_assignment, updates))
-    from = (CANVAS_RAILS4_2 ? from_value&.first : from_clause.value)
+    from = from_clause.value
     stmt.table(from ? Arel::Nodes::SqlLiteral.new(from) : table)
     stmt.key = table[primary_key]
 
     sql = stmt.to_sql
 
-    if CANVAS_RAILS4_2
-      collector = Arel::Collectors::Bind.new
-      arel.join_sources.each do |node|
-        connection.visitor.accept(node, collector)
-      end
-      join_sql = collector.compile(arel.bind_values.map{|bvs| connection.quote(*bvs.reverse)})
-    else
-      binds = connection.prepare_binds_for_database(bound_attributes)
-      binds.map! { |value| connection.quote(value) }
-      collector = Arel::Collectors::Bind.new
-      arel.join_sources.each do |node|
-        connection.visitor.accept(node, collector)
-      end
-      binds_in_join = collector.value.count { |x| x.is_a?(Arel::Nodes::BindParam) }
-      join_sql = collector.substitute_binds(binds).join
+    binds = bound_attributes.map(&:value_for_database)
+    binds.map! { |value| connection.quote(value) }
+    collector = Arel::Collectors::Bind.new
+    arel.join_sources.each do |node|
+      connection.visitor.accept(node, collector)
     end
+    binds_in_join = collector.value.count { |x| x.is_a?(Arel::Nodes::BindParam) }
+    join_sql = collector.substitute_binds(binds).join
     tables, join_conditions = deconstruct_joins(join_sql)
 
     unless tables.empty?
@@ -974,71 +981,49 @@ module UpdateAndDeleteWithJoins
     scope = self
     join_conditions.each { |join| scope = scope.where(join) }
 
-    if CANVAS_RAILS4_2
-      binds = scope.bind_values.dup
-      sql_string = Arel::Collectors::Bind.new
-      scope.arel.constraints.each do |node|
-        connection.visitor.accept(node, sql_string)
-      end
-      sql.concat('WHERE ' + sql_string.compile(binds.map{|bvs| connection.quote(*bvs.reverse)}))
-    else
-      # skip any binds that are used in the join
-      binds = scope.bound_attributes[binds_in_join..-1]
-      binds = connection.prepare_binds_for_database(binds)
-      binds.map! { |value| connection.quote(value) }
-      sql_string = Arel::Collectors::Bind.new
-      scope.arel.constraints.each do |node|
-        connection.visitor.accept(node, sql_string)
-      end
-      sql.concat('WHERE ' + sql_string.substitute_binds(binds).join)
+    # skip any binds that are used in the join
+    binds = scope.bound_attributes[binds_in_join..-1]
+    binds = binds.map(&:value_for_database)
+    binds.map! { |value| connection.quote(value) }
+    sql_string = Arel::Collectors::Bind.new
+    scope.arel.constraints.each do |node|
+      connection.visitor.accept(node, sql_string)
     end
+    sql.concat('WHERE ' + sql_string.substitute_binds(binds).join)
 
     connection.update(sql, "#{name} Update")
   end
 
-  def delete_all(conditions = nil, *args)
+  def delete_all
     return super if joins_values.empty?
 
-    if conditions
-      where(conditions).delete_all
-    else
-      sql = "DELETE FROM #{quoted_table_name} "
+    sql = "DELETE FROM #{quoted_table_name} "
 
-      join_sql = arel.join_sources.map(&:to_sql).join(" ")
-      tables, join_conditions = deconstruct_joins(join_sql)
+    join_sql = arel.join_sources.map(&:to_sql).join(" ")
+    tables, join_conditions = deconstruct_joins(join_sql)
 
-      sql.concat('USING ')
-      sql.concat(tables.join(', '))
-      sql.concat(' ')
+    sql.concat('USING ')
+    sql.concat(tables.join(', '))
+    sql.concat(' ')
 
-      scope = self
-      join_conditions.each { |join| scope = scope.where(join) }
+    scope = self
+    join_conditions.each { |join| scope = scope.where(join) }
 
-      if CANVAS_RAILS4_2
-        binds = scope.bind_values.dup
-        sql_string = Arel::Collectors::Bind.new
-        scope.arel.constraints.each do |node|
-          connection.visitor.accept(node, sql_string)
-        end
-        sql.concat('WHERE ' + sql_string.compile(binds.map{|bvs| connection.quote(*bvs.reverse)}))
-      else
-        binds = scope.bound_attributes
-        binds = connection.prepare_binds_for_database(binds)
-        binds.map! { |value| connection.quote(value) }
-        sql_string = Arel::Collectors::Bind.new
-        scope.arel.constraints.each do |node|
-          connection.visitor.accept(node, sql_string)
-        end
-        sql.concat('WHERE ' + sql_string.substitute_binds(binds).join)
-      end
-
-      connection.exec_query(sql, "#{name} Delete all", scope.bind_values)
+    binds = scope.bound_attributes
+    binds = binds.map(&:value_for_database)
+    binds.map! { |value| connection.quote(value) }
+    sql_string = Arel::Collectors::Bind.new
+    scope.arel.constraints.each do |node|
+      connection.visitor.accept(node, sql_string)
     end
+    sql.concat('WHERE ' + sql_string.substitute_binds(binds).join)
+
+    connection.delete(sql, "SQL", scope.bind_values)
   end
 end
 ActiveRecord::Relation.prepend(UpdateAndDeleteWithJoins)
 
-module DeleteAllWithLimit
+module UpdateAndDeleteAllWithLimit
   def delete_all(*args)
     if limit_value || offset_value
       scope = except(:select).select("#{quoted_table_name}.#{primary_key}")
@@ -1046,8 +1031,16 @@ module DeleteAllWithLimit
     end
     super
   end
+
+  def update_all(updates, *args)
+    if limit_value || offset_value
+      scope = except(:select).select("#{quoted_table_name}.#{primary_key}")
+      return unscoped.where(primary_key => scope).update_all(updates)
+    end
+    super
+  end
 end
-ActiveRecord::Relation.prepend(DeleteAllWithLimit)
+ActiveRecord::Relation.prepend(UpdateAndDeleteAllWithLimit)
 
 ActiveRecord::Associations::CollectionProxy.class_eval do
   def respond_to?(name, include_private = false)
@@ -1062,6 +1055,10 @@ ActiveRecord::Associations::CollectionProxy.class_eval do
     record = klass.unscoped.merge(scope).new(*args)
     @association.set_inverse_instance(record)
     record
+  end
+
+  def uniq(*args)
+    raise "use #distinct instead of #uniq on relations (Rails 5.1 will delegate uniq to to_a)"
   end
 end
 
@@ -1129,16 +1126,6 @@ class ActiveRecord::Migration
   # at least one of these tags is required
   DEPLOY_TAGS = [:predeploy, :postdeploy]
 
-  if CANVAS_RAILS4_2
-    class V4_2 < self
-      class << self
-        def method_missing(name, *args, &block) # :nodoc:
-          (delegate || superclass.delegate || superclass.superclass.delegate).send(name, *args, &block)
-        end
-      end
-    end
-  end
-
   class << self
     def tag(*tags)
       raise "invalid tags #{tags.inspect}" unless tags - VALID_TAGS == []
@@ -1156,23 +1143,6 @@ class ActiveRecord::Migration
     def has_postgres_proc?(procname)
       connection.select_value("SELECT COUNT(*) FROM pg_proc WHERE proname='#{procname}'").to_i != 0
     end
-
-    if CANVAS_RAILS4_2
-      def [](version)
-        raise ArgumentError unless version == 4.2
-        V4_2
-      end
-
-      def inherited(klass)
-        super
-        return if klass.name == 'V4_2' || klass.superclass != ActiveRecord::Migration
-        raise \
-            "Directly inheriting from ActiveRecord::Migration is deprecated. " \
-            "Please specify the Rails release the migration was written for:\n" \
-            "\n" \
-            "  class #{klass.name} < ActiveRecord::Migration[4.2]"
-      end
-    end
   end
 
   def connection
@@ -1189,7 +1159,7 @@ class ActiveRecord::Migration
 end
 
 class ActiveRecord::MigrationProxy
-  delegate :connection, :tags, to: :migration
+  delegate :connection, :tags, :cassandra_cluster, to: :migration
 
   def runnable?
     !migration.respond_to?(:runnable?) || migration.runnable?
@@ -1298,17 +1268,13 @@ ActiveRecord::Associations::CollectionAssociation.class_eval do
 end
 
 module UnscopeCallbacks
-  if CANVAS_RAILS4_2
-    def __run_callbacks__(*args)
-      scope = self.class.base_class.unscoped
-      scope.scoping { super }
-    end
-  else
-    def __run_callbacks__(*args)
+  method = CANVAS_RAILS5_0 ? "__run_callbacks__" : "run_callbacks"
+  module_eval <<-RUBY, __FILE__, __LINE__ + 1
+    def #{method}(*args)
       scope = self.class.all.klass.unscoped
       scope.scoping { super }
     end
-  end
+  RUBY
 end
 ActiveRecord::Base.send(:include, UnscopeCallbacks)
 
@@ -1366,7 +1332,8 @@ module SkipTouchCallbacks
   end
 
   module BelongsTo
-    def touch_record(o, foreign_key, name, *args)
+    def touch_record(o, *args)
+      name = CANVAS_RAILS5_0 ? args[1] : args[2]
       return if o.class.touch_callbacks_skipped?(name)
       super
     end
@@ -1386,21 +1353,17 @@ module ReadonlyCloning
 end
 ActiveRecord::Base.prepend(ReadonlyCloning)
 
-if CANVAS_RAILS4_2
-  # https://github.com/rails/rails/commit/696f1766148453160e1f6f21e4d7d7aac1356c7d
-  # the fix was backported into rails 5-0-stable
-  module DecimalCastRescueRuby24
-    def cast_value(value)
-      if value.is_a?(::String)
-        begin
-          super(value)
-        rescue ArgumentError
-          BigDecimal(0)
-        end
-      else
-        super(value)
-      end
+module DupArraysInMutationTracker
+  # setting a serialized attribute to an array of hashes shouldn't change all the hashes to indifferent access
+  # when the array gets stored in the indifferent access hash inside the mutation tracker
+  # not that it really matters too much but having some consistency is nice
+  def change_to_attribute(*args)
+    change = super
+    if change
+      val = change[1]
+      change[1] = val.dup if val.is_a?(Array)
     end
+    change
   end
-  ActiveRecord::Type::Decimal.prepend DecimalCastRescueRuby24
 end
+ActiveRecord::AttributeMutationTracker.prepend(DupArraysInMutationTracker) unless CANVAS_RAILS5_0

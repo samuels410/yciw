@@ -39,12 +39,6 @@ const ConversationsRouter = Backbone.Router.extend({
     '': 'index',
     'filter=:state': 'filter'
   },
-
-  messages: {
-    confirmDelete: I18n.t('confirm.delete_conversation', 'Are you sure you want to delete your copy of this conversation? This action cannot be undone.'),
-    messageDeleted: I18n.t('message_deleted', 'Message Deleted!')
-  },
-
   sendingCount: 0,
 
   initialize () {
@@ -143,27 +137,37 @@ const ConversationsRouter = Backbone.Router.extend({
     this.submissionReply.show(this.detail.model, {trigger: $('#submission-reply-btn')})
   },
 
-  onReply (message) {
+  onReply (message, trigger) {
     if (this.detail.model.get('for_submission')) {
       this.onSubmissionReply()
     } else {
-      this._delegateReply(message, 'reply')
+      this._delegateReply(message, 'reply', trigger)
     }
   },
 
-  onReplyAll (message) {
-    this._delegateReply(message, 'replyAll')
+  onReplyAll (message, trigger) {
+    this._delegateReply(message, 'replyAll', trigger)
   },
 
-  _delegateReply (message, type) {
-    const btn = type === 'reply' ? 'reply-btn' : 'reply-all-btn'
-    const trigger = message ? $(`.message-item-view[data-id=${message.id}] .${btn}`) : $(`#${btn}`)
-
+  _delegateReply (message, type, trigger) {
     this.compose.show(this.detail.model, {to: type, trigger, message})
   },
 
-  onArchive () {
+  onArchive (focusNext, trigger) {
     const action = this.list.selectedMessage().get('workflow_state') === 'archived' ? 'mark_as_read' : 'archive'
+    const confirmMessage = action === 'archive'
+      ? I18n.t({
+          one: 'Are you sure you want to archive your copy of this conversation?',
+          other: 'Are you sure you want to archive your copies of these conversations?'
+        }, {count: this.list.selectedMessages.length})
+      : I18n.t({
+          one: 'Are you sure you want to unarchive this conversation?',
+          other: 'Are you sure you want to unarchive these conversations?'
+        }, {count: this.list.selectedMessages.length})
+    if (!confirm(confirmMessage)) {  // eslint-disable-line no-alert
+      $(trigger).focus()
+      return
+    }
     const messages = this.batchUpdate(action, function (m) {
       const newState = action === 'mark_as_read' ? 'read' : 'archived'
       m.set('workflow_state', newState)
@@ -173,20 +177,42 @@ const ConversationsRouter = Backbone.Router.extend({
       this.list.collection.remove(messages)
       this.selectConversation(null)
     }
+    let $focusNext = $(focusNext)
+    if ($focusNext.length === 0) {
+      $focusNext = $('#compose-message-recipients')
+    }
+    $focusNext.focus()
   },
 
-  onDelete () {
-    if (!confirm(this.messages.confirmDelete)) return
+  onDelete (focusNext, trigger) {
+    const confirmMsg = I18n.t({
+      one: 'Are you sure you want to delete your copy of this conversation? This action cannot be undone.',
+      other: 'Are you sure you want to delete your copy of these conversations? This action cannot be undone.'
+    }, {count: this.list.selectedMessages.length})
+    if (!confirm(confirmMsg)) {
+      $(trigger).focus()
+      return
+    }
+    const delmsg = I18n.t({
+      one: 'Message Deleted!',
+      other: 'Messages Deleted!'
+    }, {count: this.list.selectedMessages.length})
     const messages = this.batchUpdate('destroy')
     delete this.detail.model
     this.list.collection.remove(messages)
     this.header.updateUi(null)
-    $.flashMessage(this.messages.messageDeleted)
+    $.flashMessage(delmsg)
     this.detail.render()
+
+    let $focusNext = $(focusNext)
+    if ($focusNext.length === 0) {
+      $focusNext = $('#compose-message-recipients')
+    }
+    $focusNext.focus()
   },
 
   onCompose (e) {
-    this.compose.show(null, {trigger: $('#compose-btn')})
+    this.compose.show(null, {trigger: '#compose-btn'})
   },
 
   index () {
@@ -201,7 +227,7 @@ const ConversationsRouter = Backbone.Router.extend({
     this.list.collection.reset()
     if (filters.type === 'submission_comments') {
       _.each(
-        ['scope', 'filter', 'filter_mode', 'include_private_conversation_enrollments'], 
+        ['scope', 'filter', 'filter_mode', 'include_private_conversation_enrollments'],
         this.list.collection.deleteParam,
         this.list.collection
       )
@@ -236,8 +262,7 @@ const ConversationsRouter = Backbone.Router.extend({
     return this.batchUpdate('mark_as_read', m => m.toggleReadState(true))
   },
 
-  onForward (message) {
-    let trigger
+  onForward (message, trigger) {
     let model
     if (message) {
       model = this.detail.model.clone()
@@ -246,9 +271,7 @@ const ConversationsRouter = Backbone.Router.extend({
         m.id === message.id ||
         (_.include(m.participating_user_ids, message.author_id) && m.created_at < message.created_at)
       ))
-      trigger = $(`.message-item-view[data-id=${message.id}] .al-trigger`)
     } else {
-      trigger = $('#admin-btn')
       model = this.detail.model
     }
     this.compose.show(model, {to: 'forward', trigger})
@@ -456,4 +479,3 @@ const ConversationsRouter = Backbone.Router.extend({
 
 window.conversationsRouter = new ConversationsRouter()
 Backbone.history.start()
-

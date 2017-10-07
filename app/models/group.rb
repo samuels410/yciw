@@ -55,7 +55,7 @@ class Group < ActiveRecord::Base
   has_many :external_feeds, :as => :context, :inverse_of => :context, :dependent => :destroy
   has_many :messages, :as => :context, :inverse_of => :context, :dependent => :destroy
   belongs_to :wiki
-  has_many :wiki_pages, foreign_key: 'wiki_page', primary_key: 'wiki_page'
+  has_many :wiki_pages, as: :context, inverse_of: :context
   has_many :web_conferences, :as => :context, :inverse_of => :context, :dependent => :destroy
   has_many :collaborations, -> { order("#{Collaboration.quoted_table_name}.title, #{Collaboration.quoted_table_name}.created_at") }, as: :context, inverse_of: :context, dependent: :destroy
   has_many :media_objects, :as => :context, :inverse_of => :context
@@ -181,7 +181,7 @@ class Group < ActiveRecord::Base
   end
 
   def participants(opts={})
-    users = participating_users.uniq.all
+    users = participating_users.distinct.all
     if opts[:include_observers] && self.context.is_a?(Course)
       (users + User.observing_students_in_course(users, self.context)).flatten.uniq
     else
@@ -236,7 +236,7 @@ class Group < ActiveRecord::Base
   def submission?
     if context_type == 'Course'
       assignments = Assignment.for_group_category(group_category_id).active
-      return Submission.where(group_id: id, assignment_id: assignments).exists?
+      return Submission.active.where(group_id: id, assignment_id: assignments).exists?
     end
     false
   end
@@ -411,10 +411,6 @@ class Group < ActiveRecord::Base
     self.group_category.groups.where("id<>?", self).to_a
   end
 
-  def migrate_content_links(html, from_course)
-    Course.migrate_content_links(html, from_course, self)
-  end
-
   attr_accessor :merge_mappings
   attr_accessor :merge_results
   def merge_mapped_id(*args)
@@ -460,11 +456,7 @@ class Group < ActiveRecord::Base
   def account_id=(new_account_id)
     write_attribute(:account_id, new_account_id)
     if self.account_id_changed?
-      if CANVAS_RAILS4_2
-        self.root_account = self.account(true)&.root_account
-      else
-        self.root_account = self.reload_account&.root_account
-      end
+      self.root_account = self.reload_account&.root_account
     end
   end
 

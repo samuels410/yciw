@@ -53,7 +53,8 @@ class GradeCalculator
   def self.recompute_final_score(user_ids, course_id, compute_score_opts = {})
     user_ids = Array(user_ids).uniq.map(&:to_i)
     return if user_ids.empty?
-    course = Course.active.find(course_id)
+    course = Course.active.where(id: course_id).take
+    return unless course
     grading_period = GradingPeriod.for(course).find_by(
       id: compute_score_opts.delete(:grading_period_id)
     )
@@ -84,17 +85,19 @@ class GradeCalculator
     calculate_grading_period_scores if @update_all_grading_period_scores
     compute_scores
     save_scores
+    invalidate_caches
     calculate_course_score if @update_course_score
   end
 
   private
 
   def effective_due_dates
-    @effective_due_dates ||= EffectiveDueDates.for_course(@course, @assignments)
+    @effective_due_dates ||= EffectiveDueDates.for_course(@course, @assignments).filter_students_to(@user_ids)
   end
 
   def compute_scores_and_group_sums_for_batch(user_ids)
     user_ids.map do |user_id|
+      next unless enrollments_by_user[user_id].first
       group_sums = compute_group_sums_for_user(user_id)
       scores = compute_scores_for_user(user_id, group_sums)
       update_changes_hash_for_user(user_id, scores)
@@ -104,7 +107,7 @@ class GradeCalculator
         final: scores[:final],
         final_groups: group_sums[:final].index_by { |group| group[:id] }
       }
-    end
+    end.compact
   end
 
   def assignment_visible_to_student?(assignment_id, user_id)
@@ -276,7 +279,7 @@ class GradeCalculator
     return if @grading_period && @grading_period.deleted?
 
     @course.touch
-    updated_at = Score.sanitize(Time.now.utc)
+    updated_at = Score.connection.quote(Time.now.utc)
 
     Score.transaction do
       @course.shard.activate do
@@ -596,5 +599,10 @@ class GradeCalculator
       score: wrapped_submission[:score],
       total: wrapped_submission[:total],
     }
+  end
+
+  # If you need to invalidate caches with associated classes, put those calls here.
+  def invalidate_caches
+    GradeSummaryPresenter.invalidate_cache(@course)
   end
 end

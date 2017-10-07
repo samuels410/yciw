@@ -24,7 +24,7 @@ describe WikiPage do
     course_with_teacher(:active_all => true)
     n = Notification.create(:name => "Updated Wiki Page", :category => "TestImmediately")
     NotificationPolicy.create(:notification => n, :communication_channel => @user.communication_channel, :frequency => "immediately")
-    p = @course.wiki.wiki_pages.create(:title => "some page")
+    p = @course.wiki_pages.create(:title => "some page")
     p.created_at = 3.days.ago
     p.notify_of_update = true
     p.save!
@@ -41,7 +41,7 @@ describe WikiPage do
     course_with_student(:active_all => true)
     n = Notification.create(:name => "Updated Wiki Page", :category => "TestImmediately")
     NotificationPolicy.create(:notification => n, :communication_channel => @user.communication_channel, :frequency => "immediately")
-    p = @course.wiki.wiki_pages.create(:title => "some page")
+    p = @course.wiki_pages.create(:title => "some page")
     p.created_at = 3.days.ago
     p.notify_of_update = true
     p.save!
@@ -54,7 +54,7 @@ describe WikiPage do
     n = Notification.create(:name => "Updated Wiki Page", :category => "TestImmediately")
     NotificationPolicy.create(:notification => n, :communication_channel => @user.communication_channel, :frequency => "immediately")
     @course.update_attributes(:start_at => 2.days.from_now, :restrict_enrollments_to_course_dates => true)
-    p = @course.wiki.wiki_pages.create(:title => "some page")
+    p = @course.wiki_pages.create(:title => "some page")
     p.created_at = 3.days.ago
     p.notify_of_update = true
     p.save!
@@ -62,18 +62,57 @@ describe WikiPage do
     expect(p.messages_sent["Updated Wiki Page"].map(&:user)).to_not be_include(@student)
   end
 
+  describe "duplicate manages titles properly" do
+    it "works on assignment" do
+      course_with_teacher(:active_all => true)
+      old_wiki = wiki_page_assignment_model({ :title => "Wiki Assignment" }).wiki_page
+      old_wiki.workflow_state = "published"
+      old_wiki.save!
+      new_wiki = old_wiki.duplicate
+      expect(new_wiki.new_record?).to be true
+      expect(new_wiki.assignment).not_to be_nil
+      expect(new_wiki.assignment.new_record?).to be true
+      expect(new_wiki.title).to eq "Wiki Assignment Copy"
+      expect(new_wiki.assignment.title).to eq "Wiki Assignment Copy"
+      expect(new_wiki.workflow_state).to eq "unpublished"
+      new_wiki.save!
+      new_wiki2 = old_wiki.duplicate
+      expect(new_wiki2.title).to eq "Wiki Assignment Copy 2"
+      expect(new_wiki2.assignment.title).to eq "Wiki Assignment Copy 2"
+      new_wiki2.save!
+      new_wiki3 = new_wiki.duplicate
+      expect(new_wiki3.title).to eq "Wiki Assignment Copy 3"
+      expect(new_wiki3.assignment.title).to eq "Wiki Assignment Copy 3"
+      new_wiki4 = new_wiki.duplicate({ :copy_title => "Stupid title" })
+      expect(new_wiki4.title).to eq "Stupid title"
+      expect(new_wiki4.assignment.title).to eq "Stupid title"
+    end
+
+    it "works on non-assignment" do
+      course_with_teacher(:active_all => true)
+      old_wiki = wiki_page_model({ :title => "Wiki Page" })
+      old_wiki.workflow_state = "published"
+      old_wiki.save!
+      new_wiki = old_wiki.duplicate
+      expect(new_wiki.new_record?).to be true
+      expect(new_wiki.assignment).to be_nil
+      expect(new_wiki.title).to eq "Wiki Page Copy"
+      expect(new_wiki.workflow_state).to eq "unpublished"
+    end
+  end
+
   it "should validate the title" do
     course_with_teacher(:active_all => true)
-    expect(@course.wiki.wiki_pages.new(:title => "").valid?).not_to be_truthy
-    expect(@course.wiki.wiki_pages.new(:title => "!!!").valid?).not_to be_truthy
-    expect(@course.wiki.wiki_pages.new(:title => "a"*256).valid?).not_to be_truthy
-    expect(@course.wiki.wiki_pages.new(:title => "asdf").valid?).to be_truthy
+    expect(@course.wiki_pages.new(:title => "").valid?).not_to be_truthy
+    expect(@course.wiki_pages.new(:title => "!!!").valid?).not_to be_truthy
+    expect(@course.wiki_pages.new(:title => "a"*256).valid?).not_to be_truthy
+    expect(@course.wiki_pages.new(:title => "asdf").valid?).to be_truthy
   end
 
   it "should set as front page" do
     course_with_teacher(:active_all => true)
 
-    new_front_page = @course.wiki.wiki_pages.create!(:title => "asdf")
+    new_front_page = @course.wiki_pages.create!(:title => "asdf")
     expect(new_front_page.set_as_front_page!).to eq true
 
     @course.wiki.reload
@@ -88,7 +127,7 @@ describe WikiPage do
     front_page.workflow_state = 'unpublished'
     expect(front_page.valid?).not_to be_truthy
 
-    new_front_page = @course.wiki.wiki_pages.create!(:title => "asdf")
+    new_front_page = @course.wiki_pages.create!(:title => "asdf")
     new_front_page.set_as_front_page!
 
     front_page.reload
@@ -113,24 +152,24 @@ describe WikiPage do
 
   it "should transliterate unicode characters in the title for the url" do
     course_with_teacher(:active_all => true)
-    page = @course.wiki.wiki_pages.create!(:title => "æ vęrÿ ßpéçïâł なまえ ¼‽")
+    page = @course.wiki_pages.create!(:title => "æ vęrÿ ßpéçïâł なまえ ¼‽")
     expect(page.url).to eq 'ae-very-sspecial-namae-1-slash-4'
   end
 
   it "should make the title/url unique" do
     course_with_teacher(:active_all => true)
-    p1 = @course.wiki.wiki_pages.create(:title => "Asdf")
-    p2 = @course.wiki.wiki_pages.create(:title => "Asdf")
+    p1 = @course.wiki_pages.create(:title => "Asdf")
+    p2 = @course.wiki_pages.create(:title => "Asdf")
     expect(p2.title).to eql('Asdf-2')
     expect(p2.url).to eql('asdf-2')
   end
 
   it "should make the title unique and truncate to proper length" do
     course_with_teacher(:active_all => true)
-    p1 = @course.wiki.wiki_pages.create!(:title => "a" * WikiPage::TITLE_LENGTH)
-    p2 = @course.wiki.wiki_pages.create!(:title => p1.title)
-    p3 = @course.wiki.wiki_pages.create!(:title => p1.title)
-    p4 = @course.wiki.wiki_pages.create!(:title => "a" * (WikiPage::TITLE_LENGTH - 2) + "-2")
+    p1 = @course.wiki_pages.create!(:title => "a" * WikiPage::TITLE_LENGTH)
+    p2 = @course.wiki_pages.create!(:title => p1.title)
+    p3 = @course.wiki_pages.create!(:title => p1.title)
+    p4 = @course.wiki_pages.create!(:title => "a" * (WikiPage::TITLE_LENGTH - 2) + "-2")
     expect(p2.title.length).to eq WikiPage::TITLE_LENGTH
     expect(p2.title.end_with?('-2')).to be_truthy
     expect(p3.title.length).to eq WikiPage::TITLE_LENGTH
@@ -141,11 +180,11 @@ describe WikiPage do
 
   it "should let you reuse the title/url of a deleted page" do
     course_with_teacher(:active_all => true)
-    p1 = @course.wiki.wiki_pages.create(:title => "Asdf")
+    p1 = @course.wiki_pages.create(:title => "Asdf")
     p1.workflow_state = 'deleted'
     p1.save
 
-    p2 = @course.wiki.wiki_pages.create(:title => "Asdf")
+    p2 = @course.wiki_pages.create(:title => "Asdf")
     p2.reload
     expect(p2.title).to eql('Asdf')
     expect(p2.url).to eql('asdf')
@@ -161,24 +200,10 @@ describe WikiPage do
     expect(p1.url).to eql('asdf-2')
   end
 
-  it "should preserve course links when in a group belonging to the course" do
-    other_course = Course.create!
-    course_with_teacher
-    group(:group_context => @course)
-    page = @group.wiki.wiki_pages.create(:title => "poni3s")
-    page.user = @teacher
-    page.update_attribute(:body, %{<a href='/courses/#{@course.id}/files#oops'>click meh</a>
-                                  <a href='/courses/#{other_course.id}/files#whoops'>click meh too</a>})
-
-    page.reload
-    expect(page.body).to include("/courses/#{@course.id}/files#oops")
-    expect(page.body).to include("/groups/#{@group.id}/files#whoops")
-  end
-
   context "unpublished" do
     before :once do
       teacher_in_course(:active_all => true)
-      @page = @course.wiki.wiki_pages.create(:title => "some page")
+      @page = @course.wiki_pages.create(:title => "some page")
       @page.workflow_state = :unpublished
       @page.save!
     end
@@ -204,7 +229,7 @@ describe WikiPage do
   describe '#can_edit_page?' do
     it 'is true if the user has manage_wiki rights' do
       course_with_teacher(:active_all => true)
-      page = @course.wiki.wiki_pages.create(:title => "some page", :editing_roles => 'teachers')
+      page = @course.wiki_pages.create(:title => "some page", :editing_roles => 'teachers')
       page.workflow_state = 'unpublished'
       expect(page.can_edit_page?(@teacher)).to be_truthy
     end
@@ -218,14 +243,14 @@ describe WikiPage do
       end
 
       it 'does not grant teachers or TAs edit rights when editing roles are "Only teachers"' do
-        page = @course.wiki.wiki_pages.create(:title => "some page", :editing_roles => 'teachers')
+        page = @course.wiki_pages.create(:title => "some page", :editing_roles => 'teachers')
         page.workflow_state = 'unpublished'
         expect(page.can_edit_page?(@teacher)).to be_falsey
         expect(page.can_edit_page?(@ta)).to be_falsey
       end
 
       it 'grants teachers and TAs edit rights when editing roles are "Teachers and students"' do
-        page = @course.wiki.wiki_pages.create(:title => "some page", :editing_roles => 'teachers,students')
+        page = @course.wiki_pages.create(:title => "some page", :editing_roles => 'teachers,students')
         page.workflow_state = 'unpublished'
         expect(page.can_edit_page?(@teacher)).to be_truthy
         expect(page.can_edit_page?(@ta)).to be_truthy
@@ -234,14 +259,14 @@ describe WikiPage do
 
     it 'is true for students who are in the course' do
       course_with_student(:active_all => true)
-      page = @course.wiki.wiki_pages.create(:title => "some page", :editing_roles => 'students')
+      page = @course.wiki_pages.create(:title => "some page", :editing_roles => 'students')
       student = @course.students.first
       expect(page.can_edit_page?(student)).to be_truthy
     end
 
     it 'is not true for users who are not in the course (if it is not public)' do
       course_factory(active_all: true)
-      page = @course.wiki.wiki_pages.create(:title => "some page", :editing_roles => 'public')
+      page = @course.wiki_pages.create(:title => "some page", :editing_roles => 'public')
       user_factory(active_all: true)
       expect(page.can_edit_page?(@user)).to be_falsey
     end
@@ -250,7 +275,7 @@ describe WikiPage do
       course_factory(active_all: true)
       @course.is_public = true
       @course.save!
-      page = @course.wiki.wiki_pages.create(:title => "some page", :editing_roles => 'public')
+      page = @course.wiki_pages.create(:title => "some page", :editing_roles => 'public')
       user_factory(active_all: true)
       expect(page.can_edit_page?(@user)).to be_truthy
     end
@@ -280,6 +305,17 @@ describe WikiPage do
         front_page.initialize_wiki_page(@teacher)
         expect(front_page).to be_published
       end
+
+      it 'should not change the URL in a wiki page link' do
+        allow_any_instance_of(UserContent::HtmlRewriter).to receive(:user_can_view_content?).and_return true
+        course = course_factory()
+        some_other_course = course_factory()
+
+        file_url = "/courses/#{some_other_course.id}/files/1"
+        link_string = "<a href='#{file_url}'>link</a>"
+        page = course.wiki_pages.create!(title: 'New', body: "<p>#{link_string}</p>", user: @user)
+        expect(page.body).to include(file_url)
+      end
     end
 
     context 'on a group' do
@@ -305,7 +341,7 @@ describe WikiPage do
     context 'admins' do
       before :once do
         account_admin_user
-        @page = @course.wiki.wiki_pages.build(:title => 'Some page')
+        @page = @course.wiki_pages.create!(:title => 'Some page')
         @page.workflow_state = 'active'
       end
 
@@ -334,7 +370,7 @@ describe WikiPage do
     context 'teachers' do
       before :once do
         course_with_teacher :course => @course, :active_all => true
-        @page = @course.wiki.wiki_pages.build(:title => 'Some page')
+        @page = @course.wiki_pages.create!(:title => 'Some page')
         @page.workflow_state = 'active'
       end
 
@@ -363,7 +399,7 @@ describe WikiPage do
     context 'students' do
       before :once do
         course_with_student :course => @course, :active_all => true
-        @page = @course.wiki.wiki_pages.build(:title => 'Some page')
+        @page = @course.wiki_pages.create!(:title => 'Some page')
         @page.workflow_state = 'active'
       end
 
@@ -423,6 +459,7 @@ describe WikiPage do
         before :once do
           @page.context.default_wiki_editing_roles = 'teachers,students'
           @page.context.save!
+          @page.reload
         end
 
         it 'should be given create rights' do
@@ -509,7 +546,7 @@ describe WikiPage do
     end
 
     it "should destroy its content tags" do
-      @page = @course.wiki.wiki_pages.create! title: 'destroy me'
+      @page = @course.wiki_pages.create! title: 'destroy me'
       @module = @course.context_modules.create!(:name => "module")
       tag = @module.add_item(type: 'WikiPage', title: 'kill meeee', id: @page.id)
       @page.destroy
@@ -522,7 +559,7 @@ describe WikiPage do
     before (:once) { course_factory }
 
     it "should restore to unpublished state" do
-      @page = @course.wiki.wiki_pages.create! title: 'dot dot dot'
+      @page = @course.wiki_pages.create! title: 'dot dot dot'
       @page.update_attribute(:workflow_state, 'deleted')
       @page.restore
       expect(@page.reload).to be_unpublished
@@ -547,7 +584,7 @@ describe WikiPage do
     end
 
     it "should not restore its content tags" do
-      @page = @course.wiki.wiki_pages.create! title: 'dot dot dot'
+      @page = @course.wiki_pages.create! title: 'dot dot dot'
       @module = @course.context_modules.create!(:name => "module")
       tag = @module.add_item(type: 'WikiPage', title: 'dash dash dash', id: @page.id)
       @page.update_attribute(:workflow_state, 'deleted')
@@ -560,7 +597,7 @@ describe WikiPage do
   describe "context_module_action" do
     it "should process all content tags" do
       course_with_student active_all: true
-      page = @course.wiki.wiki_pages.create! title: 'teh page'
+      page = @course.wiki_pages.create! title: 'teh page'
       mod1 = @course.context_modules.create name: 'module1'
       tag1 = mod1.add_item type: 'wiki_page', id: page.id
       mod1.completion_requirements = { tag1.id => { type: 'must_view' } }
@@ -578,8 +615,8 @@ describe WikiPage do
   describe "locked_for?" do
     it "should lock by preceding item and sequential progress" do
       course_with_student active_all: true
-      pageB = @course.wiki.wiki_pages.create! title: 'B'
-      pageC = @course.wiki.wiki_pages.create! title: 'C'
+      pageB = @course.wiki_pages.create! title: 'B'
+      pageC = @course.wiki_pages.create! title: 'C'
       mod = @course.context_modules.create name: 'teh module'
       tagB = mod.add_item type: 'wiki_page', id: pageB.id
       tagC = mod.add_item type: 'wiki_page', id: pageC.id
@@ -591,7 +628,7 @@ describe WikiPage do
 
     it "includes a future unlock date" do
       course_with_student active_all: true
-      page = @course.wiki.wiki_pages.create! title: 'page'
+      page = @course.wiki_pages.create! title: 'page'
       mod = @course.context_modules.create name: 'teh module', unlock_at: 1.week.from_now
       mod.add_item type: 'wiki_page', id: page.id
       mod.workflow_state = 'unpublished'
@@ -601,7 +638,7 @@ describe WikiPage do
 
     it "doesn't reference an expired unlock-at date" do
       course_with_student active_all: true
-      page = @course.wiki.wiki_pages.create! title: 'page'
+      page = @course.wiki_pages.create! title: 'page'
       mod = @course.context_modules.create name: 'teh module', unlock_at: 1.week.ago
       mod.add_item type: 'wiki_page', id: page.id
       mod.workflow_state = 'unpublished'
@@ -614,7 +651,7 @@ describe WikiPage do
     before(:once) do
       Timecop.freeze(1.hour.ago) do
         course_factory
-        @page = @course.wiki.wiki_pages.create! title: 'page'
+        @page = @course.wiki_pages.create! title: 'page'
         @old_timestamp = @page.revised_at
       end
     end

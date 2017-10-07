@@ -74,6 +74,9 @@ class WikiPagesController < ApplicationController
     if authorized_action(@context.wiki, @current_user, :read) && tab_enabled?(@context.class::TAB_PAGES)
       log_asset_access([ "pages", @context ], "pages", "other")
       js_env ConditionalRelease::Service.env_for @context
+      if @context.root_account.feature_enabled?(:student_planner)
+        js_env :student_planner_enabled => @context.grants_any_right?(@current_user, session, :manage)
+      end
       js_env :wiki_page_menu_tools => external_tools_display_hashes(:wiki_page_menu)
       set_tutorial_js_env
       @padless = true
@@ -87,7 +90,7 @@ class WikiPagesController < ApplicationController
         encoded_name = @page_name && CGI.escape(@page_name).gsub("+", " ")
         redirect_to polymorphic_url([@context, :wiki_page], id: encoded_name || @page, titleize: params[:titleize], action: :edit)
       else
-        wiki_page = @wiki.wiki_pages.deleted_last.where(url: @page.url).first
+        wiki_page = @context.wiki_pages.deleted_last.where(url: @page.url).first
         if wiki_page && wiki_page.deleted?
           flash[:warning] = t('notices.page_deleted', 'The page "%{title}" has been deleted.', :title => @page.title)
         else
@@ -115,6 +118,9 @@ class WikiPagesController < ApplicationController
       set_master_course_js_env_data(@page, @context)
 
       js_env ConditionalRelease::Service.env_for @context
+      if @context.root_account.feature_enabled?(:student_planner)
+        js_env :student_planner_enabled => @page.context.grants_any_right?(@current_user, session, :manage)
+      end
       if !ConditionalRelease::Service.enabled_in_context?(@context) ||
         enforce_assignment_visible(@page)
         add_crumb(@page.title)

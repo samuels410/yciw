@@ -147,7 +147,6 @@ Canvas::Plugin.register('mathman', nil, {
   :author_website => 'http://www.instructure.com',
   :version => '1.0.0',
   :settings_partial => 'plugins/mathman_settings',
-  :validator => 'MathmanValidator',
   :settings => {
     use_for_svg: false,
     use_for_mml: false
@@ -425,5 +424,14 @@ Canvas::Plugin.register('live_events', nil, {
   :encrypted_settings => [ :aws_secret_access_key ],
   :settings_partial => 'plugins/live_events_settings',
   :validator => 'LiveEventsValidator'
+})
+Canvas::Plugin.register('inst_fs', nil, {
+  :name =>lambda{ t :name, 'Inst-FS' },
+  :description => lambda{ t :description, 'File service that proxies for S3.' },
+  :author => 'Instructure',
+  :author_website => 'http://www.instructure.com',
+  :version => '0.0.1',
+  :settings => nil,
+  :settings_partial => 'plugins/inst_fs_settings'
 })
 require_dependency 'canvas/plugins/address_book'

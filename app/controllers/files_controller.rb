@@ -113,7 +113,7 @@ class FilesController < ApplicationController
   before_action :require_context, except: [
     :assessment_question_show, :image_thumbnail, :show_thumbnail,
     :create_pending, :s3_success, :show, :api_create, :api_create_success, :api_create_success_cors,
-    :api_show, :api_index, :destroy, :api_update, :api_file_status, :public_url
+    :api_show, :api_index, :destroy, :api_update, :api_file_status, :public_url, :api_capture
   ]
 
   before_action :check_file_access_flags, only: [:show_relative, :show]
@@ -395,7 +395,7 @@ class FilesController < ApplicationController
     # if the attachment is part of a submisison, its 'context' will be the student that submmited the assignment.  so if  @current_user is a
     # teacher authorized_action(@attachment, @current_user, :download) will be false, we need to actually check if they have perms to see the
     # submission.
-    @submission = Submission.find(params[:submission_id]) if params[:submission_id]
+    @submission = Submission.active.find(params[:submission_id]) if params[:submission_id]
     # verify that the requested attachment belongs to the submission
     return render_unauthorized_action if @submission && !@submission.includes_attachment?(@attachment)
     if @submission ? authorized_action(@submission, @current_user, :read) : authorized_action(@attachment, @current_user, :download)
@@ -627,12 +627,12 @@ class FilesController < ApplicationController
         redirect_to(named_context_url(@context, :context_file_url, attachment.id))
       end
     else
-      send_stored_file(attachment, false, true)
+      send_stored_file(attachment, false)
     end
   end
   protected :send_attachment
 
-  def send_stored_file(attachment, inline=true, redirect_to_s3=false)
+  def send_stored_file(attachment, inline=true)
     user = @current_user
     user ||= api_find(User, params[:user_id]) if params[:user_id].present?
     attachment.context_module_action(user, :read) if user && !params[:preview]
@@ -640,8 +640,7 @@ class FilesController < ApplicationController
     render_or_redirect_to_stored_file(
       attachment: attachment,
       verifier: params[:verifier],
-      inline: inline,
-      redirect_to_s3: redirect_to_s3
+      inline: inline
     )
   end
   protected :send_stored_file
@@ -713,7 +712,7 @@ class FilesController < ApplicationController
         @folder ||= Folder.unfiled_folder(@context)
         @attachment.folder_id = @folder.id
       end
-      @attachment.content_type = Attachment.mimetype(@attachment.filename)
+      @attachment.content_type = params[:attachment][:content_type].presence || Attachment.mimetype(@attachment.filename)
       @attachment.set_publish_state_for_usage_rights
       @attachment.save!
 
@@ -766,6 +765,50 @@ class FilesController < ApplicationController
 
   def api_create_success_cors
     head :ok
+  end
+
+  def api_capture
+    unless InstFS.enabled?
+      head :not_found
+      return
+    end
+
+    # check service authorization
+    key = Base64.decode64(InstFS.jwt_secret)
+    begin
+      Canvas::Security.decode_jwt(params[:token], [ key ])
+    rescue
+      head :forbidden
+      return
+    end
+
+    # validate params
+    unless params[:user_id] && params[:context_type] && params[:context_id]
+      head :bad_request
+      return
+    end
+
+    @context = Context.find_polymorphic(params[:context_type], params[:context_id])
+    @attachment = @context.attachments.build
+
+    # service metadata
+    @attachment.filename = params[:name]
+    @attachment.display_name = params[:name].presence
+    @attachment.size = params[:size]
+    @attachment.content_type = params[:content_type]
+    @attachment.instfs_uuid = params[:instfs_uuid]
+    @attachment.modified_at = Time.zone.now
+
+    # capture params
+    @attachment.folder = Folder.where(id: params[:folder_id]).first
+    @attachment.user = api_find(User, params[:user_id])
+    @attachment.lock_at = params[:lock_at].presence
+    @attachment.unlock_at = params[:unlock_at].presence
+    @attachment.locked = Canvas::Plugin.value_to_boolean(params[:locked])
+    @attachment.hidden = Canvas::Plugin.value_to_boolean(params[:hidden])
+
+    @attachment.save!
+    render plain: "OK", status: :created, location: api_v1_attachment_url(@attachment)
   end
 
   def api_create_success
@@ -1031,10 +1074,30 @@ class FilesController < ApplicationController
   # @API Delete file
   # Remove the specified file
   #
+  # @argument replace [boolean]
+  #   This action is irreversible.
+  #   If replace is set to true the file contents will be replaced with a
+  #   generic "file has been removed" file. This also destroys any previews
+  #   that have been generated for the file.
+  #   Must have manage files and become other users permissions
+  #
+  # @example_request
+  #
   #   curl -X DELETE 'https://<canvas>/api/v1/files/<file_id>' \
   #        -H 'Authorization: Bearer <token>'
+  #
+  # @returns File
   def destroy
     @attachment = Attachment.find(params[:id])
+    if value_to_boolean(params[:replace])
+      @context = @attachment.context
+      if can_replace_file?
+        @attachment.destroy_content_and_replace(@current_user)
+        return render json: attachment_json(@attachment, @current_user, {}, {omit_verifier_in_app: true})
+      else
+        return render_unauthorized_action
+      end
+    end
     if can_do(@attachment, @current_user, :delete)
       return render_unauthorized_action if master_courses? && editing_restricted?(@attachment)
       @attachment.destroy
@@ -1053,6 +1116,15 @@ class FilesController < ApplicationController
       render :json => { :message => I18n.t('Cannot delete a file that has been submitted as part of an assignment') }, :status => :forbidden
     else
       render :json => { :message => I18n.t('Unauthorized to delete this file') }, :status => :unauthorized
+    end
+  end
+
+  def can_replace_file?
+    if @context.is_a?(User)
+      @context.can_masquerade?(@current_user, @domain_root_account)
+    else
+      @context.grants_right?(@current_user, nil, :manage_files) &&
+        @domain_root_account.grants_right?(@current_user, nil, :become_user)
     end
   end
 

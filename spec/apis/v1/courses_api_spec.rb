@@ -99,9 +99,9 @@ describe Api::V1::Course do
       mod.save!
 
       stubbed_url = "redirect_url"
-      CourseProgress.any_instance.stubs(:course_context_modules_item_redirect_url).returns(stubbed_url).with do |opts|
-        opts[:course_id] == @course2.id && opts[:id] == tag.id
-      end
+      allow_any_instance_of(CourseProgress).to receive(:course_context_modules_item_redirect_url).
+        with(include(course_id: @course2.id, id: tag.id)).
+          and_return(stubbed_url)
 
       json = @test_api.course_json(@course2, @me, {}, ['course_progress'], [])
       expect(json).to include('course_progress')
@@ -164,8 +164,8 @@ describe Api::V1::Course do
 
   describe '#add_helper_dependant_entries' do
     let(:hash) { Hash.new }
-    let(:course) { stub_everything( :feed_code => 573, :id => 42, :syllabus_body => 'syllabus text' ) }
-    let(:course_json) { stub_everything() }
+    let(:course) { double( :feed_code => 573, :id => 42, :syllabus_body => 'syllabus text' ).as_null_object }
+    let(:course_json) { double.as_null_object() }
     let(:api) { TestCourseApi.new }
 
     let(:result) do
@@ -188,7 +188,7 @@ describe Api::V1::Course do
     end
 
     describe 'when the include options are all set off' do
-      let(:course_json){ stub( :include_syllabus => false, :include_url => false ) }
+      let(:course_json){ double( :include_syllabus => false, :include_url => false ) }
 
       describe '#syllabus_body' do
         subject { super().syllabus_body }
@@ -202,7 +202,7 @@ describe Api::V1::Course do
     end
 
     describe 'when everything is included' do
-      let(:course_json){ stub( :include_syllabus => true, :include_url => true ) }
+      let(:course_json){ double( :include_syllabus => true, :include_url => true ) }
 
       describe '#syllabus_body' do
         subject { super().syllabus_body }
@@ -232,8 +232,9 @@ describe CoursesController, type: :request do
   end
 
   before :each do
-    Course.any_instance.stubs(:start_at).returns nil
-    Course.any_instance.stubs(:end_at).returns nil
+    @course_dates_stubbed = true
+    allow_any_instance_of(Course).to receive(:start_at).and_wrap_original { |original| original.call unless @course_dates_stubbed }
+    allow_any_instance_of(Course).to receive(:end_at).and_wrap_original { |original| original.call unless @course_dates_stubbed }
   end
 
   describe "observer viewing a course" do
@@ -489,8 +490,8 @@ describe CoursesController, type: :request do
         @resource_params = { :controller => 'courses', :action => 'create', :format => 'json', :account_id => @account.id.to_s }
       end
 
-      before :each do
-        Course.any_instance.unstub(:start_at, :end_at)
+      before do
+        @course_dates_stubbed = false
       end
 
       it "should create a new course" do
@@ -531,10 +532,10 @@ describe CoursesController, type: :request do
           'start_at' => '2011-01-01T07:00:00Z',
           'end_at' => '2011-05-01T07:00:00Z',
           'workflow_state' => 'available',
-          'default_view' => 'feed',
+          'default_view' => 'modules',
           'storage_quota_mb' => @account.default_storage_quota_mb
         })
-        Auditors::Course.expects(:record_created).once
+        expect(Auditors::Course).to receive(:record_created).once
         json = api_call(:post, @resource_path, @resource_params, post_params)
         new_course = Course.find(json['id'])
         [:name, :course_code, :start_at, :end_at,
@@ -552,7 +553,8 @@ describe CoursesController, type: :request do
         expect(new_course.time_zone.tzinfo.name).to eql 'America/Juneau'
         course_response.merge!(
           'id' => new_course.id,
-          'calendar' => { 'ics' => "http://www.example.com/feeds/calendars/course_#{new_course.uuid}.ics" }
+          'calendar' => { 'ics' => "http://www.example.com/feeds/calendars/course_#{new_course.uuid}.ics" },
+          'uuid' => new_course.uuid
         )
         course_response.delete 'term_id' #not included in the response
         expect(json).to eql course_response
@@ -595,7 +597,7 @@ describe CoursesController, type: :request do
           'start_at' => '2011-01-01T07:00:00Z',
           'end_at' => '2011-05-01T07:00:00Z',
           'workflow_state' => 'available',
-          'default_view' => 'feed',
+          'default_view' => 'modules',
           'storage_quota_mb' => @account.default_storage_quota_mb
         })
         json = api_call(:post, @resource_path, @resource_params, post_params)
@@ -603,7 +605,8 @@ describe CoursesController, type: :request do
         expect(new_course.enrollment_term_id).to eql term.id
         course_response.merge!(
           'id' => new_course.id,
-          'calendar' => { 'ics' => "http://www.example.com/feeds/calendars/course_#{new_course.uuid}.ics" }
+          'calendar' => { 'ics' => "http://www.example.com/feeds/calendars/course_#{new_course.uuid}.ics" },
+          'uuid' => new_course.uuid
         )
         expect(json).to eql course_response
       end
@@ -620,7 +623,7 @@ describe CoursesController, type: :request do
       end
 
       it "should offer a course if passed the 'offer' parameter" do
-        Auditors::Course.expects(:record_published).once
+        expect(Auditors::Course).to receive(:record_published).once
         json = api_call(:post, @resource_path,
           @resource_params,
           { :account_id => @account.id, :offer => true, :course => { :name => 'Test Course' } }
@@ -639,8 +642,8 @@ describe CoursesController, type: :request do
       end
 
       it "should allow setting sis_course_id without offering the course" do
-        Auditors::Course.expects(:record_created).once
-        Auditors::Course.expects(:record_published).never
+        expect(Auditors::Course).to receive(:record_created).once
+        expect(Auditors::Course).to receive(:record_published).never
         json = api_call(:post, @resource_path,
           @resource_params,
           { :account_id => @account.id, :course => { :name => 'Test Course', :sis_course_id => '9999' } }
@@ -786,14 +789,14 @@ describe CoursesController, type: :request do
       }, 'offer' => true }
     end
 
-    before :each do
-      Course.any_instance.unstub(:start_at, :end_at)
+    before do
+      @course_dates_stubbed = false
     end
 
     context "an account admin" do
       it "should be able to update a course" do
         @course.root_account.allow_self_enrollment!
-        Auditors::Course.expects(:record_updated).once
+        expect(Auditors::Course).to receive(:record_updated).once
 
         json = api_call(:put, @path, @params, @new_values)
         @course.reload
@@ -1013,7 +1016,7 @@ describe CoursesController, type: :request do
         end
 
         it 'cannot change group_weighting_scheme if any effective due dates in the whole course are in a closed grading period' do
-          Course.any_instance.expects(:any_assignment_in_closed_grading_period?).returns(true)
+          expect_any_instance_of(Course).to receive(:any_assignment_in_closed_grading_period?).and_return(true)
           @new_values["course"]["group_weighting_scheme"] = "percent"
           teacher_in_course(course: @course, active_all: true)
           raw_api_call(:put, @path, @params, @new_values)
@@ -1199,7 +1202,7 @@ describe CoursesController, type: :request do
     end
     context "an authorized user" do
       it "should be able to delete a course" do
-        Auditors::Course.expects(:record_deleted).once
+        expect(Auditors::Course).to receive(:record_deleted).once
         json = api_call(:delete, @path, @params, { :event => 'delete' })
         expect(json).to eq({ 'delete' => true })
         @course.reload
@@ -1217,7 +1220,7 @@ describe CoursesController, type: :request do
       end
 
       it "should conclude when completing a course" do
-        Auditors::Course.expects(:record_concluded).once
+        expect(Auditors::Course).to receive(:record_concluded).once
         json = api_call(:delete, @path, @params, { :event => 'conclude' })
         expect(json).to eq({ 'conclude' => true })
 
@@ -1295,21 +1298,21 @@ describe CoursesController, type: :request do
     context "an authorized user" do
       let(:course_ids){ [@course1.id, @course2.id, @course3.id] }
       it "should delete multiple courses" do
-        Auditors::Course.expects(:record_deleted).times(course_ids.length)
+        expect(Auditors::Course).to receive(:record_deleted).exactly(course_ids.length).times
         api_call(:put, @path, @params, { :event => 'delete', :course_ids => course_ids })
         run_jobs
         [@course1, @course2, @course3].each { |c| expect(c.reload).to be_deleted }
       end
 
       it "should conclude multiple courses" do
-        Auditors::Course.expects(:record_concluded).times(course_ids.length)
+        expect(Auditors::Course).to receive(:record_concluded).exactly(course_ids.length).times
         api_call(:put, @path, @params, { :event => 'conclude', :course_ids => course_ids })
         run_jobs
         [@course1, @course2, @course3].each { |c| expect(c.reload).to be_completed }
       end
 
       it "should publish multiple courses" do
-        Auditors::Course.expects(:record_published).times(course_ids.length)
+        expect(Auditors::Course).to receive(:record_published).exactly(course_ids.length).times
         api_call(:put, @path, @params, { :event => 'offer', :course_ids => course_ids })
         run_jobs
         [@course1, @course2, @course3].each { |c| expect(c.reload).to be_available }
@@ -1317,7 +1320,7 @@ describe CoursesController, type: :request do
 
       it "should accept sis ids" do
         course_ids = ['sis_course_id:course1', 'sis_course_id:course2', 'sis_course_id:course3']
-        Auditors::Course.expects(:record_published).times(course_ids.length)
+        expect(Auditors::Course).to receive(:record_published).exactly(course_ids.length).times
         api_call(:put, @path, @params, { :event => 'offer', :course_ids => course_ids })
         run_jobs
         [@course1, @course2, @course3].each { |c| expect(c.reload).to be_available }
@@ -1325,7 +1328,7 @@ describe CoursesController, type: :request do
 
       it 'should undelete courses' do
         [@course1, @course2].each { |c| c.destroy }
-        Auditors::Course.expects(:record_restored).twice
+        expect(Auditors::Course).to receive(:record_restored).twice
         api_call(:put, @path, @params, { :event => 'undelete', :course_ids => [@course1.id, 'sis_course_id:course2'] })
         run_jobs
         [@course1, @course2].each { |c| expect(c.reload).to be_claimed }
@@ -1333,7 +1336,7 @@ describe CoursesController, type: :request do
 
       it "should not conclude deleted courses" do
         @course1.destroy
-        Auditors::Course.expects(:record_concluded).once
+        expect(Auditors::Course).to receive(:record_concluded).once
         api_call(:put, @path, @params, { :event => 'conclude', :course_ids => [@course1.id, @course2.id] })
         run_jobs
         expect(@course1.reload).to be_deleted
@@ -1342,7 +1345,7 @@ describe CoursesController, type: :request do
 
       it "should not publish deleted courses" do
         @course1.destroy
-        Auditors::Course.expects(:record_published).once
+        expect(Auditors::Course).to receive(:record_published).once
         api_call(:put, @path, @params, { :event => 'offer', :course_ids => [@course1.id, @course2.id] })
         run_jobs
         expect(@course1.reload).to be_deleted
@@ -1415,7 +1418,7 @@ describe CoursesController, type: :request do
 
       it "should succeed when publishing already published courses" do
         @course1.offer!
-        Auditors::Course.expects(:record_published).twice
+        expect(Auditors::Course).to receive(:record_published).twice
         json = api_call(:put, @path, @params, { :event => 'offer', :course_ids => course_ids })
         run_jobs
         progress = Progress.find(json['id'])
@@ -1426,7 +1429,7 @@ describe CoursesController, type: :request do
       it "should succeed when concluding already concluded courses" do
         @course1.complete!
         @course2.complete!
-        Auditors::Course.expects(:record_concluded).once
+        expect(Auditors::Course).to receive(:record_concluded).once
         json = api_call(:put, @path, @params, { :event => 'conclude', :course_ids => course_ids })
         run_jobs
         progress = Progress.find(json['id'])
@@ -1437,7 +1440,7 @@ describe CoursesController, type: :request do
       it "should be able to unconclude courses" do
         @course1.complete!
         @course2.complete!
-        Auditors::Course.expects(:record_unconcluded).twice
+        expect(Auditors::Course).to receive(:record_unconcluded).twice
         json = api_call(:put, @path, @params, { :event => 'offer', :course_ids => course_ids })
         run_jobs
         progress = Progress.find(json['id'])
@@ -1460,14 +1463,13 @@ describe CoursesController, type: :request do
       end
 
       it "should report a failure if an exception is raised outside course update" do
-        Progress.any_instance.stubs(:complete!).raises "crazy exception"
+        allow_any_instance_of(Progress).to receive(:complete!).and_raise "crazy exception"
         json = api_call(:put, @path + "?event=offer&course_ids[]=#{@course2.id}",
                         @params.merge(:event => 'offer', :course_ids => [@course2.id.to_s]))
         run_jobs
         progress = Progress.find(json['id'])
         expect(progress).to be_failed
         expect(progress.message).to be_include "crazy exception"
-        Progress.any_instance.unstub(:complete!)
       end
     end
 
@@ -2147,8 +2149,8 @@ describe CoursesController, type: :request do
     end
 
     it "should not be paginated (for legacy reasons)" do
-      controller = mock()
-      controller.stubs(:params).returns({})
+      controller = double()
+      allow(controller).to receive(:params).and_return({})
       course_with_teacher(:active_all => true)
       num = Api.per_page_for(controller) + 1 # get the default api per page value
       create_users_in_course(@course, num)
@@ -2337,7 +2339,7 @@ describe CoursesController, type: :request do
       it "returns a list of users" do
         json = api_call(:get, "/api/v1/courses/#{@course1.id}/users.json",
                         { :controller => 'courses', :action => 'users', :course_id => @course1.id.to_s, :format => 'json' })
-        expected_users = @course1.users.uniq - [@test_student]
+        expected_users = @course1.users.to_a.uniq - [@test_student]
         expect(json.sort_by{|x| x["id"]}).to eq api_json_response(expected_users,
                                                               :only => user_api_fields).sort_by{|x| x["id"]}
       end
@@ -2825,7 +2827,8 @@ describe CoursesController, type: :request do
         'apply_assignment_group_weights' => false,
         'enrollment_term_id' => @course.enrollment_term_id,
         'restrict_enrollments_to_course_dates' => false,
-        'time_zone' => 'America/Los_Angeles'
+        'time_zone' => 'America/Los_Angeles',
+        'uuid' => @course1.uuid
       })
     end
 
@@ -3210,7 +3213,7 @@ describe ContentImportsController, type: :request do
     @course.assignments.create!(:title => 'Assignment 1', :points_possible => 10, :assignment_group => group)
     @copy_from.discussion_topics.create!(:title => "Topic 1", :message => "<p>watup?</p>")
     @copy_from.syllabus_body = "haha"
-    @copy_from.wiki.wiki_pages.create!(:title => "some page", :body => 'hi')
+    @copy_from.wiki_pages.create!(:title => "some page", :body => 'hi')
     @copy_from.context_external_tools.create!(:name => "new tool", :consumer_key => "key", :shared_secret => "secret", :domain => 'example.com')
     Attachment.create!(:filename => 'wut.txt', :display_name => "huh?", :uploaded_data => StringIO.new('uh huh.'), :folder => Folder.unfiled_folder(@copy_from), :context => @copy_from)
     @copy_from.calendar_events.create!(:title => 'event', :description => 'hi', :start_at => 1.day.from_now)
@@ -3297,7 +3300,7 @@ describe ContentImportsController, type: :request do
   end
 
   it "should log copied event to course activity" do
-    Auditors::Course.expects(:record_copied).once
+    expect(Auditors::Course).to receive(:record_copied).once
     run_copy
   end
 
@@ -3351,7 +3354,7 @@ describe ContentImportsController, type: :request do
   it "should only copy wiki pages" do
     run_only_copy(:wiki_pages)
     check_counts 0
-    expect(@copy_to.wiki.wiki_pages.count).to eq 1
+    expect(@copy_to.wiki_pages.count).to eq 1
   end
 
   each_copy_option do |option, association|
@@ -3372,7 +3375,7 @@ describe ContentImportsController, type: :request do
   it "should skip copy wiki pages" do
     run_except_copy(:wiki_pages)
     check_counts 1
-    expect(@copy_to.wiki.wiki_pages.count).to eq 0
+    expect(@copy_to.wiki_pages.count).to eq 0
   end
   each_copy_option do |option, association|
     it "should skip copy #{option}" do
@@ -3400,8 +3403,8 @@ describe ContentImportsController, type: :request do
       { :controller => 'courses', :action => 'link_validation', :format => 'json', :course_id => @course.id.to_param })
     expect(json).to eq({'state' => 'queued'})
 
-    CourseLinkValidator.any_instance.stubs(:check_course)
-    CourseLinkValidator.any_instance.stubs(:issues).returns(['mock_issue'])
+    allow_any_instance_of(CourseLinkValidator).to receive(:check_course)
+    allow_any_instance_of(CourseLinkValidator).to receive(:issues).and_return(['mock_issue'])
     run_jobs
 
     # check results

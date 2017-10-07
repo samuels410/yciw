@@ -26,7 +26,7 @@
   <strong><%= mt 'details.allow_application', "%{app_name} is requesting access to your account.", :app_name => @provider.app_name %></strong>
 </p>
 <p>
-  <%= mt 'details.login_name', "You are authorizing this app as %{user_name}.", :user_name => link_to(@current_user.short_name, user_profile_url(@current_user), :popup => true) %>
+  <%= mt 'details.login_name', "You are authorizing this app as %{user_name}.", :user_name => link_to(@current_user.short_name, user_profile_url(@current_user), :popup => true, target:"_blank") %>
   <% if @current_user.email.present? && @current_user.email != @current_user.short_name %>
     <br/>
     <%= t 'details.email', "Your email address is %{email}.", :email => @current_user.email %>
@@ -34,13 +34,13 @@
 </p>
 <%= form_tag oauth2_auth_accept_path, id: "oauth2_accept_form" do %>
   <div class="button_box ic-Login-confirmation__actions">
-    <%= link_to(t(:cancel, "Cancel"), oauth2_auth_deny_path, :class => "btn") %>
-    <%=  submit_tag(t("Authorize"),  class: "btn btn-primary", disable_with: t('Please wait...')) %>
+    <%= link_to(t(:cancel, "Cancel"), oauth2_auth_deny_path, :class => "Button Button--block") %>
+    <%=  submit_tag(t("Authorize"),  class: "Button Button--primary Button--block", data: {disable_with: t('Please wait...')}) %>
   </div>
   <% unless @provider.scopes.blank? %>
     <div class="control-group">
       <%= check_box_tag(:remember_access, "1", false, :class => "checkbox") %>
-      <%= label_tag(:remember_access, :en => "Remember my authorization for this service", :class => "checkbox") %>
+      <%= label_tag :remember_access, t('labels.remember_access', "Remember my authorization for this service"), class: "checkbox" %>
     </div>
   <% end %>
 <% end %>

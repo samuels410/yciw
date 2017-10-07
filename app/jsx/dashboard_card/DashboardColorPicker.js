@@ -18,6 +18,7 @@
 
 import _ from 'underscore'
 import React from 'react'
+import PropTypes from 'prop-types'
 import $ from 'jquery'
 import I18n from 'i18n!dashcards'
 import ColorPicker from 'jsx/shared/ColorPicker'
@@ -30,11 +31,11 @@ import cx from 'classnames'
 
   var SPACE_NEEDED_FOR_TOOLTIP = 300;
 
-  var ColorPickerTooltip = React.createClass({
+  var DashboardColorPicker = React.createClass({
 
     propTypes: {
-      elementID: React.PropTypes.string,
-      isOpen: React.PropTypes.bool,
+      elementID: PropTypes.string,
+      isOpen: PropTypes.bool,
       settingsToggle: DOMElement
     },
 
@@ -162,10 +163,11 @@ import cx from 'classnames'
                        hideOnScroll     = {false}
                        currentColor     = {this.props.backgroundColor}
                        nicknameInfo     = {this.props.nicknameInfo}
+                       parentComponent  = "DashboardColorPicker"
           />
         </div>
       )
     }
   })
 
-export default ColorPickerTooltip
+export default DashboardColorPicker

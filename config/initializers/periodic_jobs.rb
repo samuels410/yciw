@@ -54,7 +54,7 @@ Rails.configuration.after_initialize do
     Delayed::Periodic.cron 'ActiveRecord::SessionStore::Session.delete_all', '*/5 * * * *' do
       callback = -> { Canvas::Errors.capture_exception(:periodic_job, $ERROR_INFO) }
       Shard.with_each_shard(exception: callback) do
-        ActiveRecord::SessionStore::Session.delete_all(['updated_at < ?', expire_after.seconds.ago])
+        ActiveRecord::SessionStore::Session.where('updated_at < ?', expire_after.seconds.ago).delete_all
       end
     end
   end
@@ -62,7 +62,7 @@ Rails.configuration.after_initialize do
   persistence_token_expire_after = (ConfigFile.load("session_store") || {})[:expire_remember_me_after]
   persistence_token_expire_after ||= 1.month
   Delayed::Periodic.cron 'SessionPersistenceToken.delete_all', '35 11 * * *' do
-    with_each_shard_by_database(SessionPersistenceToken, :delete_all, ['updated_at < ?', persistence_token_expire_after.seconds.ago])
+    with_each_shard_by_database(SessionPersistenceToken, :delete_expired, persistence_token_expire_after)
   end
 
   Delayed::Periodic.cron 'ExternalFeedAggregator.process', '*/30 * * * *' do
@@ -74,7 +74,7 @@ Rails.configuration.after_initialize do
   end
 
   Delayed::Periodic.cron 'CrocodocDocument.update_process_states', '*/10 * * * *' do
-    if Canvas::Crocodoc.config
+    if Canvas::Crocodoc.config && !Canvas::Plugin.value_to_boolean(Canvas::Crocodoc.config['disable_polling'])
       with_each_shard_by_database(CrocodocDocument, :update_process_states)
     end
   end
@@ -123,11 +123,11 @@ Rails.configuration.after_initialize do
     end
   end
 
-  Delayed::Periodic.cron 'Alerts::DelayedAlertSender.process', '30 11 * * *', :priority => Delayed::LOW_PRIORITY do
+  Delayed::Periodic.cron 'Alerts::DelayedAlertSender.process', '30 11 * * *', priority: Delayed::LOW_PRIORITY do
     with_each_shard_by_database(Alerts::DelayedAlertSender, :process)
   end
 
-  Delayed::Periodic.cron 'Attachment.do_notifications', '*/10 * * * *', :priority => Delayed::LOW_PRIORITY do
+  Delayed::Periodic.cron 'Attachment.do_notifications', '*/10 * * * *', priority: Delayed::LOW_PRIORITY do
     with_each_shard_by_database(Attachment, :do_notifications)
   end
 
@@ -143,16 +143,22 @@ Rails.configuration.after_initialize do
     with_each_shard_by_database(DelayedMessageScrubber, :scrub)
   end
 
-  if BounceNotificationProcessor.enabled?
-    Delayed::Periodic.cron 'BounceNotificationProcessor.process', '*/5 * * * *' do
-      BounceNotificationProcessor.process
-    end
+  Delayed::Periodic.cron 'BounceNotificationProcessor.process', '*/5 * * * *' do
+    DatabaseServer.send_in_each_region(
+      BounceNotificationProcessor,
+      :process,
+      { run_current_region_asynchronously: true,
+        singleton: 'BounceNotificationProcessor.process' }
+    )
   end
 
-  if NotificationFailureProcessor.enabled?
-    Delayed::Periodic.cron 'NotificationFailureProcessor.process', '*/5 * * * *' do
-      NotificationFailureProcessor.process
-    end
+  Delayed::Periodic.cron 'NotificationFailureProcessor.process', '*/5 * * * *' do
+    DatabaseServer.send_in_each_region(
+      NotificationFailureProcessor,
+      :process,
+      { run_current_region_asynchronously: true,
+        singleton: 'NotificationFailureProcessor.process' }
+    )
   end
 
   Delayed::Periodic.cron 'Quizzes::QuizSubmissionEventPartitioner.process', '0 0 * * *' do
@@ -169,14 +175,20 @@ Rails.configuration.after_initialize do
                                   :refresh_providers)
     end
 
-    Delayed::Periodic.cron 'AccountAuthorizationConfig::SAML::InCommon.refresh_providers', '45 0 * * *' do
-      DatabaseServer.send_in_each_region(AccountAuthorizationConfig::SAML::InCommon,
-                                  :refresh_providers,
-                                  singleton: 'AccountAuthorizationConfig::SAML::InCommon.refresh_providers')
+    AccountAuthorizationConfig::SAML::Federation.descendants.each do |federation|
+      Delayed::Periodic.cron "AccountAuthorizationConfig::SAML::#{federation.class_name}.refresh_providers", '45 0 * * *' do
+        DatabaseServer.send_in_each_region(federation,
+                                    :refresh_providers,
+                                    singleton: "AccountAuthorizationConfig::SAML::#{federation.class_name}.refresh_providers")
+      end
     end
   end
 
-  Delayed::Periodic.cron 'EnrollmentState.recalculate_expired_states', '*/5 * * * *', :priority => Delayed::LOW_PRIORITY do
+  Delayed::Periodic.cron 'EnrollmentState.recalculate_expired_states', '*/5 * * * *', priority: Delayed::LOW_PRIORITY do
     with_each_shard_by_database(EnrollmentState, :recalculate_expired_states)
+  end
+
+  Delayed::Periodic.cron 'MissingPolicyApplicator.apply_missing_deductions', '*/5 * * * *', priority: Delayed::LOW_PRIORITY do
+    with_each_shard_by_database(MissingPolicyApplicator, :apply_missing_deductions)
   end
 end

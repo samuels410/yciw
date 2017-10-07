@@ -104,7 +104,7 @@ describe "speed grader submissions" do
 
       get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}"
 
-      expect(f('#submission_late_notice')).to be_displayed
+      expect(f('#submission_details')).to contain_css('.submission-late-pill')
     end
 
     it "should not display a late message if an assignment has been overridden", priority: "1", test_id: 283280 do
@@ -118,9 +118,8 @@ describe "speed grader submissions" do
 
       get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}"
 
-      expect(f('#submission_late_notice')).not_to be_displayed
+      expect(f('#submission_details')).not_to contain_css('.submission-late-pill')
     end
-
 
     it "should display no submission message if student does not make a submission", priority: "1", test_id: 283499 do
       @student = user_with_pseudonym(:active_user => true, :username => 'student@example.com', :password => 'qwertyuiop')
@@ -131,13 +130,14 @@ describe "speed grader submissions" do
       expect(f('#this_student_does_not_have_a_submission')).to be_displayed
     end
 
+    let(:unenrolled_user) { create_users(1, return_type: :record)[0] }
+
+    let(:student_3) { @course.enroll_student(unenrolled_user, enrollment_state: :active) }
+
     it "should handle versions correctly", priority: "2", test_id: 283500 do
       submission1 = student_submission(:username => "student1@example.com", :body => 'first student, first version')
       submission2 = student_submission(:username => "student2@example.com", :body => 'second student')
-      submission3 = student_submission(:username => "student3@example.com", :body => 'third student')
-
-      # This is "no submissions" guy
-      submission3.delete
+      student_3
 
       submission1.submitted_at = 10.minutes.from_now
       submission1.body = 'first student, second version'
@@ -240,9 +240,11 @@ describe "speed grader submissions" do
         # validates the image\attachment is inside the iframe as expected
         image_element = f('img')
 
-        expect(image_element.attribute('src')).to include('download')
-        expect(image_element.attribute('style')).to include('max-height: 100')
-        expect(image_element.attribute('style')).to include('max-width: 100')
+        if Attachment.local_storage?
+          expect(image_element.attribute('src')).to include('download')
+        else
+          expect(image_element.attribute('src')).to include('amazonaws')
+        end
       end
     end
 

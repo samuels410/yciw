@@ -23,6 +23,7 @@ import I18n from 'i18n!common'
 import Backbone from 'Backbone'
 import updateSubnavMenuToggle from 'jsx/subnav_menu/updateSubnavMenuToggle'
 import splitAssetString from 'compiled/str/splitAssetString'
+import * as mathml from 'mathml'
 
 // modules that do their own thing on every page that simply need to be required
 import 'translations/_core_en'
@@ -44,7 +45,6 @@ import 'compiled/behaviors/instructure_inline_media_comment'
 import 'compiled/behaviors/ping'
 import 'LtiThumbnailLauncher'
 import 'compiled/badge_counts'
-import 'instructure-ui/lib/themes/canvas'
 
 // Other stuff several bundles use.
 // If any of these really arn't used on most pages,
@@ -56,6 +56,8 @@ import 'jqueryui/progressbar'
 import 'jqueryui/tabs'
 import 'compiled/registration/incompleteRegistrationWarning'
 import 'moment'
+
+$('html').removeClass('scripts-not-loaded')
 
 $('.help_dialog_trigger').click((event) => {
   event.preventDefault()
@@ -114,3 +116,19 @@ if (
     initializeNewUserTutorials()
   }, 'NewUserTutorialsAsyncChunk')
 }
+
+// edge < 15 does not support css vars
+// edge >= 15 claims to, but is currently broken
+const edge = window.navigator.userAgent.indexOf("Edge") > -1
+const supportsCSSVars = !edge && window.CSS && window.CSS.supports && window.CSS.supports('(--foo: red)')
+if (!supportsCSSVars) {
+  require.ensure([], (require) => {
+    window.canvasCssVariablesPolyfill = require('jsx/canvasCssVariablesPolyfill')
+  }, 'canvasCssVariablesPolyfill')
+}
+
+$(document).ready(() => {
+  if (mathml.isMathMLOnPage()) {
+    mathml.loadMathJax('MML_HTMLorMML.js')
+  }
+})

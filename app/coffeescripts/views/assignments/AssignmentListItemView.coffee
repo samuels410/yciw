@@ -21,6 +21,7 @@ define [
   'jquery'
   'underscore'
   'jsx/shared/conditional_release/CyoeHelper'
+  'compiled/models/Assignment'
   'compiled/views/PublishIconView'
   'compiled/views/LockIconView'
   'compiled/views/assignments/DateDueColumnView'
@@ -36,7 +37,7 @@ define [
   'jqueryui/tooltip'
   'compiled/behaviors/tooltip'
   'compiled/jquery.rails_flash_notifications'
-], (I18n, Backbone, $, _, CyoeHelper, PublishIconView, LockIconView, DateDueColumnView, DateAvailableColumnView, CreateAssignmentView, SisButtonView, MoveDialogView, preventDefault, template, scoreTemplate, round, AssignmentKeyBindingsMixin) ->
+], (I18n, Backbone, $, _, CyoeHelper, Assignment, PublishIconView, LockIconView, DateDueColumnView, DateAvailableColumnView, CreateAssignmentView, SisButtonView, MoveDialogView, preventDefault, template, scoreTemplate, round, AssignmentKeyBindingsMixin) ->
 
   class AssignmentListItemView extends Backbone.View
     @mixin AssignmentKeyBindingsMixin
@@ -61,6 +62,7 @@ define [
 
     events:
       'click .delete_assignment': 'onDelete'
+      'click .duplicate_assignment': 'onDuplicate'
       'click .tooltip_link': preventDefault ->
       'keydown': 'handleKeys'
       'mousedown': 'stopMoveIfProtected'
@@ -190,6 +192,7 @@ define [
 
       data.canMove = @canMove()
       data.canDelete = @canDelete()
+      data.canDuplicate = @canDuplicate()
       data.is_locked =  @model.isRestrictedByMasterCourse()
       data.showAvailability = @model.multipleDueDates() or not @model.defaultDates().available()
       data.showDueDate = @model.multipleDueDates() or @model.singleSectionDueDate()
@@ -231,6 +234,21 @@ define [
       else
         data
 
+    addAssignmentToList: (response) =>
+      return unless response
+      assignment = new Assignment(response)
+      # The positions here are not always consistent with what is in the DB,
+      # so treat the position here as "canonical" to make the UI behave properly.
+      targetPosition = @model.get('position') + 1
+      assignment.set('position', targetPosition)
+      @model.collection.insertModel(assignment)
+      @focusOnAssignment(response)
+
+    onDuplicate: (e) =>
+      return unless @canDuplicate()
+      e.preventDefault()
+      @model.duplicate(@addAssignmentToList)
+
     onDelete: (e) =>
       e.preventDefault()
       return unless @canDelete()
@@ -256,6 +274,13 @@ define [
 
     canDelete: ->
       (@userIsAdmin or @model.canDelete()) && !@model.isRestrictedByMasterCourse()
+
+    isDuplicableAssignment: ->
+      !@model.is_quiz_assignment() && !@model.isDiscussionTopic()
+
+    canDuplicate: ->
+      # For now, forbid duplicating quizzes. We will implement that later.
+      (@userIsAdmin || @canManage()) && @isDuplicableAssignment()
 
     canMove: ->
       @userIsAdmin or (@canManage() and @model.canMove())

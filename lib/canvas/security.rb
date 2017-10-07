@@ -39,7 +39,7 @@ module Canvas::Security
   end
 
   def self.config
-    @config ||= (YAML.load_file(Rails.root+"config/security.yml")[Rails.env] rescue nil)
+    @config ||= YAML.safe_load(ERB.new(File.read(Rails.root + 'config/security.yml')).result)[Rails.env]
   end
 
   def self.encrypt_password(secret, key)
@@ -342,11 +342,11 @@ module Canvas::Security
     end
 
     def services_encryption_secret
-      Canvas::DynamicSettings.from_cache("canvas", use_env: false)["encryption-secret"]
+      Canvas::DynamicSettings.find("canvas")["encryption-secret"]
     end
 
     def services_signing_secret
-      Canvas::DynamicSettings.from_cache("canvas", use_env: false)["signing-secret"]
+      Canvas::DynamicSettings.find("canvas")["signing-secret"]
     end
   end
 end

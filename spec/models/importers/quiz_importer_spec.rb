@@ -93,7 +93,7 @@ describe "Importers::QuizImporter" do
     quiz_hash = get_import_data ['vista', 'quiz'], 'simple_quiz_data'
     data = {'assessments' => {'assessments' => [quiz_hash]}}
     migration = context.content_migrations.create!
-    migration.stubs(:canvas_import?).returns(true)
+    allow(migration).to receive(:canvas_import?).and_return(true)
     Importers::CourseContentImporter.import_content(context, data, @migration, migration)
 
     expect(Assignment.count).to eq 0
@@ -110,7 +110,7 @@ describe "Importers::QuizImporter" do
     quiz_hash = get_import_data ['vista', 'quiz'], 'simple_quiz_data'
     data = {'assessments' => {'assessments' => [quiz_hash]}}
     migration = context.content_migrations.create!
-    migration.stubs(:canvas_import?).returns(false)
+    allow(migration).to receive(:canvas_import?).and_return(false)
     Importers::CourseContentImporter.import_content(context, data, @migration, migration)
 
     expect(Assignment.count).to eq 1
@@ -166,6 +166,25 @@ describe "Importers::QuizImporter" do
     Importers::QuizImporter.import_from_migration(data, context, @migration, question_data)
 
     expect(quiz.quiz_questions.active.first.question_data[:question_name]).to eq "Not Rocket Bee?"
+  end
+
+  it "should not clear dates if these are null in the source hash" do
+    course_model
+    quiz_hash = {
+      "migration_id" => "ib4834d160d180e2e91572e8b9e3b1bc6",
+      "title" => "date clobber or not",
+      "due_at" => nil,
+      "lock_at" => nil,
+      "unlock_at" => nil
+    }
+    migration = @course.content_migrations.create!
+    quiz = @course.quizzes.create! :title => "test", :due_at => Time.now, :unlock_at => 1.day.ago, :lock_at => 1.day.from_now, :migration_id => "ib4834d160d180e2e91572e8b9e3b1bc6"
+    Importers::QuizImporter.import_from_migration(quiz_hash, @course, migration, {})
+    quiz.reload
+    expect(quiz.title).to eq "date clobber or not"
+    expect(quiz.due_at).not_to be_nil
+    expect(quiz.unlock_at).not_to be_nil
+    expect(quiz.lock_at).not_to be_nil
   end
 
 end

@@ -58,7 +58,7 @@ describe UsersController, type: :request do
     announcement_model
     conversation(User.create, @user)
     Notification.create(:name => 'Assignment Due Date Changed', :category => "TestImmediately")
-    Assignment.any_instance.stubs(:created_at).returns(4.hours.ago)
+    allow_any_instance_of(Assignment).to receive(:created_at).and_return(4.hours.ago)
     assignment_model(:course => @course)
     @assignment.update_attribute(:due_at, 1.week.from_now)
     json = api_call(:get, "/api/v1/users/self/activity_stream/summary.json",
@@ -86,7 +86,7 @@ describe UsersController, type: :request do
         announcement_model
         conversation(User.create, @user)
         Notification.create(:name => 'Assignment Due Date Changed', :category => "TestImmediately")
-        Assignment.any_instance.stubs(:created_at).returns(4.hours.ago)
+        allow_any_instance_of(Assignment).to receive(:created_at).and_return(4.hours.ago)
         assignment_model(:course => @course)
         @assignment.update_attribute(:due_at, 1.week.from_now)
         @assignment.update_attribute(:due_at, 2.weeks.from_now)
@@ -138,7 +138,7 @@ describe UsersController, type: :request do
     # TODO: can remove this spec as well as the code in lib/api/v1/stream_item once the datafixup has been run
     @context = @course
     Notification.create(:name => 'Assignment Due Date Changed', :category => "TestImmediately")
-    Assignment.any_instance.stubs(:created_at).returns(4.hours.ago)
+    allow_any_instance_of(Assignment).to receive(:created_at).and_return(4.hours.ago)
     assignment_model(:course => @course)
     @assignment.update_attribute(:due_at, 1.week.from_now)
     @assignment.update_attribute(:due_at, 2.weeks.from_now)
@@ -357,9 +357,10 @@ describe UsersController, type: :request do
     assign_json['created_at'] = @assignment.created_at.as_json
     assign_json['updated_at'] = @assignment.updated_at.as_json
     assign_json['title'] = @assignment.title
-    expect(json).to eq [{
+    expect(json).to eql [{
       'id' => StreamItem.last.id,
       'submission_id' => @sub.id,
+      'cached_due_date' => nil,
       'title' => "assignment 1",
       'message' => nil,
       'type' => 'Submission',
@@ -367,13 +368,17 @@ describe UsersController, type: :request do
       'created_at' => StreamItem.last.created_at.as_json,
       'updated_at' => StreamItem.last.updated_at.as_json,
       'grade' => '12',
+      'entered_grade' => '12',
+      'grading_period_id' => @sub.grading_period_id,
       'excused' => false,
       'grader_id' => @teacher.id,
       'graded_at' => @sub.graded_at.as_json,
-      'score' => 12,
+      'score' => 12.0,
+      'entered_score' => 12.0,
       'html_url' => "http://www.example.com/courses/#{@course.id}/assignments/#{@assignment.id}/submissions/#{@user.id}",
       'workflow_state' => 'graded',
       'late' => false,
+      'missing' => false,
       'assignment' => assign_json,
       'assignment_id' => @assignment.id,
       'attempt' => nil,
@@ -382,6 +387,9 @@ describe UsersController, type: :request do
       'preview_url' => "http://www.example.com/courses/#{@course.id}/assignments/#{@assignment.id}/submissions/#{@user.id}?preview=1&version=1",
       'submission_type' => nil,
       'submitted_at' => nil,
+      'late_policy_status' => nil,
+      'points_deducted' => nil,
+      'seconds_late' => 0,
       'url' => nil,
       'user_id' => @sub.user_id,
 
@@ -427,7 +435,7 @@ describe UsersController, type: :request do
         'calendar' => { 'ics' => "http://www.example.com/feeds/calendars/course_#{@course.uuid}.ics" },
         'hide_final_grades' => false,
         'html_url' => course_url(@course, :host => HostUrl.context_host(@course)),
-        'default_view' => 'feed',
+        'default_view' => 'modules',
         'workflow_state' => 'available',
         'public_syllabus' => false,
         'public_syllabus_to_auth' => false,
@@ -436,7 +444,8 @@ describe UsersController, type: :request do
         'storage_quota_mb' => @course.storage_quota_mb,
         'apply_assignment_group_weights' => false,
         'restrict_enrollments_to_course_dates' => false,
-        'time_zone' => 'America/Denver'
+        'time_zone' => 'America/Denver',
+        'uuid' => @course.uuid
       },
 
       'user' => {
@@ -469,9 +478,10 @@ describe UsersController, type: :request do
     assign_json['created_at'] = @assignment.created_at.as_json
     assign_json['updated_at'] = @assignment.updated_at.as_json
     assign_json['title'] = @assignment.title
-    expect(json).to eq [{
+    expect(json).to eql [{
       'id' => StreamItem.last.id,
       'submission_id' => @sub.id,
+      'cached_due_date' => nil,
       'title' => "assignment 1",
       'message' => nil,
       'type' => 'Submission',
@@ -479,21 +489,28 @@ describe UsersController, type: :request do
       'created_at' => StreamItem.last.created_at.as_json,
       'updated_at' => StreamItem.last.updated_at.as_json,
       'grade' => nil,
+      'entered_grade' => nil,
+      'grading_period_id' => @sub.grading_period_id,
       'excused' => nil,
       'grader_id' => @teacher.id,
       'graded_at' => nil,
       'score' => nil,
+      'entered_score' => nil,
       'html_url' => "http://www.example.com/courses/#{@course.id}/assignments/#{@assignment.id}/submissions/#{@user.id}",
       'workflow_state' => 'unsubmitted',
       'late' => false,
+      'missing' => false,
       'assignment' => assign_json,
       'assignment_id' => @assignment.id,
       'attempt' => nil,
       'body' => nil,
-      'grade_matches_current_submission' => nil,
+      'grade_matches_current_submission' => true,
       'preview_url' => "http://www.example.com/courses/#{@course.id}/assignments/#{@assignment.id}/submissions/#{@user.id}?preview=1&version=1",
       'submission_type' => nil,
       'submitted_at' => nil,
+      'late_policy_status' => nil,
+      'points_deducted' => nil,
+      'seconds_late' => 0,
       'url' => nil,
       'user_id' => @sub.user_id,
 
@@ -539,7 +556,7 @@ describe UsersController, type: :request do
         'calendar' => { 'ics' => "http://www.example.com/feeds/calendars/course_#{@course.uuid}.ics" },
         'hide_final_grades' => false,
         'html_url' => course_url(@course, :host => HostUrl.context_host(@course)),
-        'default_view' => 'feed',
+        'default_view' => 'modules',
         'workflow_state' => 'available',
         'public_syllabus' => false,
         'public_syllabus_to_auth' => false,
@@ -548,7 +565,8 @@ describe UsersController, type: :request do
         'storage_quota_mb' => @course.storage_quota_mb,
         'apply_assignment_group_weights' => false,
         'restrict_enrollments_to_course_dates' => false,
-        'time_zone' => 'America/Denver'
+        'time_zone' => 'America/Denver',
+        'uuid' => @course.uuid
       },
 
       'user' => {
@@ -608,7 +626,7 @@ describe UsersController, type: :request do
   end
 
   it "should format WebConference" do
-    WebConference.stubs(:plugins).returns(
+    allow(WebConference).to receive(:plugins).and_return(
         [OpenObject.new(:id => "big_blue_button", :settings => {:domain => "bbb.instructure.com", :secret_dec => "secret"}, :valid_settings? => true, :enabled? => true),]
     )
     @conference = BigBlueButtonConference.create!(:title => 'myconf', :user => @user, :description => 'mydesc', :conference_type => 'big_blue_button', :context => @course)

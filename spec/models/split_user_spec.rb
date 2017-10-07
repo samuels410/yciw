@@ -56,6 +56,23 @@ describe SplitUsers do
       expect(pseudonym2.reload.user).to eq user1
     end
 
+    it 'should use the setting for split time.' do
+      pseudonym1 = user1.pseudonyms.create!(unique_id: 'sam1@example.com')
+      pseudonym2 = user2.pseudonyms.create!(unique_id: 'sam2@example.com')
+      Setting.set('user_merge_to_split_time', '12')
+      Timecop.travel(15.days.ago) do
+        UserMerge.from(user2).into(user1)
+      end
+
+      expect(SplitUsers.split_db_users(user1)).to eq []
+
+      Setting.set('user_merge_to_split_time', '30')
+
+      SplitUsers.split_db_users(user1)
+      expect(pseudonym1.reload.user).to eq user1
+      expect(pseudonym2.reload.user).to eq user2
+    end
+
     describe 'with merge data' do
 
       it 'should split multiple users if no merge_data is specified' do
@@ -309,7 +326,7 @@ describe SplitUsers do
       expect { SplitUsers.split_db_users(user2) }.not_to raise_error
     end
 
-    it 'should restore admins even with stale data' do
+    it 'should restore admins to the original state' do
       admin = account1.account_users.create(user: user1)
       admin2 = sub_account.account_users.create(user: user1)
       admin3 = sub_account.account_users.create(user: user2)
@@ -317,7 +334,8 @@ describe SplitUsers do
       admin.reload.destroy
       SplitUsers.split_db_users(user2)
 
-      expect{admin.reload}.to raise_error(ActiveRecord::RecordNotFound)
+      expect(admin.reload.workflow_state).to eq 'active'
+      expect(admin.reload.user).to eq user1
       expect(admin2.reload.user).to eq user1
       expect(admin3.reload.user).to eq user2
     end

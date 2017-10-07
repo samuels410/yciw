@@ -16,6 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 require File.expand_path(File.dirname(__FILE__) + '/cc_spec_helper')
+require File.expand_path(File.dirname(__FILE__) + '/../../lti2_course_spec_helper')
 
 require 'nokogiri'
 
@@ -25,7 +26,7 @@ describe "Common Cartridge exporting" do
     course = course_model
     user = user_model
     message = "fail"
-    course.stubs(:wiki).raises(message)
+    allow(course).to receive(:wiki_pages).and_raise(message)
     content_export = ContentExport.new
     content_export.context = course
     content_export.user = user
@@ -120,8 +121,8 @@ describe "Common Cartridge exporting" do
       @cm1 = @course.context_modules.create!(:name => "another module")
       @att = Attachment.create!(:filename => 'first.txt', :uploaded_data => StringIO.new('ohai'), :folder => Folder.unfiled_folder(@course), :context => @course)
       @att2 = Attachment.create!(:filename => 'second.txt', :uploaded_data => StringIO.new('ohai'), :folder => Folder.unfiled_folder(@course), :context => @course)
-      @wiki = @course.wiki.wiki_pages.create!(:title => "wiki", :body => "ohai")
-      @wiki2 = @course.wiki.wiki_pages.create!(:title => "wiki2", :body => "ohais")
+      @wiki = @course.wiki_pages.create!(:title => "wiki", :body => "ohai")
+      @wiki2 = @course.wiki_pages.create!(:title => "wiki2", :body => "ohais")
       @event = @course.calendar_events.create!(:title => "event", :start_at =>1.week.from_now)
       @event1 = @course.calendar_events.create!(:title => "event2", :start_at =>2.weeks.from_now)
       @bank = @course.assessment_question_banks.create!(:title => 'bank')
@@ -429,6 +430,24 @@ describe "Common Cartridge exporting" do
       expect(@manifest_doc.at_css('resource[href="course_settings/syllabus.html"]')).not_to be_nil
     end
 
+    describe "tool proxies" do
+      include_context "lti2_course_spec_helper"
+
+      before(:each) do
+        tool_proxy.context = @course
+        tool_proxy.save!
+      end
+
+      it "should export tool profiles" do
+        run_export
+
+        resource = @manifest_doc.at_css('resource[type="tool_profile"]')
+        expect(resource).not_to be_nil
+        file_path = resource.at_css('file').attribute('href')
+        expect(@zip_file.find_entry(file_path)).not_to be_nil
+      end
+    end
+
     it "should use canvas_export.txt as flag" do
       run_export
 
@@ -444,13 +463,13 @@ describe "Common Cartridge exporting" do
 
     it "should export media tracks" do
       stub_kaltura
-      CanvasKaltura::ClientV3.any_instance.stubs(:startSession)
-      CanvasKaltura::ClientV3.any_instance.stubs(:flavorAssetGetPlaylistUrl).returns('http://www.example.com/blah.flv')
+      allow_any_instance_of(CanvasKaltura::ClientV3).to receive(:startSession)
+      allow_any_instance_of(CanvasKaltura::ClientV3).to receive(:flavorAssetGetPlaylistUrl).and_return('http://www.example.com/blah.flv')
       stub_request(:get, 'http://www.example.com/blah.flv').to_return(body: "", status: 200)
-      CC::CCHelper.stubs(:media_object_info).returns({asset: {id: 1, status: '2'}, filename: 'blah.flv'})
+      allow(CC::CCHelper).to receive(:media_object_info).and_return({asset: {id: 1, status: '2'}, filename: 'blah.flv'})
       obj = @course.media_objects.create! media_id: '0_deadbeef'
       track = obj.media_tracks.create! kind: 'subtitles', locale: 'tlh', content: "Hab SoSlI' Quch!"
-      page = @course.wiki.wiki_pages.create!(:title => "wiki", :body => "ohai")
+      page = @course.wiki_pages.create!(:title => "wiki", :body => "ohai")
       page.body = %Q{<a id="media_comment_0_deadbeef" class="instructure_inline_media_comment video_comment"></a>}
       page.save!
       @ce.export_type = ContentExport::COMMON_CARTRIDGE
@@ -629,7 +648,7 @@ describe "Common Cartridge exporting" do
         assignment = @course.assignments.create!({title: 'assignment', unlock_at: 5.days.from_now})
         quiz = @course.quizzes.create!(title: 'quiz', unlock_at: 5.days.from_now)
         topic = @course.discussion_topics.create!(title: 'topic', unlock_at: 5.days.from_now)
-        page = @course.wiki.wiki_pages.create!(:title => "wiki", :body => "ohai")
+        page = @course.wiki_pages.create!(:title => "wiki", :body => "ohai")
         mod = @course.context_modules.create!(:name => "some module")
         mod.add_item(type: 'page', id: page.id)
         mod.unlock_at = 5.days.from_now
@@ -662,7 +681,7 @@ describe "Common Cartridge exporting" do
     end
 
     context 'attachment permissions' do
-      before :once do
+      before do
         folder = Folder.root_folders(@course).first
         @visible = Attachment.create!({
           :uploaded_data => stub_png_data('visible.png'),

@@ -16,17 +16,15 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-define([
-  'INST' /* INST */,
-  'i18n!instructure',
-  'jquery' /* jQuery, $ */,
-  'underscore',
-  'str/htmlEscape' /* htmlEscape, /\$\.h/ */,
-  'jquery.ajaxJSON' /* ajaxJSON */,
-  'jquery.google-analytics' /* trackEvent */,
-  'jquery.instructure_misc_helpers' /*  /\$\.uniq/, capitalize */,
-  'jquery.loadingImg' /* loadingImage */
-], function(INST, I18n, $, _, htmlEscape) {
+import INST from './INST'
+import I18n from 'i18n!instructure'
+import $ from 'jquery'
+import _ from 'underscore'
+import htmlEscape from './str/htmlEscape'
+import './jquery.ajaxJSON'
+import './jquery.google-analytics' /* trackEvent */
+import './jquery.instructure_misc_helpers' /*  /\$\.uniq/, capitalize */
+import './jquery.loadingImg'
 
   // first element in array is if scribd can handle it, second is if google can.
   var previewableMimeTypes = {
@@ -94,6 +92,7 @@ define([
             src: opts.crocodoc_session_url,
             width: opts.width,
             height: opts.height,
+            allowfullscreen: "1",
             id: opts.id
         });
         iframe.appendTo($this);
@@ -104,15 +103,17 @@ define([
         });
       }
       else if (opts.canvadoc_session_url) {
+        const canvadocWrapper = $('<div style="overflow: auto; resize: vertical;\
+        border: 1px solid transparent; height: 100%;"/>')
+        canvadocWrapper.appendTo($this)
         var iframe = $('<iframe/>', {
-            src: opts.canvadoc_session_url,
-            width: opts.width,
-            height: opts.height,
-            allowfullscreen: "1",
-            css: {border: 0},
-            id: opts.id
+          src: opts.canvadoc_session_url,
+          width: opts.width,
+          allowfullscreen: '1',
+          css: {border: 0, overflow: 'auto', height: '99%', 'min-height': '400px'},
+          id: opts.id
         });
-        iframe.appendTo($this);
+        iframe.appendTo(canvadocWrapper)
         iframe.load(function() {
           tellAppIViewedThisInline('canvadocs');
           if ($.isFunction(opts.ready))
@@ -163,5 +164,3 @@ define([
       }
     });
   };
-
-});

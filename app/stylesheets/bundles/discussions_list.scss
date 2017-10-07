@@ -69,7 +69,7 @@ $announcements_disscussion-summary-color: $ic-font-color-dark;
     color: $announcements_disscussion-summary-color;
     @include fontSize(11px);
   }
-  .discussion-info-icons, .master-course-cell {
+  .discussion-info-icons {
     display: inline-block;
     padding: $ic-sp 0 0;
     i {
@@ -162,7 +162,7 @@ $announcements_disscussion-summary-color: $ic-font-color-dark;
 
   &.droppable-hover {
     @if $use_high_contrast {
-      box-shadow: inset 0 0 0 2px $ic-link-color;
+      box-shadow: inset 0 0 0 2px var(--ic-link-color);
     }
     @else {
       > * { opacity: 0.5; }
@@ -240,10 +240,6 @@ $announcements_disscussion-summary-color: $ic-font-color-dark;
   .discussion-row {
     display: table-row;
 
-    .master-course-cell i {
-      margin-right: 10px;
-    }
-
     .mastery-path-icon {
       margin-right: 10px;
       padding: 2px 7px;
@@ -304,9 +300,10 @@ $announcements_disscussion-summary-color: $ic-font-color-dark;
 
   .discussion-status {
     color: $ic-color-icon-disabled;
-    width: 60px;
+    width: 84px;
+    white-space: nowrap;
 
-    .publish-icon {
+    .publish-icon, .lock-icon {
       margin-right: 10px;
     }
 

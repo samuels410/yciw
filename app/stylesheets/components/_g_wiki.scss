@@ -46,7 +46,6 @@ $revision-sidebar-selected-color: #ffffff;
 $revision-sidebar-hover-color: lighten($ic-color-neutral, 10);
 $revision-sidebar-dimmed-color: $ic-dim-helper-text;
 $revision-button-color: $ic-color-dark;
-$revision-button-hover-color: $ic-brand-primary;
 
 .pages .sticky-toolbar .sticky {
   position: fixed;
@@ -76,12 +75,13 @@ $revision-button-hover-color: $ic-brand-primary;
 }
 
 .add_prerequisite_or_requirement_link {
-  color: #0088cc;
+  color: var(--ic-link-color);
   border: none;
   background: none;
   padding: 0px;
   &:hover {
-    color: #005580;
+    color: var(--ic-link-color-darkened-10);
+    background: none;
     text-decoration: underline;
   }
 }
@@ -436,7 +436,7 @@ $revision-button-hover-color: $ic-brand-primary;
       text-align: center;
       color: dimgrey;
       &:hover {
-        color: $revision-button-hover-color;
+        color: var(--ic-brand-primary);
       }
       i.icon-x {
         position: absolute;
@@ -476,7 +476,7 @@ $revision-button-hover-color: $ic-brand-primary;
       }
     }
     &:not(.selected):hover {
-      border-left-color: $ic-link-color;
+      border-left-color: var(--ic-link-color);
       .revision-content {
         cursor: pointer;
       }
@@ -492,7 +492,7 @@ $revision-button-hover-color: $ic-brand-primary;
       cursor: pointer;
     }
     &.selected {
-      border-left-color: $ic-link-color;
+      border-left-color: var(--ic-link-color);
       background: $ic-bg-light-primary;
     }
   }
@@ -508,7 +508,7 @@ $revision-button-hover-color: $ic-brand-primary;
     a:hover {
       text-decoration: none;
       cursor: pointer;
-      color: $revision-button-hover-color;
+      color: var(--revision-button-hover-color);
       border-radius: 3px;
     }
     .prev-button {

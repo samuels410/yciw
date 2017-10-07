@@ -88,6 +88,11 @@ require 'securerandom'
 #           "description": "the SIS identifier for the course, if defined. This field is only included if the user has permission to view SIS information.",
 #           "type": "string"
 #         },
+#         "uuid": {
+#           "description": "the UUID of the course",
+#           "example": "WvAHhY5FINzq5IyRIJybGeiXyFkG3SqHUPb7jZY5",
+#           "type": "string"
+#         },
 #         "integration_id": {
 #           "description": "the integration identifier for the course, if defined. This field is only included if the user has permission to view SIS information.",
 #           "type": "string"
@@ -1194,9 +1199,27 @@ class CoursesController < ApplicationController
 
       set_tutorial_js_env
 
-      @course_settings_sub_navigation_tools = ContextExternalTool.all_tools_for(@context, :type => :course_settings_sub_navigation, :root_account => @domain_root_account, :current_user => @current_user)
+      if @context.root_account.feature_enabled?(:master_courses)
+        master_template = @context.master_course_templates.for_full_course.first
+        restrictions_by_object_type = master_template&.default_restrictions_by_type || {}
+        cleaned_restrictions = restrictions_by_object_type.map{|k, v| [k.sub(/^.+::/, '').underscore, v] }.to_h
+        message =!MasterCourses::MasterTemplate.is_master_course?(@context) && why_cant_i_enable_master_course(@context)
+        message ||= ''
+        js_env({
+          IS_MASTER_COURSE: MasterCourses::MasterTemplate.is_master_course?(@context),
+          DISABLED_BLUEPRINT_MESSAGE: message,
+          BLUEPRINT_RESTRICTIONS: master_template&.default_restrictions || { :content => true },
+          USE_BLUEPRINT_RESTRICTIONS_BY_OBJECT_TYPE: master_template&.use_default_restrictions_by_type || false,
+          BLUEPRINT_RESTRICTIONS_BY_OBJECT_TYPE: cleaned_restrictions
+        })
+      end
+
+      @course_settings_sub_navigation_tools = ContextExternalTool.all_tools_for(@context,
+        :type => :course_settings_sub_navigation,
+        :root_account => @domain_root_account,
+        :current_user => @current_user)
       unless @context.grants_right?(@current_user, session, :read_as_admin)
-        @course_settings_sub_navigation_tools.reject! { |tool| tool.course_settings_sub_navigation(:visibility) == 'admins' }
+        @course_settings_sub_navigation_tools.reject!{|tool| tool.course_settings_sub_navigation(:visibility)=='admins'}
       end
     end
   end
@@ -1993,7 +2016,7 @@ class CoursesController < ApplicationController
       if (adjust_dates = params[:adjust_dates]) && Canvas::Plugin.value_to_boolean(adjust_dates[:enabled])
         params[:date_shift_options][adjust_dates[:operation]] = '1'
       end
-      @content_migration.set_date_shift_options(params[:date_shift_options].to_hash.with_indifferent_access)
+      @content_migration.set_date_shift_options(params[:date_shift_options].to_unsafe_h)
 
       if Canvas::Plugin.value_to_boolean(params[:selective_import])
         @content_migration.migration_settings[:import_immediately] = false
@@ -2154,14 +2177,14 @@ class CoursesController < ApplicationController
   # @argument course[blueprint_restrictions] [BlueprintRestriction]
   #   Sets a default set to apply to blueprint course objects when restricted,
   #   unless _use_blueprint_restrictions_by_object_type_ is enabled.
-  #   See the {api:Blueprint_Templates:BlueprintRestriction Blueprint Restriction} documentation
+  #   See the {api:Blueprint_Courses:BlueprintRestriction Blueprint Restriction} documentation
   #
   # @argument course[use_blueprint_restrictions_by_object_type] [Boolean]
   #   When enabled, the _blueprint_restrictions_ parameter will be ignored in favor of
   #   the _blueprint_restrictions_by_object_type_ parameter
   #
   # @argument course[blueprint_restrictions_by_object_type] [multiple BlueprintRestrictions]
-  #   Allows setting multiple {api:Blueprint_Templates:BlueprintRestriction Blueprint Restriction}
+  #   Allows setting multiple {api:Blueprint_Courses:BlueprintRestriction Blueprint Restriction}
   #   to apply to blueprint course objects of the matching type when restricted.
   #   The possible object types are "assignment", "attachment", "discussion_topic", "quiz" and "wiki_page".
   #   Example usage:
@@ -2192,7 +2215,7 @@ class CoursesController < ApplicationController
     params_for_update = course_params
     params[:course][:event] = :offer if params[:offer].present?
 
-    if params[:course][:event] && params[:course].size == 1
+    if params[:course][:event] && params[:course].keys.size == 1
       if authorized_action(@course, @current_user, :change_course_state) && process_course_event
         render_update_success
       end
@@ -2351,13 +2374,13 @@ class CoursesController < ApplicationController
         end
 
         if (mc_restrictions = params[:course][:blueprint_restrictions])
-          restrictions = Hash[mc_restrictions.map{|k, v| [k.to_sym, value_to_boolean(v)]}]
+          restrictions = Hash[mc_restrictions.to_unsafe_h.map{|k, v| [k.to_sym, value_to_boolean(v)]}]
           template.default_restrictions = restrictions
         end
 
         if (mc_restrictions_by_type = params[:course][:blueprint_restrictions_by_object_type])
           parsed_restrictions_by_type = {}
-          mc_restrictions_by_type.each do |type, restrictions|
+          mc_restrictions_by_type.to_unsafe_h.each do |type, restrictions|
             class_name = type == "quiz" ? "Quizzes::Quiz" : type.camelcase
             parsed_restrictions_by_type[class_name] = Hash[restrictions.map{|k, v| [k.to_sym, value_to_boolean(v)]}]
           end
@@ -2469,7 +2492,7 @@ class CoursesController < ApplicationController
       return render(:json => { :message => 'must specify course_ids[]' }, :status => :bad_request) unless params[:course_ids].is_a?(Array)
       @course_ids = Api.map_ids(params[:course_ids], Course, @domain_root_account, @current_user)
       return render(:json => { :message => 'course batch size limit (500) exceeded' }, :status => :forbidden) if @course_ids.size > 500
-      update_params = params.slice(:event).to_hash.with_indifferent_access
+      update_params = params.permit(:event).to_unsafe_h
       return render(:json => { :message => 'need to specify event' }, :status => :bad_request) unless update_params[:event]
       return render(:json => { :message => 'invalid event' }, :status => :bad_request) unless %w(offer conclude delete undelete).include? update_params[:event]
       progress = Course.batch_update(@account, @current_user, @course_ids, update_params, :api)
@@ -2491,7 +2514,7 @@ class CoursesController < ApplicationController
     @entries.concat(@context.discussion_topics.active.select{ |dt|
       dt.published? && !dt.locked_for?(@current_user, :check_policies => true)
     })
-    @entries.concat @context.wiki.wiki_pages
+    @entries.concat @context.wiki_pages
     @entries = @entries.sort_by{|e| e.updated_at}
     @entries.each do |entry|
       feed.entries << entry.to_atom(:context => @context)
@@ -2634,10 +2657,10 @@ class CoursesController < ApplicationController
       # destroy these after enrollment so
       # needs_grading_count callbacks work
       ModeratedGrading::Selection.where(:student_id => @fake_student).delete_all
-      pg_scope = ModeratedGrading::ProvisionalGrade.where(:submission_id => @fake_student.submissions)
+      pg_scope = ModeratedGrading::ProvisionalGrade.where(:submission_id => @fake_student.all_submissions)
       SubmissionComment.where(:provisional_grade_id => pg_scope).delete_all
       pg_scope.delete_all
-      @fake_student.submissions.destroy_all
+      @fake_student.all_submissions.destroy_all
       @fake_student.quiz_submissions.each{|qs| qs.events.destroy_all}
       @fake_student.quiz_submissions.destroy_all
 

@@ -21,14 +21,15 @@ import parseLinkHeader from 'jsx/shared/helpers/parseLinkHeader'
 import MigrationStates from './migrationStates'
 
 const ApiClient = {
-  _depaginate (url, allResults = []) {
+  _depaginate (url, maxPages = Infinity, allResults = []) {
     return axios.get(url)
       .then((res) => {
         const results = allResults.concat(res.data)
-        if (res.headers.link) {
+        const remainingPages = maxPages - 1
+        if (res.headers.link && remainingPages > 0) {
           const links = parseLinkHeader(res)
           if (links.next) {
-            return this._depaginate(links.next, results)
+            return this._depaginate(links.next, remainingPages, results)
           }
         }
         res.data = results // eslint-disable-line
@@ -55,36 +56,39 @@ const ApiClient = {
       { enrollment_term_id: term },
     ])
 
-    return this._depaginate(`/api/v1/accounts/${subAccount || accountId}/courses?${params}`)
+    return this._depaginate(`/api/v1/accounts/${subAccount || accountId}/courses?${params}`, 1)
   },
 
-  getAssociations ({ course }) {
+  getAssociations ({ masterCourse }) {
     const params = this._queryString([
       { per_page: '100' },
     ])
 
-    return this._depaginate(`/api/v1/courses/${course.id}/blueprint_templates/default/associated_courses?${params}`)
+    return this._depaginate(`/api/v1/courses/${masterCourse.id}/blueprint_templates/default/associated_courses?${params}`)
   },
 
-  saveAssociations ({ course, addedAssociations, removedAssociations }) {
-    return axios.put(`/api/v1/courses/${course.id}/blueprint_templates/default/update_associations`, {
+  saveAssociations ({ masterCourse, addedAssociations, removedAssociations }) {
+    return axios.put(`/api/v1/courses/${masterCourse.id}/blueprint_templates/default/update_associations`, {
       course_ids_to_add: addedAssociations.map(c => c.id),
-      course_ids_to_remove: removedAssociations,
+      course_ids_to_remove: removedAssociations.map(c => c.id),
     })
   },
 
-  getMigrations ({ course }) {
-    return axios.get(`/api/v1/courses/${course.id}/blueprint_templates/default/migrations`)
+  getMigrations ({ masterCourse }) {
+    return axios.get(`/api/v1/courses/${masterCourse.id}/blueprint_templates/default/migrations`)
   },
 
-  beginMigration ({ course, willSendNotification, willIncludeCustomNotificationMessage, notificationMessage}) {
+  beginMigration ({ masterCourse, willSendNotification, willIncludeCustomNotificationMessage, notificationMessage, willIncludeCourseSettings}) {
     const params = {
-      send_notification: willSendNotification
+      send_notification: willSendNotification,
+    }
+    if (willIncludeCourseSettings) {
+      params.copy_settings = true // don't send parameter if not checked
     }
     if (willIncludeCustomNotificationMessage && notificationMessage) {
       params.comment = notificationMessage
     }
-    return axios.post(`/api/v1/courses/${course.id}/blueprint_templates/default/migrations`, params)
+    return axios.post(`/api/v1/courses/${masterCourse.id}/blueprint_templates/default/migrations`, params)
   },
 
   checkMigration (state) {
@@ -101,18 +105,33 @@ const ApiClient = {
       })
   },
 
-  getMigrationDetails ({ course }, migrationId) {
-    return axios.get(`/api/v1/courses/${course.id}/blueprint_templates/default/migrations/${migrationId}/details`)
+  getMigration ({ course }, { blueprintType = 'blueprint_templates', templateId = 'default', changeId }) {
+    return axios.get(`/api/v1/courses/${course.id}/${blueprintType}/${templateId}/migrations/${changeId}`)
   },
 
-  getSyncHistory ({ course }) {
-    return this.getMigrations({ course })
+  getMigrationDetails ({ course }, { blueprintType = 'blueprint_templates', templateId = 'default', changeId }) {
+    return axios.get(`/api/v1/courses/${course.id}/${blueprintType}/${templateId}/migrations/${changeId}/details`)
+  },
+
+  getFullMigration ({ course }, params) {
+    return this.getMigration({ course }, params)
+      .then(({ data }) =>
+        this.getMigrationDetails({ course }, params)
+          .then(res => Object.assign(data, {
+            changeId: params.changeId,
+            changes: res.data,
+          })
+        ))
+  },
+
+  getSyncHistory ({ masterCourse }) {
+    return this.getMigrations({ masterCourse })
       .then(({ data }) =>
         Promise.all(
           // limit to last 5 migrations
           data.slice(0, 5)
             .map(mig =>
-              this.getMigrationDetails({ course }, mig.id)
+              this.getMigrationDetails({ course: masterCourse }, { changeId: mig.id })
                 .then(res => Object.assign(mig, { changes: res.data }))
             )))
   },
@@ -125,8 +144,8 @@ const ApiClient = {
     })
   },
 
-  loadUnsynchedChanges ({ course }) {
-    return axios.get(`/api/v1/courses/${course.id}/blueprint_templates/default/unsynced_changes`)
+  loadUnsyncedChanges ({ masterCourse }) {
+    return axios.get(`/api/v1/courses/${masterCourse.id}/blueprint_templates/default/unsynced_changes`)
   },
 }
 

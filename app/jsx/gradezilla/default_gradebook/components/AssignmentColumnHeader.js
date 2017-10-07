@@ -16,27 +16,33 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import React from 'react'
-import IconMoreSolid from 'instructure-icons/lib/Solid/IconMoreSolid'
-import IconMutedSolid from 'instructure-icons/lib/Solid/IconMutedSolid'
-import IconWarningSolid from 'instructure-icons/lib/Solid/IconWarningSolid'
-import Link from 'instructure-ui/lib/components/Link'
-import { MenuItem, MenuItemGroup, MenuItemSeparator } from 'instructure-ui/lib/components/Menu'
-import PopoverMenu from 'instructure-ui/lib/components/PopoverMenu'
-import Typography from 'instructure-ui/lib/components/Typography'
-import 'message_students'
-import MessageStudentsWhoHelper from 'jsx/gradezilla/shared/helpers/messageStudentsWhoHelper'
-import I18n from 'i18n!gradebook'
+import React from 'react';
+import { arrayOf, bool, func, instanceOf, number, shape, string } from 'prop-types';
+import IconMoreSolid from 'instructure-icons/lib/Solid/IconMoreSolid';
+import IconMutedSolid from 'instructure-icons/lib/Solid/IconMutedSolid';
+import IconWarningSolid from 'instructure-icons/lib/Solid/IconWarningSolid';
+import Link from 'instructure-ui/lib/components/Link';
+import {
+  MenuItem,
+  MenuItemFlyout,
+  MenuItemGroup,
+  MenuItemSeparator
+} from 'instructure-ui/lib/components/Menu';
+import PopoverMenu from 'instructure-ui/lib/components/PopoverMenu';
+import Typography from 'instructure-ui/lib/components/Typography';
+import 'message_students';
+import MessageStudentsWhoHelper from 'jsx/gradezilla/shared/helpers/messageStudentsWhoHelper';
+import I18n from 'i18n!gradebook';
+import ScreenReaderContent from 'instructure-ui/lib/components/ScreenReaderContent';
+import ColumnHeader from 'jsx/gradezilla/default_gradebook/components/ColumnHeader';
 
-const { arrayOf, bool, func, instanceOf, number, shape, string } = React.PropTypes;
-
-class AssignmentColumnHeader extends React.Component {
+class AssignmentColumnHeader extends ColumnHeader {
   static propTypes = {
+    ...ColumnHeader.propTypes,
     assignment: shape({
       courseId: string.isRequired,
       htmlUrl: string.isRequired,
       id: string.isRequired,
-      invalid: bool,
       muted: bool.isRequired,
       name: string.isRequired,
       omitFromFinalGrade: bool.isRequired,
@@ -69,10 +75,6 @@ class AssignmentColumnHeader extends React.Component {
       }).isRequired,
     })).isRequired,
     submissionsLoaded: bool.isRequired,
-    assignmentDetailsAction: shape({
-      disabled: bool.isRequired,
-      onSelect: func.isRequired
-    }).isRequired,
     setDefaultGradeAction: shape({
       disabled: bool.isRequired,
       onSelect: func.isRequired
@@ -88,7 +90,13 @@ class AssignmentColumnHeader extends React.Component {
     muteAssignmentAction: shape({
       disabled: bool.isRequired,
       onSelect: func.isRequired
-    }).isRequired
+    }).isRequired,
+    onMenuClose: func.isRequired,
+    showUnpostedMenuItem: bool.isRequired
+  };
+
+  static defaultProps = {
+    ...ColumnHeader.defaultProps
   };
 
   static renderMutedIcon (screenreaderText) {
@@ -107,11 +115,44 @@ class AssignmentColumnHeader extends React.Component {
     );
   }
 
-  constructor (props) {
-    super(props);
+  bindAssignmentLink = (ref) => { this.assignmentLink = ref };
 
-    this.bindOptionsMenuContent = (ref) => { this.optionsMenuContent = ref };
-    this.showMessageStudentsWhoDialog = this.showMessageStudentsWhoDialog.bind(this);
+  curveGrades = () => { this.invokeAndSkipFocus(this.props.curveGradesAction) };
+  setDefaultGrades = () => { this.invokeAndSkipFocus(this.props.setDefaultGradeAction) };
+  muteAssignment = () => { this.invokeAndSkipFocus(this.props.muteAssignmentAction) };
+  downloadSubmissions = () => { this.invokeAndSkipFocus(this.props.downloadSubmissionsAction) };
+  reuploadSubmissions = () => { this.invokeAndSkipFocus(this.props.reuploadSubmissionsAction) };
+
+  invokeAndSkipFocus (action) {
+    this.setState({ skipFocusOnClose: true });
+    action.onSelect(this.focusAtEnd);
+  }
+
+  focusAtStart = () => { this.assignmentLink.focus() };
+
+  handleKeyDown = (event) => {
+    if (event.which === 9) {
+      if (this.assignmentLink.focused && !event.shiftKey) {
+        event.preventDefault();
+        this.optionsMenuTrigger.focus();
+        return false; // prevent Grid behavior
+      }
+
+      if (document.activeElement === this.optionsMenuTrigger && event.shiftKey) {
+        event.preventDefault();
+        this.assignmentLink.focus();
+        return false; // prevent Grid behavior
+      }
+    }
+
+    return ColumnHeader.prototype.handleKeyDown.call(this, event);
+  };
+
+  showMessageStudentsWhoDialog = () => {
+    this.setState({ skipFocusOnClose: true });
+    const settings = MessageStudentsWhoHelper.settings(this.props.assignment, this.activeStudentDetails());
+    settings.onClose = this.focusAtEnd;
+    window.messageStudents(settings);
   }
 
   activeStudentDetails () {
@@ -127,11 +168,6 @@ class AssignmentColumnHeader extends React.Component {
     });
   }
 
-  showMessageStudentsWhoDialog () {
-    const settings = MessageStudentsWhoHelper.settings(this.props.assignment, this.activeStudentDetails());
-    window.messageStudents(settings);
-  }
-
   renderAssignmentLink () {
     const assignment = this.props.assignment;
     let assignmentTitle;
@@ -143,14 +179,14 @@ class AssignmentColumnHeader extends React.Component {
     } else if (assignment.omitFromFinalGrade) {
       assignmentTitle = I18n.t('This assignment does not count toward the final grade');
       assignmentIcon = AssignmentColumnHeader.renderWarningIcon(assignmentTitle);
-    } else if (assignment.invalid) {
+    } else if (assignment.pointsPossible == null || assignment.pointsPossible === 0) {
       assignmentTitle = I18n.t('This assignment has no points possible and cannot be included in grade calculation');
       assignmentIcon = AssignmentColumnHeader.renderWarningIcon(assignmentTitle);
     }
 
     return (
       <span className="assignment-name">
-        <Link title={assignmentTitle} href={assignment.htmlUrl}>
+        <Link ref={this.bindAssignmentLink} title={assignmentTitle} href={assignment.htmlUrl}>
           {assignmentIcon}
           {assignment.name}
         </Link>
@@ -170,10 +206,13 @@ class AssignmentColumnHeader extends React.Component {
 
   renderTrigger () {
     const optionsTitle = I18n.t('%{name} Options', { name: this.props.assignment.name });
+    const menuShown = this.state.menuShown;
+    const classes = `Gradebook__ColumnHeaderAction ${menuShown ? 'menuShown' : ''}`;
+
     return (
-      <span className="Gradebook__ColumnHeaderAction">
+      <span ref={this.bindOptionsMenuTrigger} className={classes}>
         <Typography weight="bold" fontStyle="normal" size="large" color="brand">
-          <IconMoreSolid title={optionsTitle} />
+          <IconMoreSolid className="rotated" title={optionsTitle} />
         </Typography>
       </span>
     );
@@ -190,57 +229,55 @@ class AssignmentColumnHeader extends React.Component {
         contentRef={this.bindOptionsMenuContent}
         focusTriggerOnClose={false}
         trigger={this.renderTrigger()}
+        onToggle={this.onToggle}
+        onClose={this.props.onMenuClose}
       >
-        <MenuItemGroup label={I18n.t('Sort by')}>
-          <MenuItem
-            selected={selectedSortSetting === 'grade' && sortBySetting.direction === 'ascending'}
-            disabled={sortBySetting.disabled}
-            onSelect={sortBySetting.onSortByGradeAscending}
-          >
-            <span>{I18n.t('Grade - Low to High')}</span>
-          </MenuItem>
+        <MenuItemFlyout contentRef={this.bindSortByMenuContent} label={I18n.t('Sort by')}>
+          <MenuItemGroup label={<ScreenReaderContent>{I18n.t('Sort by')}</ScreenReaderContent>}>
+            <MenuItem
+              selected={selectedSortSetting === 'grade' && sortBySetting.direction === 'ascending'}
+              disabled={sortBySetting.disabled}
+              onSelect={sortBySetting.onSortByGradeAscending}
+            >
+              {I18n.t('Grade - Low to High')}
+            </MenuItem>
 
-          <MenuItem
-            selected={selectedSortSetting === 'grade' && sortBySetting.direction === 'descending'}
-            disabled={sortBySetting.disabled}
-            onSelect={sortBySetting.onSortByGradeDescending}
-          >
-            <span>{I18n.t('Grade - High to Low')}</span>
-          </MenuItem>
+            <MenuItem
+              selected={selectedSortSetting === 'grade' && sortBySetting.direction === 'descending'}
+              disabled={sortBySetting.disabled}
+              onSelect={sortBySetting.onSortByGradeDescending}
+            >
+              {I18n.t('Grade - High to Low')}
+            </MenuItem>
 
-          <MenuItem
-            selected={selectedSortSetting === 'missing'}
-            disabled={sortBySetting.disabled}
-            onSelect={sortBySetting.onSortByMissing}
-          >
-            <span data-menu-item-id="sort-by-missing">{I18n.t('Missing')}</span>
-          </MenuItem>
+            <MenuItem
+              selected={selectedSortSetting === 'missing'}
+              disabled={sortBySetting.disabled}
+              onSelect={sortBySetting.onSortByMissing}
+            >
+              {I18n.t('Missing')}
+            </MenuItem>
 
-          <MenuItem
-            selected={selectedSortSetting === 'late'}
-            disabled={sortBySetting.disabled}
-            onSelect={sortBySetting.onSortByLate}
-          >
-            <span data-menu-item-id="sort-by-late">{I18n.t('Late')}</span>
-          </MenuItem>
+            <MenuItem
+              selected={selectedSortSetting === 'late'}
+              disabled={sortBySetting.disabled}
+              onSelect={sortBySetting.onSortByLate}
+            >
+              {I18n.t('Late')}
+            </MenuItem>
 
-          <MenuItem
-            selected={selectedSortSetting === 'unposted'}
-            disabled={sortBySetting.disabled}
-            onSelect={sortBySetting.onSortByUnposted}
-          >
-            <span>{I18n.t('Unposted')}</span>
-          </MenuItem>
-        </MenuItemGroup>
-
-        <MenuItemSeparator />
-
-        <MenuItem
-          disabled={this.props.assignmentDetailsAction.disabled}
-          onSelect={this.props.assignmentDetailsAction.onSelect}
-        >
-          <span data-menu-item-id="show-assignment-details">{I18n.t('Assignment Details')}</span>
-        </MenuItem>
+            {
+              this.props.showUnpostedMenuItem &&
+                <MenuItem
+                  selected={selectedSortSetting === 'unposted'}
+                  disabled={sortBySetting.disabled}
+                  onSelect={sortBySetting.onSortByUnposted}
+                >
+                  {I18n.t('Unposted')}
+                </MenuItem>
+            }
+          </MenuItemGroup>
+        </MenuItemFlyout>
 
         <MenuItem
           disabled={!this.props.submissionsLoaded}
@@ -251,40 +288,47 @@ class AssignmentColumnHeader extends React.Component {
 
         <MenuItem
           disabled={this.props.curveGradesAction.isDisabled}
-          onSelect={this.props.curveGradesAction.onSelect}
+          onSelect={this.curveGrades}
         >
           <span data-menu-item-id="curve-grades">{I18n.t('Curve Grades')}</span>
         </MenuItem>
 
         <MenuItem
           disabled={this.props.setDefaultGradeAction.disabled}
-          onSelect={this.props.setDefaultGradeAction.onSelect}
+          onSelect={this.setDefaultGrades}
         >
           <span data-menu-item-id="set-default-grade">{I18n.t('Set Default Grade')}</span>
         </MenuItem>
 
+        <MenuItem
+          disabled={this.props.muteAssignmentAction.disabled}
+          onSelect={this.muteAssignment}
+        >
+          <span data-menu-item-id="assignment-muter">
+            {this.props.assignment.muted ? I18n.t('Unmute Assignment') : I18n.t('Mute Assignment')}
+          </span>
+        </MenuItem>
+
+        {
+          !(
+            this.props.downloadSubmissionsAction.hidden &&
+            this.props.reuploadSubmissionsAction.hidden
+          ) && <MenuItemSeparator />
+        }
+
         {
           !this.props.downloadSubmissionsAction.hidden &&
-          <MenuItem onSelect={this.props.downloadSubmissionsAction.onSelect}>
+          <MenuItem onSelect={this.downloadSubmissions}>
             <span data-menu-item-id="download-submissions">{I18n.t('Download Submissions')}</span>
           </MenuItem>
         }
 
         {
           !this.props.reuploadSubmissionsAction.hidden &&
-          <MenuItem onSelect={this.props.reuploadSubmissionsAction.onSelect}>
+          <MenuItem onSelect={this.reuploadSubmissions}>
             <span data-menu-item-id="reupload-submissions">{I18n.t('Re-Upload Submissions')}</span>
           </MenuItem>
         }
-
-        <MenuItem
-          disabled={this.props.muteAssignmentAction.disabled}
-          onSelect={this.props.muteAssignmentAction.onSelect}
-        >
-          <span data-menu-item-id="assignment-muter">
-            {this.props.assignment.muted ? I18n.t('Unmute Assignment') : I18n.t('Mute Assignment')}
-          </span>
-        </MenuItem>
       </PopoverMenu>
     );
   }
@@ -305,4 +349,4 @@ class AssignmentColumnHeader extends React.Component {
   }
 }
 
-export default AssignmentColumnHeader
+export default AssignmentColumnHeader;

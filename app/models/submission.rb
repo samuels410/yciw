@@ -94,10 +94,16 @@ class Submission < ActiveRecord::Base
   validates_length_of :published_grade, :maximum => maximum_string_length, :allow_nil => true, :allow_blank => true
   validates_as_url :url
   validates :points_deducted, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
+  validates :seconds_late_override, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
   validates :late_policy_status, inclusion: ['none', 'missing', 'late'], allow_nil: true
   validate :ensure_grader_can_grade
 
+  scope :active, -> { where("submissions.workflow_state <> 'deleted'") }
   scope :with_comments, -> { preload(:submission_comments) }
+  scope :unread_for, -> (user_id) do
+    joins(:content_participations).
+    where(user_id: user_id, content_participations: {workflow_state: 'unread', user_id: user_id})
+  end
   scope :after, lambda { |date| where("submissions.created_at>?", date) }
   scope :before, lambda { |date| where("submissions.created_at<?", date) }
   scope :submitted_before, lambda { |date| where("submitted_at<?", date) }
@@ -122,6 +128,77 @@ class Submission < ActiveRecord::Base
     where(assignment_id: course.assignments.except(:order))
   }
 
+  scope :missing, -> do
+    joins(:assignment).
+    where("
+      -- if excused is false or null, and...
+      excused IS NOT TRUE AND (
+        -- teacher said it's missing, 'nuff said.
+        late_policy_status = 'missing' OR
+        (
+          -- Otherwise, submission does not have a late policy applied and
+          late_policy_status is null and
+          -- submission is past due and
+          COALESCE(submitted_at, CURRENT_TIMESTAMP) >= cached_due_date +
+            CASE submission_type WHEN 'online_quiz' THEN interval '1 minute' ELSE interval '0 minutes' END and
+          -- submission is not submitted and
+          NULLIF(submission_type, '') is null and
+          -- we expect a digital submission
+          COALESCE(NULLIF(assignments.submission_types, ''), 'none') not similar to '%(none|not\_graded|on\_paper|wiki\_page|external\_tool)%'
+        )
+      )
+    ")
+  end
+
+  scope :not_missing, -> do
+    joins(:assignment).
+    where("
+      -- excused submissions cannot be missing
+      excused IS TRUE OR (
+        -- teacher hasn't said it's missing and
+        late_policy_status is distinct from 'missing' and
+        (
+          -- late policy status was overridden but the value is not 'missing', or
+          late_policy_status IS NOT NULL OR
+          -- submission is not past due or
+          cached_due_date is null or
+          COALESCE(submitted_at, CURRENT_TIMESTAMP) < cached_due_date +
+            CASE submission_type WHEN 'online_quiz' THEN interval '1 minute' ELSE interval '0 minutes' END or
+          -- submission is submitted or
+          NULLIF(submission_type, '') is not null or
+          -- we expect an offline submission
+          COALESCE(NULLIF(assignments.submission_types, ''), 'none') similar to
+            '%(none|not\_graded|on\_paper|wiki\_page|external\_tool)%'
+        )
+      )
+    ")
+  end
+
+  scope :late, -> do
+    left_joins(:quiz_submission).
+    where("
+      submissions.excused IS NOT TRUE AND (
+        submissions.late_policy_status = 'late' OR
+        (submissions.late_policy_status IS NULL AND submissions.submitted_at >= submissions.cached_due_date +
+           CASE submissions.submission_type WHEN 'online_quiz' THEN interval '1 minute' ELSE interval '0 minutes' END
+           AND (submissions.quiz_submission_id IS NULL OR quiz_submissions.workflow_state = 'complete'))
+      )
+    ")
+  end
+
+  scope :not_late, -> do
+    left_joins(:quiz_submission).
+    where("
+      submissions.excused IS TRUE OR (
+        submissions.late_policy_status is distinct from 'late' AND
+        (submissions.submitted_at IS NULL OR submissions.cached_due_date IS NULL OR
+          submissions.submitted_at < submissions.cached_due_date +
+            CASE submissions.submission_type WHEN 'online_quiz' THEN interval '1 minute' ELSE interval '0 minutes' END
+          OR quiz_submissions.workflow_state <> 'complete')
+      )
+    ")
+  end
+
   workflow do
     state :submitted do
       event :grade_it, :transitions_to => :graded
@@ -129,14 +206,16 @@ class Submission < ActiveRecord::Base
     state :unsubmitted
     state :pending_review
     state :graded
+    state :deleted
   end
 
   # see #needs_grading?
-  # When changing these conditions, consider updating index_submissions_on_assignment_id
-  # to maintain performance.
+  # When changing these conditions, update index_submissions_needs_grading to
+  # maintain performance.
   def self.needs_grading_conditions
     conditions = <<-SQL
       submissions.submission_type IS NOT NULL
+      AND (submissions.excused = 'f' OR submissions.excused IS NULL)
       AND (submissions.workflow_state = 'pending_review'
         OR (submissions.workflow_state IN ('submitted', 'graded')
           AND (submissions.score IS NULL OR NOT submissions.grade_matches_current_submission)
@@ -182,6 +261,7 @@ class Submission < ActiveRecord::Base
   attr_accessor :saved_by,
                 :assignment_changed_not_sub,
                 :grading_error_message
+  before_save :apply_late_policy, if: :late_policy_relevant_changes?
   before_save :update_if_pending
   before_save :validate_single_submission, :infer_values
   before_save :prep_for_submitting_to_plagiarism
@@ -233,7 +313,7 @@ class Submission < ActiveRecord::Base
   simply_versioned :explicit => true,
     :when => lambda{ |model| model.new_version_needed? },
     :on_create => lambda{ |model,version| SubmissionVersion.index_version(version) },
-    :on_load => lambda{ |model,version| model.cached_due_date = version.versionable.cached_due_date }
+    :on_load => lambda{ |model,version| model&.cached_due_date = version.versionable&.cached_due_date }
 
   # This needs to be after simply_versioned because the grade change audit uses
   # versioning to grab the previous grade.
@@ -543,7 +623,7 @@ class Submission < ActiveRecord::Base
   def originality_data
     data = self.originality_reports.each_with_object({}) do |originality_report, hash|
       hash[Attachment.asset_string(originality_report.attachment_id)] = {
-        similarity_score: originality_report.originality_score.round(2),
+        similarity_score: originality_report.originality_score&.round(2),
         state: originality_report.state,
         report_url: originality_report.originality_report_url,
         status: originality_report.workflow_state
@@ -570,7 +650,7 @@ class Submission < ActiveRecord::Base
     if self.grants_right?(user, :view_turnitin_report)
       attachment = self.attachments.find_by_asset_string(asset_string)
       report = self.originality_reports.find_by(attachment: attachment)
-      url = report.originality_report_url if report
+      url = report&.report_launch_url
     end
     url
   end
@@ -629,8 +709,7 @@ class Submission < ActiveRecord::Base
     self.vericite_data_hash ||= {}
     # check to see if the score is stale, if so, fetch it again
     update_scores = false
-    # since there could be multiple versions, let's not waste calls for old versions and use the old score
-    if Canvas::Plugin.find(:vericite).try(:enabled?) && !self.readonly? && lookup_data && self.versions.current && self.versions.current.number == self.version_number
+    if Canvas::Plugin.find(:vericite).try(:enabled?) && !self.readonly? && lookup_data
       self.vericite_data_hash.keys.each do |asset_string|
         data = self.vericite_data_hash[asset_string]
         next unless data && data.is_a?(Hash) && data[:object_id]
@@ -638,7 +717,7 @@ class Submission < ActiveRecord::Base
       end
       # we have found at least one score that is stale, call VeriCite and save the results
       if update_scores
-        check_vericite_status
+        check_vericite_status(0)
       end
     end
     if !self.vericite_data_hash.empty?
@@ -694,8 +773,11 @@ class Submission < ActiveRecord::Base
 
     # flag to make sure that all scores are just updates and not new
     recheck_score_all = true
+    data_changed = false
     self.vericite_data_hash.keys.each do |asset_string|
       data = self.vericite_data_hash[asset_string]
+      # keep track whether the score state changed
+      data_orig = data.dup
       next unless data && data.is_a?(Hash) && data[:object_id]
       # check to see if the score is stale, if so, delete it and fetch again
       recheck_score = vericite_recheck_score(data)
@@ -704,7 +786,6 @@ class Submission < ActiveRecord::Base
       # look up scores if:
       if recheck_score || data[:similarity_score].blank?
         if attempt < VERICITE_STATUS_RETRY
-          # keep track of when we asked for this score, so if it fails, we don't keep trying immediately again (i.e. wain 20 sec before trying again)
           data[:similarity_score_check_time] = Time.now.to_i
           vericite ||= VeriCite::Client.new()
           res = vericite.generateReport(self, asset_string)
@@ -727,26 +808,35 @@ class Submission < ActiveRecord::Base
         data[:status] = 'scored'
       end
       self.vericite_data_hash[asset_string] = data
+      data_changed = data_changed ||
+                      data_orig[:similarity_score] != data[:similarity_score] ||
+                      data_orig[:state] != data[:state] ||
+                      data_orig[:status] != data[:status] ||
+                      data_orig[:public_error_message] != data[:public_error_message]
     end
 
-    if !self.vericite_data_hash.empty?
+    if !self.vericite_data_hash.empty? && self.vericite_data_hash[:provider].nil?
       # only set vericite provider flag if the hash isn't empty
       self.vericite_data_hash[:provider] = :vericite
+      data_changed = true
     end
     retry_mins = 2 ** attempt
     if retry_mins > 240
       #cap the retry max wait to 4 hours
       retry_mins = 240;
     end
-    send_at(retry_mins.minutes.from_now, :check_vericite_status, attempt + 1) if needs_retry
-    self.vericite_data_changed!
+    # if attempt <= 0, then that means no retries should be attempted
+    send_at(retry_mins.minutes.from_now, :check_vericite_status, attempt + 1) if attempt > 0 && needs_retry
     # if all we did was recheck scores, do not version this save (i.e. increase the attempt number)
-    if recheck_score_all
-      self.with_versioning( false ) do |t|
-        t.save!
+    if data_changed
+      self.vericite_data_changed!
+      if recheck_score_all
+        self.with_versioning( false ) do |t|
+          t.save!
+        end
+      else
+        self.save
       end
-    else
-      self.save
     end
   end
 
@@ -1031,11 +1121,8 @@ class Submission < ActiveRecord::Base
   def submit_attachments_to_canvadocs
     if attachment_ids_changed? && submission_type != 'discussion_topic'
       attachments.preload(:crocodoc_document, :canvadoc).each do |a|
-        # moderated grading annotations are only supported in crocodoc right now
-        dont_submit_to_canvadocs = assignment.moderated_grading?
-
         # associate previewable-document and submission for permission checks
-        if a.canvadocable? && Canvadocs.annotations_supported? && !dont_submit_to_canvadocs
+        if a.canvadocable? && Canvadocs.annotations_supported?
           submit_to_canvadocs = true
           a.create_canvadoc! unless a.canvadoc
           a.shard.activate do
@@ -1051,14 +1138,9 @@ class Submission < ActiveRecord::Base
 
         if submit_to_canvadocs
           opts = {
-            preferred_plugins: [Canvadocs::RENDER_BOX, Canvadocs::RENDER_CROCODOC],
-            wants_annotation: true,
-            force_crocodoc: dont_submit_to_canvadocs
+            preferred_plugins: [Canvadocs::RENDER_PDFJS, Canvadocs::RENDER_BOX, Canvadocs::RENDER_CROCODOC],
+            wants_annotation: true
           }
-
-          if context.account.feature_enabled?(:new_annotations)
-            opts[:preferred_plugins].unshift Canvadocs::RENDER_PDFJS
-          end
 
           if context.root_account.settings[:canvadocs_prefer_office_online]
             # Office 365 should take priority over pdfjs
@@ -1076,14 +1158,17 @@ class Submission < ActiveRecord::Base
   end
 
   def infer_values
-    # we don't want this to be in a before_create because we want cache_due_date
-    # to happen before we infer other values, if it's needed
-    cache_due_date if new_record? && assignment.present?
     if assignment
       self.context_code = assignment.context_code
     end
 
-    self.accepted_at = nil unless late_policy_status == 'late'
+    self.seconds_late_override = nil unless late_policy_status == 'late'
+    if self.excused_changed? && self.excused
+      self.late_policy_status = nil
+      self.seconds_late_override = nil
+    elsif self.late_policy_status_changed? && self.late_policy_status.present?
+      self.excused = false
+    end
     self.submitted_at ||= Time.now if self.has_submission?
     self.quiz_submission.reload if self.quiz_submission_id
     self.workflow_state = 'submitted' if self.unsubmitted? && self.submitted_at
@@ -1112,7 +1197,7 @@ class Submission < ActiveRecord::Base
       self.quiz_submission ||= Quizzes::QuizSubmission.where(user_id: self.user_id, quiz_id: self.assignment.quiz).first rescue nil
     end
     @just_submitted = (self.submitted? || self.pending_review?) && self.submission_type && (self.new_record? || self.workflow_state_changed?)
-    if score_changed?
+    if score_changed? || grade_changed?
       self.grade = assignment ?
         assignment.score_to_grade(score, grade) :
         score.to_s
@@ -1130,8 +1215,8 @@ class Submission < ActiveRecord::Base
     true
   end
 
-  def cache_due_date
-    self.cached_due_date = assignment.overridden_for(user).due_at
+  def just_submitted?
+    @just_submitted || false
   end
 
   def update_admins_if_just_submitted
@@ -1169,6 +1254,7 @@ class Submission < ActiveRecord::Base
         end
       end
       res = self.versions.to_a[0,1].map(&:model) if res.empty?
+      res = [self] if res.empty?
       res.sort_by{ |s| s.submitted_at || CanvasSort::First }
     end
   end
@@ -1189,6 +1275,68 @@ class Submission < ActiveRecord::Base
     end
     true
   end
+
+  def late_policy_status_manually_applied?
+    cleared_late = late_policy_status_was == 'late' && ['none', nil].include?(late_policy_status)
+    cleared_none = late_policy_status_was == 'none' && late_policy_status.nil?
+    late_policy_status == 'missing' || late_policy_status == 'late' || cleared_late || cleared_none
+  end
+  private :late_policy_status_manually_applied?
+
+  def apply_late_policy(late_policy=nil, incoming_assignment=nil)
+    return if points_deducted_changed? || grading_period&.closed?
+    incoming_assignment ||= assignment
+    return unless late_policy_status_manually_applied? || incoming_assignment.expects_submission?
+    late_policy ||= incoming_assignment.course.late_policy
+    return score_missing(late_policy, incoming_assignment.points_possible, incoming_assignment.grading_type) if missing?
+    score_late_or_none(late_policy, incoming_assignment.points_possible, incoming_assignment.grading_type)
+  end
+
+  def score_missing(late_policy, points_possible, grading_type)
+    if self.points_deducted.present?
+      self.score = entered_score unless score_changed?
+      self.points_deducted = nil
+    end
+
+    if late_policy&.missing_submission_deduction_enabled && self.score.nil?
+      self.score = late_policy.points_for_missing(points_possible, grading_type)
+    end
+  end
+  private :score_missing
+
+  def score_late_or_none(late_policy, points_possible, grading_type)
+    raw_score = score_changed? || @regraded ? score : entered_score
+    deducted = late_points_deducted(raw_score, late_policy, points_possible, grading_type)
+    new_score = raw_score && raw_score - deducted
+    self.points_deducted = late? ? deducted : nil
+    self.score = new_score
+  end
+  private :score_late_or_none
+
+  def entered_score
+    score + (points_deducted || 0) if score
+  end
+
+  def entered_grade
+    return grade if grading_type == 'pass_fail'
+    assignment.score_to_grade(entered_score) if entered_score
+  end
+
+  def late_points_deducted(raw_score, late_policy, points_possible, grading_type)
+    return 0 unless raw_score && late_policy && late?
+
+    late_policy.points_deducted(
+      score: raw_score, possible: points_possible, late_for: seconds_late, grading_type: grading_type
+    )
+  end
+  private :late_points_deducted
+
+  def late_policy_relevant_changes?
+    return true if @regraded
+    return false if grade_matches_current_submission == false # nil is treated as true
+    changes.slice(:score, :submitted_at, :seconds_late_override, :late_policy_status).any?
+  end
+  private :late_policy_relevant_changes?
 
   def ensure_grader_can_grade
     return true if grader_can_grade?
@@ -1225,9 +1373,7 @@ class Submission < ActiveRecord::Base
 
     student_id = user_id || self.user.try(:id)
 
-    # TODO: replace this check with `grading_period&.closed?` once
-    # the populate_grading_period_for_submissions data fixup finishes
-    if assignment.in_closed_grading_period_for_student?(student_id)
+    if grading_period&.closed?
       :assignment_in_closed_grading_period
     else
       :success
@@ -1255,9 +1401,7 @@ class Submission < ActiveRecord::Base
 
     student_id = self.user_id || self.user.try(:id)
 
-    # TODO: replace this check with `grading_period&.closed?` once
-    # the populate_grading_period_for_submissions data fixup finishes
-    if assignment.in_closed_grading_period_for_student?(student_id)
+    if grading_period&.closed?
       :assignment_in_closed_grading_period
     else
       :success
@@ -1379,7 +1523,7 @@ class Submission < ActiveRecord::Base
     end
 
     attachments_by_submission = submissions.map do |s|
-      [s, attachments_by_id.values_at(*attachment_ids_by_submission[s]).flatten.uniq]
+      [s, attachments_by_id.values_at(*attachment_ids_by_submission[s]).flatten.compact.uniq]
     end
     Hash[attachments_by_submission]
   end
@@ -1507,7 +1651,7 @@ class Submission < ActiveRecord::Base
   scope :having_submission, -> { where("submissions.submission_type IS NOT NULL") }
   scope :without_submission, -> { where(submission_type: nil, workflow_state: "unsubmitted") }
   scope :not_placeholder, -> {
-    where("submissions.submission_type IS NOT NULL or submissions.excused or submissions.score IS NOT NULL")
+    active.where("submissions.submission_type IS NOT NULL or submissions.excused or submissions.score IS NOT NULL or submissions.workflow_state = 'graded'")
   }
 
   scope :include_user, -> { preload(:user) }
@@ -1636,27 +1780,22 @@ class Submission < ActiveRecord::Base
     final ? self.provisional_grades.final.first : self.provisional_grades.not_final.find_by(scorer: scorer)
   end
 
-  def crocodoc_whitelist
+  def moderated_grading_whitelist
     if assignment.moderated_grading?
       if assignment.grades_published?
         sel = assignment.moderated_grading_selections.where(student_id: self.user).first
+        has_crocodoc = attachments.any?(&:crocodoc_available?)
         if sel && (pg = sel.provisional_grade)
           # include the student, the final grader, and the source grader (if a moderator copied a mark)
           annotators = [self.user, pg.scorer]
           annotators << pg.source_provisional_grade.scorer if pg.source_provisional_grade
-          annotators.map(&:crocodoc_id!)
-        else
-          # student not in moderation set: no filter
-          nil
+          annotators.map { |u| u.moderated_grading_ids(has_crocodoc) }
         end
       else
         # grades not yet published: students see only their own annotations
         # (speedgrader overrides this for provisional graders)
-        [self.user.crocodoc_id!]
+        [ user.moderated_grading_ids(has_crocodoc) ]
       end
-    else
-      # not a moderated assignment: no filter
-      nil
     end
   end
 
@@ -1702,7 +1841,7 @@ class Submission < ActiveRecord::Base
   end
 
   def participating_instructors
-    commenting_instructors.present? ? commenting_instructors : context.participating_instructors.uniq
+    commenting_instructors.present? ? commenting_instructors : context.participating_instructors.to_a.uniq
   end
 
   def possible_participants_ids
@@ -1804,43 +1943,54 @@ class Submission < ActiveRecord::Base
   #  * score (Integer)
   #  * excused (Boolean)
   #  * late_policy_status (String)
-  #  * accepted_at (Time)
+  #  * seconds_late_override (Integer)
   #
   module Tardiness
     def past_due?
-      minutes_late > 0
+      seconds_late > 0
     end
-    alias_method :past_due, :past_due?
+    alias past_due past_due?
 
     def late?
-      accepted_at.present? && past_due?
+      return false if excused?
+      return late_policy_status == 'late' unless late_policy_status.nil?
+      submitted_at.present? && past_due?
     end
-    alias_method :late, :late?
+    alias late late?
 
     def missing?
-      return false if !past_due? || submitted_at.present?
-      assignment.expects_submission? || !(self.excused || (self.graded? && self.score > 0))
+      return false if excused?
+      # It's missing if the teacher said it was missing
+      return late_policy_status == 'missing' if late_policy_status.present?
+
+      # Teacher didn't say it was missing
+      # It's not missing if it has already been submitted
+      return false if submitted_at.present?
+
+      # It hasn't been submitted yet
+      # It's not missing if it's not past due
+      return false unless past_due?
+
+      # It isn't excused
+      # It is missing if the assignment expects a submission
+      # It is not missing if the assignment does not expect a submission
+      assignment.expects_submission?
     end
-    alias_method :missing, :missing?
+    alias missing missing?
 
     def graded?
       excused || (!!score && workflow_state == 'graded')
     end
 
-    def minutes_late
-      # the submission cannot be late if it's been marked with 'none' or 'missing'
-      return 0.0 if ['none', 'missing'].include?(late_policy_status)
-      return 0.0 if cached_due_date.nil? || time_of_submission <= cached_due_date
+    def seconds_late
+      return (seconds_late_override || 0) if late_policy_status == 'late'
+      return 0 if cached_due_date.nil? || time_of_submission <= cached_due_date
 
-      (time_of_submission - cached_due_date) / 60
-    end
-
-    def accepted_at
-      read_attribute(:accepted_at) || submitted_at
+      (time_of_submission - cached_due_date).to_i
     end
 
     def time_of_submission
-      time = accepted_at || Time.zone.now
+      time = submitted_at || Time.zone.now
       time -= 60.seconds if submission_type == 'online_quiz'
       time
     end
@@ -1852,7 +2002,7 @@ class Submission < ActiveRecord::Base
     self.graded? && (!self.submitted_at || (self.graded_at && self.graded_at >= self.submitted_at))
   end
 
-  def context(_user=nil)
+  def context
     self.assignment.context if self.assignment
   end
 
@@ -1891,7 +2041,7 @@ class Submission < ActiveRecord::Base
 
   def self.json_serialization_full_parameters(additional_parameters={})
     includes = { :quiz_submission => {} }
-    methods = [ :submission_history, :attachments ]
+    methods = [ :submission_history, :attachments, :entered_score, :entered_grade ]
     methods << (additional_parameters.delete(:comments) || :submission_comments)
     excepts = additional_parameters.delete :except
 
@@ -2009,6 +2159,14 @@ class Submission < ActiveRecord::Base
 
   def unread?(current_user)
     !read?(current_user)
+  end
+
+  def mark_read(current_user)
+    change_read_state("read", current_user)
+  end
+
+  def mark_unread(current_user)
+    change_read_state("unread", current_user)
   end
 
   def change_read_state(new_state, current_user)

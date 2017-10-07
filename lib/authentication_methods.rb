@@ -70,8 +70,7 @@ module AuthenticationMethods
       @authenticated_with_jwt = true
     rescue JSON::JWT::InvalidFormat,             # definitely not a JWT
            Canvas::Security::TokenExpired,       # it could be a JWT, but it's expired if so
-           Canvas::Security::InvalidToken,       # Looks like garbage
-           Canvas::DynamicSettings::ConsulError  # no config present for talking to consul
+           Canvas::Security::InvalidToken       # Looks like garbage
       # these will happen for some configurations (no consul)
       # and for some normal use cases (old token, access token),
       # so we can return and move on
@@ -84,7 +83,9 @@ module AuthenticationMethods
   end
 
   def load_pseudonym_from_access_token
-    return unless api_request? || (params[:controller] == 'oauth2_provider' && params[:action] == 'destroy')
+    return unless api_request? ||
+      (params[:controller] == 'oauth2_provider' && params[:action] == 'destroy') ||
+      (params[:controller] == 'login' && params[:action] == 'session_token')
 
     token_string = AuthenticationMethods.access_token(request)
 
@@ -205,7 +206,7 @@ module AuthenticationMethods
         params_without_become = params.dup
         params_without_become.delete_if {|k,v| [ 'become_user_id', 'become_teacher', 'become_student', 'me' ].include? k }
         params_without_become[:only_path] = true
-        session[:masquerade_return_to] = url_for(params_without_become.to_hash)
+        session[:masquerade_return_to] = url_for(params_without_become.to_unsafe_h)
         return redirect_to user_masquerade_url(request_become_user.id)
       end
     end

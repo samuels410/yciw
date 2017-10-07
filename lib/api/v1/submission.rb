@@ -89,8 +89,10 @@ module Api::V1::Submission
     hash
   end
 
-  SUBMISSION_JSON_FIELDS = %w(id user_id url score grade excused attempt submission_type submitted_at body assignment_id graded_at grade_matches_current_submission grader_id workflow_state).freeze
-  SUBMISSION_JSON_METHODS = %w(late).freeze
+  SUBMISSION_JSON_FIELDS = %w(id user_id url score grade excused attempt submission_type submitted_at body
+    assignment_id graded_at grade_matches_current_submission grader_id workflow_state late_policy_status
+    points_deducted grading_period_id cached_due_date).freeze
+  SUBMISSION_JSON_METHODS = %w(late missing seconds_late entered_grade entered_score).freeze
   SUBMISSION_OTHER_FIELDS = %w(attachments discussion_entries).freeze
 
   def submission_attempt_json(attempt, assignment, user, session, context = nil)
@@ -119,6 +121,9 @@ module Api::V1::Submission
     end
 
     hash['group'] = submission_minimal_group_json(attempt) if includes.include?("group")
+    if hash.key?('grade_matches_current_submission')
+      hash['grade_matches_current_submission'] = hash['grade_matches_current_submission'] != false
+    end
 
     unless params[:exclude_response_fields] && params[:exclude_response_fields].include?('preview_url')
       preview_args = { 'preview' => '1' }
@@ -157,7 +162,8 @@ module Api::V1::Submission
         atjson = attachment_json(attachment, user, {},
                                  submission_attachment: true,
                                  include: ['preview_url'],
-                                 crocodoc_ids: attempt.crocodoc_whitelist)
+                                 enable_annotations: true, # we want annotations on submission's attachment preview_urls
+                                 moderated_grading_whitelist: attempt.moderated_grading_whitelist)
         attachment.skip_submission_attachment_lock_checks = false
         atjson
       end.compact unless attachments.blank?
@@ -176,6 +182,13 @@ module Api::V1::Submission
         entries = assignment.discussion_topic.discussion_entries.active.for_user(attempt.user_id)
       end
       hash['discussion_entries'] = discussion_entry_api_json(entries, assignment.discussion_topic.context, user, session)
+    end
+
+    if attempt.submission_type == 'basic_lti_launch'
+      hash['external_tool_url'] = attempt.external_tool_url
+      hash['url'] = retrieve_course_external_tools_url(context.id,
+                                                       assignment_id: assignment.id,
+                                                       url: attempt.external_tool_url)
     end
 
     hash
@@ -275,10 +288,14 @@ module Api::V1::Submission
       json['submission_comments'] = submission_comments_json(provisional_grade.submission_comments, current_user)
     end
     if includes.include?('rubric_assessment')
-      json['rubric_assessments'] = provisional_grade.rubric_assessments.map{|ra| ra.as_json(:methods => [:assessor_name], :include_root => false)}
+      json['rubric_assessments'] = provisional_grade.rubric_assessments.map do |ra|
+        ra.as_json(:methods => [:assessor_name], :include_root => false)
+      end
     end
     if includes.include?('crocodoc_urls')
-      json['crocodoc_urls'] = submission.versioned_attachments.map { |a| provisional_grade.crocodoc_attachment_info(current_user, a) }
+      json['crocodoc_urls'] = submission.versioned_attachments.map do |a|
+        provisional_grade.attachment_info(current_user, a)
+      end
     end
     json
   end

@@ -18,6 +18,7 @@
 
 require_relative '../../common'
 require_relative '../page_objects/gradezilla_page'
+require_relative '../page_objects/gradezilla_cells_page'
 require_relative '../setup/gradebook_setup'
 
 describe "Gradezilla with grading periods" do
@@ -32,6 +33,7 @@ describe "Gradezilla with grading periods" do
       create_grading_periods(term_name, now)
       add_teacher_and_student
       associate_course_to_term(term_name)
+      show_grading_periods_filter(@teacher)
     end
 
     context 'as a teacher' do
@@ -40,16 +42,18 @@ describe "Gradezilla with grading periods" do
       end
 
       it 'assignment in ended grading period should be gradable', test_id: 2947119, priority: "1" do
-        @course.assignments.create!(due_at: 13.days.ago(now), title: "assign in ended")
+        assign = @course.assignments.create!(due_at: 13.days.ago(now), title: "assign in ended")
         Gradezilla.visit(@course)
 
-        Gradezilla.select_grading_period(0)
-        Gradezilla.enter_grade("10", 0, 0)
-        expect(Gradezilla.cell_graded?("10", 0, 0)).to be true
+        Gradezilla.select_grading_period("All Grading Periods")
+        Gradezilla::Cells.edit_grade(@student, assign, "10")
+        expect(Gradezilla::Cells.get_grade(@student, assign)).to eq "10"
 
-        Gradezilla.select_grading_period(@gp_ended.id)
-        Gradezilla.enter_grade("8", 0, 0)
-        expect(Gradezilla.cell_graded?("8", 0, 0)).to be true
+
+        Gradezilla.select_grading_period(@gp_ended.title)
+        Gradezilla::Cells.edit_grade(@student, assign, "8")
+        expect(Gradezilla::Cells.get_grade(@student, assign)).to eq "8"
+
       end
     end
 
@@ -57,16 +61,16 @@ describe "Gradezilla with grading periods" do
       before(:each) do
         account_admin_user(account: Account.site_admin)
         user_session(@admin)
+        show_grading_periods_filter(@admin)
       end
 
       it 'assignment in closed grading period should be gradable', test_id: 2947126, priority: "1" do
-
         assignment = @course.assignments.create!(due_at: 18.days.ago(now), title: "assign in closed")
         Gradezilla.visit(@course)
 
-        Gradezilla.select_grading_period(@gp_closed.id)
-        Gradezilla.enter_grade("10", 0, 0)
-        expect(Gradezilla.cell_graded?("10", 0, 0)).to be true
+        Gradezilla.select_grading_period(@gp_closed.title)
+        Gradezilla::Cells.edit_grade(@student, assignment, "10")
+        expect(Gradezilla::Cells.get_grade(@student, assignment)).to eq "10"
         expect(Submission.where(assignment_id: assignment.id, user_id: @student.id).first.grade).to eq "10"
       end
     end
@@ -74,14 +78,14 @@ describe "Gradezilla with grading periods" do
     it 'assignment in closed gp should not be gradable', test_id: 2947118, priority: "1" do
       user_session(@teacher)
 
-      @course.assignments.create!(due_at: 18.days.ago, title: "assign in closed")
+      assign = @course.assignments.create!(due_at: 18.days.ago, title: "assign in closed")
       Gradezilla.visit(@course)
 
-      Gradezilla.select_grading_period(0)
-      expect(Gradezilla.grading_cell(0, 0)).to contain_css(Gradezilla.ungradable_selector)
+      Gradezilla.select_grading_period("All Grading Periods")
+      expect(Gradezilla::Cells.grading_cell(@student, assign)).to contain_css(Gradezilla::Cells.ungradable_selector)
 
-      Gradezilla.select_grading_period(@gp_closed.id)
-      expect(Gradezilla.grading_cell(0, 0)).to contain_css(Gradezilla.ungradable_selector)
+      Gradezilla.select_grading_period(@gp_closed.title)
+      expect(Gradezilla::Cells.grading_cell(@student, assign)).to contain_css(Gradezilla::Cells.ungradable_selector)
     end
   end
 end

@@ -92,6 +92,7 @@ ActiveRecord::Base::DROPPED_COLUMNS = {
                     old_account_id
                     show_all_discussion_entries
                   ).freeze,
+    'delayed_notifications' => %w(asset_context_type asset_context_id).freeze,
     'developer_keys' => %w(tool_id).freeze,
     'discussion_topics' => %w(authorization_list_id).freeze,
     'enrollment_terms' => %w(sis_data
@@ -118,7 +119,7 @@ ActiveRecord::Base::DROPPED_COLUMNS = {
     'learning_outcome_results' => %w{comments}.freeze,
     'learning_outcome_question_results' => %w{context_code context_id context_type}.freeze,
     'lti_resource_placements' => %w(resource_handler_id).freeze,
-    'messages' => %w(cc bcc notification_category).freeze,
+    'messages' => %w(cc bcc notification_category asset_context_code asset_context_type asset_context_id).freeze,
     'moderated_grading_provisional_grades' => %w(position).freeze,
     'notification_policies' => %w(user_id broadcast).freeze,
     'page_views' => %w(contributed).freeze,
@@ -135,7 +136,7 @@ ActiveRecord::Base::DROPPED_COLUMNS = {
     'sis_batches' => %w(batch_id errored_attempts).freeze,
     'stream_items' => %w(context_code item_asset_string).freeze,
     'stream_item_instances' => %w(context_code).freeze,
-    'submissions' => %w(changed_since_publish late).freeze,
+    'submissions' => %w(changed_since_publish late accepted_at).freeze,
     'submission_comments' => %w{recipient_id}.freeze,
     'users' => %w(type
                   creation_unique_id

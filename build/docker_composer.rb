@@ -18,6 +18,7 @@
 require "yaml"
 require "fileutils"
 require "English"
+require_relative "./docker_utils"
 
 Thread.abort_on_exception = true
 
@@ -43,7 +44,7 @@ class DockerComposer
   class << self
     # :cry: not the same as canvas docker-compose ... yet
     RUNNER_IDS = Array.new(ENV['MASTER_RUNNERS'].to_i) { |i| i == 0 ? "" : i + 1 }
-    COMPOSE_FILES = %w[docker-compose.yml docker-compose.override.yml docker-compose.test.yml]
+    COMPOSE_FILES = %w[docker-compose.yml docker-compose.override.yml docker-compose.jenkins.yml]
 
     def run
       nuke_old_crap
@@ -117,7 +118,7 @@ class DockerComposer
       dump_file = "/tmp/#{ENV["COMPOSE_PROJECT_NAME"]}_structure.sql"
       File.delete dump_file if File.exist?(dump_file)
       FileUtils.touch dump_file
-      docker "exec -i #{ENV["COMPOSE_PROJECT_NAME"]}_postgres_1 pg_dump -s -x -O -U postgres -n public canvas_test_ > #{dump_file}"
+      docker "exec -i #{ENV["COMPOSE_PROJECT_NAME"]}_postgres_1 pg_dump -s -x -O -U postgres -n public -T 'quiz_submission_events_*' canvas_test_ > #{dump_file}"
     end
 
     # data_loader will fetch postgres + cassandra volumes from s3, if
@@ -173,7 +174,6 @@ class DockerComposer
       tasks << "ci:disable_structure_dump"
       tasks << "db:migrate"
       tasks << "ci:prepare_test_shards" if ENV["PREPARE_TEST_DATABASE"] == "1"
-      tasks << "ci:discard_past_quiz_event_partitions"
       tasks << "canvas:quizzes:create_event_partitions"
       tasks << "ci:reset_database" if ENV["PREPARE_TEST_DATABASE"] == "1"
       tasks = tasks.join(" ")
@@ -243,23 +243,11 @@ class DockerComposer
     end
 
     def own_config
-      @own_config ||= YAML.load_file(COMPOSE_FILES.last)
+      @own_config ||= DockerUtils.compose_config(COMPOSE_FILES.last)
     end
 
     def config
-      @config ||= begin
-        merger = proc do |key, v1, v2|
-          Hash === v1 && Hash === v2 ?
-            v1.merge(v2, &merger) :
-          Array === v1 && Array === v2 ?
-            v1.concat(v2) :
-            v2
-        end
-
-        COMPOSE_FILES.inject({}) do |config, file|
-          config.merge(YAML.load_file(file), &merger)
-        end
-      end
+      @config ||= DockerUtils.compose_config(*COMPOSE_FILES)
     end
   end
 end

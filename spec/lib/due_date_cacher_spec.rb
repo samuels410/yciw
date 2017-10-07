@@ -26,8 +26,8 @@ describe DueDateCacher do
 
   describe ".recompute" do
     before do
-      @instance = stub('instance', :recompute => nil)
-      @new_expectation = DueDateCacher.expects(:new).returns(@instance)
+      @instance = double('instance', :recompute => nil)
+      @new_expectation = expect(DueDateCacher).to receive(:new).and_return(@instance)
     end
 
     it "should wrap assignment in an array" do
@@ -36,12 +36,12 @@ describe DueDateCacher do
     end
 
     it "should delegate to an instance" do
-      @instance.expects(:recompute)
+      expect(@instance).to receive(:recompute)
       DueDateCacher.recompute(@assignment)
     end
 
     it "should queue a delayed job in an assignment-specific singleton in production" do
-      @instance.expects(:send_later_if_production_enqueue_args).
+      expect(@instance).to receive(:send_later_if_production_enqueue_args).
         with(:recompute, singleton: "cached_due_date:calculator:Assignment:#{@assignment.global_id}")
       DueDateCacher.recompute(@assignment)
     end
@@ -51,8 +51,8 @@ describe DueDateCacher do
     before do
       @assignments = [@assignment]
       @assignments << assignment_model(:course => @course)
-      @instance = stub('instance', :recompute => nil)
-      @new_expectation = DueDateCacher.expects(:new).returns(@instance)
+      @instance = double('instance', :recompute => nil)
+      @new_expectation = expect(DueDateCacher).to receive(:new).and_return(@instance)
     end
 
     it "should pass along the whole array" do
@@ -61,30 +61,30 @@ describe DueDateCacher do
     end
 
     it "should default to all assignments in the context" do
-      @new_expectation.with { |course, assignment_ids| course.id == @course.id && assignment_ids.sort == @assignments.map(&:id).sort }
+      @new_expectation.with(@course, match_array(@assignments.map(&:id)))
       DueDateCacher.recompute_course(@course)
     end
 
     it "should delegate to an instance" do
-      @instance.expects(:recompute)
+      expect(@instance).to receive(:recompute)
       DueDateCacher.recompute_course(@course, @assignments)
     end
 
     it "should queue a delayed job in a singleton in production if assignments.nil" do
-      @instance.expects(:send_later_if_production_enqueue_args).
+      expect(@instance).to receive(:send_later_if_production_enqueue_args).
           with(:recompute, singleton: "cached_due_date:calculator:Course:#{@course.global_id}")
       DueDateCacher.recompute_course(@course)
     end
 
     it "should queue a delayed job without a singleton if assignments is passed" do
-      @instance.expects(:send_later_if_production_enqueue_args).with(:recompute, {})
+      expect(@instance).to receive(:send_later_if_production_enqueue_args).with(:recompute, {})
       DueDateCacher.recompute_course(@course, @assignments)
     end
 
     it "should operate on a course id" do
-      @instance.expects(:send_later_if_production_enqueue_args).
+      expect(@instance).to receive(:send_later_if_production_enqueue_args).
           with(:recompute, singleton: "cached_due_date:calculator:Course:#{@course.global_id}")
-      @new_expectation.with { |course, assignment_ids| course.id == @course.id && assignment_ids.sort == @assignments.map(&:id).sort }
+      @new_expectation.with(@course, match_array(@assignments.map(&:id).sort))
       DueDateCacher.recompute_course(@course.id)
     end
   end
@@ -100,7 +100,7 @@ describe DueDateCacher do
       it "should create submissions for enrollments that are not overridden" do
         Submission.destroy_all
         expect { @cacher.recompute }.to change {
-          Submission.where(assignment_id: @assignment.id).count
+          Submission.active.where(assignment_id: @assignment.id).count
         }.from(0).to(1)
       end
 
@@ -111,14 +111,27 @@ describe DueDateCacher do
         Submission.destroy_all
 
         expect { @cacher.recompute }.to change {
-          Submission.where(assignment_id: @assignment.id).count
+          Submission.active.where(assignment_id: @assignment.id).count
+        }.from(0).to(1)
+      end
+
+      it "should not create submissions for enrollments that are not assigned" do
+        @assignment1 = @assignment
+        @assignment2 = assignment_model(course: @course)
+        @assignment2.only_visible_to_overrides = true
+        @assignment2.save!
+
+        Submission.destroy_all
+
+        expect { DueDateCacher.recompute_course(@course) }.to change {
+          Submission.active.count
         }.from(0).to(1)
       end
     end
 
     it "should not create another submission for enrollments that have a submission" do
       expect { @cacher.recompute }.not_to change {
-        Submission.where(assignment_id: @assignment.id).count
+        Submission.active.where(assignment_id: @assignment.id).count
       }
     end
 
@@ -128,8 +141,29 @@ describe DueDateCacher do
       @override.save!
 
       expect { @cacher.recompute }.not_to change {
-        Submission.where(assignment_id: @assignment.id).count
+        Submission.active.where(assignment_id: @assignment.id).count
       }
+    end
+
+    it "should delete submissions for enrollments that are no longer assigned" do
+      @assignment.only_visible_to_overrides = true
+
+      expect { @assignment.save! }.to change {
+        Submission.active.count
+      }.from(1).to(0)
+    end
+
+    it "should restore submissions for enrollments that are assigned again" do
+      @assignment.submit_homework(@student, submission_type: :online_url, url: 'http://instructure.com')
+      @assignment.only_visible_to_overrides = true
+      @assignment.save!
+      expect(Submission.first.workflow_state).to eq 'deleted'
+
+      @assignment.only_visible_to_overrides = false
+      expect { @assignment.save! }.to change {
+        Submission.active.count
+      }.from(0).to(1)
+      expect(Submission.first.workflow_state).to eq 'submitted'
     end
 
     context "no overrides" do
@@ -423,6 +457,21 @@ describe DueDateCacher do
       it "should not apply to apply to submission on the other assignment" do
         expect(@submission2.reload.cached_due_date).to eq @assignment.due_at.change(sec: 0)
       end
+    end
+
+    it 'kicks off a LatePolicyApplicator job on completion when called with a single assignment' do
+      expect(LatePolicyApplicator).to receive(:for_assignment).with(@assignment)
+
+      @cacher.recompute
+    end
+
+    it 'does not kick off a LatePolicyApplicator job when called with multiple assignments' do
+      @assignment1 = @assignment
+      @assignment2 = assignment_model(course: @course)
+
+      expect(LatePolicyApplicator).not_to receive(:for_assignment)
+
+      DueDateCacher.new(@course, [@assignment1, @assignment2]).recompute
     end
   end
 end

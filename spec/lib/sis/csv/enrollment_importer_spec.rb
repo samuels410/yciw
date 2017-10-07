@@ -544,8 +544,8 @@ describe SIS::CSV::EnrollmentImporter do
     @course.assignments.create!
     user_with_managed_pseudonym(:account => @account, :sis_user_id => 'U001')
     user_with_managed_pseudonym(:account => @account, :sis_user_id => 'U002')
-    DueDateCacher.expects(:recompute).never
-    DueDateCacher.expects(:recompute_course).twice
+    expect(DueDateCacher).to receive(:recompute).never
+    expect(DueDateCacher).to receive(:recompute_course).twice
     process_csv_data_cleanly(
         "course_id,user_id,role,status",
         "C001,U001,student,active",
@@ -702,7 +702,12 @@ describe SIS::CSV::EnrollmentImporter do
     )
     user = account2.pseudonyms.where(sis_user_id: 'user_1').first.user
     expect(SisPseudonym).to receive(:for).with(user, @account, type: :implicit, require_sis: false).and_return(user.pseudonyms.first)
-    SIS::EnrollmentImporter::Work.any_instance.expects(:root_account_from_id).with('account2').once.returns(account2)
+
+    warnings = []
+    work = SIS::EnrollmentImporter::Work.new(nil, @account, Rails.logger, 1000, warnings)
+    expect(work).to receive(:root_account_from_id).with('account2').once.and_return(account2)
+    expect(SIS::EnrollmentImporter::Work).to receive(:new).with(any_args).and_return(work)
+
     # the enrollments
     process_csv_data_cleanly(
         "course_id,root_account,user_id,role,status",
@@ -727,13 +732,16 @@ describe SIS::CSV::EnrollmentImporter do
     user = account2.pseudonyms.where(sis_user_id: 'user_1').first.user
     expect(SisPseudonym).to receive(:for).with(user, @account, type: :implicit, require_sis: false).once.and_return(nil)
 
-    SIS::EnrollmentImporter::Work.any_instance.expects(:root_account_from_id).with('account2').once.returns(account2)
+    warnings = []
+    work = SIS::EnrollmentImporter::Work.new(nil, @account, Rails.logger, 1000, warnings)
+    expect(work).to receive(:root_account_from_id).with('account2').once.and_return(account2)
+    expect(SIS::EnrollmentImporter::Work).to receive(:new).with(any_args).and_return(work)
     # the enrollments
     importer = process_csv_data(
         "course_id,root_account,user_id,role,status",
         "test_1,account2,user_1,teacher,active",
     )
-    expect(importer.warnings.map(&:last)).to eq ["User account2:user_1 does not have a usable login for this account"]
+    expect(warnings).to eq ["User account2:user_1 does not have a usable login for this account"]
     course = @account.courses.where(sis_source_id: 'test_1').first
     expect(course.teachers.to_a).to be_empty
   end
@@ -753,7 +761,10 @@ describe SIS::CSV::EnrollmentImporter do
     user = account2.pseudonyms.where(sis_user_id: 'user_1').first.user
     expect(SisPseudonym).to receive(:for).with(user, @account, type: :implicit, require_sis: false).never
 
-    SIS::EnrollmentImporter::Work.any_instance.expects(:root_account_from_id).with('account2').once.returns(nil)
+    warnings = []
+    work = SIS::EnrollmentImporter::Work.new(nil, @account, Rails.logger, 1000, warnings)
+    expect(work).to receive(:root_account_from_id).with('account2').once.and_return(nil)
+    expect(SIS::EnrollmentImporter::Work).to receive(:new).with(any_args).and_return(work)
     # the enrollments
     importer = process_csv_data_cleanly(
         "course_id,root_account,user_id,role,status",
@@ -884,5 +895,103 @@ describe SIS::CSV::EnrollmentImporter do
     student = Pseudonym.where(:sis_user_id => "student_user").first.user
     expect(student.enrollments.count).to eq 1
     expect(student.enrollments.first).to be_completed
+  end
+
+  it "doesn't die if the last record is invalid" do
+    process_csv_data_cleanly(
+      "course_id,short_name,long_name,status",
+      "c1,Course,Course,active",
+    )
+    process_csv_data_cleanly(
+      "section_id,course_id,name,status",
+      "s1,c1,Section,active",
+    )
+    process_csv_data_cleanly(
+      "user_id,login_id,first_name,last_name,email,status",
+      "u1,user1,User,Uno,user@example.com,active",
+      "u2,user2,User,Uno,user@example.com,active",
+      "u3,user3,User,Uno,user@example.com,active",
+      "u4,user4,User,Uno,user@example.com,active",
+      "u5,user5,User,Uno,user@example.com,active",
+      "u6,user6,User,Uno,user@example.com,active",
+      "u7,user7,User,Uno,user@example.com,active",
+      "u8,user8,User,Uno,user@example.com,active",
+      "u9,user9,User,Uno,user@example.com,active",
+      "u0,user0,User,Uno,user@example.com,active",
+    )
+    importer = process_csv_data(
+                 "course_id,user_id,role,section_id,status",
+                 "c1,u1,student,s1,active",
+                 "c1,u2,student,s1,active",
+                 "c1,u3,student,s1,active",
+                 "c1,u4,student,s1,active",
+                 "c1,u5,student,s1,active",
+                 "c1,u6,student,s1,active",
+                 "c1,u7,student,s1,active",
+                 "c1,u8,student,s1,active",
+                 "c1,u9,student,s1,active",
+                 "c1,u0,student,s1,active",
+                 "c1,u1,student,s2,active",
+    )
+    warnings = importer.warnings.map { |r| r.last }
+    expect(warnings.first).to include("non-existent section")
+    expect(importer.errors).to be_empty
+  end
+
+  it "associates to the correct accounts and doesn't die for invalid rows" do
+    process_csv_data_cleanly(
+      "account_id,name,parent_account_id,status",
+      "a1,a1,,active",
+      "a2,a2,,active",
+    )
+    process_csv_data_cleanly(
+      "course_id,short_name,long_name,account_id,status",
+      "c1,Course,Course,a1,active",
+      "c2,Course,Course,a2,active",
+    )
+    process_csv_data_cleanly(
+      "section_id,course_id,name,status,start_date,end_date",
+      "s1,c1,Sec1,active,,",
+      "s2,c2,Sec2,active,,",
+      "s3,c1,Sec3,active,,",
+    )
+    process_csv_data_cleanly(
+      "user_id,login_id,first_name,last_name,email,status",
+      "u1,user1,User,Uno,user@example.com,active",
+      "u2,user2,User,Uno,user@example.com,active",
+      "u3,user3,User,Uno,user@example.com,active",
+      "u4,user4,User,Uno,user@example.com,active",
+      "u5,user5,User,Uno,user@example.com,active",
+      "u6,user6,User,Uno,user@example.com,active",
+      "u7,user7,User,Uno,user@example.com,active",
+      "u8,user8,User,Uno,user@example.com,active",
+      "u9,user9,User,Uno,user@example.com,active",
+      "u0,user0,User,Uno,user@example.com,active",
+      "v1,vser1,User,Uno,user@example.com,active",
+    )
+    importer = process_csv_data(
+      "course_id,section_id,user_id,role,status",
+      "c1,s1,u1,student,active",
+      "c1,s1,u2,student,active",
+      "c1,s1,u3,student,active",
+      "c1,s1,u4,student,active",
+      "c1,s1,u5,student,active",
+      "c1,s1,u6,student,active",
+      "c1,s1,u7,student,active",
+      "c1,s1,u8,student,active",
+      "c1,s1,u9,student,active",
+      "c1,s1,u0,student,active",
+      "c3,s3,v1,student,active", # invalid course_id
+      "c2,s2,v1,student,active",
+    )
+    expect(importer.errors).to eq []
+    warnings = importer.warnings.map &:last
+    expect(warnings).to eq ["An enrollment referenced a non-existent course c3"]
+    a1 = @account.sub_accounts.find_by(sis_source_id: 'a1')
+    a2 = @account.sub_accounts.find_by(sis_source_id: 'a2')
+    u1 = @account.pseudonyms.active.find_by(sis_user_id: 'u1').user
+    v1 = @account.pseudonyms.active.find_by(sis_user_id: 'v1').user
+    expect(u1.associated_accounts).not_to be_include(a2)
+    expect(v1.associated_accounts).not_to be_include(a1)
   end
 end

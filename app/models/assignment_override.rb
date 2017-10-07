@@ -30,7 +30,7 @@ class AssignmentOverride < ActiveRecord::Base
 
   belongs_to :assignment
   belongs_to :quiz, class_name: 'Quizzes::Quiz'
-  belongs_to :set, :polymorphic => true
+  belongs_to :set, polymorphic: [:group, :course_section], exhaustive: false
   has_many :assignment_override_students, :dependent => :destroy, :validate => false
   validates_presence_of :assignment_version, :if => :assignment
   validates_presence_of :title, :workflow_state
@@ -121,7 +121,8 @@ class AssignmentOverride < ActiveRecord::Base
 
   def update_cached_due_dates
     return unless assignment?
-    if due_at_overridden_changed? ||
+    if due_at_overridden_changed? || set_id_changed? ||
+      (set_type_changed? && set_type != 'ADHOC') ||
       (due_at_overridden && due_at_changed?) ||
       (due_at_overridden && workflow_state_changed?)
       DueDateCacher.recompute(assignment)
@@ -148,7 +149,8 @@ class AssignmentOverride < ActiveRecord::Base
     transaction do
       self.assignment_override_students.reload.destroy_all
       self.workflow_state = 'deleted'
-      self.save!
+      self.default_values
+      self.save!(validate: false)
     end
   end
 

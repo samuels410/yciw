@@ -59,7 +59,7 @@ class CanvasUnzip
   #     :filename_too_long => [list of entries],
   #     :unknown_compression_method => [list of entries] }
 
-  def self.extract_archive(archive_filename, dest_folder = nil, limits = nil, &block)
+  def self.extract_archive(archive_filename, dest_folder = nil, limits: nil, nested_dir: nil, &block)
     warnings = {}
     limits ||= default_limits(File.size(archive_filename))
     bytes_left = limits.maximum_bytes
@@ -79,7 +79,9 @@ class CanvasUnzip
       else
         raise FileLimitExceeded if files_left <= 0
         begin
-          f_path = File.join(dest_folder, entry.name)
+          name = entry.name
+          name = name.sub(nested_dir, '') if nested_dir # pretend the dir doesn't exist
+          f_path = File.join(dest_folder, name)
           entry.extract(f_path, false, bytes_left) do |size|
             bytes_left -= size
             raise SizeLimitExceeded if bytes_left < 0
@@ -190,6 +192,7 @@ class CanvasUnzip
         raise DestinationFileExists, "Destination '#{dest_path}' already exists"
       end
 
+      digest = Digest::MD5.new
       ::File.open(dest_path, "wb") do |os|
         if type == :zip
           entry.get_input_stream do |is|
@@ -197,16 +200,19 @@ class CanvasUnzip
             buf = ''
             while buf = is.sysread(::Zip::Decompressor::CHUNK_SIZE, buf)
               os << buf
+              digest.update(buf)
               yield(buf.size) if block_given?
             end
           end
         elsif type == :tar
           while buf = entry.read(BUFFER_SIZE)
             os << buf
+            digest.update(buf)
             yield(buf.size) if block_given?
           end
         end
       end
+      digest.hexdigest
     end
 
     # forces name to UTF-8, converting from fallback_encoding if it isn't UTF-8 to begin with

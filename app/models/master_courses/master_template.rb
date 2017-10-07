@@ -61,14 +61,36 @@ class MasterCourses::MasterTemplate < ActiveRecord::Base
     if self.use_default_restrictions_by_type
       if self.use_default_restrictions_by_type_changed? || self.default_restrictions_by_type_changed?
         MasterCourses::RESTRICTED_OBJECT_TYPES.each do |type|
-          self.master_content_tags.where(:use_default_restrictions => true, :content_type => type).
-            update_all(:restrictions => self.default_restrictions_by_type[type] || {})
+          new_type_restrictions = self.default_restrictions_by_type[type] || {}
+          count = self.master_content_tags.where(:use_default_restrictions => true, :content_type => type).
+            update_all(:restrictions => new_type_restrictions)
+          next unless count > 0
+
+          old_type_restrictions = self.default_restrictions_by_type_was[type] || {}
+          if new_type_restrictions.any?{|setting, locked| locked && !old_type_restrictions[setting]} # tightened restrictions
+            self.touch_all_content_for_tags(type)
+          end
         end
       end
     else
       if self.default_restrictions_changed?
-        self.master_content_tags.where(:use_default_restrictions => true).update_all(:restrictions => self.default_restrictions)
+        count = self.master_content_tags.where(:use_default_restrictions => true).
+          update_all(:restrictions => self.default_restrictions)
+        if count > 0 && self.default_restrictions.any?{|setting, locked| locked && !self.default_restrictions_was[setting]} # tightened restrictions
+          self.touch_all_content_for_tags
+        end
       end
+    end
+  end
+
+  def touch_all_content_for_tags(only_content_type=nil)
+    content_types = only_content_type ?
+      [only_content_type] :
+      self.master_content_tags.where(:use_default_restrictions => true).distinct.pluck(:content_type)
+    content_types.each do |content_type|
+      klass = content_type.constantize
+      klass.where(klass.primary_key => self.master_content_tags.where(:use_default_restrictions => true,
+        :content_type => content_type).select(:content_id)).touch_all
     end
   end
 
@@ -118,7 +140,8 @@ class MasterCourses::MasterTemplate < ActiveRecord::Base
   end
 
   def self.preload_index_data(templates)
-    child_counts = MasterCourses::ChildSubscription.active.where(:master_template_id => templates).group(:master_template_id).count
+    child_counts = MasterCourses::ChildSubscription.active.where(:master_template_id => templates).
+      joins(:child_course).where.not(:courses => {:workflow_state => "deleted"}).group(:master_template_id).count
     last_export_times = Hash[MasterCourses::MasterMigration.where(:master_template_id => templates, :workflow_state => "completed").
       order("master_template_id, id DESC").pluck("DISTINCT ON (master_template_id) master_template_id, imports_completed_at")]
 
@@ -200,8 +223,6 @@ class MasterCourses::MasterTemplate < ActiveRecord::Base
       item_scope = case klass
       when 'Attachment'
         course.attachments.where(:file_state => 'deleted')
-      when 'WikiPage'
-        course.wiki.wiki_pages.where(:workflow_state => 'deleted')
       else
         klass.constantize.where(:context_id => course, :context_type => 'Course', :workflow_state => 'deleted')
       end
@@ -214,9 +235,58 @@ class MasterCourses::MasterTemplate < ActiveRecord::Base
 
   def default_restrictions_for(object)
     if self.use_default_restrictions_by_type
+      if object.is_a?(Assignment) && submittable = object.submittable_object
+        object = submittable
+      end
       self.default_restrictions_by_type[object.class.base_class.name] || {}
     else
       self.default_restrictions
+    end
+  end
+
+  def self.create_associations_from_sis(root_account, associations, messages, migrating_user=nil)
+    associations.keys.each_slice(50) do |master_sis_ids|
+      templates = self.active.for_full_course.joins(:course).
+        where(:courses => {:root_account_id => root_account, :sis_source_id => master_sis_ids}).
+        select("#{self.table_name}.*, courses.sis_source_id AS sis_source_id").to_a
+      if templates.count != master_sis_ids.count
+        (master_sis_ids - templates.map(&:sis_source_id)).each do |missing_id|
+          messages << "Unknown blueprint course \"#{missing_id}\""
+        end
+      end
+
+      templates.each do |template|
+        needs_migration = false
+        associations[template.sis_source_id].each_slice(50) do |associated_sis_ids|
+          data = root_account.all_courses.where(:sis_source_id => associated_sis_ids).not_master_courses.
+            joins("LEFT OUTER JOIN #{MasterCourses::ChildSubscription.quoted_table_name} AS mcs ON mcs.child_course_id=courses.id AND mcs.workflow_state<>'deleted'").
+            pluck(:id, :sis_source_id, "mcs.master_template_id")
+
+          if data.count != associated_sis_ids
+            (associated_sis_ids - data.map{|id, sis_id, t_id| sis_id}).each do |invalid_id|
+              messages << "Cannot associate course \"#{invalid_id}\" - is a blueprint course"
+            end
+          end
+          data.each do |id, associated_sis_id, master_template_id|
+            if master_template_id
+              if master_template_id != template.id
+                messages << "Cannot associate course \"#{associated_sis_id}\" - is associated to another blueprint course"
+              end # otherwise we don't need to do anything - it's already associated
+            else
+              needs_migration = true
+              template.add_child_course!(id)
+            end
+          end
+        end
+
+        if migrating_user && needs_migration
+          begin
+            MasterCourses::MasterMigration.start_new_migration!(template, migrating_user)
+          rescue MasterCourses::MasterMigration::MigrationRunningError
+            # meh
+          end
+        end
+      end
     end
   end
 end

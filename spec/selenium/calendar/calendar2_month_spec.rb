@@ -256,7 +256,7 @@ describe "calendar2" do
         create_middle_day_assignment(name)
         f('.fc-event.assignment').click
         hover_and_click '.edit_event_link'
-        expect_new_page_load { hover_and_click '.more_options_link' }
+        expect_new_page_load { f('.more_options_link').click }
         expect(find('#assignment_name').attribute(:value)).to include(name)
       end
 
@@ -264,7 +264,7 @@ describe "calendar2" do
         create_published_middle_day_assignment
         f('.fc-event.assignment').click
         hover_and_click '.edit_event_link'
-        expect_new_page_load { hover_and_click '.more_options_link' }
+        expect_new_page_load { f('.more_options_link').click }
         expect(find('#assignment-draft-state')).not_to include_text("Not Published")
       end
 
@@ -294,7 +294,7 @@ describe "calendar2" do
       end
 
       it "should not have a delete link for a frozen assignment" do
-        PluginSetting.stubs(:settings_for_plugin).returns({"assignment_group_id" => "true"})
+        allow(PluginSetting).to receive(:settings_for_plugin).and_return({"assignment_group_id" => "true"})
         frozen_assignment = @course.assignments.build(
             name: "frozen assignment",
             due_at: Time.zone.now,

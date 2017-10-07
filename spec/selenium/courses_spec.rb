@@ -34,11 +34,15 @@ describe "courses" do
       account = Account.default
       account.settings = {:open_registration => true, :no_enrollments_can_create_courses => true, :teachers_can_create_courses => true}
       account.save!
+      allow_any_instance_of(Account).to receive(:feature_enabled?).and_call_original
+      allow_any_instance_of(Account).to receive(:feature_enabled?).with(:new_user_tutorial).and_return(false)
     end
 
     context 'draft state' do
       before(:each) do
         course_with_teacher_logged_in
+        @course.default_view = 'feed'
+        @course.save
       end
 
       def validate_action_button(postion, validation_text)
@@ -85,6 +89,8 @@ describe "courses" do
 
       it "should allow publishing even if graded submissions exist" do
         course_with_student_submissions({submission_points: true, unpublished: true})
+        @course.default_view = 'feed'
+        @course.save
         get "/courses/#{@course.id}"
         course_status_buttons = ff('#course_status_actions button')
         expect(course_status_buttons.first).to have_class('disabled')
@@ -98,12 +104,16 @@ describe "courses" do
 
       it "should not show course status if published and graded submissions exist" do
         course_with_student_submissions({submission_points: true})
+        @course.default_view = 'feed'
+        @course.save
         get "/courses/#{@course.id}"
         expect(f("#content")).not_to contain_css('#course_status')
       end
 
       it "should allow unpublishing of the course if submissions have no score or grade" do
         course_with_student_submissions
+        @course.default_view = 'feed'
+        @course.save
         get "/courses/#{@course.id}"
         course_status_buttons = ff('#course_status_actions button')
         expect_new_page_load { course_status_buttons.first.click }
@@ -486,7 +496,7 @@ describe "courses" do
 
         # manually trigger a stale enrollment - should recalculate on visit if it didn't already in the background
         Course.where(:id => @course).update_all(:start_at => 1.day.ago)
-        Enrollment.where(:id => @student.student_enrollments).update_all(:updated_at => 1.second.from_now) # because of enrollment date caching
+        Enrollment.where(:id => @student.student_enrollments).update_all(:updated_at => 1.minute.from_now) # because of enrollment date caching
         EnrollmentState.where(:enrollment_id => @student.student_enrollments).update_all(:state_is_current => false)
 
         refresh_page
@@ -527,7 +537,7 @@ describe "courses" do
     @course.show_announcements_on_home_page = true
     @course.home_page_announcement_limit = 5
     @course.save!
-    @course.wiki.wiki_pages.create!(:title => 'blah').set_as_front_page!
+    @course.wiki_pages.create!(:title => 'blah').set_as_front_page!
 
     get "/courses/#{@course.id}"
 

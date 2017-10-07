@@ -27,22 +27,43 @@ module Lti
 
     serialize :icon_info
 
-    validates_presence_of :resource_type_code, :name, :tool_proxy, :lookup_id
-    before_validation :set_lookup_id
+    validates :resource_type_code, :name, :tool_proxy, presence: true
 
-    def self.generate_lookup_id_for(resource_handler)
-      tool_proxy = resource_handler.tool_proxy
-      product_family = tool_proxy.product_family
-      components = [product_family.product_code,
-                    product_family.vendor_code,
-                    resource_handler.resource_type_code].join('-')
-      "#{components}-#{Canvas::Security.hmac_sha1(components)}"
+    def find_message_by_type(message_type)
+      message_handlers.by_message_types(message_type).first
     end
 
-    private
+    def self.by_product_family(product_families, context)
+      initial_tool_proxies = ToolProxy.find_active_proxies_for_context(context)
+      tool_proxies = []
+      product_families.each do |pf|
+        tool_proxies += initial_tool_proxies.where(product_family: pf)
+      end
+      tool_proxies.map { |tp| tp.resources.to_a.flatten }.flatten
+    end
 
-    def set_lookup_id
-      self.lookup_id ||= self.class.generate_lookup_id_for(self)
+
+    def self.by_resource_codes(vendor_code:, product_code:, resource_type_code:, context:)
+      product_families = ProductFamily.where(vendor_code: vendor_code,
+                                             product_code: product_code)
+      possible_handlers = ResourceHandler.by_product_family(product_families, context)
+      possible_handlers.select { |rh| rh.resource_type_code == resource_type_code}
+    end
+
+    def find_or_create_tool_setting(context: nil, resource_url: nil, link_fragment: nil)
+      context ||= tool_proxy.context
+      mh = message_handlers.find_by(message_type: MessageHandler::BASIC_LTI_LAUNCH_REQUEST)
+      resource_link_id = mh.build_resource_link_id(context: context, link_fragment: link_fragment)
+
+      tool_setting = Lti::ToolSetting.find_by(resource_link_id: resource_link_id)
+      tool_setting ||= ToolSetting.new
+      tool_setting.update_attributes(resource_link_id: resource_link_id,
+                                     context: context,
+                                     product_code: tool_proxy.product_family.product_code,
+                                     vendor_code: tool_proxy.product_family.vendor_code,
+                                     resource_type_code: resource_type_code,
+                                     resource_url: resource_url)
+      tool_setting
     end
   end
 end

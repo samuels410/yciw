@@ -61,7 +61,7 @@ describe MasterCourses::MasterTemplate do
 
       MasterCourses::MasterTemplate.remove_as_master_course(@course)
 
-      template.expects(:destroy).never
+      expect(template).to receive(:destroy).never
       expect(template).to be_deleted
     end
   end
@@ -74,7 +74,7 @@ describe MasterCourses::MasterTemplate do
     it "should cache the result" do
       enable_cache do
         expect(check).to be_falsey
-        @course.expects(:master_course_templates).never
+        expect(@course).to receive(:master_course_templates).never
         expect(check).to be_falsey
         expect(MasterCourses::MasterTemplate.is_master_course?(@course.id)).to be_falsey # should work with ids too
       end
@@ -104,7 +104,7 @@ describe MasterCourses::MasterTemplate do
 
     it "should find tags" do
       tag = @template.create_content_tag_for!(@assignment)
-      @template.expects(:create_content_tag_for!).never # don't try to recreate
+      expect(@template).to receive(:create_content_tag_for!).never # don't try to recreate
       expect(@template.content_tag_for(@assignment)).to eq tag
     end
 
@@ -123,7 +123,7 @@ describe MasterCourses::MasterTemplate do
       expect(@template.content_tag_for(@assignment).id).to eq old_tag_id
 
       # should still create a tag even if it's not found in the index
-      @page = @course.wiki.wiki_pages.create!(:title => "title")
+      @page = @course.wiki_pages.create!(:title => "title")
       page_tag = @template.content_tag_for(@page)
       expect(page_tag.reload.content).to eq @page
     end
@@ -190,6 +190,52 @@ describe MasterCourses::MasterTemplate do
       expect(topic_tag1.reload.restrictions).to be_blank
       expect(assmt_tag1.reload.restrictions).to be_blank
     end
+
+    it "should touch content when tightening default_restrictions" do
+      @template.update_attribute(:default_restrictions, {:content => true, :points => true})
+      old_time = 1.minute.ago
+      Timecop.freeze(old_time) do
+        @quiz1 = @course.quizzes.create!
+        @quiz2 = @course.quizzes.create!
+        @template.create_content_tag_for!(@quiz1, :use_default_restrictions => true)
+        @template.create_content_tag_for!(@quiz2, :use_default_restrictions => false)
+      end
+      @template.update_attribute(:default_restrictions, {:content => true})
+      # shouldn't need to update
+      expect(@quiz1.reload.updated_at.to_i).to eq old_time.to_i
+
+      @template.update_attribute(:default_restrictions, {:content => true, :due_dates => true})
+      # now should update
+      expect(@quiz1.reload.updated_at.to_i).to_not eq old_time.to_i
+      expect(@quiz2.reload.updated_at.to_i).to eq old_time.to_i # has custom restrictions
+    end
+
+    it "should touch content when tightening default_restrictions_by_type" do
+      @template.update_attributes(:use_default_restrictions_by_type => true,
+        :default_restrictions_by_type => {
+          'Assignment' => {:content => true, :points => true},
+          'DiscussionTopic' => {:content => true},
+          'Quizzes::Quiz' => {:content => true}
+        })
+
+      old_time = 1.minute.ago
+      Timecop.freeze(old_time) do
+        @assmt = @course.assignments.create!
+        @topic = @course.discussion_topics.create!
+        @quiz = @course.quizzes.create!
+        [@assmt, @topic, @quiz].each do |obj|
+          @template.create_content_tag_for!(obj, :use_default_restrictions => true)
+        end
+      end
+      @template.update_attributes(:default_restrictions_by_type => {
+        'Assignment' => {:content => true}, # lessened restrictions
+        'DiscussionTopic' => {:content => true, :points => true},
+        'Quizzes::Quiz' => {:content => true, :due_dates => true}
+      })
+      expect(@assmt.reload.updated_at.to_i).to eq old_time.to_i
+      expect(@topic.reload.updated_at.to_i).to_not eq old_time.to_i
+      expect(@quiz.reload.updated_at.to_i).to_not eq old_time.to_i
+    end
   end
 
   describe "child subscriptions" do
@@ -254,6 +300,16 @@ describe MasterCourses::MasterTemplate do
       expect(t2.instance_variable_get(:@last_export_completed_at)).to eq time1
       expect(t3.instance_variable_defined?(:@last_export_completed_at)).to be_truthy
       expect(t3.instance_variable_get(:@last_export_completed_at)).to be_nil
+    end
+
+    it "should not count deleted courses" do
+      t = MasterCourses::MasterTemplate.set_as_master_course(@course)
+      t.add_child_course!(Course.create!)
+      t.add_child_course!(Course.create!(:workflow_state => 'deleted'))
+
+      MasterCourses::MasterTemplate.preload_index_data([t])
+
+      expect(t.child_course_count).to eq 1
     end
   end
 end

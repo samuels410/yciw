@@ -75,6 +75,7 @@ class CommunicationChannel < ActiveRecord::Base
       ['49',   I18n.t('Germany (+49)'),                false],
       ['504',  I18n.t('Honduras (+504)'),              false],
       ['852',  I18n.t('Hong Kong (+852)'),             false],
+      ['354',  I18n.t('Iceland (+354)'),               false],
       ['91',   I18n.t('India (+91)'),                  false],
       ['353',  I18n.t('Ireland (+353)'),               false],
       ['972',  I18n.t('Israel (+972)'),                false],
@@ -92,6 +93,7 @@ class CommunicationChannel < ActiveRecord::Base
       ['63',   I18n.t('Philippines (+63)'),            false],
       ['48',   I18n.t('Poland (+48)'),                 false],
       ['974',  I18n.t('Qatar (+974)'),                 false],
+      ['7',    I18n.t('Russia (+7)'),                  false],
       ['966',  I18n.t('Saudi Arabia (+966)'),          false],
       ['65',   I18n.t('Singapore (+65)'),              false],
       ['82',   I18n.t('South Korea (+82)'),            false],
@@ -167,7 +169,10 @@ class CommunicationChannel < ActiveRecord::Base
       record.workflow_state == 'unconfirmed' and self.user.registered? and
       self.path_type == TYPE_EMAIL
     }
-    p.context { @root_account }
+    p.data { {
+      root_account_id: @root_account.global_id,
+      from_host: HostUrl.context_host(@root_account)
+    } }
 
     p.dispatch :merge_email_communication_channel
     p.to { self }
@@ -184,7 +189,10 @@ class CommunicationChannel < ActiveRecord::Base
       self.path_type == TYPE_SMS and
       !self.user.creation_pending?
     }
-    p.context { @root_account }
+    p.data { {
+      root_account_id: @root_account.global_id,
+      from_host: HostUrl.context_host(@root_account)
+    } }
   end
 
   def uniqueness_of_path
@@ -251,7 +259,7 @@ class CommunicationChannel < ActiveRecord::Base
 
   def forgot_password!
     @request_password = true
-    set_confirmation_code(true)
+    set_confirmation_code(true, Setting.get('password_reset_token_expiration_minutes', '120').to_i.minutes.from_now)
     self.save!
     @request_password = false
   end
@@ -274,7 +282,7 @@ class CommunicationChannel < ActiveRecord::Base
     m = self.messages.temp_record
     m.to = self.path
     m.body = message
-    Mailer.create_message(m).deliver rescue nil # omg! just ignore delivery failures
+    Mailer.deliver(Mailer.create_message(m))
   end
 
   def send_otp!(code, account = nil)
@@ -287,8 +295,11 @@ class CommunicationChannel < ActiveRecord::Base
         e164_path
       )
     else
-      send_later_if_production_enqueue_args(:send_otp_via_sms_gateway!,
-                                            priority: Delayed::HIGH_PRIORITY, max_attempts: 1)
+      send_later_if_production_enqueue_args(
+        :send_otp_via_sms_gateway!,
+        { priority: Delayed::HIGH_PRIORITY, max_attempts: 1 },
+        message
+      )
     end
   end
 
@@ -296,13 +307,14 @@ class CommunicationChannel < ActiveRecord::Base
   # works.  If you are resetting the confirmation_code, call @cc.
   # set_confirmation_code(true), or just save the record to leave the old
   # confirmation code in place.
-  def set_confirmation_code(reset=false)
+  def set_confirmation_code(reset=false, expires_at=nil)
     self.confirmation_code = nil if reset
     if self.path_type == TYPE_EMAIL or self.path_type.nil?
       self.confirmation_code ||= CanvasSlug.generate(nil, 25)
     else
       self.confirmation_code ||= CanvasSlug.generate
     end
+    self.confirmation_code_expires_at = expires_at if reset
     true
   end
 
