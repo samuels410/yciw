@@ -66,3 +66,4 @@ docker-compose.local.*
 /public/javascripts/compiled/
 /spec/javascripts/compiled/
 /config/build.js
+/.idea/*

@@ -428,7 +428,7 @@ END
       display_name: -> { I18n.t('Rich Content Editor Sidebar Enhancements') },
       description: -> { I18n.t('Use new rich content editor with enhanced sidebar everywhere') },
       applies_to: 'RootAccount',
-      state: 'hidden',
+      stastatete: 'hidden',
       beta: false,
       development: false,
       root_opt_in: false
