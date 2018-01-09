@@ -33,8 +33,7 @@ class GradebookSettingsModal extends React.Component {
     courseId: string.isRequired,
     locale: string.isRequired,
     onClose: func.isRequired,
-    gradedLateOrMissingSubmissionsExist: bool.isRequired,
-    newGradebookDevelopmentEnabled: bool.isRequired,
+    gradedLateSubmissionsExist: bool.isRequired,
     onLatePolicyUpdate: func.isRequired
   }
 
@@ -125,11 +124,12 @@ class GradebookSettingsModal extends React.Component {
     return (
       <Modal
         size="large"
-        isOpen={isOpen}
+        open={isOpen}
         label={title}
         closeButtonLabel={I18n.t('Close')}
-        onAfterOpen={this.fetchLatePolicy}
-        onRequestClose={this.close}
+        applicationElement={() => document.getElementById('application')}
+        onOpen={this.fetchLatePolicy}
+        onDismiss={this.close}
         onExited={this.props.onClose}
       >
         <ModalHeader>
@@ -143,8 +143,7 @@ class GradebookSettingsModal extends React.Component {
                 latePolicy={latePolicy}
                 changeLatePolicy={this.changeLatePolicy}
                 locale={this.props.locale}
-                showContentComingSoon={!this.props.newGradebookDevelopmentEnabled}
-                showAlert={this.props.gradedLateOrMissingSubmissionsExist}
+                showAlert={this.props.gradedLateSubmissionsExist}
               />
             </TabPanel>
           </TabList>

@@ -273,9 +273,11 @@ define [
           $.fullCalendar.formatRange(startDate, endDate, "LT")
 
       screenReaderTitleHint = if event.eventType.match(/assignment/)
-          I18n.t('event_assignment_title', 'Assignment Title:')
+          I18n.t('Assignment Title:')
+        else if event.eventType == 'planner_note'
+          I18n.t('To Do:')
         else
-          I18n.t('event_event_title', 'Event Title:')
+          I18n.t('Event Title:')
 
       reservedText = ""
       if event.isAppointmentGroupEvent()
@@ -540,6 +542,7 @@ define [
         # need to update the appointmentGroupEventStatus to make sure it
         # correctly displays the new status in the calendar.
         parentEvent.appointmentGroupEventStatus = parentEvent.calculateAppointmentGroupEventStatus()
+        @dataSource.removeCachedReservation(event.calendarEvent)
 
         @refetchEvents()
 

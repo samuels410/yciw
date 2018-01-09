@@ -22,7 +22,7 @@ module CC
 module CCHelper
 
   CANVAS_NAMESPACE = 'http://canvas.instructure.com/xsd/cccv1p0'
-  XSD_URI = 'http://canvas.instructure.com/xsd/cccv1p0.xsd'
+  XSD_URI = 'https://canvas.instructure.com/xsd/cccv1p0.xsd'
 
   # IMS formats/types
   IMS_DATE = "%Y-%m-%d"
@@ -142,7 +142,7 @@ module CCHelper
 
   def get_html_title_and_body(doc)
     title = get_node_val(doc, 'html head title')
-    body = doc.at_css('html body').to_s.gsub(%r{</?body>}, '').strip
+    body = doc.at_css('html body').to_s.force_encoding(Encoding::UTF_8).gsub(%r{</?body>}, '').strip
     [title, body]
   end
 
@@ -277,10 +277,10 @@ module CCHelper
       meta_html = ""
       meta_fields.each_pair do |k, v|
         next unless v.present?
-        meta_html += %{<meta name="#{k}" content="#{v}"/>\n}
+        meta_html += %{<meta name="#{HtmlTextHelper.escape_html(k.to_s)}" content="#{HtmlTextHelper.escape_html(v.to_s)}"/>\n}
       end
 
-      %{<html>\n<head>\n<meta http-equiv="Content-Type" content="text/html; charset=utf-8">\n<title>#{title}</title>\n#{meta_html}</head>\n<body>\n#{content}\n</body>\n</html>}
+      %{<html>\n<head>\n<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>\n<title>#{HtmlTextHelper.escape_html(title)}</title>\n#{meta_html}</head>\n<body>\n#{content}\n</body>\n</html>}
     end
 
     def html_content(html)

@@ -43,6 +43,7 @@ WebMock.enable!
 module WebMock::API
   include WebMock::Matchers
   def self.included(other)
+    other.before { allow(CanvasHttp).to receive(:insecure_host?).and_return(false) }
     other.after { WebMock.reset! }
   end
 end
@@ -264,7 +265,7 @@ module Helpers
     m.to = opts[:to] || 'some_user'
     m.from = opts[:from] || 'some_other_user'
     m.subject = opts[:subject] || 'a message for you'
-    m.body = opts[:body] || 'nice body'
+    m.body = opts[:body] || 'foo bar'
     m.sent_at = opts[:sent_at] || 5.days.ago
     m.workflow_state = opts[:workflow_state] || 'sent'
     m.user_id = opts[:user_id] || opts[:user].try(:id)
@@ -348,6 +349,7 @@ RSpec.configure do |config|
     RequestStore.clear!
     MultiCache.reset
     Course.enroll_user_call_count = 0
+    TermsOfService.skip_automatic_terms_creation = true
     $spec_api_tokens = {}
   end
 
@@ -465,7 +467,7 @@ RSpec.configure do |config|
   #****************************************************************
 
   def login_as(username = "nobody@example.com", password = "asdfasdf")
-    post "/login",
+    post "/login/canvas",
                       params: {"pseudonym_session[unique_id]" => username,
                       "pseudonym_session[password]" => password}
     follow_redirect! while response.redirect?

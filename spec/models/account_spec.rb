@@ -141,6 +141,25 @@ describe Account do
         expect(@account.fast_all_courses({:term => EnrollmentTerm.where(sis_source_id: "T003").first}).map(&:sis_source_id).sort).to eq ["C005", "C006", "C007", "C008", "C009", "C005S", "C006S", "C007S", "C008S", "C009S"].sort
       end
 
+      it "don't double-count cross-listed courses" do
+        def check_account(account, expected_length, expected_course_names)
+          actual_courses = account.fast_all_courses
+          expect(actual_courses.length).to eq expected_length
+          actual_course_names = actual_courses.pluck("name").sort!
+          expect(actual_course_names).to eq(expected_course_names.sort!)
+        end
+
+        root_account = Account.create!
+        account_a = Account.create!({ :root_account => root_account })
+        account_b = Account.create!({ :root_account => root_account })
+        course_a = course_factory({ :account => account_a, :course_name => "course_a" })
+        course_b = course_factory({ :account => account_b, :course_name => "course_b" })
+        course_b.course_sections.create!({ :name => "section_b" })
+        course_b.course_sections.first.crosslist_to_course(course_a)
+        check_account(account_a, 1, ["course_a"])
+        check_account(account_b, 1, ["course_b"])
+      end
+
       it "should list associated nonenrollmentless courses" do
         expect(@account.fast_all_courses({:hide_enrollmentless_courses => true}).map(&:sis_source_id).sort).to eq ["C001", "C005", "C007", "C001S", "C005S", "C007S"].sort #C007 probably shouldn't be here, cause the enrollment section is deleted, but we kinda want to minimize database traffic
       end
@@ -419,6 +438,11 @@ describe Account do
       sub_account = Account.create!(:parent_account => root_account)
       expect(root_account.closest_turnitin_pledge).not_to be_empty
       expect(sub_account.closest_turnitin_pledge).not_to be_empty
+    end
+
+    it 'uses the default message if pledge is nil or empty' do
+      account = Account.create!(turnitin_pledge: '')
+      expect(account.closest_turnitin_pledge).to eq 'This assignment submission is my own, original work'
     end
   end
 
@@ -1495,6 +1519,11 @@ describe Account do
     describe "#terms_required?" do
       it "returns true by default" do
         expect(account_model.terms_required?).to eq true
+      end
+
+      it "returns false by default for new accounts" do
+        TermsOfService.skip_automatic_terms_creation = false
+        expect(account_model.terms_required?).to eq false
       end
 
       it "returns false if Setting is false" do

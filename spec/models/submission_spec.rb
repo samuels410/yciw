@@ -25,9 +25,10 @@ describe Submission do
     course_with_teacher(active_all: true)
     course_with_student(active_all: true, course: @course)
     @context = @course
-    @assignment = @context.assignments.new(:title => "some assignment")
-    @assignment.workflow_state = "published"
-    @assignment.save
+    @assignment = @context.assignments.create!(
+      title: 'some assignment',
+      workflow_state: 'published'
+    )
     @valid_attributes = {
       assignment: @assignment,
       user: @user,
@@ -74,6 +75,29 @@ describe Submission do
       end
 
       describe "grade" do
+        context "the submission is deleted" do
+          before(:once) do
+            @assignment.due_at = in_open_grading_period
+            @assignment.save!
+            submission_spec_model
+            @submission.update(workflow_state: 'deleted')
+          end
+
+          it "does not have grade permissions if the user is a root account admin" do
+            expect(@submission.grants_right?(@admin, :grade)).to eq(false)
+          end
+
+          it "does not have grade permissions if the user is non-root account admin with manage_grades permissions" do
+            expect(@submission.grants_right?(@teacher, :grade)).to eq(false)
+          end
+
+          it "doesn't have grade permissions if the user is non-root account admin without manage_grades permissions" do
+            @student = user_factory(active_all: true)
+            @context.enroll_student(@student)
+            expect(@submission.grants_right?(@student, :grade)).to eq(false)
+          end
+        end
+
         context "the submission is due in an open grading period" do
           before(:once) do
             @assignment.due_at = in_open_grading_period
@@ -89,7 +113,7 @@ describe Submission do
             expect(@submission.grants_right?(@teacher, :grade)).to eq(true)
           end
 
-          it "has not have grade permissions if the user is non-root account admin without manage_grades permissions" do
+          it "doesn't have grade permissions if the user is non-root account admin without manage_grades permissions" do
             @student = user_factory(active_all: true)
             @context.enroll_student(@student)
             expect(@submission.grants_right?(@student, :grade)).to eq(false)
@@ -111,7 +135,7 @@ describe Submission do
             expect(@submission.grants_right?(@teacher, :grade)).to eq(true)
           end
 
-          it "has not have grade permissions if the user is non-root account admin without manage_grades permissions" do
+          it "doesn't have grade permissions if the user is non-root account admin without manage_grades permissions" do
             @student = user_factory(active_all: true)
             @context.enroll_student(@student)
             expect(@submission.grants_right?(@student, :grade)).to eq(false)
@@ -142,16 +166,28 @@ describe Submission do
   describe 'entered_grade' do
     let(:submission) { @assignment.submissions.find_by!(user_id: @student) }
 
-    it 'returns grade if grading_type is pass_fail' do
-      @assignment.update(grading_type: 'pass_fail')
-      submission.update(score: 100)
-      expect(submission.entered_grade).to eql(submission.grade)
-    end
-
     it 'returns grade without deduction' do
       @assignment.update(grading_type: 'percent', points_possible: 100)
       submission.update(score: 25.5, points_deducted: 60)
       expect(submission.entered_grade).to eql('85.5%')
+    end
+
+    it 'returns grade if grading_type is pass_fail' do
+      @assignment.update(grading_type: 'pass_fail')
+      submission.update(grade: 'complete')
+      expect(submission.entered_grade).to eql('complete')
+    end
+
+    it 'returns the grade for a letter grade assignment with no points possible' do
+      @assignment.update(grading_type: 'letter_grade', points_possible: 0)
+      submission.update(grade: 'B')
+      expect(submission.entered_grade).to eql('B')
+    end
+
+    it 'returns the grade for a GPA scale assignment with no points possible' do
+      @assignment.update(grading_type: 'gpa_scale', points_possible: nil)
+      submission.update(grade: 'B')
+      expect(submission.entered_grade).to eql('B')
     end
   end
 
@@ -1047,6 +1083,32 @@ describe Submission do
     @submission.save!
   end
 
+  it "grade change event author can be set" do
+    submission_spec_model
+    assistant = User.create!
+    @course.enroll_ta(assistant, enrollment_state: "active")
+
+    expect(Auditors::GradeChange).to receive(:record).once do |submission|
+      expect(submission.grader_id).to eq assistant.id
+    end
+
+    @submission.grade_change_event_author_id = assistant.id
+    @submission.score = 5
+    @submission.save!
+  end
+
+  it "uses the existing grader_id as the author if grade_change_event_author_id is not set" do
+    submission_spec_model
+    @assignment.grade_student(@student, grade: 10, grader: @teacher)
+
+    expect(Auditors::GradeChange).to receive(:record).once do |submission|
+      expect(submission.grader_id).to eq @teacher.id
+    end
+
+    @submission.score = 5
+    @submission.save!
+  end
+
   it "should log excused submissions" do
     submission_spec_model
 
@@ -1066,6 +1128,7 @@ describe Submission do
 
     # only graded submissions are updated by assignment
     @submission.score = 111
+    @submission.workflow_state = 'graded'
     @submission.save!
 
     @assignment.points_possible = 999
@@ -1502,9 +1565,17 @@ describe Submission do
       scores.where.not(grading_period_id: nil)
     end
 
+    let(:course_scores) do
+      scores.where(course_score: true)
+    end
+
+    let(:course_and_grading_period_scores) do
+      scores.where(course_score: true).or(scores.where.not(grading_period_id: nil).where(assignment_group_id: nil))
+    end
+
     it 'recomputes course scores when the submission score changes' do
       expect { @submission.update!(score: 5) }.to change {
-        scores.pluck(:current_score)
+        course_scores.pluck(:current_score)
       }.from([nil]).to([50.0])
     end
 
@@ -1531,7 +1602,7 @@ describe Submission do
       it 'updates the course score and grading period score if a submission ' \
       'in a grading period is graded' do
         expect { @submission.update!(score: 5) }.to change {
-          scores.pluck(:current_score)
+          course_and_grading_period_scores.pluck(:current_score)
         }.from([nil, 80.0]).to([50.0, 65.0])
       end
 
@@ -1540,7 +1611,7 @@ describe Submission do
         day_after_grading_period_ends = 1.day.from_now(@grading_period.end_date)
         @assignment.update!(due_at: day_after_grading_period_ends)
         expect { @submission.update!(score: 5) }.to change {
-          scores.pluck(:current_score)
+          course_and_grading_period_scores.pluck(:current_score)
         }.from([nil, 80.0]).to([nil, 65.0])
       end
     end
@@ -1726,11 +1797,14 @@ describe Submission do
   end
 
   context "OriginalityReport" do
-    let(:attachment) { attachment_model }
+    let(:attachment) { attachment_model(context: group) }
     let(:course) { course_model }
     let(:submission) { submission_model }
+    let(:group) { Group.create!(name: 'test group', context: course) }
 
     let(:originality_report) do
+      AttachmentAssociation.create!(context: submission, attachment_id: attachment)
+      submission.update_attributes(attachment_ids: attachment.id.to_s)
       OriginalityReport.create!(attachment: attachment, originality_score: '1', submission: submission)
     end
 
@@ -1739,13 +1813,13 @@ describe Submission do
         originality_report.originality_report_url = 'http://example.com'
         originality_report.save!
         expect(submission.originality_data).to eq({
-                                                    attachment.asset_string => {
-                                                      similarity_score: originality_report.originality_score,
-                                                      state: originality_report.state,
-                                                      report_url: originality_report.originality_report_url,
-                                                      status: originality_report.workflow_state
-                                                    }
-                                                  })
+          attachment.asset_string => {
+            similarity_score: originality_report.originality_score,
+            state: originality_report.state,
+            report_url: originality_report.originality_report_url,
+            status: originality_report.workflow_state
+          }
+        })
       end
 
       it "includes tii data" do
@@ -1757,8 +1831,8 @@ describe Submission do
         }
         submission.turnitin_data[attachment.asset_string] = tii_data
         expect(submission.originality_data).to eq({
-                                                    attachment.asset_string => tii_data
-                                                  })
+          attachment.asset_string => tii_data
+        })
       end
 
       it "overrites the tii data with the originality data" do
@@ -1772,13 +1846,13 @@ describe Submission do
         }
         submission.turnitin_data[attachment.asset_string] = tii_data
         expect(submission.originality_data).to eq({
-                                                    attachment.asset_string => {
-                                                      similarity_score: originality_report.originality_score,
-                                                      state: originality_report.state,
-                                                      report_url: originality_report.originality_report_url,
-                                                      status: originality_report.workflow_state
-                                                    }
-                                                  })
+          attachment.asset_string => {
+            similarity_score: originality_report.originality_score,
+            state: originality_report.state,
+            report_url: originality_report.originality_report_url,
+            status: originality_report.workflow_state
+          }
+        })
       end
 
       it 'does not cause error if originality score is nil' do
@@ -1793,7 +1867,7 @@ describe Submission do
       end
 
       it "filters out :provider key and value" do
-         originality_report.originality_report_url = 'http://example.com'
+        originality_report.originality_report_url = 'http://example.com'
         originality_report.save!
         tii_data = {
           provider: 'vericite',
@@ -1806,6 +1880,39 @@ describe Submission do
         expect(submission.originality_data).not_to include :vericite
       end
 
+      it "finds originality data for group assignment submissions" do
+        submission.update_attributes!(attachment_ids: attachment.id.to_s)
+        originality_report
+        submission_two = submission.dup
+        submission_two.update_attributes!(user: User.create!(name: 'second student'))
+        expect(submission_two.originality_data).to eq({
+          attachment.asset_string => {
+            similarity_score: originality_report.originality_score,
+            state: originality_report.state,
+            report_url: originality_report.originality_report_url,
+            status: originality_report.workflow_state
+          }
+        })
+      end
+    end
+
+    describe '#attachment_ids_for_version' do
+      let(:attachments) do
+        [
+          attachment_model(filename: "submission-a.doc", context: @student),
+          attachment_model(filename: "submission-b.doc", context: @student),
+          attachment_model(filename: "submission-c.doc", context: @student)
+        ]
+      end
+      let(:single_attachment) { attachment_model(filename: "single.doc", context: @student) }
+
+      before { student_in_course(active_all: true) }
+
+      it "includes attachment ids from 'attachment_id'" do
+        submission = @assignment.submit_homework(@student, submission_type: 'online_upload', attachments: attachments)
+        submission.update_attributes!(attachment_id: single_attachment)
+        expect(submission.attachment_ids_for_version).to match_array attachments.map(&:id) + [single_attachment.id]
+      end
     end
 
     describe '#originality_report_url' do
@@ -1846,6 +1953,27 @@ describe Submission do
       it 'requires the :grade permission' do
         unauthorized_user = User.new
         expect(submission.originality_report_url(attachment.asset_string, unauthorized_user)).to be_nil
+      end
+
+      it 'treats attachments in submission history as valid' do
+        submission = nil
+        attachments = [attachment]
+        Timecop.freeze(10.second.ago) do
+          submission = assignment.submit_homework(test_student, submission_type: 'online_upload',
+                                     attachments: [attachments[0]])
+        end
+
+        attachments << attachment_model(filename: "submission-b.doc", :context => test_student)
+        Timecop.freeze(5.second.ago) do
+          submission = assignment.submit_homework test_student, attachments: [attachments[1]]
+        end
+
+        attachments << attachment_model(filename: "submission-c.doc", :context => test_student)
+        Timecop.freeze(1.second.ago) do
+          submission = assignment.submit_homework test_student, attachments: [attachments[2]]
+        end
+
+        expect(submission.originality_report_url(attachments.first.asset_string, test_teacher)).to eq(report_url)
       end
     end
   end
@@ -2724,6 +2852,26 @@ describe Submission do
       sub.attachments.update_all(:context_type => "Submission", :context_id => sub.id)
       expect(sub.reload.versioned_attachments).to be_empty
     end
+
+    it "includes attachments owned by other users in a group for a group submission" do
+      student1, student2 = n_students_in_course(2, { course: @course })
+      assignment = @course.assignments.create!(name: "A1", submission_types: "online_upload")
+
+      group_category = @course.group_categories.create!(name: "Project Groups")
+      group = group_category.groups.create!(name: "A Team", context: @course)
+      group.add_user(student1)
+      group.add_user(student2)
+      assignment.update_attributes(group_category: group_category)
+
+      user_attachment = attachment_model(context: student1)
+      assignment.submit_homework(student1, submission_type: "online_upload", attachments: [user_attachment])
+
+      [student1, student2].each do |student|
+        submission = assignment.submission_for_student(student)
+        submission.versioned_attachments
+        expect(submission.versioned_attachments).to include user_attachment
+      end
+    end
   end
 
   describe "includes_attachment?" do
@@ -3026,16 +3174,33 @@ describe Submission do
     before(:each) do
       student_in_course(active_all: true)
       @student2 = user_factory
-      @course.enroll_student(@student2).accept!
+      @student2_enrollment = @course.enroll_student(@student2)
+      @student2_enrollment.accept!
       @assignment = peer_review_assignment
-      @assignment.submit_homework(@student,  body: 'Lorem ipsum dolor')
-      @assignment.submit_homework(@student2, body: 'Sit amet consectetuer')
+      @student1_homework = @assignment.submit_homework(@student,  body: 'Lorem ipsum dolor')
+      @student2_homework = @assignment.submit_homework(@student2, body: 'Sit amet consectetuer')
     end
 
     it "should send a reminder notification" do
       expect_any_instance_of(AssessmentRequest).to receive(:send_reminder!).once
       submission1, submission2 = @assignment.submissions
       submission1.assign_assessor(submission2)
+    end
+
+    it "should not allow read access when assignment's peer reviews are off" do
+      @student1_homework.assign_assessor(@student2_homework)
+      expect(@student1_homework.grants_right?(@student2, :read)).to eq true
+      @assignment.peer_reviews = false
+      @assignment.save!
+      @student1_homework.reload
+      AdheresToPolicy::Cache.clear
+      expect(@student1_homework.grants_right?(@student2, :read)).to eq false
+    end
+
+    it "should not allow read access when other student's enrollment is not active" do
+      @student2_homework.assign_assessor(@student1_homework)
+      @student2_enrollment.conclude
+      expect(@student2_homework.grants_right?(@student, :read)).to eq false
     end
   end
 
@@ -3400,18 +3565,6 @@ describe Submission do
     end
   end
 
-  describe '#rubric_association_with_assessing_user_id' do
-    before :once do
-      submission_model assignment: @assignment, user: @student
-      rubric_association_model association_object: @assignment, purpose: 'grading'
-    end
-    subject { @submission.rubric_association_with_assessing_user_id }
-
-    it 'sets assessing_user_id to submission.user_id' do
-      expect(subject.assessing_user_id).to eq @submission.user_id
-    end
-  end
-
   describe '#visible_rubric_assessments_for' do
     before :once do
       submission_model assignment: @assignment, user: @student
@@ -3654,6 +3807,16 @@ describe Submission do
     it "does not include excused submissions" do
       @assignment.grade_student(@student, excused: true, grader: @teacher)
       expect(Submission.needs_grading.count).to eq(0)
+    end
+
+    context "sharding" do
+      specs_require_sharding
+
+      it "serializes relative to current scope's shard" do
+        @shard1.activate do
+          expect(Submission.shard(Shard.default).needs_grading.count).to eq(1)
+        end
+      end
     end
   end
 
@@ -4078,6 +4241,54 @@ describe Submission do
 
     it 'excludes homeworks that have been manually marked as late' do
       expect(@not_late_submission_ids).not_to include(@timely_hw_marked_late.id)
+    end
+  end
+
+  describe '#filter_attributes_for_user' do
+    let(:user) { instance_double('User', id: 1) }
+    let(:session) { {} }
+    let(:submission) { @assignment.submissions.build(user_id: 2) }
+
+    context 'assignment is muted' do
+      before do
+        @assignment.update!(muted: true)
+      end
+
+      it 'filters score' do
+        expect(submission.assignment).to receive(:user_can_read_grades?).and_return(false)
+        hash = { 'score' => 10 }
+        expect(submission.filter_attributes_for_user(hash, user, session)).not_to have_key('score')
+      end
+
+      it 'filters grade' do
+        expect(submission.assignment).to receive(:user_can_read_grades?).and_return(false)
+        hash = { 'grade' => 10 }
+        expect(submission.filter_attributes_for_user(hash, user, session)).not_to have_key('grade')
+      end
+
+      it 'filters published_score' do
+        expect(submission.assignment).to receive(:user_can_read_grades?).and_return(false)
+        hash = { 'published_score' => 10 }
+        expect(submission.filter_attributes_for_user(hash, user, session)).not_to have_key('published_score')
+      end
+
+      it 'filters published_grade' do
+        expect(submission.assignment).to receive(:user_can_read_grades?).and_return(false)
+        hash = { 'published_grade' => 10 }
+        expect(submission.filter_attributes_for_user(hash, user, session)).not_to have_key('published_grade')
+      end
+
+      it 'filters entered_score' do
+        expect(submission.assignment).to receive(:user_can_read_grades?).and_return(false)
+        hash = { 'entered_score' => 10 }
+        expect(submission.filter_attributes_for_user(hash, user, session)).not_to have_key('entered_score')
+      end
+
+      it 'filters entered_grade' do
+        expect(submission.assignment).to receive(:user_can_read_grades?).and_return(false)
+        hash = { 'entered_grade' => 10 }
+        expect(submission.filter_attributes_for_user(hash, user, session)).not_to have_key('entered_grade')
+      end
     end
   end
 

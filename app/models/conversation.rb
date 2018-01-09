@@ -120,6 +120,10 @@ class Conversation < ActiveRecord::Base
     Setting.get("max_group_conversation_size", 100).to_i
   end
 
+  def can_add_participants?(users)
+    (users.map(&:id) + conversation_participants.pluck(:user_id)).uniq.count <= self.class.max_group_conversation_size
+  end
+
   def add_participants(current_user, users, options={})
     message = nil
     self.shard.activate do
@@ -647,7 +651,8 @@ class Conversation < ActiveRecord::Base
     # look up participants across all shards
     shards = conversations.map(&:associated_shards).flatten.uniq
     Shard.with_each_shard(shards) do
-      user_map = Shackles.activate(:slave) do
+      shackles_env = conversations.any?{|c| c.updated_at && c.updated_at > 10.seconds.ago} ? :master : :slave
+      user_map = Shackles.activate(shackles_env) do
         User.select("users.id, users.updated_at, users.short_name, users.name, users.avatar_image_url, users.avatar_image_source, last_authored_at, conversation_id").
           joins(:all_conversations).
           where(:conversation_participants => { :conversation_id => conversations }).

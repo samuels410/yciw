@@ -91,6 +91,10 @@
 #         "description": {
 #           "example": "Full marks",
 #           "type": "string"
+#         },
+#        "long_description": {
+#           "example": "Student completed the assignment flawlessly.",
+#           "type": "string"
 #         }
 #       }
 #     }
@@ -126,6 +130,10 @@
 #         "long_description": {
 #           "example": "Criterion 1 more details",
 #           "type": "string"
+#         },
+#         "criterion_use_range": {
+#           "example": true,
+#           "type": "boolean"
 #         },
 #         "ratings": {
 #           "type": "array",
@@ -433,6 +441,11 @@
 #             ]
 #           }
 #         },
+#         "has_submitted_submissions": {
+#           "description": "If true, the assignment has been submitted to by at least one student",
+#           "example": true,
+#           "type": "boolean"
+#         },
 #         "grading_type": {
 #           "description": "The type of grading the assignment receives; one of 'pass_fail', 'percent', 'letter_grade', 'gpa_scale', 'points'",
 #           "example": "points",
@@ -541,7 +554,7 @@
 #           "items": { "$ref": "AssignmentOverride" }
 #         },
 #         "omit_from_final_grade": {
-#           "description": "(Optional) If true, the assignment will be ommitted from the student's final grade",
+#           "description": "(Optional) If true, the assignment will be omitted from the student's final grade",
 #           "example": true,
 #           "type": "boolean"
 #         }
@@ -555,7 +568,7 @@ class AssignmentsApiController < ApplicationController
   include Api::V1::AssignmentOverride
 
   # @API List assignments
-  # Returns the list of assignments for the current context.
+  # Returns the paginated list of assignments for the current context.
   # @argument include[] [String, "submission"|"assignment_visibility"|"all_dates"|"overrides"|"observed_users"]
   #   Associations to include with the assignment. The "assignment_visibility" option
   #   requires that the Differentiated Assignments course feature be turned on. If
@@ -569,6 +582,8 @@ class AssignmentsApiController < ApplicationController
   # @argument bucket [String, "past"|"overdue"|"undated"|"ungraded"|"unsubmitted"|"upcoming"|"future"]
   #   If included, only return certain assignments depending on due date and submission status.
   # @argument assignment_ids[] if set, return only assignments specified
+  # @argument order_by [String, "position"|"name"]
+  #   Determines the order of the assignments. Defaults to "position".
   # @returns [Assignment]
   def index
     error_or_array= get_assignments(@current_user)
@@ -576,7 +591,7 @@ class AssignmentsApiController < ApplicationController
   end
 
   # @API List assignments for user
-  # Returns the list of assignments for the specified user if the current user has rights to view.
+  # Returns the paginated list of assignments for the specified user if the current user has rights to view.
   # See {api:AssignmentsApiController#index List assignments} for valid arguments.
   def user_index
     @user.shard.activate do
@@ -597,19 +612,24 @@ class AssignmentsApiController < ApplicationController
       return render json: { error: 'quiz duplication not implemented' }, status: :bad_request
     end
 
-    if old_assignment.discussion_topic
-      return render json: { error: 'discussion topic duplication not implemented' }, status: :bad_request
-    end
-
     return unless authorized_action(old_assignment, @current_user, :create)
 
-    new_assignment = old_assignment.duplicate
-    # insert_at seems to do the right thing only on already saved entities, so
-    # save than insert into the proper position.
-    new_assignment.save!
+    new_assignment = old_assignment.duplicate({ :user => @current_user })
+
     new_assignment.insert_at(old_assignment.position + 1)
+    new_assignment.save!
+    positions_in_group = Assignment.active.where(assignment_group_id: old_assignment.assignment_group_id)
+                                   .pluck("id", "position")
+    positions_hash = {}
+    positions_in_group.each do |id_pos_pair|
+      positions_hash[id_pos_pair[0]] = id_pos_pair[1]
+    end
     if new_assignment
-      render :json => assignment_json(new_assignment, @current_user, session)
+      # Include the updated positions in the response so the frontend can
+      # update them appropriately
+      result_json = assignment_json(new_assignment, @current_user, session)
+      result_json['new_positions'] = positions_hash
+      render :json => result_json
     else
       render json: { error: 'cannot save new assignment' }, status: :bad_request
     end
@@ -639,6 +659,7 @@ class AssignmentsApiController < ApplicationController
         end
         scope = scope.where(id: params[:assignment_ids])
       end
+      scope = scope.reorder("#{Assignment.best_unicode_collation_key('assignments.title')}, assignment_groups.position, assignments.position, assignments.id") if params[:order_by] == 'name'
 
       assignments = Api.paginate(scope, self, api_v1_course_assignments_url(@context))
 
@@ -766,7 +787,7 @@ class AssignmentsApiController < ApplicationController
   #   The position of this assignment in the group when displaying
   #   assignment lists.
   #
-  # @argument assignment[submission_types][] [String, "online_quiz"|"none"|"on_paper"|"online_quiz"|"discussion_topic"|"external_tool"|"online_upload"|"online_text_entry"|"online_url"|"media_recording"]
+  # @argument assignment[submission_types][] [String, "online_quiz"|"none"|"on_paper"|"discussion_topic"|"external_tool"|"online_upload"|"online_text_entry"|"online_url"|"media_recording"]
   #   List of supported submission types for the assignment.
   #   Unless the assignment is allowing online submissions, the array should
   #   only have one element.
@@ -775,7 +796,6 @@ class AssignmentsApiController < ApplicationController
   #     "online_quiz"
   #     "none"
   #     "on_paper"
-  #     "online_quiz"
   #     "discussion_topic"
   #     "external_tool"
   #
@@ -810,7 +830,7 @@ class AssignmentsApiController < ApplicationController
   #   format.
   #
   # @argument assignment[integration_data]
-  #   Data related to third party integrations, JSON string required.
+  #   Data used for SIS integrations. Requires admin-level token with the "Manage SIS" permission. JSON string required.
   #
   # @argument assignment[integration_id]
   #   Unique ID from third party integrations
@@ -921,7 +941,7 @@ class AssignmentsApiController < ApplicationController
   #   The position of this assignment in the group when displaying
   #   assignment lists.
   #
-  # @argument assignment[submission_types][] [String, "online_quiz"|"none"|"on_paper"|"online_quiz"|"discussion_topic"|"external_tool"|"online_upload"|"online_text_entry"|"online_url"|"media_recording"]
+  # @argument assignment[submission_types][] [String, "online_quiz"|"none"|"on_paper"|"discussion_topic"|"external_tool"|"online_upload"|"online_text_entry"|"online_url"|"media_recording"]
   #   List of supported submission types for the assignment.
   #   Unless the assignment is allowing online submissions, the array should
   #   only have one element.
@@ -930,7 +950,6 @@ class AssignmentsApiController < ApplicationController
   #     "online_quiz"
   #     "none"
   #     "on_paper"
-  #     "online_quiz"
   #     "discussion_topic"
   #     "external_tool"
   #
@@ -965,7 +984,7 @@ class AssignmentsApiController < ApplicationController
   #   format.
   #
   # @argument assignment[integration_data]
-  #   Data related to third party integrations, JSON string required.
+  #   Data used for SIS integrations. Requires admin-level token with the "Manage SIS" permission. JSON string required.
   #
   # @argument assignment[integration_id]
   #   Unique ID from third party integrations
@@ -1062,6 +1081,7 @@ class AssignmentsApiController < ApplicationController
     @assignment = @context.active_assignments.api_id(params[:id])
     if authorized_action(@assignment, @current_user, :update)
       @assignment.content_being_saved_by(@current_user)
+      @assignment.updating_user = @current_user
       # update_api_assignment mutates params so this has to be done here
       opts = assignment_json_opts
       result = update_api_assignment(@assignment, params.require(:assignment), @current_user, @context)

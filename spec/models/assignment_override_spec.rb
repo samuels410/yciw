@@ -374,6 +374,37 @@ describe AssignmentOverride do
     end
   end
 
+  describe "#title_from_students" do
+    before :each do
+      @assignment_override = AssignmentOverride.new
+      allow(AssignmentOverride).to receive(:title_from_student_count)
+    end
+
+    it "returns 'No Students' when passed in nil" do
+      expect(@assignment_override.title_from_students(nil)).to eql('No Students')
+    end
+
+    it "returns 'No Students' when pass in an empty array" do
+      expect(@assignment_override.title_from_students([])).to eql('No Students')
+    end
+
+    it "calls AssignmentOverride.title_from_student_count when called with a non-empty array" do
+      expect(AssignmentOverride).to receive(:title_from_student_count)
+
+      @assignment_override.title_from_students(["A Student"])
+    end
+  end
+
+  describe ".title_from_student_count" do
+    it "returns '1 student' when passed in 1" do
+      expect(AssignmentOverride.title_from_student_count(1)).to eql('1 student')
+    end
+
+    it "returns '42 students' when passed in 42" do
+      expect(AssignmentOverride.title_from_student_count(42)).to eql('42 students')
+    end
+  end
+
   def self.describe_override(field, value1, value2)
     describe "#{field} overrides" do
       before :once do
@@ -727,24 +758,24 @@ describe AssignmentOverride do
       @override.save
     end
 
-    it "does not trigger when non-applicable override is created" do
-      expect(DueDateCacher).to receive(:recompute).never
+    it "triggers when override without a due_date is created" do
+      expect(DueDateCacher).to receive(:recompute)
       @assignment.assignment_overrides.create
     end
 
-    it "does not trigger when non-applicable override deleted" do
+    it "triggers when override without a due_date deleted" do
       @override.clear_due_at_override
       @override.save
 
-      expect(DueDateCacher).to receive(:recompute).never
+      expect(DueDateCacher).to receive(:recompute)
       @override.destroy
     end
 
-    it "does not trigger when non-applicable override undeleted" do
+    it "triggers when override without a due_date undeleted" do
       @override.clear_due_at_override
       @override.destroy
 
-      expect(DueDateCacher).to receive(:recompute).never
+      expect(DueDateCacher).to receive(:recompute)
       @override.workflow_state = 'active'
       @override.save
     end

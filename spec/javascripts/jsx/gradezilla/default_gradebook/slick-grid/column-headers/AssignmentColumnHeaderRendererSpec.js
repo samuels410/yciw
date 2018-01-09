@@ -17,7 +17,7 @@
  */
 
 import ReactDOM from 'react-dom';
-import { createGradebook } from 'spec/jsx/gradezilla/default_gradebook/GradebookSpecHelper';
+import { createGradebook, setFixtureHtml } from 'spec/jsx/gradezilla/default_gradebook/GradebookSpecHelper';
 import AssignmentColumnHeaderRenderer
 from 'jsx/gradezilla/default_gradebook/slick-grid/column-headers/AssignmentColumnHeaderRenderer';
 
@@ -26,8 +26,10 @@ QUnit.module('AssignmentColumnHeaderRenderer', function (suiteHooks) {
   let gradebook;
   let assignment;
   let column;
-  let renderer;
   let component;
+  let renderer;
+  let student;
+  let submission;
 
   function render () {
     renderer.render(column, $container, {} /* gridSupport */, { ref (ref) { component = ref } });
@@ -35,6 +37,8 @@ QUnit.module('AssignmentColumnHeaderRenderer', function (suiteHooks) {
 
   suiteHooks.beforeEach(function () {
     $container = document.createElement('div');
+    document.body.appendChild($container);
+    setFixtureHtml($container);
 
     gradebook = createGradebook();
 
@@ -42,6 +46,7 @@ QUnit.module('AssignmentColumnHeaderRenderer', function (suiteHooks) {
       id: '2301',
       assignment_visibility: null,
       course_id: '1201',
+      grading_type: 'points',
       html_url: '/assignments/2301',
       muted: false,
       name: 'Math Assignment',
@@ -51,11 +56,34 @@ QUnit.module('AssignmentColumnHeaderRenderer', function (suiteHooks) {
       submission_types: ['online_text_entry']
     };
 
+    submission =  {
+      id: '93',
+      assignment_id: '2301',
+      excused: false,
+      late_policy_status: null,
+      score: null,
+      submitted_at: null,
+      user_id: '441'
+    };
+
+    student = {
+      id: '441',
+      assignment_2301: submission,
+      isInactive: false,
+      name: 'Guy B. Studying',
+      enrollments: [{ type: 'StudentEnrollment', user_id: '441', course_section_id: '1' }]
+    };
+
     gradebook.gotAllAssignmentGroups([
       { id: '2201', position: 1, name: 'Assignments', assignments: [assignment] }
     ]);
+
     column = { id: gradebook.getAssignmentColumnId('2301'), assignmentId: '2301' };
     renderer = new AssignmentColumnHeaderRenderer(gradebook);
+  });
+
+  suiteHooks.afterEach(function() {
+    $container.remove();
   });
 
   QUnit.module('#render', function () {
@@ -167,10 +195,168 @@ QUnit.module('AssignmentColumnHeaderRenderer', function (suiteHooks) {
       equal(component.props.downloadSubmissionsAction, gradebook.getDownloadSubmissionsAction.returnValues[0]);
     });
 
+    test('shows the "enter grades as" setting for a "points" assignment', function () {
+      assignment.grading_type = 'points';
+      render();
+      strictEqual(component.props.enterGradesAsSetting.hidden, false);
+    });
+
+    test('shows the "enter grades as" setting for a "percent" assignment', function () {
+      assignment.grading_type = 'percent';
+      render();
+      strictEqual(component.props.enterGradesAsSetting.hidden, false);
+    });
+
+    test('shows the "enter grades as" setting for a "letter grade" assignment', function () {
+      assignment.grading_type = 'letter_grade';
+      render();
+      strictEqual(component.props.enterGradesAsSetting.hidden, false);
+    });
+
+    test('shows the "enter grades as" setting for a "GPA scale" assignment', function () {
+      assignment.grading_type = 'gpa_scale';
+      render();
+      strictEqual(component.props.enterGradesAsSetting.hidden, false);
+    });
+
+    test('hides the "enter grades as" setting for a "pass/fail" assignment', function () {
+      assignment.grading_type = 'pass_fail';
+      render();
+      strictEqual(component.props.enterGradesAsSetting.hidden, true);
+    });
+
+    test('hides the "enter grades as" setting for a "not graded" assignment', function () {
+      assignment.grading_type = 'not_graded';
+      render();
+      strictEqual(component.props.enterGradesAsSetting.hidden, true);
+    });
+
+    test('includes a callback for changing the "enter grades as" setting', function () {
+      sinon.stub(gradebook, 'updateEnterGradesAsSetting');
+      render();
+      component.props.enterGradesAsSetting.onSelect('percent');
+      strictEqual(gradebook.updateEnterGradesAsSetting.callCount, 1);
+    });
+
+    test('includes the assignment id when changing the "enter grades as" setting', function () {
+      sinon.stub(gradebook, 'updateEnterGradesAsSetting');
+      render();
+      component.props.enterGradesAsSetting.onSelect('percent');
+      const assignmentId = gradebook.updateEnterGradesAsSetting.lastCall.args[0];
+      strictEqual(assignmentId, '2301');
+    });
+
+    test('includes the new setting when changing the "enter grades as" setting', function () {
+      sinon.stub(gradebook, 'updateEnterGradesAsSetting');
+      render();
+      component.props.enterGradesAsSetting.onSelect('percent');
+      const assignmentId = gradebook.updateEnterGradesAsSetting.lastCall.args[1];
+      equal(assignmentId, 'percent');
+    });
+
+    test('uses the current "enter grades as" setting for the assignment', function () {
+      gradebook.setEnterGradesAsSetting('2301', 'percent');
+      render();
+      equal(component.props.enterGradesAsSetting.selected, 'percent');
+    });
+
+    test('hides the "enter grades as" grading scheme option for a "points" assignment', function () {
+      assignment.grading_type = 'points';
+      render();
+      strictEqual(component.props.enterGradesAsSetting.showGradingSchemeOption, false);
+    });
+
+    test('hides the "enter grades as" grading scheme option for a "percent" assignment', function () {
+      assignment.grading_type = 'percent';
+      render();
+      strictEqual(component.props.enterGradesAsSetting.showGradingSchemeOption, false);
+    });
+
+    test('shows the "enter grades as" grading scheme option for a "letter grade" assignment', function () {
+      assignment.grading_type = 'letter_grade';
+      render();
+      strictEqual(component.props.enterGradesAsSetting.showGradingSchemeOption, true);
+    });
+
+    test('shows the "enter grades as" grading scheme option for a "GPA scale" assignment', function () {
+      assignment.grading_type = 'gpa_scale';
+      render();
+      strictEqual(component.props.enterGradesAsSetting.showGradingSchemeOption, true);
+    });
+
     test('includes the mute assignment action', function () {
       sinon.spy(gradebook, 'getMuteAssignmentAction');
       render();
       equal(component.props.muteAssignmentAction, gradebook.getMuteAssignmentAction.returnValues[0]);
+    });
+
+    test('student submissions for the assignment include "excused"', function () {
+      submission.excused = true;
+      gradebook.gotChunkOfStudents([student]);
+      render();
+      const studentProp = component.props.students.find(s => s.id === student.id);
+      strictEqual(studentProp.submission.excused, true);
+    });
+
+    test('"excused" is false if the student does not have a submission', function () {
+      submission.excused = true;
+      delete student.assignment_2301;
+      gradebook.gotChunkOfStudents([student]);
+      render();
+      const studentProp = component.props.students.find(s => s.id === student.id);
+      strictEqual(studentProp.submission.excused, false);
+    });
+
+    test('student submissions for the assignment include "latePolicyStatus"', function () {
+      submission.late_policy_status = 'missing';
+      gradebook.gotChunkOfStudents([student]);
+      render();
+      const studentProp = component.props.students.find(s => s.id === student.id);
+      strictEqual(studentProp.submission.latePolicyStatus, 'missing');
+    });
+
+    test('"latePolicyStatus" is null if the student does not have a submission', function () {
+      submission.late_policy_status = 'missing';
+      delete student.assignment_2301;
+      gradebook.gotChunkOfStudents([student]);
+      render();
+      const studentProp = component.props.students.find(s => s.id === student.id);
+      strictEqual(studentProp.submission.latePolicyStatus, null);
+    });
+
+    test('student submissions for the assignment include "score"', function () {
+      submission.score = 9;
+      gradebook.gotChunkOfStudents([student]);
+      render();
+      const studentProp = component.props.students.find(s => s.id === student.id);
+      strictEqual(studentProp.submission.score, 9);
+    });
+
+    test('"score" is null if the student does not have a submission', function () {
+      submission.score = 9;
+      delete student.assignment_2301;
+      gradebook.gotChunkOfStudents([student]);
+      render();
+      const studentProp = component.props.students.find(s => s.id === student.id);
+      strictEqual(studentProp.submission.score, null);
+    });
+
+    test('student submissions for the assignment include "submittedAt"', function () {
+      const submittedAt = new Date("Mon Nov 3 2016");
+      submission.submitted_at = submittedAt;
+      gradebook.gotChunkOfStudents([student]);
+      render();
+      const studentProp = component.props.students.find(s => s.id === student.id);
+      strictEqual(studentProp.submission.submittedAt, submittedAt);
+    });
+
+    test('"submittedAt" is null if the student does not have a submission', function () {
+      submission.submittedAt = new Date("Mon Nov 3 2016");
+      delete student.assignment_2301;
+      gradebook.gotChunkOfStudents([student]);
+      render();
+      const studentProp = component.props.students.find(s => s.id === student.id);
+      strictEqual(studentProp.submission.submittedAt, null);
     });
 
     test('includes a callback for keyDown events', function () {

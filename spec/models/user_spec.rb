@@ -509,6 +509,16 @@ describe User do
     expect(teacher.recent_feedback(:contexts => [@course])).to be_empty
   end
 
+  it "should not include non-recent feedback via old submission comments" do
+    create_course_with_student_and_assignment
+    sub = @assignment.grade_student(@user, grade: 9, grader: @teacher).first
+    sub.submission_comments.create!(:author => @teacher, :comment => 'good jorb')
+    expect(@user.recent_feedback(:contexts => [@course])).to include sub
+    Timecop.travel(1.year.from_now) do
+      expect(@user.recent_feedback(:contexts => [@course])).not_to include sub
+    end
+  end
+
   describe '#courses_with_primary_enrollment' do
 
     it "should return appropriate courses with primary enrollment" do
@@ -1155,10 +1165,22 @@ describe User do
       expect(@user.avatar_image_url).to be_nil
     end
 
-    it "should allow external url's to be assigned" do
+    it "should not allow external url's to be assigned" do
       @user.avatar_image = { 'type' => 'external', 'url' => 'http://www.example.com/image.jpg' }
       @user.save!
-      expect(@user.reload.avatar_image_url).to eq 'http://www.example.com/image.jpg'
+      expect(@user.reload.avatar_image_url).to eq nil
+    end
+
+    it "should allow external url's that match avatar_external_url_patterns to be assigned" do
+      @user.avatar_image = { 'type' => 'external', 'url' => 'http://www.instructure.com/image.jpg' }
+      @user.save!
+      expect(@user.reload.avatar_image_url).to eq nil
+    end
+
+    it "should allow gravatar url's to be assigned" do
+      @user.avatar_image = { 'type' => 'gravatar', 'url' => 'http://www.gravatar.com/image.jpg' }
+      @user.save!
+      expect(@user.reload.avatar_image_url).to eq 'http://www.gravatar.com/image.jpg'
     end
 
     it "should return a useful avatar_fallback_url" do
@@ -2037,7 +2059,7 @@ describe User do
     end
   end
 
-  describe "ungraded_quizzes_needing_submitting" do
+  describe "ungraded_quizzes" do
     before(:once) do
       course_with_student :active_all => true
       @quiz = @course.quizzes.create!(:title => "some quiz", :quiz_type => "survey", :due_at => 1.day.from_now)
@@ -2045,46 +2067,47 @@ describe User do
     end
 
     it "includes ungraded quizzes" do
-      expect(@student.ungraded_quizzes_needing_submitting).to include @quiz
+      expect(@student.ungraded_quizzes(:needing_submitting => true)).to include @quiz
     end
 
     it "excludes graded quizzes" do
       other_quiz = @course.quizzes.create!(:title => "some quiz", :quiz_type => "assignment", :due_at => 1.day.from_now)
       other_quiz.publish!
-      expect(@student.ungraded_quizzes_needing_submitting).not_to include other_quiz
+      expect(@student.ungraded_quizzes(:needing_submitting => true)).not_to include other_quiz
     end
 
     it "excludes unpublished quizzes" do
       other_quiz = @course.quizzes.create!(:title => "some quiz", :quiz_type => "survey", :due_at => 1.day.from_now)
-      expect(@student.ungraded_quizzes_needing_submitting).not_to include other_quiz
+      expect(@student.ungraded_quizzes(:needing_submitting => true)).not_to include other_quiz
     end
 
     it "excludes locked quizzes" do
       @quiz.unlock_at = 1.day.from_now
       @quiz.save!
-      expect(@student.ungraded_quizzes_needing_submitting).not_to include @quiz
+      expect(@student.ungraded_quizzes(:needing_submitting => true)).not_to include @quiz
     end
 
     it "includes locked quizzes if requested" do
       @quiz.unlock_at = 1.day.from_now
       @quiz.save!
-      expect(@student.ungraded_quizzes_needing_submitting(include_locked: true)).to include @quiz
+      expect(@student.ungraded_quizzes(include_locked: true, needing_submitting: true)).to include @quiz
     end
 
     it "filters by due date" do
-      expect(@student.ungraded_quizzes_needing_submitting(:due_after => 2.days.from_now)).not_to include @quiz
+      expect(@student.ungraded_quizzes(:due_after => 2.days.from_now, :needing_submitting => true)).not_to include @quiz
     end
 
-    it "excludes submitted quizzes" do
+    it "excludes submitted quizzes unless requested" do
       qs = @quiz.quiz_submissions.build :user => @student
       qs.workflow_state = 'complete'
       qs.save!
-      expect(@student.ungraded_quizzes_needing_submitting).not_to include @quiz
+      expect(@student.ungraded_quizzes(:needing_submitting => true)).not_to include @quiz
+      expect(@student.ungraded_quizzes(:needing_submitting => false)).to include @quiz
     end
 
     it "filters by enrollment state" do
       @student.enrollments.where(course: @course).first.complete!
-      expect(@student.ungraded_quizzes_needing_submitting).not_to include @quiz
+      expect(@student.ungraded_quizzes(:needing_submitting => true)).not_to include @quiz
     end
 
     context "sharding" do
@@ -2092,30 +2115,35 @@ describe User do
       it "includes quizzes from other shards" do
         other_user = @shard1.activate { user_factory }
         student_in_course :course => @course, :user => other_user, :active_all => true
-        expect(other_user.ungraded_quizzes_needing_submitting).to include @quiz
+        expect(other_user.ungraded_quizzes(:needing_submitting => true)).to include @quiz
       end
     end
   end
 
   describe "submissions_needing_peer_review" do
     before(:each) do
-      course_with_student(:active_all => true)
-      @assessor = @student
+      @reviewer = course_with_student(active_all: true).user
+      @reviewee = course_with_student(course: @course, active_all: true).user
       assignment_model(course: @course, peer_reviews: true)
-      @submission = submission_model(assignment: @assignment)
-      @assessor_submission = submission_model(assignment: @assignment, user: @assessor)
-      @assessment_request = AssessmentRequest.create!(assessor: @assessor, asset: @submission, user: @student, assessor_asset: @assessor_submission)
-      @assessment_request.workflow_state = 'assigned'
-      @assessment_request.save
+
+      @reviewer_submission = submission_model(assignment: @assignment, user: @reviewer)
+      @reviewee_submission = submission_model(assignment: @assignment, user: @reviewee)
+      @assessment_request = @assignment.assign_peer_review(@reviewer, @reviewee)
     end
 
     it "should included assessment requests where the user is the assessor" do
-      expect(@assessor.submissions_needing_peer_review.length).to eq 1
+      expect(@reviewer.submissions_needing_peer_review.length).to eq 1
     end
 
-    it "should note include assessment requests that have been ignored" do
-      Ignore.create!(asset: @assessment_request, user: @assessor, purpose: 'reviewing')
-      expect(@assessor.submissions_needing_peer_review.length).to eq 0
+    it "should not include assessment requests that have been ignored" do
+      Ignore.create!(asset: @assessment_request, user: @reviewer, purpose: 'reviewing')
+      expect(@reviewer.submissions_needing_peer_review.length).to eq 0
+    end
+
+    it "should not include assessment requests the user does not have permission to perform" do
+      @assignment.peer_reviews = false
+      @assignment.save!
+      expect(@reviewer.submissions_needing_peer_review.length).to eq 0
     end
   end
 
@@ -2314,13 +2342,22 @@ describe User do
         expect(@student.discussion_topics_needing_viewing(opts)).to eq []
       end
 
-      it 'should not show discussions that are graded' do
-        a = @course.assignments.create!(title: "some assignment", points_possible: 5)
+      it 'should not show discussions that are graded unless new_activity is true' do
+        a = @course.assignments.create!(title: "some assignment", points_possible: 5, due_at: 1.day.from_now)
         t = @course.discussion_topics.build(assignment: a, title: "some topic", message: "a little bit of content")
         t.save
         expect(t.assignment_id).to eql(a.id)
         expect(t.assignment).to eql(a)
         expect(@student.discussion_topics_needing_viewing(opts)).not_to include t
+      end
+
+      it 'should show graded discussion if new activity is true' do
+        a = @course.assignments.create!(title: "some assignment", points_possible: 5, due_at: 1.day.from_now)
+        t = @course.discussion_topics.build(assignment: a, title: "some topic", message: "a little bit of content")
+        t.save
+        expect(t.assignment_id).to eql(a.id)
+        expect(t.assignment).to eql(a)
+        expect(@student.discussion_topics_needing_viewing(opts.merge({new_activity: true}))).to include t
       end
 
       context "locked discussion topics" do
@@ -2513,6 +2550,7 @@ describe User do
       submission.grade_it!
 
       expect(@student.submission_statuses[:graded]).to match_array([@assignment.id])
+      expect(@student.submission_statuses[:has_feedback]).to match_array([])
     end
 
     it 'should indicate that an assignment is late' do
@@ -3333,21 +3371,22 @@ describe User do
   end
 
   describe "preferred_gradebook_version" do
-    let(:user) { User.new }
     subject { user.preferred_gradebook_version }
 
-    it "prefers gb2" do
-      user.preferences[:gradebook_version] = '2'
-      is_expected.to eq '2'
+    let(:user) { User.new }
+
+    it "returns default gradebook when preferred" do
+      user.preferences[:gradebook_version] = 'default'
+      is_expected.to eq 'default'
     end
 
-    it "prefers srgb " do
-      user.preferences[:gradebook_version] = 'srgb'
-      is_expected.to eq 'srgb'
+    it "returns individual gradebook when preferred" do
+      user.preferences[:gradebook_version] = 'individual'
+      is_expected.to eq 'individual'
     end
 
-    it "returns '2' when not set" do
-      is_expected.to eq '2'
+    it "returns default gradebook when not set" do
+      is_expected.to eq 'default'
     end
   end
 
@@ -3703,6 +3742,10 @@ describe User do
       expect(@student.group_memberships_for(@course).size).to eq 0
     end
 
+    it 'should show if user has group_membership' do
+      expect(@student.current_groups_in_region?).to eq true
+    end
+
   end
 
   describe 'visible_groups' do
@@ -3949,6 +3992,51 @@ describe User do
     it "returns false when user is designer" do
         course_with_designer(:user => user)
         expect(user.has_student_enrollment?).to eq false
+    end
+  end
+
+  describe "#participating_student_current_and_concluded_course_ids" do
+    let(:user) { User.create! }
+
+    before :each do
+      course_with_student(user: user, active_all: true)
+    end
+
+    it "includes courses for current enrollments" do
+      expect(user.participating_student_current_and_concluded_course_ids).to include(@course.id)
+    end
+
+    it "includes concluded courses" do
+      @course.soft_conclude!
+      @course.save
+      expect(user.participating_student_current_and_concluded_course_ids).to include(@course.id)
+    end
+
+    it "includes courses for concluded enrollments" do
+      user.enrollments.last.conclude
+      expect(user.participating_student_current_and_concluded_course_ids).to include(@course.id)
+    end
+  end
+
+  describe "from_tokens" do
+    specs_require_sharding
+
+    let(:users) { [User.create!, @shard1.activate { User.create! }] }
+    let(:tokens) { users.map(&:token) }
+
+    it "generates tokens made of id/md5(uuid) pairs" do
+      tokens.each_with_index do |token, i|
+        expect(token).to eq "#{users[i].id}_#{Digest::MD5.hexdigest(users[i].uuid)}"
+      end
+    end
+
+    it "instantiates users by token" do
+      expect(User.from_tokens(tokens)).to match_array(users)
+    end
+
+    it "excludes bad tokens" do
+      broken_tokens = tokens.map { |token| token + 'ff' }
+      expect(User.from_tokens(broken_tokens)).to be_empty
     end
   end
 end

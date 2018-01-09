@@ -175,32 +175,6 @@ describe MasterCourses::MasterMigration do
       end
     end
 
-    it "should continue to work with the old import_results format" do
-      @copy_to = course_factory
-      @sub = @template.add_child_course!(@copy_to)
-
-      topic = @copy_from.discussion_topics.create!(:title => "some title")
-
-      @migration = MasterCourses::MasterMigration.start_new_migration!(@template, @admin)
-      run_job(Delayed::Job.where(:tag => "MasterCourses::MasterMigration#perform_exports").first) # only run the export job right now
-
-      @migration.reload
-      result = @migration.migration_results.first
-      expect(result.state).to eq 'queued'
-
-      import_results = {result.content_migration_id => {
-        :state => 'queued', :import_type => result.import_type.to_sym, :subscription_id => result.child_subscription_id, :skipped => []
-      }}
-      @migration.update_attribute(:import_results, import_results)
-      MasterCourses::MigrationResult.where(:master_migration_id => @migration).delete_all # make sure they're gone
-
-      run_jobs
-
-      expect(@migration.reload).to be_completed
-      expect(@migration.imports_completed_at).to be_present
-      expect(@sub.reload.use_selective_copy?).to be_truthy # should have been marked as up-to-date now
-    end
-
     it "should copy selectively on second time" do
       @copy_to = course_factory
       @sub = @template.add_child_course!(@copy_to)
@@ -311,6 +285,71 @@ describe MasterCourses::MasterMigration do
       end
     end
 
+    it "should sync deleted quiz questions (unless changed downstream)" do
+      @copy_to = course_factory
+      sub = @template.add_child_course!(@copy_to)
+
+      quiz = @copy_from.quizzes.create!
+      qq1 = quiz.quiz_questions.create!(:question_data => {'question_name' => 'test question', 'question_type' => 'essay_question'})
+      qq2 = quiz.quiz_questions.create!(:question_data => {'question_name' => 'test question 2', 'question_type' => 'essay_question'})
+      qgroup = quiz.quiz_groups.create!(:name => "group", :pick_count => 1)
+      qq3 = qgroup.quiz_questions.create!(:quiz => quiz, :question_data => {'question_name' => 'test group question', 'question_type' => 'essay_question'})
+      run_master_migration
+
+      quiz_to = @copy_to.quizzes.where(:migration_id => mig_id(quiz)).first
+      qq1_to = quiz_to.quiz_questions.where(:migration_id => mig_id(qq1)).first
+      qq2_to = quiz_to.quiz_questions.where(:migration_id => mig_id(qq2)).first
+      qq3_to = quiz_to.quiz_questions.where(:migration_id => mig_id(qq3)).first
+
+      new_text = "new text"
+      qq1_to.update_attribute(:question_data, qq1_to.question_data.merge('question_text' => new_text))
+      Timecop.freeze(2.minutes.from_now) do
+        qq2.destroy
+      end
+      run_master_migration
+
+      expect(qq1_to.reload.question_data['question_text']).to eq new_text
+      expect(qq2_to.reload).to_not be_deleted # should not have overwritten because downstream changes
+
+      Timecop.freeze(4.minutes.from_now) do
+        @template.content_tag_for(quiz).update_attribute(:restrictions, {:content => true})
+      end
+      run_master_migration
+
+      expect(qq1_to.reload.question_data['question_text']).to_not eq new_text # should overwrite now because locked
+      expect(qq2_to.reload).to be_deleted
+      expect(qq3_to.reload).to_not be_deleted
+    end
+
+    it "should sync unpublished quiz points possible" do
+      @copy_to = course_factory
+      sub = @template.add_child_course!(@copy_to)
+
+      quiz = @copy_from.quizzes.create!(:workflow_state => "unpublished")
+      qq = quiz.quiz_questions.create!(:question_data => {'question_name' => 'test question', 'question_type' => 'essay_question', 'points_possible' => 1})
+      quiz.root_entries(true)
+      quiz.save!
+
+      run_master_migration
+
+      quiz_to = @copy_to.quizzes.where(:migration_id => mig_id(quiz)).first
+      expect(quiz_to.points_possible).to eq 1
+      qq_to = quiz_to.quiz_questions.where(:migration_id => mig_id(qq)).first
+
+      new_text = "new text"
+      Timecop.freeze(2.minutes.from_now) do
+        qq.update_attribute(:question_data, qq.question_data.merge(:points_possible => 2))
+        quiz.root_entries(true)
+        quiz.save!
+        expect(quiz.points_possible).to eq 2
+      end
+
+      run_master_migration
+
+      expect(qq_to.reload.question_data["points_possible"]).to eq 2
+      expect(quiz_to.reload.points_possible).to eq 2
+    end
+
     it "tracks creations and updates in selective migrations" do
       @copy_to = course_factory
       @template.add_child_course!(@copy_to)
@@ -342,31 +381,136 @@ describe MasterCourses::MasterMigration do
 
       page1 = @copy_from.wiki_pages.create!(:title => "whee")
       page2 = @copy_from.wiki_pages.create!(:title => "whoo")
+      quiz = @copy_from.quizzes.create!(:title => 'what')
       run_master_migration
 
       page1_to = @copy_to.wiki_pages.where(:migration_id => mig_id(page1)).first
       page1_to.destroy # "manually" delete it
       page2_to = @copy_to.wiki_pages.where(:migration_id => mig_id(page2)).first
+      quiz_to = @copy_to.quizzes.where(:migration_id => mig_id(quiz)).first
+      quiz_to.destroy
 
       Timecop.freeze(3.minutes.from_now) do
         page1.update_attribute(:title, 'new title eh')
         page2.destroy
+        quiz.update_attribute(:title, 'new title wat')
       end
       run_master_migration
 
       expect(page1_to.reload).to be_deleted # shouldn't have restored it
       expect(page2_to.reload).to be_deleted # should still sync the original deletion
+      expect(quiz_to.reload).to be_deleted # shouldn't have restored it neither
 
       Timecop.freeze(5.minutes.from_now) do
         page1.update_attribute(:title, 'another new title srsly')
         @template.content_tag_for(page1).update_attribute(:restrictions, {:content => true}) # lock it down
-
         page2.update_attribute(:workflow_state, "active") # restore the original
+        quiz.update_attribute(:title, 'another new title frd pdq')
+        @template.content_tag_for(quiz).update_attribute(:restrictions, {:content => true}) # lock it down
       end
       run_master_migration
 
       expect(page1_to.reload).to be_active # should be restored because it's locked now
       expect(page2_to.reload).to be_active # should be restored because it hadn't been deleted manually
+      expect(quiz_to.reload).not_to be_deleted # should be restored because it's locked now
+    end
+
+    it "doesn't undelete modules that were deleted downstream" do
+      @copy_to = course_factory
+      @template.add_child_course!(@copy_to)
+
+      mod = @copy_from.context_modules.create! :name => 'teh'
+      run_master_migration
+
+      mod_to = @copy_to.context_modules.where(:migration_id => mig_id(mod)).first
+      mod_to.destroy
+
+      Timecop.freeze(3.minutes.from_now) do
+        mod.touch
+      end
+      run_master_migration
+
+      expect(mod_to.reload).to be_deleted
+    end
+
+    describe "outcomes and groups" do
+      before :once do
+        @copy_to = course_factory
+        @template.add_child_course!(@copy_to)
+
+        root = @copy_from.root_outcome_group
+        @og = @copy_from.learning_outcome_groups.create!({:title => 'outcome group'})
+        root.adopt_outcome_group(@og)
+        @outcome = @copy_from.created_learning_outcomes.create!({:title => 'new outcome'})
+        @og.add_outcome(@outcome)
+        run_master_migration
+
+        @outcome_to = @copy_to.learning_outcomes.where(:migration_id => mig_id(@outcome)).first
+        @og_to = @copy_to.learning_outcome_groups.where(:migration_id => mig_id(@og)).first
+      end
+
+      it "doesn't undelete learning outcomes and outcome groups that were deleted downstream" do
+        @outcome_to.destroy
+        @og_to.destroy
+
+        Timecop.freeze(3.minutes.from_now) do
+          @og.touch
+          @outcome.touch
+        end
+        run_master_migration
+
+        expect(@outcome_to.reload).to be_deleted
+        expect(@og_to.reload).to be_deleted
+      end
+
+      it "doesn't resurrect links to deleted outcomes" do
+        @outcome_to.destroy
+
+        Timecop.freeze(3.minutes.from_now) do
+          @og.touch
+          @outcome.touch
+        end
+        run_master_migration
+
+        expect(@outcome_to.reload).to be_deleted
+        expect(@og_to.child_outcome_links.not_deleted.where(content_type: 'LearningOutcome', content_id: @outcome_to)).not_to be_any
+      end
+    end
+
+    it "doesn't restore deleted associated files unless relocked" do
+      @copy_to = course_factory
+      @template.add_child_course!(@copy_to)
+
+      att1 = Attachment.create!(:filename => 'file1.txt', :uploaded_data => StringIO.new('1'),
+        :folder => Folder.root_folders(@copy_from).first, :context => @copy_from)
+      att2 = Attachment.create!(:filename => 'file2.txt', :uploaded_data => StringIO.new('2'),
+        :folder => Folder.root_folders(@copy_from).first, :context => @copy_from)
+
+      run_master_migration
+
+      att1_to = @copy_to.attachments.where(:migration_id => mig_id(att1)).first
+      att1_to.destroy # "manually" delete it
+      att2_to = @copy_to.attachments.where(:migration_id => mig_id(att2)).first
+
+      Timecop.freeze(3.minutes.from_now) do
+        att1.touch
+        att2.destroy
+      end
+      run_master_migration
+
+      expect(att1_to.reload).to be_deleted # shouldn't have restored it
+      expect(att2_to.reload).to be_deleted # should still sync the original deletion
+
+      Timecop.freeze(5.minutes.from_now) do
+        att1.touch
+        @template.content_tag_for(att1).update_attribute(:restrictions, {:content => true}) # lock it down
+
+        att2.update_attribute(:file_state, "available") # restore the original
+      end
+      run_master_migration
+
+      expect(att1_to.reload).to be_available # should be restored because it's locked now
+      expect(att2_to.reload).to be_available # should be restored because it hadn't been deleted manually
     end
 
     it "limits the number of items to track" do
@@ -769,6 +913,35 @@ describe MasterCourses::MasterMigration do
       expect(@copy_to.reload.is_public).to be_truthy
     end
 
+    it "should copy front wiki pages" do
+      @copy_to = course_factory
+      @sub = @template.add_child_course!(@copy_to)
+
+      @page = @copy_from.wiki_pages.create!(:title => "first page")
+      @page.set_as_front_page!
+      @copy_from.update_attribute(:default_view, 'wiki')
+
+      run_master_migration(:copy_settings => true)
+
+      expect(@copy_to.reload.default_view).to eq 'wiki'
+      @page_copy = @copy_to.wiki_pages.where(:migration_id => mig_id(@page)).first
+      expect(@copy_to.wiki.front_page).to eq @page_copy
+
+      Timecop.freeze(1.minute.from_now) do
+        @page2 = @copy_from.wiki_pages.create!(:title => "second page")
+        @page2.set_as_front_page!
+      end
+
+      run_master_migration
+
+      expect(@copy_to.wiki.reload.front_page).to eq @page_copy # don't change yet
+
+      run_master_migration(:copy_settings => true)
+
+      @page2_copy = @copy_to.wiki_pages.where(:migration_id => mig_id(@page2)).first
+      expect(@copy_to.wiki.reload.front_page).to eq @page2_copy # now should change
+    end
+
     it "shouldn't overwrite syllabus body if already present or changed" do
       @copy_to1 = course_factory
       @template.add_child_course!(@copy_to1)
@@ -920,6 +1093,251 @@ describe MasterCourses::MasterMigration do
       end
       run_master_migration
       expect(tag.reload).to_not be_deleted
+    end
+
+    it "should be able to delete modules" do
+      @copy_to = course_factory
+      sub = @template.add_child_course!(@copy_to)
+      mod = @copy_from.context_modules.create!(:name => "module")
+
+      run_master_migration
+
+      mod_to = @copy_to.context_modules.where(:migration_id => mig_id(mod)).first
+      expect(mod_to).to be_active
+
+      mod.destroy
+
+      run_master_migration
+      expect(@migration).to be_completed
+      expect(mod_to.reload).to be_deleted
+    end
+
+    it "should copy outcomes in selective copies" do
+      @copy_to = course_factory
+      sub = @template.add_child_course!(@copy_to)
+
+      default = @copy_from.root_outcome_group
+      log = @copy_from.learning_outcome_groups.create!(:context => @copy_from, :title => "outcome groupd")
+      default.adopt_outcome_group(log)
+
+      run_master_migration # get the full sync out of the way
+
+      Timecop.freeze(1.minute.from_now) do
+        @lo = @copy_from.created_learning_outcomes.new(:context => @copy_from, :short_description => "whee", :workflow_state => 'active')
+        @lo.data = {:rubric_criterion=>{:mastery_points=>2, :ratings=>[{:description=>"e", :points=>50}, {:description=>"me", :points=>2},
+          {:description=>"Does Not Meet Expectations", :points=>0.5}], :description=>"First outcome", :points_possible=>5}}
+        @lo.save!
+        log.reload.add_outcome(@lo)
+      end
+
+      run_master_migration
+      expect(@migration).to be_completed
+      lo_to = @copy_to.learning_outcomes.where(:migration_id => mig_id(@lo)).first
+      expect(lo_to).to be_present
+    end
+
+    it "preserves account question bank references" do
+      @copy_to = course_factory
+      sub = @template.add_child_course!(@copy_to)
+
+      quiz = @copy_from.quizzes.create!(:title => 'quiz')
+      bank = @copy_from.account.assessment_question_banks.create!(:title => 'bank')
+
+      bank.assessment_question_bank_users.create!(:user => @user)
+      group = quiz.quiz_groups.create!(:name => "group", :pick_count => 5, :question_points => 2.0)
+      group.assessment_question_bank = bank
+      group.save
+
+      run_master_migration
+
+      quiz_to = @copy_to.quizzes.where(migration_id: mig_id(quiz)).first
+      group_to = quiz_to.quiz_groups.first
+      expect(group_to.assessment_question_bank_id).to eq bank.id
+    end
+
+    it "resets generated quiz questions on assessment question re-import" do
+      @copy_to = course_factory
+      sub = @template.add_child_course!(@copy_to)
+
+      quiz = @copy_from.quizzes.create!(:title => 'quiz')
+      bank = @copy_from.assessment_question_banks.create!(:title => 'bank')
+      aq = bank.assessment_questions.create!(:question_data => {'question_name' => 'test question', 'question_type' => 'essay_question'})
+      group = quiz.quiz_groups.create!(:name => "group", :pick_count => 1, :question_points => 2.0)
+      group.assessment_question_bank = bank
+      group.save
+      quiz.publish!
+
+      run_master_migration
+
+      quiz_to = @copy_to.quizzes.where(migration_id: mig_id(quiz)).first
+      student1 = user_factory
+      quiz_to.generate_submission(student1) # generates quiz questions from the bank questions
+
+      new_text = 'something new'
+      Timecop.freeze(2.minutes.from_now) do
+        aq.update_attribute(:question_data, aq.question_data.merge('question_text' => new_text))
+      end
+
+      run_master_migration
+
+      student2 = user_factory
+      sub = quiz_to.generate_submission(student2)
+      expect(sub.quiz_data.first["question_text"]).to eq new_text
+    end
+
+    it "copies tab configurations for account-level external tools" do
+      @tool_from = @copy_from.account.context_external_tools.create!(:name => "new tool", :consumer_key => "key", :shared_secret => "secret", :custom_fields => {'a' => '1', 'b' => '2'}, :url => "http://www.example.com")
+      @tool_from.settings[:course_navigation] = {:url => "http://www.example.com", :text => "Example URL"}
+      @tool_from.save!
+
+      @copy_from.tab_configuration = [{"id" =>0 }, {"id" => "context_external_tool_#{@tool_from.id}", "hidden" => true}, {"id" => 14}]
+      @copy_from.save!
+
+      @copy_to = course_factory
+      sub = @template.add_child_course!(@copy_to)
+
+      run_master_migration
+      expect(@copy_to.reload.tab_configuration).to eq @copy_from.tab_configuration
+    end
+
+    it "should not break trying to match existing attachments on cloned_item_id" do
+      # this was 'fun' to debug - i'm still not quite sure how it came about
+      @copy_to = course_factory
+      sub = @template.add_child_course!(@copy_to)
+      att1 = Attachment.create!(:filename => 'first.txt', :uploaded_data => StringIO.new('ohai'),
+        :folder => Folder.unfiled_folder(@copy_from), :context => @copy_from)
+
+      run_master_migration
+
+      att_to = @copy_to.attachments.where(:migration_id => mig_id(att1)).first
+      expect(att_to.cloned_item_id).to eq att1.reload.cloned_item_id # i still don't know why we set this
+
+      sub.destroy
+
+      @copy_from2 = course_factory
+      @template2 = MasterCourses::MasterTemplate.set_as_master_course(@copy_from2)
+      att2 = Attachment.create!(:filename => 'first.txt', :uploaded_data => StringIO.new('ohai'),
+        :folder => Folder.unfiled_folder(@copy_from2), :context => @copy_from2, :cloned_item_id => att1.cloned_item_id)
+      sub2 = @template2.add_child_course!(@copy_to)
+
+      MasterCourses::MasterMigration.start_new_migration!(@template2, @admin)
+      run_jobs
+
+      expect(@copy_to.content_migrations.last.migration_issues).to_not be_exists
+      att2_to = @copy_to.attachments.where(:migration_id => @template2.migration_id_for(att2)).first
+      expect(att2_to).to be_present
+    end
+
+    it "should link to existing outcomes even when some weird migration_id thing happens" do
+      @copy_to = course_factory
+      sub = @template.add_child_course!(@copy_to)
+
+      allow(AcademicBenchmark).to receive(:use_new_guid_columns?).and_return(true) # what is this
+
+      lo = @copy_from.created_learning_outcomes.new(:context => @copy_from, :short_description => "whee", :workflow_state => 'active')
+      lo.data = {:rubric_criterion=>{:mastery_points=>2, :ratings=>[{:description=>"e", :points=>50}, {:description=>"me", :points=>2},
+        {:description=>"Does Not Meet Expectations", :points=>0.5}], :description=>"First outcome", :points_possible=>5}}
+      lo.save!
+      from_root = @copy_from.root_outcome_group
+      from_root.add_outcome(lo)
+
+      LearningOutcome.where(:id => lo).update_all(:updated_at => 1.minute.ago)
+
+      run_master_migration
+
+      lo_to = @copy_to.created_learning_outcomes.where(:migration_id_2 => mig_id(lo)).first # what is that
+
+      rub = Rubric.new(:context => @copy_from)
+      rub.data = [{
+        :points => 3, :description => "Outcome row", :id => 2,
+        :ratings => [{:points => 3,:description => "meep",:criterion_id => 2,:id => 3}], :ignore_for_scoring => true,
+        :learning_outcome_id => lo.id
+      }]
+      rub.save!
+      rub.associate_with(@copy_from, @copy_from)
+
+      run_master_migration
+
+      rub_to = @copy_to.rubrics.where(:migration_id => mig_id(rub)).first
+      expect(rub_to.data.first["learning_outcome_id"]).to eq lo_to.id
+      expect(rub_to.learning_outcome_alignments.first.learning_outcome_id).to eq lo_to.id
+    end
+
+    it "should sync workflow states more betterisher" do
+      @copy_to = course_factory
+      @sub = @template.add_child_course!(@copy_to)
+
+      assmt = @copy_from.assignments.create!
+      topic = @copy_from.discussion_topics.create!(:message => "hi", :title => "discussion title")
+      page = @copy_from.wiki_pages.create!(:title => "wiki", :body => "ohai")
+      quiz = @copy_from.quizzes.create!(:workflow_state => 'available')
+      file = @copy_from.attachments.create!(:filename => 'blah', :uploaded_data => default_uploaded_data)
+      mod = @copy_from.context_modules.create!(:name => "module")
+      tag = mod.add_item(type: 'context_module_sub_header', title: 'header')
+      tag.publish!
+
+      run_master_migration
+
+      copied_assmt = @copy_to.assignments.where(:migration_id => mig_id(assmt)).first
+      copied_topic = @copy_to.discussion_topics.where(:migration_id => mig_id(topic)).first
+      copied_page = @copy_to.wiki_pages.where(:migration_id => mig_id(page)).first
+      copied_quiz = @copy_to.quizzes.where(:migration_id => mig_id(quiz)).first
+      copied_file = @copy_to.attachments.where(:migration_id => mig_id(file)).first
+      copied_mod = @copy_to.context_modules.where(:migration_id => mig_id(mod)).first
+      copied_tag = @copy_to.context_module_tags.where(:migration_id => mig_id(tag)).first
+      copied_things = [copied_assmt, copied_topic, copied_page, copied_quiz, copied_file, copied_mod, copied_tag]
+
+      copied_things.each do |copied_obj|
+        expect(copied_obj).to be_published
+      end
+
+      # unpublish everything
+      Timecop.freeze(1.minute.from_now) do
+        [assmt, topic, page, quiz, mod, tag].each do |obj|
+          obj.update_attribute(:workflow_state, "unpublished")
+        end
+        file.update_attribute(:locked, true)
+      end
+
+      run_master_migration
+
+      # should be unpublished
+      copied_things.each do |copied_obj|
+        expect(copied_obj.reload).to_not be_published
+      end
+
+      # republish everything
+      Timecop.freeze(2.minutes.from_now) do
+        assmt.update_attribute(:workflow_state, 'published')
+        quiz.update_attribute(:workflow_state, 'available')
+        [topic, page, mod, tag].each do |obj|
+          obj.update_attribute(:workflow_state, "active")
+        end
+        file.update_attribute(:locked, false)
+      end
+
+      run_master_migration
+
+      # should be published
+      copied_things.each do |copied_obj|
+        expect(copied_obj.reload).to be_published
+      end
+
+      # unpublish everything on child side
+      [copied_assmt, copied_topic, copied_page, copied_quiz, copied_mod, copied_tag].each do |obj|
+        obj.update_attribute(:workflow_state, "unpublished")
+      end
+      copied_file.update_attribute(:locked, true)
+      Timecop.freeze(3.minutes.from_now) do
+        [assmt, topic, page, quiz, mod, tag, file].each(&:touch) # retouch
+      end
+
+      run_master_migration
+
+      # should still be unpublished
+      copied_things.each do |copied_obj|
+        expect(copied_obj.reload).to_not be_published
+      end
     end
 
     it "sends notifications", priority: "2", test_id: 3211103 do

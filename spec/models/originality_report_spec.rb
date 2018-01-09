@@ -54,7 +54,13 @@ describe OriginalityReport do
     expect(subject.errors[:attachment]).to eq ["can't be blank"]
   end
 
-  it 'requies a valid workflow_state' do
+  it 'is invalid if the attachment is already taken' do
+    subject
+    duplicate = OriginalityReport.create(attachment: attachment, submission: submission_model)
+    expect(duplicate).to be_invalid
+  end
+
+  it 'requires a valid workflow_state' do
     subject.workflow_state = 'invalid_state'
     subject.valid?
     expect(subject.errors).not_to include :workflow_state
@@ -94,6 +100,52 @@ describe OriginalityReport do
     expect(subject.state).to eq 'acceptable'
   end
 
+  describe 'accepts nested attributes for lti link' do
+    let(:lti_link_attributes) do
+      {
+        product_code: 'product',
+        vendor_code: 'vendor',
+        resource_type_code: 'resource'
+      }
+    end
+
+    it 'creates an lti link' do
+      report = OriginalityReport.create!(
+        attachment: attachment,
+        originality_score: '1',
+        submission: submission,
+        workflow_state: 'pending',
+        lti_link_attributes: lti_link_attributes
+      )
+      expect(report.lti_link.product_code).to eq 'product'
+    end
+
+    it 'updates an lti link' do
+      report = OriginalityReport.create!(
+        attachment: attachment,
+        originality_score: '1',
+        submission: submission,
+        workflow_state: 'pending',
+        lti_link_attributes: lti_link_attributes
+      )
+      report.update_attributes(lti_link_attributes: { id: report.lti_link.id, resource_url: 'http://example.com' })
+      expect(report.lti_link.resource_url).to eq 'http://example.com'
+    end
+
+    it 'destroys an lti link' do
+      report = OriginalityReport.create!(
+        attachment: attachment,
+        originality_score: '1',
+        submission: submission,
+        workflow_state: 'pending',
+        lti_link_attributes: lti_link_attributes
+      )
+      link_id = report.lti_link.id
+      report.update_attributes!(lti_link_attributes: { id: link_id, _destroy: true })
+      expect(Lti::Link.find_by(id: link_id)).to be_nil
+    end
+  end
+
   describe 'workflow_state transitions' do
     let(:report_no_score){ OriginalityReport.new(attachment: attachment, submission: submission) }
     let(:report_with_score){ OriginalityReport.new(attachment: attachment, submission: submission, originality_score: 23.2) }
@@ -127,32 +179,29 @@ describe OriginalityReport do
     end
   end
 
-  describe '#report_launch_url' do
+  describe '#report_launch_path' do
     include_context 'lti2_spec_helper'
-    let(:link_id) { SecureRandom.uuid }
-
-    let(:tool_setting) do
-      ToolSetting.new(tool_proxy: tool_proxy,
-                      context: course,
-                      resource_link_id: link_id,
-                      vendor_code: product_family.vendor_code,
-                      product_code: product_family.product_code,
-                      resource_type_code: resource_handler.resource_type_code)
+    let(:lti_link) do
+      Lti::Link.new(resource_link_id: SecureRandom.uuid,
+                    vendor_code: product_family.vendor_code,
+                    product_code: product_family.product_code,
+                    resource_type_code: resource_handler.resource_type_code,
+                    linkable: report)
     end
     let(:report) { subject }
 
-    it 'creates an LTI launch URL if a link_id is present' do
-      report.update_attributes(link_id: link_id)
-      expected_url = "http://localhost/courses/"\
+    it 'creates an LTI launch URL if a lti_link is present' do
+      report.update_attributes(lti_link: lti_link)
+      expected_url = "/courses/"\
                      "#{submission.assignment.course.id}/assignments/"\
-                     "#{submission.assignment.id}/lti/resource/#{link_id}?display=borderless"
-      expect(report.report_launch_url).to eq expected_url
+                     "#{submission.assignment.id}/lti/resource/#{lti_link.resource_link_id}?display=borderless"
+      expect(report.report_launch_path).to eq expected_url
     end
 
     it 'uses the originality_report_url when the link id is present' do
       non_lti_url = 'http://www.test.com/report'
       report.update_attributes(originality_report_url: non_lti_url)
-      expect(report.report_launch_url).to eq non_lti_url
+      expect(report.report_launch_path).to eq non_lti_url
     end
   end
 

@@ -30,6 +30,7 @@ define [
   'compiled/views/assignments/PeerReviewsSelector'
   'helpers/fakeENV'
   'compiled/userSettings'
+  'helpers/assertions'
   'helpers/jquery.simulate'
 ], (
   $,
@@ -45,7 +46,8 @@ define [
   GroupCategorySelector,
   PeerReviewsSelector,
   fakeENV,
-  userSettings) ->
+  userSettings,
+  assertions) ->
 
   s_params = 'some super secure params'
 
@@ -111,6 +113,11 @@ define [
 
     editView: ->
       editView.apply(this, arguments)
+
+  test 'should be accessible', (assert) ->
+    view = @editView()
+    done = assert.async()
+    assertions.isAccessible view, done, {'a11yReport': true}
 
   test 'renders', ->
     view = @editView()
@@ -716,6 +723,17 @@ define [
     view.handleSubmissionTypeChange()
     equal view.$('#similarity_detection_tools').css('display'), 'block'
 
+    view.$('#assignment_submission_type').val('online')
+    view.$('#assignment_text_entry').attr('checked', false)
+    view.$('#assignment_online_upload').attr('checked', false)
+    view.handleSubmissionTypeChange()
+    equal view.$('#similarity_detection_tools').css('display'), 'none'
+
+    view.$('#assignment_submission_type').val('online')
+    view.$('#assignment_text_entry').attr('checked', true)
+    view.handleSubmissionTypeChange()
+    equal view.$('#similarity_detection_tools').css('display'), 'block'
+
   test 'it is hidden if the plagiarism_detection_platform flag is disabled', ->
     ENV.PLAGIARISM_DETECTION_PLATFORM = false
     view = @editView()
@@ -744,3 +762,33 @@ define [
 
   test 'does not show the load in new tab checkbox', ->
     equal @view.$externalToolsNewTab.length, 0
+
+  QUnit.module 'EditView: Anonymous Instructor Annotations',
+    setup: ->
+      fakeENV.setup()
+      ENV.COURSE_ID = 1
+      @server = sinon.fakeServer.create()
+
+    teardown: ->
+      @server.restore()
+      fakeENV.teardown()
+
+    editView: ->
+      editView.apply(this, arguments)
+
+  test 'when environment is not set, does not enable editing the property', ->
+    view = @editView()
+    strictEqual(view.toJSON().anonymousInstructorAnnotationsEnabled, false)
+    strictEqual(view.$el.find('input#assignment_anonymous_instructor_annotations').length, 0)
+
+  test 'when environment is set to false, does not enable editing the property', ->
+    ENV.ANONYMOUS_INSTRUCTOR_ANNOTATIONS_ENABLED = false
+    view = @editView()
+    strictEqual(view.toJSON().anonymousInstructorAnnotationsEnabled, false)
+    strictEqual(view.$el.find('input#assignment_anonymous_instructor_annotations').length, 0)
+
+  test 'when environment is set to true, enables editing the property', ->
+    ENV.ANONYMOUS_INSTRUCTOR_ANNOTATIONS_ENABLED = true
+    view = @editView()
+    strictEqual(view.toJSON().anonymousInstructorAnnotationsEnabled, true)
+    strictEqual(view.$el.find('input#assignment_anonymous_instructor_annotations').length, 1)

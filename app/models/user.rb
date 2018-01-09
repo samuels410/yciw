@@ -19,6 +19,7 @@
 require 'atom'
 
 class User < ActiveRecord::Base
+  GRAVATAR_PATTERN = /^https?:\/\/[^.?&\/]+.gravatar.com\//
   include TurnitinID
 
   # this has to be before include Context to prevent a circular dependency in Course
@@ -177,10 +178,11 @@ class User < ActiveRecord::Base
     next none if name.strip.empty?
     scopes = []
     all.primary_shard.activate do
-      scopes << unscoped.where(wildcard('users.name', name))
-      scopes << unscoped.where(wildcard('users.short_name', name))
-      scopes << unscoped.joins(:pseudonyms).where(wildcard('pseudonyms.sis_user_id', name)).where(pseudonyms: {workflow_state: 'active'})
-      scopes << unscoped.joins(:pseudonyms).where(wildcard('pseudonyms.unique_id', name)).where(pseudonyms: {workflow_state: 'active'})
+      base_scope = except(:select, :order, :group, :having)
+      scopes << base_scope.where(wildcard('users.name', name))
+      scopes << base_scope.where(wildcard('users.short_name', name))
+      scopes << base_scope.joins(:pseudonyms).where(wildcard('pseudonyms.sis_user_id', name)).where(pseudonyms: {workflow_state: 'active'})
+      scopes << base_scope.joins(:pseudonyms).where(wildcard('pseudonyms.unique_id', name)).where(pseudonyms: {workflow_state: 'active'})
     end
 
     scopes.map!(&:to_sql)
@@ -870,7 +872,7 @@ class User < ActiveRecord::Base
   # avoid extraneous callbacks when enrolled in multiple sections
   def delete_enrollments(enrollment_scope=self.enrollments)
     courses_to_update = enrollment_scope.active.distinct.pluck(:course_id)
-    Enrollment.suspend_callbacks(:update_cached_due_dates) do
+    Enrollment.suspend_callbacks(:set_update_cached_due_dates) do
       enrollment_scope.each{ |e| e.destroy }
     end
     courses_to_update.each do |course|
@@ -1213,17 +1215,18 @@ class User < ActiveRecord::Base
     # Return here if we're passed a nil val or any non-hash val (both of which
     # will just nil the user's avatar).
     return unless val.is_a?(Hash)
+    external_avatar_url_patterns = Setting.get('avatar_external_url_patterns', '^https://[^.?&\/]+.instructure.com/').split(/,/).map {|re| Regexp.new re}
 
-    if val['type'] == 'gravatar'
+    if val['url'] && val['url'].match?(GRAVATAR_PATTERN)
       self.avatar_image_source = 'gravatar'
-      self.avatar_image_url = nil
-      self.avatar_state = 'submitted'
-    elsif val['type'] == 'external'
-      self.avatar_image_source = 'external'
       self.avatar_image_url = val['url']
       self.avatar_state = 'submitted'
     elsif val['type'] == 'attachment' && val['url']
       self.avatar_image_source = 'attachment'
+      self.avatar_image_url = val['url']
+      self.avatar_state = 'submitted'
+    elsif val['url'] && external_avatar_url_patterns.find { |p| val['url'].match?(p) }
+      self.avatar_image_source = 'external'
       self.avatar_image_url = val['url']
       self.avatar_state = 'submitted'
     end
@@ -1454,7 +1457,8 @@ class User < ActiveRecord::Base
     original_shard = Shard.current
     shard.activate do
       course_ids = course_ids_for_todo_lists(participation_type, opts)
-      opts = {limit: 15}.merge(opts.slice(:due_after, :due_before, :limit, :include_ungraded, :ungraded_quizzes, :include_ignored, :include_locked, :include_concluded, :scope_only, :only_favorites))
+      opts = {limit: 15}.merge(opts.slice(:due_after, :due_before, :limit, :include_ungraded, :ungraded_quizzes, :include_ignored,
+        :include_locked, :include_concluded, :scope_only, :only_favorites, :needing_submitting))
 
       if opts[:scope_only]
         Shard.partition_by_shard(course_ids) do |shard_course_ids|
@@ -1536,7 +1540,7 @@ class User < ActiveRecord::Base
     end
   end
 
-  def ungraded_quizzes_needing_submitting(opts={})
+  def ungraded_quizzes(opts={})
     assignments_needing('submitting', :student, 15.minutes, opts.merge(:ungraded_quizzes => true)) do |quiz_scope, options|
       due_after = options[:due_after] || Time.now
       due_before = options[:due_before] || 1.week.from_now
@@ -1547,8 +1551,8 @@ class User < ActiveRecord::Base
       quizzes = quizzes.
                   available.
                   due_between_with_overrides(due_after, due_before).
-                  need_submitting_info(id, options[:limit]).
                   preload(:context)
+      quizzes = quizzes.need_submitting_info(id, options[:limit]) if options[:needing_submitting]
       if options[:scope_only]
         quizzes.for_course(options[:shard_course_ids])
       else
@@ -1595,9 +1599,9 @@ class User < ActiveRecord::Base
         expecting_submission.
         where(:moderated_grading => true).
         where("assignments.grades_published_at IS NULL").
-        where(:id => ModeratedGrading::ProvisionalGrade.joins(:submission).where("submissions.assignment_id=assignments.id").distinct.select(:assignment_id)).
-        preload(:context).
-        need_grading_info
+        where(:id => ModeratedGrading::ProvisionalGrade.joins(:submission).where("submissions.assignment_id=assignments.id").
+          where(Submission.needs_grading_conditions).distinct.select(:assignment_id)).
+        preload(:context)
       if options[:scope_only]
         scope # Also need to check the rights like below
       else
@@ -1626,10 +1630,13 @@ class User < ActiveRecord::Base
             shard_course_context_codes = shard_course_ids.map { |course_id| "course_#{course_id}"}
             AssessmentRequest.where(assessor_id: id).incomplete.
               not_ignored_by(self, 'reviewing').
-              for_context_codes(shard_course_context_codes)
+              for_context_codes(shard_course_context_codes).
+              preload({submission: :assignment}) # avoid n+1 query on grants_right? check below
           end
+          # only include assessment requests they have permission to perform
+          result = result.select { |request| request.submission.grants_right?(self, :read) }
           # outer limit, since there could be limit * n_shards results
-          result = result[0...limit] if limit && !opts[:scope_only]
+          result = result[0...limit] if limit
           result
         end
       end
@@ -1643,7 +1650,7 @@ class User < ActiveRecord::Base
 
       if opts[:scope_only]
         Shard.partition_by_shard(course_ids) do |shard_course_ids|
-          next unless Shard.current == original_shard # only provideo scope on current shard
+          next unless Shard.current == original_shard # only provide scope on current shard
           return yield(*arguments_for_needing_viewing(object_type, shard_course_ids, opts))
         end
         return object_type.constantize.none
@@ -1666,8 +1673,13 @@ class User < ActiveRecord::Base
   def arguments_for_needing_viewing(object_type, shard_course_ids, opts)
     scope = object_type.constantize.for_courses_and_groups(shard_course_ids, cached_current_group_memberships.map(&:group_id))
     scope = scope.not_ignored_by(self, 'viewing') unless opts[:include_ignored]
-    scope = scope.todo_date_between(opts[:due_after], opts[:due_before])
-    [scope, opts.merge(:shard_course_ids => shard_course_ids)]
+    scope_todo = scope.todo_date_between(opts[:due_after], opts[:due_before])
+    if object_type == 'DiscussionTopic' && opts[:new_activity]
+      scope_todo = scope_todo.or(scope.where(assignment_id:
+        Assignment.active.where(context_id: shard_course_ids, context_type: 'Course', submission_types: 'discussion_topic').
+        due_between_with_overrides(opts[:due_after], opts[:due_before]).pluck(:id)))
+    end
+    [scope_todo, opts.merge(:shard_course_ids => shard_course_ids)]
   end
 
   def discussion_topics_needing_viewing(opts={})
@@ -1693,7 +1705,9 @@ class User < ActiveRecord::Base
           late: Set.new(Submission.active.with_assignment.late.where(user_id: self).pluck(:assignment_id)),
           missing: Set.new(Submission.active.with_assignment.missing.where(user_id: self).pluck(:assignment_id)),
           needs_grading: Set.new(Submission.active.with_assignment.needs_grading.where(user_id: self).pluck(:assignment_id)),
-          has_feedback: Set.new(self.recent_feedback(start_at: opts[:due_after]).pluck(:assignment_id)),
+          # distinguishes between assignment being graded and having feedback comments, but cannot discern new feedback and new grades if there is already feedback.
+          # that's OK for now, since the "New" was removed from the "New Grades" and "New Feedback" pills in the UI to simply indicate if there is _any_ feedback or grade.
+          has_feedback: Set.new((self.recent_feedback(start_at: opts[:due_after]).select { |feedback| feedback[:submission_comments_count].to_i > 0 }).pluck(:assignment_id)),
           new_activity: Set.new(Submission.active.with_assignment.unread_for(self).pluck(:assignment_id))
         }.with_indifferent_access
     end
@@ -1964,14 +1978,32 @@ class User < ActiveRecord::Base
     end
   end
 
+  def participating_student_current_and_concluded_course_ids
+    @participating_student_current_and_concluded_course_ids ||=
+      participating_course_ids('student_current_and_concluded') do |enrollments|
+        enrollments.current_and_concluded.not_inactive_by_date_ignoring_access
+      end
+  end
+
   def participating_student_course_ids
-    @participating_student_course_ids ||= self.shard.activate do
-      Rails.cache.fetch([self, 'participating_student_course_ids', ApplicationController.region].cache_key) do
-        self.enrollments.shard(in_region_associated_shards).where(:type => %w{StudentEnrollment StudentViewEnrollment}).
-          current.active_by_date.distinct.pluck(:course_id)
+    @participating_student_course_ids ||=
+      participating_course_ids('student') do |enrollments|
+        enrollments.current.active_by_date
+      end
+  end
+
+  def participating_course_ids(cache_qualifier)
+    self.shard.activate do
+      cache_path = [self, "participating_#{cache_qualifier}_course_ids", ApplicationController.region]
+      Rails.cache.fetch(cache_path.cache_key) do
+        enrollments = yield self.enrollments.
+          shard(in_region_associated_shards).
+          where(type: %w{StudentEnrollment StudentViewEnrollment})
+        enrollments.distinct.pluck(:course_id)
       end
     end
   end
+  private :participating_course_ids
 
   def participating_instructor_course_ids
     @participating_instructor_course_ids ||= self.shard.activate do
@@ -2016,6 +2048,7 @@ class User < ActiveRecord::Base
           subs_with_comment_scope = Submission.active.where(user_id: self).for_context_codes(context_codes).
             joins(:submission_comments, :assignment).
             where(assignments: {muted: false, workflow_state: 'published'}).
+            where('submission_comments.created_at>?', opts[:start_at]).
             where.not(:submission_comments => {:author_id => self, :draft => true}).
             distinct_on("submissions.id").
             order("submissions.id, submission_comments.created_at DESC"). # get the last created comment
@@ -2887,7 +2920,7 @@ class User < ActiveRecord::Base
   end
 
   def all_paginatable_accounts
-    ShardedBookmarkedCollection.build(Account::Bookmarker, self.adminable_accounts_scope)
+    ShardedBookmarkedCollection.build(Account::Bookmarker, self.adminable_accounts_scope.order(:name, :id))
   end
 
   def all_pseudonyms_loaded?
@@ -2902,13 +2935,19 @@ class User < ActiveRecord::Base
     !!@all_active_pseudonyms
   end
 
+  def current_groups_in_region?
+    return true if self.current_groups.exists?
+    return true if self.current_groups.shard(self.in_region_associated_shards).exists?
+    false
+  end
+
   def all_active_pseudonyms(reload=false)
     @all_active_pseudonyms = nil if reload
     @all_active_pseudonyms ||= self.pseudonyms.shard(self).active.to_a
   end
 
   def preferred_gradebook_version
-    preferences.fetch(:gradebook_version, '2')
+    preferences.fetch(:gradebook_version, 'default')
   end
 
   def stamp_logout_time!
@@ -3011,5 +3050,23 @@ class User < ActiveRecord::Base
       roles << 'root_admin' if account_users.any?{|au| root_ids.include?(au.account_id) }
     end
     roles
+  end
+
+  # user tokens are returned by UserListV2 and used to bulk-enroll users using information that isn't easy to guess
+  def self.token(id, uuid)
+    "#{id}_#{Digest::MD5.hexdigest(uuid)}"
+  end
+
+  def token
+    User.token(id, uuid)
+  end
+
+  def self.from_tokens(tokens)
+    id_token_map = tokens.each_with_object({}) do |token, map|
+      id, huuid = token.split('_')
+      id = Shard.relative_id_for(id, Shard.current, Shard.current)
+      map[id] = "#{id}_#{huuid}"
+    end
+    User.where(:id => id_token_map.keys).to_a.select { |u| u.token == id_token_map[u.id] }
   end
 end

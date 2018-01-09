@@ -17,7 +17,7 @@
 
 require_relative '../../helpers/gradezilla_common'
 require_relative '../../helpers/assignment_overrides'
-require_relative '../page_objects/gradezilla_page'
+require_relative '../pages/gradezilla_page'
 
 describe "Gradezilla - arrange by due date" do
   include_context "in-process server selenium tests"
@@ -35,7 +35,7 @@ describe "Gradezilla - arrange by due date" do
   end
 
   it "validates arrange columns by due date option", priority: "1", test_id: 3253270 do
-    expected_text = "-"
+    expected_text = "–"
 
     Gradezilla.open_view_menu_and_arrange_by_menu
     Gradezilla.view_arrange_by_submenu_item('Due Date - Oldest to Newest').click

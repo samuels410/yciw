@@ -41,6 +41,7 @@ class Attachment < ActiveRecord::Base
   include MasterCourses::Restrictor
   restrict_columns :content, [:display_name, :uploaded_data]
   restrict_columns :settings, [:folder_id, :locked, :lock_at, :unlock_at, :usage_rights_id]
+  restrict_columns :state, [:locked, :file_state]
 
   attr_accessor :podcast_associated_asset
 
@@ -199,6 +200,7 @@ class Attachment < ActiveRecord::Base
   # note, that the time it takes to send to s3 is the bad guy.
   # It blocks and makes the user wait.
   def run_after_attachment_saved
+    old_workflow_state = self.workflow_state
     if workflow_state == 'unattached' && @after_attachment_saved_workflow_state
       self.workflow_state = @after_attachment_saved_workflow_state
       @after_attachment_saved_workflow_state = nil
@@ -210,7 +212,7 @@ class Attachment < ActiveRecord::Base
     end
 
     # directly update workflow_state so we don't trigger another save cycle
-    if CANVAS_RAILS5_0 ? self.workflow_state_changed? : self.will_save_change_to_workflow_state?
+    if old_workflow_state != self.workflow_state
       self.shard.activate do
         self.class.where(:id => self).update_all(:workflow_state => self.workflow_state)
       end
@@ -218,9 +220,12 @@ class Attachment < ActiveRecord::Base
 
     # try an infer encoding if it would be useful to do so
     send_later(:infer_encoding) if self.encoding.nil? && self.content_type =~ /text/ && self.context_type != 'SisBatch'
-    if respond_to?(:process_attachment, true) && thumbnailable? && !attachment_options[:thumbnails].blank? && parent_id.nil?
-      self.class.attachment_options[:thumbnails].each do |suffix, size|
-        send_later_if_production_enqueue_args(:create_thumbnail_size, {:singleton => "attachment_thumbnail_#{self.global_id}_#{suffix}"}, suffix)
+    if respond_to?(:process_attachment, true)
+      automatic_thumbnail_sizes.each do |suffix|
+        send_later_if_production_enqueue_args(
+          :create_thumbnail_size,
+          {singleton: "attachment_thumbnail_#{global_id}_#{suffix}"},
+          suffix)
       end
     end
   end
@@ -257,14 +262,17 @@ class Attachment < ActiveRecord::Base
       Attachment.where(:id => self).update_all(:cloned_item_id => self.cloned_item.id) # don't touch it for no reason
     end
     existing = context.attachments.active.find_by_id(self)
-    existing ||= self.cloned_item_id ? context.attachments.active.where(cloned_item_id: self.cloned_item_id).first : nil
+
+    options[:cloned_item_id] ||= self.cloned_item_id
+    existing ||= Attachment.find_existing_attachment_for_clone(context, options.merge(:active_only => true))
     return existing if existing && !options[:overwrite] && !options[:force_copy]
-    existing ||= self.cloned_item_id ? context.attachments.where(cloned_item_id: self.cloned_item_id).first : nil
+    existing ||= Attachment.find_existing_attachment_for_clone(context, options)
+
     dup ||= Attachment.new
     dup = existing if existing && options[:overwrite]
 
     excluded_atts = EXCLUDED_COPY_ATTRIBUTES
-    excluded_atts += ["locked", "hidden"] if dup == existing
+    excluded_atts += ["locked", "hidden"] if dup == existing && !options[:migration]&.for_master_course_import?
     dup.assign_attributes(self.attributes.except(*excluded_atts))
 
     # avoid cycles (a -> b -> a) and self-references (a -> a) in root_attachment_id pointers
@@ -287,6 +295,16 @@ class Attachment < ActiveRecord::Base
     dup.clone_updated = true
     dup.set_publish_state_for_usage_rights unless self.locked?
     dup
+  end
+
+  def self.find_existing_attachment_for_clone(context, options={})
+    scope = context.attachments
+    scope = scope.active if options[:active_only]
+    if options[:migration_id] && options[:match_on_migration_id]
+      scope.where(migration_id: options[:migration_id]).first
+    elsif options[:cloned_item_id]
+      scope.where(cloned_item_id: options[:cloned_item_id]).first
+    end
   end
 
   def copy_to_folder!(folder, on_duplicate = :rename)
@@ -737,8 +755,40 @@ class Attachment < ActiveRecord::Base
     store.shared_secret(datetime)
   end
 
+  def instfs_hosted?
+    !!instfs_uuid
+  end
+
   def downloadable?
-    !!(self.authenticated_s3_url rescue false)
+    instfs_hosted? || !!(authenticated_s3_url rescue false)
+  end
+
+  def authenticated_url(**options)
+    if instfs_hosted?
+      InstFS.authenticated_url(self, options)
+    else
+      # attachment_fu doesn't like the extra option when building s3 urls
+      should_download = options.delete(:download)
+      disposition = should_download ? "attachment" : "inline"
+      options[:response_content_disposition] = "#{disposition}; #{disposition_filename}"
+      self.authenticated_s3_url(**options)
+    end
+  end
+
+  def stored_locally?
+    # if the file exists in inst-fs, it won't be in local storage even if
+    # that's what Canvas otherwise thinks it's configured for
+    return false if instfs_hosted?
+    Attachment.local_storage?
+  end
+
+  def can_be_proxied?
+    # we don't support proxying from instfs yet (no equivalent to
+    # s3object.get.body)
+    return false if instfs_hosted?
+    mime_class == 'html' && size < Setting.get('max_inline_html_proxy_size', 128 * 1024).to_i ||
+    mime_class == 'flash' && size < Setting.get('max_swf_proxy_size', 1024 * 1024).to_i ||
+    content_type == 'text/css' && size < Setting.get('max_css_proxy_size', 64 * 1024).to_i
   end
 
   def local_storage_path
@@ -778,13 +828,19 @@ class Attachment < ActiveRecord::Base
     store.open(opts, &block)
   end
 
-  # you should be able to pass an optional width, height, and page_number/video_seconds to this method
-  # can't handle arbitrary thumbnails for our attachment_fu thumbnails on s3 though, we could handle a couple *predefined* sizes though
+  def has_thumbnail?
+    thumbnailable? && (instfs_hosted? || thumbnail.present?)
+  end
+
+  # you should be able to pass an optional width, height, and page_number/video_seconds to this method for media objects
+  # you should be able to pass an optional size (e.g. '64x64') to this method for other thumbnailable content types
   def thumbnail_url(options={})
     return nil if Attachment.skip_thumbnails
 
     geometry = options[:size]
-    if self.thumbnail || geometry.present?
+    if instfs_hosted? && thumbnailable?
+      InstFS.authenticated_thumbnail_url(self, geometry: geometry)
+    elsif self.thumbnail || geometry.present?
       to_use = thumbnail_for_size(geometry) || self.thumbnail
       to_use.cached_s3_url
     elsif self.media_object && self.media_object.media_id
@@ -908,15 +964,16 @@ class Attachment < ActiveRecord::Base
   end
 
   def download_url(ttl = url_ttl)
-    authenticated_s3_url(expires_in: ttl, response_content_disposition: "attachment; " + disposition_filename)
+    authenticated_url(expires_in: ttl, download: true)
   end
 
   def inline_url(ttl = url_ttl)
-    authenticated_s3_url(expires_in: ttl, response_content_disposition: "inline; " + disposition_filename)
+    authenticated_url(expires_in: ttl, download: false)
   end
 
   def url_ttl
-    Setting.get('attachment_url_ttl', 1.day.to_s).to_i
+    default = Setting.get('attachment_url_ttl', 1.hour.to_s).to_i.seconds
+    (root_account_id && Account.find_cached(root_account_id)&.settings[:s3_url_ttl_seconds]&.to_i&.seconds) || default
   end
   protected :url_ttl
 
@@ -1009,6 +1066,8 @@ class Attachment < ActiveRecord::Base
       "image/pjpeg" => "image",
       "image/png" => "image",
       "image/gif" => "image",
+      "image/bmp" => "image",
+      "image/vnd.microsoft.icon" => "image",
       "application/x-rar" => "zip",
       "application/x-rar-compressed" => "zip",
       "application/x-zip" => "zip",
@@ -1237,6 +1296,7 @@ class Attachment < ActiveRecord::Base
     return true if Purgatory.where(attachment_id: att).active.exists?
     att.send_to_purgatory(deleted_by_user)
     att.destroy_content
+    att.thumbnail&.destroy
     att.uploaded_data = File.open Rails.root.join('public', 'file_removed', 'file_removed.pdf')
     CrocodocDocument.where(attachment_id: att.children_and_self.select(:id)).delete_all
     Canvadoc.where(attachment_id: att.children_and_self.select(:id)).delete_all
@@ -1308,9 +1368,17 @@ class Attachment < ActiveRecord::Base
     end
   end
 
+  def destroy_permanently_plus
+    unless root_attachment_id
+      make_childless
+      destroy_content
+    end
+    destroy_permanently!
+  end
+
   def make_childless(preferred_child = nil)
     return if root_attachment_id
-    child = preferred_child || children.take
+    child = preferred_child || children.first
     return unless child
     raise "must be a child" unless child.root_attachment_id == id
     child.root_attachment_id = nil
@@ -1319,6 +1387,12 @@ class Attachment < ActiveRecord::Base
   end
 
   def copy_attachment_content(destination)
+    # parent is broken; if child is probably broken too, make sure it gets marked as broken
+    if file_state == 'broken' && destination.md5.nil?
+      Attachment.where(id: destination).update_all(file_state: 'broken')
+      return
+    end
+
     destination.write_attribute(:filename, filename) if filename
     if Attachment.s3_storage?
       if filename && s3object.exists? && !destination.s3object.exists?
@@ -1327,9 +1401,10 @@ class Attachment < ActiveRecord::Base
     else
       return if destination.store.exists? && open == destination.open
       old_content_type = self.content_type
-      Attachment.where(:id => self).update_all(:content_type => "invalid/invalid") # prevents find_existing_attachment_for_md5 from reattaching the child to the old root
+      scope = Attachment.where(:md5 => self.md5, :namespace => self.namespace, :root_attachment_id => nil)
+      scope.update_all(:content_type => "invalid/invalid") # prevents find_existing_attachment_for_md5 from reattaching the child to the old root
       destination.uploaded_data = open
-      Attachment.where(:id => self).update_all(:content_type => old_content_type)
+      scope.where.not(:id => destination).update_all(:content_type => old_content_type)
     end
     destination.save!
   end
@@ -1490,13 +1565,11 @@ class Attachment < ActiveRecord::Base
     false
   end
 
-  def matches_filename?(match)
-    filename == match || display_name == match ||
-      URI.unescape(filename) == match || URI.unescape(display_name) == match ||
-      filename.downcase == match.downcase || display_name.downcase == match.downcase ||
-      URI.unescape(filename).downcase == match.downcase || URI.unescape(display_name).downcase == match.downcase
+  def self.matches_name?(name, match)
+    return false unless name
+    name == match || URI.unescape(name) == match || name.downcase == match.downcase || URI.unescape(name).downcase == match.downcase
   rescue
-    false
+     false
   end
 
   def self.attachment_list_from_migration(context, ids)
@@ -1541,7 +1614,6 @@ class Attachment < ActiveRecord::Base
 
   scope :uploadable, -> { where(:workflow_state => 'pending_upload') }
   scope :active, -> { where(:file_state => 'available') }
-  scope :thumbnailable?, -> { where(:content_type => AttachmentFu.content_types) }
   scope :by_display_name, -> { order(display_name_order_by_clause('attachments')) }
   scope :by_position_then_display_name, -> { order("attachments.position, #{display_name_order_by_clause('attachments')}") }
   def self.serialization_excludes; [:uuid, :namespace]; end
@@ -1569,6 +1641,20 @@ class Attachment < ActiveRecord::Base
     end
     new_name
   end
+
+  # the list of thumbnail sizes to be pre-generated automatically
+  def self.automatic_thumbnail_sizes
+    attachment_options[:thumbnails].keys
+  end
+
+  def automatic_thumbnail_sizes
+    if thumbnailable? && !instfs_hosted?
+      self.class.automatic_thumbnail_sizes
+    else
+      []
+    end
+  end
+  protected :automatic_thumbnail_sizes
 
   DYNAMIC_THUMBNAIL_SIZES = %w(640x>)
 
@@ -1685,7 +1771,7 @@ class Attachment < ActiveRecord::Base
   # Pass an existing attachment in opts[:attachment] to use that, rather than
   # creating a new attachment.
   def self.clone_url_as_attachment(url, opts = {})
-    _, uri = CanvasHttp.validate_url(url)
+    _, uri = CanvasHttp.validate_url(url, check_host: true)
 
     CanvasHttp.get(url) do |http_response|
       if http_response.code.to_i == 200

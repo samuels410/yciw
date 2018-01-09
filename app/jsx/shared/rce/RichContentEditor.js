@@ -23,6 +23,7 @@ import featureFlag from 'jsx/shared/rce/featureFlag'
 import $ from 'jquery'
 
 function loadServiceRCE (target, tinyMCEInitOptions, callback) {
+  target.css('display', 'none')
   serviceRCELoader.loadOnTarget(target, tinyMCEInitOptions, (textarea, remoteEditor) => {
     const $textarea = freshNode($(textarea))
     $textarea.data('remoteEditor', remoteEditor)
@@ -44,6 +45,7 @@ function loadLegacyTinyMCE (callback) {
     legacyTinyMCELoaded = true
     require('tinymce.editor_box')
     require('compiled/tinymce')
+    require('./initA11yChecker')
     callback()
   }, 'legacyTinymceAsyncChunk')
 }
@@ -63,6 +65,7 @@ function hideTextareaWhileLoadingLegacyRCE (target, callback) {
 }
 
 function loadLegacyRCE (target, tinyMCEInitOptions, callback) {
+  target.css('display', '')
   hideTextareaWhileLoadingLegacyRCE(target, () => {
     tinyMCEInitOptions.defaultContent ?
       target.editorBox(tinyMCEInitOptions).editorBox('set_code', tinyMCEInitOptions.defaultContent) :
@@ -82,7 +85,7 @@ function establishParentNode (target) {
   if (target.parent().attr('id') == parentId) {
     // parent wrapper already exits
   } else {
-    return target.wrap(`<div id='${parentId}'></div>`)
+    return target.wrap(`<div id='${parentId}' style='visibility: hidden'></div>`)
   }
 }
 
@@ -195,14 +198,6 @@ const RichContentEditor = {
       if (tinyMCEInitOptions.manageParent) {
         delete tinyMCEInitOptions.manageParent
         establishParentNode($target)
-      }
-
-      const originalOnFocus = tinyMCEInitOptions.onFocus
-      tinyMCEInitOptions.onFocus = (editor) => {
-        this.activateRCE($target)
-        if (typeof originalOnFocus === 'function') {
-          originalOnFocus(editor)
-        }
       }
 
       loadServiceRCE($target, tinyMCEInitOptions, callback)

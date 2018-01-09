@@ -78,15 +78,15 @@
 #     }
 #
 class CommunicationChannelsController < ApplicationController
-  before_action :require_user, :only => [:create, :destroy]
+  before_action :require_user, :only => [:create, :destroy, :re_send_confirmation]
   before_action :reject_student_view_student
 
   include Api::V1::CommunicationChannel
 
   # @API List user communication channels
   #
-  # Returns a list of communication channels for the specified user, sorted by
-  # position.
+  # Returns a paginated list of communication channels for the specified user,
+  # sorted by position.
   #
   # @example_request
   #     curl https://<canvas>/api/v1/users/12345/communication_channels \
@@ -358,10 +358,12 @@ class CommunicationChannelsController < ApplicationController
           valid = @pseudonym.valid?
           valid = @user.valid? && valid # don't want to short-circuit, since we are interested in the errors
           unless valid
+            ps_errors = @pseudonym.errors.as_json[:errors]
+            ps_errors.delete(:password_confirmation) unless params[:pseudonym][:password_confirmation]
             return render :json => {
                             :errors => {
                               :user => @user.errors.as_json[:errors],
-                              :pseudonym => @pseudonym.errors.as_json[:errors]
+                              :pseudonym => ps_errors
                             }
                           }, :status => :bad_request
           end
@@ -418,6 +420,13 @@ class CommunicationChannelsController < ApplicationController
     @user = User.find(params[:user_id])
     # the active shard needs to be searched for the enrollment (not the user's shard)
     @enrollment = params[:enrollment_id] && Enrollment.where(id: params[:enrollment_id], user_id: @user).first!
+
+    if @enrollment
+      return render_unauthorized_action unless @current_user.can_create_enrollment_for?(@enrollment.course, session, @enrollment.type)
+    else
+      return render_unauthorized_action unless @user.grants_any_right?(@current_user, session, :manage, :manage_user_details)
+    end
+
     if @enrollment && (@enrollment.invited? || @enrollment.active?)
       @enrollment.re_send_confirmation!
     else

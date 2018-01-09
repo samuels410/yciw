@@ -378,21 +378,22 @@ describe UsersController do
       end
 
       it "should validate acceptance of the terms" do
+        Account.default.create_terms_of_service!(terms_type: "default", passive: false)
         post 'create', params: {:pseudonym => { :unique_id => 'jacob@instructure.com' }, :user => { :name => 'Jacob Fugal' }}
         assert_status(400)
         json = JSON.parse(response.body)
         expect(json["errors"]["user"]["terms_of_use"]).to be_present
       end
 
-      it "should not validate acceptance of the terms if not required by system" do
-        Setting.set('terms_required', 'false')
+      it "should not validate acceptance of the terms if terms are passive" do
+        Account.default.create_terms_of_service!(terms_type: "default")
         post 'create', params: {:pseudonym => { :unique_id => 'jacob@instructure.com' }, :user => { :name => 'Jacob Fugal' }}
         expect(response).to be_success
       end
 
       it "should not validate acceptance of the terms if not required by account" do
         default_account = Account.default
-        default_account.settings[:account_terms_required] = false
+        Account.default.create_terms_of_service!(terms_type: "default")
         default_account.save!
 
         post 'create', params: {:pseudonym => { :unique_id => 'jacob@instructure.com' }, :user => { :name => 'Jacob Fugal' }}
@@ -1247,6 +1248,40 @@ describe UsersController do
     end
   end
 
+  describe 'GET masquerade' do
+    let(:user2) do
+      user2 = user_with_pseudonym(name: "user2", short_name: "u2")
+      user2.pseudonym.sis_user_id = "user2_sisid1"
+      user2.pseudonym.integration_id = "user2_intid1"
+      user2.pseudonym.login = "user2_login1@foo.com"
+      user2.pseudonym.save!
+      user2
+    end
+
+    before do
+      user_session(site_admin_user)
+    end
+
+    it 'should set the js_env properly with act as user data' do
+      get 'masquerade', params: {user_id: user2.id}
+      assert_response(:success)
+      act_as_user_data = controller.js_env[:act_as_user_data][:user]
+      expect(act_as_user_data).to include({
+        name: user2.name,
+        short_name: user2.short_name,
+        id: user2.id,
+        avatar_image_url: user2.avatar_image_url,
+        sortable_name: user2.sortable_name,
+        email: user2.email,
+        pseudonyms: [
+          { login_id: user2.pseudonym.login,
+            sis_id: user2.pseudonym.sis_user_id,
+            integration_id: user2.pseudonym.integration_id }
+        ]
+      })
+    end
+  end
+
   describe 'GET media_download' do
     let(:kaltura_client) do
       kaltura_client = instance_double('CanvasKaltura::ClientV3')
@@ -1461,6 +1496,7 @@ describe UsersController do
       new_user1 = User.where(:name => 'example1@example.com').first
       new_user2 = User.where(:name => 'Hurp Durp').first
       expect(json['invited_users'].map{|u| u['id']}).to match_array([new_user1.id, new_user2.id])
+      expect(json['invited_users'].map{|u| u['user_token']}).to match_array([new_user1.token, new_user2.token])
     end
 
     it 'checks for pre-existing users' do
@@ -1478,6 +1514,7 @@ describe UsersController do
       expect(json['invited_users']).to be_empty
       expect(json['errored_users'].count).to eq 1
       expect(json['errored_users'].first['existing_users'].first['user_id']).to eq existing_user.id
+      expect(json['errored_users'].first['existing_users'].first['user_token']).to eq existing_user.token
     end
   end
 

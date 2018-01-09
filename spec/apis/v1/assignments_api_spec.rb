@@ -20,6 +20,7 @@ require_relative '../api_spec_helper'
 require_relative '../locked_spec'
 require_relative '../../sharding_spec_helper'
 require_relative '../../lti_spec_helper'
+require_relative '../../lti2_spec_helper'
 
 describe AssignmentsApiController, type: :request do
   include Api
@@ -198,6 +199,59 @@ describe AssignmentsApiController, type: :request do
                           assignment4)
     end
 
+    it "sorts the returned list of assignments by name" do
+      # the API returns the assignments sorted by
+      # [assignment_groups.position, assignments.position]
+      group1 = @course.assignment_groups.create!(:name => 'group1')
+      group1.update_attribute(:position, 10)
+      group2 = @course.assignment_groups.create!(:name => 'group2')
+      group2.update_attribute(:position, 7)
+      group3 = @course.assignment_groups.create!(:name => 'group3')
+      group3.update_attribute(:position, 12)
+      @course.assignments.create!(:title => 'assignment1',
+                                  :assignment_group => group2).
+        update_attribute(:position, 2)
+      @course.assignments.create!(:title => 'assignment2',
+                                  :assignment_group => group2).
+        update_attribute(:position, 1)
+      @course.assignments.create!(:title => 'assignment3',
+                                  :assignment_group => group1).
+        update_attribute(:position, 1)
+      @course.assignments.create!(:title => 'assignment4',
+                                  :assignment_group => group3).
+        update_attribute(:position, 3)
+      @course.assignments.create!(:title => 'assignment5',
+                                  :assignment_group => group1).
+        update_attribute(:position, 2)
+      @course.assignments.create!(:title => 'assignment6',
+                                  :assignment_group => group2).
+        update_attribute(:position, 3)
+      @course.assignments.create!(:title => 'assignment7',
+                                  :assignment_group => group3).
+        update_attribute(:position, 2)
+      @course.assignments.create!(:title => 'assignment8',
+                                  :assignment_group => group3).
+        update_attribute(:position, 1)
+      json = api_call(:get,
+                      "/api/v1/courses/#{@course.id}/assignments.json?order_by=name",
+                      {
+                        controller: 'assignments_api',
+                        action: 'index',
+                        format: 'json',
+                        course_id: @course.id.to_s,
+                        order_by: 'name'
+                      })
+      order = json.map { |a| a['name'] }
+      expect(order).to eq %w(assignment1
+                          assignment2
+                          assignment3
+                          assignment4
+                          assignment5
+                          assignment6
+                          assignment7
+                          assignment8)
+    end
+
     it "should search for assignments by title" do
       2.times {|i| @course.assignments.create!(:title => "First_#{i}") }
       ids = @course.assignments.map(&:id)
@@ -303,6 +357,18 @@ describe AssignmentsApiController, type: :request do
                              :points_possible => 12,
                               :free_form_criterion_comments => true)
 
+      @rubric.data.push(
+        {
+          id: 'crit3', description: "Criterion With Range",
+          long_description: "Long Criterion With Range",
+          points: 5, criterion_use_range: true, ratings:
+            [{id: 'rat1',
+              description: "Full Marks",
+              long_description: "Student did a great job.",
+              points: 5.0}]
+        }
+      )
+
       @assignment.build_rubric_association(:rubric => @rubric,
                                            :purpose => 'grading',
                                            :use_for_grading => true,
@@ -320,19 +386,32 @@ describe AssignmentsApiController, type: :request do
           'id' => 'crit1',
           'points' => 10,
           'description' => 'Crit1',
+          'criterion_use_range' => false,
           'ratings' => [
-            {'id' => 'rat1', 'points' => 10, 'description' => 'A'},
-            {'id' => 'rat2', 'points' => 7, 'description' => 'B'},
-            {'id' => 'rat3', 'points' => 0, 'description' => 'F'}
+            {'id' => 'rat1', 'points' => 10, 'description' => 'A', 'long_description' => ''},
+            {'id' => 'rat2', 'points' => 7, 'description' => 'B', 'long_description' => ''},
+            {'id' => 'rat3', 'points' => 0, 'description' => 'F', 'long_description' => ''}
           ]
         },
         {
           'id' => 'crit2',
           'points' => 2,
           'description' => 'Crit2',
+          'criterion_use_range' => false,
           'ratings' => [
-            {'id' => 'rat1', 'points' => 2, 'description' => 'Pass'},
-            {'id' => 'rat2', 'points' => 0, 'description' => 'Fail'},
+            {'id' => 'rat1', 'points' => 2, 'description' => 'Pass', 'long_description' => ''},
+            {'id' => 'rat2', 'points' => 0, 'description' => 'Fail', 'long_description' => ''},
+          ]
+        },
+        {
+          'id' => 'crit3',
+          'points' => 5,
+          'description' => 'Criterion With Range',
+          'long_description' => 'Long Criterion With Range',
+          'criterion_use_range' => true,
+          'ratings' => [
+            {'id' => 'rat1', 'points' => 5, 'description' => 'Full Marks',
+             'long_description' => 'Student did a great job.'}
           ]
         }
       ]
@@ -720,7 +799,9 @@ describe AssignmentsApiController, type: :request do
              )
       assign = json.first
       expect(assign['submission']).to eq(
-        json_parse(controller.submission_json(submission,assignment,@user,session).to_json)
+        json_parse(
+          controller.submission_json(submission, assignment, @user, session, { include: ['submission'] }).to_json
+        )
       )
     end
 
@@ -1021,7 +1102,7 @@ describe AssignmentsApiController, type: :request do
           { :expected_status => 400 })
     end
 
-    it "should require non-discussion topic" do
+    it "should duplicate discussion topic" do
       assignment = group_discussion_assignment.assignment
       api_call_as_user(@teacher, :post,
         "/api/v1/courses/#{@course.id}/assignments/#{assignment.id}/duplicate.json",
@@ -1032,7 +1113,7 @@ describe AssignmentsApiController, type: :request do
           :assignment_id => assignment.id.to_s },
         {},
         {},
-        { :expected_status => 400 })
+        { :expected_status => 200 })
     end
 
     it "should duplicate wiki page assignment" do
@@ -1317,112 +1398,168 @@ describe AssignmentsApiController, type: :request do
       expect(a.lti_context_id).to eq(lti_assignment_id)
     end
 
-    it "sets the configuration LTI 1 tool if one is provided" do
+    context 'set the configuration LTI 1 tool if provided' do
+      let(:tool) { @course.context_external_tools.create!(name: "a", url: "http://www.google.com", consumer_key: '12345', shared_secret: 'secret') }
+      let(:a) { Assignment.last }
+
+      before do
+        api_create_assignment_in_course(@course, {
+          'description' => 'description',
+          'similarityDetectionTool' => tool.id,
+          'configuration_tool_type' => 'ContextExternalTool',
+          'submission_type' => 'online',
+          'submission_types' => submission_types
+        })
+      end
+
+      context 'with online_upload' do
+        let(:submission_types) { ['online_upload'] }
+        it "sets the configuration LTI 1 tool if one is provided" do
+          expect(a.tool_settings_tool).to eq(tool)
+        end
+      end
+
+      context 'with online_text_entry' do
+        let(:submission_types) { ['online_text_entry'] }
+        it "sets the configuration LTI 1 tool if one is provided" do
+          expect(a.tool_settings_tool).to eq(tool)
+        end
+      end
+    end
+
+    it "does set the visibility settings" do
       tool = @course.context_external_tools.create!(name: "a", url: "http://www.google.com", consumer_key: '12345', shared_secret: 'secret')
-      api_create_assignment_in_course(@course, {
+      response = api_create_assignment_in_course(@course, {
         'description' => 'description',
         'similarityDetectionTool' => tool.id,
         'configuration_tool_type' => 'ContextExternalTool',
         'submission_type' => 'online',
-        'submission_types' => ['online_upload']
+        'submission_types' => ['online_upload'],
+        'report_visibility' => 'after_grading'
       })
-
-      a = Assignment.last
-      expect(a.tool_settings_tool).to eq(tool)
+      a = Assignment.find response['id']
+      expect(a.turnitin_settings[:originality_report_visibility]).to eq('after_grading')
     end
 
-    it "sets the configuration LTI 2 tool in account context" do
-      allow_any_instance_of(AssignmentConfigurationToolLookup).to receive(:create_subscription).and_return true
-      account = @course.account
-      product_family = Lti::ProductFamily.create(
-        vendor_code: '123',
-        product_code: 'abc',
-        vendor_name: 'acme',
-        root_account: account
-      )
-
-      tool_proxy = Lti:: ToolProxy.create(
-        shared_secret: 'shared_secret',
-        guid: 'guid',
-        product_version: '1.0beta',
-        lti_version: 'LTI-2p0',
-        product_family: product_family,
-        context: account,
-        workflow_state: 'active',
-        raw_data: 'some raw data'
-      )
-
-      resource_handler = Lti::ResourceHandler.create(
-        resource_type_code: 'code',
-        name: 'resource name',
-        tool_proxy: tool_proxy
-      )
-
-      message_handler = Lti::MessageHandler.create(
-        message_type: 'basic-lti-launch-request',
-        launch_path: 'https://samplelaunch/blti',
-        resource_handler: resource_handler
-      )
-
-      Lti::ToolProxyBinding.create(context: account, tool_proxy: tool_proxy)
-
-      api_create_assignment_in_course(@course, {
+    it 'gives plagiarism platform settings priority of plagiarism plugins for Vericite' do
+      tool = @course.context_external_tools.create!(name: "a", url: "http://www.google.com", consumer_key: '12345', shared_secret: 'secret')
+      response = api_create_assignment_in_course(@course, {
         'description' => 'description',
-        'similarityDetectionTool' => message_handler.id,
-        'configuration_tool_type' => 'Lti::MessageHandler',
+        'similarityDetectionTool' => tool.id,
+        'configuration_tool_type' => 'ContextExternalTool',
         'submission_type' => 'online',
-        'submission_types' => ['online_upload']
+        'submission_types' => ['online_upload'],
+        'report_visibility' => 'after_grading',
+        "vericite_settings" => {
+          "originality_report_visibility" => "immediately",
+          "exclude_quoted" => true,
+          "exclude_self_plag" => true,
+          "store_in_index" =>true
+        }
       })
-
-      a = Assignment.last
-      expect(a.tool_settings_tool).to eq(message_handler)
+      a = Assignment.find response['id']
+      expect(a.turnitin_settings[:originality_report_visibility]).to eq('after_grading')
     end
 
-    it "sets the configuration an LTI 2 tool in course context" do
-      allow_any_instance_of(AssignmentConfigurationToolLookup).to receive(:create_subscription).and_return true
-      account = @course.account
-      product_family = Lti::ProductFamily.create(
-        vendor_code: '123',
-        product_code: 'abc',
-        vendor_name: 'acme',
-        root_account: account
-      )
-
-      tool_proxy = Lti:: ToolProxy.create(
-        shared_secret: 'shared_secret',
-        guid: 'guid',
-        product_version: '1.0beta',
-        lti_version: 'LTI-2p0',
-        product_family: product_family,
-        context: @course,
-        workflow_state: 'active',
-        raw_data: 'some raw data'
-      )
-
-      resource_handler = Lti::ResourceHandler.create(
-        resource_type_code: 'code',
-        name: 'resource name',
-        tool_proxy: tool_proxy
-      )
-
-      message_handler = Lti::MessageHandler.create(
-        message_type: 'basic-lti-launch-request',
-        launch_path: 'https://samplelaunch/blti',
-        resource_handler: resource_handler
-      )
-
-      Lti::ToolProxyBinding.create(context: @course, tool_proxy: tool_proxy)
-
-      api_create_assignment_in_course(@course, {
+    it 'gives plagiarism platform settings priority of plagiarism plugins for TII' do
+      tool = @course.context_external_tools.create!(name: "a", url: "http://www.google.com", consumer_key: '12345', shared_secret: 'secret')
+      response = api_create_assignment_in_course(@course, {
         'description' => 'description',
-        'similarityDetectionTool' => message_handler.id,
-        'configuration_tool_type' => 'Lti::MessageHandler',
+        'similarityDetectionTool' => tool.id,
+        'configuration_tool_type' => 'ContextExternalTool',
         'submission_type' => 'online',
-        'submission_types' => ['online_upload']
+        'submission_types' => ['online_upload'],
+        'report_visibility' => 'after_grading',
+        "turnitin_settings" => {
+          "originality_report_visibility" => "immediately",
+          "exclude_quoted" => true,
+          "exclude_self_plag" => true,
+          "store_in_index" =>true
+        }
       })
+      a = Assignment.find response['id']
+      expect(a.turnitin_settings[:originality_report_visibility]).to eq('after_grading')
+    end
 
-      a = Assignment.last
-      expect(a.tool_settings_tool).to eq(message_handler)
+    context 'LTI 2.x' do
+      include_context 'lti2_spec_helper'
+
+      let(:root_account) { Account.create!(name: 'root account') }
+      let(:course) { Course.create!(name: 'test course', account: account) }
+      let(:teacher) { teacher_in_course(course: course) }
+
+      before { account.update_attributes(root_account: root_account) }
+
+      it "checks for tool installation in entire account chain" do
+        user_session teacher
+        allow_any_instance_of(AssignmentConfigurationToolLookup).to receive(:create_subscription).and_return true
+        api_create_assignment_in_course(course, {
+          'description' => 'description',
+          'similarityDetectionTool' => message_handler.id,
+          'configuration_tool_type' => 'Lti::MessageHandler',
+          'submission_type' => 'online',
+          'submission_types' => ['online_upload']
+        })
+        new_assignment = Assignment.find(JSON.parse(response.body)['id'])
+        expect(new_assignment.tool_settings_tool).to eq message_handler
+      end
+
+      context 'sets the configuration LTI 2 tool' do
+        shared_examples_for 'sets the tools_settings_tool' do
+          let(:submission_types) { raise 'Override in spec' }
+          let(:context) { raise 'Override in spec' }
+
+          it 'sets the tool correctly' do
+            tool_proxy.update_attributes(context: context)
+            allow_any_instance_of(AssignmentConfigurationToolLookup).to receive(:create_subscription).and_return true
+            Lti::ToolProxyBinding.create(context: context, tool_proxy: tool_proxy)
+            api_create_assignment_in_course(
+              @course,
+              {
+                'description' => 'description',
+                'similarityDetectionTool' => message_handler.id,
+                'configuration_tool_type' => 'Lti::MessageHandler',
+                'submission_type' => 'online',
+                'submission_types' => submission_types
+              }
+            )
+            a = Assignment.last
+            expect(a.tool_settings_tool).to eq(message_handler)
+          end
+        end
+
+        context 'in account context' do
+          context 'with online_upload' do
+            it_behaves_like 'sets the tools_settings_tool' do
+              let(:submission_types) { ['online_upload'] }
+              let(:context) { @course.account }
+            end
+          end
+
+          context 'with online_text_entry' do
+            it_behaves_like 'sets the tools_settings_tool' do
+              let(:submission_types) { ['online_text_entry'] }
+              let(:context) { @course.account }
+            end
+          end
+        end
+
+        context 'in course context' do
+          context 'with online_upload' do
+            it_behaves_like 'sets the tools_settings_tool' do
+              let(:submission_types) { ['online_upload'] }
+              let(:context) { @course }
+            end
+          end
+
+          context 'with online_text_entry' do
+            it_behaves_like 'sets the tools_settings_tool' do
+              let(:submission_types) { ['online_text_entry'] }
+              let(:context) { @course }
+            end
+          end
+        end
+      end
     end
 
     it "does not set the configuration tool if the submission type is not online with uploads" do
@@ -2223,6 +2360,27 @@ describe AssignmentsApiController, type: :request do
       )
     end
 
+    it 'allows trying to update points (that get ignored) on an ungraded assignment when locked' do
+      other_course = Account.default.courses.create!
+      template = MasterCourses::MasterTemplate.set_as_master_course(other_course)
+      original_assmt = other_course.assignments.create!(:title => "blah", :description => "bloo")
+      tag = template.create_content_tag_for!(original_assmt, :restrictions => {:points => true})
+
+      course_with_teacher(:active_all => true)
+      @assignment = @course.assignments.create!(:name => "something", :migration_id => tag.migration_id, :submission_types => "not_graded")
+
+      api_call(:put, "/api/v1/courses/#{@course.id}/assignments/#{@assignment.id}.json",
+        {
+          :controller => 'assignments_api',
+          :action => 'update',
+          :format => 'json',
+          :course_id => @course.id.to_s,
+          :id => @assignment.id.to_s
+        },
+        { :assignment => {:points_possible => 0} },
+        {}, {:expected_status => 200})
+    end
+
     context "without overrides or frozen attributes" do
       before :once do
         @start_group = @course.assignment_groups.create!({:name => "start group"})
@@ -2309,6 +2467,13 @@ describe AssignmentsApiController, type: :request do
         @json = api_update_assignment_call(@course,@assignment,{
             'grading_type' => 'points'
         })
+        @assignment.reload
+        expect(@assignment.grading_type).to eq 'points'
+        expect(@json['grading_type']).to eq @assignment.grading_type
+      end
+
+      it "updates the assignments grading_type when type is empty" do
+        @json = api_update_assignment_call(@course, @assignment, {'grading_type': ''})
         @assignment.reload
         expect(@assignment.grading_type).to eq 'points'
         expect(@json['grading_type']).to eq @assignment.grading_type
@@ -2455,6 +2620,42 @@ describe AssignmentsApiController, type: :request do
             }
           )
           expect(response['due_at']).to eq(@section_due_at.iso8601)
+        end
+
+        it 'updates overrides for inactive students' do
+          @enrollment.deactivate
+          update_assignment
+          expect(@assignment.assignment_overrides.count).to eq 4
+          @adhoc_override = @assignment.assignment_overrides.where(set_type: 'ADHOC').first
+          expect(@adhoc_override).not_to be_nil
+          expect(@adhoc_override.set).to eq [@student]
+          expect(@adhoc_override.due_at_overridden).to be_truthy
+          expect(@adhoc_override.due_at.to_i).to eq @adhoc_due_at.to_i
+        end
+
+        it 'updates overrides for concluded students' do
+          @enrollment.conclude
+          update_assignment
+          expect(@assignment.assignment_overrides.count).to eq 4
+          @adhoc_override = @assignment.assignment_overrides.where(set_type: 'ADHOC').first
+          expect(@adhoc_override).not_to be_nil
+          expect(@adhoc_override.set).to eq [@student]
+          expect(@adhoc_override.due_at_overridden).to be_truthy
+          expect(@adhoc_override.due_at.to_i).to eq @adhoc_due_at.to_i
+        end
+
+        it 'does not create overrides when student_ids is invalid' do
+          api_update_assignment_call(@course, @assignment, {
+            'name' => 'Assignment With Overrides',
+            'assignment_overrides' => {
+              '0' => {
+                'student_ids' => 'bad parameter',
+                'title' => 'adhoc override',
+                'due_at' => @adhoc_due_at.iso8601
+              }
+            }
+          })
+          expect(@assignment.assignment_overrides.count).to eq 0
         end
 
         it 'does not override the assignment for the user if passed false for override_dates' do
@@ -3377,7 +3578,7 @@ describe AssignmentsApiController, type: :request do
       end
 
       it "returns the dates for assignment as they apply to the user" do
-        Score.where(enrollment_id: @student.enrollments).delete_all
+        Score.where(enrollment_id: @student.enrollments).each(&:destroy_permanently!)
         @student.enrollments.each(&:destroy_permanently!)
         @assignment = @course.assignments.create!(
           :title => "Test Assignment",
@@ -3395,7 +3596,7 @@ describe AssignmentsApiController, type: :request do
       end
 
       it "returns original assignment due dates" do
-        Score.where(enrollment_id: @student.enrollments).delete_all
+        Score.where(enrollment_id: @student.enrollments).each(&:destroy_permanently!)
         @student.enrollments.each(&:destroy_permanently!)
         @assignment = @course.assignments.create!(
           :title => "Test Assignment",
@@ -3500,7 +3701,9 @@ describe AssignmentsApiController, type: :request do
           :id => assignment.id.to_s},
           {:include => ['submission']})
         expect(json['submission']).to eq(
-          json_parse(controller.submission_json(submission,assignment,@user,session).to_json)
+          json_parse(
+            controller.submission_json(submission, assignment, @user, session, { include: ['submission'] }).to_json
+          )
         )
       end
 

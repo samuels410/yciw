@@ -79,13 +79,15 @@ describe ContentMigration do
 
     it "should keep assignment relationship" do
       vanilla_page_from = @copy_from.wiki_pages.create!(title: "Everyone Sees This Page")
-      wiki_page_assignment_model(course: @copy_from, title: "conditional page")
+      title = "conditional page"
+      wiki_page_assignment_model(course: @copy_from, title: title)
 
       run_course_copy
 
       page_to = @copy_to.wiki_pages.where(migration_id: mig_id(@page)).take!
       asg_to = @copy_to.assignments.where(migration_id: mig_id(@assignment)).take!
       expect(asg_to.wiki_page).to eq page_to
+      expect(asg_to.title).to eq page_to.title
 
       vanilla_page_to = @copy_to.wiki_pages.where(migration_id: mig_id(vanilla_page_from)).take!
       expect(vanilla_page_to.assignment).to be_nil
@@ -179,14 +181,14 @@ describe ContentMigration do
         expect(@copy_to.wiki.has_no_front_page).to eq true
       end
 
-      it "should set default view to feed if wiki front page is missing" do
+      it "should set default view to modules if wiki front page is missing" do
         @copy_from.default_view = 'wiki'
         @copy_from.save!
         @copy_from.wiki.set_front_page_url!('haha not here')
 
         run_course_copy
 
-        expect(@copy_to.default_view).to eq 'feed'
+        expect(@copy_to.default_view).to eq 'modules'
         expect(@copy_to.wiki.has_front_page?).to eq false
       end
     end

@@ -44,7 +44,7 @@ module Canvas::Migration
         @nested_dir = nil
         base_entries = zip_file.glob("*")
         unless base_entries.any?{|e| !e.directory?}
-          root_dirs = base_entries.reject{|e| File.basename(e.name) =~ UnzipAttachment::THINGS_TO_IGNORE_REGEX}
+          root_dirs = base_entries.reject{|e| e.name.split('/').any?{|p| p =~ UnzipAttachment::THINGS_TO_IGNORE_REGEX}}
           @nested_dir = root_dirs.first.name if root_dirs.count == 1
         end
       end
@@ -60,7 +60,7 @@ module Canvas::Migration
         zip_file.read(nest_entry_if_needed(entry))
       else
         unzip_archive
-        path = File.join(self.unzipped_file_path, entry)
+        path = package_root.item_path(entry)
         File.exist?(path) && File.read(path)
       end
     end
@@ -72,7 +72,7 @@ module Canvas::Migration
         # if it's not an actual zip file
         # just extract the package (or try to) and look for the file
         unzip_archive
-        File.exist?(File.join(self.unzipped_file_path, entry))
+        File.exist?(package_root.item_path(entry))
       end
     end
 
@@ -81,7 +81,7 @@ module Canvas::Migration
       if @settings[:export_archive_path]
         File.open(@settings[:export_archive_path], 'rb')
       elsif @settings[:course_archive_download_url].present?
-        _, uri = CanvasHttp.validate_url(@settings[:course_archive_download_url])
+        _, uri = CanvasHttp.validate_url(@settings[:course_archive_download_url], check_host: true)
         CanvasHttp.get(@settings[:course_archive_download_url]) do |http_response|
           raise CanvasHttp::InvalidResponseCodeError.new(http_response.code.to_i) unless http_response.code.to_i == 200
           tmpfile = CanvasHttp.tempfile_for_uri(uri)
@@ -107,6 +107,10 @@ module Canvas::Migration
         @unzipped_file_path = Dir.mktmpdir(nil, config[:data_folder].presence)
       end
       @unzipped_file_path
+    end
+
+    def package_root
+      @package_root ||= PackageRoot.new(self.unzipped_file_path)
     end
 
     def get_converter
@@ -140,7 +144,7 @@ module Canvas::Migration
     # it into the directory with the given file name
     def prepare_cartridge_file(file_name='imsmanifest.xml')
       if self.path.ends_with?('xml')
-        FileUtils::cp(self.path, File.join(self.unzipped_file_path, file_name))
+        FileUtils::cp(self.path, package_root.item_path(file_name))
       else
         unzip_archive
       end

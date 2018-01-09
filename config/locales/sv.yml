@@ -44,6 +44,7 @@ sv:
     cancel: Avbryt
     save: Spara
   _at_the_bottom__4360f2b4: "-- Längst ner --"
+  _at_the_bottom__d2cf682a: "--Längst ner--"
   _b4455c8b: "%"
   _section_not_synced_yet_cd07d0dd: "-- Avsnittet har inte synkats än"
   _start_from_a_template__a03ea3b3: "-- Börja med en mall --"
@@ -67,6 +68,7 @@ sv:
   a_table_that_contains_the_grading_scheme_data_each_fe739bf6: "En tabell som innehåller data för betygsschema. Varje rad innehåller ett namn, ett maximalt procenttal och ett minsta procenttal. Dessutom innehåller varje rad en knapp för att lägga till en ny rad nedan, och en knapp för att ta bort nuvarande rad."
   a_z_243c3301: A–Z
   a_z_29d8e67c: "A - Z"
+  about_this_service_b10bc808: "Om denna tjänst"
   academic_benchmark: 
     api_error: "Kunde inte uppdatera auktoritetsstandarden %{auth}."
     bad_ab_file: "Den försedda Academic Benchmar filen innehåller ett fel."
@@ -855,6 +857,36 @@ sv:
             note: |-
                 Kurser med tystade uppgifter kanske inte korrekt reflekterar 
                 resultaten i den här rapporten.
+    proservices: 
+      provisioning: 
+        parameters: 
+          account_reports: 
+            default: 
+              accounts: 
+                check_box: "Konto CSV"
+              courses: 
+                check_box: "Kurs CSV"
+              enrollments: 
+                check_box: "Registrerings CSV"
+              group_categories: 
+                login: 
+                  check_box: "Gruppkategorier, CSV"
+              group_membership: 
+                login: 
+                  check_box: "Gruppmedlemskap CSV"
+              groups: 
+                check_box: "Grupp CSV"
+              sections: 
+                check_box: "Sektion CSV"
+              terms: 
+                check_box: "Termin CSV"
+              users: 
+                check_box: "Användare CSV"
+              xlist: 
+                check_box: "X list CSV"
+            sis_default: 
+              parameters: 
+                note: "*Terminställningar påverkar endast kurser, sektioner, inskrivningar och x-lista CSV-filer."
     provisioning_csv_description: 
       account_reports: 
         sis_export: 
@@ -1112,7 +1144,7 @@ sv:
         external_services_warning: "Observera: Vissa aviseringar kan innehålla konfidentiell information. Välja att ta emot aviseringar via en e-post annan en den din institution har gett dig kan leda till att känslig information om Canvas kurser och grupper skickas utanför det institutionella systemet. "
         external_services_warning_label: "Pop-up meddelande innehåll:"
         from: Från
-        sample_subject: "Betygsändring: Kontrollera i undersökning, testningskurs"
+        sample_subject: "Senaste Canvas-aviseringar"
         subject: Ämne
       open_registration_delegated_warning_message: "En extern identitetsleverantör är aktiverad och användare som skapats via en öppen anmälan kan inte logga in om inte det externa identitetsleverantörs inloggningsformuläret innehåller en länk tillbaka till %{url}. "
       open_registration_delegated_warning_tooltip: "En extern identitetsleverantör är aktiverad"
@@ -1409,6 +1441,7 @@ sv:
   achieve_mastery_count_times_8c9bbcec: 
     one: "Uppnå måluppfyllelse en gång"
     other: "Uppnå måluppfyllelse %{count} gånger"
+  act_as_is_essentially_logging_in_as_this_user_with_6244031c: "Att ”agera som\" loggar i huvudsak in som den här användaren utan lösenord.Du kommer att kunna vidta åtgärder som om du var den här användaren, och från andra användares synpunkter kommer det att upplevas som om den här användaren utförde dem.I historik-loggar registreras dock att du var den som utförde åtgärderna på den här användarens vägnar."
   act_as_is_essentially_logging_in_as_this_user_with_7e7a7009: "Att ”agera som\" loggar i huvudsak in som den här användaren utan lösenord. Du kommer att kunna vidta åtgärder som om du var den här användaren, och från andra användares synpunkter kommer det att upplevas som om den här användaren utförde dem."
   act_as_name_16d15bfa: "Agera som %{name}"
   act_as_user_d7ef0e48: "Agera som användare"
@@ -1491,7 +1524,9 @@ sv:
   add_new_set_of_due_dates_e8e240f: "Lägg till en ny grupp av inlämningsdatum"
   add_new_term_d2217c0d: "Lägg till ny termin"
   add_people_7ee4b2ec: "Lägg till personer"
+  add_people_to_coursename_5ea234e1: "Lägg till personer till: %{courseName}"
   add_quiz_ip_filter_c7b37dc5: "Lägg till Quiz IP-filter?"
+  add_rating_89d7fbde: "Lägg till ranking"
   add_recipient_ff135ed7: "Lägg till mottagare"
   add_remove_or_rearrange_sections_for_this_portfoli_4628320a: "Lägg till, ta bort eller omorganisera sektioner i denna portfolio"
   add_review_2fb1590c: "Lägg till omdöme"
@@ -1521,13 +1556,19 @@ sv:
   addressbook_microservice_a4940422: "AddressBook mikrotjänst"
   addressbook_performance_tap_98ddf67: "AddressBook Prestanda steg"
   adjust_final_grade_fa45e7e0: "Justera slutbetyg"
-  admin_4d3ba42f: Administratör
+  admin_4d3ba42f: Admin
   admin_csv_f8d1b3eb: "Admin CSV"
   admin_navigation_menu_77b801a2: "Administratörs navigeringsmeny"
+  admin_user_name_29dd115a: admin_user_name
   admins_3e1dce15: Administratörer
+  after_48b9d69: Efter...
   after_4c71e718: Efter
+  after_cbb5ebae: Efter...
   after_date_981cd41b: "Efter %{date}"
   after_last_attempt_c9168da2: "Efter sista försöket"
+  after_the_assignment_is_graded_53754607: "Efter att uppgiften är bedömd"
+  after_the_due_date_eee89c9c: "Efter slutdatum"
+  ahead_21f22939: Framåt
   ajax_errors: 
     error_heading: "Ajax fel: %{status_code}"
     errors: 
@@ -1592,6 +1633,7 @@ sv:
   all_configured_apps_a14eef0a: "Alla konfigurerade appar"
   all_courses_a7dbb853: "Alla kurser"
   all_dates_fields_must_be_present_and_formatted_cor_3a0fe925: "Alla datumfält måste presenteras och formateras korrekt"
+  all_day_fb42c4fc: "Hela dagen"
   all_finished_time_to_publish_your_course_click_the_b6f07217: "Färdig? Då är det dags att publicera din kurs! Klicka på knappen nedan för att göra det officiellt! Efter publicering kommer användare kunna delta i kursen."
   all_grading_period_sets_must_have_a_title_799538f: "Alla uppsättningar med betygsperioder måste ha ett namn"
   all_grading_period_sets_must_have_at_least_one_enr_20b84ba1: "Alla set med bedömningsperioder måste ha minst en inskrivningstermin"
@@ -1608,6 +1650,7 @@ sv:
   all_students_have_taken_the_survey_494f9f42: "Alla studenterna har gjort undersökningen"
   all_submissions_must_have_a_selected_grade_3a84e5a9: "Alla inlämningar måste ha ett betyg valt."
   all_terms_cd27b0fb: "Alla terminer"
+  all_timezones_5e8afa7b: "Alla tidszoner"
   all_weights_must_be_greater_than_or_equal_to_0_cc2dcdf1: "Alla vikter måste vara större eller lika med 0"
   allow_a_moderator_to_review_multiple_independent_g_752c4b90: "Tillåt en moderator att se flera oberoende bedömningar för valda inlämningar"
   allow_bulk_grade_export_to_sis_e11a6e66: "Tillåt grupp-exportering av betyg till SIS"
@@ -1616,10 +1659,11 @@ sv:
   allow_course_images_to_be_assigned_to_a_course_and_adb906f4: "Tillåt kursbilder att tilldelas till en kurs och användas i kontrollpanelerna."
   allow_dashboard_cards_to_be_reordered_for_each_use_81f989d7: "Låt översiktskort registreras för varje användare."
   allow_in_mastery_paths_5332c786: "Tillåt i måluppfyllelseväg"
-  allow_intra_group_peer_reviews_53f1e455: "Tillåt interngrupp att kika på granskningar"
+  allow_intra_group_peer_reviews_53f1e455: "Tillåt interngrupp att kika på referentgranskningar"
   allow_lor_tools: "Tillåt användare att visa och använda externa verktyg som konfigurerats för LOR."
   allow_multiple_attempts_e67a0a37: "Tillåt flera försök"
   allow_opt_out_of_inbox: "Tillåt användare att välja om de vill ut ur konversations-inkorgen. Det kommer leda till att alla konversationsmeddelanden och aviseringar skickas som ASAP-aviseringar till användarens primära e-post, dölj Konversations-inkorgens märke för olästa meddelanden, och dölj Konversations-inkorgens aviseringspreferenser. "
+  allow_passive_acceptance_of_terms_of_service_63ef5994: "Tillåt passivt godkännande av användarvillkoren"
   allow_reorder_dashboard_cards_78215947: "Tillåt registrering av översiktskort"
   allow_students_to_download_course_content_and_view_810e66ec: "Tillåt studenter att hämta kursinnehåll och visa offline"
   allow_students_to_see_who_has_signed_up_for_time_s_497f4a46: "Tillåt studenter att se vem som har bokat in sig för tidsluckorna."
@@ -1627,7 +1671,9 @@ sv:
   allow_the_ability_to_send_notifications_through_ou_13cc8537: "Tillåt möjligheten att skicka aviseringar via vår utskicks kö"
   allow_the_ability_to_send_notifications_through_ou_fdaace5a: "Tillåt tillgången att skicka aviseringar genom vår utskickskö"
   allowed_attempts_4e229caa: "Tillåtna försök"
+  allows_creating_announcements_for_a_specific_secti_14e0a63d: "Tillåter att skapa meddelanden för en viss sektion"
   allows_teachers_to_mark_grade_data_to_be_exported__a6bf77cf: "Tillåt lärare att markera betygsdata som ska exporteras gruppvis till SIS integrationer."
+  allows_the_duplicating_of_modules_in_canvas_2e15b444: "Tillåter duplicering av moduler i Canvas"
   allows_the_duplicating_of_objects_in_canvas_c86f3665: "Tillåter duplicering av föremål i Canvas"
   allows_the_scheduling_of_recurring_calendar_events_aac71007: "Tillåt schemaläggning av återkommande kalender-event"
   allows_users_with_international_phone_numbers_to_r_f90f8522: "Tillåt användare med internationella telefonnummer att ta emot meddelanden från Canvas."
@@ -1647,6 +1693,7 @@ sv:
   an_error_occurred_changing_the_lock_state_for_file_77443f15: "Ett fel uppstod vid ändring av låsstatusen för \"%{fileName}\""
   an_error_occurred_making_a_network_request_d1bda348: "Ett fel uppstod vid försök att göra en nätverksförfrågan"
   an_error_occurred_please_post_your_reply_again_lat_b0220ac6: "*Ett fel uppstod*, vänligen skicka in ditt svar igen senare."
+  an_error_occurred_please_try_again_95361e05: "Ett fel inträffade.Vänligen försök igen."
   an_error_occurred_please_try_again_later_84223241: "Ett fel inträffade. Försök igen senare."
   an_error_occurred_publishing_grades_cfdf7631: "Ett fel uppstod när betygen publicerades."
   an_error_occurred_selecting_provisional_grades_9d7bcda: "Ett fel uppstod när provisoriska betyg valdes"
@@ -1665,6 +1712,7 @@ sv:
   an_error_occurred_while_starting_migration_8e6015e2: "Ett fel uppstod när migreringen startades"
   an_error_occurred_while_updating_late_policies_a95b707f: "Ett fel uppstod vid uppdatering av sena policys"
   an_error_ocurred_while_deleting_the_appointment_gr_4948bbc5: "Ett fel uppstod vid radering av mötesgruppen"
+  an_error_ocurred_while_loading_announcements_32af2ce4: "Ett fel uppstod vid laddning av meddelanden"
   an_error_ocurred_while_loading_sync_history_ad9dc6df: "Ett fel uppstod vid laddning av synkroniserings-historiken"
   an_error_ocurred_while_loading_unsynced_changes_aed0d04d: "Ett fel uppstod vid laddning av osynkroniserade ändringar"
   an_error_ocurred_while_saving_the_appointment_grou_e19452cd: "Ett fel uppstod vid sparande av mötesgruppen"
@@ -1754,10 +1802,13 @@ sv:
     podcast_feed_description_group: "Alla media filer som antingen är länkade eller inbäddade i gruppen meddelanden \"%{group}\" kommer dyka upp i det här flödet."
     podcast_feed_name: "%{course} Meddelanden Podcastflöde"
   announcements_a4b8ed4a: Meddelanden
+  announcements_loaded_e9335d5f: "Meddelanden laddade!"
   announcements_tutorial_tray_994287d6: "Meddelande handledning"
+  anonymize_all_annotations_made_by_instructors_on_s_4f2b70a5: "Anonymisera alla anteckningar som gjorts av instruktörer om inlagor för denna uppgift i SpeedGrader"
   anonymous_e1b8ad27: Anonym
   anonymous_grading_ccb5045c: "Anonymt betyg"
   anonymous_grading_forces_student_names_to_be_hidde_8b46d7e7: "Anonym bedömning döljer studentnamnet i SpeedGrader™"
+  anonymous_instructor_annotations_2b6c822: "Anonyma instruktörs annoteringar"
   anonymous_user: "Anonym användare"
   anonymous_user_d984b9ce: "Anonym användare"
   anonymously_graded_59149570: "Anonymt betygsatt"
@@ -1835,6 +1886,7 @@ sv:
   applied_cc7be774: Tillämpad
   apply_781a2546: Tillämpa
   apply_changes_b1dffc70: "Tillämpa ändringar"
+  apply_filters_note_clicking_this_button_will_cause_753f04: "Använd filter.Obs: Genom att klicka på den här knappen kommer sidan att laddas om."
   apply_theme_7af08387: " Tillämpa tema"
   applying_new_styles_to_subaccounts_e8aeeef2: "Lägger till nya stilar för underkonton"
   applying_please_be_patient_f7b5f244: "Tillämpar, vad god vänta"
@@ -1876,6 +1928,7 @@ sv:
   are_you_sure_you_want_to_delete_this_grading_perio_380b040d: "Är du säker på att du vill ta bort det här uppsättningen med betygsperioder?"
   are_you_sure_you_want_to_delete_this_grading_perio_422359cd: "Är du säker på att du vill radera den här betygsperioden?"
   are_you_sure_you_want_to_delete_this_grading_schem_df8b75f9: "Är du säker på att du vill radera det här betygsschemat?"
+  are_you_sure_you_want_to_delete_this_to_do_item_497016ea: "Är du säker på att du vill radera det här To Do föremålet?"
   are_you_sure_you_want_to_delete_your_copy_of_these_f04442ed: 
     one: "Är du säker på att du vill ta bort din kopia av den här konversationen? Den här åtgärden kan inte ångras."
     other: "Är du säker på att du vill ta bort din kopia av dessa konversationer? Den här åtgärden kan inte ångras."
@@ -1958,6 +2011,8 @@ sv:
       grading_scheme_info: "Visa/Redigera Betygsschema"
     vericite_submission_types_validation: "VeriCite Stöder endast fil inlagor och textinmatning "
   assignment_976578a8: Uppgift
+  assignment_assignment_submission_paper_view_8a4c9776: "Uppgifts %{assignment} inlämning pappersvy"
+  assignment_assignment_submission_plain_text_view_b217d372: "Uppgifts %{assignment} inlämning enkel textvy"
   assignment_comments_e43ed898: Uppgiftskommentarer
   assignment_configuration_4153cb88: Uppgiftskonfigurering
   assignment_created_assignment_name_course_name_324a5639: "Uppgift skapad - %{assignment_name}, %{course_name}"
@@ -2007,6 +2062,7 @@ sv:
       frozen_assignments_error: "Du kan inte radera en grupp med en låst uppgift"
   assignment_groups_bc9cc3c9: Uppgiftsgrupper
   assignment_groups_weight_2f1a5a7c: "Viktning för Uppgiftsgrupper"
+  assignment_id_b040cee0: Uppgifts-Id
   assignment_menu_91fe3716: Uppgiftsmeny
   assignment_muted_4cb590a4: "Uppgiften har tystats"
   assignment_muted_8d74bfa0: "Uppgiften är tystad"
@@ -2033,7 +2089,9 @@ sv:
       one: "%{count} student"
       other: "%{count} studenter"
   assignment_path_selected_e80191d1: "Uppgiftssökväg vald"
+  assignment_preview_3833e819: "%{assignment} förhandsgranskning"
   assignment_selection_6bff05c4: Uppgiftssortiment
+  assignment_title_82b4422e: "Uppgiftstitel:"
   assignment_was_deleted_8320d26d: "Uppgiften raderades"
   assignment_weights_d4bcf9ab: Uppgiftsvikter
   assignments: 
@@ -2106,7 +2164,7 @@ sv:
     available_date_description: 
       available_until: "Tillgänglig tills"
       closed: Stängda
-      not_available_until: "Inte tillgänglig förrens"
+      not_available_until: "Inte tillgänglig förrän"
     buttons: 
       add_group: "Lägg till grupp"
       delete_group: "Radera grupp"
@@ -2232,7 +2290,7 @@ sv:
       graded_count: "%{graded_count} *av* %{total} Inlämningar bedömda"
       links: 
         download_submissions: "Ladda ner inlämningar"
-        peer_reviews: "Person recensioner"
+        peer_reviews: Referentgranskningar
         reupload_submissions: "Ladda upp inlämningar igen"
       resubmission_count: 
         one: "1 icke betygsatt åter-inlämning"
@@ -2370,43 +2428,43 @@ sv:
     peer_reviews: 
       buttons: 
         add: "Lägg till"
-        assign_peer_reviews: "Tilldela förhandsvisning"
+        assign_peer_reviews: "Tilldela referentgranskningar"
       descriptions: 
-        automatically_assign_reviews: "Du kan tilldela förhandsvisningar för de som har lämnat in men ännu inte har tilldelats förhandsvisningar genom att klicka på knappen nedan. "
+        automatically_assign_reviews: "Du kan tilldela referentgranskningar för de som har lämnat in men ännu inte har tilldelats referentgranskningar genom att klicka på knappen nedan. "
       details: "Till vänster kan du se en lista av studenter för den här uppgiften, och även vilka studentuppgifter (om några) de har tillåtelse att förhandsvisa."
       links: 
         assign_peer_review: "Ge %{student} en annan inlämning att bedöma"
         back_to_assignment: "Tillbaka till uppgift"
       messages: 
-        cancel_peer_review: "Avbryt den här recensionen?"
+        cancel_peer_review: "Avbryt den här referentgranskning?"
         no_students_found: "Inga studenter hittades"
       none_assigned: "Inga tilldelningar"
       not_yet_submitted: "ännu inte inlämnad"
       options: 
         select_student: "[Välj student]"
       overview: |-
-          Recensioner kommer anses vara färdiga när studenten 
+          Referentgranskningar kommer anses vara färdiga när studenten 
           har kommenterat minst en gång på sidan.
-      overview_with_rubric: "Recensioner kommer anses vara färdiga när studenten har kommenterat minst en gång på sidan och markerat i matrisen för uppgiften."
-      page_title: "Person recensioner"
+      overview_with_rubric: "Referentgranskningar kommer anses vara färdiga när studenten har kommenterat minst en gång på sidan och markerat i matrisen för uppgiften."
+      page_title: Referentgranskningar
       reviews_per_user: "%{count} recensioner per användare"
       submitted: inlämnad
-      title: "%{assignment} Recensioner"
+      title: "%{assignment} Referentgranskningar"
       titles: 
         automatically_assign_reviews: "Tilldela recensioner automatisk"
         remind: "Påminn %{assessor} om bedömningen, senast påmind %{time}"
         reminder: "Påminn %{assessor} om bedömningen, senast påmind %{time}"
     peer_reviews_selector: 
       anonymous_peer_reviews: Anonymitet
-      how_to_peer_review: "Hur du tilldelar recensioner"
+      how_to_peer_review: "Hur du tilldelar referentgranskningar"
       labels: 
-        anonymous_peer_reviews: "Recensioner visas anonymt"
-        automatically_assign_peer_reviews: "Tilldela recensioner automatiskt"
-        manually_assign_peer_reviews: "Tilldela recensioner manuellt"
-        require_peer_reviews: "Begär recensioner"
+        anonymous_peer_reviews: "Referentgranskningar visas anonymt"
+        automatically_assign_peer_reviews: "Tilldela referentgranskningar automatiskt"
+        manually_assign_peer_reviews: "Tilldela referentgranskningar manuellt"
+        require_peer_reviews: "Begär referentgranskningar"
       locked_until: "Tilldela bedömning"
       peer_reviews_assign_at_explanation: "Måste komma efter inlämningsdatum. Om blank, använd sista dagen."
-      peer_reviews_header: "Person recensioner"
+      peer_reviews_header: Referentgranskningar
       reviews_per_user: "Bedömningar per användare"
     points_possible_number: "Möjliga poäng måste vara ett nummer"
     positive_number: "Du måste använda ett positivt nummer"
@@ -2478,7 +2536,7 @@ sv:
         no_comments: "Inga kommentarer"
         submission_late_timestamp: "%{submitted_at} (sen)"
       titles: 
-        assigned_peer_reviews: "Tilldelade recensioner"
+        assigned_peer_reviews: "Tilldelade referentgranskningar"
         comments: "Kommentarer:"
         submission: Inlämning
         submission_not_turned_in: "Inte inlämnad!"
@@ -2645,6 +2703,10 @@ sv:
   associations_3fd4abe8: Sammanslutningar
   associations_saved_successfully_48b9eae3: "Föreningar sparades framgångsrikt"
   at_least_one_term_must_be_attached_24fd2bf5: "Minst en inskrivningstermin måste vara bifogad"
+  at_the_bottom_a109f5c8: "Längs ner"
+  at_the_bottom_a6a5f0fe: "I botten"
+  at_the_top_c2ce2371: "Längst upp"
+  at_the_top_fa836591: "Vid toppen"
   attach_terms_2b8770a5: "Bifoga terminer"
   attached_display_name_afa00c2e: "Bifogad: %{display_name}"
   attached_files_must_be_greater_than_0_bytes_7f57bee7: "Bifogade filer måste vara större än 0 bytes"
@@ -2713,6 +2775,7 @@ sv:
   available_until_lock_at_ab022445: "Tillgänglig tills %{lock_at}"
   availableslots_available_87b8b69d: "%{availableSlots} Tillgänglig"
   availableslots_more_available_be5193a8: "%{availableSlots} mer tillgängligt"
+  avatar_for_author_2eabbf55: "Profilbild för %{author}"
   avatar_for_studentname_8ea511ae: "Profilbild för %{studentName}"
   average_49c63f9b: Genomsnitt
   back_2900f52a: Tillbaka
@@ -2735,6 +2798,8 @@ sv:
   bb_name: "Svart tavlan konverterare"
   be_a_hero_and_ask_your_instructor_to_fix_this_link_4981930c: "Var en hjälte och be din lärare att fixa länken"
   before_44c686b4: Före
+  before_54324c1d: Före...
+  before_cb32fc0: Tidigare...
   before_implementing_custom_css_or_javascript_pleas_128da8cd: "Innan du implementerar anpassad CSS eller Javascript, se * vår dokumentation*."
   before_implementing_custom_css_or_javascript_pleas_65423572: "Innan du implementerar anpassad CSS eller Javascript, se * vår dokumentation*."
   before_publishing_this_file_you_must_specify_usage_2229d20b: "Innan du publicerar filen måste du specificera användarrättigheter."
@@ -2745,6 +2810,7 @@ sv:
   before_using_this_feature_we_recommend_trying_the__7e6f194e: "Innan du använder denna funktionen rekommenderar vi att du testar *********%{t_theme_editor}********* för braning. Att aktivera denna funktionern ger dig möjgihet att ladda upp custom JavaScript och CSS filer i Theme Editor. Modifieringar som görs med denna metoden kan påverka framtida ändringar i Canvas DOM (t.ex. element klassnamn eller HTML-struktur) och stödjs därför inte. Du måste även se till att alla modifieringar du gör är tillgängliga för alla, inklusive de som använder *skärmläsare* och **de** som ***förlitar*** sig på ****high contrast funktionen****. Instructure avsäger sig allt ansvar för ändringar som du gör. Det är ditt ansvar att kontrollera att de uppfyller *****alla***** ******krav****** *******standrads******* som finns där du bor. De som använder funktionen bör ha en bra förståelse över JavaScript och CSS och måste ha sin egen kod. ********Använd på egen risk!********"
   before_you_can_edit_your_profile_you_need_to_verif_4fd9143e: "Innan du kan redigera din profil måste du bekräfta din e-postadress (%{email}) genom att klicka på länken i e-postmeddelandet som vi skickat till dig. Om du inte ser det, *klicka på skicka e-postmeddelande igen* och se till att du kontrollerar din skräpbox."
   beginning_date_2d2a29ac: Startdatum
+  behind_31e4e0fe: Bredvid
   belgium_32_e5f5b598: "Belgien (+32)"
   belgium_ef8739b6: Belgien
   below_this_search_field_is_a_list_of_content_type__58aaa03f: "Under sökfältet finns en lista med %{content_type}. Medan du skriver kommer den listan filtreras efter din fråga. Konverserings-meddelanden kommer att filtreras efter det alternativ du valt."
@@ -2781,6 +2847,7 @@ sv:
   bookmark_service: 
     default_title: "Ingen titel"
   bookmark_this_question_bank_dc414a82: "Bokmärk den här frågebanken"
+  bottom_15a2a9be: "Längst ner"
   bounce_count_reset_c4c2218f: "Antal avvisanden återställt!"
   bounce_reason_689ed4c6: Avvisande-anledning
   brazil_55_34103ffa: "Brasilien (+55)"
@@ -3150,6 +3217,11 @@ sv:
         appointment_group: Mötesgrupp
         assignment: Uppgift
         event: Händelse
+        todo: "Att göra"
+    edit_planner_note: 
+      calendar: "Kalender:"
+      date: "Datum:"
+      title: "Titel:"
     end_before_start_error: "Startiden måste vara före sluttiden"
     ends_in_past_error: "Du kan inte skapa en bokad händelse som slutar i förfluten tid"
     errors: 
@@ -3199,7 +3271,7 @@ sv:
       modal: 
         chooseDueDate: "VIll du gå tillbaka och välja en sista dag?"
         goBackToInclude: "VIll du gå tillbaka och inkludera:"
-        notAllSectionsAssigned: "Alla sektioner kommer inte tilldelas detta föremålet"
+        notAllSectionsAssigned: "Alla sektioner kommer inte tilldelas detta objekt"
     name_is_required: "Det krävs ett namn!"
     no_dates_error: "Du måste specificera åtminstone ett datum och tid"
     no_groups: "Inga grupper hittades"
@@ -3240,6 +3312,7 @@ sv:
       show_undated_events: "Visa odaterade objekt"
   calendar_283a9ed9: kalender
   calendar_a8563bb2: "Kalender:"
+  calendar_contextinfo_name_a7d98525: "Kalender %{contextInfo.name}"
   calendar_d14cfc8f: Kalender
   calendar_event: 
     errors: 
@@ -3330,6 +3403,9 @@ sv:
   canada_aec587fa: Kanada
   cancel_caeb1e68: Avbryt
   cancel_custom_link_creation_39ec70bd: "Avbryt skapande av egen länk"
+  cancel_submitting_comment_2666e98b: "Avbryt inlämningskommentar"
+  cancel_updating_comment_6816d855: "Avbryt uppdateringskommentar"
+  cannot_access_group_in_concluded_course_90a8db52: "Kan inte komma åt gruppen i avslutad kurs"
   cannot_autograde_at_this_time_a146ad9d: "Kan inte bedöma automatiskt den här gången"
   cannot_be_associated_with_a_different_account_ac863be2: "kan inte vara associerad med ett annat konto"
   cannot_be_associated_with_different_accounts_f461814f: "kan inte vara associerad med olika konton"
@@ -3388,6 +3464,7 @@ sv:
   canvas_demo_7a005cf3: "Canvas Demo"
   canvas_did_not_recognize_your_identity_provider_cb0e50fc: "Canvas kände inte igen din identitetsleverantör"
   canvas_doesn_t_have_an_account_for_user_user_5bcae0dd: "Canvas har inget konto för användaren: %{user}"
+  canvas_enrollment_id_d0e8b9a4: canvas_enrollment_id
   canvas_error_report_ff678539: "Canvas felrapport"
   canvas_group_category_id_38d8cfd7: canvas_group_category_id
   canvas_introduction_video_2d81f3ad: "Canvas introduktionsvideo"
@@ -3403,7 +3480,7 @@ sv:
   canvas_will_regrade_all_your_submissions_after_you_2d68694a: "Canvas omklassa alla svar efter att du har detta Quiz, det kan ta ett par minuter."
   card_movement_menu_for_title_b94c09af: "Kort förflyttningsmeny för %{title}"
   card_view_eaf73185: kortvy
-  careful_changes_to_group_membership_will_apply_to__19a9089c: "Försiktigt! Ändringar till gruppers medlemskap kommer tillämpas på grupper som redan har uppgiftsinlämningar. Det är inte säkert att Gruppuppgifts-inlämningar behålls som ett resultat. Vill du skapa en ny grupp för framtida uppgifter? "
+  careful_changes_to_group_membership_will_apply_to__19a9089c: "Försiktigt! Ändringar i gruppens medlemskap kommer tillämpas på grupper som redan har inlämningar. Det är inte säkert att betyg på redan bedömda inlämningar behålls. Vill du skapa en ny gruppuppsättning eller ändra grupper?"
   cas_url_4ba2843e: "CAS URL"
   catalog_already_enabled_56478a3c: "Katalogen är redan aktiverad"
   catalog_name_46d37909: Katalognamn
@@ -3436,10 +3513,14 @@ sv:
       update_assignment_points: "Uppgiftens totala poäng är %{assignmentPoints} och matrisens totala poäng är %{rubricPoints} resulterar i ett högsta poäng på %{toPercentage_pointRatio} för studenters inlämningar som betygsatts med matrisen."
     titles: 
       update_assignment_points: "Ändra uppgiftens poäng så att den matchar matrisen?"
+  change_section_to_sectionname_6e947e90: "Ändra avsnitt till %{sectionName}"
+  change_sis_ids_3a47154d: "Ändra SIS IDs"
   changed_item_1d16a85f: "Ändra föremål"
   changes_will_still_apply_if_you_leave_this_page_935cedc6: "Ändringarna gäller även om du lämnar denna sidan."
   changes_you_made_may_not_be_saved_4e8db973: "Ändringar du gjort kan inte sparas."
+  changing_the_late_policy_will_affect_previously_gr_49071db7: "Ändring av sen policy kommer att påverka tidigare betygsatta inlägg."
   changing_your_policy_now_will_affect_previously_gr_62063898: "Ändring av din policy kommer att påverka tidigare betygsatta inlämningar."
+  chars_written_max_character_length_len_fec9bd18: "%{chars} skriven, max teckenlängd %{len}"
   chart_of_the_student_s_grades_on_each_assignment_a1fb1908: "Tabell med studentbetyg för varje uppgift"
   chat_2153c6b7: Chatt
   check_back_in_a_little_while_17756399: "Kom tillbaka inom kort."
@@ -3452,6 +3533,7 @@ sv:
   chile_56_88238b47: "Chile (+56)"
   chile_9081cde6: Chile
   choose_a_color_or_course_nickname_for_course_2585e42c: "Välj färg eller smeknamn för kursen %{course}"
+  choose_a_color_or_course_nickname_or_move_course_c_dd23f754: "Välj ett färg- eller kursnamn eller flytta kurskort för %{course}"
   choose_a_course_home_page_8059c7b: "Välj en hemsida för kursen"
   choose_a_csv_file_to_upload_9644480c: "Välj en CSV fil att ladda upp:"
   choose_a_timezone_d9c52998: "Välj tidszon"
@@ -3464,8 +3546,10 @@ sv:
   choose_attribute_to_add_866e128d: "Välj attribut att lägga till"
   choose_course_home_page_d8642f9e: "Välj kurs hemsida"
   choose_home_page_80cef4ee: "Välj hemsida"
+  choose_image_242f727e: "Välj bild"
   choose_image_e5ee5d7a: "Välj bild"
   choose_student_1513fcd1: "-- Välj student --"
+  choose_the_next_mastery_path_b035b727: "Vald nästa bemästringsväg"
   choose_usage_rights_33683854: "Ändra användningsrättigheter"
   chosencolor_is_not_a_valid_color_5d542cc: "'%{chosenColor}' är inte en giltig färg."
   clear_2084585f: Rensa
@@ -3503,12 +3587,18 @@ sv:
   click_to_sort_by_last_login_descending_61fdadc: "Klicka för att sortera efter senaste inloggning fallande"
   click_to_sort_by_name_ascending_739c011e: "Klicka för att sortera efter namn stigande"
   click_to_sort_by_name_descending_b6262093: "Klicka för att sortera efter namn fallande"
+  click_to_sort_by_number_of_students_ascending_d09bea31: "Klicka för att sortera stigande efter antal studenter"
+  click_to_sort_by_number_of_students_descending_3600dc1f: "Klicka för att sortera fallande efter antalet studenter"
   click_to_sort_by_sis_id_ascending_832c870: "Klicka för att sortera efter SIS ID stigande"
   click_to_sort_by_sis_id_descending_2d611236: "Klicka för att sortera efter SIS ID fallande"
+  click_to_sort_by_sub_account_ascending_989b1ab: "Klicka för att sortera efter stigande underkonto"
+  click_to_sort_by_sub_account_descending_88c611db: "Klicka för att sortera efter fallande underkonto"
   click_to_sort_by_subaccount_ascending_11252bc4: "Klicka för att sortera efter delkonto stigande"
   click_to_sort_by_subaccount_descending_3d8a2381: "Klicka för att sortera efter delkonto fallande"
   click_to_sort_by_teacher_ascending_cda7a18c: "Klicka för att sortera efter lärare stigande"
   click_to_sort_by_teacher_descending_45ef0d1e: "Klicka för att sortera efter lärare fallande"
+  click_to_sort_by_term_ascending_c3ef1eb7: "Klicka för att sortera benämning stigande"
+  click_to_sort_by_term_descending_199c48c0: "Klicka för att sortera benämning fallande"
   click_to_sort_c81ff8c8: "Klicka för att sortera."
   click_to_test_a_different_score_2e0bb6f0: "Klicka för att testa en annan poäng"
   click_to_test_dropdown_b950974d: "Klicka för att testa rullgardinsmenyn"
@@ -3523,6 +3613,7 @@ sv:
   close_details_sidebar_ff8f663d: "Stäng sidofältet för detaljer"
   close_for_comments_37783f56: "Stäng för kommentarer"
   close_grade_info_58ef5a20: "Stäng betygsinfo"
+  close_move_tray_8609e988: "Stäng utragsbara facket"
   close_picker_256aca8a: "Stäng Picker"
   close_sidebar_10b0fbb4: "Stäng sidofältet"
   close_submission_tray_c4988fa8: "Stäng inlämningsfack"
@@ -3671,6 +3762,7 @@ sv:
   collapsed_510aa02a: Förminskad
   colombia_57_c6c75620: "Colombia (+57)"
   colombia_919c87f9: Colombia
+  color_a363e1b0: Färg
   color_overlay_fb5ecce7: Färgöverlagring
   columns_464bd055: Kolumner
   coming_up_4348b0bd: Kommande
@@ -3678,6 +3770,8 @@ sv:
     from_beginning: början
     to_now: nu
   comment_by_replying_to_this_message_or_join_the_co_26d42fde: "Kommentera genom att svara på detta meddelandet, eller anslut dig till konversationen via denna länken: %{link}."
+  comment_by_replying_to_this_message_or_join_the_co_52b5ac1c: "Kommentera genom att svara på det här meddelandet, eller gå med i konversationen med den här länken: %{link}.När det är tillåtet, om du behöver inkludera en bilaga, logga in på Canvas och svara på diskussionen."
+  comment_by_replying_to_this_message_or_join_the_co_886bc612: "Kommentera genom att svara på det här meddelandet, eller gå med i konversationen med den här länken: %{link}När det är tillåtet, om du behöver bifoga en bilaga, logga in på Canvas och svara på meddelandet."
   comments_e07bcbe3: Kommentarer
   common_cartridge_description: "Det här aktiverar konvertering av Common Cartridge paket i ett förmedlande json format att importeras"
   common_cartridge_display: "Common Catridge"
@@ -4124,9 +4218,9 @@ sv:
         media_playback: "Media Playback"
     media_objects_not_configured: "Mediaokbjekten konfigurerades inte"
     new_roster_user: 
-      completed_enrollment: "färdiga *%{completed_at}*"
+      completed_enrollment: "Färdig *%{completed_at}*"
       enrolled_as: "Registrerade som %{enrollment_type}"
-      enrollment_linked_to: "länka till *%{linked_user}*"
+      enrollment_linked_to: "Länkad till *%{linked_user}*"
       labels: 
         user_privileges: Privilegier
       legends: 
@@ -4175,8 +4269,9 @@ sv:
     roster_user: 
       completed_enrollment: "färdiga *%{completed_at}*"
       confirm: 
+        conclude: "Är du säker på att du vill avsluta den här registreringen?"
         conclude_student: "Är du säker på att du vill avbryta den här studentens registreringar?"
-        delete_enrollment: "Är du säker på att du vill radera den här studentens registreringar?"
+        delete_enrollment: "Är du säker på att du vill radera denna registrering?"
       enrolled_as: "Registrerade som %{enrollment_type}"
       enrollment_change_failed: "Ändringen av registreringsprivilegiet misslyckades, vänligen försök igen"
       enrollment_linked_to: "länka till *%{linked_user}*"
@@ -4688,6 +4783,7 @@ sv:
   correct_check_icon_617da6c3: "rätt kryssikon"
   costa_rica_506_d63d2ea1: "Costa Rica (+506)"
   costa_rica_97d66afe: "Costa Rica"
+  could_not_duplicate_discussion_953ed67f: "Kunde inte duplicera diskussion"
   could_not_save_chosencolor_741b74ce: "Kunde inte spara '%{chosenColor}'"
   couldn_t_find_an_authority_to_update_44d9407e: "Kunde inte hitta en befogenhet att uppdatera"
   couldn_t_find_canvas_csv_import_headers_487f1b6c: "Kunde inte hitta Canvas CSV rubriksimporter"
@@ -4718,6 +4814,7 @@ sv:
   count_items_deleted_successfully_a287aa53: 
     one: "%{name} raderad"
     other: "%{count} föremål raderades"
+  count_items_on_page_page_961fc0c7: "%{count} objekt på sidan %{page}"
   count_items_selected_91814713: 
     one: "%{count} föremål vald"
     other: "%{count} valda föremål"
@@ -4731,6 +4828,7 @@ sv:
     one: "1 minut"
     other: "%{count} minuter"
     zero: "mindre än 1 minut"
+  count_of_max_maximum_characters_fcb6ddf8: "%{count} av %{max} maximala tecken"
   count_options_190d6373: 
     one: "1 Alternativ"
     other: "%{count} Alternativ"
@@ -4740,6 +4838,9 @@ sv:
   count_participations_ac8f82b7: 
     one: "1 deltagande"
     other: "%{count} deltagande"
+  count_people_successfully_enrolled_into_course_nam_db8eed18: 
+    one: "%{user_name} framgångsrikt registrerade i*%{course_name}*."
+    other: "%{count} personer framgångsrikt registrerade i*%{course_name}*."
   count_points_4735a2e8: 
     one: "1 poäng"
     other: "%{count} poäng"
@@ -4773,6 +4874,7 @@ sv:
   count_submissions_need_grading_d34bae25: 
     one: "1 inlämning måste betygsättas"
     other: "%{count} inlämningar måste bedömas"
+  count_type_would_be_deleted_and_exceeds_the_set_th_19dc538d: "%{count} %{type} skulle raderas och överstiga den inställda tröskeln för %{change_threshold}%"
   count_unsynced_changes_1fc147e5: "%{count} Osynkroniserade ändringar"
   count_unsynched_changes_3a1249ba: "%{count} Osynkroniserade förändringar"
   country_is_required_b0afbf52: "Land krävs"
@@ -4837,6 +4939,7 @@ sv:
       teachers_students: "Lärare och studenter"
   course_8a63b4a3: Kurs
   course_8dcfb195: kurs
+  course_activity_bfe11267: Kursaktivitet
   course_activity_stream_40091c17: Kurs-aktivitetsflöde
   course_and_user_search_ebc1ae41: "Kurs- och användarsökning"
   course_announcements_76b07340: Kursmeddelande
@@ -4854,10 +4957,10 @@ sv:
   course_content_download_from_3c8c6c01: "Kursinnehåll laddas ner från"
   course_content_downloads_6cb31802: "Kursinnehålls nedladdning"
   course_copy_argument_error: "En kurskopia kräver en kurskälla"
-  course_copy_description: "Migrerings-plugin för kopiering av canvas kurser"
+  course_copy_description: "Migrerings-plugin för kopiering av Canvas kurser"
   course_copy_display: Kurskopia
-  course_copy_file_description: "Kopiera en Canvas kurs"
-  course_copy_name: "Kopiera Canvas kurs"
+  course_copy_file_description: "Kopiera en Canvas-kurs"
+  course_copy_name: "Kopiera Canvas-kurs"
   course_copy_no_course_error: "Kurskällan hittades inte"
   course_copy_not_allowed_error: "Du får inte kopiera kurskällan"
   course_discussions_38c0b74f: Kursdiskussioner
@@ -5631,6 +5734,7 @@ sv:
       i grupper som hemläxor, arbete i klasser, uppsatser, diskussioner
       och frågeformulär. Uppgiftsgrupper kan nu vägas.
   create_content_for_your_course_500a7032: "Skapa innehåll för din kurs"
+  create_criterion_6df4d4ad: "Skapa kriterium"
   create_educational_resources_8219326e: "Skapa utbildningsresurser"
   create_failed_15d07ad4: "Skapandet misslyckades"
   create_item_base: 
@@ -5660,12 +5764,16 @@ sv:
   created_by_b39b9c8b: "Skapad av"
   created_by_sis_93fbb66b: created_by_sis
   created_by_sis_e1449c31: "Skapad av SIS"
+  created_created_bf5714b8: "Skapad %{created}"
   created_group_group_name_2097306b: "Skapade gruppen %{group_name}"
   creating_a_submission_export_will_allow_you_to_dow_b4b1a658: "Att skapa en Inlämningsexport kommer låta dig ladda ner en zipfil innehållandes alla dina uppgiftsinlämningar från alla dina nuvarande och tidigare kurser. Det kan vara en stor fil så det kan ta en stund. Du kan lämna sidan och komma tillbaka senare."
   creative_commons_714a065f: "Gemensam kreativitet"
   creative_commons_license_725584ae: "Gemensam kreativitet licens:"
   creative_commons_licenses_7d557d9a: "Kreativa gemensamma licenser"
   criterion_5f0b62f8: Kriterium
+  criterion_created_42669293: "Kriterium skapat"
+  criterion_long_description_e9a97247: "Kriterium lång beskrivning"
+  criterion_updated_36c0b3dc: "Uppdaterat kriterium"
   crumbs: 
     access_report: "Tillgång till rapporten"
     announcements: Meddelanden
@@ -5713,6 +5821,7 @@ sv:
     bottom: 
       student: 
         count: "Antal lågpresterande studenter"
+    column_delimiter: ","
     comments: Kommentarer
     correct: 
       bottom: 
@@ -5730,6 +5839,7 @@ sv:
     current_score: "Nuvarande poäng"
     difficulty: 
       index: Svårighetsindex
+    encoding: UTF-8
     final_grade: Slutbetyg
     final_score: Slutbetyg
     id: ID
@@ -5787,6 +5897,7 @@ sv:
       assign_blanks: "Ge nollor till ej inlämnade studenter"
     out_of_points_possible: "utav %{assignment.points_possible}"
     this_is_permanent: "Betygskruva kan inte göras om. För-kurvor för betygen kommer vara tillgängliga, men åtgärden är oåterkallig."
+  custom_6979cd81: Anpassa
   custom_css_and_javascript_may_cause_accessibility__93d2a823: "Anpassad CSS och Javascript kan orsaka åtkomst problem eller konflikter med framtida Canvas-uppdateringar!"
   custom_fields_fc3e55af: "Anpassade fält"
   custom_link_details_35fd38fc: "Detaljer om anpassad länk"
@@ -5835,6 +5946,7 @@ sv:
   dashboard_options_b240ed5a: "Instrumentbräda alternativ"
   dashboard_view_d7d85969: "Panel vy"
   data_exports: "data exporter"
+  data_point_over_time_8d0a54cc: "%{data_point} Över tid"
   data_set_identifier_data_set_id_c228b5df: "Datamängdsidentifierare: %{data_set_id}"
   date: 
     abbr_day_names: 
@@ -5914,12 +6026,13 @@ sv:
   date_created_87e265bc: "Datum skapat"
   date_ee500367: Datum
   date_error_7b38f8ff: "Datum fel"
+  date_is_required_9c6f5e83: "Datum krävs"
   date_modified_e1c8ac8f: "Datum ändrat"
   date_of_most_recent_bounce_b23d0119: "Datum för senaste avvisande"
   datepicker: 
     errors: 
       not_a_date: "Det är inget datum!"
-    first_day_index: "0"
+    first_day_index: "1"
     nextText: Nästa
     prevText: Föregående
   dates: 
@@ -5979,10 +6092,12 @@ sv:
   deduct_104e8866: "Räkna av"
   deep_orange_4c7eea99: "Djup orange"
   deep_purple_bb3e2907: "Djup lila"
+  default_9db103d: Förinställd
   default_conference_title: "%{course_name} Konferens"
   default_email_5cb9fa04: "Standard e-post:"
   default_email_9efb7fbd: "Standard e-post"
   default_grade_cannot_be_set_to_ex_723caa59: "Förinställt betyg kan inte ställas in som %{ex}"
+  default_grading_scheme_894a0eb: "Förinställt betygsschema"
   default_order_8c409051: "Standard beställning"
   default_question_name: Fråga
   default_question_text: Frågetext
@@ -6002,7 +6117,9 @@ sv:
   delete_assignment_name_deec56e3: "Ta bort uppgift %{name}"
   delete_bank_d8f4cb64: "Ta bort %{bank}"
   delete_comment_a71040c3: "Radera kommentar"
+  delete_comment_comment_d32ffc85: "Ta bort kommentar: %{comment}"
   delete_comment_commenttext_c8afe129: "Radera kommentar: %{commentText}"
+  delete_criterion_row_80c3b3b: "Ta bort kriterium rad"
   delete_current_message_5da0221a: "Radera nuvarande meddelande"
   delete_current_module_item_21fefc54: "Radera nuvarande modul/föremål"
   delete_custom_help_link_814f0509: "Ta bort anpassad hjälplänk"
@@ -6016,6 +6133,7 @@ sv:
   delete_outcome_cc6546f1: "Ta bort lärandemål"
   delete_outcome_group_6b399d34: "Ta bort lärandemåls-grupp"
   delete_quiz_142b8099: "Radera quiz"
+  delete_rating_24876355: "Radera ranking"
   delete_requirement_bce2d943: "Radera uppgift"
   delete_rubric_9b66412d: "Ta bort matris"
   delete_section_name_a48d9d79: "Ta bort avsnitt \"%{name}\""
@@ -6028,6 +6146,7 @@ sv:
   delete_this_collaboration_4f20b698: "Ta bort det här samarbetet"
   delete_this_feed_67d5d924: "Ta bort det här Flödet"
   delete_this_key_70f74aa1: "Radera den här nyckeln"
+  delete_this_module_20d54791: "Radera modulen"
   delete_this_page_509f2baf: "Radera den här sidan"
   delete_this_question_8f955ceb: "Ta bort den här frågan"
   delete_this_section_380338: "Radera den här sektionen"
@@ -6126,6 +6245,7 @@ sv:
   department_6abddd98: Avdelning
   description_436c48d7: Beskrivning
   details_98a31b68: Detaljer
+  details_a6f427c3: "Detaljer:"
   developer_key: 
     api_key: "Nyckel: *%{api_key}*"
     created: "Skapad:"
@@ -6178,6 +6298,9 @@ sv:
   disable_sync_to_name_10c371dc: "Avaktivera synkronisering för %{name}"
   disabled_18c33a73: (avaktiverad)
   disabled_3b1b332a: Avaktiverad
+  disabled_and_locked_d14dc6c2: "Inaktiverad och låst"
+  disabled_by_default_7d822dcb: "Inaktiverad som standard"
+  disabled_in_course_settings_d15ee35d: "* Inaktiverad i kursinställningar"
   disabled_links_b3bdea99: "Avaktiverade länkar"
   disabling_f594bda: Avaktiverar...
   disabling_post_to_sis_is_not_available_for_non_pub_ee031373: "Inaktivering av Post till SIS är inte tillgängligt för icke publicerade kurser"
@@ -6347,7 +6470,7 @@ sv:
       last_page: Sista
     peer_reviews: 
       due_date: "slutdatum %{date}"
-      peer_review_alert: "Du har tilldelats en personlig recension av %{person}"
+      peer_review_alert: "Du har tilldelats en referentgranskning av %{person}"
     points_possible_number: "Möjliga poäng måste vara ett nummer"
     published_button: 
       buttons: 
@@ -6376,7 +6499,7 @@ sv:
       from_context: "Från *%{context_name}*"
       initial_post_required: "Svar är endast synliga för dem som har skrivit minst ett svar."
       links: 
-        peer_reviews: "Person recensioner"
+        peer_reviews: Referentgranskningar
       loading_replies: "Laddar svar..."
       lock_topic: "Stäng för kommentarer"
       locked: "Det här ämnet är stängt för kommentarer"
@@ -6610,12 +6733,17 @@ sv:
   due_time_9acd6b69: "Slutdatum %{time}"
   duplicate_31cec192: Duplicera
   duplicate_assignment_name_3ca7d753: "Duplicera bedömning %{name}"
+  duplicate_discussion_title_43b39959: "Duplicera diskussion %{title}"
+  duplicate_item_339f54bb: "Kopiera föremål"
+  duplicate_module_module_name_be40ad50: "Duplicerad modul %{module_name}"
+  duplicate_modules_8ea35557: "Duplicerade moduler"
   duplicate_objects_120eda73: "Duplicera föremål"
   duplicate_provider_provider_d9842134: "Duplicera leverantör %{provider}"
   e_c2991d1b: e
   e_g_doe_jon_fe1d9298: "Ex. Jansson, Jan"
   e_g_http_university_edu_helpdesk_acab04d6: "t.ex. http://university.edu/helpdesk"
   e_g_jon_doe_77233e3b: "Ex. Jan Jansson"
+  e_g_jondoe_example_com_98656fb5: "t.ex. jondoe@example.com"
   e_mail_only_2cc5e513: "Endast e-post"
   each_bar_is_an_assignment_the_green_layer_represen_b6536ab1: "Varje stapel är en uppgift. Det gröna lagret representerar procenten elever som lämnat in sin inläming *i tid*. **Sena** inlämningar är gula, och inlämningar som ***saknas*** r röda."
   each_bar_is_one_assignment_the_thin_vertical_whisk_17840129: "Varje stapel är en uppgift. Den \"tunna lodräta linjen* sträcker sig från den lägsta elevpoängen till den högsta. Den **tjockare stolpen** sträcker sig från den 25:e till den 75:e procentenheten, med ***medianen markerad***."
@@ -6638,8 +6766,11 @@ sv:
   edit_assignment_name_mastery_paths_40b50541: "Redigera uppgift %{name} kontrollsökvägar"
   edit_bank_92eb8e14: "Redigera %{bank}"
   edit_c5fbea07: Redigera
+  edit_comment_comment_e74afa04: "Redigera kommentar %{comment}"
   edit_conference_title_6e234815: "Ändra \"%{conference_title}\""
   edit_course_role_3b992fc2: "Redigera kursroll"
+  edit_criterion_5e4dadca: Redigera-kriterium
+  edit_criterion_description_5828919: "Redigera beskrivning av kriterium"
   edit_current_message_da650d4c: "Redigera nuvarande meddelande"
   edit_grading_period_e39af45d: "Ändra bedömningsperiod"
   edit_grading_period_set_c548f4df: "Ändra set med bedömningsperioder"
@@ -6659,6 +6790,7 @@ sv:
     one: "Redigera behörighet för: %{itemName}"
     other: "Redigera behörighet för %{count} föremål"
   edit_quiz_ededddd8: "Redigera Quiz"
+  edit_rating_c2ac31e5: "Redigera ranking"
   edit_role_1e96ad20: "Redigera roll"
   edit_rubric: 
     buttons: 
@@ -6679,6 +6811,7 @@ sv:
       read_only_rubric: "Du kan inte redigera matrisen, det beror antingen på att du inte har behörighet eller så används den på annan plats. Om du utför ändringar kommer det resultera i en ny matris baserad på den gamla. Vill du fortsätt ändå?"
     titles: 
       criterion_long_description: "Kriterium lång beskrivning"
+      edit_rubric_rating: "Redigera ranking"
       find_existing_rubric: "Hitta befintlig matris"
   edit_section_name_558cc89: "Redigera avsnitt \"%{name}\""
   edit_survey_b0d6890d: "Redigera undersökning"
@@ -6694,6 +6827,7 @@ sv:
   edit_user_c46cf103: "Redigera användare"
   edit_user_details_4d7b63ff: "Ändra användaruppgifter"
   edit_your_catalog_account_cce59310: "Redigera ditt katalog konto"
+  edited_date_b0455372: "(Redigerat) %{date}"
   editing_permissions_for_name_3503e235: "Redigerar tillstånd för %{name}"
   editor: 
     alt_text: "Växla text:"
@@ -6756,6 +6890,7 @@ sv:
   editor_button_6647db9c: Redigeringsknapp
   either_the_url_or_domain_should_be_set_c29cf8c1: "Uppge url eller domänen som ska ställas in."
   either_you_re_a_new_user_or_the_terms_of_use_have__14f0d0d0: "Antingen är du en ny användare eller så har *användarvillkoren* ändrats sedan du senast godkände dem. Vänligen godkänn *användarvillkoren* och **intergritetspolicyn** innan du fortsätter."
+  either_you_re_a_new_user_or_the_terms_of_use_have__2bbebdef: "Antingen är du en ny användare, eller så har *användarvillkoren* ändrats sedan du godkände dem. Vänligen godkänn *användarvillkoren* innan du fortsätter"
   element_option_missing_error_an_element_to_attach__be433478: "`element` alternativet saknar fel: Ett element att bifoga TreeBrowserView till måste specificeras när inställningen för render-alternativet ställs in som 'sann' för BBTreeBrowserView"
   email: 
     default_from_name: "Instructure Canvas"
@@ -6790,8 +6925,13 @@ sv:
   enable_the_creation_of_blueprint_courses_79f91c30: "Aktivera skapande av kursplaner"
   enable_the_creation_of_master_courses_8205b155: "Aktivera skapande av huvudkurser"
   enable_the_plagiarism_detection_platform_7c3b6195: "Aktivera detektering av plagieringsplattform"
+  enabled_and_locked_49ff3de4: "Aktiverat och låst"
+  enabled_ba7cab66: Aktiverad
+  enabled_by_default_e530d6ed: "Aktiverat som standard"
   enabled_links_be110215: "Aktivera länkar"
+  enabled_web_services_f620b2be: "Aktivera webbtjänster"
   encourage_class_participation_4e069479: "Uppmuntra klassens deltagande"
+  encrypted_sourcedids_for_basic_outcomes_87fa11ea: "Krypterade Sourcedids för grundläggande resultat"
   end_course_set_up_tutorial_dialog_5b812ec6: "Slutkurs inställning handledningsdialog"
   end_course_set_up_tutorial_f358b85d: "Slutkurs ställ in handledning"
   end_date_cannot_be_before_start_date_eb62ed6d: "Slutdatum kan inte vara innan startdatumet"
@@ -6800,8 +6940,10 @@ sv:
   end_dates_cannot_be_before_start_dates_d6018daf: "Slutdatum kan inte vara före startdatum"
   end_time_250391e8: Sluttid
   end_tutorial_7fb16b6f: "Avsluta handledning"
+  end_user_license_agreement_6d2c666b: "Slutanvändare licensavtal."
   ending_date_e1ea13a4: Slutdatum
   ends_4fcb632: "Slutar:"
+  ends_at_9a62b528: "Slutar vid"
   enrolled_a6a517cd: Anmäld
   enrolled_as_272da3b9: "Registrerad som"
   enrollment: 
@@ -6849,6 +6991,7 @@ sv:
   enter_a_what_if_score_668c91a3: "Skriv in vad-om poäng."
   enter_account_domain_to_substitute_the_user_s_root_1b79eac2: "Ange \"{{ACCOUNT_DOMAIN}}\" för att ersätta användarens root-konto-domän"
   enter_canvas_user_id_to_substitute_the_user_s_uniq_b2a75735: "Ange \"{{CANVAS_USER_ID}}\" för att ersätta användarens unika Canvas ID"
+  enter_grades_as_e113e606: "Ange betyg som"
   enter_or_find_an_external_tool_url_6aebbd0d: "Ange eller hitta ett externt verktyg URL"
   enter_the_access_token_for_your_organization_from__cc77493d: "Fyll i tillgångstoken för din organisation från *eduappcenter.com*. När de applicerats, kommer endast appar som din organisation godkänt i EduAppCenter att listas på sidan för externa appar. Lär dig hur du **genererar tillgångstoken**."
   enter_the_email_addresses_of_the_users_you_would_l_17cef6a0: "Ange e-postadresserna till de användare som du vill lägga till, separerade med kommatecken"
@@ -7125,10 +7268,13 @@ sv:
   error_59293a2c: fel
   error_98e81528: Fel
   error_deleting_name_reason_11f9d399: "Fel vid radering %{name}: %{reason}"
+  error_duplicating_module_4b023042: "Fel vid duplicering av modulen"
   error_exporting_gradebook_msg_6ea31e2f: "Ett fel uppstod vid export av betygsbok: %{msg}"
   error_in_mastery_paths_range_index_7d17ddac: "%{error} i kontrollsökvägsområdet %{index}"
   error_loading_grade_history_try_again_36465d2c: "Misslyckades att ladda bedömningshistorik Försök igen?"
+  error_loading_gradebook_history_try_again_19032437: "Misslyckades att ladda betygboks-historik. Försök igen?"
   error_message_2b9d12ee: "Fel: %{message}"
+  error_rendering_duplicated_module_db821097: "Fel med att göra duplicerad modul"
   error_retrieving_assignment_configuration_tools_f7d75303: "Fel vid hämtning av konfigurationsverktyg för anvisning"
   error_retrieving_similarity_detection_tools_d6d4f9e9: "Fel vid hämtning av likhets detektionsredskap"
   error_running_quizzes_2_export_cfecedba: "Fel vid körning av Quizzes 2 export."
@@ -7195,6 +7341,7 @@ sv:
   event_end_time_ef830e66: "Händelsens sluttid"
   event_fe9ba3fe: Händelse
   event_start_time_441b491f: "Händelsens starttid"
+  event_title_57a50568: "Händelsetitel:"
   event_title_course_name_changed_to_37510fbb: "%{event_title}, %{course_name} ändrat till"
   every_665d821e: Varje
   everyone_854554dd: Alla
@@ -7391,13 +7538,19 @@ sv:
   extreme_critical_emergency_80b3dbda: "EXTREMT KRITISKT NÖDFALL!"
   faculty_journal_5634938e: Fakultetsjournal
   fail_62dbb06a: misslyckades
+  failed_276786d: Misslyckad
   failed_307449e1: "Misslyckades:"
   failed_creating_user_b706a1c5: "Misslyckades att skapa användare"
+  failed_loading_associations_component_is_your_netw_fa49fb32: "Misslyckades att ladda föreningskomponenten. Är din nätverksanslutning OK?"
   failed_loading_course_sections_refresh_page_to_try_f97160bf: "Misslyckades ladda kursval. Uppdatera sida och försök igen."
+  failed_loading_sync_history_component_is_your_netw_2d04fc10: "Misslyckades med att ladda synkronisering-historik (Sync History) komponenten. Är din nätverksanslutning OK?"
+  failed_loading_unsynced_changes_component_is_your__89f863d6: "Misslyckades med att ladda ej synkroniserade ändringar (Unsynced Changes) komponenten. Är din nätverksanslutning OK?"
   failed_to_create_webhook_b766cf5c: "Misslyckades att skapa beteendemönster för webbsida."
   failed_to_create_zip_file_1a943d06: "Misslyckades att skapa zipfil"
+  failed_to_export_some_tool_settings_c992fc56: "Misslyckades med att exportera vissa verktygsinställningar"
   failed_to_import_media_objects_4c1fcb4f: "Misslyckades att importera mediaobjekt"
   failed_to_log_in_7ceec561: "Misslyckades att logga in "
+  failed_to_move_items_e043da6: "Kunde inte flytta föremål"
   failed_to_publish_draft_comment_853761e9: "Kunde inte publicera utkastkommentar"
   failed_to_save_please_try_again_later_bb7070fb: "Misslyckades att spara, vänligen försök igen senare"
   failed_to_submit_draft_comment_1de83451: "Kunde inte skicka in utkast kommentar"
@@ -7451,6 +7604,7 @@ sv:
     quiz_log_auditing: "Granskning av quizlogg"
     student_groups: "Ny elevgruppsida"
     student_outcome_gradebook: "Studentöverblick för Måluppfyllelse"
+  features_2581da: Funktioner
   federated_attributes_5cbe6441: Förbundsattribut
   federated_attributes_are_information_sent_from_you_2116fb61: "Förbundsattribut är information som skickats från  ditt externa verifieringssystem som kan användas för att automatiskt uppdatera överensstämmande information för användare i Canvas varje gång de loggar in. "
   feed_url_is_required_253fda4e: "Flödes-URL krävs"
@@ -7604,10 +7758,12 @@ sv:
       no_rubric_outcomes_found: "Inga matris-konfigurerade lärandemål hittades"
     titles: 
       find_outcome: "Hitta Lärandemål"
+  find_outcome_746cc57e: "Hitta Lärandemål"
   find_questions_4930b38f: "Hitta frågor"
   finished_19aaf6f5: Färdig
   finland_1f322b39: Finland
   finland_358_abeffc8a: "Finland (+358)"
+  first_5744470e: Första
   first_last_name_9820d256: "För, efternamn"
   first_name_d5c12500: Förnamn
   first_reviewer_9ea05caa: "Första bedömaren"
@@ -7652,6 +7808,7 @@ sv:
     other: "Hittade %{count} trasiga länkar"
   france_33_90b595d7: "Frankrike (+33)"
   france_c25bfeae: Frankrike
+  from_date_must_be_before_to_date_79f00046: "\"Från\" datum måste vara före \"Till\" datum"
   from_fdd4956d: Från
   from_from_to_to_e31f6422: "Från %{from} till %{to}"
   front_page_must_be_set_first_4dbbfdbe: "Framsidan måste ställas in först"
@@ -7662,6 +7819,7 @@ sv:
   future_5416ea92: Framtid
   future_terms_7fba2ae6: "Framtida termer"
   general_locked_objects_6a9adafb: "Allmänt låsta föremål"
+  generate_activity_for_user_2b0af749: "Generera aktivitet för %{user}"
   generate_epub_80e89ea4: "Generera ePub"
   generate_item_analysis_report_statuslabel_16e02c8: "Generera analysrapport för objekt %{statusLabel}"
   generate_student_analysis_report_statuslabel_aecdc4dc: "Generera analysrapport för student %{statusLabel}"
@@ -7677,6 +7835,8 @@ sv:
   get_your_users_error_reports_posted_to_salesforce__76f57839: "Få dina användarfelsrapporter postade till ditt Salesforce Service Cloud"
   get_your_users_error_reports_posted_to_salesforce_dfb1a6c2: "få dina användarfelsrapportet postadee till Salesforce"
   getting_started_with_collaborations_794240ba: "Komma igång med Samarbeten"
+  give_all_students_the_same_grade_for_assignment_na_e44fcc7e: "Ge alla studenter samma betyg för *%{assignment.name}* genom att ange och skicka ett betygsvärde nedan:"
+  give_all_students_the_same_percent_grade_for_assig_6a008004: "Ge alla studenter samma *procentuella* betyg för **%{assignment.name}** genom att ange och skicka ett betygsvärde nedan:"
   global_branding_df1cae12: "Global märkning"
   global_message_icons: 
     announcement: meddelande
@@ -7688,6 +7848,7 @@ sv:
     warning: varning
   global_navigation_8bee3501: "Global navigering"
   go_30af2a7b: Sök
+  go_back_ed239e69: Återgå
   go_to_name_s_profile_eaa1826b: "Gå till %{name}’s profil"
   go_to_settings_for_name_812308b5: "Gå till inställningar för %{name}"
   go_to_statistics_for_name_2ee6b6f3: "Gå till statistik för %{name}"
@@ -7713,6 +7874,7 @@ sv:
   grade_9c6f076d: Betyg
   grade_a91e433e: "Betyg:"
   grade_assignment_7c1abc11: "Bedöma %{assignment}"
+  grade_change_activity_75fb525: "Betyg förändringsaktivitet"
   grade_changes_cb5a57a8: Betygsändringar
   grade_display_warning_dialog: 
     grade_display_warning: 
@@ -7726,6 +7888,9 @@ sv:
   grade_history_ccc09fde: Betygshistorik
   grade_info_19fb9875: Betygsinformation
   grade_low_to_high_1678b713: "Betyg - Lågt till högt"
+  grade_out_of_percentage_1972bf52: "Betyg av %{percentage}"
+  grade_out_of_points_d401b79d: "Betyg av %{points}"
+  grade_point_average_2976cc59: "Betygspoäng genomsnitt"
   grade_summary: 
     graph_title: "Medel %{mean}, Högsta %{high}, Lågsta %{low}"
     ? "no"
@@ -8006,6 +8171,7 @@ sv:
   gradebook_export_failed_reason_2b0f6c53: "Betygsbok export misslyckades: %{reason}"
   gradebook_export_started_723461b9: "Betygsbok export påbörjades"
   gradebook_history_a3e8e0b4: Betygshistorik
+  gradebook_history_b03f8524: "Betygsbok historik..."
   gradebook_individual_view_8846598e: "betygsbok: Individuell vy"
   gradebook_performance_764d8b3d: "Betygsboks prestanda"
   gradebook_settings_b45c6df9: "Betygboks inställningar"
@@ -8117,7 +8283,7 @@ sv:
       media_comment: "Det här är en mediakommentar,"
       not_official: "*OBS*: Det är INTE din officiella poäng."
       page_title: "Betyg för %{student}"
-      print_grades: "Skriv ut betyg"
+      print_grades: "Skriv ut"
       score_details: Poängdetaljer
       see_rubric_results: "Se matrisresultat"
       see_rubric_results_screenreader: "Se matrisresultat"
@@ -8329,6 +8495,7 @@ sv:
   grades_a61eba0a: Betyg
   grades_are_now_reverted_to_original_scores_e6deade1: "Betygen är nu återställda till ursprunglig poäng"
   grades_are_now_showing_what_if_scores_711a8be2: "Betygen visar nu \"Ifall-att\" poäng"
+  grades_for_student_aff00ba: "Betyg för %{student}"
   gradezilla: 
     alerts: 
       scores_updated: 
@@ -8436,6 +8603,7 @@ sv:
   grading_periods_are_weighted_4f3663ab: "Betygsperioder viktas"
   grading_periods_must_not_overlap_f45336fb: "Betygsperioder får inte överlappa"
   grading_scheme_deleted_7ae5a072: "Betygsschema har raderats"
+  grading_scheme_f151d195: Betygsschema
   grading_scheme_saved_85535151: "Betygsschema har sparats"
   grading_schemes_1c3c3252: Betygsscheman
   grading_standard: 
@@ -8539,6 +8707,7 @@ sv:
   group_name_in_group_category_name_group_category_29bf3254: "%{group_name} I %{group_category_name} gruppkategorin"
   group_name_is_required_5547bc0b: "Det krävs ett gruppnamn"
   group_roster_1846bf84: Grupplista
+  group_select_330df8bd: Gruppval
   group_set_name_2aed2347: Gruppnamn
   group_settings: 
     invitation_sent: "Inbjudan har skickats"
@@ -8892,6 +9061,9 @@ sv:
   groups_must_be_empty_to_assign_by_section_a9fafa72: "Grupper måste vara tomma för anvisning per sektion"
   groups_navigation_menu_76b5acc6: "Grupp navigeringsmeny"
   groupweight_of_total_9579ae8c: "%{groupWeight}% av totalt"
+  handlebars_helpers: 
+    time: 
+      event: "%{date} vid %{time}"
   has_similarity_score_d5f332b4: "Har liknande poäng"
   has_turnitin_score_3e1cacf6: "Har Turinitinpoäng"
   haven_t_been_graded_d7dee5bb: "Har inte bedömts"
@@ -8950,8 +9122,8 @@ sv:
       conversation_label: "Besök konversationer"
       discussion_details: Diskussiondetaljer
       discussion_label: "Besök kursdiskussionerna"
-      peer_review_details: Recensionsdetaljer
-      peer_review_label: "Besök kursens recensioner"
+      peer_review_details: "Referentgranskning Detaljer"
+      peer_review_label: "Besök kursens referentgranskningar"
       x_more: "%{x} mer..."
       x_new_in_announcements: 
         one: "*1* meddelande"
@@ -8967,7 +9139,7 @@ sv:
         other: "*%{count}* Diskussioner"
       x_new_in_peer_reviews: 
         one: "*1* Recension"
-        other: "*%{count}* Recensioner"
+        other: "*%{count}* Referentgranskningar"
     local: Lokal
     select: 
       prompt: "Vänligen välj"
@@ -9024,7 +9196,10 @@ sv:
       Canvas är förinställt att först använda Flash för att spela videos. Starta det här eller försök använda HTML5 först,
       gå sen tillbaka till Flash.
   html_editor_fb2ab713: "HTML Editor"
+  i_agree_to_the_34aa16ce: "Jag godkänner"
+  i_agree_to_the_terms_of_use_18e16f0c: "Jag godkänner *användarvillkoren*."
   i_agree_to_the_terms_of_use_and_privacy_policy_f41760cc: "Jag accepterar *användarvillkoren* och **integritetspolicyn**."
+  i_agree_to_the_tool_s_270301a5: "Jag godkänner till verktygens"
   i_cannot_get_things_done_until_i_hear_back_from_yo_83ba46b7: "Jag kan inte utföra något innan jag hör från er"
   i_cb2f5130: i
   i_have_obtained_permission_to_use_this_file_6386f087: "Jag har fått tillåtelse att använda den här filen."
@@ -9051,6 +9226,7 @@ sv:
   if_enabled_modules_will_have_the_option_to_be_mark_a4313e1: "Om aktiverad kommer moduler ha alternativet att bli markerade som färdig även om bara ett krav har uppnåtts."
   if_enabled_oauth2_access_token_url_will_be_sent_in_c21186fd: "Om aktiverat, ’’oauth2_access_token_url’ kommer att sändas i LTI2 registreringslansering"
   if_enabled_query_parameters_will_not_be_copied_to__4c6ed625: "Om aktiverad kommer frågeparametrarna inte att kopieras från POST body under en LTI start."
+  if_enabled_sourcedids_used_by_canvas_for_basic_out_aa2ea4b1: "Om det är aktiverat, kommer Sourcedids som används av Canvas for Basic Outcomes att krypteras."
   if_enabled_users_will_be_able_to_configure_lti_2_t_6293eebd: "Om aktiverat kommer användare kunna konfigurerar LTI 2 verktyg."
   if_none_are_selected_send_to_everyone_in_the_entir_16aa0bb0: "(om ingen väljs, skicka till alla i hela kontot)"
   if_none_are_selected_send_to_everyone_in_the_entir_21119709: "(om ingen väljs, skicka till alla i hela underkontot)"
@@ -9266,12 +9442,14 @@ sv:
       view_in_new_window: "Visa i ett nytt fönster"
     tooltips: 
       enter_search_terms: "uppge söktermer"
+  instructure_default_73317bb1: "Lärare standard"
   integration_id_a6977535: "Integrations ID:"
   integration_id_int_id_is_already_in_use_f30f03b5: "Integrations ID \"%{int_id}\" används redan"
   interactions_report_47c1219e: Interaktionsrapport
   international_sms_9edb9868: "Internationellt SMS"
   international_sms_send_from_recipient_s_country_43881ea4: "Internationellt SMS - Skicka från mottagarens land"
   international_text_messaging_rates_may_apply_d4b4a97a: "Priser för internationella SMS kan tillkomma."
+  internet2_254c6ca6: Internet2
   invalid_address_book_strategy_904a7ada: "Ogiltig adressbok-strategi."
   invalid_authenticity_token_b753558c: "Ogiltigt bekräftelse-token"
   invalid_aws_configuration_e8a6ae0f: "Ogiltig AWS konfiguration"
@@ -9299,11 +9477,13 @@ sv:
   it_took_too_long_to_login_please_try_again_c1ed2e28: "Det tog för lång tid att logga in. Försök igen"
   italy_39_cfad867a: "Italien (+39)"
   italy_daec3097: Italien
+  item_cannot_be_duplicated_cebf3109: "Föremål kan inte kopieras"
   item_complete_d334fd43: "(Föremålet färdigt)"
   item_filter_ca3987d7: "Filtrering av föremål"
   item_incomplete_d6a16040: "(Föremålet ofärdigt)"
   item_name_is_not_currently_supported_d0d7dcb: "%{item_name} stödjs inte för tillfället"
   item_past_due_dc6e776: "Föremål har gått över sista dag"
+  item_select_fe0f320a: "Föremål val"
   item_type_assignment_13a1132e: "Föremålstyp: Uppgift"
   item_type_choice_aebcf2ef: "Posttyp: Val"
   item_type_discussion_e3ddae9b: "Föremålstyp: Diskussion"
@@ -9381,6 +9561,8 @@ sv:
   join_6cafecca: Anslut
   join_course_511e6cb3: "Anslut %{course}"
   join_group_group_name_871a5e3f: "Anslut till gruppen %{group_name}"
+  join_the_conversation_using_the_link_below_54ab1f0e: "Anslut till konversationen via länken nedan."
+  join_the_conversation_using_this_link_link_9017499: "Anslut till konversationen via denna länk: %{link}."
   joined_group_group_name_e3802c04: "Har anslutit till gruppen %{group_name}"
   joining_81f8b6c9: Ansluter
   jpg_png_or_gif_files_14e360d2: "jpg, png eller gif filer"
@@ -9395,6 +9577,7 @@ sv:
       nu gäller det
       bara för vissa stiländringar, men fler K-12 saker kan läggas till i framtiden.
   k_2521301c: k
+  keep_in_mind_this_submission_will_count_for_everyo_bb526d67: "Kom ihåg att den här inlämningen berör alla i din %{groupType} grupp."
   keep_submissions_anonymous_5cbaf419: "Håll inlämningarna anonyma"
   key_api_key_68bf80ae: "Nyckel: *%{api_key}*"
   keyboard_instructions_e032939f: tangentbordsinstruktioner
@@ -9405,6 +9588,7 @@ sv:
   labels: 
     lock_module_until: "Lås tills"
   last_download_33ea9bf4: "Senast nedladdad:"
+  last_e159dbd: Sista
   last_enrollment_activity_10fe15ba: "Senaste registreringsaktivitet"
   last_export_899a04c5: "Senaste export:"
   last_first_name_95a078f5: "Efter, Förnamn"
@@ -9437,6 +9621,7 @@ sv:
   latest_assessment_a85280ef: "Senaste utvärdering"
   latest_f604a75: Senaste
   latest_score_905aa87b: "Senaste poäng"
+  launch_external_tool_672c0409: "Starta externt verktyg"
   launch_registration_tool_38d4781: "Starta registreringsverktyget"
   launch_url_e150bd41: "Starta URL"
   layouts: 
@@ -9475,9 +9660,12 @@ sv:
     no_comment: "Inga kommentar"
     no_description: "Ingen beskrivning"
   leave_5e852989: Lämna
+  leave_a_comment_7991725b: "Lämna en kommentar"
   leave_group_group_name_6847c632: "Lämna gruppen %{group_name}"
   left_group_group_name_aac4e813: "Lämnade gruppen %{group_name}"
+  len_maxlen_97f1c88d: "%{len}/%{maxLen}"
   length_notifications_found_25276610: "%{length} Avisering hittad"
+  length_results_found_3afd01e5: "%{length} resultat hittade"
   let_students_see_the_correct_answers_dacc2faf: "Låt studenterna se de korrekta svaren"
   let_students_see_their_quiz_responses_fbc07d14: "Låt studenterna se deras testsvar"
   let_students_see_their_quiz_responses_incorrect_qu_f5c9cb70: "Låt studenter se deras Quiz-svar (Felaktiga frågor kommer att markeras i studentens återkoppling)"
@@ -9493,8 +9681,11 @@ sv:
       over_quota: "filstorleken överstiger kvoten"
     auth: 
       api: 
+        bad_request_message: bad_request
         bad_request_messagee: bad_request
         bad_request_status: bad_request
+        not_found_message: not_found
+        not_found_status: not_found
       authentication_required: " användargodkännande krävs"
       errors: 
         not_authenticated: "Du måste vara inloggad för att ha tillgång till den här sidan"
@@ -9566,6 +9757,7 @@ sv:
       word_separator: " "
   license_help: 
     content_license_help: "Innehållsrättigheter hjälp"
+  license_type_6b74b543: Licenstyp
   life_preserver_icon_8660b6ce: "Ikon för livboj"
   light_blue_5374f600: Ljusblå
   light_green_c1cd020d: Ljusgrön
@@ -9628,6 +9820,7 @@ sv:
   load_more_9ca37ccc: "Ladda mer..."
   loaded_more_collaborations_13f1d630: "Laddade fler samarbeten"
   loading_25990131: Laddar...
+  loading_6ac402e1: laddar...
   loading_725811ca: laddar
   loading_announcements_b927a86c: "Laddar meddelanden"
   loading_assignments_352ec769: "Laddar uppgifter"
@@ -9636,6 +9829,7 @@ sv:
   loading_associations_started_1f65d8d: "Laddar associationer startade"
   loading_bde52856: Laddar
   loading_change_log_94ac6073: "Laddar ändrings-logg"
+  loading_comments_32366acf: "Laddar kommentarer"
   loading_courses_409a3641: "Laddar kurser"
   loading_courses_bd1bffe: "Laddar kurser..."
   loading_courses_complete_count_courses_found_6768d9e1: 
@@ -9646,6 +9840,7 @@ sv:
   loading_graders_f6a76142: "Laddar betygsättare"
   loading_mastery_paths_c558a766: "Laddar Mastery Paths..."
   loading_more_grade_history_results_b235de5: "Laddar mer historik för betygsresultat."
+  loading_more_gradebook_history_results_810f6d2e: "Laddar fler betygbok-historik resultat"
   loading_more_results_def6df65: "Ladda fler resultat.."
   loading_results_769c8819: "Laddar resultat"
   loading_results_spinner_73ef739c: "Laddar resultats-spinner"
@@ -9673,6 +9868,7 @@ sv:
   locked_objects_by_type_ff376c6c: "Låsta föremål efter typ"
   locked_objects_cannot_be_edited_in_associated_cour_1af858c8: "Låsta föremål kan inte redigeras i sammarbetskurser."
   locked_until_item_name_is_graded_3b8d967f: "Låst tills \"%{item_name}\" är graderad"
+  locked_until_mastery_path_is_processed_for_item_na_48766cf7: "Låst tills styrbanan behandlas för \"%{item_name}\""
   locked_until_unlock_date_498ead5f: "Låst tills %{unlock_date}"
   locking_91f476a5: Låser...
   log_in_c9e240ef: "Logga in"
@@ -9752,8 +9948,8 @@ sv:
               utöver att veta ditt lösenord, för att logga in på Canvas. Detta kan vara en enhet som kan generera
               verifieringskoder, eller en telefon som kan ta emot textmeddelanden Google Authenticator-appen för [iPhone](%{iphone_url}) eller
               [Android](%{android_url}) Kan konfigureras genom att skanna QR-koden nedan. Andra tokens kan konfigureras genom att ange den
-              hemliga nyckeln **%{secret_key}**. När du har konfigurerat multi-faktor autentisering rekommenderas att du går till din
-              profilsida och skriver ut en uppsättning säkerhetskoder, om din normala multi-faktor enhet är otillgänglig.
+              hemliga nyckeln **%{secret_key}**. När du har konfigurerat multifaktorautentisering rekommenderas att du går till din
+              profilsida och skriver ut en uppsättning säkerhetskopieringskoder, i fall din normala multifaktor-enhet inte är tillgänglig.
           mfa_required: "Det krävs att du använder en flerstegs-verifiering"
           otp_on_device: "Vänligen uppge verifieringskoden som din token visar."
           otp_sent_to_phone: "En verifieringskod har skickats till din telefon. Vänligen uppge den här."
@@ -9784,6 +9980,7 @@ sv:
   login_footer_link_hover_1b474e6c: "Inloggningssidofotlänk svävar"
   login_id_12109693: Inloggnings-ID
   login_id_bc943b97: "Inloggnings ID:"
+  login_info_d1d9f11e: Inloggningsinformation
   login_instructure_logo_8f2332db: "Inloggning Instructure-logga"
   login_is_invalid_must_be_alphanumeric_or_an_email__ae4499b3: "Oglitigt användarnamn: måste vara alfanumerisk eller en e-postadress"
   login_is_too_long_25373f95: "Användarnamnet är för långt"
@@ -9794,6 +9991,7 @@ sv:
   login_with_auth_type_a0aaa52a: "Logga in med *%{auth_type}*"
   login_with_provider_3fd3998e: "Logga in med %{provider}"
   logout_a9312e35: "Logga ut"
+  long_description_7d89285c: "Lång beskrivning"
   looks_great_e4d883ed: "Ser väldigt bra ut!"
   low_eab1cadd: Lågsta
   low_score_4eeb95b2: "Lågt: %{score}"
@@ -9841,6 +10039,7 @@ sv:
       delete_avatar: "Är du säker på att du vill radera den här användarens profilbild?"
       lock_avatar: "Låser du den här bilden kommer den godkännas och användare kommer inte kunna uppdatera den. Fortsätt?"
   manage_b88f7150: Hantera
+  manage_discussion_title_a2ecb3fb: "Hantera diskussioner %{title}"
   manage_enrollment_status_create_groups_and_add_use_3c91de1b: "Hantera inskrivningsstatus, skapa grupper och lägg till användare från denna sida."
   manage_grading_schemes_in_context_name_e3678273: "Hantera betygsscheman i %{context_name}"
   manage_group_group_name_ac8578c6: "Hantera gruppen %{group_name}"
@@ -9858,6 +10057,8 @@ sv:
   manual_entry_e4a4f99a: "Manuellt inlägg"
   mark_as_done_6fa48d2f: "Markera som färdig"
   mark_as_done_779556d7: "markera som färdig"
+  mark_as_read_e7de2ce3: "Markera som läst"
+  mark_as_unread_4a413c41: "Markera som oläst"
   mark_done_9d81bcd9: "Markering färdig "
   marked_done_8f61ebb8: "markerad som färdig"
   marked_done_9fd646f: "Markering är färdig"
@@ -9865,6 +10066,7 @@ sv:
   masquerade_fdbc9594: Maskering
   master_courses_2aaa4841: Huvudkurser
   mastery_n_mastery_points_precision_2_str_points_e0ed1b3b: "Måluppfyllelse: %{n_mastery_points_precision_2_str} Poäng"
+  mastery_path_processing_f4471152: "Behandling av styrbanan"
   mastery_paths_breakdown_6e0b5fce: Målvägssammanbrott
   mastery_paths_cc4096c2: Måluppfyllnadsväg
   mastery_paths_editor_930655bb: "Redigerare huvudsökväg"
@@ -9884,6 +10086,7 @@ sv:
       miscellaneous: Misc
       operators: Operatörer
       relationships: Relationer
+  max_dd02d615: max
   max_membership_bd0ddc68: max_membership
   max_users_groups_per_appointment_867c505b: "Max användare/grupper per bokat möte"
   maximum_number_of_appointments_a_participant_can_a_70dfd6cd: "Maximalt antal bokade möten en deltagare kan delta i"
@@ -10090,7 +10293,7 @@ sv:
         discussion_entry_reply_message: "Anslut dig till konversationen med länken nedan, eller kommentera genom att svara på det här meddelandet."
         html: 
           body: "%{user} lämnade en ny kommentar på meddelandet: %{discussion_topic} för %{course}:"
-          discussion_entry_reply_message: "Anslut dig till konversationen med länken nedan, eller kommentera genom att svara på det här meddelandet."
+          discussion_entry_reply_message: "Anslut dig till konversationen med länken nedan, eller kommentera genom att svara på det här meddelandet.När det är tillåtet, om du behöver bifoga en bilaga, logga in på Canvas och svara på meddelandet."
           link: "Klicka här för att ansluta och se meddelandet"
           subject: "Ny kommentar på meddelandet %{discussion_topic}: %{course}"
         subject: "Ny kommentar på meddelandet %{discussion_topic}: %{course}"
@@ -10649,7 +10852,7 @@ sv:
           attached_files: "Bifogade filer:"
           audio_comment: "Det här meddelandet innehåller mediakommentarer. För att lyssna eller svara, klicka på länken nedan:"
           download: "ladda ner"
-          reply_to_conversation_message: "Du kan svara på det här meddelandet i Canvas genom att svara direkt på e-postmeddelandet. "
+          reply_to_conversation_message: "Du kan svara på det här meddelandet i Canvas genom att svara direkt på e-postmeddelandet.Om du behöver inkludera en bilaga, logga in på Canvas och svara via inkorgen."
           subject: "%{user_name}, du skickade nyss ett meddelande i Canvas."
           unknown_user: "Okänd användare"
           view_message: "Visa det här meddelandet i konversationer"
@@ -10675,7 +10878,7 @@ sv:
           attached_files: "Bifogade filer:"
           audio_comment: "Det här meddelandet innehåller mediakommentarer. För att lyssna eller svara, klicka på länken nedan:"
           download: "ladda ner"
-          reply_to_conversation_message: "Du kan svara på det här meddelandet i Canvas genom att svara direkt på e-postmeddelandet. "
+          reply_to_conversation_message: "Du kan svara på det här meddelandet i Canvas genom att svara direkt på e-postmeddelandet.Om du behöver inkludera en bilaga, logga in på Canvas och svara via inkorgen."
           subject: "%{user_name} skickade nyss ett meddelande till dig i Canvas."
           unknown_user: "Okänd användare"
           view_message: "Visa det här meddelandet i konversationer"
@@ -11238,7 +11441,7 @@ sv:
         discussion_entry_reply_message: "Anslut dig till konversationen med länken nedan, eller kommentera genom att svara på det här meddelandet."
         html: 
           body: "%{user} lämnade en ny kommentar i tråden %{discussion_topic} för %{course}:"
-          discussion_entry_reply_message: "Anslut dig till konversationen med länken nedan, eller kommentera genom att svara på det här meddelandet."
+          discussion_entry_reply_message: "Anslut dig till konversationen med länken nedan, eller kommentera genom att svara på det här meddelandet.När det är tillåtet, om du behöver inkludera en bilaga, logga in på Canvas och svara på diskussionen."
           link: "Klicka här för att ansluta dig till konversationen"
           subject: "Ny kommentar för %{discussion_topic}: %{course}"
         subject: "Ny kommentar för %{discussion_topic}: %{course}"
@@ -11379,16 +11582,16 @@ sv:
     page_unpublished_module: "Den här sidan är en del av en avpublicerad modul och är därför inte tillgänglig än."
     peer_review_invitation: 
       email: 
-        body: "Du har blivit inbjuden till att recensera %{reviewee}. Följ länken nedanför för att lämna dem en recension!"
+        body: "Du har blivit inbjuden till att referentgranskning %{reviewee}. Följ länken nedanför för att lämna dem en recension!"
         html: 
           link_message: "Klicka här för att slutföra din recension"
-        subject: "recensera för %{reviewee}"
+        subject: "referentgranskning för %{reviewee}"
       sms: 
         more_info: "Mer information på %{url}"
       summary: 
         body: "Du har blivit inbjuden till att recensera %{reviewee}. Följ länken nedanför för att lämna dem en recension!"
       twitter: 
-        body: "Du har blivit inbjuden till att recensera %{reviewee}. Följ länken nedanför för att lämna dem en recension!"
+        body: "Du har blivit inbjuden till att referentgranskning %{reviewee}. Följ länken nedanför för att lämna dem en recension!"
     pseudonym_registration: 
       email: 
         body: "Du har registrerat dig för ett Canvaskontot på %{account}! Innan du kan logga in och börja använda Canvas måste du färdigställa konfigurationen."
@@ -11506,7 +11709,7 @@ sv:
           link_message: "Klicka här för att visa kommentaren"
           someone: Någon
           subject: "Inlämningskommentar: %{user}, %{assignment}, %{context}"
-          submission_comment_link_message: "Du kan se över inlämningsdetaljerna genom att använda länken nedanför, eller svara på kommentaren genom att svara på det här meddelandet."
+          submission_comment_link_message: "Du kan se över inlämningsdetaljerna genom att använda länken nedanför, eller svara på kommentaren genom att svara på det här meddelandet.När det är tillåtet, om du behöver bifoga en bilaga, logga in på Canvas och svara på inlämningen."
         link_message: "Du kan se över inlämningsdetaljerna här:"
         someone: Någon
         subject: "Inlämningskommentar: %{user}, %{assignment}, %{context}"
@@ -11757,6 +11960,7 @@ sv:
       valid_workflow_state: "Måste skicka ett giltigt arbetsflödestillstånd"
   migration_selection_5f1c5f55: Migreringsurval
   migration_successful_f1811ef3: "Migrationen lyckades"
+  min_e10fe94c: min
   mini_calendar_fe8003e4: Minikalender
   minimize_global_navigation_2d839351: "Minimera global navigering"
   minimum_score_e6d1c134: Minimipoäng
@@ -11788,11 +11992,11 @@ sv:
   moderate_grades_4f43f85d: "Moderera betyg"
   moderated_grading_allows_multiple_graders_to_grade_5c0d53db: "Modererade bedömning låter flera betygsättare bedömma valda uppgifter på egen hand, med en moderator som ger slutbetyget."
   moderated_grading_cannot_be_enabled_for_group_assi_7e947ab7: "Moderering av grupper kan inte aktiveras för gruppuppgifter"
-  moderated_grading_cannot_be_enabled_for_peer_revie_6b7eedc1: "Moderering av betyg kan inte aktiveras för granskade uppgifter"
+  moderated_grading_cannot_be_enabled_for_peer_revie_6b7eedc1: "Moderering av betyg kan inte aktiveras för referentgranskning uppgifter"
   moderated_grading_e6127f72: "Modererade bedömning"
   moderated_grading_setting_cannot_be_changed_if_gra_ba939ce2: "Moderering av betyg kan inte ändras om en betygsatt inlämning existerar"
   moderated_grading_setting_cannot_be_enabled_for_gr_d81fb43b: "Moderering av betyg kan inte aktiveras för gruppuppgifter"
-  moderated_grading_setting_cannot_be_enabled_for_pe_fc7b5b8b: "Moderering av granskade uppgifter kan inte aktiveras"
+  moderated_grading_setting_cannot_be_enabled_for_pe_fc7b5b8b: "Moderering av referentgranskning uppgifter kan inte aktiveras"
   moderated_grading_setting_cannot_be_enabled_for_un_e40e6cd4: "Moderering av betyg kan inte aktiveras för ej betygsatta uppgifter"
   moderator_49b9f2e1: Moderator
   moderator_sortorder_18063692: "Moderator %{sortOrder}"
@@ -11979,8 +12183,13 @@ sv:
   most_recent_result_counts_as_calculation_int_of_ma_d2fc1d19: "De senaste resultaten räknas som %{calculation_int} av bemästrings vikt, genomsnitt av alla andra resultat räknas som %{remainder} av vikt. Om det enbart finns en följd av detta kommer den inre ställningen att returneras."
   most_recent_score_13a87e8c: "Senaste poäng"
   move_abf00365: Flytta
+  move_assignment_6f890f64: "Flytta uppgift"
+  move_assignment_contents_245c61bb: "Flytta uppgiftsinnehåll"
   move_assignment_group_46e09fc3: "Flytta uppgiftsgrupp"
   move_assignment_name_aa253f26: "Flytta uppgiften %{name}"
+  move_contents_29713356: "Flytta innehållet..."
+  move_contents_cefe9e92: "Flytta innehållet..."
+  move_contents_into_f3e4fd9d: "Flytta innehåll till"
   move_dialog: 
     cancel: Avbryt
     save: Spara
@@ -11988,23 +12197,35 @@ sv:
     where_to_move: "Vart skulle du vilja flytta *%{name}*?"
   move_dialog_select: 
     move_to_end: "-- Längst ner --"
+  move_discussion_9ff5b2d1: "Flytta diskussion"
+  move_group_3dd7f76e: "Flytta grupp"
+  move_group_77ae285d: "Flytta grupp..."
   move_item_e94a8103: "Flytta föremål"
+  move_item_failed_8e4c1db6: "Flytta föremål misslyckades"
   move_left_8c364375: "Flytta till vänster"
+  move_module_346b8112: "Flytta modulen..."
+  move_module_90e6927e: "Flytta modul"
   move_module_after_31fc870b: "Flytta modul efter"
   move_module_before_32153dc8: "Flytta modul före"
+  move_module_contents_74fa15d5: "Flytta modulens innehåll"
   move_module_item_77754119: "Flytta Modul/föremål"
   move_module_item_after_bbcfe2d6: "Flytta modulpost efter"
   move_module_item_before_13e940eb: "Flytta modulpost före"
+  move_module_item_f525d6c8: "Flytta modul föremål"
+  move_navigation_item_f034cd8a: "Flytta navigeringsföremål"
   move_outcome_ce497e6c: "Flytta bedömning"
   move_outcome_group_cfa1a505: "Flytta bedömningsgrupp"
   move_page_e25b123d: "Flytta sida"
   move_right_e4ddc6bf: "Flytta till höger"
   move_section_d3866941: "Flytta sektionen"
+  move_student_49d6bc9d: "Flytta student"
   move_text_down_7176acd4: "Flytta ner %{text}"
   move_text_up_91fb4241: "Flytta upp %{text}"
   move_this_item_41145b2d: "Flytta denna post"
+  move_this_module_4a262aaf: "Flytta den här modulen"
   move_this_page_4a05c813: "Flytta den här sidan"
   move_this_section_890bee38: "Flytta den här sektionen"
+  move_to_25d7ef11: "Flytta till"
   move_to_9b91c6e0: "Flytta till..."
   move_to_dde1a5e1: "Flytta till..."
   move_to_end_c6bfbcf5: "Gå till slutet"
@@ -12016,6 +12237,7 @@ sv:
   moving_a4d552df: Flyttar...
   multi_factor_authentication_backup_codes_4d781044: "Multi-faktor autentiserings säkerhetskopierings koder"
   multi_factor_authentication_configured_865b1bde: "Flerstegs-verifiering konfigurerad"
+  multiple_are_marked_current_theme_because_the_same_3bdebbe1: "Flera är markerade \"Aktuellt tema\" eftersom samma värden har sparats under flera namn—dvs. att de är alla samma som vad som just nu tillämpas"
   multiple_ba5220cd: Flera
   multiple_canvas_accounts_are_associated_with_cleve_c1739660: "Flera Canvas konton är associerade med Clever District %{district_id}"
   multiple_due_dates_283dd861: "Flera förfallodatum"
@@ -12063,6 +12285,7 @@ sv:
     sure_you_want_to_mute: "Är du säker på att du vill tysta den här uppgiften? Medan uppgiften är tystad kommer studenter inte längre ta emot aviseringar om eller kunna se:"
   mute_unmute_assignment_62608e44: "Tysta/av-tysta uppgiften"
   muted_283cfa0f: (tystad)
+  muted_3ff94739: Tystad
   muting_assignment_a9aeb5c7: "Tystar uppgiften..."
   my_dashboard_b724020: "Min översikt"
   my_themes_b72217b8: "Mina teman"
@@ -12125,6 +12348,8 @@ sv:
   new_conference_8b483024: "Ny konferens"
   new_conferences_a020a8a9: "Nya konferenser"
   new_course_role_6a7bb75f: "Ny kursroll"
+  new_criterion_6054bc7f: "Nytt kriterium"
+  new_criterion_canceled_d8c2a655: "Nytt kriterium avbrutet"
   new_event_for_course_name_2ba1f734: "Ny händelse för %{course_name}"
   new_export_3ab758: "Ny export"
   new_file_135ae520: "[Ny fil]"
@@ -12143,6 +12368,7 @@ sv:
   new_question_group_d9306280: "Ny frågegrupp"
   new_quiz_34aacba6: "Ny quiz"
   new_quiz_statistics_desc: "Aktivera den nya quiz-statistikssidan för en kurs"
+  new_rating_canceled_eed3c4ff: "Ny ranking avbruten"
   new_rating_created_54125331: "Nytt omdöme skapades"
   new_sis_integrations: |-
       Denna funktion gäller institutioner med en befintlig SIS Canvas integration.
@@ -12152,6 +12378,7 @@ sv:
       inställningarna. Funktionen Post till SIS-funktionen har införlivats i den här nya
       inställningen, och kommer att aktiveras som standard.
   new_topic_for_course_3d98222a: "Nytt ämne för %{course}"
+  new_typography_4eaeca26: "Ny typografi"
   new_ui_487a624e: "Ny UI"
   new_user_s_name_909b6267: "Nytt användarnamn"
   new_user_tutorial_cdd3a446: "Ny användarhandledning"
@@ -12159,11 +12386,18 @@ sv:
   new_zealand_ef5d7b74: "Nya Zeeland"
   newest_oldest_d768cf1a: "Nyast - äldst"
   next_40e12421: Nästa
+  next_assignment_8ec51175: "Nästa uppgift"
+  next_item_2d1ddc96: "Nästa: *föremål*"
+  next_mastery_path_is_currently_locked_a9253711: "Nästa bemästringsväg är för närvarande låst"
+  next_mastery_path_is_currently_processing_f044d7d8: "Nästa bemästringsväg bearbetas för nävarande"
+  next_mastery_path_is_still_processing_please_perio_bb0121af: "Nästa mastery path behandlas fortfarande, uppdatera sidan regelbundet"
   next_message_780bcf24: "Nästa meddelande"
   next_module_item_9bb8a222: "Nästa modul/föremål"
   next_month_749b1778: "Nästa månad"
   next_month_b55a387c: "Nästa månad"
+  next_page_d2a39853: "Nästa sida"
   next_steps_ce0f0d0c: "Nästa steg"
+  next_student_b62869f4: "Nästa student"
   nickname_1e6da3ad: Smeknamn
   nickname_7df95b09: "Smeknamn:"
   no_74e9b590: nej
@@ -12194,7 +12428,9 @@ sv:
   no_icon_1f6ea5f4: "ingen iko"
   no_items_in_module_21f111a2: "Inga föremål i den här modulen"
   no_ltis_configured_f4b9bc6b: "Inga LTI:er konfigurerade"
+  no_marks_5e7d2b59: "Inga poäng"
   no_matching_users_found_83889c10: "Inga matchande användare hittades."
+  no_message_present_e3af6358: "Inga meddelandeprocent"
   no_migration_file: "Fil krävs för innehållsmigrering"
   no_more_results_to_load_6774fb1c: "Inga fler resultat att laddas."
   no_outcome_file_or_authority_given_c90f9c5f: "Ingen bedömningsfil eller auktoritet har uppgetts"
@@ -12210,7 +12446,10 @@ sv:
   no_students_have_taken_the_quiz_yet_e667644b: "Inga studenter har gjort denna Quiz"
   no_students_have_taken_the_survey_yet_d378cd35: "Inga studenter har gjort undersökningen än"
   no_students_with_that_name_found_f6004da2: "Inga studenter med det namnet hittades"
+  no_subject_58b7941c: "Inget ämne"
+  no_subject_970aad80: "Inget ämne"
   no_submission_for_assignment_a9cb6fe2: "Ingen inlämning för %{assignment}"
+  no_terms_eab5ee7b: "Inga villkor"
   no_tls_618add1a: "Ingen TLS"
   no_unassigned_terms_deb7b76b: "Inga ej tilldelade terminer"
   no_unresponsive_links_found_8ea497f9: "Inga trasiga länkar hittades"
@@ -12224,10 +12463,12 @@ sv:
   norway_47_bc598662: "Norge (+47)"
   norway_c11471b3: Norge
   not_a_number: "måste vara ett positivt nummer"
+  not_all_sections_will_be_assigned_this_item_4e2b8eaa: "Alla sektioner kommer inte tilldelas detta objekt."
   not_anonymously_graded_87574f91: "Ej anonymt betygsatt"
   not_available_487d3648: "Inte tillgänglig"
   not_available_during_sync_ae645e8c: "Ej tillgängliga under synkronisering"
   not_available_until_next_submission_2175158: "Inte tillgänglig förrens nästa inlämning"
+  not_completed_55fb4c00: "Ej färdig"
   not_completed_d70acea3: "Inte färdig"
   not_factored_into_grading_455dcf6a: "Inte inräknat i betyget"
   not_graded_e027c866: "Inte bedömd"
@@ -12265,10 +12506,7 @@ sv:
   notification: 
     added_to_conversation_description: "Du har lagts till i en konversation"
     added_to_conversation_display: "Tillagd i konversationen"
-    all_submissions_description: |-
-        *Endast lärare och administratör:*
-        
-        Uppgiftsinlämning/återinlämning
+    all_submissions_description: "*Endast lärare och administratörer:*Uppgift (förutom quizzes) inlämning/återinlämning"
     all_submissions_display: "Alla inlämningar"
     announcement_created_by_you_description: |-
         * Meddelanden skapade av dig
@@ -12353,7 +12591,7 @@ sv:
         * Webb-konferenser
         * Grupper
         * Samarbeten
-        * Förgranskningar & påminnelser
+        * Referentgranskning & påminnelser
     invitation_display: Inbjudan
     late_grading_description: |-
         *Endast lärare och administratörer:*
@@ -12500,6 +12738,7 @@ sv:
       scheduling: Schemaläggning
   notification_preferences_cf47083d: "Inställningar för aviseringar"
   notifications_cbfa7704: Aviseringar
+  notifications_search_results_80a0b06f: "Aviseringar sökresultat"
   notify_users_this_quiz_has_changed_c5b05995: "Meddela användare när detta Quiz ändras"
   now_click_the_agenda_button_607fb40e: "Klicka nu på *Agenda* -knappen"
   now_that_your_course_is_set_up_and_available_you_p_c0c8635c: "Nu när din kurs är färdig och tillgänglig, behöver du nog inte den här checklistan längre. Fast vi kommer behålla den om du skulle inse att du vill testa något nytt eller om du behöver tips när du ändrar kursens innehåll."
@@ -12601,6 +12840,7 @@ sv:
     observing: Observerar
   observer_accounts_only_30c70a70: "Endast observationskonton"
   observer_id_2be07260: observer_id
+  observers_672971d: Observatörer
   observing_f3c5e759: Observerar
   occurrence_s_c12d1aad: händelse(r)
   of_students_5d1af0d2: "# av studenter"
@@ -12625,6 +12865,7 @@ sv:
   online_upload_59969592: "Online uppladdning"
   online_url_37830a72: "Online URL"
   only_a_maximum_of_100_events_can_be_created_ad703982: "max 100 händelser kan skapas"
+  only_a_maximum_of_limit_events_can_be_created_b81c405e: "endast ett maximalt antal %{limit} händelser kan skapas"
   only_after_their_last_attempt_3593d101: "Endast efter deras sista försök"
   only_available_to_students_with_link_not_visible_i_b21ec391: "Endast tillgängliga studenter med en länk. Inte synlig i studentfiler"
   only_once_after_each_attempt_cc842738: "Endast efter varje försök"
@@ -12632,8 +12873,10 @@ sv:
   ontime_on_time_late_late_missing_missing_145e9e5d: "%{onTime} i tid, %{late} sen, %{missing} saknas"
   oops_there_was_a_problem_loading_content_locks_4ab29a2a: "Hoppsan, det gick inte att hämta innehållslås."
   open_color_picker_f117df0a: "Öppna Color Picker"
+  open_event_menu_e9a21e39: "Öppna event meny"
   open_for_comments_f8f7641e: "Öppen för kommentarer"
   open_in_theme_editor_156028e2: "Öppna i Temaredigeraren"
+  open_message_d7b12975: "Öppna meddelande"
   open_name_color_picker_a2646a33: "Öppna %{name} Color Picker"
   open_sidebar_2852e8c8: "Öppna sidofält"
   open_submission_tray_4eb14e96: "Öppna bedömningsfack"
@@ -12688,6 +12931,7 @@ sv:
   out_of_points_possible_8ab14f7: "av %{points_possible}"
   out_of_pointspossible_3fb5ee20: "Av %{pointsPossible}"
   outcome_da397d20: Lärandemål
+  outcome_group_39fae76f: Utkomstgrupp
   outcome_groups: 
     invalid_file: "Ogiltig bedömningsgruppfil"
   outcome_groups_api: 
@@ -12831,11 +13075,12 @@ sv:
         latest_score: "Senaste poäng"
         outcome: Lärandemål
   outcomes_report_8887bd49: "Utfalls rapport"
+  over_time_bee1a733: "över tid"
   overrides: 
     blank_override: "Du måste ha en student eller en sektion vald"
     everyone: Alla
     everyone_else: "Alla andra"
-    invalid_group_override: "Denna uppgift kan endast tilldelas grupper som ingår i den valda gruppsammansättning"
+    invalid_group_override: "Du kan inte tilldela en grupp utanför uppgiftens gruppsammansättning"
     overrides: 
       everyone: Alla
   own_copyright_cc59db55: Upphovsrättshavande
@@ -12900,6 +13145,7 @@ sv:
     loading_more_results: "Laddar fler resultat"
   panama_507_831fbc99: "Panama (+507)"
   panama_fa454c86: Panama
+  paper_view_7405eeab: Pappersvy
   paraguay_181a5029: Paraguay
   paraguay_595_ca58b83a: "Paraguay (+595)"
   parent_of_a_canvas_user_afba1624: "Förälder av en Canvas användare?"
@@ -12918,12 +13164,12 @@ sv:
   paypal: 
     exception: "Ursäkta, ett fel uppstod, vänligen försök igen senare."
   pdf_d8236d9a: PDF
-  peer_review_for_assignment_ce72fc52: "Recension för %{assignment}"
+  peer_review_for_assignment_ce72fc52: "Referentgranskning för %{assignment}"
   peer_reviewed_graded_discussion_b339df5b: "Förgranskad betygsdiskussion:"
   peer_reviews_api: 
     errors: 
       delete_reminder_failed: "Radering misslyckades"
-  peer_reviews_cannot_be_enabled_for_moderated_assig_149d33c4: "Granskningar kan inte aktiveras för modererade uppgifter"
+  peer_reviews_cannot_be_enabled_for_moderated_assig_149d33c4: "Referentgranskningar kan inte aktiveras för modererade uppgifter"
   penalty_adjusted_707df573: "*%{penalty}* **%{adjusted}**"
   pending_3e506a5b: Väntar
   pending_message_2d9a8796: "Väntar: %{message}"
@@ -12958,13 +13204,16 @@ sv:
   pin_cdbc9f8f: Nåla
   pink_68ad45cb: Rosa
   place_b128fa94: Plats
+  place_item_2acc18b9: "Placera \"%{item}\""
   place_section_before_5b45714e: "Placera ””%{section}” före:"
+  place_title_2c183274: "Placera \"%{title}\""
   placements_5b5e056b: Placeringar
   plagiarism_detection_platform_6ce67e66: "Plattform plagiatdetektering"
   plagiarism_review_tool_error_513f47ff: "Plagiat-granskningsverktyg fel"
   plagiarism_review_tool_is_missing_submission_event_75273069: "Plagiat-granskningsverktyg saknar inlämnings händelsetjänst"
   plagiarism_review_tool_submission_event_service_is_b023b4c7: "Plagiat-granskningsverktyg inlämnings händelsetjänsten saknar slutpunkt"
   plain_text_e3ab33aa: "Enkel text"
+  plain_text_view_7640af4c: Enkeltextvy
   planner_7fd46783: Plannerare
   please_add_a_due_date_1d433d2: "Vänligen lägg till slutdatum"
   please_add_at_least_one_non_blank_answer_213c2c8e: "Vänligen lägg till minst ett icke-blankt svar."
@@ -12983,6 +13232,7 @@ sv:
   please_provide_a_field_e5a7d0b3: "Vänligen förse en %{field}"
   please_select_a_group_set_for_this_assignment_e1da63d3: "Vänligen välj en grupp för den här uppgiften"
   please_select_a_user_role_for_this_link_9fb4e655: "Vänligen välj en användarroll för den här länken."
+  please_select_an_item_30c287ef: "Vänligen välj ett föremål"
   please_select_one_f931e883: "Vänligen välj en"
   please_upload_files_as_a_zip_5a2c799f: "Vänligen ladda upp filer som .zip"
   please_wait_2b646bc2: "Vänligen vänta."
@@ -13435,6 +13685,7 @@ sv:
   points_possible_must_be_0_or_more_for_selected_gra_f96a04e3: "Möjliga poäng måste vara 0 eller mer för valda betygstyper"
   points_possible_points_fda3b111: "%{points_possible} Poäng"
   points_pts_e5596bf7: "%{points} pts"
+  points_range_rating_pts_ab9c8540: "%{points}%{range_rating} poäng"
   points_total_pts_5b4cbd77: "%{points} / %{total} poäng"
   pointspossible_points_possible_964c8592: "%{pointsPossible} Möjliga poäng"
   pointspossible_pts_624a6733: "%{pointsPossible} poäng"
@@ -13460,10 +13711,12 @@ sv:
   poor_score_715306e2: "Dålig poäng"
   port_75f69d1: Port
   position_f9c9b93c: Position
+  position_select_c2dd3980: Position-val
   possible_combination_count_db651ca4: "Antal möjliga kombinationer"
   possible_matches_for_address_select_the_correct_on_e206f972: "Möjliga matchningar för \"%{address}\". Välj den korrekta nedan eller skapa en ny användare."
   possible_score_5e0a328e: "Möjlig: %{score}"
   post_1e445890: Post
+  post_comment_a5a430a6: "Lämna kommentar"
   post_grade_to_sis_disabled_click_to_toggle_6ee5ff3: "Att lämna betyg på SIS är avaktiverat. Klicka för att aktivera."
   post_grade_to_sis_enabled_click_to_toggle_82da8ce8: "Att lämna in betyg på SIS är aktiverat. Klicka för att avaktivera."
   post_grades_39c52870: "Lämna betyg"
@@ -13477,6 +13730,7 @@ sv:
   posted_at_4cfce2c3: "%{posted_at}"
   powerschool_a30f0bfc: PowerSchool
   practice_quiz_19a8505d: Övningsquiz
+  pre_processing_92865c1d: Förbehandling
   prerequisites_49659f16: "Förutsättningar:"
   prerequisites_lookup: 
     headers: 
@@ -13490,6 +13744,7 @@ sv:
   prev_month_34bd934c: "Föregående månad"
   preview_53003fd2: Förhandsvisa
   preview_your_changes_373557d8: "Förhandsvisa dina ändringar"
+  previous_assignment_83d1f423: "Tidigare uppgift"
   previous_bd2ac015: Föregående
   previous_csv_file_time_d7bfe7ef: "Tidigare CVS fil (%{time})"
   previous_csv_timestamp_6673c69c: "Tidigare CVS (%{timestamp})"
@@ -13498,7 +13753,9 @@ sv:
   previous_module_item_2bb5e499: "Föregående Modul/föremål"
   previous_month_7adf1380: "Föregående månad"
   previous_month_bb1e3c84: "Föregående månad"
+  previous_page_928fc112: "Tidigare sida"
   previous_snapshots_d8cd4820: "Tidigare ögonblicksbilder"
+  previous_student_46275eae: "Tidigare student"
   previous_time_cc96b361: "Föregående (%{time})"
   previous_timestamp_19343a58: "Föregående (%{timestamp})"
   previously_unhandled_error_encountered_while_refre_ec9c2d81: "Tidigare ohanterat fel uppstod när resultaten uppdaterades"
@@ -13578,7 +13835,7 @@ sv:
     please_select_an_option: "Vänligen välj ett alternativ"
     profile: 
       access_token_description: "Tillgångstokens kan användas för att tillåta att applikationer gör API calls i ditt namn. Du kan också generera tillgångstokens och *använda Canvas Open API* för att skapa dina egna integrationer."
-      approved_integrations: "Nedan syns externa tredjepartsapplikationer du har godkänt för Canvas:"
+      approved_integrations: "Nedan syns externa tredjepartsapplikationer som godkänts för Canvas:"
       buttons: 
         add_picture_file: "Lägg till fil"
         authorize_google_docs: "Tillåt tillgång för Google Docs"
@@ -13896,6 +14153,7 @@ sv:
       email_sent: "Bekräftelse e-post skickat till %{email}, glöm inte att kolla din skräppost"
       link_invalid: "Länken du använde är inte längre giltig. Om du inte kan logga in, klicka på \"Kan du inte lösenordet?\" för att återställa ditt lösenord."
       password_changed: "Lösenord ändrat"
+  pts_699bd9aa: poäng
   public_a749f507: Offentlig
   public_course_index_59270e80: "Offentligt kursindex."
   public_courses_title: "Offentliga kurser"
@@ -13932,10 +14190,12 @@ sv:
   published_4bb5209e: Publicerad
   published_c944a23d: publicerad
   published_click_to_modify_233c0d4: "Publicerad - Klicka för att ändra"
+  published_click_to_unpublish_db016671: "Publiserad.  Klicka för att avpublicera"
   published_click_to_unpublish_ec4495b5: "Publicerad. Klicka för att avpublicera."
   published_click_to_unpublish_item_name_aaa804b0: "Publicerad. Klicka för att avpublicera %{item_name}."
   published_click_to_unpublish_module_name_eddd07bb: "Publicerad. Klicka för att avpublicera %{module_name}."
   published_click_to_unpublish_name_9bdd66cf: "Publicerad. Klicka för att avpublicera %{name}"
+  published_click_to_unpublish_title_358122a: "Publiserad.  Klicka för att avpublicera %{title}."
   published_status_icon_78f998a: "publicerade statusikoner"
   publishing_9890d50f: Publicerar...
   publishing_is_disabled_for_this_item_efa7803f: "Publicering är avaktiverad för detta föremålet"
@@ -14053,6 +14313,7 @@ sv:
   question_mark_icon_d2bbd204: "Ikon för frågetecken"
   question_unanswered: "Har inte svarat än"
   questions_a955145c: Frågor
+  queued_d0e45c4b: Köad
   quiz: 
     regrade: 
       give_everyone_full_credit: "Ge alla fullt beröm för denna frågan"
@@ -14064,6 +14325,7 @@ sv:
   quiz_40ee61b1: quiz
   quiz_e0dcce8f: Quiz
   quiz_failed_to_update_2b66fa4d: "Quiz lyckades inte uppdateras"
+  quiz_ip_address_filters_49a75ec8: "Quiz IP-adressfilter"
   quiz_log_auditing: 
     buttons: 
       reload_events: Uppdatera
@@ -14161,6 +14423,7 @@ sv:
   quiz_results_are_protected_for_this_quiz_and_are_n_c85bd56e: "Resultatet för detta Quiz är låsta och därför inte synliga för studenterna innan de har gjort sitt sista försök."
   quiz_results_are_protected_for_this_quiz_and_can_b_fc4fc208: "Resultatet för detta quiz är låst och kan granskas en gång direkt efter inlämning."
   quiz_score_to_keep_d1f7c4b1: "Quizpoäng att behålla"
+  quiz_settings_4e17f005: "Quiz inställning"
   quiz_statistics: 
     answer_bars_chart: 
       audible_answer_position: "Svar %{position}:"
@@ -14999,10 +15262,10 @@ sv:
           update_scores: "Uppdatera poäng"
         labels: 
           final_score: Slutpoäng
-          fudge_points: "Förfalskade poäng"
+          fudge_points: "Plus eller minuspoäng"
           fudge_points_changed_points_quiz: "Sen %{user} tog detta Quiz har antalet möjliga poäng ändrats med %{difference}. Du kan justera den här ändringen och manuellt lägga till positiva eller negativa poäng med den här boxen."
           fudge_points_changed_points_survey: "Sen %{user} tog den här undersökningen har antalet möjlig poäng ändrats med %{difference}. Du kan justera den här ändringen och manuellt lägga till positiva eller negativa poäng med den här boxen."
-          fudge_points_generic_explanation: "Du kan justera poängen manuellt genom att lägga till positiva eller negativa poäng i den här boxen."
+          fudge_points_generic_explanation: "Du kan justera poängen manuellt genom att lägga till plus eller minuspoäng i den här boxen."
           questions_need_review: "Den följande frågan måste ses över"
           quiz_score: Quizpoäng
           score_for_attempt: "Poäng för det här försöket"
@@ -15297,6 +15560,12 @@ sv:
   range_name_90614433: "Räckvidd namn"
   rangestudents_out_of_totalstudents_students_click__21beede0: "%{rangeStudents} Av %{totalStudents} studenter, klicka för att visa intervall av studentdetaljer"
   rangestudents_out_of_totalstudents_students_e5ee60e1: "%{rangeStudents} ut från %{totalStudents} studenter"
+  rating_description_db6adf39: "Ranking beskrivning"
+  rating_max_score_eade1523: "Ranking max betyg"
+  rating_min_score_3d35a762: "Ranking min betyg"
+  rating_score_22cfc724: "Ranking betyg"
+  rating_title_3b60881e: "Ranking titel"
+  rating_updated_7aff90ea: "Ranking uppdaterad"
   ratio_answered_correctly_b0c1e7d: "%{ratio}% svarade korrekt"
   ratio_responded_correctly_6d890107: "%{ratio}% svarade korrekt"
   re_activate_user_f7d77c9a: "Återaktivera användare"
@@ -15435,6 +15704,7 @@ sv:
   remind_me_next_time_6402eb7d: "Påminn mig nästa gång"
   reminder_ffd21289: Påminnelse
   remove_account_from_this_profile_c3095eb2: "Ta bort konto från den här profilen"
+  remove_as_front_page_2698aa12: "Ta bort som framsida"
   remove_association_1412eabf: "Ta bort association"
   remove_attachment_ceae0973: "Ta bort bilaga"
   remove_attendee_name_55165070: "Ta bort deltagare %{name}"
@@ -15463,6 +15733,7 @@ sv:
   removed_user_as_group_leader_bb69330f: "Tog bort %{user} som gruppledare"
   rename_45608f54: "Döp om"
   rename_c_name_section_e0e92c97: "Döp om %{c.name} sektionen"
+  rename_or_reorder_a_page_via_the_settings_menu_nex_f4aff39f: "Byt namn på eller ordna om en sida via inställningsmenyn bredvid sidnamnet. Alternativt klickar du på en sidas namn för att byta namn på den, eller dra en sidas namn för att ordna den igen."
   rename_this_page_554f0583: "Döp om den här sidan"
   rename_this_section_73065edd: "Döp om denna sektionen"
   rename_this_section_bcbb6741: "Döp om den här sektionen"
@@ -15501,7 +15772,9 @@ sv:
     plugin_settings: 
       labels: 
         enabled: "Aktiverad (måste också aktivera QTI konverteraren)"
+  responsive_layout_54e4ca06: "Responsiv utformning"
   restart_link_validation_b61286fc: "Återställ länk-validering"
+  restore_courses_182e162e: "Återställ kurser"
   restored_course_association_course_c9e16045: "Återställd kursförening %{course}"
   restrict_access_84ba6bb8: "Begränsa tillgång"
   restrict_student_access: 
@@ -15522,6 +15795,8 @@ sv:
   restrict_students_from_accessing_courses_after_end_7dd66bce: "Begränsa studenterna från att komma åt kurserna efter slutdatumet"
   restrict_students_from_accessing_courses_before_st_f7c22c00: "Begränsa studenterna från att komma åt kurser innan startdatumet"
   restricted_access_d3e99a39: "Begränsad tillgång"
+  resubmit_to_the_associated_tool_for_plagiarism_ana_8d84d913: "Skicka in till det associerade verktyget för plagiatanalys."
+  resubmit_to_tool_name_1cf02a31: "Skicka igen till %{tool_name}"
   resubmitted_2080646f: "Lämnad in igen"
   resubmitted_since_last_graded_8484d285: "Inlämnad igen sedan den senaste betygssättningen"
   resume_quiz_afeceb87: "Fortsätt quiz"
@@ -15701,6 +15976,7 @@ sv:
     unknown_user: "Okänd användare"
   rubric_association: 
     no_details: "Inga detaljer"
+  rubric_criterion_range_12499bf1: "Rubrik kriterie-område"
   rubric_fc39da76: Matris
   rubrics: 
     index: 
@@ -15741,6 +16017,7 @@ sv:
         are_you_sure_delete: "Är du säker på att du vill radera den här rmatrisen? Kurser som är associerade med den här matrisen kommer har tillgång till den, fast inga nya kurser kommer kunna se den."
         are_you_sure_remove: "Är du säker på att du vill radera den här matrisen från din lista?"
       remove_rubric: "Ta bort den här matrisen från min lista"
+  running_c5a4998d: Körs
   russia_7_87bc99d5: "Ryssland (+7)"
   salesforce_account_id_eb5c78ad: "Salesforce Konto-Id"
   salesforce_has_a_different_login_host_for_sanbox_a_2d878ae9: "Salesforce har olika inloggningsvärdar för sanboxkonton och produktionskonton, så om du använder ett Salesforce sanboxkonto och inte markerar den här rutan kommer den inte kunna verifiera (det gäller åt andra hållet också, och du har ett produktionskonto och MARKERAR rutan kan den inte verifiera)"
@@ -15856,7 +16133,7 @@ sv:
     settings: 
       assignment_toggles_and_actions: 
         download_current_scores: "Ladda ner nuvarande poäng (.csv)"
-        grading_history: "Visa betygshistorik"
+        grading_history: "Visa historik för betygsbok"
         hide_student_names_label: "Dölj studenters namn"
         include_ungraded_assignments: "Betrakta ej betygsatt som 0"
         set_group_weights: "Ställ in gruppvikter"
@@ -15913,12 +16190,15 @@ sv:
     student_groups: Studentgrupper
   search_23a88d5c: Sök...
   search_280d00bd: Sök
+  search_by_c559efd: "Sök efter"
   search_by_title_short_name_or_sis_id_fe84aa12: "Sök efter titel, smeknamn, eller SIS ID"
   search_by_user_dd3ad189: "Sök efter användare"
   search_courses_591bc900: "Sök efter kurser..."
   search_courses_7b5c4ab3: "Sök kurser"
+  search_courses_by_teacher_e9760a48: "Sök kurser efter lärare..."
   search_entries_or_author_63fb0a86: "Sök efter inlägg eller författare"
   search_flickr_6f28b02e: "Sök på flickr"
+  search_for_a_deleted_course_by_id_f553398d: "Sök efter raderade kurser med ID"
   search_for_files_7541fb28: "Sök efter filer"
   search_form_fcaa38f7: Sökformulär
   search_grading_periods_e947a3e9: "Sök efter betygsperioder..."
@@ -15969,6 +16249,7 @@ sv:
   section_section_names_98f172e6: "Sektion: %{section_names}"
   section_sis_2a80d2fa: Sektions-Sis
   section_sis_94511bcd: "sektion sis"
+  section_specific_announcements_e0d355d9: "Sektion särskilda meddelanden"
   section_starts_at_65eaed1: "Sektionen börjar kl."
   sections: 
     section_created: "Sektion har skapats!"
@@ -16035,6 +16316,7 @@ sv:
   see_turnitin_results_cd9d4a6c: "Se Turnitinresultat"
   select_a_grading_period_5ea50f1: "Välj en betygsperiod..."
   select_a_grading_period_aab25483: "Välj en betygsperiod"
+  select_a_log_type_to_search_247fc6b4: "Välj en log-typ för att söka"
   select_a_predefined_color_c77ab2f5: "Välj en förinställd färg."
   select_all_count_9ad54aa1: "Välj alla (%{count})"
   select_all_count_courses_4fc63811: 
@@ -16059,6 +16341,7 @@ sv:
     titles: 
       add_item_to_module: "Lägg till föremål i modul"
       find_links_using_service: "Hitta länkar med hjälp av %{service}"
+  select_conversation_subject_3f36074a: "Välj konversation %{subject}"
   select_country_d21cb85a: "Välj land"
   select_course_5cf89177: "Välj kurs"
   select_course_a_selection_is_required_before_recip_f622d9df: "Välj kurs: ett val måste göras innan mottagarfältet blir synligt."
@@ -16073,6 +16356,8 @@ sv:
   select_module_to_move_before_or_after_c28e8f46: "Välj modul för att flytta före eller efter"
   select_module_to_move_item_into_89fb2ac7: "Välj modul för att flytta post in i"
   select_navigation_links_68e1e924: "Välj navigeringslänkar"
+  select_one_8e0af564: "Välj en"
+  select_one_b647b384: "Välj en"
   select_one_of_the_options_c8b0c6e4: "Välj ett av alternativen:"
   select_prerequisite_module_57894963: "Välj förkunskapsmodul"
   select_prerequite_module_e9042bb0: "Välj nödvändig modul"
@@ -16091,6 +16376,7 @@ sv:
   selected_all_courses_9cfef57f: "Valde alla kurser"
   selected_answer: "Du valde det här svaret"
   selected_course_course_a581f834: "Välj kurs %{course}"
+  selected_item_35bed33a: "valt föremål"
   selected_subtree_a7693937: "Valde %{subtree}"
   self_enrollments: 
     already_enrolled: 
@@ -16155,6 +16441,7 @@ sv:
       Skicka det här meddelandet till användare med kurs-rollen 
       %{role}
   send_to_ce05b460: "Skicka till"
+  sending_bf324366: Skickar..
   sending_message_8ac5bc90: "Skickar meddelande..."
   sending_message_failed_please_try_again_b53cc904: "Meddelandet skickades inte, försök igen"
   sends_international_text_messages_from_a_phone_num_10afbad6: "Skicka, om möjligt, internationella textmeddelande från ett telefonnummer i mottagerns land."
@@ -16215,8 +16502,10 @@ sv:
   settings_5aa0fd0c: Inställningar
   settings_changed_exceptions_e5247936: "Inställningar ändrade undantag:"
   settings_for_assignment_name_c19565e1: "Inställningar för uppgiften %{name}"
+  settings_for_name_7731a33d: "Inställningar för %{name}"
   settings_for_tab_label_3bff4468: "Inställningar för %{tab_label}"
   settings_for_title_d3ca495: "Inställningar för %{title}"
+  settings_for_title_label_e103bdd6: "Inställningar för %{title_label}"
   settings_tutorial_tray_6f37761b: "Inställningar handledning"
   setup_checklist_eb8b00b8: "Se checklista"
   share_important_information_with_all_users_in_your_bc49ee7f: |-
@@ -16861,25 +17150,25 @@ sv:
       labels: 
         folder: Mapp
       links: 
-        announcements: "Lista med meddelanden"
-        announcements_page: Meddelandelista
-        assignments: Uppgiftslista
-        assignments_page: Uppgiftslista
+        announcements: Meddelanden
+        announcements_page: Meddelanden
+        assignments: Uppgifter
+        assignments_page: Uppgifter
         collaborations_page: Samarbeten
-        discussions: Diskussionsindex
-        discussions_page: Diskussionindex
-        files_page: Filindex
+        discussions: Diskussioner
+        discussions_page: Diskussioner
+        files_page: Filer
         find_on_flickr: "Hitta bilder på flickr creative commons"
         grades_page: Betyg
-        modules: Modullista
+        modules: Moduler
         modules_page: Moduler
         new_page: "Länka till en ny sida"
-        quizzes: Quizlista
-        syllabus: "Kursplan för kursen"
+        quizzes: Quiz
+        syllabus: Kursplan
         upload_file: "Ladda upp en ny fil"
         upload_image: "Ladda upp en ny bild"
         users_page: Personer
-        wiki_pages_index: "Wiki hem"
+        wiki_pages_index: Sidor
       links_to: 
         announcements: Meddelanden
         assignments: Uppgifter
@@ -16889,7 +17178,7 @@ sv:
           course: Kursnavigering
           group: Gruppnavigering
         quizzes: Quiz
-        wiki_pages: Wikisidor
+        wiki_pages: Sidor
       messages: 
         loading: Laddar...
       new_page_name: "Vad vill du kalla den nya sidan?"
@@ -16919,6 +17208,7 @@ sv:
   show_admin_navigation_menu_92fb579f: "Visa administratörs-navigeringsmeny"
   show_all_artifacts_34b91a83: "Visa alla föremål"
   show_all_details_9879980c: "Visa alla detaljer"
+  show_all_sections_190203e8: "Visa alla sektioner"
   show_and_hide_courses_menu_9e09d1d0: "Visa och dölj kursmenyer"
   show_attendance_columns_4d160e16: "Visa närvarokolumner"
   show_by_709f525b: "Visa efter"
@@ -16929,6 +17219,7 @@ sv:
   show_correct_answers_at_30c37e01: "Visa rätt svar kl."
   show_correct_answers_at_a5475aa3: "Visa rätt svar kl."
   show_course_sections_for_course_name_5f715702: "Visa kurssektioner för kurs %{name}"
+  show_courses_from_8a087f63: "Visa kurser från"
   show_courses_menu_4e17e480: "Visa kursmeny"
   show_courses_navigation_menu_7ad1a8d4: "Visa kurs-navigeringsmeny"
   show_current_grade_5bf4e0d9: "Visa nuvarande betyg"
@@ -16947,6 +17238,7 @@ sv:
   show_notes_column_22d2b6c1: "Visa anteckningskolumnen"
   show_one_question_at_a_time_271e346d: "Visa en fråga i taget"
   show_only_blueprint_courses_9fb37b41: "Visa endast kursplaner"
+  show_originality_report_to_students_be22f5ee: "Visa original rapport för studenter"
   show_question_details_b059df00: "Visa frågedetaljer"
   show_recent_activity_stream_2be4abc1: "Visa senaste aktivitetsflödet"
   show_rubric_dca783f2: "Visa matris"
@@ -17103,6 +17395,7 @@ sv:
   space_ec476863: Blanksteg
   spain_34_d5286826: "Spanien (+34)"
   spain_817a5961: Spanien
+  specify_max_and_min_points_to_clarify_boundaries_o_1c4d732a: "Ange max och min poäng för att klargöra gränserna för ett rubrik-kriterie-betyg."
   specify_the_transparency_of_the_watermark_backgrou_f4d5cc1d: "Välj transparensen för bakgrundsbildens vattenmärke"
   speech_recognition_c1c0b7f7: Taligenkänning
   speed_grader: 
@@ -17149,6 +17442,7 @@ sv:
     previous_object: "Föregående %{type}"
     student_hidden_name: "Student %{position}"
   sso_settings_ebf98263: SSO-inställningar
+  star_conversation_2e2ba614: "Stjärnmärk konversationen"
   starred_no_subject_click_to_unstar_3191d64: "Stjärnmärkt \"(No Subject)\", klicka för att ta bort stjärnmarkeringen."
   starred_no_subject_click_to_unstar_bff04bce: "Stjärnmärkt \"(No subject)\", klicka för att ta bort stjärnmarkeringen."
   starred_subject_click_to_unstar_6aafcddc: "Stjärnmärkt \"%{subject}\", klicka för att ta bort stjärnmarkeringen."
@@ -17167,6 +17461,7 @@ sv:
   start_time_to_end_time_ee60f6eb: "%{start_time} till %{end_time}"
   start_tls_26e4b0dc: "Starta TLS"
   started_5e138638: Startad
+  starts_at_29843f98: "Börjar vid"
   starts_ce584f1c: "Startar:"
   statistics: 
     csv_columns: 
@@ -17185,6 +17480,7 @@ sv:
     exact_answer: "%{exact_value} +/- %{margin}"
     inexact_answer: "%{lower_bound} till %{upper_bound}"
     no_answer: "Inget svar"
+  statistics_for_name_f4b7b0fc: "Statistik för %{name}"
   status_color_picker_9ea0156b: "%{status} Färgväljare"
   status_e051bb30: status
   status_e7fdbe06: Status
@@ -17194,7 +17490,7 @@ sv:
   stop_acting_as_user_8809a97f: "Sluta att agera som en användare"
   storage_used_in_mb_c75fbd9c: "använt utrymme i MB"
   stream_items_api: 
-    assessment_request_title: "Recension för %{title}"
+    assessment_request_title: "Referentgranskning för %{title}"
   student_5da6bfd1: Student
   student_921b864d: student
   student_assignment_outcome_map_title: "Studenters kompetenser"
@@ -17379,14 +17675,14 @@ sv:
       media_comment: Mediakommentar
       media_comment_link: "Det här är en mediakommentar, *klicka här för att visa den*."
       only_see_your_own_comments_muted: "Du kan inte se alla kommentarer just nu eftersom uppgiften betygsätts"
-      only_see_your_own_comments_peer: "Som en recenserande student kan du endast se kommentarer som lämnats av dig."
+      only_see_your_own_comments_peer: "Som en referentgranskning student kan du endast se kommentarer som lämnats av dig."
       options: 
         new_assessment: "[Ny uppgift]"
       out_of_points: "utav %{points_possible}"
-      peer_review: Recension
-      peer_review_not_done: "**Den här recensionen är inte färdig än:** För att den ska anses som färdig måste du lämna minst en kommentar."
-      peer_review_not_done_rubric: "**Den här recensionen är inte färdig än:** För att den ska anses som färdig måste du lämna minst en kommentar och fylla i matrisen till höger."
-      peer_review_steps_complete: "Du har gjort klart de nödvändiga stegen för den här recensionen."
+      peer_review: Referentgranskning
+      peer_review_not_done: "**Den här referentgranskning är inte färdig än:** För att den ska anses som färdig måste du lämna minst en kommentar."
+      peer_review_not_done_rubric: "**Den här referentgranskning är inte färdig än:** För att den ska anses som färdig måste du lämna minst en kommentar och fylla i matrisen till höger."
+      peer_review_steps_complete: "Du har gjort klart de nödvändiga stegen för den här referentgranskning."
       see_vericite_results: "Se VeriCite resultat"
       sent_to_whole_group: "Skicka kommentar till hela gruppen"
       show_rubric: "Visa matris"
@@ -17434,6 +17730,7 @@ sv:
   submit_a_feature_idea_2d4baa3d: "Lämna in en idé"
   submit_assignment_5799b4e3: "Lämna in uppgift"
   submit_comment_commenttext_8e5638d7: "Inlämningskommentar: %{commentText}"
+  submit_comment_e5cc2718: "Lämna kommentar"
   submit_media_file_f334c1ba: "Skicka in mediafil"
   submit_ticket_5515ffd: "Skicka in biljett"
   submitted_at_4d5ea3aa: "Lämnades in"
@@ -17446,9 +17743,12 @@ sv:
   success_all_users_on_this_domain_will_now_see_this_4681b85d: "Lycka! Alla användare i den här domänen kommer du se märkningen."
   success_grades_were_published_to_the_grade_book_da3b4fba: "Lycka! Betygen har publicerats i betygsboken"
   successfully_created_a_set_38374719: "Setet skapades"
+  successfully_deleted_the_comment_a8bbe561: "Kommentaren har tagits bort"
   successfully_moved_model_to_newgroup_f7b7aa5a: "Flyttade %{model} till %{newGroup}"
+  successfully_posted_the_comment_12d95d56: "Kommentaren har postats"
   successfully_resubmitted_to_turnitin_c908de0f: "Lämnade in turintin igen."
   successfully_resubmitted_to_vericite_dab924b6: "Inlämnad igen till VeriCite."
+  successfully_updated_the_comment_946360d5: "Uppdaterad kommentar"
   sum_of_all_files_in_mb_2b705055: "Summa av alla filer i Mb"
   summary_statistics_f74852a5: Sammanfattningsstatistik
   support: 
@@ -17632,6 +17932,10 @@ sv:
         unspecified: "när som helst"
       timespan: "%{start_at} *till* %{end_at}"
   terms_35d91184: "Terminer:"
+  terms_not_found_terms_must_be_included_with_multi__ca2e5c25: "Villkor hittades inte. Villkor måste inkluderas med multi_term_batch_mode"
+  terms_of_service_attributes_not_valid_f3f9fca9: "Användarvillkor attribut ej giltiga"
+  terms_of_service_bedefcaf: Användarvillkor
+  terms_of_service_f183ff7f: Användarvillkor
   text_document_eacbcdb7: Textdokument
   text_entry_submission_7b0ae0c5: Textinmatnings-inlämning
   text_entry_submission_cannot_be_empty_3d187cae: "Textinlägg-inlämningar kan inte vara tomma"
@@ -17741,6 +18045,7 @@ sv:
   there_are_no_unsynched_changes_d208547c: "Det finns inga osynkade ändringar"
   there_was_a_failure_logging_out_at_your_idp_30070527: "Ett fel inträffade när du loggades ut på din IdP"
   there_was_a_problem_creating_the_teacher_notes_col_dd73456f: "Det uppstod ett problem med att skapa kolumnen för lärarkommentarer."
+  there_was_a_problem_deleting_the_comment_93053aa9: "Det uppstod ett problem vid radering av kommentaren"
   there_was_a_problem_deleting_the_grading_period_50ce07c5: "Ett problem uppstod när betygsperioden raderades"
   there_was_a_problem_deleting_the_grading_scheme_2a959c40: "Ett problem uppstod när betygsschemat raderades"
   there_was_a_problem_exporting_c33dc250: "Ett problem uppstod vid export."
@@ -17748,13 +18053,16 @@ sv:
   there_was_a_problem_hiding_the_teacher_notes_colum_3f03014: "Det uppstod ett problem att dölja kolumnen för lärarkommentarer."
   there_was_a_problem_loading_the_gradebook_69b2a17: "Ett problem uppstod när betygsboken laddades."
   there_was_a_problem_logging_in_at_institution_5a298155: "Ett problem uppstod vid inloggning på %{institution}"
+  there_was_a_problem_posting_the_comment_75d15646: "Det uppstod ett problem vid postande av kommentaren"
   there_was_a_problem_saving_the_grading_period_243bed6c: "Ett problem uppstod när betygsperioden sparades"
   there_was_a_problem_saving_the_grading_scheme_5e6076e9: "Ett problem uppstod när betygsschemat sparades"
   there_was_a_problem_sending_your_message_22b249a5: "Det uppstod ett problem med att skicka ditt meddelande."
   there_was_a_problem_showing_the_teacher_notes_colu_a6e4a2bc: "Det uppstod ett problem som visar kolumnen för lärarkommentarer."
   there_was_a_problem_submitting_your_set_27ca2ed0: "Det uppstod ett problem när ditt set skickades in"
   there_was_a_problem_toggling_the_content_lock_2a5d678b: "Det uppstod ett problem med att ändra innehållslåset."
+  there_was_a_problem_updating_the_comment_5f3595b9: "Det gick inte att uppdatera kommentaren"
   there_was_a_problem_updating_the_submission_6e5280a1: "Det gick inte att uppdatera inlämningen."
+  there_was_an_error_fetching_submission_comments_ce153077: "Det gick inte att hämta inlämningskommentarer"
   there_was_an_error_generating_the_tool_launch_fb3f47ac: "Ett fel uppstod när verktyget skulle startas"
   there_was_an_error_in_processing_your_request_6513a49a: "Ett fel uppstod när din begäran bearbetades"
   there_was_an_error_removing_the_image_c83acffe: "Ett fel uppstod när bilden togs bort"
@@ -17784,9 +18092,12 @@ sv:
   this_assignment_is_excused_and_will_not_be_conside_5892de1f: "Den här uppgiften är ursäktad och kommer inte räknas in i den totala uträkningen"
   this_assignment_is_in_a_closed_grading_period_for__a22bb4ed: "Uppgiften är i stängd bedömningsperiod för den här studenten"
   this_assignment_is_muted_915e2dab: "Den här uppgiften har tystats"
+  this_assignment_is_not_applicable_to_this_student_c149a5ad: "Denna uppgift är inte tillämplig för den här studenten"
+  this_assignment_is_not_graded_576f1244: "Uppgiften är inte betygsatt."
   this_assignment_is_overdue_a44bea3b: "Uppgiften är sen"
   this_assignment_is_still_unpublished_a9185624: "Den här uppgiften är fortfarande opublicerad"
   this_assignment_is_unpublished_64c0f46c: "Denna uppgift är opublicerad"
+  this_assignment_submission_is_my_own_original_work_e820ce4b: "Den inlämnade uppgiften är mitt egna originella arbete"
   this_assignment_will_no_longer_count_towards_your__a6eb6778: "Den här uppgiften kommer inte längre att räknas mot ditt betyg."
   this_attachment_has_been_unpublished_by_the_author_37bff9c3: "Denna bilaga har varit opublicerad av författaren."
   this_conference_may_be_recorded_f76deeeb: "Konferensen kan komma att spelas in."
@@ -17794,6 +18105,7 @@ sv:
   this_course_hasn_t_started_yet_you_will_not_be_abl_c828c423: "Kursen har inte börjat än. Du kommer inte kunna delta i kursen förrens %{date}."
   this_course_is_claimed_and_ready_but_you_ll_need_t_25b95a0a: "Kursen är redo, men du måste slutföra registreringen innan du kan publicera kursen. Du borde har fått ett e-postmeddelande från Canvas innehållande en länk för att slutföra processen. Se till att du även kollar din skräppost."
   this_course_is_visible_only_to_teachers_until_it_i_ce972f0: "Kursen är endast synlig för lärare till det att den har publicerats."
+  this_criterion_is_linked_to_a_learning_outcome_c8aa57bf: "Det här kriteriet är länkat till ett lärandemål"
   this_element_is_a_more_accessible_alternative_to_d_e17b4e51: "Det här elementet är ett mer tillgängligt alternativ för dra och släpp omorganisering. Tryck på Enter eller Blankstegs-tangenten för att flytta den här frågan."
   this_email_address_is_unconfirmed_f0fc8c6e: "E-postadressen är inte bekräftad"
   this_enables_a_course_setting_to_allow_students_to_fc47219: "Detta aktiverar en kursinställning så att studenter kan exportera kurserna som en webbzipmapp offline."
@@ -17811,6 +18123,8 @@ sv:
   this_image_appears_as_a_background_watermark_to_yo_1c6b4497: "Denna bilden syns som ett vattenmärke i bakgrunden på din sida. Accepterade format: png, svg, gif, jpeg"
   this_is_a_comma_separated_list_of_url_s_to_trust_t_a6611f4: "Det här är en kommatecken-separerad lista av URL att lita på. Lita på en URL från den här listan och gå runt CSRF token när du loggar in på Canvas."
   this_is_a_concluded_course_so_only_concluded_enrol_e6e3a9d9: "Det här är en avslutad kurs, så endast avslutad anmälningar är tillgängliga."
+  this_is_a_feature_to_allow_product_design_to_remov_e92ea1c3: "Det här är en funktion som gör det möjligt för produkt-design att ta bort alla de olika skriftstorlekarna i applikationen."
+  this_is_a_feature_to_allow_the_development_of_a_re_8452eb0d: "Detta är en funktion som möjliggör utveckling av en responsiv utformning"
   this_is_a_message_for_name_7abf1e39: "Det här är ett meddelande för *%{name}*"
   this_is_a_preview_of_the_draft_version_of_the_quiz_910a02e0: "Det här är en förhandsvisning av utkastet av detta Quiz"
   this_is_a_preview_of_the_published_version_of_the__70e0c8: "Det här är en förhandsvisning av den publicerade versionen av quizet"
@@ -17828,6 +18142,7 @@ sv:
   this_may_take_a_bit_48fe4235: "Detta kan ta en stund..."
   this_may_take_a_bit_c061d0f6: "det här kan ta en stund..."
   this_message_includes_media_comments_to_listen_or__5fc98641: "Meddelandet kommer inkludera mediakommentarer. För att lyssna eller svara, klickar du på denna länk: %{link}."
+  this_message_includes_media_comments_to_listen_or__df72d662: "Det här meddelandet innehåller media-kommentarer.För att lyssna eller svara, klicka på den här länken: %{link}.När det är tillåtet, om du behöver bifoga en bilaga, logga in på Canvas och svara på inlämningen."
   this_module_is_locked_until_completing_all_of_the__ddf06070: "Den här modulen är låst tills alla kraven för följande moduler är färdiga: %{prerequisites}"
   this_module_is_locked_until_datetime_b2486751: "Denna modulen är låst tills %{datetime}"
   this_most_likely_happened_because_you_imported_cou_a78ea880: "Det här hände förmodligen för att du importerade kursinnehåll utan associerade filer."
@@ -17853,15 +18168,19 @@ sv:
   this_report_shows_all_the_courses_for_a_given_term_9102a3d7: "Den här rapporten visar alla kurser för en given term. Den resulterande csv-filen kommer att ha en rad per kurs och kommer att visa kurs-id, kursens sis-id, kursens kortnamn, kursnamn, konto-id, kontots sis-id, kontonamn, använt utrymmer i MB."
   this_report_shows_grading_period_grades_and_overal_a86346a: "Den här rapporten visar betygsperioder (och kursbetyg) för varje student som är inskriven i en given termin. Den resulterade csv-filen kommer att ha en rad per inskrivning."
   this_sample_page_includes_common_ui_elements_in_ca_331f4ac4: "Denna sample-sidan inkluderar vanliga UI element i Canvas för att hjälpa dig bygga ditt eget märke. När du börjar ändra färg-värden och bilder i den vänstra menyn, kommer du se en *Förhandsvisa Dina Ändringar* -knapp. Klicka på den för att uppdatera sidan och se hur dina ändringar ser ut."
+  this_student_s_enrollment_has_been_concluded_c03bfafe: "Denna studentens registrering har avslutats."
   this_student_s_responses_are_hidden_because_this_a_252e8335: "Elevens respons är dold efter som uppgiften är anonym."
   this_student_was_just_awarded_an_unusually_high_gr_9ad835f3: "Denna student har just tilldelats ett ovanligt högt betyg."
   this_student_was_just_awarded_negative_points_55741a37: "Den här studenten har just tilldelats negativa poäng."
   this_student_wrote_f1a3f22d: "Studenten skrev:"
   this_submission_has_already_been_graded_and_is_rea_8ec61c52: "Din inlämning har redan betygsatts och är redo för moderering."
+  this_submission_is_in_a_closed_grading_period_45a723d3: "Inlämningen är i en stängd betygsperiod."
   this_submission_is_in_a_closed_grading_period_cc9ecb8a: "Denna uppgift är under en stängd betygsättningsperiod."
   this_submission_is_in_another_grading_period_36bc720b: "Denna uppgift är under en annan betygsättningsperiod."
+  this_submission_is_in_another_grading_period_f0498cdd: "Inlämningen är i en annan betygsperiod."
   this_submission_is_not_being_autograded_4fd68d32: "Den här inlämningen blir inte betygsatt automatiskt"
   this_submission_is_not_in_any_grading_period_cbbd2f8: "Denna uppgift är inte i någon betygsättningsperiod."
+  this_submission_is_not_in_any_grading_period_d4c728db: "Inlämningen är inte i någon betygsperiod."
   this_topic_is_closed_for_comments_3dd10c00: "Det här ämnet är stängt för kommentarer."
   this_topic_is_closed_for_comments_5bacad6: "Det här ämnet är stängt för kommentarer"
   this_topic_is_used_for_grading_efc6ca89: "Ämnet används för betygsättning"
@@ -17944,13 +18263,16 @@ sv:
     chihuahua: Chihuahua
     chongqing: Chingqing
     copenhagen: Köpenhamn
+    cuiaba: Cuiaba
     darwin: Darwin
     dhaka: Dhaka
     dublin: Dublin
     eastern_time_us_canada: "Eastern Time (US & Kanada)"
     edinburgh: Edinburgh
+    eirunepe: Eirunepe
     ekaterinburg: Ekaterinburg
     fiji: Fiji
+    fortaleza: Fortaleza
     georgetown: Georgetown
     greenland: Grönland
     guadalajara: Guadalajara
@@ -17985,6 +18307,7 @@ sv:
     london: London
     madrid: Madrid
     magadan: Magadan
+    manaus: Manaus
     marshall_is: "Marshall Is."
     mazatlan: Mazataln
     melbourne: Melbourne
@@ -18003,12 +18326,14 @@ sv:
     new_caledonia: "Nya Caledonia"
     new_delhi: "New Delhi"
     newfoundland: Newfoundland
+    noronha: Noronha
     novosibirsk: Novosibrisk
     nukualofa: Nuku'alofa
     osaka: Osaka
     pacific_time_us_canada: "Pacific Time (US & Kanada)"
     paris: Paris
     perth: Perth
+    philippines: Filippinerna
     port_moresby: "Port Moresby"
     prague: Prag
     pretoria: Pretoria
@@ -18085,6 +18410,7 @@ sv:
   title_is_off_6c823e2d: "%{title} är av"
   title_is_on_2b72a9b7: "%{title} är på"
   title_is_required_437f9993: "Titel krävs"
+  title_is_required_8bb13295: "Titel krävs!"
   title_is_too_long_must_be_under_length_characters_ab694ae4: "Titeln är för lång, den måste vara under %{length} tecken"
   title_separator: ":"
   titles: 
@@ -18113,7 +18439,9 @@ sv:
       För att konfigurera en OpenID Ansluten leverantör behöver du godkännings- och token urls, och få tag på ett Klient ID och Klient hemlighet.
       
       Om leverantören kan konfigurera giltiga callback eller omdirigera URLs, använd %{callback_url}.
+  to_date_can_t_come_before_from_date_cf9e18aa: "\"Till datum\" kan inte komma före \"Från datum\""
   to_do_1d554f36: "Att göra"
+  to_do_5526f10a: "Att göra:"
   to_do_items_loading_d1cdfcd5: "Atta göra föremål laddar"
   to_do_list_dashboard_d741f64e: "”To Do”-lista för panel"
   to_link_the_course_observer_name_to_a_student_star_f993c826: "För att länka kursobservatören *%{name}* till en student skriver du in studentens namn nedanför för att hitta dem och därefter klickar du på Uppdatera."
@@ -18122,6 +18450,7 @@ sv:
   to_restrict_to_users_from_a_specific_clever_distri_dc3b89fb: "För att begränsa användare från ett specifikt Clever distrikt, fyll i distriktets Clever ID här. Detta krävs för att Clever Instant-inloggningen ska fungera i en miljö med många användare."
   to_restrict_to_users_from_specific_google_apps_dom_3a57f0fd: "Ange domänen här för att begränsa användare från särskilda Google Apps domäner."
   to_restrict_to_users_of_your_azure_active_director_df7cdd41: "För att begränsa användare från din Azure Active katalog, nämn användaren här."
+  to_view_all_notifications_sent_to_a_canvas_user_se_6172daa: "För att visa alla aviseringar som skickats till en Canvas användare, välj användare och datumintervallet för din sökning."
   to_view_assignments_make_sure_the_agenda_view_is_a_5695abfd: "För att visa uppgift måste du se till att *Agenda* vy är aktiv."
   today_76e10f9c: Idag
   toggle_course_card_color_overlays_b5b8137a: "Växla färgöverlagringar för kurskort"
@@ -18146,11 +18475,13 @@ sv:
     incomplete: ofärdig
     vdd: 
       more_message: "och %{count} mer..."
+  top_66e0adb6: Topp
   top_box_background_6db383e9: "Top box bakgrund"
   top_box_border_94cee4a7: "Top box gräns"
   topic_podcast_feed_dff98ab0: "Ämne podcastflöde"
   total_71a4807: Total
   total_column_options_4e6a6032: "Totala kolumnalternativ"
+  total_messages_af025be6: "Totalt antal meddelanden"
   total_options_351e2682: "Totala alternativ"
   total_range_45c8549a: "Total omfattning"
   total_results_outcomedetails_cnt_30ff1f8d: "Totala resultat: %{outcomeDetails.cnt}"
@@ -18212,12 +18543,15 @@ sv:
   underline_all_links_description: |-
       Understrukna länkar visar hyperlänkar i navigeringsmenyerna, instrumentpanelen och sidans sidofält som
       *understruken text*. Det här funktionsalternativet gäller inte för användargenererade innehållslänkar i
-      ”Rich Content Editor”, visas som understrukna för alla användare.
+      ”Rich Content Editor”, som alltid visas som understrukna för alla användare.
   underline_links_e7cf9b4f: "Understrukna länkar"
   undo_a7be8fef: Ångra
   undo_remove_course_association_name_68eb4037: "Ångra borttagning av kursförbindelse %{name}"
+  unenrolled_bc89d5e3: Avregistrerats
   unenrolled_users_e7632d24: "Icke registrerade användare"
+  ungraded_147a0dce: ograderad
   ungraded_answers_31ef2df7: "Ej betygsatta svar"
+  ungraded_ed0c6f98: "inte bedömd"
   ungraded_submissions_44efb0ec: "Ej betygsatta inlämningar"
   ungraded_survey_ad7de790: "Ej betygsatt undersökning"
   united_arab_emirates_971_649b3750: "Förenade Arabemiraten (+971)"
@@ -18260,10 +18594,12 @@ sv:
   unpublished_8b6107d6: Avpublicerad
   unpublished_assignments_9cdbcc87: "Opublicerade uppgifter"
   unpublished_click_to_modify_60f9051: "Avpublicerad - Klicka för att ändra"
+  unpublished_click_to_publish_6a6d12e1: "Opublicerad.  Klicka för att publicera"
   unpublished_click_to_publish_c073631a: "Opublcerad. Klicka för att publicera."
   unpublished_click_to_publish_item_name_614c4952: "Opublicerad. Klicka för att publicera %{item_name}."
   unpublished_click_to_publish_module_name_89f8601c: "Opublicerad. Klicka för att publicera %{module_name}."
   unpublished_click_to_publish_name_10104b5c: "Avpublicerad. Klicka för att publicera %{name}"
+  unpublished_click_to_publish_title_7c57293f: "Opublicerad.  Klicka för att publicera %{title}."
   unpublished_courses_title: "Avpublicerade kurser"
   unpublished_dfd8801: Avpublicerad
   unpublishing_1fa99dc6: Avpublicerar...
@@ -18272,6 +18608,7 @@ sv:
   unreserved_e86b7425: Avreserverad
   unselected_all_courses_99a9d35c: "Ej valda alla kurser"
   unselected_course_course_89995a83: "Ej valda kurser %{course}"
+  unstar_conversation_45fc43d6: "Ta bort stjärnmärkning från konversation"
   unstarted_932f2990: "Ej startad"
   unsupported_package: "Innehållspaket som inte kan hanteras"
   unsyncable_4bf11ee6: "Ej synkroniseringsbar"
@@ -18291,13 +18628,18 @@ sv:
   update_and_view_sections_course_details_navigation_de248be8: |-
       Uppdatera och visa sektioner, kursinformation, navigering, funktions-
       alternativ och externa app-integrationer, alla är synliga endast för instruktörer.
+  update_comment_8cedb4f0: "Uppdatera kommentar"
+  update_comments_21991be0: "Uppdatera kommentarer"
+  update_criterion_edcbd330: "Uppdatera kriterium"
   update_details_6abfed16: "Uppdatera detaljer"
   update_link_b7cab181: "Uppdatera länk"
+  update_rating_6d29c2ef: "Uppdatera ranking"
   update_tool_7d48ef2a: "Uppdatera %{tool}"
   updated_2c1e8615: Uppdaterad
   updated_current_grade_to_be_empty_c2ce1d13: "Uppdaterat nuvarande betyg är tomt "
   updated_current_grade_to_currentgrade_bfe2ea14: "Uppdatera nuvarande betyg till %{currentGrade}"
   updated_group_group_name_727b1d98: "Uppdaterade gruppen %{group_name}"
+  updated_terms_of_service_82f34148: "Uppdaterade användarvillkor"
   updated_ui_for_searching_and_displaying_users_and__6755e08e: "Uppdaterad UI för sökning och visning av studenter och kurser inom ett konto."
   updating_6edbab78: Uppdaterar
   upload_8b403d05: "Ladda upp"
@@ -18422,6 +18764,7 @@ sv:
     users_to_add: 
       one: "Om du fortsätter nu, kommer 1 användare läggas till."
       other: "Om du fortsätter nu, kommer %{count} användare läggas till."
+  user_login_logout_activity_90fbbd9a: "Användare inloggning / utloggning-aktivitet"
   user_logins: 
     buttons: 
       add_login: "Lägg till inloggning"
@@ -18503,6 +18846,7 @@ sv:
       journal_header: Fakultetsjournal
       page_title: Fakultetsjournal
   user_observer_csv_3592a9cf: "Användarobservatör CSV"
+  user_observers_454d4303: "Användare observatörer"
   user_option_links_66090987: "Länkar för användaralternativ"
   user_profile: 
     profile_title_too_long: "Titeln är för lång"
@@ -18805,6 +19149,7 @@ sv:
   validate: 
     is_required: "Det här fältet är nödvändigt"
   validate_links_in_content_b1630fba: "Validera länkar i innehållet"
+  value_d842f16d: Värde
   vanity_url_76f93382: "Vanity URL"
   vericite: 
     no_score_after_retries: "VeriCite har inte returnerat ett resultat efter %{max_tries} försök att återfå en."
@@ -18826,6 +19171,7 @@ sv:
   view_course_analytics_eefe6b2: "Visa analys av kurs"
   view_faculty_journals_ad0e8c8f: "Visa fakultetsjournaler"
   view_file_8a1c62e5: "Visa fil"
+  view_gradebook_history_a9272918: "Visa historik för betygsbok"
   view_grades_8d3bae6c: "Visa betyg"
   view_grades_for_name_45aeb2f2: "Visa betyg för %{name}"
   view_grading_history_e64bb8fe: "Visa betygshistorik"
@@ -18833,6 +19179,7 @@ sv:
   view_name_app_62a2ad8e: "Visa %{name} appen"
   view_next_file_a8a4a885: "Visa nästa fil"
   view_next_student_9fc72fef: " visa nästa student"
+  view_notifications_6aea09a2: "Visa aviseringar"
   view_previous_file_b846db4f: "Visa förra filen"
   view_previous_student_90000459: "visa föregående student"
   view_prior_enrollments_9b519b25: "Visa tidigare registreringar"
@@ -18852,6 +19199,7 @@ sv:
   virtual_lectures_in_real_time_a1778dea: "Virtuella lektioner i realtid"
   visit_864b4060: Besök
   visit_group_group_name_7a816081: "Besök gruppen %{group_name}"
+  waiting_for_selection_ce0398c7: "Väntar på val"
   warning_6576b5b8: varning
   warning_aacb8c24: Varning
   warning_crocodoc_has_limitations_when_used_in_fire_8ab414e6: "Varning: Crocodoc har begränsningar när det används i Firefox. Kommentarer kommer inte alltid sparas."
@@ -18882,6 +19230,7 @@ sv:
   we_were_unable_to_deactivate_the_app_5e2632f3: "Vi lyckades inte avaktivera appen."
   we_were_unable_to_find_a_tool_profile_match_for_pr_34e6a5d2: "Vi kunde inte hitta en matching för verktygsprofil för \"%{product_name}\"."
   we_were_unable_to_find_a_tool_profile_match_for_pr_cd98678e: "Vi kunde inte hitta en matching för verktygsprofil för \"%{product_name}\". Om du vill använda verktyget ska du installera det med följande registreringsadress: %{registration_url}"
+  we_were_unable_to_find_a_tool_profile_match_for_ve_5645a3e0: "Vi kunde inte hitta en verktygs-profil-match för vendor_code: \"%{vendor_code}\" product_code: \"%{product_code}\"."
   we_were_unable_to_find_matches_below_f1c6d1ed: "Vi kunde inte hitta matchningarna nedan."
   we_were_unable_to_find_matches_below_select_any_yo_87035b30: "Vi kunde inte hitta matchningarna nedan. Välj någon som du vill skapa som ny användare. Omarkerad kommer att hoppas över den här gången."
   we_were_unable_to_find_matches_for_the_logins_belo_d5f79db2: "Vi kunde inte hitta några matchningar för inloggningarna nedan. Välj de som du vill skapa som nya användare."
@@ -18924,6 +19273,7 @@ sv:
   whenever_b943b119: "när som helst"
   where_would_you_like_to_move_title_fabd6e8f: "Vart skulle du vilja flytta %{title}?"
   which_course_is_this_question_about_f819a158: "Vilken kurs handlar frågan om?"
+  who_can_create_new_courses_7a6c1338: "Vem kan skapa nya kurser"
   widget: 
     upload_media_track_form: 
       choose_a_language: "--Välj ett språk--"
@@ -19095,6 +19445,7 @@ sv:
   work_and_create_together_c65f358b: "Arbete eller skapa tillsammans"
   would_you_like_to_accept_or_dismiss_this_update_9009d696: "Vill du acceptera eller avfärda uppdateringen?"
   would_you_like_to_enable_this_app_ccdf735d: "Vill du aktivera den här appen?"
+  would_you_like_to_go_back_to_include_1d279044: "VIll du gå tillbaka och inkludera:"
   would_you_like_to_let_students_continue_in_the_cou_a4c36171: "Vill du låta studenter fortsätta i kursen eller vill du låsa dessa modulerna till de nya kraven är färdiga?"
   wrap_event_titles_in_calendar_month_view_cbb29fd8: "Slå ihop händelsetitlar i kalenderns månads vy"
   x_y_4a86b3ab: "%{x}/%{y}"
@@ -19142,17 +19493,25 @@ sv:
       Du kan publicera din kurs från hemsidan när du är redo
       att dela den med dina studenter. Fram till din kurs publiceras kommer endast instruktörer att få tillgång till den.
   you_can_reply_to_this_comment_by_responding_to_thi_3d130e8c: "Du kan svara på denna kommentaren genom att svara på detta meddelandet, eller granska inlämningsdetaljerna via denna länken: %{link}."
+  you_can_reply_to_this_comment_by_responding_to_thi_4fd1379e: "Du kan svara på den här kommentaren genom att svara på det här meddelandet eller granska inlämningsuppgifterna med den här länken: %{link}.När det är tillåtet, om du behöver bifoga en bilaga, logga in på Canvas och svara på inlämningen"
+  you_can_reply_to_this_message_in_canvas_by_clickin_f5f5f7a3: "Du kan svara på det här meddelandet i Canvas genom att klicka på den här länken: %{link}."
+  you_can_reply_to_this_message_in_canvas_by_replyin_c9f9abb: "Du kan svara på det här meddelandet i Canvas genom att svara direkt på det här e-postmeddelandet eller genom att klicka på den här länken: %{link}.Om du behöver inkludera en bilaga, logga in på Canvas och svara via inkorgen."
   you_can_reply_to_this_message_in_canvas_by_replyin_fa33638d: "Du kan svara på detta meddelandet i Canvas genom att svar direkt på detta e-postmeddelandet, eller genom att klicka på denna länken: %{link}"
   you_can_review_the_submission_details_by_clicking__9abc5515: "Du kan granska inlämningsdetaljerna genom att klicka på denna länken: %{link}"
+  you_can_review_the_submission_details_using_the_li_c25dd615: "Du kan granska inlämningsuppgifterna med hjälp av länken nedan."
+  you_can_review_the_submission_details_using_this_l_c7f51917: "Du kan granska inlämningsuppgifterna med den här länken: %{link}."
   you_can_see_details_for_this_group_by_clicking_thi_acaf07e5: "Du kan se detaljer om denna gruppen genom att klicka på denna länken: %{link}"
   you_can_see_which_groups_you_re_a_part_of_for_this_6efda22c: "Du kan se vilka grupper du är med i för detta kontot genom att klicka på denna länken: %{link}"
   you_can_see_which_groups_you_re_a_part_of_for_this_827a3706: "Du kan se vilka grupper du är med i för denna kursen genom att klicka på denna länken: %{link}"
+  you_can_t_delete_a_root_account_5673c62d: "Du kan ta bort en root_account."
   you_can_t_delete_a_sub_account_that_has_courses_in_c4f439cf: "Du kan inte radera ett underkonto som redan har en kurs i sig."
+  you_can_t_delete_a_sub_account_that_has_sub_accoun_7d815421: "Du kan ta bort ett underkonto som har tillhörande underkonton."
   you_can_t_delete_account_name_because_it_has_cours_a81c57c9: "Du kan inte ta bort %{account_name} eftersom det finns kurser där."
   you_can_try_to_log_in_again_2b23ef0f: "Du kan försöka att *logga in igen*."
   you_can_update_some_of_this_user_s_information_but_8e99a045: "Du kan uppdatera en del av användarens information, men de kan ändra tillbaka den om de vill."
   you_can_use_a_single_16x16_32x32_48x48_ico_file_85da88b5: "Du kan använda singel 16x16, 32x32, 48x48 ico fil"
   you_can_view_your_grades_based_on_what_if_scores_s_a1aeae72: "Du kan se dina betyg baserad på ”Tänkbara” resultat så att du för vetskap om hur betyg kommer påverka kommande eller återinlämnade uppgifter. Du kan testa poäng för en uppgift som redan inkluderar en poäng, eller en uppgift som ännu inte har betygsatts. "
+  you_cannot_assign_to_a_group_outside_of_the_assign_7869eb3b: "Du kan inte tilldela en grupp utanför uppgiftens gruppsammansättning"
   you_cannot_edit_themes_on_this_subaccount_63ceaaf3: "Du kan inte redigera teman i detta underkontot."
   you_cannot_remove_this_enrollment_c87be1cb: "Du kan inte ta bort den här registreringen."
   you_cannot_remove_your_default_email_address_8ed68e52: "Du kan inte ta bort din standard e-postadress"
@@ -19162,12 +19521,13 @@ sv:
   you_do_not_have_access_to_the_requested_discussion_90d8ec99: "Du har inte tillgång till den begärda diskussionen."
   you_do_not_have_access_to_the_requested_quiz_d3659e4b: "Du har inte tillgång till den begärda Quiz."
   you_do_not_have_access_to_the_requested_resource_316ce49a: "Du har inte tillgång till den begärda resursen."
+  you_do_not_have_permission_to_change_this_488c536: "Du har inte tillstånd att ändra detta"
   you_do_not_have_permission_to_invite_users_that_do_b7142404: "Du har inte behörighet att bjuda in användare som inte redan finns."
   you_do_not_have_permission_to_publish_this_course_ff361c82: "Du har inte tillstånd att publicera denna kursen."
   you_don_t_have_permission_to_manage_grades_for_thi_a9a1be3a: "Du har inte behörighet att hantera betyg för den här kursen"
   you_have_been_given_extra_time_on_this_attempt_9d8bff6c: "Du har fått extra tid för det här försöket"
   you_have_changed_the_progression_requirements_for__6772bc89: "Du har ändrat kravens utveckling för den här kursen. Det kan finnas studenter som redan har använt utveckling för den här moduler och andra som förlitar sig på den."
-  you_have_completed_a_peer_review_for_person_thank__1371f37e: "Du har slutfört en granskning för %{person}. Tack"
+  you_have_completed_a_peer_review_for_person_thank__1371f37e: "Du har slutfört en referentgranskning för %{person}. Tack"
   you_have_made_changes_to_the_questions_in_this_qui_1658361a: "*Du har gjort ändringar på frågor i detta Quiz.* Dessa ändringar kommer inte synas för studenterna innan du sparat detta Quiz."
   you_have_no_collaboration_apps_configured_talk_to__6733123a: "Du har inte konfigurerat några samarbetsappar. Prata med din lärare för att ställa in några."
   you_have_no_ltis_configured_to_create_collaboratio_5cad28dd: "Du har inga LTI:er konfigurerade att skapa samarbeten med. Prata med dina lärare för att ställa in några."
@@ -19193,9 +19553,11 @@ sv:
   you_must_allow_at_least_one_appointment_per_time_s_76e22300: "Du måste tillåta minst ett möte per tidslucka."
   you_must_allow_at_least_one_group_to_attend_68531eab: "Du måste tillåta minst en grupp medverka i"
   you_must_enter_a_date_f8eabfb1: "Du måste ange ett datum"
+  you_must_have_a_student_or_section_selected_a99e45df: "Du måste ha en student eller en sektion vald"
   you_must_log_in_to_view_replies_9ccd4da0: "Du måste logga in för att se svar"
   you_must_provide_a_value_or_unselect_the_option_3b28b754: "Du måste avge ett värde eller avmarkera alternativet."
   you_must_select_a_course_to_copy_content_from_e7bd9e09: "Du måste välja en kurs att kopiera innehåll från"
+  you_must_select_a_folder_to_upload_your_migration__ac7bc7c0: "Du måste välja en mapp för att ladda upp din migrering till"
   you_must_set_it_to_a_number_greater_than_or_equal__eb1d9275: "Du måste ställa in det som ett nummer högre eller jämnvärdigt med %{min}"
   you_must_specify_a_usage_right_5eb57f87: "Du måste specificera en användarrättighet."
   you_must_use_a_number_912ce4bd: "Du måste använda ett nummer"
@@ -19218,8 +19580,8 @@ sv:
   you_ve_been_invited_to_course_course_role_role_typ_b8ab8f22: "Du har blivit inbjuden till %{course}. Kursroll: %{role_type}"
   you_ve_been_invited_to_participate_in_a_class_at_w_b87cd481: "Du har bjudits in att delta i en kurs på %{website}. Kursen heter %{course}. Kursroll: %{role_type}"
   you_ve_been_invited_to_participate_in_the_course_c_a8d1f6a8: "Du har blivit inbjuden att delta i kursen, %{course}. Kursroll: %{role_type}"
-  you_ve_been_invited_to_peer_review_reviewee_82580fb: "Du har blivit inbjuden att recensera %{reviewee}."
-  you_ve_been_invited_to_peer_review_reviewee_follow_2e71fce2: "Du har blivit inbjuden att recensera %{reviewee}. Följ denna länken för att recensera dem: %{link}."
+  you_ve_been_invited_to_peer_review_reviewee_82580fb: "Du har blivit inbjuden att referentgranskning %{reviewee}."
+  you_ve_been_invited_to_peer_review_reviewee_follow_2e71fce2: "Du har blivit inbjuden att referentgranskning %{reviewee}. Följ denna länken för att recensera dem: %{link}."
   you_ve_been_invited_to_the_course_course_2aac8140: "Du har bjudits in till kursen %{course}."
   you_ve_been_invited_to_the_course_course_course_ro_a74d748b: "Du har blivit inbjuden till kursen, %{course}. Kursroll: %{role_type}"
   you_ve_been_reminded_to_assess_rubric_context_70eeb600: "Du har blivit påmind att utvärdera %{rubric}, %{context}."

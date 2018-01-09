@@ -91,9 +91,7 @@
         </h1>
       </div>
       <div class='assignment-buttons'>
-        <span style="display: inline-block">
-          <%= render "shared/mark_as_done" %>
-        </span>
+        <%= render "shared/mark_as_done" %>
         <%= assignment_submission_button(@assignment, @current_user, @current_user_submission) %>
       </div>
     </div>
@@ -234,8 +232,8 @@
 
 <% end %>
 
-<% if can_do(@assignment, @current_user, :submit) && !@locked %>
-  <%= render :partial => "submit_assignment" %>
+<% if !@locked && can_do(@assignment, @current_user, :submit) %>
+  <%= render :partial => "submit_assignment", locals: { eula_url: eula_url }%>
 <% end %>
 
 <%= render partial: "shared/rubrics_component" %>

@@ -318,6 +318,20 @@ function calculateSubtotals (byGradingPeriod, calculatedGrades, currentOrFinal) 
   return subtotals
 }
 
+function finalGradePointsPossibleText (groupWeightingScheme, scoreWithPointsPossible) {
+  if (groupWeightingScheme === "percent") {
+    return "";
+  }
+
+  const gradingPeriodId = GradeSummary.getSelectedGradingPeriodId();
+  const gradingPeriodSet = getGradingPeriodSet();
+  if (gradingPeriodId == null && gradingPeriodSet && gradingPeriodSet.weighted) {
+    return "";
+  }
+
+  return scoreWithPointsPossible;
+}
+
 function calculateTotals (calculatedGrades, currentOrFinal, groupWeightingScheme) {
   const showTotalGradeAsPoints = ENV.show_total_grade_as_points
 
@@ -348,7 +362,10 @@ function calculateTotals (calculatedGrades, currentOrFinal, groupWeightingScheme
   const $finalGradeRow = $('.student_assignment.final_grade')
   $finalGradeRow.find('.grade').text(finalGrade)
   $finalGradeRow.find('.score_teaser').text(teaserText)
-  $finalGradeRow.find('.points_possible').text(scoreAsPoints)
+
+  const pointsPossibleText = finalGradePointsPossibleText(groupWeightingScheme, scoreAsPoints);
+  $finalGradeRow.find('.points_possible').text(pointsPossibleText);
+
   if (groupWeightingScheme === 'percent') {
     $finalGradeRow.find('.score_teaser').hide()
   }
@@ -577,33 +594,8 @@ function setup () {
       GradeSummary.updateStudentGrades()
     }).triggerHandler('change')
 
-    $('#observer_user_url').change(function () {
-      if (location.href !== $(this).val()) {
-        location.href = $(this).val()
-      }
-    })
-
-    $('#assignment_order').change(function () {
-      this.form.submit()
-    })
-
     bindShowAllDetailsButton($ariaAnnouncer)
     StatusPill.renderPills()
-  })
-
-  $(document).on('change', '.grading_periods_selector', function () {
-    const newGP = $(this).val()
-    let matches = location.href.match(/grading_period_id=\d*/)
-    if (matches) {
-      location.href = location.href.replace(matches[0], `grading_period_id=${newGP}`)
-      return
-    }
-    matches = location.href.match(/#tab-assignments/)
-    if (matches) {
-      location.href = `${location.href.replace(matches[0], '')}?grading_period_id=${newGP}${matches[0]}`
-    } else {
-      location.href += `?grading_period_id=${newGP}`
-    }
   })
 }
 
@@ -616,6 +608,7 @@ export default _.extend(GradeSummary, {
   calculateTotals,
   calculateSubtotals,
   calculatePercentGrade,
+  finalGradePointsPossibleText,
   formatPercentGrade,
   updateScoreForAssignment,
   updateStudentGrades

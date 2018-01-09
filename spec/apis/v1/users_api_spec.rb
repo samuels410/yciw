@@ -97,6 +97,23 @@ describe Api::V1::User do
           'short_name' => 'User',
           'sis_user_id' => 'xyz',
           'integration_id' => nil,
+          'login_id' => 'xyz'
+        })
+    end
+
+    it 'should return SIS login when setting is set' do
+      @user = User.create!(name: 'User')
+      Account.default.settings['return_sis_login_id'] = 'true'
+      Account.default.save!
+      @user.pseudonyms.create!(unique_id: 'xyz', account: Account.default) { |p| p.sis_user_id = 'xyz' }
+      expect(@test_api.user_json(@user, @admin, {}, [], Account.default)).to eq({
+          'name' => 'User',
+          'sortable_name' => 'User',
+          'sis_import_id' => nil,
+          'id' => @user.id,
+          'short_name' => 'User',
+          'sis_user_id' => 'xyz',
+          'integration_id' => nil,
           'login_id' => 'xyz',
           'sis_login_id' => 'xyz'
         })
@@ -118,8 +135,7 @@ describe Api::V1::User do
         'short_name' => 'User',
         'sis_user_id' => 'xyz',
         'integration_id' => nil,
-        'login_id' => 'xyz',
-        'sis_login_id' => 'xyz'
+        'login_id' => 'xyz'
       })
     end
 
@@ -140,8 +156,7 @@ describe Api::V1::User do
         'short_name' => 'User',
         'sis_user_id' => 'xyz',
         'integration_id' => nil,
-        'login_id' => 'xyz',
-        'sis_login_id' => 'xyz'
+        'login_id' => 'xyz'
       })
 
       expect(@test_api.user_json(student, teacher, {}, [], course2)).to eq({
@@ -172,8 +187,7 @@ describe Api::V1::User do
         'short_name' => 'User',
         'sis_user_id' => 'xyz',
         'integration_id' => nil,
-        'login_id' => 'xyz',
-        'sis_login_id' => 'xyz'
+        'login_id' => 'xyz'
       })
 
       expect(@test_api.user_json(student, teacher, {}, [], group2)).to eq({
@@ -201,8 +215,7 @@ describe Api::V1::User do
           'short_name' => 'User',
           'sis_user_id' => 'xyz',
           'integration_id' => nil,
-          'login_id' => 'xyz',
-          'sis_login_id' => 'xyz'
+          'login_id' => 'xyz'
         })
     end
 
@@ -221,7 +234,6 @@ describe Api::V1::User do
           'id' => @user.id,
           'short_name' => 'User',
           'login_id' => 'abc',
-          'sis_login_id' => 'abc',
           'sis_user_id' => 'a',
           'integration_id' => nil,
           'root_account' => 'school1',
@@ -240,13 +252,19 @@ describe Api::V1::User do
           'sortable_name' => 'User',
           'id' => @user.id,
           'short_name' => 'User',
+          'integration_id' => nil,
+          'sis_import_id' => nil,
+          'sis_user_id' => nil,
           'login_id' => 'xyz',
         })
     end
 
     context "computed scores" do
       before :once do
-        @enrollment.scores.create!(current_score: 95.0, final_score: 85.0)
+        @enrollment.scores.create!
+        assignment_group = @course.assignment_groups.create!
+        @enrollment.find_score(course_score: true).update!(current_score: 95.0, final_score: 85.0)
+        @enrollment.find_score(assignment_group_id: assignment_group).update!(current_score: 50.0, final_score: 40.0)
         @student1_enrollment = @enrollment
         @student2 = course_with_student(:course => @course).user
       end
@@ -256,7 +274,7 @@ describe Api::V1::User do
         @course.save!
       end
 
-      it "should return scores as admin" do
+      it "should return course scores as admin" do
         json = @test_api.user_json(@student, @admin, {}, [], @course, [@student1_enrollment])
         expect(json['enrollments'].first['grades']).to eq({
           "html_url" => "",
@@ -267,7 +285,7 @@ describe Api::V1::User do
         })
       end
 
-      it "should not return scores as another student" do
+      it "should not return course scores as another student" do
         json = @test_api.user_json(@student, @student2, {}, [], @course, [@student1_enrollment])
         expect(json['enrollments'].first['grades'].keys).to eq ["html_url"]
       end
@@ -288,7 +306,6 @@ describe Api::V1::User do
                       "sis_user_id"=>"sis-user-id",
                       "integration_id" => nil,
                       "sis_import_id"=>@student.pseudonym.sis_batch_id,
-                      "sis_login_id"=>"pvuser@example.com",
                       "login_id" => "pvuser@example.com"
       })
     end
@@ -477,7 +494,6 @@ describe "Users API", type: :request do
          'short_name' => @other_user.short_name,
          'sis_user_id' => @other_user.pseudonym.sis_user_id,
          'integration_id' => nil,
-         'sis_login_id' => @other_user.pseudonym.sis_user_id,
          'login_id' => @other_user.pseudonym.unique_id,
          'locale' => nil,
          'permissions' => {'can_update_name' => true, 'can_update_avatar' => false}
@@ -533,7 +549,6 @@ describe "Users API", type: :request do
           'short_name' => user.short_name,
           'sis_user_id' => user.pseudonym.sis_user_id,
           'integration_id' => nil,
-          'sis_login_id' => user.pseudonym.sis_user_id,
           'login_id' => user.pseudonym.unique_id
         }]
       end
@@ -636,6 +651,7 @@ describe "Users API", type: :request do
 
       context 'using force_validations param' do
         it "validates with force_validations set to true" do
+          @site_admin.account.create_terms_of_service!(terms_type: "default", passive: false)
           raw_api_call(:post, "/api/v1/accounts/#{@site_admin.account.id}/users",
             { :controller => 'users', :action => 'create', :format => 'json', :account_id => @site_admin.account.id.to_s },
             {
@@ -677,9 +693,12 @@ describe "Users API", type: :request do
 
           expect(json).to eq({
             "id"            => user.id,
+            "integration_id"=> nil,
             "name"          => "",
             "sortable_name" => "",
             "short_name"    => "",
+            "sis_import_id" => nil,
+            "sis_user_id"   => nil,
             "login_id"      => "bademail@",
             "locale"        => nil
           })
@@ -730,7 +749,6 @@ describe "Users API", type: :request do
           "sis_user_id"      => "12345",
           "sis_import_id"    => user.pseudonym.sis_batch_id,
           "login_id"         => "test@example.com",
-          "sis_login_id"     => "test@example.com",
           "integration_id"   => nil,
           "locale"           => "en",
           "confirmation_url" => user.communication_channels.email.first.confirmation_url
@@ -868,6 +886,7 @@ describe "Users API", type: :request do
 
       it "should require acceptance of the terms" do
         @admin.account.canvas_authentication_provider.update_attribute(:self_registration, true)
+        @admin.account.create_terms_of_service!(terms_type: "default", passive: false)
         @admin.account.save!
         raw_api_call(:post, "/api/v1/accounts/#{@admin.account.id}/users",
           { :controller => 'users', :action => 'create', :format => 'json', :account_id => @admin.account.id.to_s },
@@ -983,6 +1002,7 @@ describe "Users API", type: :request do
       end
 
       it "should require acceptance of the terms" do
+        @admin.account.create_terms_of_service!(terms_type: "default", passive: false)
         @admin.account.canvas_authentication_provider.update_attribute(:self_registration, true)
         raw_api_call(:post, "/api/v1/accounts/#{@admin.account.id}/self_registration",
                      { :controller => 'users', :action => 'create_self_registered_user', :format => 'json', :account_id => @admin.account.id.to_s },
@@ -1095,7 +1115,6 @@ describe "Users API", type: :request do
           'integration_id' => nil,
           'login_id' => 'student@example.com',
           'email' => 'somenewemail@example.com',
-          'sis_login_id' => 'student@example.com',
           'locale' => 'en',
           'time_zone' => "Tijuana"
         })
@@ -1180,8 +1199,8 @@ describe "Users API", type: :request do
         expect(user.avatar_state).to eql :locked
       end
 
-      it "should allow the user's avatar to be set to an external url" do
-        url_to_set = 'http://www.instructure.example.com/image.jpg'
+      it "should not allow the user's avatar to be set to an external url" do
+        url_to_set = 'https://www.instructure.example.com/image.jpg'
         json = api_call(:put, @path, @path_options, {
           :user => {
             :avatar => {
@@ -1190,8 +1209,8 @@ describe "Users API", type: :request do
           }
         })
         user = User.find(json['id'])
-        expect(user.avatar_image_source).to eql 'external'
-        expect(user.avatar_image_url).to eql url_to_set
+        expect(user.avatar_image_source).to eql 'no_pic'
+        expect(user.avatar_image_url).to eql nil
       end
 
       it "should be able to update a name without changing sortable name if sent together" do

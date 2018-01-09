@@ -65,6 +65,7 @@
     <%= form_tag(context_url(@context, :controller => :submissions, :assignment_id => @assignment.id, :action => :create), {:id => "submit_online_upload_form", :class => "submit_assignment_form", :multipart => true }) do %>
     <%= hidden_field :submission, :submission_type, :value => "online_upload" %>
     <%= hidden_field :submission, :attachment_ids, :value => "", :id => "submission_attachment_ids" %>
+    <%= hidden_field :submission, :eula_agreement_timestamp, :id => "eula_agreement_timestamp" %>
     <table class="formtable" style="width: 100%;">
       <tr>
         <td colspan="2">
@@ -122,7 +123,12 @@
           <td colspan="2">
             <label class='checkbox'>
               <input type="checkbox" class='turnitin_pledge' name="turnitin_pledge" value="1"/>
-              <%= @similarity_pledge %>
+              <% if eula_url.present? %>
+                <%= t "I agree to the tool's" %>
+                <%= raw("<a href='#{eula_url}'>#{t 'End-User License Agreement.'}</a>") %>
+              <% else %>
+                <%= @similarity_pledge %>
+              <% end %>
             </label>
           </td>
         </tr>
@@ -384,7 +390,10 @@
       <div id="submit_from_external_tool_form_<%= external_tool.id %>" style="padding: 5px 5px 0 5px;"></div>
     <% end %>
 
-    <% if @external_tools.length > 3 %>
+    <% if @external_tools.length > 3
+      user_group = @assignment.group_category.try(:group_for, @current_user)
+      file_upload_path = user_group ? api_v1_group_files_path(user_group) : "/api/v1/courses/#{@context.id}/assignments/#{@assignment.id}/submissions/#{@current_user.id}/files"
+    %>
       <%= form_tag(context_url(@context, :controller => :submissions, :assignment_id => @assignment.id, :action => :create), {:id => "submit_from_external_tool_form", :class => "submit_assignment_form" }) do %>
         <%= hidden_field :submission, :submission_type, :value => "online_url", :id => 'external_tool_submission_type' %>
         <%= hidden_field :submission, :filename, :id => 'external_tool_filename' %>
@@ -392,7 +401,7 @@
         <%= hidden_field :submission, :url, :id => 'external_tool_url' %>
         <%= hidden_field :submission, :content_type, :id => 'external_tool_content_type' %>
         <a href="<%= context_url(@context, :homework_submissions_context_external_tools_url) %>" id="external_tools_url"></a>
-        <a href="/api/v1/courses/<%= @context.id %>/assignments/<%= @assignment.id %>/submissions/<%= @current_user.id %>/files" id="homework_file_url"></a>
+        <a href="<%= file_upload_path %>" id="homework_file_url"></a>
         <table role="presentation" class="formtable" style="width: 100%;">
           <tr>
             <td colspan="2">

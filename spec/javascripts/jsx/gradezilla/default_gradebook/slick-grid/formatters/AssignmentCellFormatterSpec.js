@@ -16,7 +16,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import { createGradebook } from 'spec/jsx/gradezilla/default_gradebook/GradebookSpecHelper';
+import { createGradebook, setFixtureHtml } from 'spec/jsx/gradezilla/default_gradebook/GradebookSpecHelper';
 import AssignmentCellFormatter from 'jsx/gradezilla/default_gradebook/slick-grid/formatters/AssignmentCellFormatter';
 
 QUnit.module('AssignmentCellFormatter', function (hooks) {
@@ -30,6 +30,7 @@ QUnit.module('AssignmentCellFormatter', function (hooks) {
   hooks.beforeEach(function () {
     $fixture = document.createElement('div');
     document.body.appendChild($fixture);
+    setFixtureHtml($fixture);
 
     gradebook = createGradebook();
     formatter = new AssignmentCellFormatter(gradebook);
@@ -49,7 +50,9 @@ QUnit.module('AssignmentCellFormatter', function (hooks) {
     };
     submissionState = { hideGrade: false };
 
-    sinon.stub(gradebook.submissionStateMap, 'getSubmissionState').withArgs(submission).returns(submissionState);
+    const getSubmissionState = gradebook.submissionStateMap.getSubmissionState.bind(gradebook.submissionStateMap);
+    sinon.stub(gradebook.submissionStateMap, 'getSubmissionState').callsFake(getSubmissionState);
+    gradebook.submissionStateMap.getSubmissionState.withArgs(submission).returns(submissionState);
   });
 
   hooks.afterEach(function () {
@@ -153,6 +156,16 @@ QUnit.module('AssignmentCellFormatter', function (hooks) {
     strictEqual(renderCell().innerHTML, '');
   });
 
+  test('renders an empty cell when the submission is not defined', function () {
+    submission = undefined;
+    strictEqual(renderCell().innerHTML, '');
+  });
+
+  test('renders an empty cell when the submission state is not defined', function () {
+    gradebook.submissionStateMap.getSubmissionState.withArgs(submission).returns(undefined);
+    strictEqual(renderCell().innerHTML, '');
+  });
+
   test('renders an empty cell when the submission has a hidden grade', function () {
     submissionState.hideGrade = true;
     strictEqual(renderCell().innerHTML, '');
@@ -162,28 +175,24 @@ QUnit.module('AssignmentCellFormatter', function (hooks) {
     student.isInactive = true;
     const $cell = renderCell();
     ok($cell.classList.contains('grayed-out'), 'cell classes include "grayed-out"');
-    notOk($cell.classList.contains('cannot_edit'), 'cell classes do not include "cannot_edit"');
   });
 
   test('renders an uneditable cell when the student enrollment is concluded', function () {
     student.isConcluded = true;
     const $cell = renderCell();
     ok($cell.classList.contains('grayed-out'), 'cell classes include "grayed-out"');
-    ok($cell.classList.contains('cannot_edit'), 'cell classes include "cannot_edit"');
   });
 
   test('renders an uneditable cell when the submission has a hidden grade', function () {
     submissionState.hideGrade = true;
     const $cell = renderCell();
     ok($cell.classList.contains('grayed-out'), 'cell classes include "grayed-out"');
-    ok($cell.classList.contains('cannot_edit'), 'cell classes include "cannot_edit"');
   });
 
   test('renders an uneditable cell when the submission cannot be graded', function () {
     submissionState.locked = true;
     const $cell = renderCell();
     ok($cell.classList.contains('grayed-out'), 'cell classes include "grayed-out"');
-    ok($cell.classList.contains('cannot_edit'), 'cell classes include "cannot_edit"');
   });
 
   test('includes the "turnitin" class when the submission has Turnitin data', function () {
@@ -216,88 +225,39 @@ QUnit.module('AssignmentCellFormatter', function (hooks) {
     ok(renderCell().classList.contains('muted'));
   });
 
-  QUnit.module('#render with an ungraded submission', {
-    setup () {
-      submission.grade = null;
-    }
-  });
-
-  test('includes the "no_grade_yet" class when the submission is pending review', function () {
-    submission.workflow_state = 'pending_review';
-    ok(renderCell().classList.contains('no_grade_yet'));
-  });
-
-  test('renders a "document" icon for "online_upload" a submission', function () {
-    submission.submission_type = 'online_upload';
-    strictEqual(renderCell().querySelectorAll('i.icon-document').length, 1);
-  });
-
-  test('renders a "discussion" icon for "discussion_topic" a submission', function () {
-    submission.submission_type = 'discussion_topic';
-    strictEqual(renderCell().querySelectorAll('i.icon-discussion').length, 1);
-  });
-
-  test('renders a "text" icon for "online_text_entry" a submission', function () {
-    submission.submission_type = 'online_text_entry';
-    strictEqual(renderCell().querySelectorAll('i.icon-text').length, 1);
-  });
-
-  test('renders a "link" icon for "online_url" a submission', function () {
-    submission.submission_type = 'online_url';
-    strictEqual(renderCell().querySelectorAll('i.icon-link').length, 1);
-  });
-
-  test('renders a "filmstrip" icon for "media_recording" a submission', function () {
-    submission.submission_type = 'media_recording';
-    strictEqual(renderCell().querySelectorAll('i.icon-filmstrip').length, 1);
-  });
-
-  test('renders a "quiz" icon for "online_quiz" a submission', function () {
-    submission.submission_type = 'online_quiz';
-    strictEqual(renderCell().querySelectorAll('i.icon-quiz').length, 1);
-  });
-
-  test('renders a "document" icon for a submission of any other type', function () {
-    submission.submission_type = 'unknown';
-    strictEqual(renderCell().querySelectorAll('i.icon-document').length, 1);
-  });
-
-  test('renders a dash "-" for a submission without a submission type', function () {
-    submission.submission_type = null;
-    strictEqual(renderCell().innerHTML.trim(), '-');
-  });
-
   QUnit.module('#render with a "points" assignment submission', {
     setup () {
       gradebook.getAssignment('2301').grading_type = 'points';
     }
   });
 
-  test('renders the grade', function () {
+  test('renders the score converted to a points string', function () {
     strictEqual(renderCell().innerHTML.trim(), '8');
   });
 
-  test('rounds the grade to two decimal places', function () {
-    submission.grade = '8.345';
-    strictEqual(renderCell().innerHTML.trim(), '8.35');
-  });
-
-  test('renders the submission type icon when the submission is ungraded', function () {
+  test('renders the "needs grading" icon when the submission was graded and cleared', function () {
     submission.grade = null;
     submission.score = null;
-    strictEqual(renderCell().querySelectorAll('i.icon-text').length, 1);
+    submission.workflow_state = 'graded';
+    strictEqual(renderCell().querySelectorAll('i.icon-not-graded').length, 1);
   });
 
-  test('renders the submission type icon when the submission is ungraded and pending review', function () {
+  test('renders the "needs grading" icon when the submission was resubmitted', function () {
+    submission.workflow_state = 'submitted';
+    submission.grade_matches_current_submission = false;
+    strictEqual(renderCell().querySelectorAll('i.icon-not-graded').length, 1);
+  });
+
+  test('renders the "needs grading" icon when the submission is ungraded and pending review', function () {
     submission.grade = null;
     submission.score = null;
     submission.workflow_state = 'pending_review';
-    strictEqual(renderCell().querySelectorAll('i.icon-text').length, 1);
+    strictEqual(renderCell().querySelectorAll('i.icon-not-graded').length, 1);
   });
 
-  test('renders "EX" when the submission is excused', function () {
+  test('renders "Excused" when the submission is excused', function () {
     excuseSubmission();
-    strictEqual(renderCell().innerHTML.trim(), 'EX');
+    strictEqual(renderCell().innerHTML.trim(), 'Excused');
   });
 
   QUnit.module('#render with a "percent" assignment submission', {
@@ -306,69 +266,76 @@ QUnit.module('AssignmentCellFormatter', function (hooks) {
     }
   });
 
-  test('renders the grade as a percentage', function () {
-    strictEqual(renderCell().innerHTML.trim(), '8%');
+  test('renders the score converted to a percentage', function () {
+    strictEqual(renderCell().innerHTML.trim(), '80%');
   });
 
-  test('rounds the percentage to two decimal places', function () {
-    submission.grade = '8.345';
-    strictEqual(renderCell().innerHTML.trim(), '8.35%');
-  });
-
-  test('renders the submission type icon when the submission is ungraded', function () {
+  test('renders the "needs grading" icon when the submission was graded and cleared', function () {
     submission.grade = null;
     submission.score = null;
-    strictEqual(renderCell().querySelectorAll('i.icon-text').length, 1);
+    submission.workflow_state = 'graded';
+    strictEqual(renderCell().querySelectorAll('i.icon-not-graded').length, 1);
   });
 
-  test('renders the submission type icon when the submission is ungraded and pending review', function () {
+  test('renders the "needs grading" icon when the submission was resubmitted', function () {
+    submission.workflow_state = 'submitted';
+    submission.grade_matches_current_submission = false;
+    strictEqual(renderCell().querySelectorAll('i.icon-not-graded').length, 1);
+  });
+
+  test('renders the "needs grading" icon when the submission is ungraded and pending review', function () {
     submission.grade = null;
     submission.score = null;
     submission.workflow_state = 'pending_review';
-    strictEqual(renderCell().querySelectorAll('i.icon-text').length, 1);
+    strictEqual(renderCell().querySelectorAll('i.icon-not-graded').length, 1);
   });
 
-  test('renders "EX" when the submission is excused', function () {
+  test('renders "Excused" when the submission is excused', function () {
     excuseSubmission();
-    strictEqual(renderCell().innerHTML.trim(), 'EX');
+    strictEqual(renderCell().innerHTML.trim(), 'Excused');
   });
 
   QUnit.module('#render with a "letter grade" assignment submission', {
     setup () {
       gradebook.getAssignment('2301').grading_type = 'letter_grade';
-      submission.grade = 'A';
+      submission.score = 9;
     }
   });
 
-  test('renders the grade', function () {
+  test('renders the score converted to a letter grade', function () {
     strictEqual(renderCell().firstChild.wholeText.trim(), 'A');
   });
 
-  test('includes the score with the grade', function () {
-    strictEqual(renderCell().querySelector('.letter-grade-points').innerHTML, '8');
+  test('renders the grade when the assignment has no points possible', function () {
+    gradebook.getAssignment('2301').points_possible = 0;
+    submission.grade = 'A';
+    submission.score = 0;
+    strictEqual(renderCell().firstChild.wholeText.trim(), 'A');
   });
 
-  test('does not round the score', function () {
-    submission.score = 8.345;
-    strictEqual(renderCell().querySelector('.letter-grade-points').innerHTML, '8.345');
-  });
-
-  test('renders the submission type icon when the submission is ungraded', function () {
+  test('renders the "needs grading" icon when the submission was graded and cleared', function () {
     submission.grade = null;
     submission.score = null;
-    strictEqual(renderCell().querySelectorAll('i.icon-text').length, 1);
+    submission.workflow_state = 'graded';
+    strictEqual(renderCell().querySelectorAll('i.icon-not-graded').length, 1);
   });
 
-  test('renders the submission type icon when the submission is ungraded and pending review', function () {
+  test('renders the "needs grading" icon when the submission was resubmitted', function () {
+    submission.workflow_state = 'submitted';
+    submission.grade_matches_current_submission = false;
+    strictEqual(renderCell().querySelectorAll('i.icon-not-graded').length, 1);
+  });
+
+  test('renders the "needs grading" icon when the submission is ungraded and pending review', function () {
     submission.grade = null;
     submission.score = null;
     submission.workflow_state = 'pending_review';
-    strictEqual(renderCell().querySelectorAll('i.icon-text').length, 1);
+    strictEqual(renderCell().querySelectorAll('i.icon-not-graded').length, 1);
   });
 
-  test('renders "EX" when the submission is excused', function () {
+  test('renders "Excused" when the submission is excused', function () {
     excuseSubmission();
-    strictEqual(renderCell().innerHTML.trim(), 'EX');
+    strictEqual(renderCell().innerHTML.trim(), 'Excused');
   });
 
   QUnit.module('#render with a "complete/incomplete" assignment submission', {
@@ -391,52 +358,74 @@ QUnit.module('AssignmentCellFormatter', function (hooks) {
     strictEqual(renderCell().querySelectorAll('button i.icon-x').length, 1);
   });
 
-  test('renders the submission type icon when the submission is ungraded', function () {
+  test('renders an emdash "–" when the submission is unsubmitted', function () {
     submission.grade = null;
     submission.rawGrade = null;
     submission.score = null;
-    strictEqual(renderCell().querySelectorAll('i.icon-text').length, 1);
+    submission.submission_type = null;
+    equal(renderCell().firstChild.wholeText.trim(), '–');
   });
 
-  test('renders the submission type icon when the submission is pending review', function () {
+  test('renders the "needs grading" icon when the submission was graded and cleared', function () {
+    submission.grade = null;
+    submission.rawGrade = null;
+    submission.score = null;
+    submission.workflow_state = 'graded';
+    strictEqual(renderCell().querySelectorAll('i.icon-not-graded').length, 1);
+  });
+
+  test('renders the "needs grading" icon when the submission was resubmitted', function () {
+    submission.workflow_state = 'submitted';
+    submission.grade_matches_current_submission = false;
+    strictEqual(renderCell().querySelectorAll('i.icon-not-graded').length, 1);
+  });
+
+  test('renders the "needs grading" icon when the submission is pending review', function () {
     submission.grade = null;
     submission.rawGrade = null;
     submission.workflow_state = 'pending_review';
-    strictEqual(renderCell().querySelectorAll('i.icon-text').length, 1);
+    strictEqual(renderCell().querySelectorAll('i.icon-not-graded').length, 1);
   });
 
-  test('renders "EX" when the submission is excused', function () {
+  test('renders "Excused" when the submission is excused', function () {
     excuseSubmission();
-    equal(renderCell().innerHTML.trim(), 'EX');
+    equal(renderCell().innerHTML.trim(), 'Excused');
   });
 
   QUnit.module('#render with a "GPA Scale" assignment submission', {
     setup () {
       gradebook.getAssignment('2301').grading_type = 'gpa_scale';
-      submission.grade = 'A';
+      submission.score = 9;
     }
   });
 
-  test('renders the grade', function () {
+  test('renders the score converted to a letter grade', function () {
     strictEqual(renderCell().innerHTML.trim(), 'A');
   });
 
-  test('renders the submission type icon when the submission is ungraded', function () {
+  test('renders the "needs grading" icon when the submission was graded and cleared', function () {
     submission.grade = null;
     submission.score = null;
-    strictEqual(renderCell().querySelectorAll('i.icon-text').length, 1);
+    submission.workflow_state = 'graded';
+    strictEqual(renderCell().querySelectorAll('i.icon-not-graded').length, 1);
   });
 
-  test('renders the submission type icon when the submission is pending review', function () {
+  test('renders the "needs grading" icon when the submission was resubmitted', function () {
+    submission.workflow_state = 'submitted';
+    submission.grade_matches_current_submission = false;
+    strictEqual(renderCell().querySelectorAll('i.icon-not-graded').length, 1);
+  });
+
+  test('renders the "needs grading" icon when the submission is pending review', function () {
     submission.grade = null;
     submission.score = null;
     submission.workflow_state = 'pending_review';
-    strictEqual(renderCell().querySelectorAll('i.icon-text').length, 1);
+    strictEqual(renderCell().querySelectorAll('i.icon-not-graded').length, 1);
   });
 
-  test('renders "EX" when the submission is excused', function () {
+  test('renders "Excused" when the submission is excused', function () {
     excuseSubmission();
-    strictEqual(renderCell().innerHTML.trim(), 'EX');
+    strictEqual(renderCell().innerHTML.trim(), 'Excused');
   });
 
   QUnit.module('#render with a quiz submission', {
@@ -446,36 +435,37 @@ QUnit.module('AssignmentCellFormatter', function (hooks) {
     }
   });
 
-  test('renders the grade', function () {
+  test('renders the score converted to a points string', function () {
     strictEqual(renderCell().innerHTML.trim(), '8');
   });
 
-  test('renders the quiz icon when the submission is ungraded', function () {
+  test('renders the "needs grading" icon when the submission was graded and cleared', function () {
     submission.grade = null;
     submission.score = null;
-    strictEqual(renderCell().querySelectorAll('i.icon-quiz').length, 1);
+    submission.workflow_state = 'graded';
+    strictEqual(renderCell().querySelectorAll('i.icon-not-graded').length, 1);
   });
 
-  test('renders the submission type icon when the submission is ungraded', function () {
-    submission.grade = null;
-    submission.score = null;
-    strictEqual(renderCell().querySelectorAll('i.icon-quiz').length, 1);
+  test('renders the "needs grading" icon when the submission was resubmitted', function () {
+    submission.workflow_state = 'submitted';
+    submission.grade_matches_current_submission = false;
+    strictEqual(renderCell().querySelectorAll('i.icon-not-graded').length, 1);
   });
 
   test('renders the quiz icon when the submission is ungraded and pending review', function () {
     submission.grade = null;
     submission.score = null;
     submission.workflow_state = 'pending_review';
-    strictEqual(renderCell().querySelectorAll('i.icon-quiz').length, 1);
+    strictEqual(renderCell().querySelectorAll('i.icon-not-graded').length, 1);
   });
 
   test('renders the quiz icon when the submission is partially graded and pending review', function () {
     submission.workflow_state = 'pending_review';
-    strictEqual(renderCell().querySelectorAll('i.icon-quiz').length, 1);
+    strictEqual(renderCell().querySelectorAll('i.icon-not-graded').length, 1);
   });
 
-  test('renders "EX" when the submission is excused', function () {
+  test('renders "Excused" when the submission is excused', function () {
     excuseSubmission();
-    strictEqual(renderCell().innerHTML.trim(), 'EX');
+    strictEqual(renderCell().innerHTML.trim(), 'Excused');
   });
 });

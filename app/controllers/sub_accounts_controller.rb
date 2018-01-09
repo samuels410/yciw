@@ -48,7 +48,9 @@ class SubAccountsController < ApplicationController
     if @query
       @accounts = []
       if @context && @context.is_a?(Account)
-        @accounts = @context.all_accounts.active.name_like(@query).limit(100)
+        @accounts = @context.all_accounts.active.name_like(@query).limit(100).to_a
+        @accounts << @context if value_to_boolean(params[:include_self]) && @context.name.downcase.include?(@query.downcase)
+        @accounts.sort_by!{|a| Canvas::ICU.collation_key(a.name)}
       end
       respond_to do |format|
         format.html {
@@ -148,13 +150,24 @@ class SubAccountsController < ApplicationController
     end
   end
 
+  # @API Delete a sub-account
+  # Cannot delete an account with active courses or active sub_accounts.
+  # Cannot delete a root_account
+  #
+  # @returns Account
   def destroy
     @sub_account = subaccount_or_self(params[:id])
     if @sub_account.associated_courses.not_deleted.exists?
-      return render json: { message: I18n.t("You can't delete a sub-account that has courses in it.") }, status: 409
+      return render json: {message: I18n.t("You can't delete a sub-account that has courses in it.")}, status: 409
+    end
+    if @sub_account.sub_accounts.exists?
+      return render json: {message: I18n.t("You can't delete a sub-account that has sub-accounts in it.")}, status: 409
+    end
+    if @sub_account.root_account?
+      return render json: {message: I18n.t("You can't delete a root_account.")}, status: 401
     end
     @sub_account.destroy
-    render :json => @sub_account
+    render json: account_json(@sub_account, @current_user, session, [])
   end
 
   protected

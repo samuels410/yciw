@@ -12,13 +12,20 @@ class GraphQLController < ApplicationController
       session: session,
       request: request,
     }
-    result = CanvasSchema.execute(query, variables: variables, context: context)
-    render json: result
+
+    ActiveRecord::Base.transaction do
+      timeout = Integer(Setting.get('graphql_statement_timeout', '60_000'))
+      ActiveRecord::Base.connection.execute "SET statement_timeout = #{timeout}"
+
+      result = CanvasSchema.execute(query, variables: variables, context: context)
+      render json: result
+    end
   end
 
   def graphiql
-    if Rails.env.production?
-       render text: "unauthorized", status: :unauthorized
+    if Rails.env.production? &&
+        !::Account.site_admin.grants_right?(@current_user, session, :read_as_admin)
+       render plain: "unauthorized", status: :unauthorized
     else
       render :graphiql, layout: 'bare'
     end

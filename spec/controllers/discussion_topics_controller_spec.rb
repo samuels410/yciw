@@ -92,6 +92,7 @@ describe DiscussionTopicsController do
 
         group_discussion_assignment
         @child_topic = @topic.child_topics.first
+        @child_topic.root_topic_id = @topic.id
         @group = @child_topic.context
         @group.add_user(@student)
         @assignment.only_visible_to_overrides = true
@@ -115,6 +116,15 @@ describe DiscussionTopicsController do
         get 'index', params: {:group_id => @group.id}
         expect(response).to be_success
         expect(assigns["topics"]).not_to include(@child_topic)
+      end
+
+      it 'should redirect to correct mastery paths edit page' do
+        user_session(@teacher)
+        allow(ConditionalRelease::Service).to receive(:enabled_in_context?).and_return(true)
+        allow(ConditionalRelease::Service).to receive(:env_for).and_return({ dummy: 'value' })
+        get :edit, params: {group_id: @group.id, id: @child_topic.id}
+        redirect_path = "/courses/#{@course.id}/discussion_topics/#{@topic.id}/edit"
+        expect(response).to redirect_to(redirect_path)
       end
     end
 
@@ -154,6 +164,28 @@ describe DiscussionTopicsController do
       get 'index', params: {:group_id => @group.id}
       expect(response).to be_success
       expect(assigns["topics"]).to include(@topic)
+    end
+
+    it "non-graded group discussions include root data if json request" do
+      delayed_post_time = 1.day.from_now
+      lock_at_time = 2.days.from_now
+      user_session(@teacher)
+      group_topic = group_discussion_topic_model(
+        :context => @course, :delayed_post_at => delayed_post_time, :lock_at => lock_at_time
+      )
+      group_topic.save!
+      group_id = group_topic.child_topics.first.group.id
+      get 'index', params: { group_id: group_id }, :format => :json
+      expect(response).to be_success
+      response_body = response.body
+      # Remove the prepending while loop so the parser doesn't choke
+      response_body.sub!('while(1);', '')
+      parsed_json = JSON.parse response_body
+      expect(parsed_json.length).to eq 1
+      parsed_topic = parsed_json.first
+      # barf
+      expect(parsed_topic["delayed_post_at"].to_json).to eq delayed_post_time.to_json
+      expect(parsed_topic["lock_at"].to_json).to eq lock_at_time.to_json
     end
 
     it "does not filter module locked discussion by default" do
@@ -1013,32 +1045,6 @@ describe DiscussionTopicsController do
 
       expect(@topic.reload).not_to be_locked
       expect(@topic.lock_at).to be_nil
-    end
-
-    it "should still update a topic if it is a group discussion (that has submission replies)" do
-      user_session(@teacher)
-
-      student_in_course
-      group_category = @course.group_categories.create(:name => 'category')
-      group = @course.groups.create!(:group_category => group_category)
-      group.add_user(@student)
-
-      course_topic(user: @teacher, with_assignment: true)
-      @topic.group_category = group_category
-      @topic.save!
-      @topic.publish!
-
-      subtopic = @topic.child_topic_for(@student)
-      subtopic.discussion_entries.create!(:message => "student message for grading", :user => @student)
-      subtopic.ensure_submission(@student)
-      subtopic.reply_from(:user => @student, :text => 'hai')
-
-      expect(subtopic.can_unpublish?).to eq false
-
-      put(:update, params: {group_id: group.id, topic_id: subtopic.id,
-          title: 'Updated Topic', locked: true})
-
-      expect(response).to be_success
     end
 
     it "should set workflow to post_delayed when delayed_post_at and lock_at are in the future" do

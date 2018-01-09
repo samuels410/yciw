@@ -149,6 +149,11 @@ module Context
     result
   end
 
+  def self.context_code_for(record)
+    raise ArgumentError unless record.respond_to?(:context_type) && record.respond_to?(:context_id)
+    "#{record.context_type.underscore}_#{record.context_id}"
+  end
+
   def self.find_polymorphic(context_type, context_id)
     klass_name = context_type.classify.to_sym
     if CONTEXT_TYPES.include?(klass_name)
@@ -191,6 +196,14 @@ module Context
     res
   rescue => e
     nil
+  end
+
+  def self.asset_name(asset)
+    name = asset.display_name.presence if asset.respond_to?(:display_name)
+    name ||= asset.title.presence if asset.respond_to?(:title)
+    name ||= asset.short_description.presence if asset.respond_to?(:short_description)
+    name ||= asset.name
+    name
   end
 
   def self.get_account(context)

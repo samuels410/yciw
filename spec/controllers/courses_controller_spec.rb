@@ -417,8 +417,22 @@ describe CoursesController do
         expect(assigns[:current_enrollments]).to be_empty
         expect(assigns[:future_enrollments]).to eq [teacher_enrollment]
       end
+
+      it "should not include unpublished course enrollments if account disallows future view" do
+        Account.default.tap{|a| a.settings.merge!(:restrict_student_future_view => true, :restrict_student_future_listing => true); a.save!}
+
+        course1 = Account.default.courses.create! start_at: 1.month.from_now, restrict_enrollments_to_course_dates: true
+        enrollment1 = course_with_student course: course1
+        expect(enrollment1.workflow_state).to eq 'creation_pending'
+        expect(enrollment1.restrict_future_listing?).to be_truthy
+
+        user_session(@student)
+        get 'index'
+        expect(response).to be_success
+        expect(assigns[:future_enrollments]).to eq []
+      end
     end
- end
+  end
 
   describe "GET 'statistics'" do
     it 'does not break using new student_ids method from course' do
@@ -1151,6 +1165,16 @@ describe CoursesController do
         expect(aua.asset_category).to eq 'home'
         expect(aua.membership_type).to eq 'StudentEnrollment'
       end
+
+      it "should log an asset user access for api requests" do
+        allow(@controller).to receive(:api_request?).and_return(true)
+        user_session(@student)
+        get 'show', params: {:id => @course.id}
+        expect(response).to be_success
+        aua = AssetUserAccess.where(user_id: @student, context_type: 'Course', context_id: @course).first
+        expect(aua.asset_category).to eq 'home'
+        expect(aua.membership_type).to eq 'StudentEnrollment'
+      end
     end
 
     context "course_home_sub_navigation" do
@@ -1315,11 +1339,11 @@ describe CoursesController do
       expect(enrollment.limit_privileges_to_course_section).to eq true
     end
 
-    it "should also accept a list of user ids (instead of ye old UserList)" do
+    it "should also accept a list of user tokens (instead of ye old UserList)" do
       u1 = user_factory
       u2 = user_factory
       user_session(@teacher)
-      post 'enroll_users', params: {:course_id => @course.id, :user_ids => [u1.id, u2.id]}
+      post 'enroll_users', params: {:course_id => @course.id, :user_tokens => [u1.token, u2.token]}
       expect(response).to be_success
       @course.reload
       expect(@course.students).to include(u1)
@@ -2244,6 +2268,7 @@ describe CoursesController do
       assignment = @course.assignments.create!(:workflow_state => 'published')
       assignment.grade_student test_student, { :grade => 1, :grader => @teacher }
       expect(test_student.submissions.size).not_to be_zero
+      OriginalityReport.create!(attachment: attachment_model, originality_score: '1', submission: test_student.submissions.first)
       delete 'reset_test_student', params: {course_id: @course.id}
       test_student.reload
       expect(test_student.submissions.size).to be_zero
@@ -2308,6 +2333,45 @@ describe CoursesController do
       expect { post 'start_offline_web_export', params: {course_id: @course.id} }
       .to change { @course.reload.web_zip_exports.count }.by(1)
       expect(response).to be_redirect
+    end
+  end
+
+  describe '#users' do
+    let(:course) { Course.create! }
+
+    let(:teacher) { teacher_in_course(course: course, active_all: true).user }
+
+    let(:student1) { student_in_course(course: course, active_all: true).user }
+
+    let(:student2) { student_in_course(course: course, active_all: true).user }
+
+    let!(:group1) do
+      group = course.groups.create!(name: "group one")
+      group.users << student1
+      group.users << student2
+      group.group_memberships.last.update!(workflow_state: 'deleted')
+      group.reload
+    end
+
+    let!(:group2) do
+      group = course.groups.create!(name: "group one")
+      group.users << student1
+      group.users << student2
+      group.group_memberships.first.update!(workflow_state: 'deleted')
+      group.reload
+    end
+
+    it 'only returns group_ids for active group memberships when requested' do
+      user_session(teacher)
+      get 'users', params: {
+        course_id: course.id,
+        format: 'json',
+        include: ['group_ids'],
+        enrollment_role: 'StudentEnrollment'
+      }
+      json = json_parse(response.body)
+      expect(json[0]).to include({ "id" => student1.id, "group_ids" => [group1.id] })
+      expect(json[1]).to include({ "id" => student2.id, "group_ids" => [group2.id] })
     end
   end
 end

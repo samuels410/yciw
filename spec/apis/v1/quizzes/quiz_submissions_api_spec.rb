@@ -16,7 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-require File.expand_path(File.dirname(__FILE__) + '/../../api_spec_helper')
+require_relative '../../api_spec_helper'
 
 shared_examples_for 'Quiz Submissions API Restricted Endpoints' do
   it 'should require the LDB' do
@@ -257,6 +257,24 @@ describe Quizzes::QuizSubmissionsApiController, type: :request do
       student_in_course
       json = qs_api_index(true)
       assert_status(401)
+    end
+
+    it 'includes submissions' do
+      enroll_student_and_submit
+      json = qs_api_index(false, { include: ['submission'] })
+      expect(json).to have_key 'submissions'
+    end
+
+    it 'includes submission grading_status' do
+      enroll_student_and_submit
+      json = qs_api_index(false, { include: ['submission', 'grading_status'] })
+      expect(json.fetch('submissions')).to all have_key 'grading_status'
+    end
+
+    it 'includes submission submission_status' do
+      enroll_student_and_submit
+      json = qs_api_index(false, { include: ['submission', 'submission_status'] })
+      expect(json.fetch('submissions')).to all have_key 'submission_status'
     end
   end
 

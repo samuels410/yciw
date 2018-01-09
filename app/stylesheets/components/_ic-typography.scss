@@ -67,6 +67,9 @@
 }
 
 html {
+  font-size: 100%;
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
   font-family: $ic-font-family-fallback;
   &.lato-font-loaded {
     font-family: $ic-font-family;
@@ -76,7 +79,6 @@ html {
 body {
   @include fontSize($ic-font-size);
   font-weight: normal;
-  margin: 0;
   line-height: $ic-line-height;
   color: $ic-font-color-dark;
   -webkit-font-smoothing: antialiased; // needed to help render the iconFont clearer
@@ -200,7 +202,7 @@ a {
 /// Underline All Links Feature Flag
 ////////=============
 .Underline-All-Links__enabled {
-  a:not(.Button, .btn, .ui-button) {
+  a:not(.Button, .btn, .ui-button, .ui-tabs-anchor) {
     text-decoration: underline;
     &:focus, &:hover { text-decoration: none; }
     @include ic-focus-base;
@@ -257,11 +259,31 @@ dd {
     width: $horizontalComponentOffset - 20;
     clear: left;
     text-align: right;
-    @include text-overflow();
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   dd {
     margin-left: $horizontalComponentOffset;
   }
+}
+
+///////==============
+/// Prevents sub and sup affecting line-height in all browsers
+///////==============
+
+sub,
+sup {
+  position: relative;
+  font-size: 75%;
+  line-height: 0;
+  vertical-align: baseline;
+}
+sup {
+  top: -0.5em;
+}
+sub {
+  bottom: -0.25em;
 }
 
 ///////==============
@@ -446,7 +468,9 @@ blockquote {
   border-left: 5px solid $ic-border-color;
   p {
     margin-bottom: 0;
-    @include font-shorthand(16px,300, 25px);
+    @include fontSize(16px);
+    font-weight: 300;
+    line-height: 25px;
   }
   small {
     display: block;

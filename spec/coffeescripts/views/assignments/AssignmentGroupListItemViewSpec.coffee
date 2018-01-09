@@ -141,6 +141,7 @@ define [
     assignmentGroupsView
 
   test "shows imported icon when integration_data is not empty", ->
+    ENV.URLS = { sort_url : "test" }
     model = createAssignmentGroup()
     model.set('integration_data', { property: 'value' })
     view = createView(model)
@@ -148,17 +149,20 @@ define [
 
   test "shows imported icon with custom SIS_NAME when integration_data is not empty", ->
     ENV.SIS_NAME = 'PowerSchool'
+    ENV.URLS = { sort_url : "test" }
     model = createAssignmentGroup()
     model.set('integration_data', { property: 'value' })
     view = createView(model)
     equal view.$("#assignment_group_#{model.id} .ig-header-title .icon-sis-imported")[0].title, 'Imported from PowerSchool'
 
   test "does not show imported icon when integration_data is not set", ->
+    ENV.URLS = { sort_url : "test" }
     model = createAssignmentGroup()
     view = createView(model)
     ok !view.$("#assignment_group_#{model.id} .ig-header-title .icon-sis-imported").length
 
   test "does not show imported icon when integration_data is empty", ->
+    ENV.URLS = { sort_url : "test" }
     model = createAssignmentGroup()
     model.set('integration_data', { })
     view = createView(model)
@@ -167,8 +171,12 @@ define [
   QUnit.module 'AssignmentGroupListItemView as a teacher',
     setup: ->
       fakeENV.setup({
-        current_user_roles: ['teacher']
+        current_user_roles: ['teacher'],
+        URLS: {
+          sort_url : "test"
+        }
       })
+
       @model = createAssignmentGroup()
       $(document).off()
       elementToggler.bind()
@@ -288,7 +296,7 @@ define [
 
   test "cacheKey builds unique key", ->
     view = createView(@model)
-    deepEqual view.cacheKey(), ["course", 1, "user", 1, "ag", 1, "expanded"]
+    deepEqual view.cacheKey(), ["course", 1, "user", "1", "ag", 1, "expanded"]
 
   test "disallows deleting groups with frozen assignments", ->
     assignments = @model.get('assignments')
@@ -336,6 +344,11 @@ define [
       @model = createAssignmentGroup()
       $(document).off()
       elementToggler.bind()
+      fakeENV.setup({
+        URLS: {
+          sort_url : "test"
+        }
+      })
 
     teardown: ->
       $("form.dialogFormView").remove()
@@ -343,14 +356,14 @@ define [
       fakeENV.teardown()
 
   test 'provides a view to delete a group when canDelete is true', ->
-    @stub @model, 'canDelete', -> true
+    @stub(@model, 'canDelete').returns(true)
     @model.set('any_assignment_in_closed_grading_period', true)
     view = createView(@model, userIsAdmin: true)
     ok view.deleteGroupView
     notOk view.$("#assignment_group_#{@model.id} a.delete_group.disabled").length
 
   test 'provides a view to delete a group when canDelete is false', ->
-    @stub @model, 'canDelete', -> false
+    @stub(@model, 'canDelete').returns(false)
     @model.set('any_assignment_in_closed_grading_period', true)
     view = createView(@model, userIsAdmin: true)
     ok view.deleteGroupView

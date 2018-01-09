@@ -30,6 +30,8 @@ class Account < ActiveRecord::Base
   authenticates_many :pseudonym_sessions
   has_many :courses
   has_many :all_courses, :class_name => 'Course', :foreign_key => 'root_account_id'
+  has_one :terms_of_service, :dependent => :destroy
+  has_one :terms_of_service_content, :dependent => :destroy
   has_many :group_categories, -> { where(deleted_at: nil) }, as: :context, inverse_of: :context
   has_many :all_group_categories, :class_name => 'GroupCategory', :as => :context, :inverse_of => :context
   has_many :groups, :as => :context, :inverse_of => :context
@@ -125,7 +127,9 @@ class Account < ActiveRecord::Base
   validates_length_of :name, :maximum => maximum_string_length, :allow_blank => true
   validate :account_chain_loop, :if => :parent_account_id_changed?
   validate :validate_auth_discovery_url
-  validates_presence_of :workflow_state
+  validates :workflow_state, presence: true
+  validate :no_active_courses, if: lambda { |a| a.workflow_state_changed? && !a.active? }
+  validate :no_active_sub_accounts, if: lambda { |a| a.workflow_state_changed? && !a.active? }
 
   include StickySisFields
   are_sis_sticky :name
@@ -322,20 +326,17 @@ class Account < ActiveRecord::Base
   end
 
   def terms_required?
-    Setting.get('terms_required', 'true') == 'true' && root_account.account_terms_required?
+    terms = TermsOfService.ensure_terms_for_account(root_account)
+    !(terms.terms_type == 'no_terms' || terms.passive)
   end
 
   def require_acceptance_of_terms?(user)
-    soc2_start_date = Setting.get('SOC2_start_date', Time.new(2015, 5, 16, 0, 0, 0).utc).to_datetime
-
     return false if !terms_required?
-    return true if user.nil? || user.new_record?
-    terms_changed_at = settings[:terms_changed_at]
+    return true if (user.nil? || user.new_record?)
+    soc2_start_date = Setting.get('SOC2_start_date', Time.new(2015, 5, 16, 0, 0, 0).utc).to_datetime
+    return false if user.created_at < soc2_start_date
+    terms_changed_at = root_account.terms_of_service.terms_of_service_content&.terms_updated_at || settings[:terms_changed_at]
     last_accepted = user.preferences[:accepted_terms]
-
-    # make sure existing users are grandfathered in
-    return false if terms_changed_at.nil? && user.registered? && user.created_at < soc2_start_date
-
     return false if last_accepted && (terms_changed_at.nil? || last_accepted > terms_changed_at)
     true
   end
@@ -461,7 +462,8 @@ class Account < ActiveRecord::Base
       all_courses
     else
       shard.activate do
-        Course.where("EXISTS (?)", CourseAccountAssociation.where(account_id: self).where("course_id=courses.id"))
+        Course.where("EXISTS (?)", CourseAccountAssociation.where(account_id: self, course_section_id: nil)
+              .where("course_id=courses.id"))
       end
     end
   end
@@ -739,6 +741,25 @@ class Account < ActiveRecord::Base
           id_chain.concat(ids.map(&:to_i))
         end
         id_chain
+      end
+    else
+      account_chain(starting_account_id).map(&:id)
+    end
+  end
+
+  def self.multi_account_chain_ids(starting_account_ids)
+    if connection.adapter_name == 'PostgreSQL'
+      original_shard = Shard.current
+      Shard.partition_by_shard(starting_account_ids) do |sliced_acc_ids|
+        ids = Account.connection.select_values(<<-SQL)
+              WITH RECURSIVE t AS (
+                SELECT * FROM #{Account.quoted_table_name} WHERE id IN (#{sliced_acc_ids.join(", ")})
+                UNION
+                SELECT accounts.* FROM #{Account.quoted_table_name} INNER JOIN t ON accounts.id=t.parent_account_id
+              )
+              SELECT id FROM t
+        SQL
+        ids.map{|id| Shard.relative_id_for(id, Shard.current, original_shard)}
       end
     else
       account_chain(starting_account_id).map(&:id)
@@ -1110,6 +1131,20 @@ class Account < ActiveRecord::Base
     end
   end
 
+  def no_active_courses
+    return true if root_account?
+    if associated_courses.not_deleted.exists?
+      errors.add(:workflow_state, "Can't delete an account with active courses.")
+    end
+  end
+
+  def no_active_sub_accounts
+    return true if root_account?
+    if sub_accounts.exists?
+      errors.add(:workflow_state, "Can't delete an account with active sub_accounts.")
+    end
+  end
+
   def find_courses(string)
     self.all_courses.select{|c| c.name.match(string) }
   end
@@ -1294,12 +1329,8 @@ class Account < ActiveRecord::Base
   end
 
   def closest_turnitin_pledge
-    if self.turnitin_pledge && !self.turnitin_pledge.empty?
-      self.turnitin_pledge
-    else
-      res = self.parent_account.try(:closest_turnitin_pledge)
-      res ||= t('#account.turnitin_pledge', "This assignment submission is my own, original work")
-    end
+    account_with_pledge = account_chain.find { |a| a.turnitin_pledge.present? }
+    account_with_pledge&.turnitin_pledge || t('This assignment submission is my own, original work')
   end
 
   def closest_turnitin_comments
@@ -1363,13 +1394,7 @@ class Account < ActiveRecord::Base
     manage_settings = user && self.grants_right?(user, :manage_account_settings)
     if root_account.site_admin?
       tabs = []
-      if user && self.grants_right?(user, :read_roster)
-        if feature_enabled?(:course_user_search)
-          tabs << { :id => TAB_SEARCH, :label => t("Courses & People"), :css_class => 'search', :href => :account_course_user_search_path }
-        else
-          tabs << { :id => TAB_USERS, :label => t('#account.tab_users', "Users"), :css_class => 'users', :href => :account_users_path }
-        end
-      end
+      tabs << { :id => TAB_USERS, :label => t("People"), :css_class => 'users', :href => :account_users_path } if user && self.grants_right?(user, :read_roster)
       tabs << { :id => TAB_PERMISSIONS, :label => t('#account.tab_permissions', "Permissions"), :css_class => 'permissions', :href => :account_permissions_path } if user && self.grants_right?(user, :manage_role_overrides)
       tabs << { :id => TAB_SUB_ACCOUNTS, :label => t('#account.tab_sub_accounts', "Sub-Accounts"), :css_class => 'sub_accounts', :href => :account_sub_accounts_path } if manage_settings
       tabs << { :id => TAB_AUTHENTICATION, :label => t('#account.tab_authentication', "Authentication"), :css_class => 'authentication', :href => :account_authentication_providers_path } if root_account? && manage_settings
@@ -1377,12 +1402,8 @@ class Account < ActiveRecord::Base
       tabs << { :id => TAB_JOBS, :label => t("#account.tab_jobs", "Jobs"), :css_class => "jobs", :href => :jobs_path, :no_args => true } if root_account? && self.grants_right?(user, :view_jobs)
     else
       tabs = []
-      if feature_enabled?(:course_user_search)
-        tabs << { :id => TAB_SEARCH, :label => t("Courses & People"), :css_class => 'search', :href => :account_path } if user && (grants_right?(user, :read_course_list) || grants_right?(user, :read_roster))
-      else
-        tabs << { :id => TAB_COURSES, :label => t('#account.tab_courses', "Courses"), :css_class => 'courses', :href => :account_path } if user && self.grants_right?(user, :read_course_list)
-        tabs << { :id => TAB_USERS, :label => t('#account.tab_users', "Users"), :css_class => 'users', :href => :account_users_path } if user && self.grants_right?(user, :read_roster)
-      end
+      tabs << { :id => TAB_COURSES, :label => t('#account.tab_courses', "Courses"), :css_class => 'courses', :href => :account_path } if user && self.grants_right?(user, :read_course_list)
+      tabs << { :id => TAB_USERS, :label => t("People"), :css_class => 'users', :href => :account_users_path } if user && self.grants_right?(user, :read_roster)
       tabs << { :id => TAB_STATISTICS, :label => t('#account.tab_statistics', "Statistics"), :css_class => 'statistics', :href => :statistics_account_path } if user && self.grants_right?(user, :view_statistics)
       tabs << { :id => TAB_PERMISSIONS, :label => t('#account.tab_permissions', "Permissions"), :css_class => 'permissions', :href => :account_permissions_path } if user && self.grants_right?(user, :manage_role_overrides)
       if user && self.grants_right?(user, :manage_outcomes)
@@ -1647,6 +1668,7 @@ class Account < ActiveRecord::Base
     work = -> do
       default_enrollment_term
       enable_canvas_authentication
+      TermsOfService.ensure_terms_for_account(self, true) if self.root_account? && !TermsOfService.skip_automatic_terms_creation
     end
     return work.call if Rails.env.test?
     self.class.connection.after_transaction_commit(&work)
@@ -1654,5 +1676,22 @@ class Account < ActiveRecord::Base
 
   def migrate_to_canvadocs?
     Canvadocs.hijack_crocodoc_sessions? && feature_enabled?(:new_annotations)
+  end
+
+  def update_terms_of_service(terms_params)
+    terms = TermsOfService.ensure_terms_for_account(self)
+    terms.terms_type = terms_params[:terms_type] if terms_params[:terms_type]
+    terms.passive = Canvas::Plugin.value_to_boolean(terms_params[:passive]) if terms_params.has_key?(:passive)
+
+    if terms.custom?
+      TermsOfServiceContent.ensure_content_for_account(self)
+      self.terms_of_service_content.update_attribute(:content, terms_params[:content]) if terms_params[:content]
+    end
+
+    if terms.changed?
+      unless terms.save
+        self.errors.add(:terms_of_service, t("Terms of Service attributes not valid"))
+      end
+    end
   end
 end

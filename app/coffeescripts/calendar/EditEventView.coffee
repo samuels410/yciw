@@ -19,6 +19,7 @@ define [
   'jquery'
   'underscore'
   'i18n!calendar.edit'
+  'jsx/shared/FlashAlert'
   'timezone'
   'Backbone'
   'jst/calendar/editCalendarEventFull'
@@ -29,7 +30,7 @@ define [
   'compiled/views/editor/KeyboardShortcuts'
   'compiled/util/coupleTimeFields'
   'jsx/shared/helpers/datePickerFormat'
-], ($, _, I18n, tz, Backbone, editCalendarEventFullTemplate, MissingDateDialogView, RichContentEditor, unflatten, deparam, KeyboardShortcuts, coupleTimeFields, datePickerFormat) ->
+], ($, _, I18n, { showFlashAlert }, tz, Backbone, editCalendarEventFullTemplate, MissingDateDialogView, RichContentEditor, unflatten, deparam, KeyboardShortcuts, coupleTimeFields, datePickerFormat) ->
 
   RichContentEditor.preloadRemoteModule()
 
@@ -51,18 +52,20 @@ define [
     initialize: ->
       super
       @model.fetch().done =>
-        picked_params = _.pick(deparam(),
-          'start_date', 'start_time', 'end_time',
+        picked_params = _.pick(Object.assign({}, @model.attributes, deparam()),
+          'start_at', 'start_date', 'start_time', 'end_time',
           'title', 'description', 'location_name', 'location_address',
           'duplicate')
-        if picked_params.start_date
+        if picked_params.start_at
+          picked_params.start_date = tz.format($.fudgeDateForProfileTimezone(picked_params.start_at), 'date.formats.medium_with_weekday')
+        else
           picked_params.start_date = tz.format($.fudgeDateForProfileTimezone(picked_params.start_date), 'date.formats.medium_with_weekday')
+
 
         attrs = @model.parse(picked_params)
         # if start and end are at the beginning of a day, assume it is an all day date
         attrs.all_day = !!attrs.start_at?.equals(attrs.end_at) and attrs.start_at.equals(attrs.start_at.clearTime())
         @model.set(attrs)
-
         @render()
 
         # populate inputs with params passed through the url
@@ -89,7 +92,6 @@ define [
 
     render: =>
       super
-
       @$(".date_field").date_field({ datepicker: { dateFormat: datePickerFormat(I18n.t('#date.formats.medium_with_weekday')) } })
       @$(".time_field").time_field()
       @$(".date_start_end_row").each (_, row) =>
@@ -163,8 +165,19 @@ define [
       @saveEvent(eventData)
 
     saveEvent: (eventData) ->
-      @$el.disableWhileLoading @model.save eventData, success: =>
-        @redirectWithMessage I18n.t 'event_saved', 'Event Saved Successfully'
+      @$el.disableWhileLoading(
+        @model.save(eventData, {
+          success: => @redirectWithMessage I18n.t 'event_saved', 'Event Saved Successfully',
+          error: (model, response, options) => showFlashAlert({
+            message: response.responseText, err: null, type: 'error'
+          })
+        })
+      )
+
+    toJSON: ->
+      result = super
+      result.recurringEventLimit = 200
+      result
 
     getFormData: ->
       data = @$el.getFormData()

@@ -21,6 +21,9 @@ require File.expand_path(File.dirname(__FILE__) + '/../../lti2_course_spec_helpe
 require 'nokogiri'
 
 describe "Common Cartridge exporting" do
+  let(:ccc_schema) do
+    get_ccc_schema
+  end
 
   it "should collect errors and finish running" do
     course = course_model
@@ -172,24 +175,29 @@ describe "Common Cartridge exporting" do
       expect(doc.at_css("learningOutcomeGroup[identifier=#{mig_id(@log3)}]")).to be_nil
       expect(doc.at_css("learningOutcome[identifier=#{mig_id(@lo)}]")).not_to be_nil
       expect(doc.at_css("learningOutcome[identifier=#{mig_id(@lo2)}]")).to be_nil
+      expect(ccc_schema.validate(doc)).to be_empty
 
       doc = Nokogiri::XML.parse(@zip_file.read("course_settings/assignment_groups.xml"))
       expect(doc.at_css("assignmentGroup[identifier=#{mig_id(@ag)}]")).not_to be_nil
       expect(doc.at_css("assignmentGroup[identifier=#{mig_id(@ag2)}]")).to be_nil
+      expect(ccc_schema.validate(doc)).to be_empty
 
       doc = Nokogiri::XML.parse(@zip_file.read("course_settings/rubrics.xml"))
       expect(doc.at_css("rubric[identifier=#{mig_id(@rubric)}]")).not_to be_nil
       expect(doc.at_css("rubric[identifier=#{mig_id(@rubric2)}]")).to be_nil
+      expect(ccc_schema.validate(doc)).to be_empty
 
       expect(@manifest_doc.at_css("item[identifier=LearningModules] item[identifier=#{mig_id(@cm)}]")).not_to be_nil
       expect(@manifest_doc.at_css("item[identifier=LearningModules] item[identifier=#{mig_id(@cm2)}]")).to be_nil
       doc = Nokogiri::XML.parse(@zip_file.read("course_settings/module_meta.xml"))
       expect(doc.at_css("module[identifier=#{mig_id(@cm)}]")).not_to be_nil
       expect(doc.at_css("module[identifier=#{mig_id(@cm2)}]")).to be_nil
+      expect(ccc_schema.validate(doc)).to be_empty
 
       doc = Nokogiri::XML.parse(@zip_file.read("course_settings/events.xml"))
       expect(doc.at_css("event[identifier=#{mig_id(@event)}]")).not_to be_nil
       expect(doc.at_css("event[identifier=#{mig_id(@event2)}]")).to be_nil
+      expect(ccc_schema.validate(doc)).to be_empty
     end
 
     it "should create a quizzes-only export" do
@@ -404,6 +412,16 @@ describe "Common Cartridge exporting" do
       doc = Nokogiri::XML.parse(@zip_file.read("course_settings/assignment_groups.xml"))
       expect(doc.at_css("assignmentGroup[identifier=#{mig_id(@ag)}]")).not_to be_nil
       expect(doc.at_css("assignmentGroup[identifier=#{mig_id(@ag2)}]")).not_to be_nil
+      expect(ccc_schema.validate(doc)).to be_empty
+    end
+
+    it "has valid course settings XML" do
+      # include all possible settings, not just changed ones
+      # (if this test fails, you need to add your setting to lib/cc/xsd/cccv1p0.xsd)
+      allow(@course).to receive(:disable_setting_defaults).and_yield
+      run_export
+      doc = Nokogiri::XML.parse(@zip_file.read("course_settings/course_settings.xml"))
+      expect(ccc_schema.validate(doc)).to be_empty
     end
 
     it "should not export syllabus if not selected" do
@@ -448,6 +466,37 @@ describe "Common Cartridge exporting" do
       end
     end
 
+    describe "tool settings" do
+      include_context 'lti2_course_spec_helper'
+
+      before { tool_proxy.update_attributes!(context: @course) }
+
+      it 'should export tool settings that have a tool proxy' do
+        Lti::ToolSetting.create!(
+          tool_proxy: tool_proxy,
+          resource_link_id: SecureRandom.uuid,
+          context: @course
+        )
+        run_export
+
+        resource = @manifest_doc.at_css('resource[type="tool_setting"]')
+        expect(resource).not_to be_nil
+        file_path = resource.at_css('file').attribute('href')
+        expect(@zip_file.find_entry(file_path)).not_to be_nil
+      end
+
+      it 'should not export tool settings that have no tool proxy' do
+        Lti::ToolSetting.create!(
+          resource_link_id: SecureRandom.uuid,
+          context: @course
+        )
+        run_export
+
+        resource = @manifest_doc.at_css('resource[type="tool_setting"]')
+        expect(resource).to be_nil
+      end
+    end
+
     it "should use canvas_export.txt as flag" do
       run_export
 
@@ -480,6 +529,7 @@ describe "Common Cartridge exporting" do
       expect(@zip_file.read(file_node['href'])).to eql(track.content)
       track_doc = Nokogiri::XML(@zip_file.read('course_settings/media_tracks.xml'))
       expect(track_doc.at_css('media_tracks media track[locale=tlh][kind=subtitles][identifierref=id4164d7d594985594573e63f8ca15975]')).to be_present
+      expect(ccc_schema.validate(track_doc)).to be_empty
     end
 
     it "should export CC 1.3 assignments" do
@@ -517,6 +567,52 @@ describe "Common Cartridge exporting" do
       expect(variant_tag.next_element.name).to eq 'file'
       html_file = variant_tag.next_element.attribute('href').value
       expect(@zip_file.read("#{assignment_id}/test-assignment.html")).to be_include "what?"
+    end
+
+    context 'similarity detection tool associations' do
+      include_context "lti2_course_spec_helper"
+
+      before(:each) do
+        allow_any_instance_of(Lti::AssignmentSubscriptionsHelper).to receive(:create_subscription) { SecureRandom.uuid }
+        allow_any_instance_of(Lti::AssignmentSubscriptionsHelper).to receive(:destroy_subscription) { SecureRandom.uuid }
+        allow(Lti::ToolProxy).to receive(:find_all_proxies_for_context) { Lti::ToolProxy.where(id: tool_proxy.id) }
+        tool_proxy.context = @course
+        tool_proxy.save!
+
+        assignment = @course.assignments.create! name: 'test assignment', submission_types: 'online_upload'
+        assignment.tool_settings_tool = message_handler
+        assignment.save!
+        @ce.export_type = ContentExport::COMMON_CARTRIDGE
+        @ce.save!
+      end
+
+      describe 'attributes' do
+        let(:assignment_xml_doc) do
+          run_export
+          assignment_xml_file = @manifest_doc.at_css("resource[href*='test-assignment.html'] file[href*='.xml']").attr('href')
+          Nokogiri::XML(@zip_file.read(assignment_xml_file))
+        end
+
+        let(:similarity_tool_el) do
+          assignment_xml_doc.elements.first.elements.find { |e| e.name == 'similarity_detection_tool' }
+        end
+
+        it 'exports the vendor code' do
+          expect(similarity_tool_el.attr('vendor_code')).to eq product_family.vendor_code
+        end
+
+        it 'exports the product code' do
+          expect(similarity_tool_el.attr('product_code')).to eq product_family.product_code
+        end
+
+        it 'exports the resource type code' do
+          expect(similarity_tool_el.attr('resource_type_code')).to eq resource_handler.resource_type_code
+        end
+
+        it 'exports the originality report visibility setting' do
+          expect(similarity_tool_el.attr('visibility')).to eq 'immediate'
+        end
+      end
     end
 
     it "should export unpublished modules and items" do

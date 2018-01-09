@@ -70,6 +70,8 @@ class AssignmentColumnHeader extends ColumnHeader {
       id: string.isRequired,
       name: string.isRequired,
       submission: shape({
+        excused: bool.isRequired,
+        latePolicyStatus: string,
         score: number,
         submittedAt: instanceOf(Date)
       }).isRequired,
@@ -116,6 +118,7 @@ class AssignmentColumnHeader extends ColumnHeader {
   }
 
   bindAssignmentLink = (ref) => { this.assignmentLink = ref };
+  bindEnterGradesAsMenuContent = (ref) => { this.enterGradesAsMenuContent = ref };
 
   curveGrades = () => { this.invokeAndSkipFocus(this.props.curveGradesAction) };
   setDefaultGrades = () => { this.invokeAndSkipFocus(this.props.setDefaultGradeAction) };
@@ -148,6 +151,10 @@ class AssignmentColumnHeader extends ColumnHeader {
     return ColumnHeader.prototype.handleKeyDown.call(this, event);
   };
 
+  onEnterGradesAsSettingSelect = (_event, values) => {
+    this.props.enterGradesAsSetting.onSelect(values[0]);
+  }
+
   showMessageStudentsWhoDialog = () => {
     this.setState({ skipFocusOnClose: true });
     const settings = MessageStudentsWhoHelper.settings(this.props.assignment, this.activeStudentDetails());
@@ -158,9 +165,11 @@ class AssignmentColumnHeader extends ColumnHeader {
   activeStudentDetails () {
     const activeStudents = this.props.students.filter(student => !student.isInactive);
     return activeStudents.map((student) => {
-      const { score, submittedAt } = student.submission;
+      const { excused, score, latePolicyStatus, submittedAt } = student.submission;
       return {
+        excused,
         id: student.id,
+        latePolicyStatus,
         name: student.name,
         score,
         submittedAt
@@ -227,7 +236,7 @@ class AssignmentColumnHeader extends ColumnHeader {
     return (
       <PopoverMenu
         contentRef={this.bindOptionsMenuContent}
-        focusTriggerOnClose={false}
+        shouldFocusTriggerOnClose={false}
         trigger={this.renderTrigger()}
         onToggle={this.onToggle}
         onClose={this.props.onMenuClose}
@@ -308,6 +317,36 @@ class AssignmentColumnHeader extends ColumnHeader {
             {this.props.assignment.muted ? I18n.t('Unmute Assignment') : I18n.t('Mute Assignment')}
           </span>
         </MenuItem>
+
+        { !this.props.enterGradesAsSetting.hidden && <MenuItemSeparator /> }
+
+        {
+          !this.props.enterGradesAsSetting.hidden && (
+            <MenuItemFlyout contentRef={this.bindEnterGradesAsMenuContent} label={I18n.t('Enter Grades as')}>
+              <MenuItemGroup
+                label={<ScreenReaderContent>{I18n.t('Enter Grades as')}</ScreenReaderContent>}
+                onSelect={this.onEnterGradesAsSettingSelect}
+                selected={[this.props.enterGradesAsSetting.selected]}
+              >
+                <MenuItem value="points">
+                  { I18n.t('Points') }
+                </MenuItem>
+
+                <MenuItem value="percent">
+                  { I18n.t('Percentage') }
+                </MenuItem>
+
+                {
+                  this.props.enterGradesAsSetting.showGradingSchemeOption && (
+                    <MenuItem value="gradingScheme">
+                      { I18n.t('Grading Scheme') }
+                    </MenuItem>
+                  )
+                }
+              </MenuItemGroup>
+            </MenuItemFlyout>
+          )
+        }
 
         {
           !(

@@ -63,6 +63,7 @@ describe "student groups" do
       end
 
       it "teacher can delete a student group", priority: "1", test_id: 182060 do
+        skip_if_safari(:alert)
         expect(f(".group-name")).to include_text(group_name.to_s)
         delete_group
         expect(f("#content")).not_to contain_css(".group-name")
@@ -93,7 +94,7 @@ describe "student groups" do
         wait_for_ajaximations
 
         # Looks for student to have a group leader icon
-        expect(f('.icon-user.group-leader')).to be_displayed
+        expect(f('.group-leader .icon-user')).to be_displayed
         # Verifies group leader silhouette and leader's name appear in the group header
         expect(f('.span3.ellipsis.group-leader')).to be_displayed
         expect(f('.span3.ellipsis.group-leader')).to include_text("Test Student 1")

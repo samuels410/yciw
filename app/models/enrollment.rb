@@ -66,16 +66,18 @@ class Enrollment < ActiveRecord::Base
   after_create :create_linked_enrollments
   after_create :create_enrollment_state
   after_save :copy_scores_from_existing_enrollment, if: :need_to_copy_scores?
+  after_save :restore_submissions_and_scores
   after_save :clear_email_caches
   after_save :cancel_future_appointments
   after_save :update_linked_enrollments
-  after_save :update_cached_due_dates
+  after_save :set_update_cached_due_dates
   after_save :touch_graders_if_needed
   after_save :reset_notifications_cache
   after_save :update_assignment_overrides_if_needed
   after_save :dispatch_invitations_later
   after_save :recalculate_enrollment_state
   after_save :add_to_favorites_later
+  after_commit :update_cached_due_dates
   after_destroy :update_assignment_overrides_if_needed
 
   attr_accessor :already_enrolled, :need_touch_user, :skip_touch_user
@@ -445,10 +447,16 @@ class Enrollment < ActiveRecord::Base
     enrollment
   end
 
+  # This is Part 1 of the update_cached_due_dates callback.  It sets @update_cached_due_dates which determines
+  # whether or not the update_cached_due_dates after_commit callback runs after this record has been committed.
+  # This split allows us to suspend this callback and affect the update_cached_due_dates callback since after_commit
+  # callbacks aren't being suspended properly.  We suspend this callback during some bulk operations.
+  def set_update_cached_due_dates
+    @update_cached_due_dates = workflow_state_changed? && (student? || fake_student?) && course
+  end
+
   def update_cached_due_dates
-    if workflow_state_changed? && (student? || fake_student?) && course
-      DueDateCacher.recompute_course(course)
-    end
+    DueDateCacher.recompute_course(course) if @update_cached_due_dates
   end
 
   def update_from(other, skip_broadcasts=false)
@@ -858,7 +866,8 @@ class Enrollment < ActiveRecord::Base
   # return Boolean
   def can_be_concluded_by(user, context, session)
     can_remove = [StudentEnrollment].include?(self.class) &&
-      context.grants_right?(user, session, :manage_students)
+      context.grants_right?(user, session, :manage_students) &&
+      context.id == ((context.is_a? Course) ? self.course_id : self.course_section_id)
     can_remove ||= context.grants_right?(user, session, :manage_admin_users)
   end
 
@@ -875,8 +884,8 @@ class Enrollment < ActiveRecord::Base
     can_remove = [StudentEnrollment, ObserverEnrollment].include?(self.class) &&
       context.grants_right?(user, session, :manage_students)
     can_remove ||= context.grants_right?(user, session, :manage_admin_users) unless student?
-    can_remove &&= self.user_id != user.id ||
-      context.account.grants_right?(user, session, :manage_admin_users)
+    can_remove &&= self.user_id != user.id || context.account.grants_right?(user, session, :manage_admin_users)
+    can_remove &&= context.id == ((context.is_a? Course) ? self.course_id : self.course_section_id)
   end
 
   def pending?
@@ -1018,34 +1027,36 @@ class Enrollment < ActiveRecord::Base
     end
   end
 
-  def computed_current_grade(grading_period_id: nil)
-    cached_score_or_grade(:current, :grade, grading_period_id: grading_period_id)
+  def computed_current_grade(id_opts=nil)
+    cached_score_or_grade(:current, :grade, id_opts)
   end
 
-  def computed_final_grade(grading_period_id: nil)
-    cached_score_or_grade(:final, :grade, grading_period_id: grading_period_id)
+  def computed_final_grade(id_opts=nil)
+    cached_score_or_grade(:final, :grade, id_opts)
   end
 
-  def computed_current_score(grading_period_id: nil)
-    cached_score_or_grade(:current, :score, grading_period_id: grading_period_id)
+  def computed_current_score(id_opts=nil)
+    cached_score_or_grade(:current, :score, id_opts)
   end
 
-  def computed_final_score(grading_period_id: nil)
-    cached_score_or_grade(:final, :score, grading_period_id: grading_period_id)
+  def computed_final_score(id_opts=nil)
+    cached_score_or_grade(:final, :score, id_opts)
   end
 
-  def cached_score_or_grade(current_or_final, score_or_grade, grading_period_id: nil)
-    score = find_score(grading_period_id: grading_period_id)
+  def cached_score_or_grade(current_or_final, score_or_grade, id_opts=nil)
+    score = find_score(id_opts)
     score&.send("#{current_or_final}_#{score_or_grade}")
   end
   private :cached_score_or_grade
 
-  # when grading period is nil, we are fetching the overall course score
-  def find_score(grading_period_id: nil)
+  def find_score(id_opts=nil)
+    id_opts ||= Score.params_for_course
+    valid_keys = %i(course_score grading_period grading_period_id assignment_group assignment_group_id)
+    return nil if id_opts.except(*valid_keys).any?
     if scores.loaded?
-      scores.find { |score| score.grading_period_id == grading_period_id }
+      scores.detect { |score| score.attributes >= id_opts.with_indifferent_access }
     else
-      scores.where(grading_period_id: grading_period_id).first
+      scores.where(id_opts).first
     end
   end
 
@@ -1234,7 +1245,10 @@ class Enrollment < ActiveRecord::Base
 
   def self.limit_privileges_to_course_section!(course, user, limit)
     course.shard.activate do
-      Enrollment.where(:course_id => course, :user_id => user).update_all(:limit_privileges_to_course_section => !!limit)
+      Enrollment.where(:course_id => course, :user_id => user).each do |enrollment|
+        enrollment.limit_privileges_to_course_section = !!limit
+        enrollment.save!
+      end
     end
     user.touch
   end
@@ -1339,6 +1353,47 @@ class Enrollment < ActiveRecord::Base
     student_or_fake_student? && other_enrollment_of_same_type.present?
   end
 
+  def restore_submissions_and_scores
+    return unless being_restored?(to_state: "completed")
+
+    # running in an n_strand to handle situations where a SIS import could
+    # update a ton of enrollments from "deleted" to "completed".
+    send_later_if_production_enqueue_args(
+      :restore_submissions_and_scores_now,
+      {
+        n_strand: "Enrollment#restore_submissions_and_scores#{root_account.global_id}",
+        max_attempts: 1,
+        priority: Delayed::LOW_PRIORITY
+      }
+    )
+  end
+
+  def restore_submissions_and_scores_now
+    restore_deleted_submissions
+    restore_deleted_scores
+  end
+
+  def restore_deleted_submissions
+    Submission.
+      joins(:assignment).
+      where(user_id: user_id, workflow_state: "deleted", assignments: { context_id: course_id }).
+      merge(Assignment.active).
+      in_batches.
+      update_all("workflow_state = #{DueDateCacher::INFER_SUBMISSION_WORKFLOW_STATE_SQL}")
+  end
+
+  def restore_deleted_scores
+    assignment_groups = course.assignment_groups.active.except(:order)
+    grading_periods = GradingPeriod.for(course)
+
+    Score.where(course_score: true).or(
+      Score.where(assignment_group: assignment_groups)
+    ).or(
+      Score.where(grading_period: grading_periods)
+    ).where(enrollment_id: id, workflow_state: "deleted").
+      update_all(workflow_state: "active")
+  end
+
   def student_or_fake_student?
     ['StudentEnrollment', 'StudentViewEnrollment'].include?(type)
   end
@@ -1353,7 +1408,7 @@ class Enrollment < ActiveRecord::Base
     ).where.not(id: id, workflow_state: :deleted).first
   end
 
-  def being_restored?
-    workflow_state_changed? && workflow_state_was == 'deleted'
+  def being_restored?(to_state: workflow_state)
+    workflow_state_changed? && workflow_state_was == 'deleted' && workflow_state == to_state
   end
 end

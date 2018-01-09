@@ -39,9 +39,10 @@
 #           "example": "https://example.com/some/path",
 #           "type": "string"
 #         },
-#         // The attachment api object of the report. Only available after the report has completed.
-#         // Abbreviated attachment object File (see files API).
-#         "attachment": {},
+#         "attachment": {
+#           "description": "The attachment api object of the report. Only available after the report has completed.",
+#           "$ref": "File"
+#         },
 #         "status": {
 #           "description": "The status of the report",
 #           "example": "complete",
@@ -178,7 +179,7 @@ class AccountReportsController < ApplicationController
 
 # @API List Available Reports
 #
-# Returns the list of reports for the current context.
+# Returns a paginated list of reports for the current context.
 #
 # @response_field name The name of the report.
 # @response_field parameters The parameters will vary for each report

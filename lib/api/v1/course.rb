@@ -79,7 +79,7 @@ module Api::V1::Course
   #     "uuid" => "WvAHhY5FINzq5IyRIJybGeiXyFkG3SqHUPb7jZY5"
   #   }
   #
-  def course_json(course, user, session, includes, enrollments)
+  def course_json(course, user, session, includes, enrollments, subject_user = user)
     if includes.include?('access_restricted_by_date') && enrollments && enrollments.all?(&:inactive?)
       return {'id' => course.id, 'access_restricted_by_date' => true}
     end
@@ -87,7 +87,7 @@ module Api::V1::Course
     Api::V1::CourseJson.to_hash(course, user, includes, enrollments) do |builder, allowed_attributes, methods, permissions_to_include|
       hash = api_json(course, user, session, { :only => allowed_attributes, :methods => methods }, permissions_to_include)
       hash['term'] = enrollment_term_json(course.enrollment_term, user, session, enrollments, []) if includes.include?('term')
-      hash['course_progress'] = CourseProgress.new(course, user).to_json if includes.include?('course_progress')
+      hash['course_progress'] = CourseProgress.new(course, subject_user).to_json if includes.include?('course_progress')
       hash['apply_assignment_group_weights'] = course.apply_group_weights?
       hash['sections'] = section_enrollments_json(enrollments) if includes.include?('sections')
       hash['total_students'] = course.student_count || course.students.count if includes.include?('total_students')
@@ -101,6 +101,8 @@ module Api::V1::Course
       apply_nickname(hash, course, user) if user
 
       hash['image_download_url'] = course.image if includes.include?('course_image') && course.feature_enabled?('course_card_images')
+
+      apply_master_course_settings(hash, course, user)
 
       # return hash from the block for additional processing in Api::V1::CourseJson
       hash
@@ -140,4 +142,18 @@ module Api::V1::Course
     hash
   end
 
+  def apply_master_course_settings(hash, course, user)
+    return unless respond_to?(:master_courses?) && master_courses?
+    is_mc = MasterCourses::MasterTemplate.is_master_course?(course)
+    hash['blueprint'] = is_mc
+
+    if is_mc
+      template = MasterCourses::MasterTemplate.full_template_for(course)
+      if template.use_default_restrictions_by_type
+        hash['blueprint_restrictions_by_object_type'] = template.default_restrictions_by_type_for_api
+      else
+        hash['blueprint_restrictions'] = template.default_restrictions
+      end
+    end
+  end
 end

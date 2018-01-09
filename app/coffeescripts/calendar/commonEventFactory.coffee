@@ -21,8 +21,9 @@ define [
   'compiled/calendar/CommonEvent.Assignment',
   'compiled/calendar/CommonEvent.AssignmentOverride'
   'compiled/calendar/CommonEvent.CalendarEvent'
+  'compiled/calendar/CommonEvent.PlannerNote'
   'compiled/str/splitAssetString'
-], ($, CommonEvent, Assignment, AssignmentOverride, CalendarEvent, splitAssetString) ->
+], ($, CommonEvent, Assignment, AssignmentOverride, CalendarEvent, PlannerNote, splitAssetString) ->
 
   (data, contexts) ->
     if data == null
@@ -38,6 +39,8 @@ define [
       'assignment_override'
     else if  data.assignment || data.assignment_group_id
       'assignment'
+    else if data.type == 'planner_note'
+      'planner_note'
     else
       'calendar_event'
 
@@ -76,6 +79,8 @@ define [
       obj = new Assignment(data, contextInfo)
     else if type == 'assignment_override'
       obj = new AssignmentOverride(data, contextInfo)
+    else if type == 'planner_note'
+      obj = new PlannerNote(data, contextInfo, actualContextInfo)
     else
       obj = new CalendarEvent(data, contextInfo, actualContextInfo)
 
@@ -113,6 +118,13 @@ define [
       unless obj.object.appointment_group_id || obj.object.parent_event_id ||
              obj.object.child_events_count || obj.object.effective_context_code
         obj.can_change_context = true
+
+    if type == 'planner_note'
+      # planner_notes can only be created by the user for herself,
+      # so she can always edit them
+      obj.can_change_context = true # TODO: will change to false when note is linked to an asset
+      obj.can_edit = true
+      obj.can_delete = true
 
     # disable fullcalendar.js dragging unless the user has permissions
     obj.editable = false unless obj.can_edit

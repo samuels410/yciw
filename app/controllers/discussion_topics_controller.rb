@@ -253,7 +253,7 @@ class DiscussionTopicsController < ApplicationController
   #   If "all_dates" is passed, all dates associated with graded discussions'
   #   assignments will be included.
   #
-  # @argument order_by [String, "position"|"recent_activity"]
+  # @argument order_by [String, "position"|"recent_activity"|"title"]
   #   Determines the order of the discussion topic list. Defaults to "position".
   #
   # @argument scope [String, "locked"|"unlocked"|"pinned"|"unpinned"]
@@ -279,7 +279,6 @@ class DiscussionTopicsController < ApplicationController
   # @returns [DiscussionTopic]
   def index
     include_params = Array(params[:include])
-
     if params[:only_announcements]
       return unless authorized_action(@context.announcements.temp_record, @current_user, :read)
     else
@@ -302,6 +301,8 @@ class DiscussionTopicsController < ApplicationController
 
     scope = if params[:order_by] == 'recent_activity'
               scope.by_last_reply_at
+            elsif params[:order_by] == 'title'
+              scope.order(DiscussionTopic.best_unicode_collation_key("discussion_topics.title")).order(:position, :id)
             elsif params[:only_announcements]
               scope.by_posted_at
             else
@@ -380,14 +381,14 @@ class DiscussionTopicsController < ApplicationController
         if @context.grants_right?(@current_user, session, :moderate_forum)
           mc_status = setup_master_course_restrictions(@topics, @context)
         end
-
+        root_topic_fields = [:delayed_post_at, :lock_at]
         render json: discussion_topics_api_json(@topics, @context, @current_user, session,
           user_can_moderate: user_can_moderate,
           plain_messages: value_to_boolean(params[:plain_messages]),
           exclude_assignment_description: value_to_boolean(params[:exclude_assignment_descriptions]),
           include_all_dates: include_params.include?('all_dates'),
-          master_course_status: mc_status
-        )
+          master_course_status: mc_status,
+          root_topic_fields: root_topic_fields)
       end
     end
   end
@@ -408,6 +409,11 @@ class DiscussionTopicsController < ApplicationController
 
   def edit
     @topic ||= @context.all_discussion_topics.find(params[:id])
+
+    if @topic.root_topic_id && @topic.has_group_category?
+      return redirect_to edit_course_discussion_topic_url(@context.context_id, @topic.root_topic_id)
+    end
+
     if authorized_action(@topic, @current_user, (@topic.new_record? ? :create : :update))
       can_set_group_category = @context.respond_to?(:group_categories) && @context.grants_right?(@current_user, session, :manage) # i.e. not a student
       hash =  {
@@ -673,6 +679,9 @@ class DiscussionTopicsController < ApplicationController
   # @argument delayed_post_at [DateTime]
   #   If a timestamp is given, the topic will not be published until that time.
   #
+  # @argument allow_rating [Boolean]
+  #   Whether or not users can rate entries in this topic.
+  #
   # @argument lock_at [DateTime]
   #   If a timestamp is given, the topic will be scheduled to lock at the
   #   provided timestamp. If the timestamp is in the past, the topic will be
@@ -713,9 +722,6 @@ class DiscussionTopicsController < ApplicationController
   # @argument group_category_id [Integer]
   #   If present, the topic will become a group discussion assigned
   #   to the group.
-  #
-  # @argument allow_rating [Boolean]
-  #   If true, users will be allowed to rate entries.
   #
   # @argument only_graders_can_rate [Boolean]
   #   If true, only graders will be allowed to rate entries.
@@ -939,16 +945,18 @@ class DiscussionTopicsController < ApplicationController
       prior_version = DiscussionTopic.find(@topic.id)
     end
 
-    return unless authorized_action(@topic, @current_user, (is_new ? :create : :update))
-
     allowed_fields = @context.is_a?(Group) ? API_ALLOWED_TOPIC_FIELDS_FOR_GROUP : API_ALLOWED_TOPIC_FIELDS
     discussion_topic_hash = params.permit(*allowed_fields)
+    only_pinning = discussion_topic_hash.except(*%w{pinned}).blank?
+
+    topic_to_check = only_pinning && @topic.root_topic ? @topic.root_topic : @topic # allow pinning/unpinning if a subtopic and we can update the root
+    return unless authorized_action(topic_to_check, @current_user, (is_new ? :create : :update))
 
     process_podcast_parameters(discussion_topic_hash)
 
     if is_new
       @topic.user = @current_user
-    elsif discussion_topic_hash.except(*%w{pinned}).present? # don't update editor if the only thing that changed was the pinned status
+    elsif !only_pinning # don't update editor if the only thing that changed was the pinned status
       @topic.editor = @current_user
     end
     @topic.current_user = @current_user
@@ -1040,8 +1048,8 @@ class DiscussionTopicsController < ApplicationController
 
   def prefer_assignment_availability_dates(discussion_topic_hash)
     return unless params[:assignment]
-    discussion_topic_hash['delayed_post_at'] = nil if params[:assignment][:unlock_at].present?
-    discussion_topic_hash['lock_at'] = nil if params[:assignment][:lock_at].present?
+    discussion_topic_hash['delayed_post_at'] = nil if params[:assignment].has_key?(:unlock_at)
+    discussion_topic_hash['lock_at'] = nil if params[:assignment].has_key?(:lock_at)
   end
 
   # Internal: detetermines if the delayed_post_at or lock_at dates were changed

@@ -104,7 +104,7 @@
 #           "type": "boolean"
 #         },
 #         "federated_attributes": {
-#           "type": "FederatedAttributesConfig"
+#           "$ref": "FederatedAttributesConfig"
 #         }
 #       }
 #     }
@@ -142,37 +142,48 @@
 #       "description": "A mapping of Canvas attribute names to attribute names that a provider may send, in order to update the value of these attributes when a user logs in. The values can be a FederatedAttributeConfig, or a raw string corresponding to the \"attribute\" property of a FederatedAttributeConfig. In responses, full FederatedAttributeConfig objects are returned if JIT provisioning is enabled, otherwise just the attribute names are returned.",
 #       "properties": {
 #         "admin_roles": {
-#           "description": "A comma separated list of role names to grant to the user. Note that these only apply at the root account level, and not sub-accounts. If the attribute is not marked for provisioning only, the user will also be removed from any other roles they currently hold that are not still specified by the IdP."
+#           "description": "A comma separated list of role names to grant to the user. Note that these only apply at the root account level, and not sub-accounts. If the attribute is not marked for provisioning only, the user will also be removed from any other roles they currently hold that are not still specified by the IdP.",
+#           "type": "string"
 #         },
 #         "display_name": {
-#           "description": "The full display name of the user"
+#           "description": "The full display name of the user",
+#           "type": "string"
 #         },
 #         "email": {
-#           "description": "The user's e-mail address"
+#           "description": "The user's e-mail address",
+#           "type": "string"
 #         },
 #         "given_name": {
-#           "description": "The first, or given, name of the user"
+#           "description": "The first, or given, name of the user",
+#           "type": "string"
 #         },
 #         "integration_id": {
-#           "description": "The secondary unique identifier for SIS purposes"
+#           "description": "The secondary unique identifier for SIS purposes",
+#           "type": "string"
 #         },
 #         "locale": {
-#           "description": "The user's preferred locale/language"
+#           "description": "The user's preferred locale/language",
+#           "type": "string"
 #         },
 #         "name": {
-#           "description": "The full name of the user"
+#           "description": "The full name of the user",
+#           "type": "string"
 #         },
 #         "sis_user_id": {
-#           "description": "The unique SIS identifier"
+#           "description": "The unique SIS identifier",
+#           "type": "string"
 #         },
 #         "sortable_name": {
-#           "description": "The full name of the user for sorting purposes"
+#           "description": "The full name of the user for sorting purposes",
+#           "type": "string"
 #         },
 #         "surname": {
-#           "description": "The surname, or last name, of the user"
+#           "description": "The surname, or last name, of the user",
+#           "type": "string"
 #         },
 #         "timezone": {
-#           "description": "The user's preferred time zone"
+#           "description": "The user's preferred time zone",
+#           "type": "string"
 #         }
 #       }
 #     }
@@ -200,7 +211,7 @@ class AccountAuthorizationConfigsController < ApplicationController
   include Api::V1::AccountAuthorizationConfig
 
   # @API List authentication providers
-  # Returns the list of authentication providers
+  # Returns a paginated list of authentication providers
   #
   # @example_request
   #
@@ -566,7 +577,7 @@ class AccountAuthorizationConfigsController < ApplicationController
   #   The attribute to use to look up the user's login in Canvas. Either
   #   'user_id' (the default), or 'screen_name'
   #
-  # - parent_registration [Optional]
+  # - parent_registration [Optional] - DEPRECATED 2017-11-03
   #
   #   Accepts a boolean value, true designates the authentication service
   #   for use on parent registrations.  Only one service can be selected
@@ -713,7 +724,6 @@ class AccountAuthorizationConfigsController < ApplicationController
   #        -H 'Authorization: Bearer <token>'
   #
   # @returns AuthenticationProvider
-  #
   def show
     aac = @account.authentication_providers.active.find params[:id]
     render json: aac_json(aac)

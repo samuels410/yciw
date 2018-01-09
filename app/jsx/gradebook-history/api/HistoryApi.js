@@ -18,7 +18,7 @@
 
 import axios from 'axios';
 
-function getGradeHistory (courseId, input) {
+function getGradebookHistory (courseId, input) {
   let url = `/api/v1/audit/grade_change/courses/${courseId}`;
   url += input.assignment ? `/assignments/${input.assignment}` : '';
   url += input.grader ? `/graders/${input.grader}` : '';
@@ -27,18 +27,19 @@ function getGradeHistory (courseId, input) {
   const params = {
     params: {
       start_time: input.from,
-      end_time: input.to
+      end_time: input.to,
+      include: ['current_grade']
     }
   };
 
-  return axios.get(encodeURI(url), params);
+  return axios.get(url, params);
 }
 
 function getNextPage (url) {
-  return axios.get(encodeURI(url));
+  return axios.get(url);
 }
 
 export default {
-  getGradeHistory,
+  getGradebookHistory,
   getNextPage
 };

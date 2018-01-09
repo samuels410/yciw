@@ -17,7 +17,7 @@
  */
 
 import ReactDOM from 'react-dom';
-import { createGradebook } from 'spec/jsx/gradezilla/default_gradebook/GradebookSpecHelper';
+import { createGradebook, setFixtureHtml } from 'spec/jsx/gradezilla/default_gradebook/GradebookSpecHelper';
 import TotalGradeColumnHeaderRenderer
 from 'jsx/gradezilla/default_gradebook/slick-grid/column-headers/TotalGradeColumnHeaderRenderer';
 
@@ -36,6 +36,8 @@ QUnit.module('TotalGradeColumnHeaderRenderer', function (suiteHooks) {
 
   suiteHooks.beforeEach(function () {
     $container = document.createElement('div');
+    document.body.appendChild($container);
+    setFixtureHtml($container);
 
     gradebook = createGradebook();
     columns = {
@@ -53,6 +55,10 @@ QUnit.module('TotalGradeColumnHeaderRenderer', function (suiteHooks) {
 
     column = { id: 'total_grade' };
     renderer = new TotalGradeColumnHeaderRenderer(gradebook);
+  });
+
+  suiteHooks.afterEach(function() {
+    $container.remove();
   });
 
   QUnit.module('#render', function () {
@@ -103,8 +109,20 @@ QUnit.module('TotalGradeColumnHeaderRenderer', function (suiteHooks) {
       strictEqual(component.props.gradeDisplay.hidden, true);
     });
 
+    test('hides the action to change grade display when grading periods are weighted', function () {
+      gradebook.gradingPeriodSet = { id: '1', weighted: true };
+      render();
+      strictEqual(component.props.gradeDisplay.hidden, true);
+    });
+
     test('shows the action to change grade display when assignment groups are not weighted', function () {
       sinon.stub(gradebook, 'weightedGroups').returns(false);
+      render();
+      strictEqual(component.props.gradeDisplay.hidden, false);
+    });
+
+    test('shows the action to change grade display when grading periods are not weighted', function () {
+      gradebook.gradingPeriodSet = { id: '1', weighted: false };
       render();
       strictEqual(component.props.gradeDisplay.hidden, false);
     });

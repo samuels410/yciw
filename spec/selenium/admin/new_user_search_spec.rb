@@ -34,33 +34,47 @@ describe "new account user search" do
     ff('.users-list div[role=row]')
   end
 
-  def click_tab
-    ff(".react-tabs > ul li").detect{|tab| tab.text.include?("People")}.click
-    wait_for_ajaximations
+  it "should be able to toggle between 'People' and 'Courses' tabs" do
+    user_with_pseudonym(:account => @account, :name => "Test User")
+    course_factory(:account => @account, :course_name => "Test Course")
+
+    get "/accounts/#{@account.id}"
+    2.times do
+      expect(f("#breadcrumbs")).not_to include_text("People")
+      expect(f("#breadcrumbs")).to include_text("Courses")
+      expect(f('.courses-list')).to include_text("Test Course")
+
+      f('#section-tabs .users').click
+      expect(driver.current_url).to include("/accounts/#{@account.id}/users")
+      expect(f("#breadcrumbs")).to include_text("People")
+      expect(f("#breadcrumbs")).not_to include_text("Courses")
+      expect(f('.users-list')).to include_text("Test User")
+
+      f('#section-tabs .courses').click
+    end
+
   end
+
+
 
   it "should not show the people tab without permission" do
     @account.role_overrides.create! :role => admin_role, :permission => 'read_roster', :enabled => false
 
     get "/accounts/#{@account.id}"
 
-    expect(f(".react-tabs > ul")).to_not include_text("People")
+    expect(f("#left-side #section-tabs")).not_to include_text("People")
   end
 
   it "should not show the create users button for non-root acocunts" do
     sub_account = Account.create!(:name => "sub", :parent_account => @account)
 
-    get "/accounts/#{sub_account.id}"
-
-    click_tab
+    get "/accounts/#{sub_account.id}/users"
 
     expect(f("#content")).not_to contain_css('button.add_user')
   end
 
   it "should be able to create users" do
-    get "/accounts/#{@account.id}"
-
-    click_tab
+    get "/accounts/#{@account.id}/users"
 
     f('button.add_user').click
 
@@ -72,9 +86,6 @@ describe "new account user search" do
 
     email = 'someemail@example.com'
     f('input.user_email').send_keys(email)
-
-    input = f('input.user_send_confirmation')
-    move_to_click("label[for=#{input['id']}]")
 
     f('.ReactModalPortal button[type="submit"]').click
     wait_for_ajaximations
@@ -89,45 +100,88 @@ describe "new account user search" do
     expect(new_row).to include_text(email)
   end
 
-  it "should paginate" do
-    10.times do |x|
-      user_with_pseudonym(:account => @account, :name => "Test User #{x + 1}")
-    end
+  it "should be able to create users with confirmation disabled", priority: "1", test_id: 3399311 do
+    name = 'Confirmation Disabled'
+    get "/accounts/#{@account.id}/users"
 
-    get "/accounts/#{@account.id}"
-    click_tab
-
-    expect(get_rows.count).to eq 10
-
-    f(".load_more").click
+    f('button.add_user').click
+    f('input.user_name').send_keys(name)
     wait_for_ajaximations
 
-    expect(get_rows.count).to eq 11
-    expect(f("#content")).not_to contain_css(".load_more")
+    email = 'someemail@example.com'
+    f('input.user_email').send_keys(email)
+
+    input = f('input.user_send_confirmation')
+    move_to_click("label[for=#{input['id']}]")
+
+    f('.ReactModalPortal button[type="submit"]').click
+    wait_for_ajaximations
+
+    new_pseudonym = Pseudonym.where(:unique_id => email).first
+    expect(new_pseudonym.user.name).to eq name
+  end
+
+  it "should bring up user page when clicking name", priority: "1", test_id: 3399648 do
+    page_user = user_with_pseudonym(:account => @account, :name => "User Page")
+    get "/accounts/#{@account.id}/users"
+
+    ff('.userUrl')[1].click
+    wait_for_ajax_requests
+    expect(f("#content h2")).to include_text page_user.name
+  end
+
+  it "should paginate" do
+    ('A'..'Z').each do |letter|
+      user_with_pseudonym(:account => @account, :name => "Test User #{letter}")
+    end
+
+    get "/accounts/#{@account.id}/users"
+
+    expect(get_rows.count).to eq 15
+    expect(get_rows.first).to include_text("Test User A")
+    expect(f(".users-list")).to_not include_text("Test User O")
+    expect(f("#content")).not_to contain_css('button[title="Previous Page"]')
+
+    f('button[title="Next Page"]').click
+    wait_for_ajaximations
+
+    expect(get_rows.count).to eq 12
+    expect(get_rows.first).to include_text("Test User O")
+    expect(get_rows.last).to include_text("Test User Z")
+    expect(f(".users-list")).not_to include_text("Test User A")
+    expect(f("#content")).to contain_css('button[title="Previous Page"]')
+    expect(f("#content")).not_to contain_css('button[title="Next Page"]')
   end
 
   it "should search by name" do
     match_user = user_with_pseudonym(:account => @account, :name => "user with a search term")
     user_with_pseudonym(:account => @account, :name => "diffrient user")
 
-    get "/accounts/#{@account.id}"
-    click_tab
+    get "/accounts/#{@account.id}/users"
 
-    f('.user_search_bar input[type=text]').send_keys('search')
-    f('.user_search_bar button').click
-    wait_for_ajaximations
+    f('.user_search_bar input[type=search]').send_keys('search')
 
+    expect(f('.users-list')).not_to contain_jqcss('div[role=row]:nth-child(2)')
     rows = get_rows
     expect(rows.count).to eq 1
     expect(rows.first).to include_text(match_user.name)
+  end
+
+  it "should search but not find bogus user", priority: "1", test_id: 3399649 do
+    bogus = 'jtsdumbthing'
+    get "/accounts/#{@account.id}/users"
+
+    f('.user_search_bar input[type=search]').send_keys(bogus)
+
+    rows = get_rows
+    expect(rows.first).not_to include_text(bogus)
   end
 
   it "should link to the user avatar page" do
     match_user = user_with_pseudonym(:account => @account, :name => "user with a search term")
     user_with_pseudonym(:account => @account, :name => "diffrient user")
 
-    get "/accounts/#{@account.id}"
-    click_tab
+    get "/accounts/#{@account.id}/users"
 
     f('#peopleOptionsBtn').click
     f('#manageStudentsLink').click
@@ -139,12 +193,12 @@ describe "new account user search" do
     match_user = user_with_pseudonym(:account => @account, :name => "user with a search term")
     user_with_pseudonym(:account => @account, :name => "diffrient user")
 
-    get "/accounts/#{@account.id}"
-    click_tab
+    get "/accounts/#{@account.id}/users"
 
     f('#peopleOptionsBtn').click
     f('#viewUserGroupLink').click
 
     expect(driver.current_url).to include("/accounts/#{@account.id}/groups")
   end
+
 end

@@ -19,7 +19,7 @@
 require File.expand_path(File.dirname(__FILE__) + '/../sharding_spec_helper.rb')
 
 describe DueDateCacher do
-  before do
+  before(:once) do
     course_with_student(:active_all => true)
     assignment_model(:course => @course)
   end
@@ -104,6 +104,14 @@ describe DueDateCacher do
         }.from(0).to(1)
       end
 
+      it "should delete submissions for enrollments that are deleted" do
+        @course.student_enrollments.update_all(workflow_state: 'deleted')
+
+        expect { @cacher.recompute }.to change {
+          Submission.active.where(assignment_id: @assignment.id).count
+        }.from(1).to(0)
+      end
+
       it "should create submissions for enrollments that are overridden" do
         assignment_override_model(assignment: @assignment, set: @course.default_section)
         @override.override_due_at(@assignment.due_at + 1.day)
@@ -126,6 +134,15 @@ describe DueDateCacher do
         expect { DueDateCacher.recompute_course(@course) }.to change {
           Submission.active.count
         }.from(0).to(1)
+      end
+
+      it "does not create submissions for concluded enrollments" do
+        student2 = user_factory
+        @course.enroll_student(student2, enrollment_state: 'active')
+        student2.enrollments.find_by(course: @course).conclude
+        expect { DueDateCacher.recompute_course(@course) }.not_to change {
+          Submission.active.where(user_id: student2.id).count
+        }
       end
     end
 
@@ -151,6 +168,18 @@ describe DueDateCacher do
       expect { @assignment.save! }.to change {
         Submission.active.count
       }.from(1).to(0)
+    end
+
+    it "does not delete submissions for concluded enrollments" do
+      student2 = user_factory
+      @course.enroll_student(student2, enrollment_state: 'active')
+      submission_model(assignment: @assignment, user: student2)
+      student2.enrollments.find_by(course: @course).conclude
+
+      @assignment.only_visible_to_overrides = true
+      expect { @assignment.save! }.not_to change {
+        Submission.active.where(user_id: student2.id).count
+      }
     end
 
     it "should restore submissions for enrollments that are assigned again" do
@@ -181,6 +210,17 @@ describe DueDateCacher do
 
         @cacher.recompute
         expect(@submission.reload.cached_due_date).to be_nil
+      end
+
+      it "does not update submissions for students with concluded enrollments" do
+        student2 = user_factory
+        @course.enroll_student(student2, enrollment_state: 'active')
+        submission2 = submission_model(assignment: @assignment, user: student2)
+        submission2.update_attributes(cached_due_date: nil)
+        student2.enrollments.find_by(course: @course).conclude
+
+        DueDateCacher.new(@course, [@assignment]).recompute
+        expect(submission2.reload.cached_due_date).to be nil
       end
     end
 
@@ -225,6 +265,17 @@ describe DueDateCacher do
         @cacher.recompute
         expect(@submission.reload.cached_due_date).to eq @assignment.due_at.change(sec: 0)
       end
+
+      it "does not update submissions for students with concluded enrollments" do
+        student2 = user_factory
+        @course.enroll_student(student2, enrollment_state: 'active')
+        submission2 = submission_model(assignment: @assignment, user: student2)
+        submission2.update_attributes(cached_due_date: nil)
+        student2.enrollments.find_by(course: @course).conclude
+
+        DueDateCacher.new(@course, [@assignment]).recompute
+        expect(submission2.reload.cached_due_date).to be nil
+      end
     end
 
     context "adhoc override" do
@@ -241,16 +292,22 @@ describe DueDateCacher do
         @submission1 = @submission
         @submission2 = submission_model(:assignment => @assignment, :user => @student2)
         Submission.update_all(:cached_due_date => nil)
-
-        @cacher.recompute
       end
 
       it "should apply to students in the adhoc set" do
+        @cacher.recompute
         expect(@submission2.reload.cached_due_date).to eq @override.due_at.change(sec: 0)
       end
 
       it "should not apply to students not in the adhoc set" do
+        @cacher.recompute
         expect(@submission1.reload.cached_due_date).to eq @assignment.due_at.change(sec: 0)
+      end
+
+      it "does not update submissions for students with concluded enrollments" do
+        @student2.enrollments.find_by(course: @course).conclude
+        DueDateCacher.new(@course, [@assignment]).recompute
+        expect(@submission2.reload.cached_due_date).to be nil
       end
     end
 
@@ -314,21 +371,28 @@ describe DueDateCacher do
         @submission1 = @submission
         @submission2 = submission_model(:assignment => @assignment, :user => @student2)
         Submission.update_all(:cached_due_date => nil)
-
-        @cacher.recompute
       end
 
       it "should apply to students in that group" do
+        @cacher.recompute
         expect(@submission2.reload.cached_due_date).to eq @override.due_at.change(sec: 0)
       end
 
       it "should not apply to students not in the group" do
+        @cacher.recompute
         expect(@submission1.reload.cached_due_date).to eq @assignment.due_at.change(sec: 0)
       end
 
       it "should not apply to non-active memberships in that group" do
+        @cacher.recompute
         @group.add_user(@student1, 'deleted')
         expect(@submission1.reload.cached_due_date).to eq @assignment.due_at.change(sec: 0)
+      end
+
+      it "does not update submissions for students with concluded enrollments" do
+        @student2.enrollments.find_by(course: @course).conclude
+        DueDateCacher.new(@course, [@assignment]).recompute
+        expect(@submission2.reload.cached_due_date).to be nil
       end
     end
 

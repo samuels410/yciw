@@ -76,15 +76,16 @@ describe "student planner" do
     end
 
     it "shows new grades tag for assignments that are graded", priority: "1", test_id: 3263152 do
-      @assignment.grade_student(@student1, grade: 10, submission_comment: 'Good', grader: @teacher)
+      @assignment.grade_student(@student1, grade: 10, grader: @teacher)
       go_to_list_view
-      validate_pill('New Grades')
+      validate_pill('Graded')
+      expect(f('.PlannerApp')).not_to include_text('Feedback') # graded != feedback
     end
 
     it "shows new feedback tag for assignments that has feedback", priority: "1", test_id: 3263154 do
-      @assignment.grade_student(@student1, grade: 10, submission_comment: 'Good', grader: @teacher)
+      @assignment.update_submission(@student1, {comment: 'Good', author: @teacher})
       go_to_list_view
-      validate_pill('New Feedback')
+      validate_pill('Feedback')
     end
 
     it "shows missing tag for assignments with missing submissions", priority: "1", test_id: 3263153 do
@@ -124,7 +125,7 @@ describe "student planner" do
     it "shows new replies tag for discussion with new replies", priority: "1", test_id: 3284231 do
       @discussion.reply_from(user: @teacher, text: 'teacher reply')
       go_to_list_view
-      validate_pill('New Replies')
+      validate_pill('Replies')
     end
   end
 
@@ -211,9 +212,9 @@ describe "student planner" do
     it "adds a new date with the date picker", priority: "1", test_id: 3263159 do
       # sets up the date to compare against
       current_month = Time.zone.today.month
-      test_month = Date::MONTHNAMES[(current_month + 1) % 12]
+      test_month = Date::MONTHNAMES[(current_month % 12) + 1]
       test_year = Time.zone.today.year
-      if current_month + 1 == 13
+      if current_month == 12
         test_year += 1
       end
 
@@ -253,7 +254,7 @@ describe "student planner" do
       fj("a:contains('Title Text')", todo_item).click
 
       # gives the To Do a new name and saves it
-      modal = f("div[aria-label = 'Edit Title Text']")
+      modal = todo_sidebar_modal("Title Text")
       element = f('input', modal)
       element.send_keys(8.chr * 10)
       element.send_keys("New Text")
@@ -275,9 +276,29 @@ describe "student planner" do
       expect(todo_item).to include_text("Title Text")
       fj("a:contains('Title Text')", todo_item).click
       fj("button:contains('Delete')").click
+      alert = driver.switch_to.alert
+      expect(alert.text).to eq("Are you sure you want to delete this planner item?")
+      alert.accept()
       refresh_page
 
       expect(fj("h2:contains('No Due Dates Assigned')")).to be_displayed
+    end
+
+    it "allows editing the date of a to-do item", priority: "1", test_id: 3402913 do
+      @student_to_do = @student1.planner_notes.create!(todo_date: Time.zone.now, title: "Student to do")
+      go_to_list_view
+      fln(@student_to_do.title).click
+      modal = todo_sidebar_modal(@student_to_do.title)
+      element = ff('input', modal)[1]
+      element.click
+      date = format_date_for_view(Time.zone.now, :long).split(" ")
+      day = date[0] + ' 15, ' + date[2]
+      fj("button:contains('15')").click
+      todo_save_button.click
+      expect(f('body')).to contain_jqcss("h2:contains(#{day})")
+      @student_to_do.reload
+      expect(format_date_for_view(@student_to_do.todo_date, :long)).
+        to eq(day)
     end
 
     it "has courses in the course combo box", priority: "1", test_id: 3263160 do
@@ -350,6 +371,7 @@ describe "student planner" do
     end
 
     it "loads more items at the bottom of the page", priority: "1", test_id: 3263149 do
+      skip('functionality has changed need to rework ADMIN-276')
       go_to_list_view
       current_last_item = items_displayed.last
       current_items = items_displayed.count

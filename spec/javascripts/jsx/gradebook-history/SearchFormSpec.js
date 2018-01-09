@@ -29,7 +29,7 @@ import Fixtures from 'spec/jsx/gradebook-history/Fixtures';
 const defaultProps = () => (
   {
     fetchHistoryStatus: 'started',
-    getGradeHistory () {},
+    getGradebookHistory () {},
     clearSearchOptions () {},
     getSearchOptions () {},
     getSearchOptionsNextPage () {},
@@ -97,16 +97,71 @@ test('has a Button for submitting', function () {
   ok(this.wrapper.find(Button).exists());
 });
 
-test('calls getGradeHistory prop on mount', function () {
-  const props = { getGradeHistory: this.stub() };
+test('disables the submit button if To date is before From date', function () {
+  this.wrapper.setState({
+    selected: {
+      from: '2017-05-02T00:00:00-05:00',
+      to: '2017-05-01T00:00:00-05:00'
+    }
+  }, () => {
+    const button = this.wrapper.find(Button);
+    ok(button.props().disabled);
+  });
+});
+
+test('does not disable the submit button if To date is after From date', function () {
+  this.wrapper.setState({
+    selected: {
+      from: '2017-05-01T00:00:00-05:00',
+      to: '2017-05-02T00:00:00-05:00'
+    }
+  }, () => {
+    const button = this.wrapper.find(Button);
+    notOk(button.props().disabled);
+  });
+});
+
+test('does not disable the submit button when there are no dates selected', function () {
+  const { from, to } = this.wrapper.state().selected;
+  const button = this.wrapper.find(Button);
+  ok(!from && !to);
+  notOk(button.props().disabled);
+});
+
+test('does not disable the submit button when only from date is entered', function () {
+  this.wrapper.setState({
+    selected: {
+      from: '1994-04-08T00:00:00-05:00',
+      to: ''
+    }
+  }, () => {
+    const button = this.wrapper.find(Button);
+    notOk(button.props().disabled);
+  });
+});
+
+test('does not disable the submit button when only to date is entered', function () {
+  this.wrapper.setState({
+    selected: {
+      from: '',
+      to: '2017-05-01T00:00:00-05:00'
+    }
+  }, () => {
+    const button = this.wrapper.find(Button);
+    notOk(button.props().disabled);
+  });
+});
+
+test('calls getGradebookHistory prop on mount', function () {
+  const props = { getGradebookHistory: this.stub() };
   const wrapper = mount(<SearchFormComponent {...defaultProps()} {...props} />);
-  strictEqual(props.getGradeHistory.callCount, 1);
+  strictEqual(props.getGradebookHistory.callCount, 1);
   wrapper.unmount();
 });
 
 QUnit.module('SearchForm when button is clicked', {
   setup () {
-    this.props = { getGradeHistory: this.stub() };
+    this.props = { getGradebookHistory: this.stub() };
     this.wrapper = mountComponent(this.props);
   },
 
@@ -128,7 +183,7 @@ test('dispatches with the state of input', function () {
     selected
   }, () => {
     this.wrapper.find(Button).simulate('click');
-    deepEqual(this.props.getGradeHistory.firstCall.args[0], selected);
+    deepEqual(this.props.getGradebookHistory.firstCall.args[0], selected);
   });
 });
 
@@ -148,7 +203,7 @@ test('turning from started to failure displays an AjaxFlashAlert', function () {
   // and then it'll create it itself, appending the error message into this new container
   equal(document.getElementById('flash_message_holder'), null);
   this.wrapper.setProps({ fetchHistoryStatus: 'failure' });
-  const flashMessageContainer = document.getElementById('flash_message_holder');
+  const flashMessageContainer = document.getElementById('flashalert_message_holder');
   ok(flashMessageContainer.childElementCount > 0);
 });
 
@@ -254,7 +309,11 @@ QUnit.module('SearchForm Autocomplete options', {
     this.assignments = Fixtures.assignmentArray();
     this.graders = Fixtures.userArray();
     this.students = Fixtures.userArray();
-    this.wrapper = mount(<SearchFormComponent {...this.props} />);
+    this.wrapper = mount(<SearchFormComponent {...this.props} />, {attachTo: document.getElementById('fixtures')});
+  },
+
+  teardown () {
+    this.wrapper.unmount();
   }
 });
 

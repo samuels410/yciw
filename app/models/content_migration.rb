@@ -481,6 +481,8 @@ class ContentMigration < ActiveRecord::Base
     self.workflow_state = :importing
     self.save
 
+    Lti::Asset.opaque_identifier_for(self.context)
+
     all_files_path = nil
     begin
       data = nil
@@ -599,7 +601,7 @@ class ContentMigration < ActiveRecord::Base
           add_skipped_item(child_tag)
         else
           Rails.logger.debug("syncing deletion of #{content.asset_string} from master course")
-          content.skip_downstream_changes!
+          content.skip_downstream_changes! if content.respond_to?(:skip_downstream_changes!)
           content.destroy
         end
       end

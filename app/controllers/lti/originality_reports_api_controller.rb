@@ -110,9 +110,11 @@ module Lti
     ].freeze
 
     skip_before_action :load_user
-    before_action :authorized_lti2_tool, :plagiarism_feature_flag_enabled
+    before_action :authorized_lti2_tool
     before_action :attachment_in_context, only: [:create]
-    before_action :report_in_context, only: [:update, :show]
+    before_action :find_originality_report
+    before_action :report_in_context, only: [:show, :update]
+    before_action :ensure_tool_proxy_associated
 
     # @API Create an Originality Report
     # Create a new OriginalityReport for the specified file
@@ -151,18 +153,25 @@ module Lti
     #
     # @returns OriginalityReport
     def create
-      render_unauthorized_action and return unless tool_proxy_associated?
-      @report = OriginalityReport.create!(create_report_params)
-      render json: api_json(@report, @current_user, session), status: :created
-    rescue ActiveRecord::RecordInvalid
-      return render json: @report.errors, status: :bad_request
-    rescue ActiveRecord::RecordNotUnique
-      return render json: {error: {message: I18n.t('the specified file with file_id already has an originality report'),
-                                   type: 'RecordNotUnique'}}, status: :bad_request
+      begin
+      if @report.present?
+        update
+      else
+        @report = OriginalityReport.new(create_report_params)
+        if @report.save
+          render json: api_json(@report, @current_user, session), status: :created
+        else
+          render json: @report.errors, status: :bad_request
+        end
+      end
+      rescue StandError => e
+        puts e.message
+      end
     end
 
     # @API Edit an Originality Report
-    # Modify an existing originality report
+    # Modify an existing originality report. An alternative to this endpoint is
+    # to POST the same parameters listed below to the CREATE endpoint.
     #
     # @argument originality_report[originality_score] [Float]
     #   A number between 0 and 100 representing the measure of the
@@ -195,7 +204,6 @@ module Lti
     #
     # @returns OriginalityReport
     def update
-      render_unauthorized_action and return unless tool_proxy_associated?
       if @report.update_attributes(update_report_params)
         render json: api_json(@report, @current_user, session)
       else
@@ -208,7 +216,6 @@ module Lti
     #
     # @returns OriginalityReport
     def show
-      render_unauthorized_action and return unless tool_proxy_associated?
       render json: api_json(@report, @current_user, session)
     end
 
@@ -218,19 +225,8 @@ module Lti
 
     private
 
-    def link_id(tool_setting_params)
-      resource_type_code = tool_setting_params&.dig('resource_type_code')
-      if resource_type_code.present?
-        rh = tool_proxy.resources.find_by(resource_type_code: resource_type_code)
-        resource_link_id(rh, tool_setting_params['resource_url'])
-      end
-    end
-
-    def resource_link_id(resource_handler, lti_url = nil)
-      tool_setting = resource_handler.find_or_create_tool_setting(resource_url: lti_url,
-                                                                  link_fragment: link_fragment,
-                                                                  context: attachment_association)
-      tool_setting.resource_link_id
+    def ensure_tool_proxy_associated
+      render_unauthorized_action unless tool_proxy_associated?
     end
 
     def link_fragment
@@ -241,25 +237,23 @@ module Lti
       PermissionChecker.authorized_lti2_action?(tool: tool_proxy, context: assignment)
     end
 
-    def plagiarism_feature_flag_enabled
-      render_unauthorized_action unless assignment.context.root_account.feature_enabled?(:plagiarism_detection_platform)
-    end
-
     def create_attributes
       [:originality_score,
        :file_id,
        :originality_report_file_id,
        :originality_report_url,
-       :workflow_state,
-       tool_setting: %i(resource_url resource_type_code)].freeze
+       :workflow_state].freeze
     end
 
     def update_attributes
       [:originality_report_file_id,
        :originality_report_url,
        :originality_score,
-       :workflow_state,
-       tool_setting: %i(resource_url resource_type_code)].freeze
+       :workflow_state].freeze
+    end
+
+    def lti_link_attributes
+       [tool_setting: %i(resource_url resource_type_code)].freeze
     end
 
     def assignment
@@ -288,7 +282,7 @@ module Lti
 
     def attachment_association
       @_attachment_association ||= begin
-        file = @report&.attachment || attachment
+        file = originality_report&.attachment || attachment
         file.attachment_associations.find { |a| a.context == submission }
       end
     end
@@ -298,7 +292,7 @@ module Lti
         report_attributes = params.require(:originality_report).permit(create_attributes).to_unsafe_h.merge(
           {submission_id: params.require(:submission_id)}
         )
-        report_attributes['link_id'] = link_id(report_attributes.delete('tool_setting'))
+        report_attributes[:lti_link_attributes] = lti_link_params
         report_attributes
       end
     end
@@ -306,8 +300,27 @@ module Lti
     def update_report_params
       @_update_report_params ||= begin
         report_attributes = params.require(:originality_report).permit(update_attributes)
-        report_attributes['link_id'] = link_id(report_attributes.delete('tool_setting'))
+        report_attributes[:lti_link_attributes] = lti_link_params
         report_attributes
+      end
+    end
+
+    def lti_link_params
+      @_lti_link_params ||= begin
+        tool_settings = params.require(:originality_report).permit(lti_link_attributes).to_unsafe_h
+
+        if tool_settings&.dig('tool_setting', 'resource_type_code')
+          tool_settings['tool_setting'].merge({
+            id: @report&.lti_link&.id,
+            product_code: tool_proxy.product_family.product_code,
+            vendor_code: tool_proxy.product_family.vendor_code
+          })
+        else
+          {
+            id: @report&.lti_link&.id,
+            _destroy: true
+          }
+        end
       end
     end
 
@@ -315,16 +328,18 @@ module Lti
       verify_submission_attachment(attachment, submission)
     end
 
+    def find_originality_report
+      @report = OriginalityReport.find_by(id: params[:id]) || OriginalityReport.find_by(attachment_id: attachment&.id)
+    end
+
     def report_in_context
-      @report = OriginalityReport.find_by(id: params[:id]) || OriginalityReport.find_by!(attachment_id: attachment&.id)
+      raise ActiveRecord::RecordNotFound if @report.blank?
       verify_submission_attachment(@report.attachment, submission)
     end
 
     def verify_submission_attachment(attachment, submission)
-      head :not_found and return unless attachment.present? && submission.present?
-      unless submission.assignment == assignment && submission.attachments.include?(attachment)
-        head :unauthorized
-      end
+      raise ActiveRecord::RecordNotFound unless attachment.present? && submission.present?
+      render_unauthorized_action unless submission.assignment == assignment && submission.attachments.include?(attachment)
     end
 
     # @!appendix Originality Report UI Locations

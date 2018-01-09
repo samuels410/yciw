@@ -32,6 +32,8 @@ class ApplicationController < ActionController::Base
     end
   end
 
+  layout :application_layout
+
   attr_accessor :active_tab
   attr_reader :context
 
@@ -113,15 +115,24 @@ class ApplicationController < ActionController::Base
   #       ENV.FOO_BAR #> [1,2,3]
   #
   def js_env(hash = {})
-    return {} unless request.format.html?
+    return {} unless request.format.html? || @include_js_env
     # set some defaults
     unless @js_env
-      editor_css = view_context.stylesheet_path(css_url_for('what_gets_loaded_inside_the_tinymce_editor'))
+      editor_css = [
+        active_brand_config_url('css'),
+        view_context.stylesheet_path(css_url_for('what_gets_loaded_inside_the_tinymce_editor'))
+      ]
+
+      editor_hc_css = [
+        active_brand_config_url('css', { force_high_contrast: true }),
+        view_context.stylesheet_path(css_url_for('what_gets_loaded_inside_the_tinymce_editor', false, { force_high_contrast: true }))
+      ]
+
       @js_env = {
         ASSET_HOST: Canvas::Cdn.config.host,
-        active_brand_config: active_brand_config.try(:md5),
-        active_brand_config_json_url: active_brand_config_json_url,
+        active_brand_config_json_url: active_brand_config_url('json'),
         url_to_what_gets_loaded_inside_the_tinymce_editor_css: editor_css,
+        url_for_high_contrast_tinymce_editor_css: editor_hc_css,
         current_user_id: @current_user.try(:id),
         current_user: Rails.cache.fetch(['user_display_json', @current_user].cache_key, :expires_in => 1.hour) { user_display_json(@current_user, :profile) },
         current_user_roles: @current_user.try(:roles, @domain_root_account),
@@ -129,6 +140,7 @@ class ApplicationController < ActionController::Base
         files_domain: HostUrl.file_host(@domain_root_account || Account.default, request.host_with_port),
         DOMAIN_ROOT_ACCOUNT_ID: @domain_root_account.try(:global_id),
         k12: k12?,
+        use_responsive_layout: use_responsive_layout?,
         help_link_name: help_link_name,
         help_link_icon: help_link_icon,
         use_high_contrast: @current_user.try(:prefers_high_contrast?),
@@ -146,6 +158,7 @@ class ApplicationController < ActionController::Base
       @js_env[:ping_url] = polymorphic_url([:api_v1, @context, :ping]) if @context.is_a?(Course)
       @js_env[:TIMEZONE] = Time.zone.tzinfo.identifier if !@js_env[:TIMEZONE]
       @js_env[:CONTEXT_TIMEZONE] = @context.time_zone.tzinfo.identifier if !@js_env[:CONTEXT_TIMEZONE] && @context.respond_to?(:time_zone) && @context.time_zone.present?
+      @js_env[:GRAPHQL_ENABLED] = @domain_root_account.try(:feature_enabled?, :graphql)
       unless @js_env[:LOCALE]
         @js_env[:LOCALE] = I18n.locale.to_s
         @js_env[:BIGEASY_LOCALE] = I18n.bigeasy_locale
@@ -181,9 +194,13 @@ class ApplicationController < ActionController::Base
   helper_method :rce_js_env
 
   def conditional_release_js_env(assignment = nil, includes: [])
-    return unless ConditionalRelease::Service.enabled_in_context?(@context)
+    currentContext = @context
+    if currentContext.is_a?(Group)
+      currentContext = @context.context
+    end
+    return unless ConditionalRelease::Service.enabled_in_context?(currentContext)
     cr_env = ConditionalRelease::Service.env_for(
-      @context,
+      currentContext,
       @current_user,
       session: session,
       assignment: assignment,
@@ -234,6 +251,16 @@ class ApplicationController < ActionController::Base
   end
   helper_method :k12?
 
+  def use_responsive_layout?
+    @domain_root_account&.feature_enabled?(:responsive_layout)
+  end
+  helper_method :use_responsive_layout?
+
+  def application_layout
+    use_responsive_layout? ? "ic_layout" : "application"
+  end
+  private :application_layout
+
   def grading_periods?
     !!@context.try(:grading_periods?)
   end
@@ -244,8 +271,8 @@ class ApplicationController < ActionController::Base
   end
   helper_method :master_courses?
 
-  def setup_master_course_restrictions(objects, course)
-    return unless master_courses? && course.is_a?(Course) && course.grants_right?(@current_user, session, :read_as_admin)
+  def setup_master_course_restrictions(objects, course, user_can_edit: false)
+    return unless master_courses? && course.is_a?(Course) && (user_can_edit || course.grants_right?(@current_user, session, :read_as_admin))
 
     if MasterCourses::MasterTemplate.is_master_course?(course)
       MasterCourses::Restrictor.preload_default_template_restrictions(objects, course)
@@ -278,21 +305,25 @@ class ApplicationController < ActionController::Base
 
     return unless is_master || is_child
 
-    js_bundle :blueprint_courses
+    js_bundle(is_master ? :blueprint_course_master : :blueprint_course_child)
     css_bundle :blueprint_courses
 
-    master_course = is_master ? @context : @context.master_course_subscriptions.active.first.master_template.course
-    js_env :DEBUG_BLUEPRINT_COURSES => Rails.env.development? || Rails.env.test?
-    js_env :BLUEPRINT_COURSES_DATA => {
+    master_course = is_master ? @context : MasterCourses::MasterTemplate.master_course_for_child_course(@context)
+    bc_data = {
       isMasterCourse: is_master,
       isChildCourse: is_child,
       accountId: @context.account.id,
       masterCourse: master_course.slice(:id, :name, :enrollment_term_id),
       course: @context.slice(:id, :name, :enrollment_term_id),
-      subAccounts: @context.account.sub_accounts.pluck(:id, :name).map{|id, name| {id: id, name: name}},
-      terms: @context.account.root_account.enrollment_terms.active.pluck(:id, :name).map{|id, name| {id: id, name: name}},
-      canManageCourse: MasterCourses::MasterTemplate.is_master_course?(@context) && @context.account.grants_right?(@current_user, :manage_master_courses)
     }
+    if is_master
+      bc_data.merge!(
+        subAccounts: @context.account.sub_accounts.pluck(:id, :name).map{|id, name| {id: id, name: name}},
+        terms: @context.account.root_account.enrollment_terms.active.pluck(:id, :name).map{|id, name| {id: id, name: name}},
+        canManageCourse: @context.account.grants_right?(@current_user, :manage_master_courses)
+      )
+    end
+    js_env :BLUEPRINT_COURSES_DATA => bc_data
     if is_master && js_env.key?(:NEW_USER_TUTORIALS)
       js_env[:NEW_USER_TUTORIALS][:is_enabled] = false
     end
@@ -459,6 +490,7 @@ class ApplicationController < ActionController::Base
     if !files_domain? && Setting.get('block_html_frames', 'true') == 'true' && !@embeddable
       headers['X-Frame-Options'] = 'ALLOWALL'
     end
+    headers['Strict-Transport-Security'] = 'max-age=31536000' if request.ssl?
     RequestContextGenerator.store_request_meta(request, @context)
     true
   end
@@ -732,7 +764,11 @@ class ApplicationController < ActionController::Base
       # we already know the user can read these courses and groups, so skip
       # the grants_right? check to avoid querying for the various memberships
       # again.
-      enrollment_scope = Enrollment.for_user(@context).current.active_by_date
+      enrollment_scope = Enrollment
+        .shard(opts[:cross_shard] ? @context.in_region_associated_shards : Shard.current)
+        .for_user(@context)
+        .current
+        .active_by_date
       include_groups = !!opts[:include_groups]
       group_ids = nil
 
@@ -743,15 +779,21 @@ class ApplicationController < ActionController::Base
         # view them.
         course_ids = only_contexts.select { |c| c.first == "Course" }.map(&:last)
         unless course_ids.empty?
-          courses = Course.where(:id => course_ids).where(:id => enrollment_scope.select(:course_id)).to_a
+          courses = Course
+            .shard(opts[:cross_shard] ? @context.in_region_associated_shards : Shard.current)
+            .joins(enrollments: :enrollment_state)
+            .merge(enrollment_scope)
+            .where(id: course_ids)
         end
         if include_groups
           group_ids = only_contexts.select { |c| c.first == "Group" }.map(&:last)
-          include_groups = false if group_ids.empty?
+          include_groups = !group_ids.empty?
         end
       else
-        courses = Course.shard(opts[:cross_shard] ? @context.in_region_associated_shards : Shard.current).
-          where(:id => enrollment_scope.select(:course_id)).to_a
+        courses = Course
+          .shard(opts[:cross_shard] ? @context.in_region_associated_shards : Shard.current)
+          .joins(enrollments: :enrollment_state)
+          .merge(enrollment_scope)
       end
 
       groups = []
@@ -1211,6 +1253,8 @@ class ApplicationController < ActionController::Base
 
   # analogous to rescue_action_without_handler from ActionPack 2.3
   def rescue_exception(exception)
+    raise if Rails.env.development? && ENV['BETTER_ERRORS_DISABLE'] != 'true'
+
     ActiveSupport::Deprecation.silence do
       message = "\n#{exception.class} (#{exception.message}):\n"
       message << exception.annoted_source_code.to_s if exception.respond_to?(:annoted_source_code)
@@ -1474,7 +1518,9 @@ class ApplicationController < ActionController::Base
       if @tag.context.is_a?(Assignment)
         @assignment = @tag.context
         @resource_title = @assignment.title
-        @module_tag = @context.context_module_tags.not_deleted.find(params[:module_item_id]) if params[:module_item_id]
+        @module_tag = params[:module_item_id] ?
+          @context.context_module_tags.not_deleted.find(params[:module_item_id]) :
+          @assignment.context_module_tags.first
       else
         @module_tag = @tag
         @resource_title = @tag.title
@@ -1535,7 +1581,8 @@ class ApplicationController < ActionController::Base
         if @assignment
           return unless require_user
           add_crumb(@resource_title)
-          @prepend_template = 'assignments/description'
+          @mark_done = MarkDonePresenter.new(self, @context, params["module_item_id"], @current_user, @assignment)
+          @prepend_template = 'assignments/lti_header'
           @lti_launch.params = adapter.generate_post_payload_for_assignment(@assignment, lti_grade_passback_api_url(@tool), blti_legacy_grade_passback_api_url(@tool), lti_turnitin_outcomes_placement_url(@tool.id))
         else
           @lti_launch.params = adapter.generate_post_payload
@@ -1821,7 +1868,7 @@ class ApplicationController < ActionController::Base
   end
 
   def in_app?
-    @pseudonym_session
+    !!(@current_user ? @pseudonym_session : session[:session_id])
   end
 
   def json_as_text?
@@ -2097,8 +2144,8 @@ class ApplicationController < ActionController::Base
     end
 
     if @page
-      if @context.wiki.grants_right?(@current_user, :manage)
-        mc_status = setup_master_course_restrictions(@page, @context)
+      if @page.grants_any_right?(@current_user, session, :update, :update_content)
+        mc_status = setup_master_course_restrictions(@page, @context, user_can_edit: true)
       end
 
       hash[:WIKI_PAGE] = wiki_page_json(@page, @current_user, session, true, :deep_check_if_needed => true, :master_course_status => mc_status)
@@ -2125,6 +2172,7 @@ class ApplicationController < ActionController::Base
     js_env({
       :URLS => {
         :new_assignment_url => new_polymorphic_url([@context, :assignment]),
+        :new_quiz_url => context_url(@context, :context_quizzes_new_url),
         :course_url => api_v1_course_url(@context),
         :sort_url => reorder_course_assignment_groups_url(@context),
         :assignment_sort_base_url => course_assignment_groups_url(@context),
@@ -2249,5 +2297,55 @@ class ApplicationController < ActionController::Base
 
   def teardown_live_events_context
     LiveEvents.clear_context!
+  end
+
+  # TODO: this belongs in AccountsController but while :course_user_search is still behind a feature flag we
+  # have to let UsersController::index own the /accounts/x/users route so it responds as it used to if the
+  # feature isn't enabled but `return course_user_search` if the feature is enabled. you can't `return` an
+  # action from another controller but you can from a controller you inherit from. Hence why this can be
+  # here in ApplicationController but not AccountsController for now. Once we remove the feature flag,
+  # we should move this back to AccountsController and just change conf/routes.rb to let
+  # AccountsController::users own /accounts/x/users instead UsersController::index
+  def course_user_search
+    return unless authorized_action(@account, @current_user, :read)
+    can_read_course_list = @account.grants_right?(@current_user, session, :read_course_list)
+    can_read_roster = @account.grants_right?(@current_user, session, :read_roster)
+    can_manage_account = @account.grants_right?(@current_user, session, :manage_account_settings)
+
+    unless can_read_course_list || can_read_roster
+      return render_unauthorized_action
+    end
+
+    def localized_timezones(zones)
+      zones.map { |tz| {name: tz.name, localized_name: tz.to_s} }
+    end
+
+    js_env({
+      TIMEZONES: {
+        priority_zones: localized_timezones(I18nTimeZone.us_zones),
+        timezones: localized_timezones(I18nTimeZone.all)
+      },
+      COURSE_ROLES: Role.course_role_data_for_account(@account, @current_user)
+    })
+    js_bundle :account_course_user_search
+    css_bundle :account_course_user_search, :addpeople
+    @page_title = @account.name
+    add_crumb '', '?' # the text for this will be set by javascript
+    js_env({
+      ROOT_ACCOUNT_NAME: @domain_root_account.name, # used in AddPeopleApp modal
+      ACCOUNT_ID: @account.id,
+      ROOT_ACCOUNT_ID: @account.root_account.id,
+      PERMISSIONS: {
+        can_read_course_list: can_read_course_list,
+        can_read_roster: can_read_roster,
+        can_create_courses: @account.grants_right?(@current_user, session, :manage_courses),
+        can_create_users: @account.root_account? && @account.grants_right?(@current_user, session, :manage_user_logins),
+        analytics: @account.service_enabled?(:analytics),
+        can_masquerade: @account.grants_right?(@current_user, session, :become_user),
+        can_message_users: @account.grants_right?(@current_user, session, :send_messages),
+        can_edit_users: @account.grants_any_right?(@current_user, session, :manage_students, :manage_user_logins)
+      }
+    })
+    render html: '', layout: true
   end
 end

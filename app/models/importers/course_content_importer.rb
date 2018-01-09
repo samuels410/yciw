@@ -209,7 +209,10 @@ module Importers
             event.reload
             event.start_at = shift_date(event.start_at, shift_options)
             event.end_at = shift_date(event.end_at, shift_options)
-            event.all_day_date = shift_date(event.all_day_date.to_datetime, shift_options).try(:to_date) if event.all_day_date
+            if event.all_day_date
+              ad_time = event.all_day_date.in_time_zone(shift_options[:time_zone] || Time.zone)
+              event.all_day_date = shift_date(ad_time, shift_options).try(:to_date)
+            end
             event.save_without_broadcasting
           end
 
@@ -306,15 +309,15 @@ module Importers
         end
         course.tab_configuration = tab_config
       end
-      if settings[:storage_quota] && ( migration.for_course_copy? || course.account.grants_right?(migration.user, :manage_courses))
+      if settings[:storage_quota] && course.account.grants_right?(migration.user, :manage_storage_quotas)
         course.storage_quota = settings[:storage_quota]
       end
       atts = Course.clonable_attributes
       atts -= Canvas::Migration::MigratorHelper::COURSE_NO_COPY_ATTS
       course.settings_will_change! unless atts.empty?
 
-      # superhax to force new wiki front page if home view changed
-      if settings['default_view'] && settings['default_view'] != course.default_view && data[:wikis]
+      # superhax to force new wiki front page if home view changed (or is master course sync)
+      if settings['default_view'] && data[:wikis] && (migration.for_master_course_import? || (settings['default_view'] != course.default_view))
         if page_hash = data[:wikis].detect{|h| h[:front_page]}
           if page = migration.find_imported_migration_item(WikiPage, page_hash[:migration_id])
             page.set_as_front_page!

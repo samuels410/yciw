@@ -33,6 +33,14 @@ function indexById (collection = []) {
   }, {});
 }
 
+function pointsPossibleCurrent (assignments, item) {
+  const assignment = assignments[item.links.assignment];
+  if (!assignment || assignment.points_possible == null) {
+    return '–';
+  }
+  return assignment.points_possible.toString();
+}
+
 function formatHistoryItems (data) {
   const historyItems = data.events || [];
   const users = indexById(data.users);
@@ -47,9 +55,11 @@ function formatHistoryItems (data) {
       grader: users[item.links.grader] ? users[item.links.grader].name : '',
       gradeAfter: item.grade_after || '',
       gradeBefore: item.grade_before || '',
+      gradeCurrent: item.grade_current || '',
       id: item.id,
-      pointsPossibleAfter: item.points_possible_after ? item.points_possible_after.toString() : '',
-      pointsPossibleBefore: item.points_possible_before ? item.points_possible_before.toString() : '',
+      pointsPossibleAfter: item.points_possible_after ? item.points_possible_after.toString() : '–',
+      pointsPossibleBefore: item.points_possible_before ? item.points_possible_before.toString() : '–',
+      pointsPossibleCurrent: pointsPossibleCurrent(assignments, item),
       student: users[item.links.student] ? users[item.links.student].name : '',
     }
   ));
@@ -112,5 +122,4 @@ export default {
   fetchHistoryNextPageStart,
   fetchHistoryNextPageSuccess,
   fetchHistoryNextPageFailure,
-  formatHistoryItems
 };

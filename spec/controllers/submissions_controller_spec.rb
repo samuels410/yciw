@@ -72,9 +72,30 @@ describe SubmissionsController do
       expect(assigns[:submission][:submission_type]).to eql("online_upload")
     end
 
+    it "accepts 'eula_agreement_timestamp' params and persists it in the 'turnitin_data'" do
+      course_with_student_logged_in(:active_all => true)
+      timestamp = Time.now.to_i
+      @assignment = @course.assignments.create!(:title => "some assignment", :submission_types => "online_upload")
+      a1 = attachment_model(:context => @user)
+      post 'create',
+        params: {
+          :course_id => @course.id,
+          :assignment_id => @assignment.id,
+          :submission => {
+            :submission_type => "online_upload",
+            :attachment_ids => a1.id,
+            :eula_agreement_timestamp => timestamp
+          },
+          :attachments => {
+            "0" => { :uploaded_data => "" },
+            "-1" => { :uploaded_data => "" }
+          }
+        }
+      expect(assigns[:submission].turnitin_data[:eula_agreement_timestamp]).to eq timestamp.to_s
+    end
+
     it "should copy attachments to the submissions folder if that feature is enabled" do
       course_with_student_logged_in(:active_all => true)
-      @course.root_account.enable_feature! :submissions_folder
       @assignment = @course.assignments.create!(:title => "some assignment", :submission_types => "online_upload")
       att = attachment_model(:context => @user, :uploaded_data => stub_file_data('test.txt', 'asdf', 'text/plain'))
       post 'create', params: {:course_id => @course.id, :assignment_id => @assignment.id, :submission => {:submission_type => "online_upload", :attachment_ids => att.id}, :attachments => { "0" => { :uploaded_data => "" }, "-1" => { :uploaded_data => "" } }}
@@ -694,6 +715,30 @@ describe SubmissionsController do
       expect(body['published_score']).to eq 10
     end
 
+    it "mark read if reading one's own submission" do
+      user_session(@student)
+      request.accept = Mime[:json].to_s
+      @submission.mark_unread(@student)
+      @submission.save!
+      get :show, params: {course_id: @context.id, assignment_id: @assignment.id, id: @student.id}, format: :json
+      expect(response).to be_success
+      submission = Submission.find(@submission.id)
+      expect(submission.read?(@student)).to be_truthy
+    end
+
+    it "don't mark read if reading someone else's submission" do
+      user_session(@teacher)
+      request.accept = Mime[:json].to_s
+      @submission.mark_unread(@student)
+      @submission.mark_unread(@teacher)
+      @submission.save!
+      get :show, params: {course_id: @context.id, assignment_id: @assignment.id, id: @student.id}, format: :json
+      expect(response).to be_success
+      submission = Submission.find(@submission.id)
+      expect(submission.read?(@student)).to be_falsey
+      expect(submission.read?(@teacher)).to be_falsey
+    end
+
     it "renders json with scores for teachers on muted assignments" do
       @assignment.update!(muted: true)
       request.accept = Mime[:json].to_s
@@ -738,6 +783,8 @@ describe SubmissionsController do
       @assessor = @student
       outcome_with_rubric
       @association = @rubric.associate_with @assignment, @context, :purpose => 'grading'
+      @assignment.peer_reviews = true
+      @assignment.save!
       @assignment.assign_peer_review(@assessor, @submission.user)
       @assessment = @association.assess(:assessor => @assessor, :user => @submission.user, :artifact => @submission, :assessment => { :assessment_type => 'grading'})
       user_session(@assessor)

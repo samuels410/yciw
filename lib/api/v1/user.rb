@@ -50,22 +50,21 @@ module Api::V1::User
       if !excludes.include?('pseudonym') && user_json_is_admin?(context, current_user)
         include_root_account = @domain_root_account.trust_exists?
         pseudonym = SisPseudonym.for(user, @domain_root_account, type: :implicit, require_sis: false)
-        sis_pseudonym = pseudonym if pseudonym&.sis_user_id
-        enrollment_json_opts[:sis_pseudonym] = sis_pseudonym
-        if sis_pseudonym
-          # the sis fields on pseudonym are poorly named -- sis_user_id is
-          # the id in the SIS import data, where on every other table
-          # that's called sis_source_id.
+        enrollment_json_opts[:sis_pseudonym] = pseudonym if pseudonym&.sis_user_id
+        # the sis fields on pseudonym are poorly named -- sis_user_id is
+        # the id in the SIS import data, where on every other table
+        # that's called sis_source_id.
 
-          if user_can_read_sis_data?(current_user, context)
-            json.merge! :sis_user_id => sis_pseudonym.sis_user_id,
-                        :integration_id => sis_pseudonym.integration_id,
-                        # TODO: don't send sis_login_id; it's garbage data
-                        :sis_login_id => sis_pseudonym.unique_id
+        if user_can_read_sis_data?(current_user, context)
+          json.merge! :sis_user_id => pseudonym&.sis_user_id,
+                      :integration_id => pseudonym&.integration_id
+          # TODO: don't send sis_login_id; it's garbage data
+          if @domain_root_account.settings['return_sis_login_id'] == 'true'
+            json.merge! :sis_login_id => pseudonym&.unique_id
           end
-          json[:sis_import_id] = sis_pseudonym.sis_batch_id if @domain_root_account.grants_right?(current_user, session, :manage_sis)
-          json[:root_account] = HostUrl.context_host(sis_pseudonym.account) if include_root_account
         end
+        json[:sis_import_id] = pseudonym&.sis_batch_id if @domain_root_account.grants_right?(current_user, session, :manage_sis)
+        json[:root_account] = HostUrl.context_host(pseudonym&.account) if include_root_account
 
         if pseudonym
           json[:login_id] = pseudonym.unique_id
@@ -132,6 +131,10 @@ module Api::V1::User
       if includes.include?('time_zone')
         zone = user.time_zone || @domain_root_account.try(:default_time_zone) || Time.zone
         json[:time_zone] = zone.name
+      end
+
+      if includes.include?('lti_id')
+        json[:lti_id] = user.lti_context_id
       end
     end
   end
@@ -268,13 +271,14 @@ module Api::V1::User
     }
 
     if grade_permissions?(user, enrollment)
-      gpid = grading_period(enrollment.course, opts)&.id
+      period = grading_period(enrollment.course, opts)
+      score_opts = period ? { grading_period_id: period.id } : Score.params_for_course
 
-      grades[:current_score] = enrollment.computed_current_score(grading_period_id: gpid)
-      grades[:current_grade] = enrollment.computed_current_grade(grading_period_id: gpid)
-      grades[:final_score]   = enrollment.computed_final_score(grading_period_id: gpid)
-      grades[:final_grade]   = enrollment.computed_final_grade(grading_period_id: gpid)
-      grades[:grading_period_id] = gpid if opts[:current_grading_period_scores]
+      grades[:current_score] = enrollment.computed_current_score(score_opts)
+      grades[:current_grade] = enrollment.computed_current_grade(score_opts)
+      grades[:final_score]   = enrollment.computed_final_score(score_opts)
+      grades[:final_grade]   = enrollment.computed_final_grade(score_opts)
+      grades[:grading_period_id] = period&.id if opts[:current_grading_period_scores]
     end
     grades
   end

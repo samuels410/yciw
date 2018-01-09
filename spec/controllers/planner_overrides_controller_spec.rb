@@ -121,10 +121,12 @@ describe PlannerOverridesController do
 
             @c1 = course_with_student(:active_all => true, :user => @u).course
             @a1 = course_assignment
+            @pn1 = planner_note_model(:todo_date => 1.day.from_now, :course => @c1)
 
             @e2 = course_with_student(:active_all => true, :user => @u)
             @c2 = @e2.course
             @a2 = course_assignment
+            @pn2 = planner_note_model(:todo_date => 1.day.from_now, :course => @c2)
             @e2.conclude
           end
 
@@ -135,13 +137,21 @@ describe PlannerOverridesController do
           it "should not include objects from concluded courses by default" do
             get :items_index
             response_json = json_parse(response.body)
-            expect(response_json.map { |i| i["plannable"]["id"] }).not_to be_include(@a2.id)
+            items = response_json.map { |i|  [i["plannable_type"], i["plannable"]["id"]] }
+            expect(items).to include ['assignment', @a1.id]
+            expect(items).to include ['planner_note', @pn1.id]
+            expect(items).to_not include ['assignment', @a2.id]
+            expect(items).to_not include ['planner_note', @pn2.id]
           end
 
           it "should include objects from concluded courses if specified" do
             get :items_index, params: {include: %w{concluded}}
             response_json = json_parse(response.body)
-            expect(response_json.map { |i| i["plannable"]["id"] }).to be_include(@a2.id)
+            items = response_json.map { |i|  [i["plannable_type"], i["plannable"]["id"]] }
+            expect(items).to include ['assignment', @a1.id]
+            expect(items).to include ['planner_note', @pn1.id]
+            expect(items).to include ['assignment', @a2.id]
+            expect(items).to include ['planner_note', @pn2.id]
           end
         end
 
@@ -496,6 +506,30 @@ describe PlannerOverridesController do
 
               get :items_index, params: {filter: "new_activity"}
               expect(json_parse(response.body).length).to eq 1
+            end
+
+            it "should return graded discussions with unread replies" do
+              @topic.change_read_state('read', @student)
+              assign = assignment_model(course: @course, due_at: Time.zone.now)
+              topic = @course.discussion_topics.create!(course: @course, assignment: assign)
+              topic.change_read_state('read', @student)
+
+              get :items_index, params: {filter: "new_activity"}
+              expect(json_parse(response.body)).to be_empty
+
+              entry = topic.discussion_entries.create!(:message => "Hello!", :user => @student)
+              reply = entry.reply_from(:user => @teacher, :text => "ohai!")
+              topic.reload
+
+              get :items_index, params: {filter: "new_activity"}
+              response_json = json_parse(response.body)
+              expect(response_json.length).to eq 1
+              expect(response_json.first["plannable_id"]).to eq assign.id
+              expect(response_json.first["plannable"]["id"]).to eq topic.id
+
+              reply.change_read_state('read', @student)
+              get :items_index, params: {filter: "new_activity"}
+              expect(json_parse(response.body)).to be_empty
             end
           end
         end

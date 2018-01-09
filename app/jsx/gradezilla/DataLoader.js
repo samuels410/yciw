@@ -25,7 +25,8 @@ const submissionsParams = {
   response_fields: [
     'id', 'user_id', 'url', 'score', 'grade', 'submission_type', 'submitted_at', 'assignment_id',
     'grade_matches_current_submission', 'attachments', 'late', 'missing', 'workflow_state', 'excused',
-    'points_deducted', 'seconds_late', 'cached_due_date', 'entered_score', 'entered_grade', 'grading_period_id'
+    'points_deducted', 'seconds_late', 'cached_due_date', 'entered_score', 'entered_grade', 'grading_period_id',
+    'late_policy_status'
   ]
 };
 
@@ -58,7 +59,7 @@ function getContextModules (url) {
 }
 
 function getCustomColumns (url) {
-  return $.ajaxJSON(url, 'GET', { include_hidden: true });
+  return cheaterDepaginate(url, { include_hidden: true });
 }
 
 function gotSubmissionsChunk (data) {
@@ -74,12 +75,7 @@ function getPendingSubmissions () {
   while (pendingStudentsForSubmissions.length) {
     const studentIds = pendingStudentsForSubmissions.splice(0, submissionChunkSize);
     submissionChunkCount++;
-    $.ajaxJSON(
-      submissionURL,
-      'GET',
-      { student_ids: studentIds, ...submissionsParams },
-      gotSubmissionsChunk
-    );
+    cheaterDepaginate(submissionURL, { student_ids: studentIds, ...submissionsParams }).then(gotSubmissionsChunk);
   }
 }
 
@@ -156,25 +152,30 @@ function getStudents (options, gotStudentIds) {
   return studentsLoaded;
 }
 
-function getDataForColumn (column, url, params, cb) {
-  const columnUrl = url.replace(/:id/, column.id);
-  const augmentedCallback = data => cb(column, data);
+function getDataForColumn (columnId, url, params, cb) {
+  const columnUrl = url.replace(/:id/, columnId);
+  const augmentedCallback = data => cb(columnId, data);
   return cheaterDepaginate(columnUrl, params, augmentedCallback);
 }
 
-function getCustomColumnData (url, params, cb, customColumnsDfd, waitForDfds) {
+function getCustomColumnData (options, customColumnsDfd, waitForDfds) {
+  const url = options.customColumnDataURL;
+  const params = options.customColumnDataParams;
+  const cb = options.customColumnDataPageCb;
   const customColumnDataLoaded = $.Deferred();
 
   if (url) {
-    let customColumnDataDfds;
-
     // waitForDfds ensures that custom column data is loaded *last*
     $.when(...waitForDfds).then(() => {
-      customColumnsDfd.then((customColumns) => {
-        customColumnDataDfds = customColumns.map(col => getDataForColumn(col, url, params, cb));
-
+      if (options.customColumnIds) {
+        const customColumnDataDfds = options.customColumnIds.map(columnId => getDataForColumn(columnId, url, params, cb));
         $.when(...customColumnDataDfds).then(() => customColumnDataLoaded.resolve());
-      });
+      } else {
+        customColumnsDfd.then((customColumns) => {
+          const customColumnDataDfds = customColumns.map(col => getDataForColumn(col.id, url, params, cb));
+          $.when(...customColumnDataDfds).then(() => customColumnDataLoaded.resolve());
+        });
+      }
     });
   }
 
@@ -199,13 +200,7 @@ function loadGradebookData (opts) {
   const gotSubmissions = getSubmissions(opts.submissionsURL, opts.submissionsChunkCb, opts.submissionsChunkSize);
 
   // Custom Column Data will load only after custom columns and all submissions.
-  const gotCustomColumnData = getCustomColumnData(
-    opts.customColumnDataURL,
-    opts.customColumnDataParams,
-    opts.customColumnDataPageCb,
-    gotCustomColumns,
-    [gotSubmissions]
-  );
+  const gotCustomColumnData = getCustomColumnData(opts, gotCustomColumns, [gotSubmissions]);
 
   return {
     gotAssignmentGroups,

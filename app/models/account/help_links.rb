@@ -28,7 +28,7 @@ class Account::HelpLinks
           :id => :instructor_question
         }.freeze,
         {
-          :available_to => ['user', 'student', 'teacher', 'admin'],
+          :available_to => ['user', 'student', 'teacher', 'admin', 'observer', 'unenrolled'],
           :text => -> { I18n.t('#help_dialog.search_the_canvas_guides', 'Search the Canvas Guides') },
           :subtext => -> { I18n.t('#help_dialog.canvas_help_sub', 'Find answers to common questions') },
           :url => Setting.get('help_dialog_canvas_guide_url', 'http://community.canvaslms.com/community/answers/guides'),
@@ -36,7 +36,7 @@ class Account::HelpLinks
           :id => :search_the_canvas_guides
         }.freeze,
         {
-          :available_to => ['user', 'student', 'teacher', 'admin'],
+          :available_to => ['user', 'student', 'teacher', 'admin', 'observer', 'unenrolled'],
           :text => -> { I18n.t('#help_dialog.report_problem', 'Report a Problem') },
           :subtext => -> { I18n.t('#help_dialog.report_problem_sub', 'If Canvas misbehaves, tell us about it') },
           :url => '#create_ticket',
@@ -59,18 +59,31 @@ class Account::HelpLinks
       end
     end
 
-    # take an array of links, and replace the duplicated default links with
-    # the canonical version from the code. This makes sure the text translates,
-    # and that updates to the link are pushed through. available_to is not copied,
-    # so that a school can still customize it
+    # take an array of links, and infer the default text, subtext, and url for links that don't customize these
+    # (text is only stored in account settings if it's customized)
     def map_default_links(links)
       links.map do |link|
         default_link = link[:type] == 'default' && default_links_hash[link[:id]&.to_sym]
         if default_link
           link = link.dup
-          link[:text] = default_link[:text]
-          link[:subtext] = default_link[:subtext]
-          link[:url] = default_link[:url]
+          link[:text] ||= default_link[:text]
+          link[:subtext] ||= default_link[:subtext]
+          link[:url] ||= default_link[:url]
+        end
+        link
+      end
+    end
+
+    # complementing the above method: for each link, remove the text, subtext, and/or url
+    # if these match the defaults from the code. this way, other users will see localized text
+    def process_links_before_save(links)
+      links.map do |link|
+        default_link = link[:type] == 'default' && default_links_hash[link[:id]&.to_sym]
+        if default_link
+          link = link.dup
+          link.delete(:text) if link[:text] == default_link[:text].call
+          link.delete(:subtext) if link[:subtext] == default_link[:subtext].call
+          link.delete(:url) if link[:url] == default_link[:url]
         end
         link
       end

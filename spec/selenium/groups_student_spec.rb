@@ -27,7 +27,6 @@ describe "student groups" do
 
   describe "as a student" do
 
-
     before(:each) do
       course_with_student_logged_in(:active_all => true)
     end
@@ -171,7 +170,7 @@ describe "student groups" do
         expect(f('.unassigned-students')).to include_text("#{@students[0].name}")
         # Fourth student should remain group leader
         expect(fj(".group[data-id=\"#{@testgroup[0].id}\"] ." \
-      "group-user:contains(\"#{@students[3].name}\") .group-leader")).to be_displayed
+      ".group-leader:contains(\"#{@students[3].name}\")")).to be_displayed
       end
     end
 
@@ -187,11 +186,6 @@ describe "student groups" do
         f(".student-group-join a").click
 
         expect(f(".student-group-students")).to include_text("0 students")
-      end
-
-      it "leaving the group should change the dialog to join", priority:"2", test_id: 180683 do
-        f(".student-group-join a").click
-
         expect(f(".student-group-join a")).to include_text("JOIN")
       end
 

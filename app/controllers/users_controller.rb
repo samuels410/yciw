@@ -94,10 +94,6 @@ require 'atom'
 #           "type": "integer",
 #           "format": "int64"
 #         },
-#         "sis_login_id": {
-#           "description": "DEPRECATED: The SIS login ID associated with the user. Please use the sis_user_id or login_id. This field will be removed in a future version of the API.",
-#           "type": "string"
-#         },
 #         "integration_id": {
 #           "description": "The integration_id associated with the user.  This field is only included if the user came from a SIS import and has permissions to view SIS information.",
 #           "example": "ABC59802",
@@ -204,8 +200,9 @@ class UsersController < ApplicationController
     return render_unauthorized_action unless enrollment.grants_right?(@current_user, session, :read_grades)
 
     grading_period_id = generate_grading_period_id(params[:grading_period_id])
+    opts = { grading_period_id: grading_period_id } if grading_period_id
     render json: {
-      grade: enrollment.computed_current_score(grading_period_id: grading_period_id),
+      grade: enrollment.computed_current_score(opts),
       hide_final_grades: enrollment.course.hide_final_grades?
     }
   end
@@ -367,7 +364,7 @@ class UsersController < ApplicationController
   end
 
   # @API List users in account
-  # Retrieve the list of users associated with this account.
+  # A paginated list of of users associated with this account.
   #
   # @argument search_term [String]
   #   The partial name or full ID of the users to match and return in the
@@ -393,6 +390,11 @@ class UsersController < ApplicationController
   # @returns [User]
   def index
     get_context
+    if !api_request? && @context.feature_enabled?(:course_user_search)
+      @account ||= @context
+      return course_user_search
+    end
+
     if authorized_action(@context, @current_user, :read_roster)
       @root_account = @context.root_account
       @query = (params[:user] && params[:user][:name]) || params[:term]
@@ -487,12 +489,14 @@ class UsersController < ApplicationController
           avatar_image_url: @user.avatar_image_url,
           sortable_name: @user.sortable_name,
           email: @user.email,
-          login_id: @user.pseudonym.login,
-          sis_id: @user.pseudonym.sis_user_id,
-          integration_id: @user.pseudonym.integration_id
+          pseudonyms: @user.all_active_pseudonyms.map do |pseudonym|
+            { login_id: pseudonym.login,
+              sis_id: pseudonym.sis_user_id,
+              integration_id: pseudonym.integration_id }
+          end
         }
       }
-      render :text => '<div id="act_as_modal"></div>'.html_safe, :layout => 'layouts/bare'
+      render :html => '<div id="application"></div><div id="act_as_modal"></div>'.html_safe, :layout => 'layouts/bare'
     end
   end
 
@@ -508,7 +512,6 @@ class UsersController < ApplicationController
 
   def user_dashboard
     if planner_enabled?
-      js_env :DEBUG_PLANNER => Rails.env.development? || Rails.env.test?
       js_bundle :react_todo_sidebar
       css_bundle :react_todo_sidebar
     end
@@ -771,7 +774,7 @@ class UsersController < ApplicationController
     @courses = @query.present? ?
       @context.manageable_courses_name_like(@query, include_concluded) :
       @context.manageable_courses(include_concluded).limit(500)
-    @courses = @courses.select("courses.*,#{Course.best_unicode_collation_key('name')} AS sort_key").order('sort_key')
+    @courses = @courses.select("courses.*,#{Course.best_unicode_collation_key('name')} AS sort_key").order('sort_key').preload(:enrollment_term).to_a
 
     cancel_cache_buster
     expires_in 30.minutes
@@ -788,7 +791,7 @@ class UsersController < ApplicationController
 
   include Api::V1::TodoItem
   # @API List the TODO items
-  # Returns the current user's list of todo items, as seen on the user dashboard.
+  # A paginated list of the current user's list of todo items, as seen on the user dashboard.
   #
   # @argument include[] [String, "ungraded_quizzes"]
   #   "ungraded_quizzes":: Optionally include ungraded quizzes (such as practice quizzes and surveys) in the list.
@@ -843,7 +846,7 @@ class UsersController < ApplicationController
       todo_item_json(a, @current_user, session, 'submitting')
     }
     if Array(params[:include]).include? 'ungraded_quizzes'
-      submitting += @current_user.ungraded_quizzes_needing_submitting.map { |q| todo_item_json(q, @current_user, session, 'submitting') }
+      submitting += @current_user.ungraded_quizzes(:needing_submitting => true).map { |q| todo_item_json(q, @current_user, session, 'submitting') }
       submitting.sort_by! { |j| (j[:assignment] || j[:quiz])[:due_at] || CanvasSort::Last }
     end
     render :json => (grading + submitting)
@@ -853,7 +856,7 @@ class UsersController < ApplicationController
   include Api::V1::CalendarEvent
 
   # @API List upcoming assignments, calendar events
-  # Returns the current user's upcoming events, i.e. the same things shown
+  # A paginated list of the current user's upcoming events, i.e. the same things shown
   # in the dashboard 'Coming Up' sidebar.
   #
   # @example_response
@@ -932,7 +935,7 @@ class UsersController < ApplicationController
   end
 
   # @API List Missing Submissions
-  # returns past-due assignments for which the student does not have a submission.
+  # A paginated list of past-due assignments for which the student does not have a submission.
   # The user sending the request must either be an admin or a parent observer using the parent app
   #
   # @argument user_id
@@ -1737,7 +1740,7 @@ class UsersController < ApplicationController
             :url => av_json['url'] }
         end
       elsif url = avatar.try(:[], :url)
-        user_params[:avatar_image] = { :type => 'external', :url => url }
+        user_params[:avatar_image] = { :url => url }
       end
     end
 
@@ -1994,8 +1997,8 @@ class UsersController < ApplicationController
       user_id = User.user_id_from_avatar_key(params[:user_id])
     end
     account_avatar_setting = service_enabled?(:avatars) ? @domain_root_account.settings[:avatars] || 'enabled' : 'disabled'
-    user_id, user_shard = Shard.local_id_for(user_id)
-    user_shard ||= Shard.current
+    user_id = Shard.global_id_for(user_id)
+    user_shard = Shard.shard_for(user_id)
     url = user_shard.activate do
       Rails.cache.fetch(Cacher.avatar_cache_key(user_id, account_avatar_setting)) do
         user = User.where(id: user_id).first if user_id.present?
@@ -2126,15 +2129,15 @@ class UsersController < ApplicationController
       # check just in case
       existing_rows = Pseudonym.active.where(:account_id => @context.root_account).joins(:user => :communication_channels).joins(:account).
         where("communication_channels.workflow_state<>'retired' AND path_type='email' AND LOWER(path) = ?", email.downcase).
-        pluck('communication_channels.path', :user_id, :account_id, 'users.name', 'accounts.name')
+        pluck('communication_channels.path', :user_id, "users.uuid", :account_id, 'users.name', 'accounts.name')
 
       if existing_rows.any?
-        existing_users = existing_rows.map do |address, user_id, account_id, user_name, account_name|
-         {:address => address, :user_id => user_id, :user_name => user_name, :account_id => account_id, :account_name => account_name}
+        existing_users = existing_rows.map do |address, user_id, user_uuid, account_id, user_name, account_name|
+         {:address => address, :user_id => user_id, :user_token => User.token(user_id, user_uuid), :user_name => user_name, :account_id => account_id, :account_name => account_name}
         end
         errored_users << user_hash.merge(:errors => [{:message => "Matching user(s) already exist"}], :existing_users => existing_users)
       elsif user.save
-        invited_users << user_hash.merge(:id => user.id)
+        invited_users << user_hash.merge(:id => user.id, :user_token => user.token)
       else
         errored_users << user_hash.merge(user.errors.as_json)
       end
@@ -2252,7 +2255,8 @@ class UsersController < ApplicationController
       grading_period_id = generate_grading_period_id(
         grading_periods.dig(course.id, :selected_period_id)
       )
-      computed_score = enrollment.computed_current_score(grading_period_id: grading_period_id)
+      opts = { grading_period_id: grading_period_id} if grading_period_id
+      computed_score = enrollment.computed_current_score(opts)
       grades[:student_enrollments][course.id] = computed_score
     end
     grades
@@ -2260,8 +2264,9 @@ class UsersController < ApplicationController
 
   def grades_from_enrollments(enrollments, grading_period_id: nil)
     grades = {}
+    opts = { grading_period_id: grading_period_id } if grading_period_id
     enrollments.each do |enrollment|
-      computed_score = enrollment.computed_current_score(grading_period_id: grading_period_id)
+      computed_score = enrollment.computed_current_score(opts)
       grades[enrollment.user_id] = computed_score
     end
     grades
@@ -2470,7 +2475,7 @@ class UsersController < ApplicationController
       end
       @user.save!
       if @observee && !@user.user_observees.where(user_id: @observee).exists?
-        @user.user_observees << @user.user_observees.create_or_restore(user_id: @observee)
+        UserObserver.create_or_restore(observee: @observee, observer: @user)
       end
 
       if notify_policy.is_self_registration?

@@ -421,25 +421,6 @@ define [
     self = @setupThis('points', null)
     equal @weightedGrades.call(self), false
 
-  QUnit.module 'Gradebook#displayPointTotals',
-    setupThis:(show_total_grade_as_points, weightedGrades) ->
-      options: { show_total_grade_as_points }
-      weightedGrades: () -> weightedGrades
-    setup: ->
-      @displayPointTotals = Gradebook.prototype.displayPointTotals
-
-  test 'returns true when grades are not weighted and show_total_grade_as_points is true', ->
-    self = @setupThis(true, false)
-    equal @displayPointTotals.call(self), true
-
-  test 'returns false when grades are weighted', ->
-    self = @setupThis(true, true)
-    equal @displayPointTotals.call(self), false
-
-  test 'returns false when show_total_grade_as_points is false', ->
-    self = @setupThis(false, false)
-    equal @displayPointTotals.call(self), false
-
   QUnit.module 'Gradebook#showNotesColumn',
     setup: ->
       @loadNotes = @stub(DataLoader, 'getDataForColumn')
@@ -467,7 +448,9 @@ define [
       @assignments = {
         '61890000000013319': { name: 'Assignment #1' }
       }
-      @student = @stub().returns({})
+      @student = @stub().returns({
+        name: 'Some Student'
+      })
       @options = {}
 
       @fixture = document.createElement('div')
@@ -487,6 +470,10 @@ define [
         preventDefault: @stub(),
         currentTarget: @fixture
       }
+      @$grid =
+        find: =>
+          hasClass: =>
+            false
       @grid = {
         getActiveCellNode: @stub().returns(@fixture)
       }
@@ -517,11 +504,25 @@ define [
   test 'when editable, calls SubmissionDetailsDialog', ->
     @cellCommentClickHandler(@event)
 
-    expectedArguments = {
+    expectedArguments =
       0: { name: 'Assignment #1' },
-      1: {},
-      2: {}
-    }
+      1: { name: 'Some Student' },
+      2: { anonymous: false }
+
+    equal SubmissionDetailsDialog.open.callCount, 1
+    deepEqual expectedArguments, @submissionDialogArgs
+
+  test 'when editable, calls SubmissionDetailsDialog', ->
+    @$grid =
+      find: =>
+        hasClass: =>
+          true
+    @cellCommentClickHandler(@event)
+
+    expectedArguments =
+      0: { name: 'Assignment #1' },
+      1: { name: 'Student' },
+      2: { anonymous: true }
 
     equal SubmissionDetailsDialog.open.callCount, 1
     deepEqual expectedArguments, @submissionDialogArgs
@@ -626,27 +627,37 @@ define [
 
     test 'updates effectiveDueDates with the submissions', () ->
       gradebook.gotSubmissionsChunk(studentSubmissions)
-      deepEqual(Object.keys(gradebook.effectiveDueDates), ['201', '202'])
-      deepEqual(Object.keys(gradebook.effectiveDueDates[201]), ['1101', '1102'])
-      deepEqual(Object.keys(gradebook.effectiveDueDates[202]), ['1101'])
+      gradebook.gridReady.resolve().then =>
+        deepEqual(Object.keys(gradebook.effectiveDueDates), ['201', '202'])
+        deepEqual(Object.keys(gradebook.effectiveDueDates[201]), ['1101', '1102'])
+        deepEqual(Object.keys(gradebook.effectiveDueDates[202]), ['1101'])
+
+    test 'waits for gridReady to resolve', () ->
+      deepEqual(Object.keys(gradebook.effectiveDueDates), [])
+      gradebook.gotSubmissionsChunk(studentSubmissions)
+      gradebook.gridReady.resolve().then =>
+        deepEqual(Object.keys(gradebook.effectiveDueDates), ['201', '202'])
 
     test 'updates effectiveDueDates on related assignments', () ->
       gradebook.assignments =
         201: { id: '201', name: 'Math Assignment', published: true },
         202: { id: '202', name: 'English Assignment', published: false }
       gradebook.gotSubmissionsChunk(studentSubmissions)
-      deepEqual(Object.keys(gradebook.assignments[201].effectiveDueDates), ['1101', '1102'])
-      deepEqual(Object.keys(gradebook.assignments[202].effectiveDueDates), ['1101'])
+      gradebook.gridReady.resolve().then =>
+        deepEqual(Object.keys(gradebook.assignments[201].effectiveDueDates), ['1101', '1102'])
+        deepEqual(Object.keys(gradebook.assignments[202].effectiveDueDates), ['1101'])
 
     test 'updates inClosedGradingPeriod on related assignments', () ->
       gradebook.assignments =
         201: { id: '201', name: 'Math Assignment', published: true },
         202: { id: '202', name: 'English Assignment', published: false }
       gradebook.gotSubmissionsChunk(studentSubmissions)
-      deepEqual(Object.keys(gradebook.assignments[201].effectiveDueDates), ['1101', '1102'])
-      deepEqual(Object.keys(gradebook.assignments[202].effectiveDueDates), ['1101'])
+      gradebook.gridReady.resolve().then =>
+        deepEqual(Object.keys(gradebook.assignments[201].effectiveDueDates), ['1101', '1102'])
+        deepEqual(Object.keys(gradebook.assignments[202].effectiveDueDates), ['1101'])
 
     test 'sets up grading for the related students', () ->
       gradebook.gotSubmissionsChunk(studentSubmissions)
-      [students] = gradebook.setupGrading.lastCall.args
-      deepEqual(students.map((student) => student.id), ['1101', '1102'])
+      gradebook.gridReady.resolve().then =>
+        [students] = gradebook.setupGrading.lastCall.args
+        deepEqual(students.map((student) => student.id), ['1101', '1102'])

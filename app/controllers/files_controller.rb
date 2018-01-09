@@ -399,7 +399,7 @@ class FilesController < ApplicationController
     # verify that the requested attachment belongs to the submission
     return render_unauthorized_action if @submission && !@submission.includes_attachment?(@attachment)
     if @submission ? authorized_action(@submission, @current_user, :read) : authorized_action(@attachment, @current_user, :download)
-      render :json  => { :public_url => @attachment.authenticated_s3_url(:secure => request.ssl?) }
+      render :json  => { :public_url => @attachment.authenticated_url(:secure => request.ssl?) }
     end
   end
 
@@ -538,11 +538,11 @@ class FilesController < ApplicationController
           # some form.
           if @current_user &&
              (attachment.canvadocable? ||
-              (service_enabled?(:google_docs_previews) && attachment.authenticated_s3_url))
+              (service_enabled?(:google_docs_previews) && attachment.authenticated_url))
             attachment.context_module_action(@current_user, :read)
           end
-          if url = service_enabled?(:google_docs_previews) && attachment.authenticated_s3_url
-            json[:attachment][:authenticated_s3_url] = url
+          if url = service_enabled?(:google_docs_previews) && attachment.authenticated_url
+            json[:attachment][:authenticated_url] = url
           end
 
           json_include = if @attachment.context.is_a?(User) || @attachment.context.is_a?(Course)
@@ -581,6 +581,7 @@ class FilesController < ApplicationController
       # if the file doesn't exist, don't leak its existence (and the context's name) to an unauthenticated user
       # (note that it is possible to have access to the file without :read on the context, e.g. with submissions)
       return unless authorized_action(@context, @current_user, :read)
+      @include_js_env = true
       return render 'shared/errors/file_not_found',
         status: :bad_request,
         formats: [:html]
@@ -705,8 +706,7 @@ class FilesController < ApplicationController
           @folder = @context.folders.active.where(id: params[:attachment][:folder_id]).first
           return unless authorized_action(@folder, @current_user, :manage_contents)
         end
-        if intent == 'submit' && context.respond_to?(:submissions_folder) &&
-            @asset && @asset.context.root_account.feature_enabled?(:submissions_folder)
+        if intent == 'submit' && context.respond_to?(:submissions_folder) && @asset
           @folder ||= @context.submissions_folder(@asset.context)
         end
         @folder ||= Folder.unfiled_folder(@context)
@@ -774,9 +774,8 @@ class FilesController < ApplicationController
     end
 
     # check service authorization
-    key = Base64.decode64(InstFS.jwt_secret)
     begin
-      Canvas::Security.decode_jwt(params[:token], [ key ])
+      Canvas::Security.decode_jwt(params[:token], [ InstFS.jwt_secret ])
     rescue
       head :forbidden
       return
@@ -793,30 +792,42 @@ class FilesController < ApplicationController
 
     # service metadata
     @attachment.filename = params[:name]
-    @attachment.display_name = params[:name].presence
+    @attachment.display_name = params[:display_name] || params[:name]
     @attachment.size = params[:size]
     @attachment.content_type = params[:content_type]
     @attachment.instfs_uuid = params[:instfs_uuid]
     @attachment.modified_at = Time.zone.now
 
+    # check non-exempt quota usage now that we have an actual size
+    return unless value_to_boolean(params[:quota_exempt]) || check_quota_after_attachment
+
     # capture params
     @attachment.folder = Folder.where(id: params[:folder_id]).first
     @attachment.user = api_find(User, params[:user_id])
-    @attachment.lock_at = params[:lock_at].presence
-    @attachment.unlock_at = params[:unlock_at].presence
-    @attachment.locked = Canvas::Plugin.value_to_boolean(params[:locked])
-    @attachment.hidden = Canvas::Plugin.value_to_boolean(params[:hidden])
-
+    @attachment.set_publish_state_for_usage_rights
     @attachment.save!
-    render plain: "OK", status: :created, location: api_v1_attachment_url(@attachment)
+
+    # apply duplicate handling
+    @attachment.handle_duplicates(params[:on_duplicate])
+
+    # trigger upload success callbacks
+    if @context.respond_to?(:file_upload_success_callback)
+      @context.file_upload_success_callback(@attachment)
+    end
+
+    url_params = {}
+    url_params[:include] = 'enhanced_preview_url' if @context.is_a?(User) || @context.is_a?(Course)
+    render json: {}, status: :created, location: api_v1_attachment_url(@attachment, url_params)
   end
 
   def api_create_success
     @attachment = Attachment.where(id: params[:id], uuid: params[:uuid]).first
     return head :bad_request unless @attachment.try(:file_state) == 'deleted'
-    duplicate_handling = check_duplicate_handling_option(request.params)
-    return unless duplicate_handling
-    return unless check_quota_after_attachment(request)
+    return unless validate_on_duplicate(params)
+
+    quota_exempt = @attachment.verify_quota_exemption_key(params[:quota_exemption])
+    return unless quota_exempt || check_quota_after_attachment
+
     if Attachment.s3_storage?
       return head(:bad_request) unless @attachment.state == :unattached
       details = @attachment.s3object.data
@@ -825,7 +836,7 @@ class FilesController < ApplicationController
       @attachment.file_state = 'available'
       @attachment.save!
     end
-    @attachment.handle_duplicates(duplicate_handling)
+    @attachment.handle_duplicates(infer_on_duplicate(params))
 
     if @attachment.context.respond_to?(:file_upload_success_callback)
       @attachment.context.file_upload_success_callback(@attachment)
@@ -833,7 +844,7 @@ class FilesController < ApplicationController
 
     json_params = { omit_verifier_in_app: true }
 
-    if @attachment.context.is_a?(User) || @attachment.context.is_a?(Course)
+    if @attachment.context.is_a?(User) || @attachment.context.is_a?(Course) || @attachment.context.is_a?(Group)
       json_params[:include] ||= []
       json_params[:include] << 'enhanced_preview_url'
     end
@@ -1041,7 +1052,12 @@ class FilesController < ApplicationController
         end
       end
 
-      @attachment.attributes = process_attachment_params(params)
+      @attachment.display_name = params[:name] if params.key?(:name)
+      @attachment.lock_at = params[:lock_at] if params.key?(:lock_at)
+      @attachment.unlock_at = params[:unlock_at] if params.key?(:unlock_at)
+      @attachment.locked = value_to_boolean(params[:locked]) if params.key?(:locked)
+      @attachment.hidden = value_to_boolean(params[:hidden]) if params.key?(:hidden)
+
       @attachment.set_publish_state_for_usage_rights if @attachment.context.is_a?(Group)
       if !@attachment.locked? && @attachment.locked_changed? && @attachment.usage_rights_id.nil? && @context.respond_to?(:feature_enabled?)  && @context.feature_enabled?(:usage_rights_required)
         return render :json => { :message => I18n.t('This file must have usage_rights set before it can be published.') }, :status => :bad_request

@@ -58,10 +58,6 @@ $gradebook_cell_padding_top: 8px;
   height: $row-height - 4px;
 }
 
-.slick-row.active .slick-cell.primary-column {
-  background-color: $ic-bg-light-primary;
-}
-
 .container_0,
 .container_1 {
   .slick-header.ui-state-default { // header container with full width of grid
@@ -214,9 +210,6 @@ $gradebook_cell_padding_top: 8px;
 
   &.hovered-column, // an element in the column is being hovered
   &.slick-header-column-active, // the column is being dragged or resized
-  &.ui-state-hover {
-    background-color: $ic-bg-light-primary;
-  }
   .slick-column-name {
     font-weight: bold;
     color: #2f2a34;
@@ -268,10 +261,18 @@ $gradebook_cell_padding_top: 8px;
 
 .odd .slick-cell {
   background-color: #f5f6f7;
+
+  &.minimized {
+    background-color: darken(#f5f6f7, 4%);
+  }
 }
 
 .even .slick-cell {
   background-color: #fcfcfc;
+
+  &.minimized {
+    background-color: darken(#fcfcfc, 4%);
+  }
 }
 
 .odd .meta-cell {
@@ -325,11 +326,6 @@ $gradebook_cell_padding_top: 8px;
 // my styles
 .slick-row.ui-state-active  .slick-cell {
   background-color: #dfe9f2;
-}
-
-.slick-cell div.cell-content {
-  text-align: center;
-  vertical-align: middle;
 }
 
 .slick-cell.editable {
@@ -413,10 +409,6 @@ $gradebook_cell_padding_top: 8px;
   margin-bottom: -50px;
 }
 
-.slick-cell.completely-hidden {
-  display: none;
-}
-
 .container_1 .slick-cell:last-child .gradebook-tooltip {
   left: auto;
   right: 0;
@@ -482,6 +474,37 @@ $gradebook_cell_padding_top: 8px;
 .slick-cell {
   z-index: auto;
 
+  &.custom_column {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &.assignment {
+    .gradebook-cell,
+    .Grid__AssignmentRowCell {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+
+  &.assignment-group-cell {
+    .gradebook-cell .percentage {
+      display: inline-block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
+    }
+  }
+
+  &.total_grade {
+    .gradebook-cell .grades {
+      display: inline-block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
+    }
+  }
+
   &.active {
     background-color: inherit;
     z-index: 5;
@@ -540,7 +563,7 @@ $gradebook_cell_padding_top: 8px;
       background: transparent;
     }
     .outof {
-      @include user-select(none);
+      user-select: none;
       text-align: left;
       // if high contrast, no color value (default to regular dark text color)
       @if $use_high_contrast == false { color: #888888; }
@@ -603,17 +626,12 @@ $gradebook_checkbox_size: 16px;
 }
 
 .minimized {
-  background-image: url("/images/4_percent_opacity.png");
-  .gradebook-cell {
-    font-size: 0px;
-    * {
-      display: none;
-    }
-  }
-}
+  background-color: darken($ic-bg-light-neutral, 4%);
 
-.minimized .slick-column-name {
-  display: none;
+  .gradebook-cell,
+  .Gradebook__ColumnHeaderContent {
+    display: none;
+  }
 }
 
 // STUFF FOR HEADER
@@ -695,32 +713,6 @@ $gradebook_checkbox_size: 16px;
   display: inline-block;
 }
 
-.submission_type_icon {
-  display: block;
-  width: 100%;
-  height: 22px;
-  background-position: center center;
-  background-repeat: no-repeat;
-  .online_text_entry & {
-    background-image: url("/images/text_entry.png");
-  }
-  .discussion_topic & {
-    background-image: url("/images/word_bubble.png");
-  }
-  .online_upload & {
-    background-image: url("/images/file.png");
-  }
-  .pending_review & {
-    background-image: url("/images/pending_review.png");
-  }
-  .media_comment &, .media_recording & {
-    background-image: url("/images/media_comment.gif");
-  }
-  .quiz & {
-    background-image: url("/images/quiz.png");
-  }
-}
-
 .letter-grade-points,
 .gpa-scale-points {
   position: absolute;
@@ -731,6 +723,10 @@ $gradebook_checkbox_size: 16px;
   .muted & {
     @if $use_high_contrast { color: darken($ic-hint-text, 20%); }
     @else { color: $ic-hint-text; }
+  }
+
+  .total_grade & {
+    position: static;
   }
 }
 
@@ -807,15 +803,6 @@ $gradebook_checkbox_size: 16px;
   list-style-type: none;
 }
 
-.ComingSoonContent__Container {
-  text-align: center;
-}
-
-.ComingSoonContent__Body {
-  display: inline-block;
-  margin-top: 2rem;
-}
-
 #LatePoliciesTabPanel__Container-noContent {
   text-align: center;
   min-height: 30rem;
@@ -847,9 +834,9 @@ $gradebook_checkbox_size: 16px;
 }
 
 .SubmissionTray__Container {
+  box-sizing: border-box;
+  height: 100%;
   padding: 1.5rem;
-  width: 18.75rem;
-  font-size: 1.2rem;
 
   input[type="text"] {
     height: auto;
@@ -859,6 +846,12 @@ $gradebook_checkbox_size: 16px;
     box-shadow: none;
     border: none;
   }
+}
+
+.with-fixed-bottom #SubmissionTray__Content::after {
+  content: ' ';
+  height: 60px; // ref: app/stylesheets/components/_g_instructure.scss
+  display: block;
 }
 
 .SubmissionTray__RadioInput {
@@ -877,6 +870,7 @@ $gradebook_checkbox_size: 16px;
 #SubmissionTray__Content {
   display: flex;
   flex-direction: column;
+  height: 100%;
 }
 
 #SubmissionTray__Avatar {
@@ -884,6 +878,10 @@ $gradebook_checkbox_size: 16px;
   padding: 0.7rem;
   text-align: center;
   font-size: 1.375rem;
+}
+
+#SubmissionTray__Comments {
+  line-height: 1;
 }
 
 #SubmissionTray__StudentName {

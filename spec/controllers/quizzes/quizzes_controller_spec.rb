@@ -186,68 +186,36 @@ describe Quizzes::QuizzesController do
     end
   end
 
-  describe "GET 'new'" do
-    it "should require authorization" do
-      get 'new', params: {:course_id => @course.id}
-      assert_unauthorized
+  describe "POST 'new'" do
+    context "when unauthorized" do
+      it "should require authorization" do
+        post 'new', params: {:course_id => @course.id}
+        assert_unauthorized
+      end
     end
 
-    it "js_env DUE_DATE_REQUIRED_FOR_ACCOUNT is true when AssignmentUtil.due_date_required_for_account? == true" do
-      user_session(@teacher)
-      allow(AssignmentUtil).to receive(:due_date_required_for_account?).and_return(true)
-      get 'new', params: {:course_id => @course.id}
-      expect(assigns[:js_env][:DUE_DATE_REQUIRED_FOR_ACCOUNT]).to eq(true)
-    end
+    context "when authorized" do
+      before { user_session(@teacher) }
 
-    it "js_env DUE_DATE_REQUIRED_FOR_ACCOUNT is false when AssignmentUtil.due_date_required_for_account? == false" do
-      user_session(@teacher)
-      allow(AssignmentUtil).to receive(:due_date_required_for_account?).and_return(false)
-      get 'new', params: {:course_id => @course.id}
-      expect(assigns[:js_env][:DUE_DATE_REQUIRED_FOR_ACCOUNT]).to eq(false)
-    end
+      it "creates a quiz" do
+        expect { post 'new', params: {:course_id => @course.id} }
+          .to change { Quizzes::Quiz.count }
+          .from(0).to(1)
+      end
 
-    it "should assign variables" do
-      user_session(@teacher)
-      get 'new', params: {:course_id => @course.id}
-      expect(assigns[:quiz]).not_to be_nil
-      q = assigns[:quiz]
-    end
+      it "redirects to the new quiz" do
+        post 'new', params: {:course_id => @course.id}
+        expect(response).to have_http_status :redirect
+        expect(response.headers['Location']).to match(%r{/courses/\w+/quizzes/\w+/edit$})
+      end
 
-    it "subsequent requests should return the same quiz unless ?fresh=1" do
-      user_session(@teacher)
-      get 'new', params: {:course_id => @course.id}
-      expect(assigns[:quiz]).not_to be_nil
-      q = assigns[:quiz]
-
-      get 'new', params: {:course_id => @course.id}
-      expect(assigns[:quiz]).not_to be_nil
-      expect(assigns[:quiz]).not_to eql(q)
-
-      get 'new', params: {:course_id => @course.id, :fresh => 1}
-
-      expect(assigns[:quiz]).not_to be_nil
-      expect(assigns[:quiz]).not_to eql(q)
-    end
-
-    it "js_env MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT is true when AssignmentUtil.name_length_required_for_account? == true" do
-      user_session(@teacher)
-      allow(AssignmentUtil).to receive(:name_length_required_for_account?).and_return(true)
-      get 'new', params: {:course_id => @course.id}
-      expect(assigns[:js_env][:MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT]).to eq(true)
-    end
-
-    it "js_env MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT is false when AssignmentUtil.name_length_required_for_account? == false" do
-      user_session(@teacher)
-      allow(AssignmentUtil).to receive(:name_length_required_for_account?).and_return(false)
-      get 'new', params: {:course_id => @course.id}
-      expect(assigns[:js_env][:MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT]).to eq(false)
-    end
-
-    it "js_env MAX_NAME_LENGTH is a 15 when AssignmentUtil.assignment_max_name_length returns 15" do
-      user_session(@teacher)
-      allow(AssignmentUtil).to receive(:assignment_max_name_length).and_return(15)
-      get 'new', params: {:course_id => @course.id}
-      expect(assigns[:js_env][:MAX_NAME_LENGTH]).to eq(15)
+      context "if xhr request" do
+        it "returns the new quiz's edit url" do
+          post 'new', params: {:course_id => @course.id}, xhr: true
+          expect(response).to have_http_status :success
+          expect(JSON.parse(response.body)['url']).to match(%r{/courses/\w+/quizzes/\w+/edit$})
+        end
+      end
     end
   end
 
@@ -995,6 +963,30 @@ describe Quizzes::QuizzesController do
       expect(assigns[:submission]).to eql(@submission)
     end
 
+    it "mark read if the student is viewing his own quiz history" do
+      user_session(@student)
+      @submission = @quiz.generate_submission(@student)
+      @submission.submission.mark_unread(@student)
+      @submission.save!
+      get 'history', params: {:course_id => @course.id, :quiz_id => @quiz.id}
+      expect(response).to be_success
+      submission = Quizzes::QuizSubmission.find(@submission.id)
+      expect(submission.submission.read?(@student)).to be_truthy
+    end
+
+    it "don't mark read if viewing *someone else's* history" do
+      user_session(@teacher)
+      @submission = @quiz.generate_submission(@student)
+      @submission.submission.mark_unread(@teacher)
+      @submission.submission.mark_unread(@student)
+      @submission.save!
+      get 'history', params: {:course_id => @course.id, :quiz_id => @quiz.id, :user_id => @student.id}
+      expect(response).to be_success
+      submission = Quizzes::QuizSubmission.find(@submission.id)
+      expect(submission.submission.read?(@teacher)).to be_falsey
+      expect(submission.submission.read?(@student)).to be_falsey
+    end
+
     it "should find the observed submissions" do
       @submission = @quiz.generate_submission(@student)
       @observer = user_factory
@@ -1068,6 +1060,41 @@ describe Quizzes::QuizzesController do
       get 'history', params: {:course_id => @course.id, :quiz_id => @quiz.id, :user_id => @student.id}
 
       expect(response).to be_success
+    end
+
+    context "with non-utf8 submission data" do
+      render_views
+
+      before do
+        course_quiz(true)
+
+        @question = @quiz.quiz_questions.create!(question_data: {
+          'question_text' => '<p>[color]是我最喜欢的颜色</p>',
+          'question_type' => 'fill_in_multiple_blanks_question',
+          'answers' => [{
+            'id' => rand(1..999).to_s,
+            'text' => '红色',
+            'blank_id' => 'color'
+          }]
+        })
+        @quiz.generate_quiz_data
+        @quiz.save!
+      end
+
+      it "should render without error" do
+        quiz_submission = @quiz.generate_submission(@student)
+        quiz_submission.mark_completed
+        quiz_submission.submission_data = [{
+          correct: false,
+          question_id: @question.id,
+          answer_for_color: "\b红色" # the \b causes psych to store this as a binary string
+        }]
+        quiz_submission.save!
+
+        user_session(@teacher)
+        get 'history', params: { course_id: @course.id, quiz_id: @quiz.id, quiz_submission_id: quiz_submission.id }
+        expect(response).to have_http_status(:success)
+      end
     end
   end
 

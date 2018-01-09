@@ -570,9 +570,9 @@ describe "context modules" do
       get "/courses/#{@course.id}/modules"
       sleep 2 #not sure what we are waiting on but drag and drop will not work, unless we wait
 
-      m1_a = fj('#context_modules .context_module:first-child .reorder_module_link a')
-      m2_a = fj('#context_modules .context_module:last-child .reorder_module_link a')
-      driver.action.drag_and_drop(m2_a, m1_a).perform
+      m1_handle = fj('#context_modules .context_module:first-child .reorder_module_link .icon-drag-handle')
+      m2_handle = fj('#context_modules .context_module:last-child .reorder_module_link .icon-drag-handle')
+      driver.action.drag_and_drop(m2_handle, m1_handle).perform
       wait_for_ajax_requests
 
       m1.reload
@@ -714,12 +714,6 @@ describe "context modules" do
         check_element_has_focus(fj("#context_module_item_#{@tag.id} .al-trigger"))
       end
 
-      it "should return focus to the module item cog when closing the move dialog" do
-        hover_and_click("#context_module_item_#{@tag.id} .move_module_item_link")
-        f('#move_module_item_cancel_btn').click
-        check_element_has_focus(fj("#context_module_item_#{@tag.id} .al-trigger"))
-      end
-
       it "should return focus to the module item cog when cancelling a delete" do
         hover_and_click("#context_module_item_#{@tag.id} .delete_item_link")
         expect(driver.switch_to.alert).not_to be_nil
@@ -728,22 +722,23 @@ describe "context modules" do
         check_element_has_focus(fj("#context_module_item_#{@tag.id} .al-trigger"))
       end
 
-      it "should return focus to the previous module item cog when deleting a module item." do
+      it "should return focus to the previous module item link when deleting a module item." do
         add_existing_module_item('#assignments_select', 'Assignment', @assignment.title)
         @tag2 = ContentTag.last
         hover_and_click("#context_module_item_#{@tag2.id} .delete_item_link")
         expect(driver.switch_to.alert).not_to be_nil
         driver.switch_to.alert.accept
         wait_for_ajaximations
-        check_element_has_focus(fj("#context_module_item_#{@tag.id} .al-trigger"))
+        check_element_has_focus(fj("#context_module_item_#{@tag.id} .item_link"))
       end
 
-      it "should return focus to the parent module's cog when deleting the last module item." do
-        hover_and_click("#context_module_item_#{@tag.id} .delete_item_link")
+      it "should return focus to the parent module's cog when deleting the first module item." do
+        first_tag = ContentTag.first
+        hover_and_click("#context_module_item_#{first_tag.id} .delete_item_link")
         expect(driver.switch_to.alert).not_to be_nil
         driver.switch_to.alert.accept
         wait_for_ajaximations
-        check_element_has_focus(f("#context_module_#{@tag.context_module_id} .al-trigger"))
+        check_element_has_focus(f("#context_module_#{first_tag.context_module_id} .al-trigger"))
       end
     end
 
@@ -795,15 +790,8 @@ describe "context modules" do
         driver.switch_to.active_element.send_keys(*keys)
       end
 
-      let(:context_modules) { ff('.context_module .icon-drag-handle') }
+      let(:context_modules) { ff('.context_module .collapse_module_link') }
       let(:context_module_items) { ff('.context_module_item a.title') }
-
-      it "should set focus to the first drag handle after the + Module button" do
-        add_module_link = f('.add_module_link')
-        add_module_link.send_keys("\t")
-        first_handle = f('.icon-drag-handle')
-        check_element_has_focus(first_handle)
-      end
 
       # Test these shortcuts (access menu by pressing comma key):
       # Up : Previous Module/Item
@@ -1107,6 +1095,7 @@ describe "context modules" do
     end
 
     it "should delete a module", priority: "1", test_id: 126736 do
+      skip_if_safari(:alert)
       add_module('Delete Module')
       driver.execute_script("$('.context_module').addClass('context_module_hover')")
       f('.ig-header-admin .al-trigger').click
@@ -1200,7 +1189,7 @@ describe "context modules" do
 
       title_input = fj('input[name="title"]:visible')
       replace_content(title_input, 'some title')
-
+      scroll_to(f('.add_item_button.ui-button'))
       f('.add_item_button.ui-button').click
 
       expect(f('.errorBox:not(#error_box_template)')).to be_displayed

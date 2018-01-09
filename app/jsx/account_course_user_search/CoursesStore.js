@@ -18,23 +18,22 @@
 
 import createStore from './createStore'
 
-const CoursesStore = createStore({
+const COURSES_TO_FETCH_PER_PAGE = 15
+
+export default createStore({
   getUrl () {
     return `/api/v1/accounts/${this.context.accountId}/courses`;
   },
 
-  normalizeParams (params) {
-    const payload = {}
-    if (params.enrollment_term_id) payload.enrollment_term_id = params.enrollment_term_id
-    if (params.search_term) payload.search_term = params.search_term
-    if (params.with_students) payload.enrollment_type = ['student']
-    if (params.sort) payload.sort = params.sort
-    if (params.order) payload.order = params.order
-    if (params.search_by) payload.search_by = params.search_by
-    payload.include = ['total_students', 'teachers', 'subaccount']
-
-    return payload
+  normalizeParams (originalParams) {
+    const params = {
+      ...originalParams,
+      include: ['total_students', 'teachers', 'subaccount', 'term'],
+      per_page: COURSES_TO_FETCH_PER_PAGE
+    }
+    if (originalParams.with_students) params.enrollment_type = ['student']
+    const propsToCleanUp = ['enrollment_term_id', 'search_term', 'sort', 'order', 'search_by', 'page']
+    propsToCleanUp.forEach(p => { if (!originalParams[p]) delete params[p] })
+    return params
   }
 })
-
-export default CoursesStore

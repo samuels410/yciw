@@ -97,6 +97,11 @@ require 'securerandom'
 #           "description": "the integration identifier for the course, if defined. This field is only included if the user has permission to view SIS information.",
 #           "type": "string"
 #         },
+#         "sis_import_id": {
+#           "description": "the unique identifier for the SIS import. This field is only included if the user has permission to manage SIS information.",
+#           "example": 34,
+#           "type": "integer"
+#         },
 #         "name": {
 #           "description": "the full name of the course",
 #           "example": "InstructureCon 2012",
@@ -287,6 +292,21 @@ require 'securerandom'
 #           "description": "The course's IANA time zone name.",
 #           "example": "America/Denver",
 #           "type": "string"
+#         },
+#         "blueprint": {
+#           "description": "optional: whether the course is set as a Blueprint Course (blueprint fields require the Blueprint Courses feature)",
+#           "example": true,
+#           "type": "boolean"
+#         },
+#         "blueprint_restrictions": {
+#           "description": "optional: Set of restrictions applied to all locked course objects",
+#           "example": {"content": true, "points": true, "due_dates": false, "availability_dates": false},
+#           "type": "object"
+#         },
+#         "blueprint_restrictions_by_object_type": {
+#           "description": "optional: Sets of restrictions differentiated by object type applied to locked course objects",
+#           "example": {"assignment": {"content": true, "points": true}, "wiki_page": {"content": true}},
+#           "type": "object"
 #         }
 #       }
 #     }
@@ -321,7 +341,7 @@ class CoursesController < ApplicationController
   include Api::V1::Progress
 
   # @API List your courses
-  # Returns the list of active courses for the current user.
+  # Returns the paginated list of active courses for the current user.
   #
   # @argument enrollment_type [String, "teacher"|"student"|"ta"|"observer"|"designer"]
   #   When set, only return courses where the user is enrolled as this type. For
@@ -464,7 +484,7 @@ class CoursesController < ApplicationController
   end
 
   # @API List courses for a user
-  # Returns a list of active courses for this user. To view the course list for a user other than yourself, you must be either an observer of that user or an administrator.
+  # Returns a paginated list of active courses for this user. To view the course list for a user other than yourself, you must be either an observer of that user or an administrator.
   #
   # @argument include[] [String, "needs_grading_count"|"syllabus_body"|"public_description"|"total_scores"|"current_grading_period_scores"|"term"|"course_progress"|"sections"|"storage_quota_used_mb"|"total_students"|"passback_status"|"favorites"|"teachers"|"observed_users"|"course_image"]
   #   - "needs_grading_count": Optional information to include with each Course.
@@ -544,9 +564,7 @@ class CoursesController < ApplicationController
   #
   # @returns [Course]
   def user_index
-    @user.shard.activate do
-      render json: courses_for_user(@user, paginate_url: api_v1_user_courses_url(@user))
-    end
+    render json: courses_for_user(@user, paginate_url: api_v1_user_courses_url(@user))
   end
 
   # @API Create a new course
@@ -755,32 +773,6 @@ class CoursesController < ApplicationController
     end
   end
 
-  def backup
-    get_context
-    if authorized_action(@context, @current_user, :update)
-      backup_json = @context.backup_to_json
-      send_file_headers!( :length=>backup_json.length, :filename=>"#{@context.name.underscore.gsub(/\s/, "_")}_#{Time.zone.today}_backup.instructure", :disposition => 'attachment', :type => 'application/instructure')
-      render :text => proc {|response, output|
-        output.write backup_json
-      }
-    end
-  end
-
-  def restore
-    get_context
-    if authorized_action(@context, @current_user, :update)
-      respond_to do |format|
-        if params[:restore]
-          @context.restore_from_json_backup(params[:restore])
-          flash[:notice] = t('notices.backup_restored', "Backup Successfully Restored!")
-          format.html { redirect_to named_context_url(@context, :context_url) }
-        else
-          format.html
-        end
-      end
-    end
-  end
-
   def unconclude
     get_context
     if authorized_action(@context, @current_user, :change_course_state)
@@ -795,7 +787,7 @@ class CoursesController < ApplicationController
 
   # @API List students
   #
-  # Returns the list of students enrolled in this course.
+  # Returns the paginated list of students enrolled in this course.
   #
   # DEPRECATED: Please use the {api:CoursesController#users course users} endpoint
   # and pass "student" as the enrollment_type.
@@ -812,7 +804,7 @@ class CoursesController < ApplicationController
   end
 
   # @API List users in course
-  # Returns the list of users in this course. And optionally the user's enrollments in the course.
+  # Returns the paginated list of users in this course. And optionally the user's enrollments in the course.
   #
   # @argument search_term [String]
   #   The partial name or full ID of the users to match and return in the results list.
@@ -901,16 +893,21 @@ class CoursesController < ApplicationController
 
       user_ids = params[:user_ids]
       if user_ids.present?
+        user_ids = user_ids.split(",") if user_ids.is_a?(String)
         users = users.where(id: user_ids)
       end
 
       users = Api.paginate(users, self, api_v1_course_users_url)
       includes = Array(params[:include])
-      user_json_preloads(
-        users,
-        includes.include?('email'),
-        group_memberships: includes.include?('group_ids')
-      )
+
+      # user_json_preloads loads both active/accepted and deleted
+      # group_memberships when passed "group_memberships: true." In a
+      # known case in the wild, each student had thousands of deleted
+      # group memberships. Since we only care about active group
+      # memberships for this course, load the data in a more targeted way.
+      user_json_preloads(users, includes.include?('email'))
+      include_group_ids = includes.delete('group_ids').present?
+
       unless includes.include?('test_student') || Array(params[:enrollment_type]).include?("student_view")
         users.reject! do |u|
           u.preferences[:fake_student]
@@ -934,16 +931,22 @@ class CoursesController < ApplicationController
 
       render :json => users.map { |u|
         enrollments = enrollments_by_user[u.id] || [] if includes.include?('enrollments')
-        user_unconfirmed = enrollments ? enrollments.all?{|e| %w{invited creation_pending rejected}.include?(e.workflow_state)} : !confirmed_user_ids.include?(u.id)
+        user_unconfirmed = if enrollments
+          enrollments.all?{|e| %w{invited creation_pending rejected}.include?(e.workflow_state)}
+        else
+          !confirmed_user_ids.include?(u.id)
+        end
         excludes = user_unconfirmed ? %w{pseudonym personal_info} : []
-        user_json(u, @current_user, session, includes, @context, enrollments, excludes)
+        user_json(u, @current_user, session, includes, @context, enrollments, excludes).tap do |json|
+          json[:group_ids] = active_group_memberships(users)[u.id]&.map(&:group_id) || [] if include_group_ids
+        end
       }
     end
   end
 
   # @API List recently logged in students
   #
-  # Returns the list of users in this course, ordered by how recently they have
+  # Returns the paginated list of users in this course, ordered by how recently they have
   # logged in. The records include the 'last_login' field which contains
   # a timestamp of the last time that user logged into canvas.  The querying
   # user must have the 'View usage reports' permission.
@@ -1053,18 +1056,21 @@ class CoursesController < ApplicationController
         todo_item_json(a, @current_user, session, 'submitting')
       }
       if Array(params[:include]).include? 'ungraded_quizzes'
-        submitting += @current_user.ungraded_quizzes_needing_submitting(:contexts => [@context]).map { |q| todo_item_json(q, @current_user, session, 'submitting') }
+        submitting += @current_user.ungraded_quizzes(:contexts => [@context], :needing_submitting => true).map { |q| todo_item_json(q, @current_user, session, 'submitting') }
         submitting.sort_by! { |j| (j[:assignment] || j[:quiz])[:due_at] }
       end
       render :json => (grading + submitting)
     end
   end
 
-  # @API Conclude a course
+  # @API Delete/Conclude a course
   # Delete or conclude an existing course
   #
   # @argument event [Required, String, "delete"|"conclude"]
   #   The action to take on the course.
+  #
+  # @example_response
+  #   { "delete": "true" }
   def destroy
     @context = api_find(Course, params[:id])
     if api_request? && !['delete', 'conclude'].include?(params[:event])
@@ -1201,8 +1207,7 @@ class CoursesController < ApplicationController
 
       if @context.root_account.feature_enabled?(:master_courses)
         master_template = @context.master_course_templates.for_full_course.first
-        restrictions_by_object_type = master_template&.default_restrictions_by_type || {}
-        cleaned_restrictions = restrictions_by_object_type.map{|k, v| [k.sub(/^.+::/, '').underscore, v] }.to_h
+        restrictions_by_object_type = master_template&.default_restrictions_by_type_for_api || {}
         message =!MasterCourses::MasterTemplate.is_master_course?(@context) && why_cant_i_enable_master_course(@context)
         message ||= ''
         js_env({
@@ -1210,7 +1215,7 @@ class CoursesController < ApplicationController
           DISABLED_BLUEPRINT_MESSAGE: message,
           BLUEPRINT_RESTRICTIONS: master_template&.default_restrictions || { :content => true },
           USE_BLUEPRINT_RESTRICTIONS_BY_OBJECT_TYPE: master_template&.use_default_restrictions_by_type || false,
-          BLUEPRINT_RESTRICTIONS_BY_OBJECT_TYPE: cleaned_restrictions
+          BLUEPRINT_RESTRICTIONS_BY_OBJECT_TYPE: restrictions_by_object_type
         })
       end
 
@@ -1611,9 +1616,11 @@ class CoursesController < ApplicationController
       if !includes.member?("all_courses")
         scope = scope.not_deleted
       end
-      @course = api_find(scope, params[:id])
+      @context = @course = api_find(scope, params[:id])
+      @context_membership = @context.enrollments.where(user_id: @current_user).except(:preload).first # for AUA
 
       if authorized_action(@course, @current_user, :read)
+        log_asset_access([ "home", @context ], "home", "other")
         enrollments = @course.current_enrollments.where(:user_id => @current_user).to_a
         if includes.include?("observed_users") &&
             enrollments.any?(&:assigned_observer?)
@@ -1889,8 +1896,8 @@ class CoursesController < ApplicationController
       enrollment_options[:role] = custom_role if custom_role
 
       list =
-        if params[:user_ids]
-          Array(params[:user_ids])
+        if params[:user_tokens]
+          Array(params[:user_tokens])
         else
           UserList.new(params[:user_list],
                           root_account: @context.root_account,
@@ -2260,7 +2267,7 @@ class CoursesController < ApplicationController
 
       term_id = params[:course].delete(:term_id)
       enrollment_term_id = params[:course].delete(:enrollment_term_id) || term_id
-      if enrollment_term_id && @course.root_account.grants_right?(@current_user, session, :manage_courses)
+      if enrollment_term_id && @course.account.grants_right?(@current_user, session, :manage_courses)
         enrollment_term = api_find(@course.root_account.enrollment_terms, enrollment_term_id)
         @course.enrollment_term = enrollment_term if enrollment_term && enrollment_term != @course.enrollment_term
       end
@@ -2592,7 +2599,6 @@ class CoursesController < ApplicationController
   #        "14": { "due_at": "2015-08-05", "grading_period_id": 3, "in_closed_grading_period": true }
   #     }
   #   }
-  # @returns {EffectiveDueDates}
   def effective_due_dates
     return unless authorized_action(@context, @current_user, :read_as_admin)
 
@@ -2660,6 +2666,7 @@ class CoursesController < ApplicationController
       pg_scope = ModeratedGrading::ProvisionalGrade.where(:submission_id => @fake_student.all_submissions)
       SubmissionComment.where(:provisional_grade_id => pg_scope).delete_all
       pg_scope.delete_all
+      OriginalityReport.where(:submission_id => @fake_student.all_submissions).delete_all
       @fake_student.all_submissions.destroy_all
       @fake_student.quiz_submissions.each{|qs| qs.events.destroy_all}
       @fake_student.quiz_submissions.destroy_all
@@ -2857,18 +2864,26 @@ class CoursesController < ApplicationController
     Canvas::Builders::EnrollmentDateBuilder.preload_state(enrollments)
     enrollments_by_course = enrollments.group_by(&:course_id).values
     enrollments_by_course.sort_by! do |course_enrollments|
-      Canvas::ICU.collation_key(course_enrollments.first.course.nickname_for(user))
+      Canvas::ICU.collation_key(course_enrollments.first.course.nickname_for(@current_user))
     end
     enrollments_by_course = Api.paginate(enrollments_by_course, self, paginate_url) if api_request?
     courses = enrollments_by_course.map(&:first).map(&:course)
-    preloads = [:account, :root_account]
+    preloads = %i/account root_account/
     preloads << :teachers if includes.include?('teachers')
     preloads << :grading_standard if includes.include?('total_scores')
+    if includes.include?('current_grading_period_scores')
+      preloads << { enrollment_term: { grading_period_group: :grading_periods } }
+      preloads << { grading_period_groups: :grading_periods }
+    end
     ActiveRecord::Associations::Preloader.new.preload(courses, preloads)
+
+    if includes.include?('total_scores') || includes.include?('current_grading_period_scores')
+      ActiveRecord::Associations::Preloader.new.preload(enrollments, scores: :course)
+    end
 
     enrollments_by_course.each do |course_enrollments|
       course = course_enrollments.first.course
-      hash << course_json(course, user, session, includes, course_enrollments)
+      hash << course_json(course, @current_user, session, includes, course_enrollments, user)
     end
     hash
   end
@@ -2917,7 +2932,7 @@ class CoursesController < ApplicationController
       add_crumb(title)
       js_bundle :webzip_export
       css_bundle :webzip_export
-      render :text => '<div id="course-webzip-export-app"></div>'.html_safe, :layout => true
+      render :html => '<div id="course-webzip-export-app"></div>'.html_safe, :layout => true
     end
   end
 
@@ -2931,6 +2946,10 @@ class CoursesController < ApplicationController
   end
 
   private
+
+  def active_group_memberships(users)
+    @active_group_memberships ||= GroupMembership.active_for_context_and_users(@context, users).group_by(&:user_id)
+  end
 
   def effective_due_dates_params
     params.permit(assignment_ids: [])

@@ -81,13 +81,15 @@
 .file-upload-submission-info {
   @include fontSize(13px);
   box-sizing: border-box;
-  flex: 0 0 50%;
   padding-right: $ic-sp;
   > a {
     @include fontSize(13px); // need to overwrite default tiny-text style here
     margin-right: $ic-sp/2;
     font-weight: bold;
   }
+  flex: 1;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 
 .file-upload-submission-info__filesize {
@@ -97,7 +99,7 @@
 
 .file-upload-submission-attachment {
   @include fontSize(13px);
-  flex: 0 0 30%;
+  flex: 0 0 auto;
   text-align: right;
   box-sizing: border-box;
   padding-left: $ic-sp;

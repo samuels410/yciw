@@ -78,6 +78,10 @@ require 'action_controller_test_process'
 #           "example": "2012-01-01T01:00:00Z",
 #           "type": "datetime"
 #         },
+#         "edited_at" : {
+#           "example": "2012-01-02T01:00:00Z",
+#           "type": "datetime"
+#         },
 #         "media_comment": {
 #           "$ref": "MediaComment"
 #         }
@@ -114,11 +118,12 @@ class SubmissionsController < ApplicationController
       return render_user_not_found
     end
 
-    @rubric_association = @submission.rubric_association_with_assessing_user_id
     @visible_rubric_assessments = @submission.visible_rubric_assessments_for(@current_user)
     @assessment_request = @submission.assessment_requests.where(assessor_id: @current_user).first
     if authorized_action(@submission, @current_user, :read)
-      @submission&.mark_read(@current_user)
+      if @submission&.user_id == @current_user.id
+        @submission&.mark_read(@current_user)
+      end
       respond_to do |format|
         @submission.limit_comments(@current_user, session)
         format.html
@@ -244,12 +249,10 @@ class SubmissionsController < ApplicationController
 
     submission_params = params[:submission].permit(
       :body, :url, :submission_type, :comment, :group_comment,
-      :media_comment_type, :media_comment_id, :attachment_ids => []
+      :media_comment_type, :media_comment_id, :eula_agreement_timestamp,
+      :attachment_ids => []
     )
-    submission_params[:attachments] = params[:submission][:attachments].compact.uniq
-    if @context.root_account.feature_enabled?(:submissions_folder)
-      submission_params[:attachments] = self.class.copy_attachments_to_submissions_folder(@context, submission_params[:attachments])
-    end
+    submission_params[:attachments] = self.class.copy_attachments_to_submissions_folder(@context, params[:submission][:attachments].compact.uniq)
 
     begin
       @submission = @assignment.submit_homework(@current_user, submission_params)
@@ -273,8 +276,11 @@ class SubmissionsController < ApplicationController
         end
         format.json do
           if api_request?
-            render :json => submission_json(@submission, @assignment, @current_user, session, @context, %{submission_comments attachments}),
-              :status => :created, :location => api_v1_course_assignment_submission_url(@context, @assignment, @current_user)
+            includes = %|submission_comments attachments|
+            json = submission_json(@submission, @assignment, @current_user, session, @context, includes, params)
+            render json: json,
+              status: :created,
+              location: api_v1_course_assignment_submission_url(@context, @assignment, @current_user)
           else
             render :json => @submission.as_json(:include => :submission_comments), :status => :created,
               :location => course_gradebook_url(@submission.assignment.context)

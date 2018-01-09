@@ -244,15 +244,16 @@ module ApplicationHelper
     Rails.env.test? && ENV.fetch("DISABLE_CSS_TRANSITIONS", "1") == "1"
   end
 
-  def css_variant
-    use_high_contrast = @current_user && @current_user.prefers_high_contrast?
-    'new_styles' + (use_high_contrast ? '_high_contrast' : '_normal_contrast')
+  def css_variant(opts = {})
+    variant = use_responsive_layout? ? 'responsive_layout' : 'new_styles'
+    use_high_contrast = @current_user && @current_user.prefers_high_contrast? || opts[:force_high_contrast]
+    variant + (use_high_contrast ? '_high_contrast' : '_normal_contrast')
   end
 
-  def css_url_for(bundle_name, plugin=false)
+  def css_url_for(bundle_name, plugin=false, opts = {})
     bundle_path = "#{plugin ? "plugins/#{plugin}" : 'bundles'}/#{bundle_name}"
-    cache = BrandableCSS.cache_for(bundle_path, css_variant)
-    base_dir = cache[:includesNoVariables] ? 'no_variables' : File.join(active_brand_config.try(:md5).to_s, css_variant)
+    cache = BrandableCSS.cache_for(bundle_path, css_variant(opts))
+    base_dir = cache[:includesNoVariables] ? 'no_variables' : css_variant(opts)
     File.join('/dist', 'brandable_css', base_dir, "#{bundle_path}-#{cache[:combinedChecksum]}.css")
   end
 
@@ -585,8 +586,12 @@ module ApplicationHelper
     (@domain_root_account && @domain_root_account.settings[:help_link_icon]) || 'help'
   end
 
+  def default_help_link_name
+    I18n.t('Help')
+  end
+
   def help_link_name
-    (@domain_root_account && @domain_root_account.settings[:help_link_name]) || I18n.t('Help')
+    (@domain_root_account && @domain_root_account.settings[:help_link_name]) || default_help_link_name
   end
 
   def help_link_data
@@ -612,7 +617,7 @@ module ApplicationHelper
   def active_brand_config(opts={})
     return active_brand_config_cache[opts] if active_brand_config_cache.key?(opts)
 
-    ignore_branding = (@current_user.try(:prefers_high_contrast?) && !opts[:ignore_high_contrast_preference])
+    ignore_branding = (@current_user.try(:prefers_high_contrast?) && !opts[:ignore_high_contrast_preference]) || opts[:force_high_contrast]
     active_brand_config_cache[opts] = if ignore_branding
       nil
     else
@@ -633,21 +638,9 @@ module ApplicationHelper
     end
   end
 
-  def active_brand_config_json_url(opts={})
-    path = active_brand_config(opts).try(:public_json_path)
-    path ||= BrandableCSS.public_default_json_path
-    "#{Canvas::Cdn.config.host}/#{path}"
-  end
-
-  def active_brand_config_js_url(opts={})
-    path = active_brand_config(opts).try(:public_js_path)
-    path ||= BrandableCSS.public_default_js_path
-    "#{Canvas::Cdn.config.host}/#{path}"
-  end
-
-  def active_brand_config_css_url(opts={})
-    path = active_brand_config(opts).try(:public_css_path)
-    path ||= BrandableCSS.public_default_css_path
+  def active_brand_config_url(type, opts={})
+    path = active_brand_config(opts).try("public_#{type}_path")
+    path ||= BrandableCSS.public_default_path(type, @current_user&.prefers_high_contrast? || opts[:force_high_contrast])
     "#{Canvas::Cdn.config.host}/#{path}"
   end
 
@@ -819,12 +812,10 @@ module ApplicationHelper
   def agree_to_terms
     # may be overridden by a plugin
     @agree_to_terms ||
-    t("I agree to the *terms of use* and **privacy policy**.",
+    t("I agree to the *terms of use*.",
       wrapper: {
-        '*' => link_to('\1', terms_of_use_url, target: '_blank'),
-        '**' => link_to('\1', privacy_policy_url, target: '_blank')
-      }
-    )
+        '*' => link_to('\1', "#", class: 'terms_of_service_link'),
+      })
   end
 
   def dashboard_url(opts={})
@@ -900,4 +891,10 @@ module ApplicationHelper
     @domain_root_account&.feature_enabled?(:student_planner) && @current_user.has_student_enrollment?
   end
 
+  def thumbnail_image_url(attachment)
+    # this thumbnail url is a route that redirects to local/s3 appropriately.
+    # deferred redirect through route because it may be saved for later use
+    # after a direct link to attachment.thumbnail_url would have expired
+    super(attachment, attachment.uuid)
+  end
 end

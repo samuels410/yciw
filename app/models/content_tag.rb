@@ -26,6 +26,10 @@ class ContentTag < ActiveRecord::Base
 
   include Workflow
   include SearchTermHelper
+
+  include MasterCourses::Restrictor
+  restrict_columns :state, [:workflow_state]
+
   belongs_to :content, polymorphic: [], exhaustive: false
   validates_inclusion_of :content_type, :allow_nil => true, :in => CONTENT_TYPES
   belongs_to :context, polymorphic:
@@ -161,6 +165,10 @@ class ContentTag < ActiveRecord::Base
     return content && !content.assignment_id.nil?
   end
 
+  def duplicate_able?
+    ['assignment', 'discussion_topic', 'wiki_page'].include? self.content_type_class
+  end
+
   def content_type_class
     if self.content_type == 'Assignment'
       if self.content && self.content.submission_types == 'online_quiz'
@@ -191,7 +199,7 @@ class ContentTag < ActiveRecord::Base
     if self.content_type == 'Assignment'
       self.content
     elsif can_have_assignment?
-      self.content.assignment
+      self.content&.assignment
     else
       nil
     end

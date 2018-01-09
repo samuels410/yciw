@@ -16,14 +16,19 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import { createGradebook } from 'spec/jsx/gradezilla/default_gradebook/GradebookSpecHelper';
+import { createGradebook, setFixtureHtml } from 'spec/jsx/gradezilla/default_gradebook/GradebookSpecHelper';
 import AssignmentRowCellPropFactory from 'jsx/gradezilla/default_gradebook/components/AssignmentRowCellPropFactory';
+
+let fixture;
 
 QUnit.module('AssignmentRowCellPropFactory#getProps', {
   setup () {
+    fixture = document.createElement('div');
+    document.body.appendChild(fixture);
+    setFixtureHtml(fixture);
     this.assignment = { id: '2301' };
     this.gradebook = createGradebook({ context_id: '1201' });
-    this.gradebook.gridSupport = {
+    this.gradebook.gradebookGrid.gridSupport = {
       helper: {
         commitCurrentEdit: this.stub(),
         focus: this.stub()
@@ -31,6 +36,10 @@ QUnit.module('AssignmentRowCellPropFactory#getProps', {
     };
     this.factory = new AssignmentRowCellPropFactory(this.assignment, this.gradebook);
     this.student = { id: '1101', isConcluded: false };
+  },
+
+  teardown () {
+    fixture.remove();
   }
 });
 
@@ -51,17 +60,14 @@ test('onToggleSubmissionTrayOpen sets the tray state', function () {
   const props = this.factory.getProps(this.student);
   this.stub(this.gradebook, 'renderSubmissionTray');
   props.onToggleSubmissionTrayOpen(this.student.id, this.assignment.id);
-  deepEqual(
-    this.gradebook.getSubmissionTrayState(),
-    { open: true, studentId: this.student.id, assignmentId: this.assignment.id }
-  );
+  strictEqual(this.gradebook.getSubmissionTrayState().open, true);
 });
 
 test('onToggleSubmissionTrayOpen cancels current cell edit', function () {
   const props = this.factory.getProps(this.student);
   this.stub(this.gradebook, 'renderSubmissionTray');
   props.onToggleSubmissionTrayOpen(this.student.id, this.assignment.id);
-  strictEqual(this.gradebook.gridSupport.helper.commitCurrentEdit.callCount, 1);
+  strictEqual(this.gradebook.gradebookGrid.gridSupport.helper.commitCurrentEdit.callCount, 1);
 });
 
 test('isSubmissionTrayOpen is true if the tray is open for the cell', function () {

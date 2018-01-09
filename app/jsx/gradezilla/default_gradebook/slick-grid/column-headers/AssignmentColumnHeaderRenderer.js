@@ -19,40 +19,43 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import AssignmentColumnHeader from 'jsx/gradezilla/default_gradebook/components/AssignmentColumnHeader';
+import { optionsForGradingType } from 'jsx/gradezilla/shared/EnterGradesAsSetting';
+
+function getSubmission (student, assignmentId) {
+  const submission = student[`assignment_${assignmentId}`];
+
+  if (!submission) {
+    return { excused: false, latePolicyStatus: null, score: null, submittedAt: null };
+  }
+
+  return {
+    excused: submission.excused,
+    latePolicyStatus: submission.late_policy_status,
+    score: submission.score,
+    submittedAt: submission.submitted_at
+  };
+}
 
 function getProps (column, gradebook, options) {
   const assignmentId = column.assignmentId;
   const columnId = column.id;
   const sortRowsBySetting = gradebook.getSortRowsBySetting();
   const assignment = gradebook.getAssignment(column.assignmentId);
-  const assignmentKey = `assignment_${assignmentId}`;
 
   const gradeSortDataLoaded =
     gradebook.contentLoadStates.assignmentsLoaded &&
     gradebook.contentLoadStates.studentsLoaded &&
     gradebook.contentLoadStates.submissionsLoaded;
 
-  const studentIds = Object.values(gradebook.studentsThatCanSeeAssignment(assignmentId));
-  const students = studentIds.map((student) => {
-    let submission = {
-      score: null,
-      submittedAt: null
-    };
-
-    if (student[assignmentKey]) {
-      submission = {
-        score: student[assignmentKey].score,
-        submittedAt: student[assignmentKey].submitted_at
-      };
-    }
-
-    return {
+  const visibleStudentsForAssignment = Object.values(gradebook.studentsThatCanSeeAssignment(assignmentId));
+  const students = visibleStudentsForAssignment.map((student) => (
+    {
       id: student.id,
       isInactive: student.isInactive,
       name: student.name,
-      submission
-    };
-  });
+      submission: getSubmission(student, assignmentId)
+    }
+  ));
 
   return {
     ref: options.ref,
@@ -73,6 +76,16 @@ function getProps (column, gradebook, options) {
 
     curveGradesAction: gradebook.getCurveGradesAction(assignmentId),
     downloadSubmissionsAction: gradebook.getDownloadSubmissionsAction(assignmentId),
+
+    enterGradesAsSetting: {
+      hidden: optionsForGradingType(assignment.grading_type).length < 2, // show only multiple options
+      onSelect (value) {
+        gradebook.updateEnterGradesAsSetting(assignmentId, value);
+      },
+      selected: gradebook.getEnterGradesAsSetting(assignmentId),
+      showGradingSchemeOption: optionsForGradingType(assignment.grading_type).includes('gradingScheme')
+    },
+
     muteAssignmentAction: gradebook.getMuteAssignmentAction(assignmentId),
     onHeaderKeyDown: (event) => {
       gradebook.handleHeaderKeyDown(event, columnId);

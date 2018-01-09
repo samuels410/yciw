@@ -23,7 +23,7 @@ import I18n from 'i18n!common'
 import Backbone from 'Backbone'
 import updateSubnavMenuToggle from 'jsx/subnav_menu/updateSubnavMenuToggle'
 import splitAssetString from 'compiled/str/splitAssetString'
-import * as mathml from 'mathml'
+import {isMathMLOnPage, loadMathJax} from 'mathml'
 
 // modules that do their own thing on every page that simply need to be required
 import 'translations/_core_en'
@@ -43,6 +43,7 @@ import 'compiled/behaviors/tooltip'
 import 'compiled/behaviors/ic-super-toggle'
 import 'compiled/behaviors/instructure_inline_media_comment'
 import 'compiled/behaviors/ping'
+import 'compiled/behaviors/broken-images'
 import 'LtiThumbnailLauncher'
 import 'compiled/badge_counts'
 
@@ -127,8 +128,6 @@ if (!supportsCSSVars) {
   }, 'canvasCssVariablesPolyfill')
 }
 
-$(document).ready(() => {
-  if (mathml.isMathMLOnPage()) {
-    mathml.loadMathJax('MML_HTMLorMML.js')
-  }
+$(() => {
+  if (isMathMLOnPage()) loadMathJax('MML_HTMLorMML.js')
 })

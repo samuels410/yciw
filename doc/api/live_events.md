@@ -218,7 +218,7 @@ No extra data.
 | `quiz_id` | The Canvas id of the quiz. |
 
 
-#### `grade_changed`
+#### `grade_change`
 
 `grade_change` events are posted every time a grade changes. These can
 happen as the result of a teacher changing a grade in the gradebook or
@@ -332,6 +332,7 @@ by `asset_type` and `asset_id`.
 | `submission_id` | The Canvas id of the new submission. |
 | `assignment_id` | The Canvas id of the assignment being submitted. |
 | `user_id` | The Canvas id of the user associated with the submission. |
+| `lti_user_id` | The Lti id of the user associated with the submission. |
 | `submitted_at` | The timestamp when the assignment was submitted. |
 | `updated_at` | The time at which this assignment was last modified in any way |
 | `score` | The raw score |
@@ -341,6 +342,7 @@ by `asset_type` and `asset_id`.
 | `url` | The URL of the submission (for 'online_url' submissions) |
 | `attempt` | This is the submission attempt number. |
 | `lti_assignment_id` | The LTI assignment guid of the submission's assignment |
+| `group_id` | The submissions’s group ID if the assignment is a group assignment. |
 
 
 #### `submission_updated`
@@ -350,6 +352,7 @@ by `asset_type` and `asset_id`.
 | `submission_id` | The Canvas id of the new submission. |
 | `assignment_id` | The Canvas id of the assignment being submitted. |
 | `user_id` | The Canvas id of the user associated with the submission. |
+| `lti_user_id` | The Lti id of the user associated with the submission. |
 | `submitted_at` | The timestamp when the assignment was submitted. |
 | `updated_at` | The time at which this assignment was last modified in any way |
 | `score` | The raw score |
@@ -359,6 +362,7 @@ by `asset_type` and `asset_id`.
 | `url` | The URL of the submission (for 'online_url' submissions) |
 | `attempt` | This is the submission attempt number. |
 | `lti_assignment_id` | The LTI assignment guid of the submission's assignment |
+| `group_id` | The submissions’s group ID if the assignment is a group assignment. |
 
 
 #### `plagiarism_resubmit`
@@ -368,6 +372,7 @@ by `asset_type` and `asset_id`.
 | `submission_id` | The Canvas id of the new submission. |
 | `assignment_id` | The Canvas id of the assignment being submitted. |
 | `user_id` | The Canvas id of the user associated with the submission. |
+| `lti_user_id` | The Lti id of the user associated with the submission. |
 | `submitted_at` | The timestamp when the assignment was submitted. |
 | `updated_at` | The time at which this assignment was last modified in any way |
 | `score` | The raw score |
@@ -377,6 +382,7 @@ by `asset_type` and `asset_id`.
 | `url` | The URL of the submission (for 'online_url' submissions) |
 | `attempt` | This is the submission attempt number. |
 | `lti_assignment_id` | The LTI assignment guid of the submission's assignment |
+| `group_id` | The submissions’s group ID if the assignment is a group assignment. |
 
 #### `user_created`
 

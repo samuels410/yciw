@@ -78,6 +78,22 @@ describe Course do
       end.and_return(nil)
       @course.recompute_student_scores
     end
+
+    it "should not use student ids for deleted enrollments, even if they are explicitly passed" do
+      @course.save!
+      enrollment = course_with_student(course: @course, active_all: true)
+      enrollment.destroy
+      expect(Enrollment).to receive(:recompute_final_score).with([], any_args)
+      @course.recompute_student_scores([enrollment.user_id])
+    end
+
+    it "should not use student ids for users enrolled in other courses, even if they are explicitly passed" do
+      @course.save!
+      first_course = @course
+      enrollment = course_with_student(active_all: true)
+      expect(Enrollment).to receive(:recompute_final_score).with([], any_args)
+      first_course.recompute_student_scores([enrollment.user_id])
+    end
   end
 
   it "should properly determine if group weights are active" do
@@ -245,6 +261,34 @@ describe Course do
 
     it "should return false if neither course nor account have grading periods" do
       expect(@course.grading_periods?).to be false
+    end
+  end
+
+  describe "#relevant_grading_period_group" do
+    it "favors legacy over enrollment term grading_period_groups" do
+      @course.save!
+      account_group = Factories::GradingPeriodGroupHelper.new.create_for_account(@course.root_account)
+      account_group.enrollment_terms << @course.enrollment_term
+      grading_period_group = Factories::GradingPeriodGroupHelper.new.legacy_create_for_course(@course)
+      expect(@course.relevant_grading_period_group).to eq(grading_period_group)
+    end
+
+    it "returns a legacy grading_period_group" do
+      @course.save!
+      grading_period_group = Factories::GradingPeriodGroupHelper.new.legacy_create_for_course(@course)
+      expect(@course.relevant_grading_period_group).to eq(grading_period_group)
+    end
+
+    it "returns an enrollment term grading_period_group" do
+      @course.save!
+      grading_period_group = Factories::GradingPeriodGroupHelper.new.create_for_account(@course.root_account)
+      grading_period_group.enrollment_terms << @course.enrollment_term
+      expect(@course.relevant_grading_period_group).to eq(grading_period_group)
+    end
+
+    it "returns nil when there are no relevant grading_period_group" do
+      @course.save!
+      expect(@course.relevant_grading_period_group).to be nil
     end
   end
 
@@ -890,6 +934,7 @@ describe Course do
     end
 
     it "should preserve sticky fields" do
+      sub = @course.root_account.sub_accounts.create
       @course.sis_source_id = 'sis_id'
       @course.course_code = "cid"
       @course.save!
@@ -899,20 +944,21 @@ describe Course do
       profile = @course.profile
       profile.description = "description"
       profile.save!
+      @course.account = sub
       @course.save!
-      expect(@course.stuck_sis_fields).to eq [:name].to_set
+      expect(@course.stuck_sis_fields).to eq [:name, :account_id].to_set
 
       @course.reload
 
       @new_course = @course.reset_content
 
       @course.reload
-      expect(@course.stuck_sis_fields).to eq [:workflow_state, :name].to_set
+      expect(@course.stuck_sis_fields).to eq [:workflow_state, :name, :account_id].to_set
       expect(@course.sis_source_id).to be_nil
 
       @new_course.reload
       expect(@new_course.sis_source_id).to eq 'sis_id'
-      expect(@new_course.stuck_sis_fields).to eq [:name].to_set
+      expect(@new_course.stuck_sis_fields).to eq [:name, :account_id].to_set
 
       expect(@course.uuid).not_to eq @new_course.uuid
       expect(@course.replacement_course_id).to eq @new_course.id
@@ -2088,77 +2134,6 @@ describe Course, "tabs_available" do
       expect(tab_ids).to include(Course::TAB_OUTCOMES)
     end
   end
-end
-
-describe Course, "backup" do
-  let_once :course_to_backup do
-    @course = course_factory
-    group = @course.assignment_groups.create!(:name => "Some Assignment Group")
-    @course.assignments.create!(:title => "Some Assignment", :assignment_group => group)
-    @course.calendar_events.create!(:title => "Some Event", :start_at => Time.now, :end_at => Time.now)
-    @course.wiki_pages.create!(:title => "Some Page")
-    topic = @course.discussion_topics.create!(:title => "Some Discussion")
-    topic.discussion_entries.create!(:message => "just a test")
-    @course
-  end
-
-  it "should backup to a valid data structure" do
-    data = course_to_backup.backup
-    expect(data).not_to be_nil
-    expect(data.length).to be > 0
-    expect(data.any?{|i| i.is_a?(Assignment)}).to eql(true)
-    expect(data.any?{|i| i.is_a?(WikiPage)}).to eql(true)
-    expect(data.any?{|i| i.is_a?(DiscussionTopic)}).to eql(true)
-    expect(data.any?{|i| i.is_a?(CalendarEvent)}).to eql(true)
-  end
-
-  it "should backup to a valid json string" do
-    data = course_to_backup.backup_to_json
-    expect(data).not_to be_nil
-    expect(data.length).to be > 0
-    parse = JSON.parse(data) rescue nil
-    expect(parse).not_to be_nil
-    expect(parse).to be_is_a(Array)
-    expect(parse.length).to be > 0
-  end
-
-  it "should not cross learning outcomes with learning outcome groups in the association" do
-    skip('fails when being run in the single thread rake task')
-    # set up two courses with two outcomes
-    course = course_model
-    default_group = course.root_outcome_group
-    outcome = course.created_learning_outcomes.create!
-    default_group.add_outcome(outcome)
-
-    other_course = course_model
-    other_default_group = other_course.root_outcome_group
-    other_outcome = other_course.created_learning_outcomes.create!
-    other_default_group.add_outcome(other_outcome)
-
-    # add another group to the first course, which "coincidentally" has the
-    # same id as the second course's outcome
-    other_group = course.learning_outcome_groups.build
-    other_group.id = other_outcome.id
-    other_group.save!
-    default_group.adopt_outcome_group(other_group)
-
-    # reload and check
-    course.reload
-    other_course.reload
-    expect(course.learning_outcomes).to be_include(outcome)
-    expect(course.learning_outcomes).not_to be_include(other_outcome)
-    expect(other_course.learning_outcomes).to be_include(other_outcome)
-  end
-
-  it "should not count learning outcome groups as having outcomes" do
-    course = course_model
-    default_group = course.root_outcome_group
-    other_group = course.learning_outcome_groups.create!(:title => 'other group')
-    default_group.adopt_outcome_group(other_group)
-
-    expect(course).not_to have_outcomes
-  end
-
 end
 
 describe Course, 'grade_publishing' do
@@ -3467,6 +3442,9 @@ describe Course, "manageable_by_user" do
     course = Course.create!(:account => sub_sub_account)
 
     expect(Course.manageable_by_user(user.id).map{ |c| c.id }).to be_include(course.id)
+
+    user.account_users.first.destroy!
+    expect(Course.manageable_by_user(user.id)).to_not be_exists
   end
 
   it "should include courses the user is actively enrolled in as a teacher" do
@@ -3673,6 +3651,18 @@ describe Course, "section_visibility" do
   end
 
   context "full" do
+    it "returns rejected enrollments if passed :priors_and_deleted" do
+      @course.student_enrollments.find_by(user_id: @student1).update!(workflow_state: "rejected")
+      visible_student_ids = @course.students_visible_to(@teacher, include: :priors_and_deleted).pluck(:id)
+      expect(visible_student_ids).to include @student1.id
+    end
+
+    it "returns deleted enrollments if passed :priors_and_deleted" do
+      @course.student_enrollments.find_by(user_id: @student1).destroy
+      visible_student_ids = @course.students_visible_to(@teacher, include: :priors_and_deleted).pluck(:id)
+      expect(visible_student_ids).to include @student1.id
+    end
+
     it "should return students from all sections" do
       expect(@course.students_visible_to(@teacher).sort_by(&:id)).to eql [@student1, @student2]
       expect(@course.students_visible_to(@student1).sort_by(&:id)).to eql [@student1, @student2]
@@ -3686,7 +3676,7 @@ describe Course, "section_visibility" do
       expect(@course.sections_visible_to(@student1)).to eq [@course.default_section]
     end
 
-    it "should ignore concluded secitions if option is given" do
+    it "should ignore concluded sections if option is given" do
       @student1 = student_in_section(@other_section, {:active_all => true})
       @student1.enrollments.each(&:conclude)
 
@@ -4926,5 +4916,124 @@ describe Course, "#default_home_page" do
 
   it "is set assigned to 'default_view' on creation'" do
     expect(course.default_view).to eq 'modules'
+  end
+end
+
+describe Course, "#show_total_grade_as_points?" do
+  before(:once) do
+    @course = Course.create!
+  end
+
+  it "returns true if the course settings include show_total_grade_as_points: true" do
+    @course.update!(show_total_grade_as_points: true)
+    expect(@course).to be_show_total_grade_as_points
+  end
+
+  it "returns false if the course settings include show_total_grade_as_points: false" do
+    @course.update!(show_total_grade_as_points: false)
+    expect(@course).not_to be_show_total_grade_as_points
+  end
+
+  it "returns false if the course settings do not include show_total_grade_as_points" do
+    expect(@course).not_to be_show_total_grade_as_points
+  end
+
+  context "course settings include show_total_grade_as_points: true" do
+    before(:once) do
+      @course.update!(show_total_grade_as_points: true)
+    end
+
+    it "returns true if assignment groups are not weighted" do
+      @course.group_weighting_scheme = "equal"
+      expect(@course).to be_show_total_grade_as_points
+    end
+
+    it "returns false if assignment groups are weighted" do
+      @course.group_weighting_scheme = "percent"
+      expect(@course).not_to be_show_total_grade_as_points
+    end
+
+    context "assignment groups are not weighted" do
+      before(:once) do
+        @course.update!(group_weighting_scheme: "equal")
+      end
+
+      it "returns true if the associated grading period group is not weighted" do
+        group = @course.account.grading_period_groups.create!
+        group.enrollment_terms << @course.enrollment_term
+        expect(@course).to be_show_total_grade_as_points
+      end
+
+      it "returns false if the associated grading period group is weighted" do
+        group = @course.account.grading_period_groups.create!(weighted: true)
+        group.enrollment_terms << @course.enrollment_term
+        expect(@course).not_to be_show_total_grade_as_points
+      end
+    end
+  end
+
+  describe Course, "#gradebook_backwards_incompatible_features_enabled?" do
+    let(:course) { Course.create! }
+
+    it "returns true if a late policy is enabled" do
+      course.late_policy = LatePolicy.new(late_submission_deduction_enabled: true)
+
+      expect(course.gradebook_backwards_incompatible_features_enabled?).to be true
+    end
+
+    it "returns true if a missing policy is enabled" do
+      course.late_policy = LatePolicy.new(missing_submission_deduction_enabled: true)
+
+      expect(course.gradebook_backwards_incompatible_features_enabled?).to be true
+    end
+
+    it "returns true if both a late and missing policy are enabled" do
+      course.late_policy =
+        LatePolicy.new(late_submission_deduction_enabled: true, missing_submission_deduction_enabled: true)
+
+      expect(course.gradebook_backwards_incompatible_features_enabled?).to be true
+    end
+
+    it "returns false if there are no policies" do
+      expect(course.gradebook_backwards_incompatible_features_enabled?).to be false
+    end
+
+    it "returns false if both policies are disabled" do
+      course.late_policy =
+        LatePolicy.new(late_submission_deduction_enabled: false, missing_submission_deduction_enabled: false)
+
+      expect(course.gradebook_backwards_incompatible_features_enabled?).to be false
+    end
+
+    context "With submissions" do
+      let(:student) { student_in_course(course: course).user }
+      let!(:assignment) { course.assignments.create!(title: 'assignment', points_possible: 10) }
+      let(:submission) { assignment.submissions.find_by(user: student) }
+
+      it "returns true if they are any submissions with a late_policy_status of none" do
+        submission.late_policy_status = 'none'
+        submission.save!
+
+        expect(course.gradebook_backwards_incompatible_features_enabled?).to be true
+      end
+
+      it "returns true if they are any submissions with a late_policy_status of missing" do
+        submission.late_policy_status = 'missing'
+        submission.save!
+
+        expect(course.gradebook_backwards_incompatible_features_enabled?).to be true
+      end
+
+      it "returns true if they are any submissions with a late_policy_status of late" do
+        submission.late_policy_status = 'late'
+        submission.save!
+
+        expect(course.gradebook_backwards_incompatible_features_enabled?).to be true
+      end
+
+      it "returns false if there are no policies and no submissions with late_policy_status" do
+        expect(course.gradebook_backwards_incompatible_features_enabled?).to be false
+      end
+    end
   end
 end

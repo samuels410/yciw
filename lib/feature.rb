@@ -108,6 +108,14 @@ class Feature
   # TODO: register built-in features here
   # (plugins may register additional features during application initialization)
   register(
+    'section_specific_announcements' =>
+    {
+      display_name: -> { I18n.t('Section Specific Announcements') },
+      description: -> { I18n.t('Allows creating announcements for a specific section') },
+      applies_to: 'Account',
+      state: 'hidden',
+      development: true,
+    },
     'google_docs_domain_restriction' =>
     {
       display_name: -> { I18n.t('features.google_docs_domain_restriction', 'Google Docs Domain Restriction') },
@@ -209,15 +217,20 @@ END
 New Gradebook enables an early release of new Gradebook enhancements.
 END
       applies_to: 'Course',
-      state: 'hidden',
+      state: 'allowed',
       root_opt_in: true,
       beta: true,
 
       custom_transition_proc: ->(user, context, _from_state, transitions) do
         if context.is_a?(Course)
-          user_may_change_flag = context.account.grants_right?(user, :manage_account_settings)
-          transitions['on']['locked'] = !user_may_change_flag if transitions&.dig('on')
-          transitions['off']['locked'] = !user_may_change_flag if transitions&.dig('off')
+          if !context.grants_right?(user, :change_course_state)
+            transitions['on']['locked'] = true if transitions&.dig('on')
+            transitions['off']['locked'] = true if transitions&.dig('off')
+          else
+            should_lock = context.gradebook_backwards_incompatible_features_enabled?
+            transitions['on']['locked'] = should_lock if transitions&.dig('on')
+            transitions['off']['locked'] = should_lock if transitions&.dig('off')
+          end
         elsif context.is_a?(Account)
           transitions['on']['locked'] = true if transitions&.dig('on')
         end
@@ -242,6 +255,16 @@ END
       applies_to: 'Course',
       state: 'hidden',
       root_opt_in: true,
+      beta: true
+    },
+    'duplicate_modules' =>
+    {
+      display_name: -> { I18n.t('Duplicate Modules') },
+      description: -> { I18n.t("Allows the duplicating of modules in Canvas") },
+      applies_to: 'Account',
+      state: 'hidden',
+      root_opt_in: true,
+      development: true,
       beta: true
     },
     'allow_opt_out_of_inbox' =>
@@ -400,6 +423,15 @@ END
       development: true,
       root_opt_in: true
     },
+    'responsive_layout' =>
+    {
+      display_name: -> { I18n.t('Responsive Layout') },
+      description: -> { I18n.t('This is a feature to allow the development of a responsive layout ') },
+      applies_to: 'RootAccount',
+      state: 'hidden',
+      development: true,
+      root_opt_in: false
+    },
     'anonymous_grading' => {
       display_name: -> { I18n.t('Anonymous Grading') },
       description: -> { I18n.t("Anonymous grading forces student names to be hidden in SpeedGrader™") },
@@ -417,7 +449,7 @@ END
       display_name: -> { I18n.t('Account Course and User Search') },
       description: -> { I18n.t('Updated UI for searching and displaying users and courses within an account.') },
       applies_to: 'Account',
-      state: 'hidden',
+      state: 'hidden_in_prod',
       beta: true,
       development: true,
       root_opt_in: true,
@@ -482,15 +514,6 @@ END
         end
       end
     },
-    'plagiarism_detection_platform' =>
-    {
-      display_name: -> { I18n.t('Plagiarism Detection Platform') },
-      description: -> { I18n.t('Enable the plagiarism detection platform') },
-      applies_to: 'RootAccount',
-      state: 'hidden',
-      beta: true,
-      root_opt_in: true
-    },
     'master_courses' =>
     {
       display_name: -> { I18n.t('Blueprint Courses') }, # this won't be confusing at all
@@ -508,15 +531,6 @@ END
       state: "allowed",
       beta: true,
       root_opt_in: true,
-    },
-    'new_gradebook_history' =>
-    {
-      display_name: -> { I18n.t('New Gradebook History') },
-      description: -> { I18n.t('Enable New Gradebook History page.') },
-      applies_to: "RootAccount",
-      state: "hidden",
-      beta: true,
-      development: true,
     },
     'new_user_tutorial' =>
     {
@@ -539,16 +553,7 @@ END
       display_name: -> { I18n.t('Export to Quizzes 2 format') },
       description: -> { I18n.t('Export an existing quiz to new Quizzes 2 format') },
       applies_to: "RootAccount",
-      state: "hidden_in_prod",
-      root_opt_in: true
-    },
-    'lti_2_auth_url_registration' =>
-    {
-      display_name: -> { I18n.t('Send Authorization URL in LTI2 Registration') },
-      description: -> { I18n.t("If enabled, 'oauth2_access_token_url' will be sent in LTI2 registration launch") },
-      applies_to: 'RootAccount',
-      state: 'hidden',
-      beta: false,
+      state: "hidden",
       root_opt_in: true
     },
     'graphql' =>
@@ -556,10 +561,23 @@ END
       display_name: -> { I18n.t("GraphQL API") },
       description: -> { I18n.t("EXPERIMENTAL GraphQL API.") },
       applies_to: "RootAccount",
-      state: "hidden",
+      state: "hidden_in_prod",
       beta: true,
-      development: true,
     },
+    'rubric_criterion_range' =>
+    {
+      display_name: -> { I18n.t('Rubric Criterion Range') },
+      description: -> { I18n.t('Specify max and min points to clarify boundaries of a rubric criterion rating.') },
+      applies_to: "RootAccount",
+      state: "allowed",
+      root_opt_in: true
+    },
+    'encrypted_sourcedids' => {
+      display_name: -> { I18n.t('Encrypted Sourcedids for Basic Outcomes') },
+      description: -> { I18n.t('If enabled, Sourcedids used by Canvas for Basic Outcomes will be encrypted.') },
+      applies_to: 'RootAccount',
+      state: 'allowed'
+    }
   )
 
   def self.definitions

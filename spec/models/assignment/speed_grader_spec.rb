@@ -16,6 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 require 'spec_helper'
+require 'lti2_spec_helper'
 
 describe Assignment::SpeedGrader do
   before :once do
@@ -235,6 +236,30 @@ describe Assignment::SpeedGrader do
           expect(submission[:late]).to eq user.submissions.first.late?
         end
       end
+    end
+
+    it "creates a non-annotatable DocViewer session for Discussion attachments" do
+      course = student_in_course(active_all: true).course
+      assignment = assignment_model(course: course)
+      topic = course.discussion_topics.create!(assignment: assignment)
+      attachment = attachment_model(
+        context: @student,
+        uploaded_data: stub_png_data,
+        filename: "homework.png"
+      )
+      entry = topic.reply_from(user: @student, text: "entry")
+      entry.attachment = attachment
+      entry.save!
+      topic.ensure_submission(@student)
+
+      expect(Canvadocs).to receive(:enabled?).twice.and_return(true)
+      expect(Canvadocs).to receive(:config).and_return({ a: 1 })
+      expect(Canvadoc).to receive(:mime_types).and_return( "image/png")
+
+      json = Assignment::SpeedGrader.new(assignment, @teacher).json
+      sub = json[:submissions].first[:submission_history].first[:submission]
+      canvadoc_url = sub[:versioned_attachments].first.dig(:attachment, :canvadoc_url)
+      expect(canvadoc_url.include?("enable_annotations%22:false")).to eq true
     end
 
     it "includes submission missing status in each submission history version" do
@@ -557,10 +582,14 @@ describe Assignment::SpeedGrader do
       student_in_course(:course => @course, :user => @other_student, :active_all => true)
     end
 
+    def find_real_submission(json)
+      json['submissions'].find { |s| s['workflow_state'] != 'unsubmitted' }
+    end
+
     it "returns submission comments with null provisional grade" do
       course_with_ta :course => @course, :active_all => true
       json = Assignment::SpeedGrader.new(@assignment, @ta, :grading_role => :provisional_grader).json
-      expect(json['submissions'][0]['submission_comments'].map { |comment| comment['comment'] }).to match_array ['real comment']
+      expect(find_real_submission(json)['submission_comments'].map { |comment| comment['comment'] }).to match_array ['real comment']
     end
 
     describe "for provisional grader" do
@@ -569,12 +598,13 @@ describe Assignment::SpeedGrader do
       end
 
       it "includes only the grader's provisional grades" do
-        expect(@json['submissions'][0]['score']).to eq 3
-        expect(@json['submissions'][0]['provisional_grades']).to be_nil
+        s = find_real_submission(@json)
+        expect(s['score']).to eq 3
+        expect(s['provisional_grades']).to be_nil
       end
 
       it "includes only the grader's provisional comments (and the real ones)" do
-        expect(@json['submissions'][0]['submission_comments'].map { |comment| comment['comment'] }).to match_array ['other provisional comment', 'real comment']
+        expect(find_real_submission(@json)['submission_comments'].map { |comment| comment['comment'] }).to match_array ['other provisional comment', 'real comment']
       end
 
       it "only includes the grader's provisional rubric assessments" do
@@ -595,8 +625,9 @@ describe Assignment::SpeedGrader do
       end
 
       it "includes the moderator's provisional grades and comments" do
-        expect(@json['submissions'][0]['score']).to eq 2
-        expect(@json['submissions'][0]['submission_comments'].map { |comment| comment['comment'] }).to match_array ['provisional comment', 'real comment']
+        s = find_real_submission(@json)
+        expect(s['score']).to eq 2
+        expect(s['submission_comments'].map { |comment| comment['comment'] }).to match_array ['provisional comment', 'real comment']
       end
 
       it "includes the moderator's provisional rubric assessments" do
@@ -606,7 +637,7 @@ describe Assignment::SpeedGrader do
       end
 
       it "lists all provisional grades" do
-        pgs = @json['submissions'][0]['provisional_grades']
+        pgs = find_real_submission(@json)['provisional_grades']
         expect(pgs.size).to eq 2
         expect(pgs.map { |pg| [pg['score'], pg['scorer_id'], pg['submission_comments'].map{|c| c['comment']}.sort] }).to match_array(
           [
@@ -617,19 +648,22 @@ describe Assignment::SpeedGrader do
       end
 
       it "includes all the other provisional rubric assessments in their respective grades" do
-        ta_pras = @json['submissions'][0]['provisional_grades'][1]['rubric_assessments']
+        ta_pras = find_real_submission(@json)['provisional_grades'][1]['rubric_assessments']
         expect(ta_pras.count).to eq 1
         expect(ta_pras[0]['assessor_id']).to eq @ta.id.to_s
       end
 
       it "includes whether the provisional grade is selected" do
-        expect(@json['submissions'][0]['provisional_grades'][0]['selected']).to be_truthy
-        expect(@json['submissions'][0]['provisional_grades'][1]['selected']).to be_falsey
+        s = find_real_submission(@json)
+        expect(s['provisional_grades'][0]['selected']).to be_truthy
+        expect(s['provisional_grades'][1]['selected']).to be_falsey
       end
     end
   end
 
   context "OriginalityReport" do
+    include_context 'lti2_spec_helper'
+
     let_once(:test_course) do
       test_course = course_factory(active_course: true)
       test_course.enroll_teacher(test_teacher, enrollment_state: 'active')
@@ -640,12 +674,16 @@ describe Assignment::SpeedGrader do
     let_once(:test_teacher) { User.create }
     let_once(:test_student) { User.create }
 
-    it 'includes the OriginalityReport in the json' do
-      assignment = Assignment.create!(title: "title", context: test_course)
+    let(:assignment) { Assignment.create!(title: "title", context: test_course) }
+    let(:attachment) do
       attachment = test_student.attachments.new :filename => "homework.doc"
       attachment.content_type = "foo/bar"
       attachment.size = 10
       attachment.save!
+      attachment
+    end
+
+    it 'includes the OriginalityReport in the json' do
       submission = assignment.submit_homework(test_student, submission_type: 'online_upload', attachments: [attachment])
       submission.update_attribute(:turnitin_data, {blah: 1})
       OriginalityReport.create!(attachment: attachment, originality_score: '1', submission: submission)
@@ -655,17 +693,38 @@ describe Assignment::SpeedGrader do
     end
 
     it "includes 'has_originality_report' in the json" do
-      assignment = Assignment.create!(title: "title", context: test_course)
-      attachment = test_student.attachments.new :filename => "homework.doc"
-      attachment.content_type = "foo/bar"
-      attachment.size = 10
-      attachment.save!
       submission = assignment.submit_homework(test_student, submission_type: 'online_upload', attachments: [attachment])
       submission.update_attribute(:turnitin_data, {blah: 1})
       OriginalityReport.create!(attachment: attachment, originality_score: '1', submission: submission)
       json = Assignment::SpeedGrader.new(assignment, test_teacher).json
       has_report = json['submissions'].first['submission_history'].first['submission']['has_originality_report']
       expect(has_report).to be_truthy
+    end
+
+    it 'includes "has_plagiarism_tool" if the assignment has a plagiarism tool' do
+      submission = assignment.submit_homework(test_student, submission_type: 'online_upload', attachments: [attachment])
+      submission.update_attribute(:turnitin_data, {blah: 1})
+
+      AssignmentConfigurationToolLookup.create!(
+        assignment: assignment,
+        tool_vendor_code: product_family.vendor_code,
+        tool_product_code: product_family.product_code,
+        tool_resource_type_code: resource_handler.resource_type_code,
+        tool_type: 'Lti::MessageHandler'
+      )
+
+      json = Assignment::SpeedGrader.new(assignment, test_teacher).json
+      has_tool = json['submissions'].first['submission_history'].first['submission']['has_plagiarism_tool']
+      expect(has_tool).to be_truthy
+    end
+
+    it 'includes "has_originality_score" if the originality report includes an originality score' do
+      submission = assignment.submit_homework(test_student, submission_type: 'online_upload', attachments: [attachment])
+      submission.update_attribute(:turnitin_data, {blah: 1})
+      OriginalityReport.create!(attachment: attachment, originality_score: '1', submission: submission)
+      json = Assignment::SpeedGrader.new(assignment, test_teacher).json
+      has_score = json['submissions'].first['submission_history'].first['submission']['has_originality_score']
+      expect(has_score).to be_truthy
     end
   end
 

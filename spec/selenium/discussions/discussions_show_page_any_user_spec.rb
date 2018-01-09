@@ -258,6 +258,7 @@ describe "discussions" do
       it "should not show keyboard shortcut modal during html editing", priority: "2", test_id: 846539 do
         get url
         f('.discussion-reply-action').click
+        wait_for_tiny(fj('.discussion-reply-form:visible textarea'))
         fln('HTML Editor').click
         fj('.reply-textarea:visible').send_keys("< , > , ?, /")
         expect(f('.ui-dialog')).not_to be_displayed
@@ -342,6 +343,7 @@ describe "discussions" do
         end
 
         it "should delete a side comment", priority: "1", test_id: 345490 do
+          skip_if_safari(:alert)
           entry = topic.discussion_entries.create!(:user => somebody, :message => "new side comment from somebody", :parent_entry => entry)
           get url
           delete_entry(entry)

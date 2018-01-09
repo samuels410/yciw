@@ -103,6 +103,12 @@ module CC::Importer::Standard
           assignment[:saved_rubric_comments][comment_node['criterion_id']] << comment_node.text.strip
         end
       end
+      if meta_doc.at_css("similarity_detection_tool")
+        node = meta_doc.at_css("similarity_detection_tool")
+        similarity_settings = node.attributes.each_with_object({}) { |(k,v), h| h[k] = v.value }
+        assignment[:similarity_detection_tool] = similarity_settings
+      end
+
       ['title', "allowed_extensions", "grading_type", "submission_types", "external_tool_url", "turnitin_settings"].each do |string_type|
         val = get_node_val(meta_doc, string_type)
         assignment[string_type] = val unless val.nil?
@@ -111,7 +117,7 @@ module CC::Importer::Standard
        "automatic_peer_reviews", "anonymous_peer_reviews", "freeze_on_copy",
        "grade_group_students_individually", "external_tool_new_tab", "moderated_grading",
        "rubric_use_for_grading", "rubric_hide_score_total", "muted", "has_group_category",
-       "omit_from_final_grade", "intra_group_peer_reviews", "only_visible_to_overrides"].each do |bool_val|
+       "omit_from_final_grade", "intra_group_peer_reviews", "only_visible_to_overrides", "post_to_sis"].each do |bool_val|
         val = get_bool_val(meta_doc, bool_val)
         assignment[bool_val] = val unless val.nil?
       end
@@ -140,7 +146,6 @@ module CC::Importer::Standard
           assignment[:assignment_overrides] << override
         end
       end
-
       assignment
     end
   end

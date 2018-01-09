@@ -90,6 +90,13 @@ define [
           fetchedUndated: false,
         }
 
+    removeCachedReservation: (event) =>
+      cached_ag = @cache.appointmentGroups[event.appointment_group_id]
+      if cached_ag
+        cached_ag.reserved_times = _.reject cached_ag.reserved_times, (reservation) ->
+          reservation.id == event.id
+        cached_ag.requiring_action = true if cached_ag.reserved_times.length == 0
+
     requiredDateRangeForContext: (start, end, context) =>
       unless contextInfo = @cache.contexts[context]
         return [ start, end ]
@@ -306,7 +313,13 @@ define [
       dataCB = (data, url, params) =>
         return unless data
         newEvents = []
-        key = 'type_'+params.type
+        # planner_notes are passing thru here too now
+        # detect and add some missing fields the calendar code needs
+        if data.length and 'todo_date' of data[0]
+          data = @fillOutPlannerNotes(data, url)
+          key = 'type_planner_note'
+        else
+          key = 'type_'+params.type
         requestResult = requestResults[key] or {events: []}
         requestResult.next = data.next
         for e in data
@@ -368,10 +381,12 @@ define [
         list.requestID = options.requestID
         donecb list
 
-      @startFetch [
+      eventDataSources = [
         [ '/api/v1/calendar_events', params ]
         [ '/api/v1/calendar_events', @assignmentParams(params) ]
-      ], dataCB, doneCB, options
+      ]
+      eventDataSources.push([ '/api/v1/planner_notes', params ]) if ENV.STUDENT_PLANNER_ENABLED
+      @startFetch eventDataSources, dataCB, doneCB, options
 
     assignmentParams: (params) ->
       p = $.extend({type: 'assignment'}, params)
@@ -461,3 +476,12 @@ define [
           return
 
         cb(data, true)
+
+    # Planner notes are getting pulled from the planner_notes api
+    # Add some necessary fields so they can be processed just like a calendar event
+    fillOutPlannerNotes: (notes, url) ->
+      notes.forEach (note) ->
+        note.type = "planner_note"
+        note.context_code = if note.course_id then "course_#{note.course_id}" else "user_#{note.user_id}"
+        note.all_context_codes = note.context_code
+      notes

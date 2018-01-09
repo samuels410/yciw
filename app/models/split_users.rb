@@ -98,6 +98,7 @@ class SplitUsers
     private
 
     def split_users(user, merge_data)
+      # user is the active user that was the destination of the user merge
       user.shard.activate do
         ActiveRecord::Base.transaction do
           records = merge_data.user_merge_data_records
@@ -115,6 +116,8 @@ class SplitUsers
       end
     end
 
+    # source_user is the destination user of the user merge
+    # user is the old user that is being restored
     def move_records_to_old_user(source_user, user, records)
       fix_communication_channels(source_user, user, records.where(context_type: 'CommunicationChannel'))
       move_user_observers(source_user, user, records.where(context_type: 'UserObserver', previous_user_id: user))
@@ -140,11 +143,16 @@ class SplitUsers
       restore_worklow_states_from_records(records)
     end
 
+    # source_user is the destination user of the user merge
+    # user is the old user that is being restored
     def fix_communication_channels(source_user, user, cc_records)
       if source_user.shard != user.shard
-        user.shard.activate do
+        source_user.shard.activate do
           # remove communication channels that didn't exist prior to the merge
-          CommunicationChannel.where(id: cc_records.where(previous_workflow_state: 'non_existent').pluck(:context_id)).delete_all
+          ccs = CommunicationChannel.where(id: cc_records.where(previous_workflow_state: 'non_existent').pluck(:context_id))
+          DelayedMessage.where(communication_channel_id: ccs).delete_all
+          NotificationPolicy.where(communication_channel: ccs).delete_all
+          ccs.delete_all
         end
       end
       # move moved communication channels back
@@ -198,7 +206,9 @@ class SplitUsers
     end
 
     def transfer_enrollment_data(source_user, target_user, courses)
-      Shard.partition_by_shard(courses) do |shard_course|
+      # use a partition proc so that we only run on the actual course shard, not all
+      # shards associated with the course
+      Shard.partition_by_shard(courses, ->(course) { course.shard }) do |shard_course|
         source_user_id = source_user.id
         target_user_id = target_user.id
         ENROLLMENT_DATA_UPDATES.each do |update|
@@ -217,7 +227,7 @@ class SplitUsers
 
     def handle_submissions(courses, source_user, target_user, target_user_id)
       source_user.submissions.where(assignment_id: Assignment.where(context_id: courses)).
-        where.not(assignment_id: target_user.submissions.select(:assignment_id)).
+        where.not(assignment_id: target_user.all_submissions.select(:assignment_id)).
         update_all(user_id: target_user_id)
       source_user.quiz_submissions.where(quiz_id: Quizzes::Quiz.where(context_id: courses)).
         where.not(quiz_id: target_user.quiz_submissions.select(:quiz_id)).

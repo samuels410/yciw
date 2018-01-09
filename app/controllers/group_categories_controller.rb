@@ -98,7 +98,7 @@ class GroupCategoriesController < ApplicationController
 
   # @API List group categories for a context
   #
-  # Returns a list of group categories in a context
+  # Returns a paginated list of group categories in a context
   #
   # @example_request
   #     curl https://<canvas>/api/v1/accounts/<account_id>/group_categories \
@@ -291,7 +291,7 @@ class GroupCategoriesController < ApplicationController
 
   # @API List groups in group category
   #
-  # Returns a list of groups in a group category
+  # Returns a paginated list of groups in a group category
   #
   # @example_request
   #     curl https://<canvas>/api/v1/group_categories/<group_cateogry_id>/groups \
@@ -309,7 +309,7 @@ class GroupCategoriesController < ApplicationController
   include Api::V1::User
   # @API List users in group category
   #
-  # Returns a list of users in the group category.
+  # Returns a paginated list of users in the group category.
   #
   # @argument search_term [String]
   #   The partial name or full ID of the users to match and return in the results
@@ -335,7 +335,7 @@ class GroupCategoriesController < ApplicationController
     search_params = params.slice(:search_term)
     search_params[:enrollment_type] = "student" if @context.is_a? Course
 
-    @group_category ||= @context.group_categories.where(id: params[:category_id]).first
+    @group_category ||= @context.group_categories.where(id: params[:group_category_id]).first
     exclude_groups = value_to_boolean(params[:unassigned]) ? @group_category.groups.active.pluck(:id) : []
     search_params[:exclude_groups] = exclude_groups
 
@@ -345,8 +345,18 @@ class GroupCategoriesController < ApplicationController
       users = UserSearch.scope_for(@context, @current_user, search_params)
     end
 
+    includes = Array(params[:include])
     users = Api.paginate(users, self, api_v1_group_category_users_url)
-    render :json => users_json(users, @current_user, session, Array(params[:include]), @context, nil, Array(params[:exclude]))
+    json_users = users_json(users, @current_user, session, includes, @context, nil, Array(params[:exclude]))
+
+    if includes.include?('group_submissions') && @group_category.context_type == "Course"
+      submissions_by_user = @group_category.submission_ids_by_user_id(users.map(&:id))
+      json_users.each do |user|
+        user[:group_submissions] = submissions_by_user[user[:id]]
+      end
+    end
+
+    render :json => json_users
   end
 
   # @API Assign unassigned members

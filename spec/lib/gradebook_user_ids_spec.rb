@@ -462,9 +462,19 @@ describe GradebookUserIds do
           it "places students that are not assigned at the end, but before fake students" do
             @assignment.update!(only_visible_to_overrides: true)
             create_adhoc_override_for_assignment(@assignment, [@student1, @student3, @student2], due_at: nil)
-            student5 = student_in_course(course: @course, active_all: true).user
             expect(gradebook_user_ids.user_ids).to eq(
-              [@student2.id, @student1.id, @student4.id, @student3.id, student5.id, @fake_student.id]
+              [@student2.id, @student1.id, @student3.id, @student4.id, @fake_student.id]
+            )
+          end
+
+          it "returns all students even if only a subset is assigned" do
+            assignment = @course.assignments.create!(points_possible: 10, only_visible_to_overrides: true)
+            create_adhoc_override_for_assignment(assignment, [@student1, @student3], due_at: nil)
+            @teacher.preferences[:gradebook_settings][@course.id][:sort_rows_by_column_id] =
+              "assignment_#{assignment.id}"
+
+            expect(gradebook_user_ids.user_ids).to eq(
+              [@student1.id, @student3.id, @student4.id, @student2.id, @fake_student.id]
             )
           end
         end
@@ -495,9 +505,8 @@ describe GradebookUserIds do
           it "places students that are not assigned at the end, but before fake students" do
             @assignment.update!(only_visible_to_overrides: true)
             create_adhoc_override_for_assignment(@assignment, [@student1, @student3, @student2], due_at: nil)
-            student5 = student_in_course(course: @course, active_all: true).user
             expect(gradebook_user_ids.user_ids).to eq(
-              [@student2.id, @student1.id, @student3.id, @student4.id, student5.id, @fake_student.id]
+              [@student2.id, @student1.id, @student3.id, @student4.id, @fake_student.id]
             )
           end
         end
@@ -541,9 +550,8 @@ describe GradebookUserIds do
           it "places students that are not assigned at the end, but before fake students" do
             @assignment.update!(only_visible_to_overrides: true)
             create_adhoc_override_for_assignment(@assignment, [@student1, @student3, @student2], due_at: nil)
-            student5 = student_in_course(course: @course, active_all: true).user
             expect(gradebook_user_ids.user_ids).to eq(
-              [@student3.id, @student4.id, @student1.id, @student2.id, student5.id, @fake_student.id]
+              [@student3.id, @student1.id, @student2.id, @student4.id, @fake_student.id]
             )
           end
         end
@@ -576,9 +584,8 @@ describe GradebookUserIds do
           it "places students that are not assigned at the end, but before fake students" do
             @assignment.update!(only_visible_to_overrides: true)
             create_adhoc_override_for_assignment(@assignment, [@student1, @student3, @student2], due_at: nil)
-            student5 = student_in_course(course: @course, active_all: true).user
             expect(gradebook_user_ids.user_ids).to eq(
-              [@student4.id, @student3.id, @student1.id, @student2.id, student5.id, @fake_student.id]
+              [@student3.id, @student1.id, @student2.id, @student4.id, @fake_student.id]
             )
           end
         end

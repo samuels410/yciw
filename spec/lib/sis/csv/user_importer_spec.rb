@@ -291,6 +291,15 @@ describe SIS::CSV::UserImporter do
     expect(user2.pseudonym.integration_id).to be_nil
   end
 
+  it "should recognize a blank integration_id and still work" do
+    process_csv_data_cleanly(
+      "user_id,login_id,first_name,last_name,email,status,ssha_password,integration_id",
+      "user_2,user2,User,Dos,user@example.com,active,#{gen_ssha_password("password")},\"\""
+    )
+    user2 = Pseudonym.by_unique_id('user2').first.user
+    expect(user2.pseudonym.integration_id).to be_nil
+  end
+
   it "should not set integration_id to nil when it is not passed" do
     process_csv_data_cleanly(
       "user_id,login_id,first_name,last_name,email,status,integration_id",
@@ -1078,6 +1087,32 @@ describe SIS::CSV::UserImporter do
     expect(user2.workflow_state).to eq 'deleted'
     expect(user1.user.workflow_state).to eq 'registered'
     expect(user2.user.workflow_state).to eq 'registered'
+  end
+
+  it 'should leave users enrollments when there is another pseudonym' do
+    process_csv_data_cleanly(
+      "course_id,short_name,long_name,account_id,term_id,status",
+      "test_1,TC 101,Test Course 101,,,active"
+    )
+    process_csv_data_cleanly(
+      "user_id,login_id,first_name,last_name,email,status",
+      "user_1,user1,User,Uno,user1@example.com,active"
+    )
+    u = @account.pseudonyms.where(sis_user_id: 'user_1').take.user
+    pseudonym2 = u.pseudonyms.create!(account: @account, unique_id: 'other_login@example.com')
+    process_csv_data_cleanly(
+      "course_id,user_id,role,section_id,status,associated_user_id,start_date,end_date",
+      "test_1,user_1,teacher,,active,,,",
+    )
+    process_csv_data_cleanly(
+      "user_id,login_id,first_name,last_name,email,status",
+      "user_1,user1,User,Uno,user1@example.com,deleted"
+    )
+    pseudonym1 = @account.pseudonyms.where(sis_user_id: 'user_1').first
+    expect(u.workflow_state).to eq 'registered'
+    expect(pseudonym1.workflow_state).to eq 'deleted'
+    expect(pseudonym2.workflow_state).to eq 'active'
+    expect(u.enrollments.take.workflow_state).to eq 'active'
   end
 
   it 'should remove enrollments when a user is deleted' do

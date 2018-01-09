@@ -23,18 +23,18 @@ class SectionTabPresenter
     @context = context
   end
   attr_reader :tab, :context
-  delegate :css_class, :label, :screenreader, :target, to: :tab
+  delegate :css_class, :label, :target, to: :tab
 
   def active?(active_tab)
     active_tab == tab.css_class
   end
 
-  def screenreader?
-    tab.respond_to?(:screenreader)
+  def hide?
+    tab.hidden
   end
 
-  def hide?
-    tab.hidden || tab.hidden_unused
+  def unused?
+    tab.hidden_unused
   end
 
   def target?
@@ -50,8 +50,6 @@ class SectionTabPresenter
   end
 
   def to_h
-    { css_class: tab.css_class, icon: tab.icon, hidden: hide?, path: path }.tap do |h|
-      h[:screenreader] = tab.screenreader if screenreader?
-    end
+    { css_class: tab.css_class, icon: tab.icon, hidden: hide? || unused?, path: path, label: tab.label }
   end
 end

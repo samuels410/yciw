@@ -19,7 +19,7 @@
 require_relative '../spec_helper'
 
 describe GradingPeriod do
-  subject(:grading_period) { grading_period_group.grading_periods.build(params) }
+  subject(:grading_period) { grading_period_group.grading_periods.create!(params) }
 
   let(:group_helper) { Factories::GradingPeriodGroupHelper.new }
   let(:account) { Account.create! }
@@ -386,6 +386,32 @@ describe GradingPeriod do
       grading_period_group.update_column(:weighted, true)
       expect(GradeCalculator).to receive(:recompute_final_score)
       grading_period.destroy
+    end
+
+    it 'runs DueDateCacher for courses from the same enrollment term' do
+      course2 = account.courses.create!
+      course2.enrollment_term = account.enrollment_terms.create!
+      course2.save!
+      student_in_course(course: course2)
+      a = course2.assignments.create!
+      a.submissions.find_by(user_id: @student).update(grading_period_id: grading_period.id)
+
+      expect(DueDateCacher).to receive(:recompute_course).with(course)
+      expect(DueDateCacher).not_to receive(:recompute_course).with(course2)
+      grading_period.destroy
+    end
+
+    it 'runs DueDateCacher for courses with submissions that have this grading period' do
+      course2 = account.courses.create!
+      course2.enrollment_term = account.enrollment_terms.create!
+      course2.save!
+      student_in_course(course: course2)
+      a = course2.assignments.create!
+      a.submissions.find_by(user_id: @student).update(grading_period_id: grading_period.id)
+
+      expect(DueDateCacher).not_to receive(:recompute_course).with(course)
+      expect(DueDateCacher).to receive(:recompute_course).with(course2)
+      grading_period_group.destroy
     end
 
     it 'does not destroy the set when the last grading period is destroyed (account grading periods)' do
@@ -890,7 +916,7 @@ describe GradingPeriod do
     end
 
     it 'creates scores for the grading period upon its creation' do
-      expect{ grading_period.save! }.to change{ Score.count }.from(1).to(2)
+      expect{ grading_period.save! }.to change{ Score.count }.by(1)
     end
 
     it 'updates grading period scores when the grading period end date is changed' do

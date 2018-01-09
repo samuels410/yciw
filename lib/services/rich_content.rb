@@ -54,7 +54,7 @@ module Services
         {
           RICH_CONTENT_APP_HOST: settings['app-host'],
           RICH_CONTENT_CDN_HOST: settings['cdn-host'],
-          RICH_CONTENT_SIDEBAR_SOURCE: settings['sidebar-source'] ? settings['sidebar-source'] : 'api'
+          RICH_CONTENT_SKIP_SIDEBAR: settings['skip-sidebar']
         }
       rescue Imperium::TimeoutError,
         Imperium::UnableToConnectError,

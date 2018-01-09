@@ -31,10 +31,13 @@ class LiveEventsObserver < ActiveRecord::Observer
           :attachment,
           :user,
           :user_account_association,
-          :account_notification
+          :account_notification,
+          :course_section
 
   def after_update(obj)
     changes = obj.changes
+    return nil if changes.except("updated_at").empty?
+
     obj.class.connection.after_transaction_commit do
     case obj
     when ContentExport
@@ -52,6 +55,8 @@ class LiveEventsObserver < ActiveRecord::Observer
       Canvas::LiveEvents.enrollment_updated(obj)
     when EnrollmentState
       Canvas::LiveEvents.enrollment_state_updated(obj)
+    when GroupCategory
+      Canvas::LiveEvents.group_category_updated(obj)
     when Group
       Canvas::LiveEvents.group_updated(obj)
     when GroupMembership
@@ -80,6 +85,8 @@ class LiveEventsObserver < ActiveRecord::Observer
       end
     when User
       Canvas::LiveEvents.user_updated(obj)
+    when CourseSection
+      Canvas::LiveEvents.course_section_updated(obj)
     end
     end
   end
@@ -119,6 +126,8 @@ class LiveEventsObserver < ActiveRecord::Observer
       Canvas::LiveEvents.account_notification_created(obj)
     when User
       Canvas::LiveEvents.user_created(obj)
+    when CourseSection
+      Canvas::LiveEvents.course_section_created(obj)
     end
     end
   end

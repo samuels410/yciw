@@ -16,8 +16,8 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 require_relative '../../helpers/gradebook_common'
-require_relative '../page_objects/gradebook_page'
-require_relative '../page_objects/grading_curve_page'
+require_relative '../pages/gradebook_page'
+require_relative '../pages/grading_curve_page'
 
 describe "editing grades" do
   include_context "in-process server selenium tests"
@@ -204,6 +204,7 @@ describe "editing grades" do
   end
 
   it "should optionally assign zeroes to unsubmitted assignments during curving", priority: "1", test_id: 220321 do
+    skip_if_safari(:alert)
     grade_page.visit_gradebook(@course)
 
     edit_grade('#gradebook_grid .container_1 .slick-row:nth-child(2) .l2', '')

@@ -98,6 +98,13 @@ describe Assignment do
 
   describe 'callbacks' do
     describe 'apply_late_policy' do
+      it "calls apply_late_policy for the assignment if points_possible changes" do
+        assignment = @course.assignments.new(assignment_valid_attributes)
+        expect(LatePolicyApplicator).to receive(:for_assignment).with(assignment)
+
+        assignment.update!(points_possible: 3.14)
+      end
+
       it 'invokes the LatePolicyApplicator for this assignment if grading type changes but due dates do not' do
         assignment = @course.assignments.new(assignment_valid_attributes)
 
@@ -302,6 +309,34 @@ describe Assignment do
       assignment.tool_settings_tool = message_handler
       assignment.save!
       expect(assignment.tool_settings_resource_codes).to eq expected_hash
+    end
+  end
+
+  describe '#tool_settings_tool_name' do
+    let(:assignment) { Assignment.create!(name: 'assignment with tool settings', context: course) }
+
+    before do
+      allow_any_instance_of(Lti::AssignmentSubscriptionsHelper).to receive(:create_subscription) { SecureRandom.uuid }
+      allow_any_instance_of(Lti::AssignmentSubscriptionsHelper).to receive(:destroy_subscription) { {} }
+    end
+
+    it 'returns the name of the tool proxy' do
+      expected_name = 'test name'
+      message_handler.tool_proxy.update_attributes!(name: expected_name)
+      setup_assignment_with_homework
+      course.assignments << @assignment
+      @assignment.tool_settings_tool = message_handler
+      @assignment.save!
+      expect(@assignment.tool_settings_tool_name).to eq expected_name
+    end
+
+    it 'returns the name of the context external tool' do
+      expected_name = 'test name'
+      setup_assignment_with_homework
+      tool = @course.context_external_tools.create!(name: expected_name, url: "http://www.google.com", consumer_key: '12345', shared_secret: 'secret')
+      @assignment.tool_settings_tool = tool
+      @assignment.save
+      expect(@assignment.tool_settings_tool_name).to eq(expected_name)
     end
   end
 
@@ -1345,6 +1380,51 @@ describe Assignment do
       @assignment.points_possible = 15
       expect(@assignment.interpret_grade("88.75%")).to eq 13.3125
     end
+
+    context "with alphanumeric grades" do
+      before(:once) do
+        @assignment.update!(grading_type: 'letter_grade', points_possible: 10.0)
+        grading_standard = @course.grading_standards.build(title: "Number Before Letter")
+        grading_standard.data = {
+          "1A" => 0.9,
+          "2B" => 0.8,
+          "3C" => 0.7,
+          "4D" => 0.6,
+          "5+" => 0.5,
+          "5F" => 0
+        }
+        grading_standard.assignments << @assignment
+        grading_standard.save!
+      end
+
+      it "does not treat maximum grade as a number" do
+        expect(@assignment.interpret_grade("1A")).to eq 10.0
+      end
+
+      it "does not treat lower grade as a number" do
+        expect(@assignment.interpret_grade("2B")).to eq 8.9
+      end
+
+      it "does not treat number followed by plus symbol as a number" do
+        expect(@assignment.interpret_grade("5+")).to eq 5.9
+      end
+
+      it "treats unsigned integer score as a number" do
+        expect(@assignment.interpret_grade("7")).to eq 7.0
+      end
+
+      it "treats negative score with decimals as a number" do
+        expect(@assignment.interpret_grade("-.2")).to eq (-0.2)
+      end
+
+      it "treats positive score with decimals as a number" do
+        expect(@assignment.interpret_grade("+0.35")).to eq 0.35
+      end
+
+      it "treats number with percent symbol as a percentage" do
+        expect(@assignment.interpret_grade("75.2%")).to eq 7.52
+      end
+    end
   end
 
   describe '#submit_homework' do
@@ -1353,6 +1433,13 @@ describe Assignment do
       @a = @course.assignments.create! title: "blah",
         submission_types: "online_text_entry,online_url",
         points_possible: 10
+    end
+
+    it "sets the 'eula_agreement_timestamp'" do
+      setup_assignment_without_submission
+      timestamp = Time.now.to_i.to_s
+      @a.submit_homework(@user, {eula_agreement_timestamp: timestamp})
+      expect(@a.submissions.first.turnitin_data[:eula_agreement_timestamp]).to eq timestamp
     end
 
     it "creates a new version for each submission" do
@@ -1399,6 +1486,12 @@ describe Assignment do
       expect(s3.submission_type).to eq "online_text_entry"
       expect(s3.late_policy_status).to eq "late"
       expect(s3.seconds_late_override).to eq 120
+    end
+
+    it "sets the submission's 'lti_user_id'" do
+      setup_assignment_without_submission
+      submission = @a.submit_homework(@user)
+      expect(submission.lti_user_id).to eq @user.lti_context_id
     end
   end
 
@@ -1705,6 +1798,20 @@ describe Assignment do
       }
     end
 
+    it "should re-schedule auto_assign date is pushed out" do
+      @a.peer_reviews = true
+      @a.automatic_peer_reviews = true
+      @a.peer_reviews_due_at = 1.day.from_now
+      @a.save!
+      job = Delayed::Job.where(:tag => "Assignment#do_auto_peer_review").last
+      expect(job.run_at.to_i).to eq @a.peer_reviews_due_at.to_i
+
+      @a.peer_reviews_due_at = 2.days.from_now
+      @a.save!
+      job.reload
+      expect(job.run_at.to_i).to eq @a.peer_reviews_due_at.to_i
+    end
+
     it "should not schedule auto_assign when skip_schedule_peer_reviews is set" do
       @a.peer_reviews = true
       @a.automatic_peer_reviews = true
@@ -1798,6 +1905,29 @@ describe Assignment do
       ids = @late_submissions.map{|s| s.user_id}
     end
 
+    it "should not assign out of group for graded group-discussions" do
+      # (as opposed to group assignments)
+      group_discussion_assignment
+
+      users = create_users_in_course(@course, 6.times.map{ |i| {name: "user #{i}"} }, return_type: :record)
+      [@group1, @group2].each do |group|
+        users.pop(3).each do |user|
+          group.add_user(user)
+          @topic.child_topic_for(user).reply_from(:user => user, :text => "entry from #{user.name}")
+        end
+      end
+
+      @assignment.reload
+      @assignment.peer_review_count = 2
+      @assignment.save!
+      requests = @assignment.assign_peer_reviews
+      expect(requests.count).to eq 12
+      requests.each do |req|
+        group = @group1.users.include?(req.user) ? @group1 : @group2
+        expect(group.users).to include(req.assessor)
+      end
+    end
+
     context "intra group peer reviews" do
       it "should not assign peer reviews to members of the same group when disabled" do
         @submissions = []
@@ -1840,30 +1970,28 @@ describe Assignment do
     context "differentiated_assignments" do
       before :once do
         setup_differentiated_assignments
-        @submissions = []
-        [@student1, @student2].each do |u|
-          @submissions << @assignment.submit_homework(u, :submission_type => "online_url", :url => "http://www.google.com")
-        end
+        @assignment.submit_homework(@student1, submission_type: 'online_url', url: 'http://www.google.com')
+        @submissions = @assignment.submissions
       end
       context "feature on" do
         it "should assign peer reviews only to students with visibility" do
           @assignment.peer_review_count = 1
           res = @assignment.assign_peer_reviews
-          expect(res.length).to eql(0)
-          @submissions.each do |s|
-            expect(res.map{|a| a.asset}).not_to be_include(s)
-            expect(res.map{|a| a.assessor_asset}).not_to be_include(s)
+          expect(res.length).to be 0
+          @submissions.reload.each do |s|
+            expect(res.map(&:asset)).not_to include(s)
+            expect(res.map(&:assessor_asset)).not_to include(s)
           end
 
-          # once graded the student will have visibility
-          # and will therefore show up in the peer reviews
-          @assignment.grade_student(@student2, :grader => @teacher, :grade => '100')
+          # let's add this student to the section the assignment is assigned to
+          student_in_section(@section1, user: @student2)
+          @assignment.submit_homework(@student2, submission_type: 'online_url', url: 'http://www.google.com')
 
           res = @assignment.assign_peer_reviews
-          expect(res.length).to eql(@submissions.length)
-          @submissions.each do |s|
-            expect(res.map{|a| a.asset}).to be_include(s)
-            expect(res.map{|a| a.assessor_asset}).to be_include(s)
+          expect(res.length).to be 2
+          @submissions.reload.each do |s|
+            expect(res.map(&:asset)).to include(s)
+            expect(res.map(&:assessor_asset)).to include(s)
           end
         end
 
@@ -3651,6 +3779,32 @@ describe Assignment do
   end
 
   describe "update_student_submissions" do
+    context "grade change events" do
+      before(:once) do
+        @assignment = @course.assignments.create!
+        @assignment.grade_student(@student, grade: 5, grader: @teacher)
+        @assistant = User.create!
+        @course.enroll_ta(@assistant, enrollment_state: "active")
+      end
+
+      it "triggers a grade change event with the grader_id as the updating_user" do
+        @assignment.updating_user = @assistant
+
+        expect(Auditors::GradeChange).to receive(:record).once do |submission|
+          expect(submission.grader_id).to eq @assistant.id
+        end
+        @assignment.update_student_submissions
+      end
+
+      it "triggers a grade change event using the grader_id on the submission if no updating_user is present" do
+        expect(Auditors::GradeChange).to receive(:record).once do |submission|
+          expect(submission.grader_id).to eq @teacher.id
+        end
+
+        @assignment.update_student_submissions
+      end
+    end
+
     context "pass/fail assignments" do
       before :once do
         @student1, @student2 = create_users_in_course(@course, 2, return_type: :record)
@@ -3714,7 +3868,6 @@ describe Assignment do
         submission.reload
         expect(submission.score).to eql(0.0)
       end
-
     end
   end
 

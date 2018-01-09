@@ -85,6 +85,7 @@ module Importers
         end
 
         if question_bank.workflow_state == 'deleted'
+          question_bank.assessment_questions.destroy_all
           question_bank.workflow_state = 'active'
         end
 
@@ -107,6 +108,13 @@ module Importers
           question_data[:aq_data][question['migration_id']] = question
         rescue
           migration.add_import_warning(t('#migration.quiz_question_type', "Quiz Question"), question[:question_name], $!)
+        end
+      end
+
+      if migration.context.is_a?(Course)
+        imported_aq_ids = question_data[:aq_data].values.map{|aq| aq['assessment_question_id']}.compact
+        imported_aq_ids.each_slice(100) do |sliced_aq_ids|
+          migration.context.quiz_questions.generated.where(:assessment_question_id => sliced_aq_ids).update_all(:assessment_question_version => nil)
         end
       end
 

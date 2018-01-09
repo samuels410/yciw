@@ -3,6 +3,7 @@ module Types
     name "Course"
 
     implements GraphQL::Relay::Node.interface
+    interfaces [Interfaces::TimestampInterface]
 
     global_id_field :id
     field :_id, !types.ID, "legacy canvas id", property: :id
@@ -12,6 +13,8 @@ module Types
       property: :course_code
     field :state, !CourseWorkflowState,
       property: :workflow_state
+
+    connection :assignmentGroupsConnection, AssignmentGroupType.connection_type, property: :assignment_groups
 
     connection :assignmentsConnection do
       type AssignmentType.connection_type
@@ -30,10 +33,18 @@ module Types
 
     connection :usersConnection do
       type UserType.connection_type
-      resolve ->(course, _, ctx) {
+
+      argument :userIds, types[!types.ID],
+        "only include users with the given ids",
+        prepare: GraphQLHelpers.relay_or_legacy_ids_prepare_func("User")
+
+      resolve ->(course, args, ctx) {
         if course.grants_any_right?(ctx[:current_user], ctx[:session],
             :read_roster, :view_all_grades, :manage_grades)
-          UserSearch.scope_for(course, ctx[:current_user], {})
+          scope = UserSearch.scope_for(course, ctx[:current_user], {})
+          scope = scope.where(users: {id: args[:userIds]}) if args[:userIds].present?
+
+          scope
         else
           nil
         end
@@ -74,7 +85,7 @@ module Types
         ).where.not(workflow_state: "unsubmitted")
 
         (args[:orderBy] || []).each { |order|
-          submissions = submissions.order(order[:field] => order[:direction])
+          submissions = submissions.order("#{order[:field]} #{order[:direction]}")
         }
 
         submissions
@@ -102,7 +113,7 @@ module Types
     argument :direction, GraphQL::EnumType.define {
       name "OrderDirection"
       value "ascending", value: "ASC"
-      value "descending", value: "DESC"
+      value "descending", value: "DESC NULLS LAST"
     }
   end
 

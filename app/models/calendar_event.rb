@@ -120,8 +120,6 @@ class CalendarEvent < ActiveRecord::Base
     effective_context_code && ActiveRecord::Base.find_by_asset_string(effective_context_code) || context
   end
 
-  scope :order_by_start_at, -> { order(:start_at) }
-
   scope :active, -> { where("calendar_events.workflow_state<>'deleted'") }
   scope :are_locked, -> { where(:workflow_state => 'locked') }
   scope :are_unlocked, -> { where("calendar_events.workflow_state NOT IN ('deleted', 'locked')") }
@@ -613,7 +611,7 @@ class CalendarEvent < ActiveRecord::Base
         event.end.icalendar_tzid = 'UTC'
       end
 
-      if @event.all_day
+      if @event.all_day && @event.all_day_date
         event.start = Date.new(@event.all_day_date.year, @event.all_day_date.month, @event.all_day_date.day)
         event.start.ical_params = {"VALUE"=>["DATE"]}
         event.end = event.start

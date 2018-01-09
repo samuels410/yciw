@@ -24,7 +24,7 @@ module SIS
       importer = Work.new(@batch, @root_account, @logger)
 
       Enrollment.skip_touch_callbacks(:course) do
-        Enrollment.suspend_callbacks(:update_cached_due_dates) do
+        Enrollment.suspend_callbacks(:set_update_cached_due_dates) do
           User.skip_updating_account_associations do
             yield importer
           end
@@ -78,9 +78,9 @@ module SIS
       end
 
       def add_remove_observer(observer, student, observer_id, student_id, status)
-        case status
+        case status.downcase
         when 'active'
-          user_observer = observer.user_observees.create_or_restore(user_id: student)
+          user_observer = UserObserver.create_or_restore(observer: observer, observee: student)
         when 'deleted'
           user_observer = observer.user_observees.active.where(user_id: student).take
           if user_observer

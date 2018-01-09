@@ -48,6 +48,15 @@ The change_threshold can be set to any integer between 1 and 100.
 
 change_threshold also impacts diffing mode.
 
+Multi Term Batch Mode
+---------------------
+
+Multi term batch mode is just like batch mode except against multiple terms.
+Multi term batch mode is run against all terms included in the same import for
+the batch. To use multi term batch mode you must also set a change_threshold. If
+you intend to remove all items with multi term batch mode, you can set the
+change_threshold to 100.
+
 Diffing Mode
 ------------
 
@@ -97,6 +106,10 @@ as source system, data type, and term id. Some examples of good identifiers:
 
  * users:fall-2015
  * source-system-1:all-data:spring-2016
+
+Diffing mode by default marks objects as "deleted" when they are not included
+for an import, but enrollments can be marked as 'completed' or 'inactive' if the
+`diffing_drop_status` is passed.
 
 If changes are made to SIS-managed objects outside of the normal import
 process, as in the example given above, it may be necessary to process a SIS
@@ -267,8 +280,10 @@ still be provided.</td>
 <p>The user's name (either first_name and last_name, or full_name) should always
 be provided. Otherwise, the name will be blanked out.</p>
 
-<p>When a student is 'deleted' all of its enrollments will also be deleted and
-they won't be able to log in to the school's account. If you still want the
+
+<p>When a user is 'deleted' it will delete the login tied to the sis_id.
+If the login is the last one, all of the users enrollments will also be deleted
+and they won't be able to log in to the school's account. If you still want the
 student to be able to log in but just not participate, leave the student
 'active' but set the enrollments to 'completed'.</p>
 
@@ -324,6 +339,13 @@ from a group import.</td>
 <td></td>
 <td>active, deleted</td>
 </tr>
+<tr>
+<td>integration_id</td>
+<td>text</td>
+<td></td>
+<td></td>
+<td>Sets the integration_id of the account</td>
+</tr>
 </table>
 
 Any account that will have child accounts must be listed in the csv before any child account
@@ -370,6 +392,13 @@ interface, this is called the SIS ID.</td>
 <td>✓</td>
 <td></td>
 <td>active, deleted</td>
+</tr>
+<tr>
+<td>integration_id</td>
+<td>text</td>
+<td></td>
+<td></td>
+<td>Sets the integration_id of the term</td>
 </tr>
 <tr>
 <td>start_date</td>
@@ -437,7 +466,7 @@ a better user experience to provide both.)</td>
 <td>account_id</td>
 <td>text</td>
 <td></td>
-<td></td>
+<td>✓</td>
 <td>The account identifier from accounts.csv, if none is specified the course will be attached to
 the root account</td>
 </tr>
@@ -455,6 +484,13 @@ specified the default term for the account will be used</td>
 <td>✓</td>
 <td>✓</td>
 <td>active, deleted, completed</td>
+</tr>
+<tr>
+<td>integration_id</td>
+<td>text</td>
+<td></td>
+<td></td>
+<td>Sets the integration_id of the course</td>
 </tr>
 <tr>
 <td>start_date</td>
@@ -487,6 +523,7 @@ YYYY-MM-DDTHH:MM:SSZ</td>
 <td>The SIS id of a pre-existing Blueprint course. When provided, 
 the current course will be set up to receive updates from the blueprint course.
 Requires Blueprint Courses feature.
+To remove the Blueprint Course link you can pass 'dissociate' in place of the id.
 </td>
 </tr>
 </table>
@@ -544,6 +581,13 @@ interface, this is called the SIS ID.</td>
 <td>active, deleted</td>
 </tr>
 <tr>
+<td>integration_id</td>
+<td>text</td>
+<td></td>
+<td></td>
+<td>Sets the integration_id of the section</td>
+</tr>
+<tr>
 <td>start_date</td>
 <td>date</td>
 <td></td>
@@ -598,9 +642,18 @@ enrollments.csv
 <tr>
 <td>user_id</td>
 <td>text</td>
-<td>✓</td>
+<td>✓&#42;</td>
 <td></td>
-<td>The User identifier from users.csv</td>
+<td>The User identifier from users.csv, required to identify user.
+ If the user_integration_id is present, this field will be ignored.</td>
+</tr>
+<tr>
+<td>user_integration_id</td>
+<td>text</td>
+<td>✓&#42;</td>
+<td></td>
+<td>The integration_id of the user from users.csv required to identify user if
+ the user_id is not present.</td>
 </tr>
 <tr>
 <td>role</td>
@@ -651,7 +704,8 @@ Ignored for any role other than observer</td>
 </tr>
 </table>
 
-&#42; course_id or section_id is required, and role or role_id is required.
+&#42; course_id or section_id is required, role or role_id is required, and
+ user_id or user_integration_id is required.
 
 When an enrollment is in a 'completed' state the student is limited to read-only access to the
 course.
@@ -943,35 +997,57 @@ change_sis_id.csv
 <tr>
 <td>old_id</td>
 <td>text</td>
-<td>✓</td>
+<td>✓&#42;</td>
 <td></td>
 <td>The current sis_id of the object that should be changed.</td>
 </tr>
 <tr>
 <td>new_id</td>
 <td>text</td>
-<td>✓</td>
+<td>✓&#42;</td>
 <td></td>
 <td>The desired sis_id of the object. This id must be currently unique to the
-object type and the root_account</td>
+object type and the root_account.</td>
+</tr>
+<tr>
+<td>old_integration_id</td>
+<td>text</td>
+<td>✓&#42;</td>
+<td></td>
+<td>The current integration_id of the object that should be changed.</td>
+</tr>
+<tr>
+<td>new_integration_id</td>
+<td>text</td>
+<td>✓&#42;</td>
+<td></td>
+<td>The desired integration_id of the object. This id must be currently unique
+to the object type and the root_account. Can pass "&lt;delete>" to
+remove the integration_id from the object.</td>
 </tr>
 <tr>
 <td>type</td>
 <td>text</td>
 <td>✓</td>
 <td></td>
-<td>account, term, course, section, group, user</td>
+<td>account, term, course, section, group, user, user_integration_id</td>
 </tr>
 </table>
 
+&#42; old_id or old_integration_id is required, new_id or new_integration_id is
+required.
+
 change_sis_id.csv is optional. The goal of change_sis_id.csv is to provide a
-way to change sis_ids of existing objects. If included in a zip file this file
-will process first. All other files should include the new ids.
+way to change sis_ids or integration_ids of existing objects. If included in a
+zip file this file will process first. All other files should include the new
+ids.
 
 Sample:
 
-<pre>old_id,new_id,type
+<pre>old_id,new_id,old_integration_id,new_integration_id,type
 u001,u001a,user
 couse1,old_course1,course
 term1,fall17,term
+u001,,,<delete>,user
+,,integration01,int01,section
 </pre>

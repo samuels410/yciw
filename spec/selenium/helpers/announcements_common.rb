@@ -77,7 +77,8 @@ module AnnouncementsCommon
     expect(f('.zip')).to include_text(filename)
   end
 
-  def edit(title, message)
+  def edit_announcement(title, message)
+    wait_for_tiny(f('textarea[name=message]'))
     replace_content(f('input[name=title]'), title)
     type_in_tiny('textarea[name=message]', message)
     expect_new_page_load { submit_form('.form-actions') }
@@ -100,5 +101,11 @@ module AnnouncementsCommon
   def click_edit_btn
     f('.edit-btn').click
     wait_for_ajaximations
+  end
+
+  # sets the course setting checkbox for 'Disable comments on announcements'
+  def disable_comments_on_announcements(set = true)
+    @course.lock_all_announcements = set
+    @course.save!
   end
 end

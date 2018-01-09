@@ -117,6 +117,25 @@ The title of the context.
 ```
 Example Course
 ```
+## com.instructure.Editor.contents
+The contents of the text editor associated with the content item launch.
+
+**Availability**: *always*  
+**Launch Parameter**: *com_instructure_editor_contents*  
+
+```
+"This text was in the editor"
+```
+## com.instructure.Editor.selection
+The contents the user has selected in the text editor associated
+with the content item launch.
+
+**Availability**: *always*  
+**Launch Parameter**: *com_instructure_editor_selection*  
+
+```
+"this text was selected by the user"
+```
 ## com.instructure.PostMessageToken
 A token that can be used for frontend communication between an LTI tool
 and Canvas via the Window.postMessage API.
@@ -313,6 +332,36 @@ returns the URL for the external tool that was launched. Only available for LTI 
 ```
 http://example.url/path
 ```
+## com.instructure.brandConfigJSON.url
+returns the URL to retrieve the brand config JSON for the launching context.
+
+**Availability**: *always*  
+
+
+```
+http://example.url/path.json
+```
+## com.instructure.brandConfigJSON
+returns the brand config JSON itself for the launching context.
+
+**Availability**: *always*  
+
+
+```
+{"ic-brand-primary-darkened-5":"#0087D7"}
+```
+## com.instructure.brandConfigJS.url
+returns the URL to retrieve the brand config javascript for the launching context.
+This URL should be used as the src attribute for a script tag on the external tool
+provider's web page. It is configured to be used with the [instructure-ui node module](https://github.com/instructure/instructure-ui).
+More information on on how to use instructure ui react components can be found [here](http://instructure.github.io/instructure-ui/).
+
+**Availability**: *always*  
+
+
+```
+http://example.url/path.js
+```
 ## Canvas.css.common
 returns the URL for the common css file.
 
@@ -431,6 +480,15 @@ returns the current course's term start date.
 ```
 YYY-MM-DD HH:MM:SS -0700
 ```
+## Canvas.term.name
+returns the current course's term name.
+
+**Availability**: **  
+**Launch Parameter**: *canvas_term_name*  
+
+```
+W1 2017
+```
 ## CourseSection.sourcedId
 returns the current course sis source id
 to return the section source id use Canvas.course.sectionIds.
@@ -491,6 +549,15 @@ Returns the full name of the launching user.
 
 **Availability**: *when launched by a logged in user*  
 **Launch Parameter**: *lis_person_name_full*  
+
+```
+John Doe
+```
+## Person.name.display
+Returns the display name of the launching user.
+
+**Availability**: *when launched by a logged in user*  
+**Launch Parameter**: *person_name_display*  
 
 ```
 John Doe

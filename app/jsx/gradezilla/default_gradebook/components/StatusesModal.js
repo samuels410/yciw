@@ -19,7 +19,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { func, shape, string } from 'prop-types';
-import update from 'react-addons-update';
+import update from 'immutability-helper';
 import I18n from 'i18n!gradebook';
 import Button from 'instructure-ui/lib/components/Button';
 import Modal, { ModalBody, ModalFooter, ModalHeader } from 'instructure-ui/lib/components/Modal';
@@ -135,13 +135,15 @@ class StatusesModal extends React.Component {
 
     return (
       <Modal
-        isOpen={isOpen}
+        open={isOpen}
         label={I18n.t('Statuses')}
         closeButtonLabel={I18n.t('Close')}
         closeButtonRef={bindCloseButton}
-        onRequestClose={close}
+        applicationElement={() => document.getElementById('application')}
+        onDismiss={close}
         onExited={onClose}
         contentRef={bindContentRef}
+        shouldCloseOnOverlayClick={false}
       >
         <ModalHeader>
           <Heading level="h3">{I18n.t('Statuses')}</Heading>

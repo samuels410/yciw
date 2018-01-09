@@ -166,8 +166,10 @@ module Importers
       # there might not be an import id if it's just a text-only type...
       item ||= Quizzes::Quiz.where(context_type: context.class.to_s, context_id: context, id: hash[:id]).first if hash[:id]
       item ||= Quizzes::Quiz.where(context_type: context.class.to_s, context_id: context, migration_id: hash[:migration_id]).first if hash[:migration_id]
-      if item && !allow_update
-        if item.deleted?
+      item ||= context.quizzes.temp_record
+      item.mark_as_importing!(migration)
+      if item
+        if !allow_update && item.deleted?
           item.workflow_state = (hash[:available] || !item.can_unpublish?) ? 'available' : 'unpublished'
           item.saved_by = :migration
           item.quiz_groups.destroy_all
@@ -175,8 +177,6 @@ module Importers
           item.save
         end
       end
-      item ||= context.quizzes.temp_record
-      item.mark_as_importing!(migration)
       new_record = item.new_record? || item.deleted?
 
       hash[:due_at] ||= hash[:due_date] if hash.has_key?(:due_date)
@@ -225,35 +225,7 @@ module Importers
       item.save!
       build_assignment = false
 
-      skip_questions = migration.for_master_course_import? && item.edit_types_locked_for_overwrite_on_import.include?(:content)
-      if question_data && !skip_questions
-        question_data[:qq_ids] ||= {}
-        hash[:questions] ||= []
-
-        unless question_data[:qq_ids][item.migration_id]
-          question_data[:qq_ids][item.migration_id] = {}
-          existing_questions = item.quiz_questions.active.where("migration_id IS NOT NULL").pluck(:id, :migration_id)
-          existing_questions.each do |id, mig_id|
-            question_data[:qq_ids][item.migration_id][mig_id] = id
-          end
-        end
-
-        hash[:questions].each_with_index do |question, i|
-          case question[:question_type]
-          when "question_reference"
-            if aq = (question_data[:aq_data][question[:migration_id]] || question_data[:aq_data][question[:assessment_question_migration_id]])
-              Importers::QuizQuestionImporter.import_from_migration(aq, question, i + 1,
-                question_data[:qq_ids][item.migration_id], context, migration, item)
-            end
-          when "question_group"
-            Importers::QuizGroupImporter.import_from_migration(question, context, item, question_data, i + 1, migration)
-          when "text_only_question"
-            Importers::QuizQuestionImporter.import_from_migration(question, question, i + 1,
-              question_data[:qq_ids][item.migration_id], context, migration, item)
-          end
-        end
-      end
-      item.reload # reload to catch question additions
+      self.import_questions(item, hash, context, migration, question_data, new_record)
 
       if hash[:assignment]
         if hash[:assignment][:migration_id] && !hash[:assignment][:migration_id].start_with?(MasterCourses::MIGRATION_ID_PREFIX)
@@ -263,11 +235,6 @@ module Importers
         item.assignment ||= context.assignments.temp_record
 
         item.assignment = ::Importers::AssignmentImporter.import_from_migration(hash[:assignment], context, migration, item.assignment, item)
-
-        if new_record && !hash[:available] && item.can_unpublish?
-          item.workflow_state = 'unpublished'
-          item.assignment.workflow_state = 'unpublished'
-        end
       elsif !item.assignment && grading = hash[:grading]
         item.quiz_type = 'assignment'
         hash[:assignment_group_migration_id] ||= grading[:assignment_group_migration_id]
@@ -300,6 +267,9 @@ module Importers
         item.generate_quiz_data
         item.workflow_state = 'available'
         item.published_at = Time.now
+      elsif item.can_unpublish? && (new_record || master_migration)
+        item.workflow_state = 'unpublished'
+        item.assignment.workflow_state = 'unpublished' if item.assignment
       end
 
       if hash[:assignment_group_migration_id]
@@ -317,6 +287,7 @@ module Importers
         item.assignment.points_possible = item.points_possible
       end
 
+      item.root_entries(true) if !item.available? && !item.survey? # reload items so we get accurate points
       item.save
       item.assignment.save if item.assignment && item.assignment.changed?
 
@@ -326,5 +297,44 @@ module Importers
       item
     end
 
+    def self.import_questions(item, hash, context, migration, question_data, new_record)
+      if migration.for_master_course_import? && !new_record
+        return if item.edit_types_locked_for_overwrite_on_import.include?(:content)
+
+        if hash[:questions]
+          # either the quiz hasn't been changed downstream or we've re-locked it - delete all the questions we're not going to (re)import in
+          importing_question_mig_ids = hash[:questions].map{|q| q[:questions] ? q[:questions].map{|qq| qq[:migration_id]} : q[:migration_id]}.flatten
+          item.quiz_questions.active.where.not(:migration_id => importing_question_mig_ids).update_all(:workflow_state => 'deleted')
+        end
+      end
+      return unless question_data
+
+      question_data[:qq_ids] ||= {}
+      hash[:questions] ||= []
+
+      unless question_data[:qq_ids][item.migration_id]
+        question_data[:qq_ids][item.migration_id] = {}
+        existing_questions = item.quiz_questions.active.where("migration_id IS NOT NULL").pluck(:id, :migration_id)
+        existing_questions.each do |id, mig_id|
+          question_data[:qq_ids][item.migration_id][mig_id] = id
+        end
+      end
+
+      hash[:questions].each_with_index do |question, i|
+        case question[:question_type]
+        when "question_reference"
+          if aq = (question_data[:aq_data][question[:migration_id]] || question_data[:aq_data][question[:assessment_question_migration_id]])
+            Importers::QuizQuestionImporter.import_from_migration(aq, question, i + 1,
+              question_data[:qq_ids][item.migration_id], context, migration, item)
+          end
+        when "question_group"
+          Importers::QuizGroupImporter.import_from_migration(question, context, item, question_data, i + 1, migration)
+        when "text_only_question"
+          Importers::QuizQuestionImporter.import_from_migration(question, question, i + 1,
+            question_data[:qq_ids][item.migration_id], context, migration, item)
+        end
+      end
+      item.reload # reload to catch question additions
+    end
   end
 end

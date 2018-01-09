@@ -25,8 +25,9 @@ define [
   'compiled/views/assignments/ToggleShowByView'
   'jquery'
   'helpers/fakeENV'
+  'helpers/assertions'
   'helpers/jquery.simulate'
-], (Backbone, AssignmentGroup, Course, AssignmentGroupCollection, AssignmentGroupListView, IndexView, ToggleShowByView, $, fakeENV) ->
+], (Backbone, AssignmentGroup, Course, AssignmentGroupCollection, AssignmentGroupListView, IndexView, ToggleShowByView, $, fakeENV, assertions) ->
 
 
   fixtures = $('#fixtures')
@@ -68,13 +69,23 @@ define [
 
   QUnit.module 'assignmentIndex',
     setup: ->
-      fakeENV.setup(PERMISSIONS: {manage: true})
+      fakeENV.setup({
+        PERMISSIONS: {manage: true},
+        URLS: {
+          assignment_sort_base_url : "test"
+        }
+      })
       @enable_spy = @spy(IndexView.prototype, 'enableSearch')
 
     teardown: ->
       fakeENV.teardown()
       assignmentGroups = null
       fixtures.empty()
+
+  test 'should be accessible', (assert) ->
+    view = assignmentIndex()
+    done = assert.async()
+    assertions.isAccessible view, done, {'a11yReport': true}
 
   test 'should filter by search term', ->
 
@@ -120,7 +131,7 @@ define [
     ok view.$("#assignment_2 .modules").text().match(/Three Module/)
 
   test "should show 'Add Quiz/Test' button if quiz lti is enabled", ->
-    ENV.PERMISSIONS.manage_course = true
+    ENV.PERMISSIONS.manage_assignments = true
     ENV.QUIZ_LTI_ENABLED = true
     view = assignmentIndex()
     $button = view.$('.new_quiz_lti')
@@ -128,7 +139,7 @@ define [
     ok /\?quiz_lti$/.test $button.attr('href')
 
   test "should not show 'Add Quiz/Test' button if quiz lti is not enabled", ->
-    ENV.PERMISSIONS.manage_course = true
+    ENV.PERMISSIONS.manage_assignments = true
     ENV.QUIZ_LTI_ENABLED = false
     view = assignmentIndex()
     equal $('.new_quiz_lti').length, 0
@@ -136,7 +147,12 @@ define [
 
   QUnit.module 'student index view',
     setup: ->
-      fakeENV.setup(PERMISSIONS: {manage: false})
+      fakeENV.setup(
+        PERMISSIONS: {manage: false},
+        URLS: {
+          assignment_sort_base_url : "test"
+        }
+      )
 
     teardown: ->
       fakeENV.teardown()

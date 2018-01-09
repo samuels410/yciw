@@ -42,6 +42,13 @@ describe AssignmentGroup do
     expect(ag.group_weight).to eq 0
   end
 
+  it "allows association with scores" do
+    ag = @course.assignment_groups.create!(@valid_attributes)
+    enrollment = @course.student_enrollments.first
+    score = ag.scores.first
+    expect(score.assignment_group_id).to be ag.id
+  end
+
   context "visible assignments" do
     before(:each) do
       @ag = @course.assignment_groups.create!(@valid_attributes)

@@ -18,8 +18,9 @@
 define [
   'jquery',
   'tinymce_plugins/instructure_links/linkable_editor',
-  'jsx/shared/rce/RceCommandShim'
-], ($, LinkableEditor, RceCommandShim) ->
+  'jsx/shared/rce/RceCommandShim',
+  'tinymce_plugins/instructure_links/links',
+], ($, LinkableEditor, RceCommandShim, links) ->
 
   rawEditor = null
 
@@ -91,3 +92,46 @@ define [
     })
     equal(extractedText, "")
 
+  QUnit.module "instructure_links link.js",
+    setup: ->
+      $('#fixtures').html('<div id="some_editor" data-value="42"><img class="iframe_placeholder" src="some_img.png" height="600" width="300"></div>')
+    teardown: ->
+      $("#fixtures").empty()
+
+  test "links initEditor PreProcess event preserves iframe size", ->
+    $editor = $(new LinkableEditor(rawEditor))
+    event = $.Event('PreProcess')
+    event.node = $('#fixtures')[0]
+    links.initEditor($editor)
+    $editor.trigger(event)
+    $iframe = $('#fixtures').find('iframe')
+    equal($iframe.attr('width'), 300)
+    equal($iframe.attr('height'), 600)
+
+  test "links initEditor PreProcess event doesn't use width/height attributes if style is present and contains those items", ->
+    $('#fixtures').html('<div id="some_editor" data-value="42"><img class="iframe_placeholder" _iframe_style="height: 500px; width: 800px;" src="some_img.png" style="height: 500px; width: 800px;"></div>')
+    $editor = $(new LinkableEditor(rawEditor))
+    links.initEditor($editor)
+    event = $.Event('PreProcess')
+    event.node = $('#fixtures')[0]
+    $editor.trigger(event)
+    $iframe = $('#fixtures').find('iframe')
+    equal($iframe.attr('style'), "height: 500px; width: 800px;")
+    ok(!$iframe.attr('width'))
+    ok(!$iframe.attr('height'))
+
+  QUnit.module "updateLinks",
+    setup: ->
+      $('#fixtures').html('<div id="some_editor" data-value="42"><p><span contenteditable="false" data-mce-object="iframe" class="mce-preview-object mce-object-iframe" data-mce-p-src="//simplydiffrient.com"><iframe style="width: 800px; height: 600px;" src="//simplydiffrient.com" frameborder="0"></iframe><span class="mce-shim"></span></span></p></div>')
+    teardown: ->
+      $("#fixtures").empty()
+
+  test "does not replace iframes with placebolders", ->
+    $editor = $(new LinkableEditor(rawEditor))
+    links.initEditor($editor)
+    mockEditor =
+      contentAreaContainer: $('<span>')
+      getBody: ->
+        $('#fixtures')[0]
+    links.updateLinks(mockEditor)
+    equal($('.iframe_placeholder').length, 0, 'should not replace iframes with placeholders')

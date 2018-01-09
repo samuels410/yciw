@@ -61,6 +61,9 @@ module Lti
       allow(m).to receive(:request).and_return(request_mock)
       allow(m).to receive(:logged_in_user).and_return(user)
       allow(m).to receive(:named_context_url).and_return('url')
+      allow(m).to receive(:active_brand_config_url).with('json').and_return('http://example.com/brand_config.json')
+      allow(m).to receive(:active_brand_config_url).with('js').and_return('http://example.com/brand_config.js')
+      allow(m).to receive(:active_brand_config).and_return(double(to_json: '{"ic-brand-primary-darkened-5":"#0087D7"}'))
       allow(m).to receive(:polymorphic_url).and_return('url')
       view_context_mock = double('view_context')
       allow(view_context_mock).to receive(:stylesheet_path)
@@ -76,9 +79,20 @@ module Lti
                                 submission: submission,
                                 link_id: resource_link_id)
     end
-    let(:attachment_association) { AttachmentAssociation.create!(context: submission, attachment: attachment) }
-    let(:tool_setting) { Lti::ToolSetting.create!(context: attachment_association, resource_link_id: resource_link_id) }
-    let(:variable_expander) { VariableExpander.new(root_account, account, controller, current_user: user, tool: tool, tool_setting: tool_setting) }
+    let(:editor_contents) { '<p>This is the contents of the editor</p>' }
+    let(:editor_selection) { 'is the contents' }
+    let(:variable_expander) do
+      VariableExpander.new(
+        root_account,
+        account,
+        controller,
+        current_user: user,
+        tool: tool,
+        originality_report: originality_report,
+        editor_contents: editor_contents,
+        editor_selection: editor_selection
+      )
+    end
 
     it 'clears the lti_helper instance variable when you set the current_user' do
       expect(variable_expander.lti_helper).not_to be nil
@@ -160,6 +174,7 @@ module Lti
            Person.name.given
            Person.name.family
            Person.name.full
+           Person.name.display
            Person.sourcedId
            User.id
            User.image
@@ -253,6 +268,11 @@ module Lti
           expanded = variable_expander.enabled_capability_params(enabled_capability)
           expect(expanded.keys).to include 'lis_person_name_full'
         end
+
+        it 'includes Person.name.display when in enabled capability' do
+          expanded = variable_expander.enabled_capability_params(enabled_capability)
+          expect(expanded.keys).to include 'person_name_display'
+        end
       end
     end
 
@@ -277,7 +297,7 @@ module Lti
       it 'has a substitution for com.instructure.Assignment.lti.id' do
         exp_hash = {test: '$com.instructure.Assignment.lti.id'}
         variable_expander.expand_variables!(exp_hash)
-        expect(exp_hash[:test]).to eq tool_setting.context.context.assignment.lti_context_id
+        expect(exp_hash[:test]).to eq originality_report.submission.assignment.lti_context_id
       end
 
       it 'has a substitution for com.instructure.Assignment.lti.id when there is no tool setting' do
@@ -334,6 +354,18 @@ module Lti
         expect(exp_hash[:test]).to eq lti_assignment_id
       end
 
+      it 'has substitution for com.instructure.Editor.contents' do
+        exp_hash = {test: '$com.instructure.Editor.contents'}
+        variable_expander.expand_variables!(exp_hash)
+        expect(exp_hash[:test]).to eq editor_contents
+      end
+
+      it 'has substitution for com.instructure.Editor.selection' do
+        exp_hash = {test: '$com.instructure.Editor.selection'}
+        variable_expander.expand_variables!(exp_hash)
+        expect(exp_hash[:test]).to eq editor_selection
+      end
+
       it 'has a substitution for Context.title' do
         exp_hash = {test: '$Context.title'}
         variable_expander.expand_variables!(exp_hash)
@@ -344,6 +376,24 @@ module Lti
         exp_hash = {test: '$vnd.Canvas.OriginalityReport.url'}
         variable_expander.expand_variables!(exp_hash)
         expect(exp_hash[:test]).to eq 'api/lti/assignments/{assignment_id}/submissions/{submission_id}/originality_report'
+      end
+
+      it 'has substitution for com.instructure.OriginalityReport.id' do
+        exp_hash = {test: '$com.instructure.OriginalityReport.id'}
+        variable_expander.expand_variables!(exp_hash)
+        expect(exp_hash[:test]).to eq originality_report.id
+      end
+
+      it 'has substitution for com.instructure.Submission.id' do
+        exp_hash = {test: '$com.instructure.Submission.id'}
+        variable_expander.expand_variables!(exp_hash)
+        expect(exp_hash[:test]).to eq originality_report.submission.id
+      end
+
+      it 'has substitution for com.instructure.File.id' do
+        exp_hash = {test: '$com.instructure.File.id'}
+        variable_expander.expand_variables!(exp_hash)
+        expect(exp_hash[:test]).to eq originality_report.attachment.id
       end
 
       it 'has substitution for vnd.Canvas.submission.url' do
@@ -383,6 +433,48 @@ module Lti
         exp_hash = {test: '$Canvas.api.domain'}
         variable_expander.expand_variables!(exp_hash)
         expect(exp_hash[:test]).to eq '$Canvas.api.domain'
+      end
+
+      it 'has substitution for $com.instructure.brandConfigJSON.url' do
+        exp_hash = {test: '$com.instructure.brandConfigJSON.url'}
+        variable_expander.expand_variables!(exp_hash)
+        expect(exp_hash[:test]).to eq 'http://example.com/brand_config.json'
+      end
+
+      it 'does not expand $com.instructure.brandConfigJSON.url when the controller is unset' do
+        variable_expander.instance_variable_set(:@controller, nil)
+        variable_expander.instance_variable_set(:@request, nil)
+        exp_hash = {test: '$com.instructure.brandConfigJSON.url'}
+        variable_expander.expand_variables!(exp_hash)
+        expect(exp_hash[:test]).to eq '$com.instructure.brandConfigJSON.url'
+      end
+
+      it 'has substitution for $com.instructure.brandConfigJSON' do
+        exp_hash = {test: '$com.instructure.brandConfigJSON'}
+        variable_expander.expand_variables!(exp_hash)
+        expect(exp_hash[:test]).to eq '{"ic-brand-primary-darkened-5":"#0087D7"}'
+      end
+
+      it 'does not expand $com.instructure.brandConfigJSON when the controller is unset' do
+        variable_expander.instance_variable_set(:@controller, nil)
+        variable_expander.instance_variable_set(:@request, nil)
+        exp_hash = {test: '$com.instructure.brandConfigJSON'}
+        variable_expander.expand_variables!(exp_hash)
+        expect(exp_hash[:test]).to eq '$com.instructure.brandConfigJSON'
+      end
+
+      it 'has substitution for $com.instructure.brandConfigJS.url' do
+        exp_hash = {test: '$com.instructure.brandConfigJS.url'}
+        variable_expander.expand_variables!(exp_hash)
+        expect(exp_hash[:test]).to eq 'http://example.com/brand_config.js'
+      end
+
+      it 'does not expand $com.instructure.brandConfigJS.url when the controller is unset' do
+        variable_expander.instance_variable_set(:@controller, nil)
+        variable_expander.instance_variable_set(:@request, nil)
+        exp_hash = {test: '$com.instructure.brandConfigJS.url'}
+        variable_expander.expand_variables!(exp_hash)
+        expect(exp_hash[:test]).to eq '$com.instructure.brandConfigJS.url'
       end
 
       it 'has substitution for $Canvas.css.common' do
@@ -667,6 +759,27 @@ module Lti
           expect(exp_hash[:test]).to eq '2015-05-21 17:01:36'
         end
 
+        it 'has a functioning guard for $Canvas.term.name when term.name is not set' do
+          term = course.enrollment_term
+          exp_hash = {test: '$Canvas.term.name'}
+          variable_expander.expand_variables!(exp_hash)
+
+          unless term && term.name
+            expect(exp_hash[:test]).to eq '$Canvas.term.name'
+          end
+        end
+
+        it 'has substitution for $Canvas.term.name when term.name is set' do
+          course.enrollment_term ||= EnrollmentTerm.new
+          term = course.enrollment_term
+
+          term.name = 'W1 2017'
+          term.save
+          exp_hash = {test: '$Canvas.term.name'}
+          variable_expander.expand_variables!(exp_hash)
+          expect(exp_hash[:test]).to eq 'W1 2017'
+        end
+
         it 'has substitution for $Canvas.externalTool.url' do
           course.save!
           tool = course.context_external_tools.create!(:domain => 'example.com', :consumer_key => '12345', :shared_secret => 'secret', :privacy_level => 'anonymous', :name => 'tool')
@@ -857,6 +970,14 @@ module Lti
           exp_hash = {test: '$Person.name.full'}
           variable_expander.expand_variables!(exp_hash)
           expect(exp_hash[:test]).to eq 'Uncle Jake'
+        end
+
+        it 'has substitution for $Person.name.display' do
+          user.name = 'Uncle Jake'
+          user.short_name = 'Unc J'
+          exp_hash = {test: '$Person.name.display'}
+          variable_expander.expand_variables!(exp_hash)
+          expect(exp_hash[:test]).to eq 'Unc J'
         end
 
         it 'has substitution for $Person.name.family' do

@@ -52,6 +52,7 @@ describe "announcements" do
       end
 
       it "should bulk delete topics", priority: "1", test_id: 220360 do # no
+        skip_if_safari(:alert)
         5.times { |i| @checkboxes[i].click }
         f('#delete').click
         driver.switch_to.alert.accept
@@ -134,6 +135,7 @@ describe "announcements" do
       end
 
       it "should remove an announcement when it is deleted from the delete option in the cog menu", priority: "1", test_id: 220364 do # no
+        skip_if_safari(:alert)
         title = "My announcement"
         announcement_model(:title => title, :user => @user)
         get url
@@ -152,7 +154,7 @@ describe "announcements" do
         get url
 
         expect_new_page_load { f('.btn-primary').click }
-        edit(@topic_title, 'new topic')
+        edit_announcement(@topic_title, 'new topic')
       end
 
       it "should add an attachment to a new topic", priority: "1", test_id: 150529 do
@@ -197,10 +199,11 @@ describe "announcements" do
         get url + "#{topic.id}"
         expect_new_page_load { f(".edit-btn").click }
 
-        edit(edit_name, 'edit message')
+        edit_announcement(edit_name, 'edit message')
       end
 
       it "should delete a topic", priority: "1", test_id: 150526 do # no
+        skip_if_safari(:alert)
         what_to_create == DiscussionTopic ? @course.discussion_topics.create!(:title => @topic_title, :user => @user) : announcement_model(:title => @topic_title, :user => @user)
         get url
 

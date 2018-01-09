@@ -21,8 +21,11 @@ define([
   'react-dom',
   'react-addons-test-utils',
   'jsx/context_cards/SubmissionProgressBars',
-  'instructure-ui/lib/components/Progress'
-], (React, ReactDOM, TestUtils, SubmissionProgressBars, { default: InstUIProgress }) => {
+  'instructure-ui/lib/components/Progress',
+  'enzyme'
+], (React, ReactDOM, TestUtils, SubmissionProgressBars, { default: InstUIProgress }, { shallow }) => {
+
+  const user = { _id: 1 };
 
   QUnit.module('StudentContextTray/Progress', (hooks) => {
     let grade, score, spy, subject, submission, tag
@@ -210,7 +213,8 @@ define([
                 id: 1,
                 grade: 'complete',
                 score: 25,
-                assignment: {points_possible: 25}
+                assignment: {points_possible: 25},
+                user
               }]}
             />
           )
@@ -226,7 +230,8 @@ define([
               id: 1,
               grade: 'incomplete',
               score: 0,
-              assignment: {points_possible: 25}
+              assignment: {points_possible: 25},
+              user
             }]} />
           )
           tag = TestUtils.findRenderedDOMComponentWithTag(subject, 'i')
@@ -241,16 +246,19 @@ define([
           id: 1,
           grade: 'incomplete',
           score: 0,
+          user,
           assignment: {points_possible: 25}
         }, {
           id: 2,
           grade: 'complete',
           score: 25,
+          user,
           assignment: {points_possible: 25}
         }, {
           id: 3,
           grade: 'A+',
           score: 25,
+          user,
           assignment: {points_possible: 25}
         }]
         subject = TestUtils.renderIntoDocument(
@@ -258,6 +266,28 @@ define([
         )
         const instUIProgressBars = TestUtils.scryRenderedComponentsWithType(subject, InstUIProgress)
         equal(instUIProgressBars.length, submissions.length)
+      })
+
+      test('ignores submissions with null grades', () => {
+        const submissions = [
+          {
+            id: '1',
+            score: 5,
+            grade: '5',
+            assignment: {html_url: 'asdf', points_possible: 1},
+            user: {short_name: 'bob', _id: '1'}
+          },
+          {
+            id: '2',
+            score: null,
+            grade: null,
+            assignment: {html_url: 'asdf', points_possible: 1},
+            user: {short_name: 'bob', _id: '1'}
+          }
+        ]
+
+        const tray = shallow(<SubmissionProgressBars submissions={submissions} />)
+        equal(tray.find('Progress').length, 1)
       })
     })
   })

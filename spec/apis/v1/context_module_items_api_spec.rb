@@ -70,6 +70,38 @@ describe "Module Items API", type: :request do
       course_with_teacher(:course => @course, :active_all => true)
     end
 
+    it 'properly shows a wiki page item locked by CYOE from progressions' do
+      module_with_page = @course.context_modules.create!(name: "new module")
+      assignment = @course.assignments.create!(
+        name: "some assignment",
+        submission_types: ["online_text_entry"],
+        points_possible: 20
+      )
+      module_with_page.add_item(:id => assignment.id, :type => 'assignment')
+      page = @course.wiki_pages.create!(title: "some page")
+      page.assignment = @course.assignments.create!(
+        name: "hidden page",
+        submission_types: ["wiki_page"],
+        only_visible_to_overrides: true
+      )
+      page.save!
+      page_tag = module_with_page.add_item(:id => page.id, :type => 'wiki_page')
+      quiz = @course.quizzes.create!(:title => "some quiz")
+      quiz.publish!
+      module_with_page.add_item(:id => quiz.id, :type => 'quiz')
+      json = api_call(
+        :get, "/api/v1/courses/#{@course.id}/"\
+          "module_item_sequence?asset_type=Assignment&asset_id=#{assignment.id}",
+        :controller => "context_module_items_api",
+        :action => "item_sequence",
+        :format => "json",
+        :course_id => @course.to_param,
+        :asset_type => 'Assignment',
+        :asset_id => assignment.to_param
+      )
+      expect(json['items'][0]['next']['id']).to eq page_tag.id
+    end
+
     it "should list module items" do
       @assignment_tag.unpublish
       json = api_call(:get, "/api/v1/courses/#{@course.id}/modules/#{@module1.id}/items",
@@ -1201,12 +1233,86 @@ describe "Module Items API", type: :request do
           expect(mastery_paths).to be_truthy
         end
 
+        it 'properly omits a wiki page item locked by CYOE from progressions' do
+          module_with_page = @course.context_modules.create!(name: "new module")
+          assignment = @course.assignments.create!(
+            name: "some assignment",
+            submission_types: ["online_text_entry"],
+            points_possible: 20
+          )
+          module_with_page.add_item(:id => assignment.id, :type => 'assignment')
+          page = @course.wiki_pages.create!(title: "some page")
+          page.assignment = @course.assignments.create!(
+            name: "hidden page",
+            submission_types: ["wiki_page"],
+            only_visible_to_overrides: true
+          )
+          page.save!
+          module_with_page.add_item(:id => page.id, :type => 'wiki_page')
+          quiz = @course.quizzes.create!(:title => "some quiz")
+          quiz.publish!
+          quiz_tag = module_with_page.add_item(:id => quiz.id, :type => 'quiz')
+          json = api_call(
+            :get, "/api/v1/courses/#{@course.id}/"\
+              "module_item_sequence?asset_type=Assignment&asset_id=#{assignment.id}",
+            :controller => "context_module_items_api",
+            :action => "item_sequence",
+            :format => "json",
+            :course_id => @course.to_param,
+            :asset_type => 'Assignment',
+            :asset_id => assignment.to_param
+          )
+          expect(json['items'][0]['next']['id']).to eq quiz_tag.id
+        end
+
+        it 'does not omit a wiki page item if CYOE is disabled' do
+          allow(ConditionalRelease::Service).to receive(:enabled_in_context?).and_return(false)
+          module_with_page = @course.context_modules.create!(name: "new module")
+          assignment = @course.assignments.create!(
+            name: "some assignment",
+            submission_types: ["online_text_entry"],
+            points_possible: 20
+          )
+          module_with_page.add_item(:id => assignment.id, :type => 'assignment')
+          page = @course.wiki_pages.create!(title: "some page")
+          page.assignment = @course.assignments.create!(
+            name: "hidden page",
+            submission_types: ["wiki_page"],
+            only_visible_to_overrides: true
+          )
+          page.save!
+          page_tag= module_with_page.add_item(:id => page.id, :type => 'wiki_page')
+          quiz = @course.quizzes.create!(:title => "some quiz")
+          quiz.publish!
+          module_with_page.add_item(:id => quiz.id, :type => 'quiz')
+          json = api_call(
+            :get, "/api/v1/courses/#{@course.id}/"\
+              "module_item_sequence?asset_type=Assignment&asset_id=#{assignment.id}",
+            :controller => "context_module_items_api",
+            :action => "item_sequence",
+            :format => "json",
+            :course_id => @course.to_param,
+            :asset_type => 'Assignment',
+            :asset_id => assignment.to_param
+          )
+          expect(json['items'][0]['next']['id']).to eq page_tag.id
+        end
+
         it "includes model data merge from Canvas" do
           json = api_call(:get, "/api/v1/courses/#{@course.id}/modules/#{@cyoe_module2.id}/items?include[]=mastery_paths",
             :controller => "context_module_items_api", :action => "index", :format => "json",
             :course_id => @course.id.to_s, :module_id => @cyoe_module2.id.to_s, :include => ['mastery_paths'])
           models = json.any? { |item| has_assignment_model?(item) }
           expect(models).to be_truthy
+        end
+      end
+
+      describe "module item sequence response data" do
+        it "should include mastery path information" do
+          json = api_call(:get, "/api/v1/courses/#{@course.id}/module_item_sequence?asset_type=Quiz&asset_id=#{@quiz.id}",
+                          :controller => "context_module_items_api", :action => "item_sequence", :format => "json",
+                          :course_id => @course.to_param, :asset_type => 'Quiz', :asset_id => @quiz.to_param)
+          expect(json['items'][0]['mastery_path']).to be_present
         end
       end
 
@@ -1521,6 +1627,28 @@ describe "Module Items API", type: :request do
                         {},
                         {:expected_status => 401})
       end
+    end
+  end
+
+  describe 'POST duplicate' do
+    before :once do
+      course_with_teacher(:course => @course, :active_all => true)
+    end
+
+    it 'should duplicate module item' do
+      api_call(:post, "/api/v1/courses/#{@course.id}/modules/items/#{@assignment_tag.id}/duplicate",
+                      { controller: "context_module_items_api", action: 'duplicate', format: 'json',
+                        course_id: "#{@course.id}", id: "#{@assignment_tag.id}" },
+                      {}, {},
+                      {:expected_status => 200})
+    end
+
+    it 'should not duplicate invalid module item' do
+      api_call(:post, "/api/v1/courses/#{@course.id}/modules/items/#{@attachment_tag.id}/duplicate",
+                      { controller: "context_module_items_api", action: 'duplicate', format: 'json',
+                        course_id: "#{@course.id}", id: "#{@attachment_tag.id}" },
+                      {}, {},
+                      {:expected_status => 400})
     end
   end
 

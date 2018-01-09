@@ -239,6 +239,12 @@ describe ContextExternalTool do
       expect(@found_tool).to eql(@tool)
     end
 
+    it "should not match on domain if domain is nil" do
+      @tool = @course.context_external_tools.create!(:name => "a", :url => "http://www.google.com/coolness", :consumer_key => '12345', :shared_secret => 'secret')
+      @found_tool = ContextExternalTool.find_external_tool("http://malicious.domain./hahaha", Course.find(@course.id))
+      expect(@found_tool).to be_nil
+    end
+
     it "should match on url or domain for a tool that has both" do
       @tool = @course.context_external_tools.create!(:name => "a", :url => "http://www.google.com/coolness", :domain => "google.com", :consumer_key => '12345', :shared_secret => 'secret')
       expect(ContextExternalTool.find_external_tool("http://google.com/is/cool", Course.find(@course.id))).to eql(@tool)
@@ -897,6 +903,22 @@ describe ContextExternalTool do
 
     it "should raise RecordNotFound if the id is invalid" do
       expect { ContextExternalTool.find_for("horseshoes", @course, :course_navigation) }.to raise_error(ActiveRecord::RecordNotFound)
+    end
+
+    it "should not find a course tool with workflow_state deleted" do
+      tool = new_external_tool @course
+      tool.course_navigation = {:url => "http://www.example.com", :text => "Example URL"}
+      tool.workflow_state = 'deleted'
+      tool.save!
+      expect { ContextExternalTool.find_for(tool.id, @course, :course_navigation) }.to raise_error(ActiveRecord::RecordNotFound)
+    end
+
+    it "should not find an account tool with workflow_state deleted" do
+      tool = new_external_tool @account
+      tool.account_navigation = {:url => "http://www.example.com", :text => "Example URL"}
+      tool.workflow_state = 'deleted'
+      tool.save!
+      expect { ContextExternalTool.find_for(tool.id, @account, :account_navigation) }.to raise_error(ActiveRecord::RecordNotFound)
     end
   end
 

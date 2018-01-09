@@ -48,6 +48,7 @@ module Api::V1::Assignment
       grading_standard_id
       moderated_grading
       omit_from_final_grade
+      anonymous_instructor_annotations
     )
   }.freeze
 
@@ -242,8 +243,11 @@ module Api::V1::Assignment
         rubric = assignment.rubric
         hash['rubric'] = rubric.data.map do |row|
           row_hash = row.slice(:id, :points, :description, :long_description)
+          row_hash["criterion_use_range"] = row[:criterion_use_range] || false
           row_hash["ratings"] = row[:ratings].map do |c|
-            c.slice(:id, :points, :description)
+            rating_hash = c.slice(:id, :points, :description, :long_description)
+            rating_hash["long_description"] = c[:long_description] || ""
+            rating_hash
           end
           if row[:learning_outcome_id] && outcome = LearningOutcome.where(id: row[:learning_outcome_id]).first
             row_hash["outcome_id"] = outcome.id
@@ -306,9 +310,10 @@ module Api::V1::Assignment
 
     if submission = opts[:submission]
       if submission.is_a?(Array)
-        hash['submission'] = submission.map { |s| submission_json(s, assignment, user, session) }
+        ActiveRecord::Associations::Preloader.new.preload(submission, :quiz_submission) if assignment.quiz?
+        hash['submission'] = submission.map { |s| submission_json(s, assignment, user, session, params) }
       else
-        hash['submission'] = submission_json(submission, assignment, user, session)
+        hash['submission'] = submission_json(submission, assignment, user, session, params)
       end
     end
 
@@ -388,7 +393,8 @@ module Api::V1::Assignment
     notify_of_update
     integration_id
     omit_from_final_grade
-  )
+    anonymous_instructor_annotations
+  ).freeze
 
   API_ALLOWED_TURNITIN_SETTINGS = %w(
     originality_report_visibility
@@ -400,14 +406,14 @@ module Api::V1::Assignment
     exclude_small_matches_type
     exclude_small_matches_value
     submit_papers_to
-  )
+  ).freeze
 
   API_ALLOWED_VERICITE_SETTINGS = %w(
     originality_report_visibility
     exclude_quoted
     exclude_self_plag
     store_in_index
-  )
+  ).freeze
 
   def create_api_assignment(assignment, assignment_params, user, context = assignment.context)
     return :forbidden unless grading_periods_allow_submittable_create?(assignment, assignment_params)
@@ -630,6 +636,8 @@ module Api::V1::Assignment
       assignment.moderated_grading = value_to_boolean(assignment_params['moderated_grading'])
     end
 
+    apply_report_visibility_options!(assignment_params, assignment)
+
     assignment.updating_user = user
     assignment.attributes = update_params
     assignment.infer_times
@@ -695,6 +703,15 @@ module Api::V1::Assignment
   end
 
   private
+
+  def apply_report_visibility_options!(assignment_params, assignment)
+    if assignment_params[:report_visibility].present?
+      settings = assignment.turnitin_settings
+      settings[:originality_report_visibility] = assignment_params[:report_visibility]
+      assignment.turnitin_settings = settings
+    end
+  end
+
 
   def prepare_assignment_create_or_update(assignment, assignment_params, user, context = assignment.context)
     raise "needs strong params" unless assignment_params.is_a?(ActionController::Parameters)
@@ -792,7 +809,7 @@ module Api::V1::Assignment
     elsif assignment_params['configuration_tool_type'] == 'Lti::MessageHandler'
       mh = Lti::MessageHandler.find(tool_id)
       mh_context = mh.resource_handler.tool_proxy.context
-      tool = mh if mh_context == @context || mh_context == @context.account || mh_context == @context.root_account
+      tool = mh if mh_context == @context || @context.account_chain.include?(mh_context)
     end
     tool
   end
@@ -800,7 +817,8 @@ module Api::V1::Assignment
   def plagiarism_capable?(assignment_params)
     assignment_params['submission_type'] == 'online' &&
       assignment_params['submission_types'].present? &&
-      assignment_params['submission_types'].include?('online_upload')
+      (assignment_params['submission_types'].include?('online_upload') ||
+      assignment_params['submission_types'].include?('online_text_entry'))
   end
 
   def submissions_download_url(context, assignment)

@@ -23,7 +23,7 @@ describe LiveEvents do
   it 'should trigger a live event on login' do
     expect(Canvas::LiveEvents).to receive(:logged_in).once
     user_with_pseudonym(:username => 'jtfrd@instructure.com', :active_user => true, :password => 'qwertyuiop')
-    post '/login', params: {:pseudonym_session => { :unique_id => 'jtfrd@instructure.com', :password => 'qwertyuiop'}}
+    post '/login/canvas', params: {:pseudonym_session => { :unique_id => 'jtfrd@instructure.com', :password => 'qwertyuiop'}}
     expect(response).to be_redirect
   end
 
@@ -94,6 +94,14 @@ describe LiveEvents do
         delete "/api/v1/files/#{file.id}"
         expect(response.code).to eq '200'
       end
+    end
+  end
+
+  context 'Enrollments' do
+    it "should trigger a live event on limit_privileges_to_course_section!" do
+      course_with_student
+      expect(Canvas::LiveEvents).to receive(:enrollment_updated).once
+      Enrollment.limit_privileges_to_course_section!(@course, @user, true)
     end
   end
 end

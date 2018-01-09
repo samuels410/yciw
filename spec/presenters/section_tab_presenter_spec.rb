@@ -43,19 +43,6 @@ describe SectionTabPresenter do
     end
   end
 
-  describe '#screenreader?' do
-    it 'should return false if tab has no screenreader element' do
-      expect(presenter.screenreader?).to be_falsey
-    end
-
-    it 'should return true when tab has screenreader element' do
-      new_presenter = SectionTabPresenter.new(
-        assignments_tab, course
-      )
-      expect(new_presenter.screenreader?).to be_truthy
-    end
-  end
-
   describe '#target?' do
     it 'returns true if the tab has a target attribute' do
       expect(SectionTabPresenter.new(tab.merge(target: '_blank'), course).target?).to eq true
@@ -74,11 +61,20 @@ describe SectionTabPresenter do
   describe '#hide?' do
     it 'should return true if tab has element hidden or hidden_unused' do
       expect(SectionTabPresenter.new(tab.merge(hidden: true), course).hide?).to be_truthy
-      expect(SectionTabPresenter.new(tab.merge(hidden_unused: true), course).hide?).to be_truthy
     end
 
     it 'should return false if tab does not have element hidden or hidden_unused' do
       expect(presenter.hide?).to be_falsey
+    end
+  end
+
+  describe '#unused?' do
+    it 'should return true if tab has element hidden or hidden_unused' do
+      expect(SectionTabPresenter.new(tab.merge(hidden_unused: true), course).unused?).to be_truthy
+    end
+
+    it 'should return false if tab does not have element hidden or hidden_unused' do
+      expect(presenter.unused?).to be_falsey
     end
   end
 
@@ -119,17 +115,11 @@ describe SectionTabPresenter do
   end
 
   describe '#to_h' do
-    it 'should include icon & path' do
+    it 'should include icon, path & label' do
       h = SectionTabPresenter.new(tab.merge({
         icon: 'icon-home'
       }), course).to_h
-      expect(h.keys).to include(:icon, :hidden, :path)
-      expect(h).to_not have_key(:screenreader)
-    end
-
-    it 'should include screenreader text if present' do
-      h = SectionTabPresenter.new(assignments_tab, course).to_h
-      expect(h).to have_key(:screenreader)
+      expect(h.keys).to include(:icon, :hidden, :path, :label)
     end
   end
 end

@@ -143,6 +143,7 @@ module BlueprintCourseCommon
         try += 1
         begin
           f('.bca-course-details__wrapper button').click
+          wait_for_ajaximations
           f('.bca-table__course-row')
           keep_trying = false
         rescue
@@ -199,7 +200,7 @@ module BlueprintCourseCommon
     # click the Save button and wait for it to complete
     def do_save
       save_button().click
-      expect(f('#flash_message_holder')).to contain_css('div') # the alert saying the save completed
+      expect(f('#flashalert_message_holder')).to contain_css('div') # the alert saying the save completed
     end
 
 

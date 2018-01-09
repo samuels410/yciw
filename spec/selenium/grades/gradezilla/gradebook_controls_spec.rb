@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
-require_relative '../page_objects/gradezilla_page'
+require_relative '../pages/gradezilla_page'
 require_relative '../setup/gradebook_setup'
 
 describe 'Gradebook Controls' do
@@ -37,9 +37,9 @@ describe 'Gradebook Controls' do
       expect(f('h1')).to include_text("Gradebook: Individual View")
     end
 
-    it "navigates to Grading History", priority: "2", test_id: 3253265 do
+    it "navigates to Gradebook History", priority: "2", test_id: 3253265 do
       Gradezilla.visit(@course)
-      expect_new_page_load { Gradezilla.gradebook_dropdown_item_click("Grading History") }
+      expect_new_page_load { Gradezilla.gradebook_dropdown_item_click("Gradebook History") }
       expect(driver.current_url).to include("/courses/#{@course.id}/gradebook/history")
     end
 
@@ -60,7 +60,7 @@ describe 'Gradebook Controls' do
       Gradezilla.select_view_dropdown
       Gradezilla.select_filters
       Gradezilla.select_view_filter("Grading Periods")
-      expect(Gradezilla.grading_period_dropdown).to be_displayed
+      expect(f(Gradezilla.grading_period_dropdown_selector)).to be_displayed
     end
 
     it 'shows Module dropdown', test_id: 3253275, priority: '1' do
@@ -94,6 +94,17 @@ describe 'Gradebook Controls' do
       Gradezilla.select_show_unpublished_assignments
 
       expect(Gradezilla.content_selector).not_to contain_css('.assignment-name')
+    end
+  end
+
+  context 'using Actions dropdown' do
+
+    it 'navigates to upload page', test_id: 3265129, priority: '1' do
+      Gradezilla.visit(@course)
+      Gradezilla.open_action_menu
+      Gradezilla.action_menu_item_selector("import").click
+
+      expect(driver.current_url).to include "courses/#{@course.id}/gradebook_upload/new"
     end
   end
 end

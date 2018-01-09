@@ -219,6 +219,27 @@ class DiscussionTopicsApiController < ApplicationController
     end
   end
 
+  def duplicate
+    return unless authorized_action(@topic, @current_user, :create)
+    # Require topic hook forbids duplicating of child, nonexistent, and deleted topics
+    # The only extra check we need is to prevent duplicating announcements.
+    if @topic.is_announcement
+      return render json: { error: 'announcements cannot be duplicated' }, status: :bad_request
+    end
+
+    new_topic = @topic.duplicate({ :user => @current_user })
+    if new_topic.save!
+      result = discussion_topic_api_json(new_topic, @context, @current_user, session)
+      if new_topic.assignment
+        new_topic.assignment.insert_at(@topic.assignment.position + 1)
+        result[:set_assignment] = true
+      end
+      render :json => result
+    else
+      render json: { error: 'unable to save new discussion topic' }, status: :bad_request
+    end
+  end
+
   # @API List topic entries
   # Retrieve the (paginated) top-level entries in a discussion topic.
   #
@@ -630,7 +651,7 @@ class DiscussionTopicsApiController < ApplicationController
       @entry.update_topic
       log_asset_access(@topic, 'topics', 'topics', 'participate')
       if has_attachment
-        @attachment = (@current_user || @context).attachments.create(:uploaded_data => params[:attachment])
+        @attachment = create_attachment
         @attachment.handle_duplicates(:rename)
         @entry.attachment = @attachment
         @entry.save
@@ -639,6 +660,18 @@ class DiscussionTopicsApiController < ApplicationController
     else
       render :json => @entry.errors, :status => :bad_request
     end
+  end
+
+  def create_attachment
+    context = (@current_user || @context)
+    attachment_params = { :uploaded_data => params[:attachment] }
+
+    if @topic.for_assignment?
+      attachment_params.merge!(:folder_id => @current_user.submissions_folder(@context))
+      context = @current_user
+    end
+
+    context.attachments.create(attachment_params)
   end
 
   def visible_topics(topic)

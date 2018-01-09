@@ -85,7 +85,8 @@ Style/IndentationWidth:
 Style/AlignParameters:
   Enabled: false
 Style/DotPosition:
-  Enabled: false
+  Enabled: true
+  EnforcedStyle: trailing
 Style/TrailingWhitespace:
   Enabled: false
 Style/MultilineOperationIndentation:
@@ -110,6 +111,14 @@ Style/VariableNumber:
   Enabled: false
 Style/SpaceInLambdaLiteral:
   Enabled: false
+Style/Dir:
+  Enabled: false
+Style/ReturnNil:
+  Enabled: false
+Style/StderrPuts:
+  Enabled: false
+Style/DateTime:
+  Enabled: false
 # We may want to enable this when we start working toward Ruby 3
 Style/FrozenStringLiteralComment:
   Enabled: false
@@ -129,6 +138,8 @@ RSpec/RepeatedDescription:
 # this isn't good for us because of how we pin dependencies
 Bundler/OrderedGems:
   Enabled: false
+Gemspec/OrderedDependencies:
+  Enabled: false
 
 # Rails style changes
 Rails:
@@ -140,6 +151,8 @@ Rails/ReadWriteAttribute:
   Enabled: false
 # we never bothered creating an ApplicationRecord
 Rails/ApplicationRecord:
+  Enabled: false
+Rails/HasManyOrHasOneDependent:
   Enabled: false
 
 # Lint changes
@@ -211,4 +224,6 @@ Style/HashSyntax:
 RSpec/MultipleExpectations:
   Enabled: false
 RSpec/ScatteredSetup:
+  Enabled: false
+Lint/RescueWithoutErrorClass:
   Enabled: false

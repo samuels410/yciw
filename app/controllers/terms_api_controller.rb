@@ -38,6 +38,11 @@
 #           "example": "Sp2014",
 #           "type": "string"
 #         },
+#         "sis_import_id": {
+#           "description": "the unique identifier for the SIS import. This field is only included if the user has permission to manage SIS information.",
+#           "example": 34,
+#           "type": "integer"
+#         },
 #         "name": {
 #           "description": "The name of the term.",
 #           "example": "Spring 2014",
@@ -73,7 +78,7 @@ class TermsApiController < ApplicationController
 
   # @API List enrollment terms
   #
-  # Return all of the terms in the account.
+  # A paginated list of all of the terms in the account.
   #
   # @argument workflow_state[] [String, "active"|"deleted"|"all"]
   #   If set, only returns terms that are in the given state.

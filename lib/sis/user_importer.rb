@@ -144,21 +144,11 @@ module SIS
                 @messages << "Can't remove yourself user_id '#{user_row.user_id}'"
                 next
               end
-              # if this user is deleted, we're just going to make sure the user isn't enrolled in anything in this root account and
-              # delete the pseudonym.
-              enrollment_ids = @root_account.enrollments.active.where(user_id: user).where.not(:workflow_state => 'deleted').pluck(:id)
-              if enrollment_ids.any?
-                Enrollment.where(id: enrollment_ids).update_all(updated_at: Time.now.utc, workflow_state: 'deleted')
-                EnrollmentState.where(enrollment_id: enrollment_ids).update_all(state: 'deleted', state_is_current: true)
-              end
 
-              d = enrollment_ids.count
-              d += @root_account.all_group_memberships.active.where(user_id: user).update_all(updated_at: Time.now.utc, workflow_state: 'deleted')
-              d += user.account_users.shard(@root_account).where(account_id: @root_account.all_accounts).update_all(updated_at: Time.now.utc, workflow_state: 'deleted')
-              d += user.account_users.shard(@root_account).where(account_id: @root_account).update_all(updated_at: Time.now.utc, workflow_state: 'deleted')
-              if d > 0
-                should_update_account_associations = true
-              end
+              # if this user is deleted and there are no more active logins,
+              # we're going to delete any enrollments for this root account and
+              # delete this pseudonym.
+              should_update_account_associations = remove_enrollments_if_last_login(user, user_row.user_id)
             end
 
             pseudo ||= Pseudonym.new
@@ -187,7 +177,7 @@ module SIS
               user_id = pseudo_by_integration.sis_user_id || pseudo_by_integration.user_id
               @messages << I18n.t("An existing Canvas user with the %{user_id} has already claimed %{other_user_id}'s requested integration_id, skipping", user_id: "#{id_message} #{user_id.to_s}", other_user_id: user_row.user_id)
             end
-            pseudo.integration_id = user_row.integration_id if user_row.integration_id
+            pseudo.integration_id = user_row.integration_id if user_row.integration_id.present?
             pseudo.account = @root_account
             pseudo.workflow_state = status_is_active ? 'active' : 'deleted'
             if pseudo.new_record? && status_is_active
@@ -324,6 +314,30 @@ module SIS
 
           end
         end
+      end
+
+      def remove_enrollments_if_last_login(user, user_id)
+        return false if @root_account.pseudonyms.active.where(user_id: user).
+          where("sis_user_id != ? OR sis_user_id IS NULL",  user_id).exists?
+
+        enrollment_ids = @root_account.enrollments.active.where(user_id: user).
+          where.not(workflow_state: 'deleted').pluck(:id)
+        if enrollment_ids.any?
+          Enrollment.where(id: enrollment_ids).update_all(updated_at: Time.now.utc, workflow_state: 'deleted')
+          EnrollmentState.where(enrollment_id: enrollment_ids).update_all(state: 'deleted', state_is_current: true)
+        end
+
+        d = enrollment_ids.count
+        d += @root_account.all_group_memberships.active.where(user_id: user).
+          update_all(updated_at: Time.now.utc, workflow_state: 'deleted')
+        d += user.account_users.shard(@root_account).where(account_id: @root_account.all_accounts).
+          update_all(updated_at: Time.now.utc, workflow_state: 'deleted')
+        d += user.account_users.shard(@root_account).where(account_id: @root_account).
+          update_all(updated_at: Time.now.utc, workflow_state: 'deleted')
+        if d > 0
+          should_update_account_associations = true
+        end
+        should_update_account_associations
       end
 
       private
