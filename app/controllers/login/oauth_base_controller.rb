@@ -25,6 +25,12 @@ class Login::OauthBaseController < ApplicationController
   def new
     # a subclass might explicitly set the AAC, so that we don't need to infer
     # it from the URL
+
+    # samuels410 redirect to special url for social logins
+    if params[:after_login_redirect]
+      store_location(params[:after_login_redirect], true)
+    end
+
     return if @aac
 
     auth_type = params[:controller].sub(%r{^login/}, '')
