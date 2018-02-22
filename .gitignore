@@ -68,3 +68,4 @@ docker-compose.local.*
 /spec/javascripts/compiled/
 /config/build.js
 /.idea/*
+.idea/dataSources.xml
