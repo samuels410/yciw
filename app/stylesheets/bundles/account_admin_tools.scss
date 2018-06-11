@@ -18,6 +18,11 @@
 
 @import "base/environment";
 
+.users-container {
+  max-height: 500px;
+  overflow-y: scroll;
+}
+
 #adminToolsTabPanes {
   .search-controls {
     background-color: $lightBackground;
@@ -29,7 +34,7 @@
 
 #commMessagesSearchResults {
   .collectionViewItems {
-    margin-left: 0;
+    margin-#{direction(left)}: 0;
     list-style-type: none;
   }
   .message { margin-bottom: 1.5em; }
@@ -51,7 +56,7 @@
     text-shadow: 0 -1px 0 rgba(black, .25);
     vertical-align: baseline;
     white-space: nowrap;
-    float: right;
+    float: direction(right);
 
     &.label-sent, &.label-dashboard {
       background-color: $successText;
@@ -72,13 +77,23 @@
 }
 
 .message-meta-data {
-  margin-left: 1em;
+  margin-#{direction(left)}: 1em;
   td {
-    text-align: left;
-    padding-right: 0.75em;
+    text-align: direction(left);
+    padding-#{direction(right)}: 0.75em;
 
     &.meta-data-label {
       font-weight: bold;
     }
   }
 }
+
+.admin-tool-well {
+  min-height: 20px;
+  padding: 19px;
+  margin-bottom: 20px;
+  background-color: $ic-color-light;
+  border: 1px solid $ic-border-light;
+  border-radius: $ic-border-radius;
+}
+

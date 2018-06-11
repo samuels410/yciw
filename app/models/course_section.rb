@@ -23,7 +23,7 @@ class CourseSection < ActiveRecord::Base
   belongs_to :nonxlist_course, :class_name => 'Course'
   belongs_to :root_account, :class_name => 'Account'
   belongs_to :enrollment_term
-  has_many :enrollments, -> { preload(:user).where("enrollments.workflow_state<>'deleted'") }, dependent: :destroy
+  has_many :enrollments, -> { preload(:user).where("enrollments.workflow_state<>'deleted'") }
   has_many :all_enrollments, :class_name => 'Enrollment'
   has_many :student_enrollments, -> { where("enrollments.workflow_state NOT IN ('deleted', 'completed', 'rejected', 'inactive')").preload(:user) }, class_name: 'StudentEnrollment'
   has_many :students, :through => :student_enrollments, :source => :user
@@ -34,6 +34,10 @@ class CourseSection < ActiveRecord::Base
   has_many :course_account_associations
   has_many :calendar_events, :as => :context, :inverse_of => :context
   has_many :assignment_overrides, :as => :set, :dependent => :destroy
+  has_many :discussion_topic_section_visibilities, -> {
+    where("discussion_topic_section_visibilities.workflow_state<>'deleted'")
+  }, dependent: :destroy
+  has_many :discussion_topics, :through => :discussion_topic_section_visibilities
 
   before_validation :infer_defaults, :verify_unique_sis_source_id
   validates_presence_of :course_id, :root_account_id, :workflow_state
@@ -65,12 +69,14 @@ class CourseSection < ActiveRecord::Base
   end
 
   def delete_enrollments_later_if_deleted
-    send_later_if_production(:delete_enrollments_if_deleted) if workflow_state == 'deleted' && workflow_state_changed?
+    send_later_if_production(:delete_enrollments_if_deleted) if workflow_state == 'deleted' && saved_change_to_workflow_state?
   end
 
   def delete_enrollments_if_deleted
     if workflow_state == 'deleted'
-      self.enrollments.active.find_each(&:destroy)
+      self.enrollments.where.not(workflow_state: 'deleted').find_in_batches do |batch|
+        Enrollment::BatchStateUpdater.destroy_batch(batch)
+      end
     end
   end
 
@@ -158,9 +164,9 @@ class CourseSection < ActiveRecord::Base
   end
 
   def update_account_associations_if_changed
-    if (self.course_id_changed? || self.nonxlist_course_id_changed?) && !Course.skip_updating_account_associations?
+    if (self.saved_change_to_course_id? || self.saved_change_to_nonxlist_course_id?) && !Course.skip_updating_account_associations?
       Course.send_later_if_production(:update_account_associations,
-                                      [self.course_id, self.course_id_was, self.nonxlist_course_id, self.nonxlist_course_id_was].compact.uniq)
+                                      [self.course_id, self.course_id_before_last_save, self.nonxlist_course_id, self.nonxlist_course_id_before_last_save].compact.uniq)
     end
   end
 
@@ -233,19 +239,15 @@ class CourseSection < ActiveRecord::Base
     end
     self.save!
     self.all_enrollments.update_all all_attrs
-    Assignment.joins(:submissions)
-      .where(context: [old_course, self.course])
-      .where(submissions: { user_id: user_ids }).touch_all
+    Assignment.where(context: [old_course, self.course]).touch_all
     EnrollmentState.send_later_if_production(:invalidate_states_for_course_or_section, self)
     User.send_later_if_production(:update_account_associations, user_ids) if old_course.account_id != course.account_id && !User.skip_updating_account_associations?
     if old_course.id != self.course_id && old_course.id != self.nonxlist_course_id
       old_course.send_later_if_production(:update_account_associations) unless Course.skip_updating_account_associations?
     end
-    if opts.include?(:run_jobs_immediately)
-      course.recompute_student_scores_without_send_later(user_ids)
-    else
-      course.recompute_student_scores(user_ids)
-    end
+
+    run_immediately = opts.include?(:run_jobs_immediately)
+    DueDateCacher.recompute_users_for_course(user_ids, course, nil, run_immediately: run_immediately, update_grades: true)
   end
 
   def crosslist_to_course(course, *opts)
@@ -293,6 +295,7 @@ class CourseSection < ActiveRecord::Base
     self.workflow_state = 'deleted'
     self.enrollments.not_fake.each(&:destroy)
     self.assignment_overrides.each(&:destroy)
+    self.discussion_topic_section_visibilities&.each(&:destroy)
     save!
   end
 
@@ -301,11 +304,11 @@ class CourseSection < ActiveRecord::Base
   scope :sis_sections, lambda { |account, *source_ids| where(:root_account_id => account, :sis_source_id => source_ids).order(:sis_source_id) }
 
   def common_to_users?(users)
-    users.all?{ |user| self.student_enrollments.active.for_user(user).count > 0 }
+    users.all?{ |user| self.student_enrollments.active.for_user(user).exists? }
   end
 
   def update_enrollment_states_if_necessary
-    if self.restrict_enrollments_to_section_dates_changed? || (self.restrict_enrollments_to_section_dates? && (changes.keys & %w{start_at end_at}).any?)
+    if self.saved_change_to_restrict_enrollments_to_section_dates? || (self.restrict_enrollments_to_section_dates? && (saved_changes.keys & %w{start_at end_at}).any?)
       EnrollmentState.send_later_if_production(:invalidate_states_for_course_or_section, self)
     end
   end

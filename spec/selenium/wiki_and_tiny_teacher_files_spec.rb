@@ -161,6 +161,7 @@ describe "Wiki pages and Tiny WYSIWYG editor Files" do
     end
 
     it "should be able to upload a file when nothing has been loaded" do
+      skip_if_chrome('fragile in chrome')
       wiki_page_tools_file_tree_setup
       expect(f("form.edit-form .edit-content")).to be_displayed
 
@@ -211,8 +212,7 @@ describe "Wiki pages and Tiny WYSIWYG editor Files" do
 
       f('form.edit-form button.submit').click
       wait_for_ajax_requests
-
-      check_file(f('#wiki_page_show .instructure_file_link_holder a'))
+      check_file(f('#wiki_page_show a.instructure_file_link'))
     end
 
     it "should not show uploaded files in image list" do
@@ -231,7 +231,7 @@ describe "Wiki pages and Tiny WYSIWYG editor Files" do
 
     it "should be able to upload a file and add the file to the rce" do
       add_file_to_rce
-      check_file(f('#wiki_page_show .instructure_file_link_holder a'))
+      check_file(f('#wiki_page_show a.instructure_file_link'))
     end
 
     it "should show files uploaded on the images tab in the file tree" do

@@ -17,9 +17,9 @@
  */
 
 import React from 'react'
-import {shallow} from 'enzyme'
-import UsersList from 'jsx/account_course_user_search/UsersList'
-import UsersListRow from 'jsx/account_course_user_search/UsersListRow'
+import {shallow, mount} from 'enzyme'
+import UsersList from 'jsx/account_course_user_search/components/UsersList'
+import UsersListRow from 'jsx/account_course_user_search/components/UsersListRow'
 
 QUnit.module('Account Course User Search UsersList View');
 
@@ -50,16 +50,10 @@ const usersProps = {
     can_message_users: true,
     can_edit_users: true
   },
-  timezones: {
-    timezones: ['123123123'],
-    priority_zones: ['alsdkfjasldkfjs']
-  },
-  userList: {
-    searchFilter: {
-      search_term: 'User',
-      sort: 'username',
-      order: 'asc'
-    }
+  searchFilter: {
+    search_term: 'User',
+    sort: 'username',
+    order: 'asc'
   },
   onUpdateFilters: sinon.spy(),
   onApplyFilters: sinon.spy(),
@@ -75,49 +69,78 @@ test('displays users that are passed in as props', () => {
   equal(renderedList.nodes[2].props.user.name, 'UserC')
 });
 
-test('sorting by username ascending puts down-arrow on Name', () => {
-  const wrapper = shallow(<UsersList {...usersProps} />)
-  const header = wrapper.find('a').first()
-  equal(header.nodes[0].props.children.props.children[1].type.name, 'IconArrowDownSolid')
-});
+Object.entries({
+  username: 'Name',
+  email: 'Email',
+  sis_id: 'SIS ID',
+  last_login: 'Last Login'
+}).forEach(([columnID, label]) => {
+  Object.entries({
+    asc: {
+      expectedArrow: 'Down',
+      unexpectedArrow: 'Up',
+      expectedTip: `Click to sort by ${label} descending`
+    },
+    desc: {
+      expectedArrow: 'Up',
+      unexpectedArrow: 'Down',
+      expectedTip: `Click to sort by ${label} ascending`
+    }
+  }).forEach(([sortOrder, {expectedArrow, unexpectedArrow, expectedTip}]) => {
+    const props = {
+      ...usersProps,
+      searchFilter: {
+        search_term: 'User',
+        sort: columnID,
+        order: sortOrder
+      }
+    }
 
-test('clicking the Name column header calls onUpdateFilters with username descending', () => {
-  const wrapper = shallow(<UsersList {...usersProps} />)
-  const header = wrapper.find('a').first()
-  header.simulate('click')
+    test(`sorting by ${columnID} ${sortOrder} puts ${expectedArrow}-arrow on ${label} only`, () => {
+      const wrapper = mount(<UsersList {...props} />)
+      equal(wrapper.find(`IconMiniArrow${unexpectedArrow}Solid`).length, 0, `no columns have an ${unexpectedArrow} arrow`)
+      const icons = wrapper.find(`IconMiniArrow${expectedArrow}Solid`)
+      equal(icons.length, 1, `only one ${expectedArrow} arrow`)
+      const header = icons.closest('UsersListHeader')
+      ok(header.find('ScreenReaderContent').text().match(RegExp(expectedTip, 'i')), 'has right tooltip')
+      ok(header.text().includes(label), `${label} is the one that has the ${expectedArrow} arrow`)
+    })
 
-  const sinonCallback = wrapper.unrendered.props.onUpdateFilters
+    test(`clicking the ${label} column header calls onChangeSort with ${columnID}`, function() {
+      const sortSpy = this.spy()
+      const wrapper = mount(<UsersList {...{
+        ...props,
+        onUpdateFilters: sortSpy
+      }} />)
+      const header = wrapper.find('UsersListHeader').filterWhere(n => n.text().includes(label)).find('button')
+      header.simulate('click')
+      ok(sortSpy.calledOnce)
+      ok(sortSpy.calledWith({
+        search_term: 'User',
+        sort: columnID,
+        order: (sortOrder === 'asc' ? 'desc' : 'asc'),
+        role_filter_id: undefined
+      }))
+    })
+  })
+})
 
-  ok(sinonCallback.calledOnce)
-  ok(sinonCallback.calledWith({search_term: 'User', sort: 'username', order: 'desc', role_filter_id: undefined}))
-});
+test('component should not update if props do not change', () => {
+  const instance = new UsersList(usersProps)
+  notOk(instance.shouldComponentUpdate({ ...usersProps }))
+})
 
-test('clicking the Email column header calls onUpdateFilters with email ascending', () => {
-  const wrapper = shallow(<UsersList {...usersProps} />)
-  const header = wrapper.find('a').slice(1, 2)
-  header.simulate('click')
+test('component should update if a prop is added', () => {
+  const instance = new UsersList(usersProps)
+  ok(instance.shouldComponentUpdate({ ...usersProps, newProp: true }))
+})
 
-  const sinonCallback = wrapper.unrendered.props.onUpdateFilters
-  ok(sinonCallback.callCount === 2)
-  ok(sinonCallback.calledWith({search_term: 'User', sort: 'email', order: 'asc', role_filter_id: undefined}))
-});
+test('component should update if a prop is changed', () => {
+  const instance = new UsersList(usersProps)
+  ok(instance.shouldComponentUpdate({ ...usersProps, users: {} }))
+})
 
-test('clicking the SIS ID column header calls onUpdateFilters with sis_id ascending', () => {
-  const wrapper = shallow(<UsersList {...usersProps} />)
-  const header = wrapper.find('a').slice(2, 3)
-  header.simulate('click')
-
-  const sinonCallback = wrapper.unrendered.props.onUpdateFilters
-  ok(sinonCallback.callCount === 3)
-  ok(sinonCallback.calledWith({search_term: 'User', sort: 'sis_id', order: 'asc', role_filter_id: undefined}))
-});
-
-test('clicking the Last Login column header calls onUpdateFilters with last_login ascending', () => {
-  const wrapper = shallow(<UsersList {...usersProps} />)
-  const header = wrapper.find('a').slice(3, 4)
-  header.simulate('click')
-
-  const sinonCallback = wrapper.unrendered.props.onUpdateFilters
-  ok(sinonCallback.callCount === 4)
-  ok(sinonCallback.calledWith({search_term: 'User', sort: 'last_login', order: 'asc', role_filter_id: undefined}))
-});
+test('component should not update if only the searchFilter prop is changed', () => {
+  const instance = new UsersList(usersProps)
+  notOk(instance.shouldComponentUpdate({ ...usersProps, searchFilter: {} }))
+})

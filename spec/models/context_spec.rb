@@ -160,4 +160,46 @@ describe Context do
       expect(Context.get_account(group_model(context: course_model(account: Account.default)))).to eq(Account.default)
     end
   end
+
+  describe 'asset_name' do
+    before :once do
+      course_factory
+    end
+
+    it "finds names for outcomes" do
+      outcome1 = @course.created_learning_outcomes.create! :display_name => 'blah', :title => 'bleh'
+      expect(Context.asset_name(outcome1)).to eq 'blah'
+
+      outcome2 = @course.created_learning_outcomes.create! :title => 'bleh'
+      expect(Context.asset_name(outcome2)).to eq 'bleh'
+    end
+
+    it "finds names for calendar events" do
+      event1 = @course.calendar_events.create! :title => 'thing'
+      expect(Context.asset_name(event1)).to eq 'thing'
+
+      event2 = @course.calendar_events.create! :title => ''
+      expect(Context.asset_name(event2)).to eq ''
+    end
+  end
+
+  describe '.rubric_contexts' do
+    def add_rubric(context)
+      r = Rubric.create!(context: context, title: 'testing')
+      RubricAssociation.create!(context: context, rubric: r, purpose: :bookmark, association_object: context)
+    end
+
+    it 'returns contexts in alphabetically sorted order' do
+      great_grandparent = Account.default
+      grandparent = Account.create!(name: 'AAA', parent_account: great_grandparent)
+      add_rubric(grandparent)
+      parent = Account.create!(name: 'ZZZ', parent_account: grandparent)
+      add_rubric(parent)
+      course = Course.create!(:name => 'MMM', account: parent)
+      add_rubric(course)
+
+      contexts = course.rubric_contexts(nil).map { |r| r[:name] }
+      expect(contexts).to eq(['AAA', 'MMM', 'ZZZ'])
+    end
+  end
 end

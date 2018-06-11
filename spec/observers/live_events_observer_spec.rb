@@ -19,6 +19,32 @@
 require File.expand_path(File.dirname(__FILE__) + '/../spec_helper')
 
 describe LiveEventsObserver do
+  describe "general" do
+    it "doesn't post events for no change" do
+      user_model(name: "Joey Joe Joe")
+
+      @user.name = "Joey Joe Joe"
+      expect(Canvas::LiveEvents).to receive(:user_updated).never
+      @user.save!
+    end
+    it "doesn't post events for NOP fields" do
+      account_model
+      course_model(name: "CS101", account: @account)
+      sis = @account.sis_batches.create
+
+      @course.name = "CS101"
+      @course.sis_batch_id = sis.id
+      expect(Canvas::LiveEvents).to receive(:course_updated).never
+      @course.save!
+    end
+    it "does post event for actual change" do
+      user_model(name: "Joey Joe Joe")
+
+      @user.name = "Joey Joe Joe Jr. Shabadu"
+      expect(Canvas::LiveEvents).to receive(:user_updated).once
+      @user.save!
+    end
+  end
   describe "syllabus" do
     it "doesn't post for no changes" do
       course_model
@@ -147,9 +173,9 @@ describe LiveEventsObserver do
       course = course_model
       student = course.enroll_student(user_model).user
       group = course.groups.create!(name: "Group 1")
-      membership = group.add_user(student, 'invited')
+      membership = group.add_user(student)
       expect(Canvas::LiveEvents).to receive(:group_membership_updated).once
-      membership.accept
+      membership.moderator = true
       membership.save
     end
   end
@@ -177,7 +203,8 @@ describe LiveEventsObserver do
     it "posts update events" do
       expect(Canvas::LiveEvents).to receive(:submission_updated).once
       s = submission_model
-      s.touch
+      s.excused = true
+      s.save!
     end
   end
 
@@ -240,8 +267,9 @@ describe LiveEventsObserver do
   describe "quiz_export_complete" do
     it "posts update events for quizzes2" do
       expect(Canvas::LiveEvents).to receive(:quiz_export_complete).once
-      Account.default.enable_feature!(:quizzes2_exporter)
       course = Account.default.courses.create!
+      enable_quizzes_next(course)
+
       Account.default.context_external_tools.create!(
         name: 'Quizzes.Next',
         consumer_key: 'test_key',
@@ -263,6 +291,71 @@ describe LiveEventsObserver do
       course = Account.default.courses.create!
       ce = course.content_exports.create!
       ce.export_without_send_later
+    end
+
+    def enable_quizzes_next(course)
+      course.enable_feature!(:quizzes_next)
+      # do quizzes next provision
+      # quizzes_next is available to users only after quizzes next provisioning
+      course.root_account.settings[:provision] = {'lti' => 'lti url'}
+      course.root_account.save!
+    end
+  end
+
+  describe "modules" do
+    it "posts create events" do
+      expect(Canvas::LiveEvents).to receive(:module_created).with(anything)
+      Account.default.courses.create!.context_modules.create!
+    end
+
+    it "posts update events" do
+      context_module = Account.default.courses.create!.context_modules.create!
+      expect(Canvas::LiveEvents).to receive(:module_updated).with(context_module)
+      context_module.update_attribute(:position, 10)
+    end
+  end
+
+  describe "context events" do
+    let(:course) { Account.default.courses.create! }
+
+    context "the tag_type is context_module" do
+      it "posts create events" do
+        expect(Canvas::LiveEvents).to receive(:module_item_created).with(anything)
+        context_module = course.context_modules.create!
+        ContentTag.create!(
+          title: "content",
+          context: course,
+          tag_type: "context_module",
+          context_module: context_module
+        )
+      end
+
+      it "posts update events" do
+        context_module = course.context_modules.create!
+        content_tag = ContentTag.create!(
+          title: "content",
+          context: course,
+          tag_type: "context_module",
+          context_module: context_module
+        )
+        expect(Canvas::LiveEvents).to receive(:module_item_updated).with(content_tag)
+        content_tag.update_attribute(:position, 11)
+      end
+    end
+
+    context "the tag_type is not context_module" do
+      it "does nothing" do
+        expect(Canvas::LiveEvents).not_to receive(:module_item_created)
+        expect(Canvas::LiveEvents).not_to receive(:module_item_updated)
+        context_module = course.context_modules.create!
+        content_tag = ContentTag.create!(
+          title: "content",
+          context: course,
+          tag_type: "learning_outcome",
+          context_module: context_module
+        )
+        content_tag.update_attribute(:position, 11)
+      end
     end
   end
 end

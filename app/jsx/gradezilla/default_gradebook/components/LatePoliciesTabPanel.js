@@ -18,19 +18,18 @@
 
 import React from 'react';
 import { bool, func, number, shape, string } from 'prop-types';
-import Alert from 'instructure-ui/lib/components/Alert';
-import ComingSoonContent from 'jsx/gradezilla/default_gradebook/components/ComingSoonContent';
-import Container from 'instructure-ui/lib/components/Container';
-import FormFieldGroup from 'instructure-ui/lib/components/FormFieldGroup';
-import NumberInput from 'instructure-ui/lib/components/NumberInput';
-import PresentationContent from 'instructure-ui/lib/components/PresentationContent';
-import Spinner from 'instructure-ui/lib/components/Spinner';
-import Typography from 'instructure-ui/lib/components/Typography';
-import ScreenReaderContent from 'instructure-ui/lib/components/ScreenReaderContent';
-import Checkbox from 'instructure-ui/lib/components/Checkbox';
-import Select from 'instructure-ui/lib/components/Select';
+import Alert from '@instructure/ui-core/lib/components/Alert';
+import Container from '@instructure/ui-core/lib/components/Container';
+import FormFieldGroup from '@instructure/ui-core/lib/components/FormFieldGroup';
+import NumberInput from '@instructure/ui-core/lib/components/NumberInput';
+import PresentationContent from '@instructure/ui-core/lib/components/PresentationContent';
+import Spinner from '@instructure/ui-core/lib/components/Spinner';
+import Text from '@instructure/ui-core/lib/components/Text';
+import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent';
+import Checkbox from '@instructure/ui-core/lib/components/Checkbox';
+import Select from '@instructure/ui-core/lib/components/Select';
 import Round from 'compiled/util/round';
-import NumberHelper from 'jsx/shared/helpers/numberHelper';
+import NumberHelper from '../../../shared/helpers/numberHelper';
 import I18n from 'i18n!gradebook';
 
 function isNumeric (input) {
@@ -109,7 +108,6 @@ class LatePoliciesTabPanel extends React.Component {
     }).isRequired,
     changeLatePolicy: func.isRequired,
     locale: string.isRequired,
-    showContentComingSoon: bool.isRequired,
     showAlert: bool.isRequired
   };
 
@@ -121,6 +119,19 @@ class LatePoliciesTabPanel extends React.Component {
     this.changeLateSubmissionMinimumPercent = this.validateAndChangeNumber.bind(this, 'lateSubmissionMinimumPercent');
     this.missingPolicyMessages = messages.bind(this, ['missingSubmissionDeduction'])
     this.latePolicyMessages = messages.bind(this, ['lateSubmissionDeduction', 'lateSubmissionMinimumPercent'])
+  }
+
+  componentDidUpdate(_prevProps, prevState) {
+    if (!prevState.showAlert || this.state.showAlert) {
+      return;
+    }
+
+    const inputEnabled = this.getLatePolicyAttribute('missingSubmissionDeductionEnabled');
+    if (inputEnabled) {
+      this.missingSubmissionDeductionInput.focus();
+    } else {
+      this.missingSubmissionCheckbox.focus();
+    }
   }
 
   getLatePolicyAttribute = (key) => {
@@ -199,20 +210,10 @@ class LatePoliciesTabPanel extends React.Component {
   }
 
   closeAlert = () => {
-    this.setState({ showAlert: false }, () => {
-      this.missingSubmissionCheckbox.focus();
-    })
+    this.setState({ showAlert: false });
   }
 
   render () {
-    if (this.props.showContentComingSoon) {
-      return (
-        <div id="LatePoliciesTabPanel__Container-noContent">
-          <ComingSoonContent />
-        </div>
-      );
-    }
-
     if (!this.props.latePolicy.data) {
       return (
         <div id="LatePoliciesTabPanel__Container-noContent">
@@ -222,20 +223,9 @@ class LatePoliciesTabPanel extends React.Component {
     }
 
     const { data, validationErrors } = this.props.latePolicy;
+    const numberInputWidth = "5.5rem";
     return (
       <div id="LatePoliciesTabPanel__Container">
-        {this.state.showAlert &&
-          <Alert
-            variant="warning"
-            closeButtonLabel={I18n.t('Close')}
-            dismissable
-            onClose={this.closeAlert}
-            margin="small"
-          >
-            {I18n.t('Changing your policy now will affect previously graded submissions.')}
-          </Alert>
-        }
-
         <Container as="div" margin="small">
           <Checkbox
             label={I18n.t('Automatically apply grade for missing submissions')}
@@ -254,7 +244,7 @@ class LatePoliciesTabPanel extends React.Component {
               <PresentationContent>
                 <Container as="div" margin="0 0 x-small 0">
                   <label htmlFor="missing-submission-grade">
-                    <Typography size="small" weight="bold">{I18n.t('Missing submission grade')}</Typography>
+                    <Text size="small" weight="bold">{I18n.t('Missing submission grade')}</Text>
                   </label>
                 </Container>
               </PresentationContent>
@@ -271,12 +261,12 @@ class LatePoliciesTabPanel extends React.Component {
                   min="0"
                   max="100"
                   inline
-                  width="4rem"
+                  width={numberInputWidth}
                 />
 
                 <PresentationContent>
                   <Container as="div" margin="0 small">
-                    <Typography>{I18n.t('%')}</Typography>
+                    <Text>{I18n.t('%')}</Text>
                   </Container>
                 </PresentationContent>
               </div>
@@ -285,6 +275,17 @@ class LatePoliciesTabPanel extends React.Component {
         </FormFieldGroup>
 
         <PresentationContent><hr /></PresentationContent>
+
+        {this.state.showAlert &&
+          <Alert
+            variant="warning"
+            closeButtonLabel={I18n.t('Close')}
+            onDismiss={this.closeAlert}
+            margin="small"
+          >
+            {I18n.t('Changing the late policy will affect previously graded submissions.')}
+          </Alert>
+        }
 
         <Container as="div" margin="small">
           <Checkbox
@@ -304,7 +305,7 @@ class LatePoliciesTabPanel extends React.Component {
                 <PresentationContent>
                   <Container as="div" margin="0 0 x-small 0">
                     <label htmlFor="late-submission-deduction">
-                      <Typography size="small" weight="bold">{I18n.t('Deduct')}</Typography>
+                      <Text size="small" weight="bold">{I18n.t('Deduct')}</Text>
                     </label>
                   </Container>
                 </PresentationContent>
@@ -321,11 +322,11 @@ class LatePoliciesTabPanel extends React.Component {
                     min="0"
                     max="100"
                     inline
-                    width="4rem"
+                    width={numberInputWidth}
                   />
                   <PresentationContent>
                     <Container as="div" margin="0 small">
-                      <Typography>{I18n.t('%')}</Typography>
+                      <Text>{I18n.t('%')}</Text>
                     </Container>
                   </PresentationContent>
                 </div>
@@ -335,7 +336,7 @@ class LatePoliciesTabPanel extends React.Component {
                 <PresentationContent>
                   <Container as="div" margin="0 0 x-small 0">
                     <label htmlFor="late-submission-interval">
-                      <Typography size="small" weight="bold">{I18n.t('For each late')}</Typography>
+                      <Text size="small" weight="bold">{I18n.t('For each late')}</Text>
                     </label>
                   </Container>
                 </PresentationContent>
@@ -361,7 +362,7 @@ class LatePoliciesTabPanel extends React.Component {
               <PresentationContent>
                 <Container as="div" margin="0 0 x-small 0">
                   <label htmlFor="late-submission-minimum-percent">
-                    <Typography size="small" weight="bold">{I18n.t('Lowest possible grade')}</Typography>
+                    <Text size="small" weight="bold">{I18n.t('Lowest possible grade')}</Text>
                   </label>
                 </Container>
               </PresentationContent>
@@ -378,12 +379,12 @@ class LatePoliciesTabPanel extends React.Component {
                   min="0"
                   max="100"
                   inline
-                  width="4rem"
+                  width={numberInputWidth}
                 />
 
                 <PresentationContent>
                   <Container as="div" margin="0 small">
-                    <Typography>{I18n.t('%')}</Typography>
+                    <Text>{I18n.t('%')}</Text>
                   </Container>
                 </PresentationContent>
               </div>

@@ -19,9 +19,14 @@ class QuotedValue < String
 end
 
 module PostgreSQLAdapterExtensions
+  def explain(arel, binds = [], analyze: false)
+    sql = "EXPLAIN #{"ANALYZE " if analyze}#{to_sql(arel, binds)}"
+    ActiveRecord::ConnectionAdapters::PostgreSQL::ExplainPrettyPrinter.new.pp(exec_query(sql, "EXPLAIN", binds))
+  end
+
   def readonly?(table = nil, column = nil)
     return @readonly unless @readonly.nil?
-    @readonly = (select_value("SELECT pg_is_in_recovery();") == "t")
+    @readonly = (select_value("SELECT pg_is_in_recovery();") == true)
   end
 
   def bulk_insert(table_name, records)
@@ -44,14 +49,9 @@ module PostgreSQLAdapterExtensions
     end
   end
 
-  def supports_delayed_constraint_validation?
-    postgresql_version >= 90100
-  end
-
   def add_foreign_key(from_table, to_table, options = {})
     raise ArgumentError, "Cannot specify custom options with :delay_validation" if options[:options] && options[:delay_validation]
 
-    options.delete(:delay_validation) unless supports_delayed_constraint_validation?
     # pointless if we're in a transaction
     options.delete(:delay_validation) if open_transactions > 0
     options[:column] ||= "#{to_table.to_s.singularize}_id"
@@ -78,7 +78,7 @@ module PostgreSQLAdapterExtensions
   end
 
   def set_standard_conforming_strings
-    super unless postgresql_version >= 90100
+    # not needed in PG 9.1+
   end
 
   # we always use the default sequence name, so override it to not actually query the db
@@ -90,8 +90,7 @@ module PostgreSQLAdapterExtensions
   # postgres doesn't support limit on text columns, but it does on varchars. assuming we don't exceed
   # the varchar limit, change the type. otherwise drop the limit. not a big deal since we already
   # have max length validations in the models.
-  def type_to_sql(type, *args)
-    limit = CANVAS_RAILS5_0 ? args.shift : args.first[:limit]
+  def type_to_sql(type, limit: nil, **)
     if type == :text && limit
       if limit <= 10485760
         type = :string
@@ -99,7 +98,7 @@ module PostgreSQLAdapterExtensions
         limit = nil
       end
     end
-    CANVAS_RAILS5_0 ? super(type, limit, *args) : super(type, args.first.merge(:limit => limit))
+    super
   end
 
   def func(name, *args)
@@ -157,7 +156,11 @@ module PostgreSQLAdapterExtensions
       desc_order_columns = inddef.scan(/(\w+) DESC/).flatten
       orders = desc_order_columns.any? ? Hash[desc_order_columns.map {|order_column| [order_column, :desc]}] : {}
 
-      ActiveRecord::ConnectionAdapters::IndexDefinition.new(table_name, index_name, unique, column_names, [], orders)
+      if CANVAS_RAILS5_1
+        ActiveRecord::ConnectionAdapters::IndexDefinition.new(table_name, index_name, unique, column_names, [], orders)
+      else
+        ActiveRecord::ConnectionAdapters::IndexDefinition.new(table_name, index_name, unique, column_names, orders: orders)
+      end
     end
   end
 
@@ -196,10 +199,6 @@ module PostgreSQLAdapterExtensions
 
   def extension_available?(extension)
     select_value("SELECT 1 FROM pg_available_extensions WHERE name='#{extension}'").to_i == 1
-  end
-
-  def set_search_path_on_function(function, args = "()", search_path = Shard.current.name)
-    execute("ALTER FUNCTION #{quote_table_name(function)}#{args} SET search_path TO #{search_path}")
   end
 
   # temporarily adds schema to the search_path (i.e. so you can use an extension that won't work
@@ -254,22 +253,6 @@ module PostgreSQLAdapterExtensions
     execute("SELECT COUNT(*) FROM #{quote_table_name(table)} WHERE #{column} IS NULL")
     super
   end
-
-  private
-
-  OID = ActiveRecord::ConnectionAdapters::PostgreSQLAdapter::OID
 end
+
 ActiveRecord::ConnectionAdapters::PostgreSQLAdapter.prepend(PostgreSQLAdapterExtensions)
-
-module TypeMapInitializerExtensions
-  def query_conditions_for_initial_load(type_map)
-    known_type_names = type_map.keys.map { |n| "'#{n}'" } + type_map.keys.map { |n| "'_#{n}'" }
-    known_type_types = %w('r' 'e' 'd')
-    <<-SQL % [known_type_names.join(", "), known_type_types.join(", ")]
-    WHERE
-      t.typname IN (%s)
-      OR t.typtype IN (%s)
-    SQL
-  end
-end
-ActiveRecord::ConnectionAdapters::PostgreSQLAdapter::OID::TypeMapInitializer.prepend(TypeMapInitializerExtensions)

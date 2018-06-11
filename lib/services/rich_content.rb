@@ -54,7 +54,7 @@ module Services
         {
           RICH_CONTENT_APP_HOST: settings['app-host'],
           RICH_CONTENT_CDN_HOST: settings['cdn-host'],
-          RICH_CONTENT_SIDEBAR_SOURCE: settings['sidebar-source'] ? settings['sidebar-source'] : 'api'
+          RICH_CONTENT_SKIP_SIDEBAR: settings['skip-sidebar']
         }
       rescue Imperium::TimeoutError,
         Imperium::UnableToConnectError,
@@ -66,10 +66,9 @@ module Services
         }
       end
 
-      def contextually_on(root_account, risk_level)
+      def contextually_on(root_account, _risk_level)
         enabled = Setting.get('rich_content_service_enabled', 'false') == 'true'
-        low_risk = risk_level == :basic || risk_level == :sidebar
-        (enabled && low_risk) || check_feature_flag(root_account, :rich_content_service_high_risk)
+        enabled || check_feature_flag(root_account, :rich_content_service_high_risk)
       end
     end
   end

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+set -e
+
+if [ -f ../config/consul.yml ]; then # canvas is running in docker
+  docker-compose run --rm --no-deps -e RAILS_ENV=test web \
+    bundle exec rspec spec/contracts/service_consumers/live_events \
+      --tag pact --format doc
+else
+  bundle exec rspec spec/contracts/service_consumers/live_events \
+    --tag pact --format doc
+fi

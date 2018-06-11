@@ -106,6 +106,20 @@ describe AccountNotification do
       expect(unenrolled_notifications).not_to include(sub_account_announcement)
     end
 
+    it "should find announcements from parent accounts to sub-accounts where user is enrolled" do
+      params = {
+        subject: 'sub account notification',
+        account: @sub_account,
+        role_ids: [Role.get_built_in_role("StudentEnrollment").id]
+      }
+      sub_account_announcement = sub_account_notification(params)
+
+      sub_sub_account = @sub_account.sub_accounts.create!
+      course_with_student(account: sub_sub_account, active_all: true)
+      students_notifications = AccountNotification.for_user_and_account(@student, Account.default)
+      expect(students_notifications).to include(sub_account_announcement)
+    end
+
     it "should find announcements where user is an account admin" do
       params = {
         subject: 'sub account notification',
@@ -154,20 +168,31 @@ describe AccountNotification do
       end
     end
 
-    it "scopes sub-accounts to the root account" do
+    it "scopes to active enrollment accounts" do
       sub_announcement = sub_account_notification(subject: 'blah', account: @sub_account)
       course_with_student(user: @user, account: @sub_account, active_all: true)
       other_root_account = Account.create!
       other_announcement = account_notification(account: other_root_account)
       course_with_student(user: @user, account: other_root_account, active_all: true)
+      nother_root_account = Account.create!(name: 'nother account')
+      nother_announcement = account_notification(account: nother_root_account)
+      # not an active course and will be excluded
+      course_with_student(user: @user, account: nother_root_account)
 
       notes = AccountNotification.for_user_and_account(@user, Account.default)
       expect(notes).to include sub_announcement
-      expect(notes).not_to include other_announcement
+      expect(notes).to include other_announcement
+      expect(notes).not_to include nother_announcement
 
       other_notes = AccountNotification.for_user_and_account(@user, other_root_account)
-      expect(other_notes).not_to include sub_announcement
+      expect(other_notes).to include sub_announcement
       expect(other_notes).to include other_announcement
+      expect(other_notes).not_to include nother_announcement
+
+      nother_notes = AccountNotification.for_user_and_account(@user, nother_root_account)
+      expect(nother_notes).to include sub_announcement
+      expect(nother_notes).to include other_announcement
+      expect(nother_notes).to include nother_announcement
     end
   end
 
@@ -308,6 +333,70 @@ describe AccountNotification do
           expect(AccountNotification.for_user_and_account(@teacher, @my_frd_account)).to include(@site_admin_announcement)
           expect(AccountNotification.for_user_and_account(@teacher, @my_frd_account)).to include(@local_announcement)
         end
+      end
+    end
+
+    context "announcements across multiple root accounts" do
+      before :once do
+        @account1 = Account.create!
+        @subaccount1 = @account1.sub_accounts.create!
+        @course1 = course_with_teacher(:account => @subaccount1, :active_all => true)
+        @account2 = Account.create!
+        @course2 = course_with_ta(:account => @account2, :user => @user, :active_all => true)
+        @shard2.activate do
+          @shard2_account = Account.create!
+          @shard2_course = course_with_student(:account => @shard2_account, :user => @user, :active_all => true)
+        end
+      end
+
+      it "should use the correct roles for the respective root accounts" do
+        # visible notifications
+        @visible1 = account_notification(:account => @subaccount1, :role_ids => [teacher_role.id])
+        @visible2 = account_notification(:account => @account2, :role_ids => [ta_role.id])
+        @shard2.activate do
+          @visible3 = account_notification(:account => @shard2_account, :role_ids => [student_role.id])
+        end
+
+        # notifications for roles that the user doesn't have in their root accounts
+        @not_visible1 = account_notification(:account => @subaccount1, :role_ids => [student_role.id])
+        @not_visible2 = account_notification(:account => @account2, :role_ids => [teacher_role.id])
+        @shard2.activate do
+          @not_visible3 = account_notification(:account => @shard2_account, :role_ids => [ta_role.id])
+        end
+
+        expected = [@visible1, @visible2, @visible3]
+        expect(AccountNotification.for_user_and_account(@user, @account1)).to match_array(expected)
+        expect(AccountNotification.for_user_and_account(@user, @account2)).to match_array(expected)
+        expect(AccountNotification.for_user_and_account(@user, @shard2_account)).to match_array(expected)
+      end
+
+      it "should be able to set notifications to be restricted to own domain" do
+        expected = []
+        expected << account_notification(:account => @account1, :domain_specific => true)
+        expected << account_notification(:account => @subaccount1, :domain_specific => true)
+
+        expect(AccountNotification.for_user_and_account(@user, @account1)).to match_array(expected)
+        expect(AccountNotification.for_user_and_account(@user, @account2)).to eq []
+        expect(AccountNotification.for_user_and_account(@user, @shard2_account)).to eq []
+      end
+
+      it "should find notifications on cross-sharded sub-accounts properly" do
+        # and perhaps more importantly, don't find notifications for accounts the user doesn't belong in
+        id = 1
+        while [Shard.default, @shard2].any?{|s| s.activate { Account.where(:id => id).exists? }} # make sure this id is free
+          id += 1 #
+        end
+
+        @tricky_sub_acc = @account1.sub_accounts.create!(:id => id) # create it with the id
+        # they don't belong to this sub-account so they shouldn't see this notification
+        @not_visible = account_notification(:account => @tricky_sub_acc)
+
+        @shard2.activate do
+          @shard2_subaccount = @shard2_account.sub_accounts.create!(:id => id) # create with same local id
+          @shard2_course2 = course_with_student(:account => @shard2_subaccount, :user => @user, :active_all => true)
+          @visible = account_notification(:account => @shard2_subaccount, :role_ids => [student_role.id])
+        end
+        expect(AccountNotification.for_user_and_account(@user, @account1)).to eq [@visible]
       end
     end
   end

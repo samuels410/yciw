@@ -16,29 +16,28 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 define [
-  'i18n!groups'
   'jquery'
-  'underscore'
-  'compiled/views/groups/manage/GroupUsersView'
-  'compiled/views/groups/manage/AssignToGroupMenu'
-  'compiled/views/groups/manage/Scrollable'
-  'compiled/views/groups/manage/GroupCategoryCloneView'
+  './GroupUsersView'
+  './AssignToGroupMenu'
+  './Scrollable'
+  './GroupCategoryCloneView'
   'jst/groups/manage/groupUsers'
-], (I18n, $, _, GroupUsersView, AssignToGroupMenu, Scrollable, GroupCategoryCloneView, template) ->
+  '../../../util/groupHasSubmissions'
+], ($, GroupUsersView, AssignToGroupMenu, Scrollable, GroupCategoryCloneView, template, groupHasSubmissions) ->
 
   class UnassignedUsersView extends GroupUsersView
 
     @optionProperty 'groupsCollection'
     @optionProperty 'category'
 
-    defaults: _.extend {},
+    defaults: Object.assign {},
       GroupUsersView::defaults,
       autoFetch: true # load until below the viewport, don't wait for the user to scroll
       itemViewOptions:
         canAssignToGroup: true
         canEditGroupAssignment: false
 
-    els: _.extend {},
+    els: Object.assign {},
       GroupUsersView::els,
       '.no-results-wrapper': '$noResultsWrapper'
       '.no-results': '$noResults'
@@ -67,7 +66,7 @@ define [
     afterRender: ->
       super
       @collection.load('first')
-      @$el.parent().droppable(_.extend({}, @dropOptions)).unbind('drop')
+      @$el.parent().droppable(Object.assign({}, @dropOptions)).unbind('drop')
                    .on('drop', @_onDrop)
       @scrollContainer = @heightContainer = @$el
       @$scrollableElement = @$el.find("ul")
@@ -161,7 +160,7 @@ define [
     _onDrop: (e, ui) =>
       user = ui.draggable.data('model')
 
-      if user.has('group') and user.get('group').get("has_submission")
+      if user.has('group') and groupHasSubmissions user.get('group')
         @cloneCategoryView = new GroupCategoryCloneView
           model: @collection.category
           openedFromCaution: true

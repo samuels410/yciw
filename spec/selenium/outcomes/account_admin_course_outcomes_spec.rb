@@ -35,10 +35,15 @@ describe "account admin outcomes" do
 
     it "should be able to manage course rubrics" do
       get "/courses/#{@course.id}/outcomes"
-      expect_new_page_load do
-        f('#popoverMenu button').click
-        f('[data-reactid*="manage-rubrics"]').click
-      end
+      expect_new_page_load { f('.manage_rubrics').click }
+      # this was originally added in OUT-465. It will eventually be moved over
+      # into the below popover menu, so leaving the blow code in place for
+      # when that happens
+
+      # expect_new_page_load do
+      #   f('#popoverMenu button').click
+      #   f('[data-reactid*="manage-rubrics"]').click
+      # end
 
       expect(f('.add_rubric_link')).to be_displayed
     end
@@ -58,6 +63,7 @@ describe "account admin outcomes" do
       end
 
       it "should delete a learning outcome", priority: "1", test_id: 250232 do
+        skip_if_safari(:alert)
         should_delete_a_learning_outcome
       end
 
@@ -85,6 +91,7 @@ describe "account admin outcomes" do
       end
 
       it "should delete an outcome group", priority: "2", test_id: 250238 do
+        skip_if_safari(:alert)
         should_delete_an_outcome_group
       end
     end
@@ -99,6 +106,7 @@ describe "account admin outcomes" do
       end
 
       it "should expand/collapse outcome groups", priority: "2", test_id: 114338 do
+        skip_if_safari(:alert)
         import_state_standart_into_account
 
         back_button = f(".go_back")

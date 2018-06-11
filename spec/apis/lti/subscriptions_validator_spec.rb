@@ -1,3 +1,21 @@
+#
+# Copyright (C) 2017 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+#
+
 require File.expand_path(File.dirname(__FILE__) + '../../../lti2_spec_helper')
 require_dependency "lti/subscriptions_validator"
 module Lti
@@ -82,11 +100,11 @@ module Lti
         end
       end
 
-      context "GRADE_CHANGED" do
+      context "GRADE_CHANGE" do
         let(:subscription) do
           {
             RootAccountUUID: account.uuid,
-            EventTypes:["grade_changed"],
+            EventTypes:["grade_change"],
             ContextType: "root_account",
             ContextId: account.uuid,
             Format: "live-event",
@@ -103,12 +121,12 @@ module Lti
             product_family: product_family,
             product_version: '1',
             workflow_state: 'active',
-            raw_data: {'enabled_capability' => ['vnd.instructure.webhooks.root_account.grade_changed']},
+            raw_data: {'enabled_capability' => ['vnd.instructure.webhooks.root_account.grade_change']},
             lti_version: '1'
           )
         end
 
-        it 'allows subscription if vnd.instructure.webhooks.root_account.grade_changed' do
+        it 'allows subscription if vnd.instructure.webhooks.root_account.grade_change' do
           validator = SubscriptionsValidator.new(subscription, tool_proxy)
           expect { validator.check_required_capabilities! }.not_to raise_error
         end

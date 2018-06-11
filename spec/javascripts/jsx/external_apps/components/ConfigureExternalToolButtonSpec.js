@@ -28,6 +28,7 @@ let el
 
 QUnit.module('ConfigureExternalToolButton screenreader functionality', {
   setup () {
+    ENV.LTI_LAUNCH_FRAME_ALLOWANCES = ['midi', 'media']
     tool = {
       name: 'test tool',
       tool_configuration: {
@@ -41,6 +42,7 @@ QUnit.module('ConfigureExternalToolButton screenreader functionality', {
   },
   teardown () {
     $('.ReactModalPortal').remove()
+    ENV.LTI_LAUNCH_FRAME_ALLOWANCES = undefined
   }
 })
 
@@ -51,9 +53,7 @@ test('shows beginning info alert and adds styles to iframe', () => {
     />
   )
   wrapper.instance().openModal(event)
-  el = $('.ReactModalPortal')
-  const alert = el.find('.before_external_content_info_alert')
-  alert[0].focus()
+  wrapper.instance().handleAlertFocus({ target: { className: "before" } })
   equal(wrapper.state().beforeExternalContentAlertClass, '')
   deepEqual(wrapper.state().iframeStyle, { border: '2px solid #008EE2', width: '300px' })
 })
@@ -65,9 +65,7 @@ test('shows ending info alert and adds styles to iframe', () => {
     />
   )
   wrapper.instance().openModal(event)
-  el = $('.ReactModalPortal')
-  const alert = el.find('.after_external_content_info_alert')
-  alert[0].focus()
+  wrapper.instance().handleAlertFocus({ target: { className: "after" } })
   equal(wrapper.state().afterExternalContentAlertClass, '')
   deepEqual(wrapper.state().iframeStyle, { border: '2px solid #008EE2', width: '300px' })
 })
@@ -80,9 +78,7 @@ test('hides beginning info alert and adds styles to iframe', () => {
   )
   wrapper.instance().openModal(event)
   el = $('.ReactModalPortal')
-  const alert = el.find('.before_external_content_info_alert')
-  alert[0].focus()
-  alert[0].blur()
+  wrapper.instance().handleAlertBlur({ target: { className: "before" } })
   equal(wrapper.state().beforeExternalContentAlertClass, 'screenreader-only')
   deepEqual(wrapper.state().iframeStyle, { border: 'none', width: '100%' })
 })
@@ -94,10 +90,7 @@ test('hides ending info alert and adds styles to iframe', () => {
     />
   )
   wrapper.instance().openModal(event)
-  el = $('.ReactModalPortal')
-  const alert = el.find('.after_external_content_info_alert')
-  alert[0].focus()
-  alert[0].blur()
+  wrapper.instance().handleAlertBlur({ target: { className: "after" } })
   equal(wrapper.state().afterExternalContentAlertClass, 'screenreader-only')
   deepEqual(wrapper.state().iframeStyle, { border: 'none', width: '100%' })
 })
@@ -112,4 +105,17 @@ test("doesn't show alerts or add border to iframe by default", () => {
   equal(wrapper.state().beforeExternalContentAlertClass, 'screenreader-only')
   equal(wrapper.state().afterExternalContentAlertClass, 'screenreader-only')
   deepEqual(wrapper.state().iframeStyle, {})
+})
+
+test('sets the iframe allowances', () => {
+  const wrapper = mount(
+    <ConfigureExternalToolButton
+      tool={tool}
+    />
+  )
+
+  wrapper.instance().openModal(event)
+  wrapper.instance().handleAlertFocus({ target: { className: "before" } })
+  equal(wrapper.state().beforeExternalContentAlertClass, '')
+  ok(wrapper.node.iframe.getAttribute('allow'), ENV.LTI_LAUNCH_FRAME_ALLOWANCES.join('; '))
 })

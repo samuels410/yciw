@@ -16,11 +16,10 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import I18n from 'i18n!external_tools'
 import $ from 'jquery'
 import _ from 'underscore'
-import createStore from 'jsx/shared/helpers/createStore'
-import ExternalAppsStore from 'jsx/external_apps/lib/ExternalAppsStore'
+import createStore from '../../shared/helpers/createStore'
+import ExternalAppsStore from '../../external_apps/lib/ExternalAppsStore'
 import parseLinkHeader from 'compiled/fn/parseLinkHeader'
 import 'compiled/jquery.rails_flash_notifications'
 

@@ -34,21 +34,44 @@ describe AppointmentGroup do
     end
 
     it "should ensure the group category matches the course" do
+      other_course = Course.create!(name: 'Other')
       expect(AppointmentGroup.new(
         :title => "test",
         :contexts => [@course],
-        :sub_context_codes => [GroupCategory.create(name: "foo").asset_string]
+        :sub_context_codes => [GroupCategory.create(name: "foo", course: other_course).asset_string]
       )).not_to be_valid
     end
 
+    it "should include all section if only course is specified" do
+      course1 = course_factory
+      course2 = course_factory
+
+      c1section1 = course1.default_section
+      c1section2 = course1.course_sections.create!
+
+      c2section1 = course2.default_section
+      course2.course_sections.create! # create second section
+
+      group = AppointmentGroup.new(
+        :title => "test",
+        :contexts => [course1, course2],
+        :sub_context_codes => [c2section1.asset_string]
+      )
+
+      expect(group).to be_valid
+      selected = [c1section1.asset_string, c1section2.asset_string, c2section1.asset_string].sort()
+      expect(group.sub_context_codes.sort()).to eql selected
+    end
+
     it "should ignore invalid sub context types" do
+      invalid_context = Account.create.asset_string
       group = AppointmentGroup.new(
         :title => "test",
         :contexts => [@course],
-        :sub_context_codes => [Account.create.asset_string]
+        :sub_context_codes => [invalid_context]
       )
       expect(group).to be_valid
-      expect(group.sub_context_codes).to be_empty
+      expect(group.sub_context_codes.include?(invalid_context)).to be_falsey
     end
   end
 
@@ -374,13 +397,13 @@ describe AppointmentGroup do
     it "should notify all participants when deleting", priority: "1", test_id: 193137 do
       @ag.publish!
       @ag.cancel_reason = "just because"
-      @ag.destroy
+      @ag.destroy(@teacher)
       expect(@ag.messages_sent).to be_include("Appointment Group Deleted")
       expect(@ag.messages_sent["Appointment Group Deleted"].map(&:user_id).sort.uniq).to eql [@student.id, @observer.id].sort
     end
 
     it "should not notify participants when unpublished" do
-      @ag.destroy
+      @ag.destroy(@teacher)
       expect(@ag.messages_sent).to be_empty
     end
 
@@ -396,7 +419,7 @@ describe AppointmentGroup do
       @ag.publish!
       expect(@ag.messages_sent).to be_empty
 
-      @ag.destroy
+      @ag.destroy(@teacher)
       expect(@ag.messages_sent).to be_empty
     end
   end
@@ -414,7 +437,7 @@ describe AppointmentGroup do
       participant
     }
 
-    ag.destroy
+    ag.destroy(@teacher)
     expect(appt.reload).to be_deleted
     participants.each do |participant|
       expect(participant.reload).to be_deleted

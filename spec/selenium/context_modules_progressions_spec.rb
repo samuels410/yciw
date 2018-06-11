@@ -97,7 +97,7 @@ describe "context modules" do
       expect(f("#progression_student_#{@students[3].id}_module_#{@module2.id} .status").text).to include("Locked")
     end
 
-    it "should show progression to individual students" do
+    it "should show progression to individual students", priority: "1", test_id: 251029 do
       user_session(@students[1])
       get "/courses/#{@course.id}/modules/progressions"
       expect(f("#progression_students")).not_to be_displayed
@@ -277,6 +277,7 @@ describe "context modules" do
     end
 
     it "should show student progress once discussion-contribute requirement is met", priority: "1", test_id: 126693 do
+      make_full_screen
       @discussion_1 = @course.assignments.create!(name: "Discuss!", points_possible: "5", submission_types: "discussion_topic")
       tag = @module1.add_item({id: @discussion_1.id, type: 'assignment'})
       add_requirement({tag.id => {type: 'must_contribute'}})
@@ -287,6 +288,7 @@ describe "context modules" do
       type_in_tiny 'textarea', 'something to submit'
       f('button[type="submit"]').click
       validate_access_to_module
+      resize_screen_to_normal
     end
 
     it "should show student progress once wiki page-view requirement is met", priority: "1", test_id: 126700 do

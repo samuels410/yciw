@@ -51,7 +51,6 @@ class CommunicationChannel < ActiveRecord::Base
   TYPE_SMS      = 'sms'
   TYPE_TWITTER  = 'twitter'
   TYPE_PUSH     = 'push'
-  TYPE_YO       = 'yo'
 
   RETIRE_THRESHOLD = 1
 
@@ -66,28 +65,37 @@ class CommunicationChannel < ActiveRecord::Base
       ['55',   I18n.t('Brazil (+55)'),                 false],
       ['1',    I18n.t('Canada (+1)'),                  false],
       ['56',   I18n.t('Chile (+56)'),                  false],
+      ['86',   I18n.t('China (+86)'),                  false],
       ['57',   I18n.t('Colombia (+57)'),               false],
       ['506',  I18n.t('Costa Rica (+506)'),            false],
       ['45',   I18n.t('Denmark (+45)'),                false],
+      ['1',    I18n.t('Dominican Republic (+1)'),      false],
       ['593',  I18n.t('Ecuador (+593)'),               false],
+      ['503',  I18n.t('El Salvador (+503)'),           false],
       ['358',  I18n.t('Finland (+358)'),               false],
       ['33',   I18n.t('France (+33)'),                 false],
       ['49',   I18n.t('Germany (+49)'),                false],
+      ['502',  I18n.t('Guatemala (+502)'),             false],
       ['504',  I18n.t('Honduras (+504)'),              false],
       ['852',  I18n.t('Hong Kong (+852)'),             false],
+      ['36',   I18n.t('Hungary (+36)'),                false],
       ['354',  I18n.t('Iceland (+354)'),               false],
       ['91',   I18n.t('India (+91)'),                  false],
+      ['62',   I18n.t('Indonesia (+62)'),              false],
       ['353',  I18n.t('Ireland (+353)'),               false],
       ['972',  I18n.t('Israel (+972)'),                false],
       ['39',   I18n.t('Italy (+39)'),                  false],
       ['81',   I18n.t('Japan (+81)'),                  false],
+      ['254',  I18n.t('Kenya (+254)'),                 false],
       ['352',  I18n.t('Luxembourg (+352)'),            false],
       ['60',   I18n.t('Malaysia (+60)'),               false],
       ['52',   I18n.t('Mexico (+52)'),                 false],
       ['31',   I18n.t('Netherlands (+31)'),            false],
       ['64',   I18n.t('New Zealand (+64)'),            false],
       ['47',   I18n.t('Norway (+47)'),                 false],
+      ['968',  I18n.t('Oman (+968)'),                  false],
       ['507',  I18n.t('Panama (+507)'),                false],
+      ['92',   I18n.t('Pakistan (+92)'),               false],
       ['595',  I18n.t('Paraguay (+595)'),              false],
       ['51',   I18n.t('Peru (+51)'),                   false],
       ['63',   I18n.t('Philippines (+63)'),            false],
@@ -96,14 +104,20 @@ class CommunicationChannel < ActiveRecord::Base
       ['7',    I18n.t('Russia (+7)'),                  false],
       ['966',  I18n.t('Saudi Arabia (+966)'),          false],
       ['65',   I18n.t('Singapore (+65)'),              false],
+      ['27',   I18n.t('South Africa (+27)'),           false],
       ['82',   I18n.t('South Korea (+82)'),            false],
       ['34',   I18n.t('Spain (+34)'),                  false],
       ['46',   I18n.t('Sweden (+46)'),                 false],
       ['41',   I18n.t('Switzerland (+41)'),            false],
+      ['886',  I18n.t('Taiwan (+886)'),                false],
+      ['66',   I18n.t('Thailand (+66)'),               false],
+      ['1',    I18n.t('Trinidad and Tobago (+1)'),     false],
       ['971',  I18n.t('United Arab Emirates (+971)'),  false],
       ['44',   I18n.t('United Kingdom (+44)'),         false],
       ['1',    I18n.t('United States (+1)'),           true ],
-      ['598',  I18n.t('Uruguay (+598)'),               false]
+      ['598',  I18n.t('Uruguay (+598)'),               false],
+      ['58',   I18n.t('Venezuela (+58)'),              false],
+      ['84',   I18n.t('Vietnam (+84)'),                false]
     ].sort_by{ |a| Canvas::ICU.collation_key(a[1]) }
   end
 
@@ -239,16 +253,12 @@ class CommunicationChannel < ActiveRecord::Base
       Pseudonym.where(:sis_communication_channel_id => self).exists?
   end
 
-  # Return the 'path' for simple communication channel types like email and sms. For
-  # Yo and Twitter, return the user's configured user_name for the service.
+  # Return the 'path' for simple communication channel types like email and sms.
+  # For Twitter, return the user's configured user_name for the service.
   def path_description
     if self.path_type == TYPE_TWITTER
       res = self.user.user_services.for_service(TYPE_TWITTER).first.service_user_name rescue nil
       res ||= t :default_twitter_handle, 'Twitter Handle'
-      res
-    elsif self.path_type == TYPE_YO
-      res = self.user.user_services.for_service(TYPE_YO).first.service_user_name rescue nil
-      res ||= t :default_yo_name, 'Yo Name'
       res
     elsif self.path_type == TYPE_PUSH
       t 'For All Devices'
@@ -357,9 +367,8 @@ class CommunicationChannel < ActiveRecord::Base
     rank_order = [TYPE_EMAIL, TYPE_SMS, TYPE_PUSH]
     # Add twitter and yo (in that order) if the user's account is setup for them.
     rank_order << TYPE_TWITTER if twitter_service
-    rank_order << TYPE_YO unless user.user_services.for_service(CommunicationChannel::TYPE_YO).empty?
     self.unretired.where('communication_channels.path_type IN (?)', rank_order).
-      order("#{self.rank_sql(rank_order, 'communication_channels.path_type')} ASC, communication_channels.position asc").to_a
+      order(Arel.sql("#{self.rank_sql(rank_order, 'communication_channels.path_type')} ASC, communication_channels.position asc")).to_a
   end
 
   scope :include_policies, -> { preload(:notification_policies) }
@@ -428,7 +437,7 @@ class CommunicationChannel < ActiveRecord::Base
 
   # This is setup as a default in the database, but this overcomes misspellings.
   def assert_path_type
-    valid_types = [TYPE_EMAIL, TYPE_SMS, TYPE_TWITTER, TYPE_PUSH, TYPE_YO]
+    valid_types = [TYPE_EMAIL, TYPE_SMS, TYPE_TWITTER, TYPE_PUSH]
     self.path_type = TYPE_EMAIL unless valid_types.include?(path_type)
     true
   end

@@ -16,7 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 require_relative '../../common'
-require_relative '../page_objects/mgp_page'
+require_relative '../pages/mgp_page'
 
 describe "grading periods account page" do
   include_context "in-process server selenium tests"
@@ -50,6 +50,7 @@ describe "grading periods account page" do
     end
 
     it "deletes grading period set", test_id: 2528621, priority: "1" do
+      skip_if_safari(:alert)
       set = backend_group_helper.create_for_account(Account.default)
       grading_standards_page.visit(Account.default.id)
       grading_standards_page.delete_first_grading_period_set(false)

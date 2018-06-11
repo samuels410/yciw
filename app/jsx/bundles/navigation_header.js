@@ -20,11 +20,11 @@ import $ from 'jquery'
 import I18n from 'i18n!common'
 import React from 'react'
 import ReactDOM from 'react-dom'
-import Navigation from 'jsx/navigation_header/Navigation'
+import Navigation from '../navigation_header/Navigation'
 
 // #
 // Handle user toggling of nav width
-let navCollapsed = window.ENV.SETTINGS.collapse_global_nav
+let navCollapsed = window.ENV.SETTINGS && window.ENV.SETTINGS.collapse_global_nav
 
 $('body').on('click', '#primaryNavToggle', function () {
   let primaryNavToggleText

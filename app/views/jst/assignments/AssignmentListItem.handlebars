@@ -3,6 +3,18 @@
   class="ig-row {{#ifAll canManage published}}ig-published{{/ifAll}} {{#if is_master_course_master_content}}is-master{{/if}}"
   data-item-id="{{labelId}}"
 >
+  {{#if isDuplicating}}
+    <div class="ig-row__layout">
+      {{>spinner}} {{#t}}Making a copy of "{{originalAssignmentName}}"{{/t}}
+    </div>
+  {{else}}
+  {{#if failedToDuplicate}}
+    {{#t}}Oops! Something went wrong with making a copy of "{{originalAssignmentName}}"{{/t}}
+    <div class="duplicate-failed-actions">
+      <button class="duplicate-failed-retry btn btn-primary">{{#t}}Retry{{/t}}</button>
+      <button class="duplicate-failed-cancel btn">{{#t}}Cancel{{/t}}</button>
+    </div>
+  {{else}}
   <div class="ig-row__layout">
     {{#if canManage}}
     <div aria-hidden='true' class="ig-handle">
@@ -84,23 +96,34 @@
             role="button"
             tabindex="0"
           >
+            <i class="icon-more" aria-hidden="true"></i>
             <span class="screenreader-only">{{#t}}Settings for Assignment {{name}}{{/t}}</span>
-            <i class="icon-settings"></i><i class="icon-mini-arrow-down"></i>
           </a>
 
           <ul
             id="assignment_{{id}}_settings_list"
             class="al-options"
-            role="menu"
           >
-            <li>
-              <a
-                class="edit_assignment icon-edit"
-                id="assignment_{{id}}_settings_edit_item"
-                aria-label="{{#t}}Edit Assignment {{name}}{{/t}}"
-                data-focus-returns-to="assign_{{id}}_manage_link"
-              >{{#t}}Edit{{/t}}</a>
-            </li>
+            {{#if canEdit}}
+              <li>
+                <a
+                  class="edit_assignment icon-edit"
+                  id="assignment_{{id}}_settings_edit_item"
+                  aria-label="{{#t}}Edit Assignment {{name}}{{/t}}"
+                  data-focus-returns-to="assign_{{id}}_manage_link"
+                >{{#t}}Edit{{/t}}</a>
+              </li>
+            {{else}}
+              <li>
+                <a
+                  class="edit_assignment icon-edit disabled"
+                  id="assignment_{{id}}_settings_edit_item"
+                  aria-label="{{#t}}Edit Assignment {{name}}{{/t}}"
+                  aria-disabled="true"
+                >{{#t}}Edit{{/t}}</a>
+                <span class="screenreader-only">{{#t}}You are not the selected moderator for this assignment{{/t}}</span>
+              </li>
+            {{/if}}
             {{#if canDuplicate}}
             <li>
               <a
@@ -168,6 +191,7 @@
     </div>
 
     <form data-view="edit-assignment" class="form-dialog"></form>
-    <form data-view="moveAssignment" class="form-dialog"></form>
+  {{/if}}
+  {{/if}}
   {{/if}}
 </div>

@@ -18,19 +18,18 @@
 
 import $ from 'jquery';
 import fakeENV from 'helpers/fakeENV';
+import DataLoader from 'jsx/gradezilla/DataLoader'
 import {
   createGradebook,
   setFixtureHtml
-} from 'spec/jsx/gradezilla/default_gradebook/GradebookSpecHelper';
-import SlickGridSpecHelper from 'spec/jsx/gradezilla/default_gradebook/slick-grid/SlickGridSpecHelper';
-import DataLoader from 'jsx/gradezilla/DataLoader';
+} from '../../gradezilla/default_gradebook/GradebookSpecHelper'
+import SlickGridSpecHelper from '../../gradezilla/default_gradebook/GradebookGrid/GridSupport/SlickGridSpecHelper'
 
 QUnit.module('Gradebook Grid Column Ordering', function (suiteHooks) {
   let $fixture;
   let gridSpecHelper;
   let gradebook;
   let dataLoader;
-  let server;
 
   let assignmentGroups;
   let assignments;
@@ -167,7 +166,7 @@ QUnit.module('Gradebook Grid Column Ordering', function (suiteHooks) {
     gradebook = createGradebook(options);
     gradebook.initialize();
     addGridData();
-    gridSpecHelper = new SlickGridSpecHelper(gradebook.grid);
+    gridSpecHelper = new SlickGridSpecHelper(gradebook.gradebookGrid);
   }
 
   suiteHooks.beforeEach(function () {
@@ -178,7 +177,6 @@ QUnit.module('Gradebook Grid Column Ordering', function (suiteHooks) {
     fakeENV.setup({
       current_user_id: '1101'
     });
-    server = sinon.fakeServer.create();
 
     dataLoader = {
       gotAssignmentGroups: $.Deferred(),
@@ -200,11 +198,9 @@ QUnit.module('Gradebook Grid Column Ordering', function (suiteHooks) {
   });
 
   suiteHooks.afterEach(function () {
-    gradebook.gridSupport.destroy();
-    gradebook.grid.destroy();
+    gradebook.destroy();
     DataLoader.loadGradebookData.restore();
     DataLoader.getDataForColumn.restore();
-    server.restore();
     fakeENV.teardown();
     $fixture.remove();
   });

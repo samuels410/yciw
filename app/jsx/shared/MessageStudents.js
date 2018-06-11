@@ -20,13 +20,13 @@ import React from 'react'
 import PropTypes from 'prop-types'
 import I18n from 'i18n!message_students'
 import axios from 'axios'
-import Button from 'instructure-ui/lib/components/Button'
-import TextInput from 'instructure-ui/lib/components/TextInput'
-import TextArea from 'instructure-ui/lib/components/TextArea'
-import Modal, { ModalHeader, ModalBody, ModalFooter } from 'instructure-ui/lib/components/Modal'
-import Heading from 'instructure-ui/lib/components/Heading'
-import FormField from 'instructure-ui/lib/components/FormField'
-import Alert from 'instructure-ui/lib/components/Alert'
+import Button from '@instructure/ui-core/lib/components/Button'
+import TextInput from '@instructure/ui-core/lib/components/TextInput'
+import TextArea from '@instructure/ui-core/lib/components/TextArea'
+import Modal, { ModalHeader, ModalBody, ModalFooter } from '@instructure/ui-core/lib/components/Modal'
+import Heading from '@instructure/ui-core/lib/components/Heading'
+import FormField from '@instructure/ui-core/lib/components/FormField'
+import Alert from '@instructure/ui-core/lib/components/Alert'
 
   class MessageStudents extends React.Component {
     static propTypes = {
@@ -216,13 +216,12 @@ import Alert from 'instructure-ui/lib/components/Alert'
           <div className="MessageStudents__Alert">
             <Alert variant={variant}
               closeButtonLabel={I18n.t('Close')}
-              dismissable
-              onClose={this.handleAlertClose}
+              onDismiss={this.handleAlertClose}
             >
               {message}
             </Alert>
           </div>
-        )
+        );
       } else { return null }
     }
 
@@ -244,11 +243,12 @@ import Alert from 'instructure-ui/lib/components/Alert'
       return (
         <div className="MessageStudents">
           <Modal
-            isOpen={this.state.open}
+            open={this.state.open}
             transition="fade"
             label={this.props.title}
-            onRequestClose={this.props.onRequestClose}
+            onDismiss={this.props.onRequestClose}
             closeButtonLabel={I18n.t('Close')}
+            applicationElement={() => document.getElementById('application')}
             size='medium'
             onExited={this.props.onExited}
           >
@@ -305,7 +305,7 @@ import Alert from 'instructure-ui/lib/components/Alert'
             </ModalFooter>
           </Modal>
         </div>
-      )
+      );
     }
   }
 

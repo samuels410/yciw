@@ -18,7 +18,7 @@
 
 define [
   'Backbone'
-  'compiled/collections/GroupUserCollection'
+  '../collections/GroupUserCollection'
 ], (Backbone, GroupUserCollection) ->
 
   class Group extends Backbone.Model
@@ -34,6 +34,8 @@ define [
       @_users = new GroupUserCollection initialUsers,
         group: this
         category: @collection?.category
+        markInactiveStudents: @collection?.options?.markInactiveStudents
+
       @_users.on 'fetched:last', => @set('members_count', @_users.length)
       @users = -> @_users
       @_users

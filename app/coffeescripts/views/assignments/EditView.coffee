@@ -18,31 +18,31 @@
 define [
   'INST'
   'i18n!assignment'
-  'compiled/views/ValidatedFormView'
+  '../ValidatedFormView'
   'underscore'
   'jquery'
   'jsx/shared/helpers/numberHelper'
-  'compiled/util/round'
+  '../../util/round'
   'jsx/shared/rce/RichContentEditor'
   'jst/assignments/EditView'
-  'compiled/userSettings'
-  'compiled/models/TurnitinSettings'
-  'compiled/models/VeriCiteSettings'
-  'compiled/views/assignments/TurnitinSettingsDialog'
-  'compiled/fn/preventDefault'
-  'compiled/views/calendar/MissingDateDialogView'
-  'compiled/views/assignments/AssignmentGroupSelector'
-  'compiled/views/assignments/GroupCategorySelector'
-  'compiled/jquery/toggleAccessibly'
-  'compiled/views/editor/KeyboardShortcuts'
+  '../../userSettings'
+  '../../models/TurnitinSettings'
+  '../../models/VeriCiteSettings'
+  './TurnitinSettingsDialog'
+  '../../fn/preventDefault'
+  '../calendar/MissingDateDialogView'
+  './AssignmentGroupSelector'
+  './GroupCategorySelector'
+  '../../jquery/toggleAccessibly'
+  '../editor/KeyboardShortcuts'
   'jsx/shared/conditional_release/ConditionalRelease'
-  'compiled/util/deparam'
-  'compiled/util/SisValidationHelper'
+  '../../util/deparam'
+  '../../util/SisValidationHelper'
   'jsx/assignments/AssignmentConfigurationTools'
   'jqueryui/dialog'
   'jquery.toJSON'
-  'compiled/jquery.rails_flash_notifications'
-  'compiled/behaviors/tooltip'
+  '../../jquery.rails_flash_notifications'
+  '../../behaviors/tooltip'
 ], (INST, I18n, ValidatedFormView, _, $, numberHelper, round, RichContentEditor, EditViewTemplate,
   userSettings, TurnitinSettings, VeriCiteSettings, TurnitinSettingsDialog,
   preventDefault, MissingDateDialog, AssignmentGroupSelector,
@@ -63,6 +63,7 @@ define [
     ONLINE_SUBMISSION_TYPES = '#assignment_online_submission_types'
     NAME = '[name="name"]'
     ALLOW_FILE_UPLOADS = '#assignment_online_upload'
+    ALLOW_TEXT_ENTRY = '#assignment_text_entry'
     RESTRICT_FILE_UPLOADS = '#assignment_restrict_file_extensions'
     RESTRICT_FILE_UPLOADS_OPTIONS = '#restrict_file_extensions_container'
     ALLOWED_EXTENSIONS = '#allowed_extensions_container'
@@ -88,6 +89,7 @@ define [
     MODERATED_GRADING_BOX = '#assignment_moderated_grading'
     CONDITIONAL_RELEASE_TARGET = '#conditional_release_target'
     SIMILARITY_DETECTION_TOOLS = '#similarity_detection_tools'
+    ANONYMOUS_GRADING_BOX = '#assignment_anonymous_grading'
 
     els: _.extend({}, @::els, do ->
       els = {}
@@ -118,6 +120,7 @@ define [
       els["#{CONDITIONAL_RELEASE_TARGET}"] = '$conditionalReleaseTarget'
       els["#{SIMILARITY_DETECTION_TOOLS}"] = '$similarityDetectionTools'
       els["#{SECURE_PARAMS}"] = '$secureParams'
+      els["#{ANONYMOUS_GRADING_BOX}"] = '$anonymousGradingBox'
       els
     )
 
@@ -137,6 +140,7 @@ define [
       events["change #{PEER_REVIEWS_BOX}"] = 'handleModeratedGradingChange'
       events["change #{MODERATED_GRADING_BOX}"] = 'handleModeratedGradingChange'
       events["change #{GROUP_CATEGORY_BOX}"] = 'handleGroupCategoryChange'
+      events["change #{ANONYMOUS_GRADING_BOX}"] = 'handleAnonymousGradingChange'
       if ENV.CONDITIONAL_RELEASE_SERVICE_ENABLED
         events["change"] = 'onChange'
       events
@@ -202,8 +206,44 @@ define [
 
     handleGroupCategoryChange: ->
       isGrouped = @$groupCategoryBox.prop('checked')
+      isAnonymous = @$anonymousGradingBox.prop('checked')
+
+      if isAnonymous
+        @resetHasGroupCategory()
+      else
+        @updateHasGroupCategory(isGrouped)
+
       @$intraGroupPeerReviews.toggleAccessibly(isGrouped)
       @handleModeratedGradingChange()
+
+    handleAnonymousGradingChange: ->
+      isGrouped = @$groupCategoryBox.prop('checked')
+      isAnonymous = @$anonymousGradingBox.prop('checked')
+
+      if isGrouped
+        @resetAnonymousGrading()
+      else
+        @updateAnonymousGrading(isAnonymous)
+
+    resetHasGroupCategory: =>
+      @$groupCategoryBox.prop('checked', false)
+
+    updateHasGroupCategory: (setting) =>
+      if setting
+        @disableCheckbox(@$anonymousGradingBox, I18n.t('Anonymous grading cannot be enabled for group assignments'))
+      else
+        @enableCheckbox(@$anonymousGradingBox)
+
+    resetAnonymousGrading: =>
+      @$anonymousGradingBox.prop('checked', false)
+
+    updateAnonymousGrading: (setting) =>
+      if setting
+        @disableCheckbox(@$groupCategoryBox, I18n.t('Group assignments cannot be enabled for anonymously graded assignments'))
+      else
+        @enableCheckbox(@$groupCategoryBox)
+
+      @assignment.anonymousGrading(setting)
 
     handleModeratedGradingChange: =>
       if !ENV?.HAS_GRADED_SUBMISSIONS
@@ -292,7 +332,8 @@ define [
         @handleOnlineSubmissionTypeChange()
 
     handleOnlineSubmissionTypeChange: (env) =>
-      showConfigTools = @$onlineSubmissionTypes.find(ALLOW_FILE_UPLOADS).attr('checked')
+      showConfigTools = @$onlineSubmissionTypes.find(ALLOW_FILE_UPLOADS).attr('checked') ||
+        @$onlineSubmissionTypes.find(ALLOW_TEXT_ENTRY).attr('checked')
       @$similarityDetectionTools.toggleAccessibly showConfigTools && ENV.PLAGIARISM_DETECTION_PLATFORM
 
     afterRender: =>
@@ -300,19 +341,23 @@ define [
       @$peerReviewsBox = $("#{PEER_REVIEWS_BOX}")
       @$intraGroupPeerReviews = $("#{INTRA_GROUP_PEER_REVIEWS}")
       @$groupCategoryBox = $("#{GROUP_CATEGORY_BOX}")
+      @$anonymousGradingBox = $("#{ANONYMOUS_GRADING_BOX}")
 
       @similarityDetectionTools = SimilarityDetectionTools.attach(
             @$similarityDetectionTools.get(0),
             parseInt(ENV.COURSE_ID),
             @$secureParams.val(),
             parseInt(ENV.SELECTED_CONFIG_TOOL_ID),
-            ENV.SELECTED_CONFIG_TOOL_TYPE)
+            ENV.SELECTED_CONFIG_TOOL_TYPE,
+            ENV.REPORT_VISIBILITY_SETTING)
 
       @_attachEditorToDescription()
       @addTinyMCEKeyboardShortcuts()
       @handleModeratedGradingChange()
       @handleOnlineSubmissionTypeChange()
       @handleSubmissionTypeChange()
+      @handleGroupCategoryChange()
+      @handleAnonymousGradingChange()
 
       if ENV?.HAS_GRADED_SUBMISSIONS
         @disableCheckbox(@$moderatedGradingBox, I18n.t("Moderated grading setting cannot be changed if graded submissions exist"))
@@ -336,7 +381,9 @@ define [
         isLargeRoster: ENV?.IS_LARGE_ROSTER or false
         conditionalReleaseServiceEnabled: ENV?.CONDITIONAL_RELEASE_SERVICE_ENABLED or false
         lockedItems: @lockedItems
-
+        anonymousInstructorAnnotationsEnabled: ENV?.ANONYMOUS_INSTRUCTOR_ANNOTATIONS_ENABLED or false
+        anonymousGradingEnabled: ENV?.ANONYMOUS_GRADING_ENABLED or false
+        anonymousModeratedMarkingEnabled: ENV.ANONYMOUS_MODERATED_MARKING_ENABLED or false
 
     _attachEditorToDescription: =>
       return if @lockedItems.content
@@ -474,6 +521,9 @@ define [
       errors = @_validateSubmissionTypes data, errors
       errors = @_validateAllowedExtensions data, errors
       errors = @assignmentGroupSelector.validateBeforeSave(data, errors)
+      if ENV.ANONYMOUS_MODERATED_MARKING_ENABLED
+        Object.assign(errors, @validateFinalGrader(data))
+        Object.assign(errors, @validateGraderCount(data))
       unless ENV?.IS_LARGE_ROSTER
         errors = @groupCategorySelector.validateBeforeSave(data, errors)
       errors = @_validatePointsPossible(data, errors)
@@ -486,6 +536,24 @@ define [
       if ENV.CONDITIONAL_RELEASE_SERVICE_ENABLED
         crErrors = @conditionalReleaseEditor.validateBeforeSave()
         errors['conditional_release'] = crErrors if crErrors
+      errors
+
+    validateFinalGrader: (data) =>
+      errors = {}
+      if data.moderated_grading == 'on' and !data.final_grader_id
+        errors.final_grader_id = [{ message: I18n.t('Grader is required') }]
+
+      errors
+
+    validateGraderCount: (data) =>
+      errors = {}
+      return errors unless data.moderated_grading == 'on'
+
+      if !data.grader_count
+        errors.grader_count = [{ message: I18n.t('Grader count is required') }]
+      else if data.grader_count == '0'
+        errors.grader_count = [{ message: I18n.t('Grader count cannot be 0') }]
+
       errors
 
     _validateTitle: (data, errors) =>
@@ -558,7 +626,7 @@ define [
       errors
 
     _validateExternalTool: (data, errors) =>
-      if data.submission_type == 'external_tool' and $.trim(data.external_tool_tag_attributes?.url?.toString()).length == 0
+      if data.submission_type == 'external_tool' && data.grading_type != 'not_graded' && $.trim(data.external_tool_tag_attributes?.url?.toString()).length == 0
         errors["external_tool_tag_attributes[url]"] = [
           message: I18n.t 'External Tool URL cannot be left blank'
         ]

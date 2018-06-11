@@ -166,7 +166,8 @@ class ConversationsController < ApplicationController
   API_ALLOWED_FIELDS = %w{workflow_state subscribed starred}.freeze
 
   # @API List conversations
-  # Returns the list of conversations for the current user, most recent ones first.
+  # Returns the paginated list of conversations for the current user, most
+  # recent ones first.
   #
   # @argument scope [String, "unread"|"starred"|"archived"]
   #   When set, only return conversations of the specified type. For example,
@@ -382,8 +383,8 @@ class ConversationsController < ApplicationController
     end
 
     params[:recipients].each do |recipient|
-      if recipient =~ /\Acourse_\d+\Z/ &&
-         !Context.find_by_asset_string(recipient).try(:grants_right?, @current_user, session, :send_messages_all)
+      if recipient =~ /\A(course_\d+)(?:_([a-z]+))?$/ && [nil, 'students', 'observers'].include?($2) &&
+         !Context.find_by_asset_string($1).try(:grants_right?, @current_user, session, :send_messages_all)
         return render_error('recipients', 'restricted by role')
       end
     end
@@ -712,16 +713,15 @@ class ConversationsController < ApplicationController
     return render_error('conversation_id', 'required') unless params['conversation_id']
 
     Conversation.find(params['conversation_id']).shard.activate do
-      cmp = ConversationMessageParticipant
-              .where(:user_id => params['user_id'])
-              .where(:conversation_message_id => params['message_id'])
+      cmp = ConversationMessageParticipant.
+        where(:user_id => params['user_id']).
+        where(:conversation_message_id => params['message_id'])
 
       cmp.update_all(:workflow_state => 'active', :deleted_at => nil)
 
-      participant = ConversationParticipant
-                      .where(:conversation_id => params['conversation_id'])
-                      .where(:user_id => params['user_id'])
-                      .first()
+      participant = ConversationParticipant.
+        where(:conversation_id => params['conversation_id']).
+        where(:user_id => params['user_id']).first
       messages = participant.messages
 
       participant.message_count = messages.count(:id)
@@ -781,8 +781,12 @@ class ConversationsController < ApplicationController
   #
   def add_recipients
     if @recipients.present?
-      @conversation.add_participants(@recipients, :tags => @tags, :root_account_id => @domain_root_account.id)
-      render :json => conversation_json(@conversation.reload, @current_user, session, :messages => [@conversation.messages.first])
+      if @conversation.conversation.can_add_participants?(@recipients)
+        @conversation.add_participants(@recipients, :tags => @tags, :root_account_id => @domain_root_account.id)
+        render :json => conversation_json(@conversation.reload, @current_user, session, :messages => [@conversation.messages.first])
+      else
+        render_error('recipients', 'too many participants for group conversation')
+      end
     else
       render :json => {}, :status => :bad_request
     end
@@ -867,6 +871,9 @@ class ConversationsController < ApplicationController
       params[:from_conversation_id] = @conversation.conversation_id
       # not a before_action because we need to set the above parameter.
       normalize_recipients
+      if @recipients && !@conversation.conversation.can_add_participants?(@recipients)
+        return render_error('recipients', 'too many participants for group conversation')
+      end
       # find included_messages
       message_ids = params[:included_messages]
       message_ids = message_ids.split(/,/) if message_ids.is_a?(String)
@@ -902,7 +909,7 @@ class ConversationsController < ApplicationController
         return render :json => [], :status => :accepted
       end
     else
-      render :json => {}, :status => :bad_reqquest
+      render :json => {}, :status => :bad_request
     end
   end
 

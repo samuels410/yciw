@@ -92,9 +92,6 @@ class EportfoliosController < ApplicationController
 
         # otherwise, if  I can otherwise view the user, link directly to them
         @owner_url ||= user_url(@portfolio.user) if @portfolio.user.grants_right?(@current_user, :view_statistics)
-
-        js_env :folder_id => Folder.unfiled_folder(@current_user).id,
-               :context_code => @current_user.asset_string
       end
     end
   end
@@ -153,11 +150,14 @@ class EportfoliosController < ApplicationController
     zip_filename = "eportfolio.zip"
     @portfolio = Eportfolio.find(params[:eportfolio_id])
     if authorized_action(@portfolio, @current_user, :update)
-      @attachments = @portfolio.attachments.not_deleted.where(display_name: zip_filename, workflow_state: ['to_be_zipped', 'zipping', 'zipped', 'unattached']).order(:created_at).to_a
-      @attachment = @attachments.pop
-      @attachments.each{|a| a.related_attachments.exists? ? a.destroy : a.destroy_permanently! }
-      if @attachment && (@attachment.created_at < 1.hour.ago || @attachment.created_at < (@portfolio.eportfolio_entries.map{|s| s.updated_at}.compact.max || @attachment.created_at))
-        @attachment.related_attachments.exists? ? @attachment.destroy : @attachment.destroy_permanently!
+      @attachments = @portfolio.attachments.not_deleted.
+        where(display_name: zip_filename,
+              workflow_state: ['to_be_zipped', 'zipping', 'zipped', 'unattached'])
+      @attachment = @attachments.order(:created_at).last
+      @attachments.where.not(id: @attachment).find_each(&:destroy_permanently_plus)
+
+      if @attachment && stale_zip_file?
+        @attachment.destroy_permanently_plus
         @attachment = nil
       end
 
@@ -171,13 +171,14 @@ class EportfoliosController < ApplicationController
       else
         respond_to do |format|
           if @attachment.zipped?
-            if Attachment.s3_storage?
-              format.html { redirect_to @attachment.inline_url }
-              format.zip { redirect_to @attachment.inline_url }
-            else
+            if @attachment.stored_locally?
               cancel_cache_buster
               format.html { send_file(@attachment.full_filename, :type => @attachment.content_type_with_encoding, :disposition => 'inline') }
               format.zip { send_file(@attachment.full_filename, :type => @attachment.content_type_with_encoding, :disposition => 'inline') }
+            else
+              inline_url = authenticated_inline_url(@attachment)
+              format.html { redirect_to inline_url }
+              format.zip { redirect_to inline_url }
             end
             format.json { render :json => @attachment.as_json(:methods => :readable_size) }
           else
@@ -189,6 +190,11 @@ class EportfoliosController < ApplicationController
         end
       end
     end
+  end
+
+  def stale_zip_file?
+    @attachment.created_at < 1.hour.ago ||
+      @attachment.created_at < (@portfolio.eportfolio_entries.map(&:updated_at).compact.max || @attachment.created_at)
   end
 
   def public_feed

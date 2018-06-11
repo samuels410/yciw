@@ -19,12 +19,13 @@ define [
   'i18n!GroupDetailView'
   'jquery'
   'Backbone'
-  'compiled/views/groups/manage/GroupEditView'
-  'compiled/views/groups/manage/GroupCategoryCloneView'
+  './GroupEditView'
+  './GroupCategoryCloneView'
   'jst/groups/manage/groupDetail'
-  'compiled/jquery.rails_flash_notifications'
+  '../../../util/groupHasSubmissions'
+  '../../../jquery.rails_flash_notifications'
   'jsx/context_cards/StudentContextCardTrigger'
-], (I18n, $, {View}, GroupEditView, GroupCategoryCloneView, template) ->
+], (I18n, $, {View}, GroupEditView, GroupCategoryCloneView, template, groupHasSubmissions) ->
 
   class GroupDetailView extends View
 
@@ -66,7 +67,7 @@ define [
     deleteGroup: (e) =>
       e.preventDefault()
       if confirm I18n.t('delete_confirm', 'Are you sure you want to remove this group?')
-        if @model.get("has_submission")
+        if groupHasSubmissions @model
           @cloneCategoryView = new GroupCategoryCloneView
             model: @model.collection.category
             openedFromCaution: true

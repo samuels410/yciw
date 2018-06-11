@@ -18,28 +18,37 @@
 
 import _ from 'underscore'
 import $ from 'jquery'
-import I18n from 'i18n!gradebook'
-import htmlEscape from 'str/htmlEscape'
-import numberHelper from '../shared/helpers/numberHelper'
-import round from 'compiled/util/round'
-import CourseGradeCalculator from '../gradebook/CourseGradeCalculator'
-import {scopeToUser} from '../gradebook/EffectiveDueDates'
-import {scoreToGrade} from '../gradebook/GradingSchemeHelper'
-import GradeFormatHelper from '../gradebook/shared/helpers/GradeFormatHelper'
-import StatusPill from '../grading/StatusPill'
-import gradingPeriodSetsApi from 'compiled/api/gradingPeriodSetsApi'
 import 'jquery.ajaxJSON'
 import 'jquery.instructure_misc_helpers'  /* replaceTags */
 import 'jquery.instructure_misc_plugins' /* showIf */
 import 'jquery.templateData'
 import 'compiled/jquery/mediaCommentThumbnail'
 import 'media_comments' /* mediaComment */
-
+import axios from 'axios'
+import { camelize } from 'convert_case'
+import React from 'react'
+import ReactDOM from 'react-dom'
+import gradingPeriodSetsApi from 'compiled/api/gradingPeriodSetsApi'
+import htmlEscape from 'str/htmlEscape'
+import I18n from 'i18n!gradebook'
+import round from 'compiled/util/round'
+import numberHelper from '../shared/helpers/numberHelper'
+import CourseGradeCalculator from '../gradebook/CourseGradeCalculator'
+import {scopeToUser} from '../gradebook/EffectiveDueDates'
+import {scoreToGrade} from '../gradebook/GradingSchemeHelper'
+import GradeFormatHelper from '../gradebook/shared/helpers/GradeFormatHelper'
+import StatusPill from '../grading/StatusPill'
+import SelectMenuGroup from '../grade_summary/SelectMenuGroup'
 
 const GradeSummary = {
   getSelectedGradingPeriodId () {
-    const $select = document.querySelector('.grading_periods_selector')
-    return ($select && $select.value !== '0') ? $select.value : null
+    const currentGradingPeriodId = ENV.current_grading_period_id
+
+    if (!currentGradingPeriodId || currentGradingPeriodId === '0') {
+      return null;
+    }
+
+    return currentGradingPeriodId
   },
 
   getAssignmentId ($assignment) {
@@ -318,6 +327,20 @@ function calculateSubtotals (byGradingPeriod, calculatedGrades, currentOrFinal) 
   return subtotals
 }
 
+function finalGradePointsPossibleText (groupWeightingScheme, scoreWithPointsPossible) {
+  if (groupWeightingScheme === "percent") {
+    return "";
+  }
+
+  const gradingPeriodId = GradeSummary.getSelectedGradingPeriodId();
+  const gradingPeriodSet = getGradingPeriodSet();
+  if (gradingPeriodId == null && gradingPeriodSet && gradingPeriodSet.weighted) {
+    return "";
+  }
+
+  return scoreWithPointsPossible;
+}
+
 function calculateTotals (calculatedGrades, currentOrFinal, groupWeightingScheme) {
   const showTotalGradeAsPoints = ENV.show_total_grade_as_points
 
@@ -348,7 +371,10 @@ function calculateTotals (calculatedGrades, currentOrFinal, groupWeightingScheme
   const $finalGradeRow = $('.student_assignment.final_grade')
   $finalGradeRow.find('.grade').text(finalGrade)
   $finalGradeRow.find('.score_teaser').text(teaserText)
-  $finalGradeRow.find('.points_possible').text(scoreAsPoints)
+
+  const pointsPossibleText = finalGradePointsPossibleText(groupWeightingScheme, scoreAsPoints);
+  $finalGradeRow.find('.points_possible').text(pointsPossibleText);
+
   if (groupWeightingScheme === 'percent') {
     $finalGradeRow.find('.score_teaser').hide()
   }
@@ -433,6 +459,47 @@ function bindShowAllDetailsButton ($ariaAnnouncer) {
       $ariaAnnouncer.text(I18n.t('assignment details collapsed'))
     }
   })
+}
+
+function displayPageContent() {
+  document.getElementById('grade-summary-content').style.display = ''
+  document.getElementById('student-grades-right-content').style.display = ''
+}
+
+function goToURL(url) {
+  window.location.href = url
+}
+
+function saveAssignmentOrder(order) {
+  return axios.post(ENV.save_assignment_order_url, { assignment_order: order })
+}
+
+function coursesWithGrades() {
+  return ENV.courses_with_grades.map((course) => camelize(course))
+}
+
+function getSelectMenuGroupProps() {
+  return {
+    assignmentSortOptions: ENV.assignment_sort_options,
+    courses: coursesWithGrades(),
+    currentUserID: ENV.current_user.id,
+    displayPageContent,
+    goToURL,
+    gradingPeriods: ENV.grading_periods || [],
+    saveAssignmentOrder,
+    selectedAssignmentSortOrder: ENV.current_assignment_sort_order,
+    selectedCourseID: ENV.context_asset_string.match(/.*_(\d+)$/)[1],
+    selectedGradingPeriodID: ENV.current_grading_period_id,
+    selectedStudentID: ENV.student_id,
+    students: ENV.students
+  }
+}
+
+function renderSelectMenuGroup() {
+  ReactDOM.render(
+    React.createElement(SelectMenuGroup, GradeSummary.getSelectMenuGroupProps()),
+    document.getElementById('GradeSummarySelectMenuGroup')
+  )
 }
 
 function setup () {
@@ -577,33 +644,8 @@ function setup () {
       GradeSummary.updateStudentGrades()
     }).triggerHandler('change')
 
-    $('#observer_user_url').change(function () {
-      if (location.href !== $(this).val()) {
-        location.href = $(this).val()
-      }
-    })
-
-    $('#assignment_order').change(function () {
-      this.form.submit()
-    })
-
     bindShowAllDetailsButton($ariaAnnouncer)
     StatusPill.renderPills()
-  })
-
-  $(document).on('change', '.grading_periods_selector', function () {
-    const newGP = $(this).val()
-    let matches = location.href.match(/grading_period_id=\d*/)
-    if (matches) {
-      location.href = location.href.replace(matches[0], `grading_period_id=${newGP}`)
-      return
-    }
-    matches = location.href.match(/#tab-assignments/)
-    if (matches) {
-      location.href = `${location.href.replace(matches[0], '')}?grading_period_id=${newGP}${matches[0]}`
-    } else {
-      location.href += `?grading_period_id=${newGP}`
-    }
   })
 }
 
@@ -616,7 +658,10 @@ export default _.extend(GradeSummary, {
   calculateTotals,
   calculateSubtotals,
   calculatePercentGrade,
+  finalGradePointsPossibleText,
   formatPercentGrade,
+  getSelectMenuGroupProps,
+  renderSelectMenuGroup,
   updateScoreForAssignment,
   updateStudentGrades
 })

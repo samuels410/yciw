@@ -49,6 +49,26 @@
 #           "description": "The user's final score for the class. Only included if user has permissions to view this score.",
 #           "example": "",
 #           "type": "string"
+#         },
+#         "unposted_current_grade": {
+#           "description": "The user's current grade in the class including muted/unposted assignments. Only included if user has permissions to view this grade, typically teachers, TAs, and admins.",
+#           "example": "",
+#           "type": "string"
+#         },
+#         "unposted_final_grade": {
+#           "description": "The user's final grade for the class including muted/unposted assignments. Only included if user has permissions to view this grade, typically teachers, TAs, and admins..",
+#           "example": "",
+#           "type": "string"
+#         },
+#         "unposted_current_score": {
+#           "description": "The user's current score in the class including muted/unposted assignments. Only included if user has permissions to view this score, typically teachers, TAs, and admins..",
+#           "example": "",
+#           "type": "string"
+#         },
+#         "unposted_final_score": {
+#           "description": "The user's final score for the class including muted/unposted assignments. Only included if user has permissions to view this score, typically teachers, TAs, and admins..",
+#           "example": "",
+#           "type": "string"
 #         }
 #       }
 #     }
@@ -173,6 +193,11 @@
 #             "example": "2012-04-18T23:08:51Z",
 #             "type": "datetime"
 #           },
+#           "last_attended_at": {
+#             "description": "The last attended date of the user for the enrollment in a course, in ISO8601 format.",
+#             "example": "2012-04-18T23:08:51Z",
+#             "type": "datetime"
+#           },
 #           "total_activity_time": {
 #             "description": "The total activity time of the user for the enrollment, in seconds.",
 #             "example": 260,
@@ -185,7 +210,24 @@
 #           },
 #           "grades": {
 #             "description": "The URL to the Canvas web UI page containing the grades associated with this enrollment.",
+#             "example": {
+#               "html_url": "https://...",
+#               "current_score": 35,
+#               "current_grade": null,
+#               "final_score": 6.67,
+#               "final_grade": null
+#             },
 #             "$ref": "Grade"
+#           },
+#           "user": {
+#             "description": "A description of the user.",
+#             "example": {
+#               "id": 3,
+#               "name": "Student 1",
+#               "sortable_name": "1, Student",
+#               "short_name": "Stud 1"
+#             },
+#             "$ref": "User"
 #           },
 #           "computed_current_score": {
 #             "description": "optional: The student's score in the course, ignoring ungraded assignments. (applies only to student enrollments, and only available in course endpoints)",
@@ -205,6 +247,26 @@
 #           "computed_final_grade": {
 #             "description": "optional: The letter grade equivalent of computed_final_score, if available. (applies only to student enrollments, and only available in course endpoints)",
 #             "example": "B-",
+#             "type": "string"
+#           },
+#           "unposted_current_grade": {
+#             "description": "The user's current grade in the class including muted/unposted assignments. Only included if user has permissions to view this grade, typically teachers, TAs, and admins.",
+#             "example": "",
+#             "type": "string"
+#           },
+#           "unposted_final_grade": {
+#             "description": "The user's final grade for the class including muted/unposted assignments. Only included if user has permissions to view this grade, typically teachers, TAs, and admins..",
+#             "example": "",
+#             "type": "string"
+#           },
+#           "unposted_current_score": {
+#             "description": "The user's current score in the class including muted/unposted assignments. Only included if user has permissions to view this score, typically teachers, TAs, and admins..",
+#             "example": "",
+#             "type": "string"
+#           },
+#           "unposted_final_score": {
+#             "description": "The user's final score for the class including muted/unposted assignments. Only included if user has permissions to view this score, typically teachers, TAs, and admins..",
+#             "example": "",
 #             "type": "string"
 #           },
 #           "has_grading_periods": {
@@ -246,6 +308,26 @@
 #             "description": "optional: The letter grade equivalent of current_period_computed_final_score, if available. If the course the enrollment belongs to does not have grading periods, or if no currently active grading period exists, the value will be null. (applies only to student enrollments, and only available in course endpoints)",
 #             "example": "B",
 #             "type": "string"
+#           },
+#           "current_period_unposted_current_score": {
+#             "description": "optional: The student's score in the course for the current grading period, including muted/unposted assignments. Only included if user has permission to view this score, typically teachers, TAs, and admins. If the course the enrollment belongs to does not have grading periods, or if no currently active grading period exists, the value will be null. (applies only to student enrollments, and only available in course endpoints)",
+#             "example": 95.80,
+#             "type": "number"
+#           },
+#           "current_period_unposted_final_score": {
+#             "description": "optional: The student's score in the course for the current grading period, including muted/unposted assignments and including ungraded assignments with a score of 0. Only included if user has permission to view this score, typically teachers, TAs, and admins. If the course the enrollment belongs to does not have grading periods, or if no currently active grading period exists, the value will be null. (applies only to student enrollments, and only available in course endpoints)",
+#             "example": 85.25,
+#             "type": "number"
+#           },
+#           "current_period_unposted_current_grade": {
+#             "description": "optional: The letter grade equivalent of current_period_unposted_current_score, if available. Only included if user has permission to view this grade, typically teachers, TAs, and admins. If the course the enrollment belongs to does not have grading periods, or if no currently active grading period exists, the value will be null. (applies only to student enrollments, and only available in course endpoints)",
+#             "example": "A",
+#             "type": "string"
+#           },
+#           "current_period_unposted_final_grade": {
+#             "description": "optional: The letter grade equivalent of current_period_unposted_final_score, if available. Only included if user has permission to view this grade, typically teachers, TAs, and admins. If the course the enrollment belongs to does not have grading periods, or if no currently active grading period exists, the value will be null. (applies only to student enrollments, and only available in course endpoints)",
+#             "example": "B",
+#             "type": "string"
 #           }
 #         }
 #       }
@@ -267,15 +349,16 @@ class EnrollmentsApiController < ApplicationController
 
   include Api::V1::User
   # @API List enrollments
-  # Depending on the URL given, return either (1) all of the enrollments in
-  # a course, (2) all of the enrollments in a section or (3) all of a user's
-  # enrollments. This includes student, teacher, TA, and observer enrollments.
+  # Depending on the URL given, return a paginated list of either (1) all of
+  # the enrollments in a course, (2) all of the enrollments in a section or (3)
+  # all of a user's enrollments. This includes student, teacher, TA, and
+  # observer enrollments.
   #
   # If a user has multiple enrollments in a context (e.g. as a teacher
   # and a student or in multiple course sections), each enrollment will be
   # listed separately.
   #
-  # note: Currently, only an admin user can return other users' enrollments. A
+  # note: Currently, only a root level admin user can return other users' enrollments. A
   # user can, however, return his/her own enrollments.
   #
   # @argument type[] [String]
@@ -310,9 +393,14 @@ class EnrollmentsApiController < ApplicationController
   #   Return grades for the given grading_period.  If this parameter is not
   #   specified, the returned grades will be for the whole course.
   #
+  # @argument enrollment_term_id [Integer]
+  #   Returns only enrollments for the specified enrollment term. This parameter
+  #   only applies to the user enrollments path. May pass the ID from the
+  #   enrollment terms api or the SIS id prepended with 'sis_term_id:'.
+  #
   # @argument sis_account_id[] [String]
   #   Returns only enrollments for the specified SIS account ID(s). Does not
-  #   look into subaccounts. May pass in array or string.
+  #   look into sub_accounts. May pass in array or string.
   #
   # @argument sis_course_id[] [String]
   #   Returns only enrollments matching the specified SIS course ID(s).
@@ -388,7 +476,7 @@ class EnrollmentsApiController < ApplicationController
       enrollments,
       self, send("api_v1_#{endpoint_scope}_enrollments_url"))
 
-    ActiveRecord::Associations::Preloader.new.preload(enrollments, [:user, :course, :course_section])
+    ActiveRecord::Associations::Preloader.new.preload(enrollments, [:user, :course, :course_section, :root_account, :sis_pseudonym])
 
     include_group_ids = Array(params[:include]).include?("group_ids")
     includes = [:user] + Array(params[:include])
@@ -639,6 +727,57 @@ class EnrollmentsApiController < ApplicationController
     end
   end
 
+  # @API Accept Course Invitation
+  # accepts a pending course invitation for the current user
+  #
+  # @example_request
+  #   curl https://<canvas>/api/v1/courses/<course_id>/enrollments/:id/accept \
+  #     -X POST \
+  #     -H 'Authorization: Bearer <token>'
+  #
+  # @example_response
+  #   {
+  #     "success": true
+  #   }
+  def accept
+    @enrollment = @context.enrollments.find(params[:id])
+    return render_unauthorized_action unless @current_user && @enrollment.user == @current_user
+    return render(json: {success: true}) if @enrollment.active?
+    return render(json: {error: 'membership not activated'}, status: :bad_request) if @enrollment.inactive?
+    if @enrollment.rejected?
+      @enrollment.workflow_state = 'invited'
+      @enrollment.save_without_broadcasting
+    end
+    return render(json: {error: 'self enroll'}, status: :bad_request) if @enrollment.self_enrolled?
+    return render(json: {error: 'no current invitation'}, status: :bad_request) unless @enrollment.invited?
+    @enrollment.accept!
+    render json: {success: true}
+  end
+
+  # @API Reject Course Invitation
+  # rejects a pending course invitation for the current user
+  #
+  # @example_request
+  #   curl https://<canvas>/api/v1/courses/<course_id>/enrollments/:id/reject \
+  #     -X POST \
+  #     -H 'Authorization: Bearer <token>'
+  #
+  # @example_response
+  #   {
+  #     "success": true
+  #   }
+  def reject
+    @enrollment = @context.enrollments.find(params[:id])
+    return render_unauthorized_action unless @current_user && @enrollment.user == @current_user
+    return render(json: {success: true}) if @enrollment.rejected?
+    return render(json: {error: 'membership not activated'}, status: :bad_request) if @enrollment.inactive?
+    return render(json: {error: 'self enroll'}, status: :bad_request) if @enrollment.self_enrolled?
+    return render(json: {error: 'no current invitation'}, status: :bad_request) unless @enrollment.invited?
+    @enrollment.reject!
+    render json: {success: true}
+  end
+
+
   # @API Re-activate an enrollment
   # Activates an inactive enrollment
   #
@@ -663,6 +802,26 @@ class EnrollmentsApiController < ApplicationController
       render :json => enrollment_json(@enrollment, @current_user, session)
     else
       render :json => @enrollment.errors, :status => :bad_request
+    end
+  end
+
+  # @API Adds last attended date to student enrollment in course
+  #
+  # @example_request
+  #   curl https://<canvas>/api/v1/courses/:course_id/user/:user_id/last_attended"
+  #     -X PUT => date="Thu%20Dec%2021%202017%2000:00:00%20GMT-0700%20(MST)
+  #
+  #
+  # @returns Enrollment
+  def last_attended
+    return unless authorized_action(@context, @current_user, [:view_all_grades, :manage_grades])
+    date = Time.zone.parse(params[:date])
+    if date
+      enrollments = Enrollment.where(:course_id => params[:course_id], :user_id => params[:user_id])
+      enrollments.update_all(last_attended_at: date)
+      render :json => {:date => date}
+    else
+      render :json => { :message => 'Invalid date time input' }, :status => :bad_request
     end
   end
 
@@ -705,7 +864,8 @@ class EnrollmentsApiController < ApplicationController
       if params[:state].present?
         enrollments = user.enrollments.where(enrollment_index_conditions(true))
       else
-        enrollments = user.enrollments.current_and_invited.where(enrollment_index_conditions)
+        enrollments = user.enrollments.current_and_invited.where(enrollment_index_conditions).
+            joins(:enrollment_state).where("enrollment_states.state<>'completed'")
       end
     else
       is_approved_parent = user.grants_right?(@current_user, :read_as_parent)
@@ -726,7 +886,13 @@ class EnrollmentsApiController < ApplicationController
       # by default, return active and invited courses. don't use the existing
       # current_and_invited_enrollments scope because it won't return enrollments
       # on unpublished courses.
-      enrollments = enrollments.where(workflow_state: %w{active invited}) unless params[:state].present?
+      enrollments = enrollments.where(workflow_state: %w{active invited}) if params[:state].blank?
+    end
+
+    terms = @domain_root_account.enrollment_terms.active
+    if params[:enrollment_term_id]
+      term = api_find(terms, params[:enrollment_term_id])
+      enrollments = enrollments.joins(:course).where(courses: {enrollment_term_id: term})
     end
 
     @shard_scope = user

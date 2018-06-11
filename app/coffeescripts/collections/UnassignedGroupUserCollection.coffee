@@ -16,15 +16,15 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 define [
-  'compiled/collections/GroupUserCollection'
-  'compiled/models/GroupUser'
+  '../collections/GroupUserCollection'
+  '../models/GroupUser'
 ], (GroupUserCollection, GroupUser) ->
 
   class UnassignedGroupUserCollection extends GroupUserCollection
 
     url: ->
       _url = "/api/v1/group_categories/#{@category.id}/users?per_page=50&include[]=sections&exclude[]=pseudonym"
-      _url += "&unassigned=true" unless @category.get('allows_multiple_memberships')
+      _url += "&unassigned=true&include[]=group_submissions" unless @category.get('allows_multiple_memberships')
       @url = _url
 
     # don't add/remove people in the "Everyone" collection (this collection)

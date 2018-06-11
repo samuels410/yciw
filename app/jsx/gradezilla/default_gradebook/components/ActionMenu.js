@@ -20,14 +20,14 @@ import $ from 'jquery'
 import React from 'react'
 import PropTypes from 'prop-types'
 import IconMiniArrowDownSolid from 'instructure-icons/lib/Solid/IconMiniArrowDownSolid'
-import Button from 'instructure-ui/lib/components/Button'
-import { MenuItem, MenuItemSeparator } from 'instructure-ui/lib/components/Menu'
-import PopoverMenu from 'instructure-ui/lib/components/PopoverMenu'
-import Typography from 'instructure-ui/lib/components/Typography'
-import GradebookExportManager from 'jsx/gradezilla/shared/GradebookExportManager'
-import { AppLaunch } from 'jsx/gradezilla/SISGradePassback/PostGradesApp'
+import Button from '@instructure/ui-core/lib/components/Button'
+import { MenuItem, MenuItemSeparator } from '@instructure/ui-core/lib/components/Menu'
+import PopoverMenu from '@instructure/ui-core/lib/components/PopoverMenu'
+import Text from '@instructure/ui-core/lib/components/Text'
+import GradebookExportManager from '../../../gradezilla/shared/GradebookExportManager'
+import { AppLaunch } from '../../../gradezilla/SISGradePassback/PostGradesApp'
 import tz from 'timezone'
-import DateHelper from 'jsx/shared/helpers/dateHelper'
+import DateHelper from '../../../shared/helpers/dateHelper'
 import I18n from 'i18n!gradebook'
 import 'compiled/jquery.rails_flash_notifications'
 
@@ -77,12 +77,10 @@ const { arrayOf, bool, func, object, shape, string } = PropTypes;
       publishGradesToSis: shape({
         isEnabled: bool.isRequired,
         publishToSisUrl: string
-      })
-    };
+      }),
 
-    static downloadableLink (url) {
-      return `${url}&download_frd=1`;
-    }
+      gradingPeriodId: string.isRequired
+    };
 
     static gotoUrl (url) {
       window.location.href = url;
@@ -128,7 +126,7 @@ const { arrayOf, bool, func, object, shape, string } = PropTypes;
       this.setExportInProgress(true);
       $.flashMessage(I18n.t('Gradebook export started'));
 
-      return this.exportManager.startExport().then((resolution) => {
+      return this.exportManager.startExport(this.props.gradingPeriodId).then((resolution) => {
         this.setExportInProgress(false);
 
         const attachmentUrl = resolution.attachmentUrl;
@@ -136,7 +134,7 @@ const { arrayOf, bool, func, object, shape, string } = PropTypes;
 
         const previousExport = {
           label: `${I18n.t('New Export')} (${DateHelper.formatDatetimeForDisplay(updatedAt)})`,
-          attachmentUrl: ActionMenu.downloadableLink(attachmentUrl)
+          attachmentUrl
         };
 
         this.setState({ previousExport });
@@ -188,7 +186,7 @@ const { arrayOf, bool, func, object, shape, string } = PropTypes;
 
       return {
         label: `${I18n.t('Previous Export')} (${DateHelper.formatDatetimeForDisplay(updatedAt)})`,
-        attachmentUrl: ActionMenu.downloadableLink(attachment.downloadUrl)
+        attachmentUrl: attachment.downloadUrl
       };
     }
 
@@ -288,9 +286,9 @@ const { arrayOf, bool, func, object, shape, string } = PropTypes;
         <PopoverMenu
           trigger={
             <Button variant="link">
-              <Typography {...buttonTypographyProps}>
+              <Text {...buttonTypographyProps}>
                 { I18n.t('Actions') }<IconMiniArrowDownSolid />
-              </Typography>
+              </Text>
             </Button>
           }
         >

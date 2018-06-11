@@ -35,12 +35,9 @@ module Exporters
     end
 
     def build_assignment_payload
-      external_tool_tag = @assignment.external_tool_tag
       {
         assignment: {
-          resource_link_id: ContextExternalTool.opaque_identifier_for(
-            external_tool_tag, @assignment.shard
-          ),
+          resource_link_id: @assignment.lti_resource_link_id,
           title: @quiz.title,
           context_title: @quiz.context.name,
           course_uuid: @course.uuid
@@ -79,7 +76,7 @@ module Exporters
         assignment_group: assignment_group,
         workflow_state: 'unpublished'
       }
-      assignment_params[:post_to_sis] = quiz.assignment.post_to_sis if post_to_sis
+      assignment_params[:post_to_sis] = quiz.assignment.post_to_sis if quiz.assignment && post_to_sis
       assignment = course.assignments.create(assignment_params)
       assignment.quiz_lti! && assignment.save!
       @assignment = assignment

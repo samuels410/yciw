@@ -20,10 +20,10 @@ define [
   'jquery'
   'underscore'
   'Backbone'
-  'compiled/views/tinymce/EquationToolbarView'
+  './EquationToolbarView'
   'jst/tinymce/EquationEditorView'
   'str/htmlEscape'
-  'compiled/fn/preventDefault'
+  '../../fn/preventDefault'
   'jsx/shared/rce/RceCommandShim'
   'jqueryui/dialog'
   'mathquill'
@@ -189,12 +189,20 @@ define [
     restoreCaret: ->
       @editor.selection.moveToBookmark(@prevSelection)
 
+    # the following is here to make it easier to unit test
+    @doubleEncodeEquationForUrl: (text) ->
+      encodeURIComponent encodeURIComponent text
+
+    # the following will be called by onSubmit below
+    doubleEncodeEquationForUrl: (text) ->
+      @constructor.doubleEncodeEquationForUrl text
+
     onSubmit: (event) =>
       event.preventDefault()
 
       text = @getEquation()
       altText = "LaTeX: #{ text }"
-      url = "/equation_images/#{ encodeURIComponent escape text }"
+      url = "/equation_images/#{ @doubleEncodeEquationForUrl text }"
       $img = $(document.createElement('img')).attr
         src: url
         alt: altText

@@ -20,44 +20,36 @@ module UserSearch
   def self.for_user_in_context(search_term, context, searcher, session=nil, options = {})
     search_term = search_term.to_s
     return User.none if search_term.strip.empty?
-    base_scope = scope_for(context, searcher, options.slice(:enrollment_type, :enrollment_role,
-      :enrollment_role_id, :exclude_groups, :enrollment_state, :include_inactive_enrollments, :sort, :order))
-    if search_term.to_s =~ Api::ID_REGEX
-      db_id = Shard.relative_id_for(search_term, Shard.current, Shard.current)
-      scope = base_scope.where(id: db_id)
-      if scope.exists?
-        return scope
-      elsif !SearchTermHelper.valid_search_term?(search_term)
-        return User.none
-      end
-      # no user found by id, so lets go ahead with the regular search, maybe this person just has a ton of numbers in their name
-    end
-
     SearchTermHelper.validate_search_term(search_term)
 
-    unless context.grants_right?(searcher, session, :manage_students) ||
-        context.grants_right?(searcher, session, :manage_admin_users)
-      restrict_search = true
-    end
+    @is_id = search_term =~ Api::ID_REGEX
+    @include_login = context.grants_right?(searcher, session, :view_user_logins)
+    @include_email = context.grants_right?(searcher, session, :read_email_addresses)
+    @include_sis   = context.grants_any_right?(searcher, session, :read_sis, :manage_sis)
+
     context.shard.activate do
-      base_scope = base_scope.where(conditions_statement(search_term, {:restrict_search => restrict_search}))
-      if options[:role_filter_id] && options[:role_filter_id] != ""
-        base_scope = base_scope.where("#{options[:role_filter_id]} IN 
-                            (SELECT role_id FROM #{Enrollment.quoted_table_name}
-                            WHERE #{Enrollment.quoted_table_name}.user_id = #{User.quoted_table_name}.id)")
-      end
-      base_scope
+      base_scope = scope_for(context, searcher, options.slice(:enrollment_type, :enrollment_role,
+        :enrollment_role_id, :exclude_groups, :enrollment_state, :include_inactive_enrollments, :sort, :order))
+
+      # TODO: Need to optimize this as it's not using the base scope filter for the conditions statement query
+      base_scope.where(conditions_statement(search_term, context.root_account))
     end
   end
 
-  def self.conditions_statement(search_term, options={})
+  def self.complex_search?
+    @include_login || @include_email || @include_sis || @is_id
+  end
+
+  def self.conditions_statement(search_term, root_account, options={})
     pattern = like_string_for(search_term)
     conditions = []
 
-    if complex_search_enabled? && !options[:restrict_search]
-      conditions << complex_sql << pattern << pattern << pattern << CommunicationChannel::TYPE_EMAIL << pattern
+    if complex_search_enabled? && complex_search?
+      # db_id is only used if the search_term.to_s =~ Api::ID_REGEX
+      params = {pattern: pattern, account: root_account, path_type: CommunicationChannel::TYPE_EMAIL, db_id: search_term}
+      conditions << complex_sql << params
     else
-      conditions << like_condition('users.name') << pattern
+      conditions << like_condition('users.name') << {pattern: pattern}
     end
 
     conditions
@@ -125,27 +117,15 @@ module UserSearch
               users.order_by_sortable_name
             end
 
-    if options[:role_filter_id] && options[:role_filter_id] != ""
-      users = users.where("#{options[:role_filter_id]} IN 
-                            (SELECT role_id FROM #{Enrollment.quoted_table_name}
-                              WHERE #{Enrollment.quoted_table_name}.user_id = #{User.quoted_table_name}.id)")
-    end
-
     if enrollment_role_ids || enrollment_roles
+      users = users.joins(:not_removed_enrollments).distinct if context.is_a?(Account)
       roles = if enrollment_role_ids
                 enrollment_role_ids.map{|id| Role.get_role_by_id(id)}.compact
               else
                 enrollment_roles.map{|name| context.is_a?(Account) ? context.get_course_role_by_name(name) :
                   context.account.get_course_role_by_name(name)}.compact
               end
-      conditions_sql = "role_id IN (?)"
-      # TODO: this can go away after we take out the enrollment role shim (after role_id has been populated)
-      roles.each do |role|
-        if role.built_in?
-          conditions_sql += " OR (role_id IS NULL AND type = #{User.connection.quote(role.name)})"
-        end
-      end
-      users = users.where(conditions_sql, roles.map(&:id))
+      users = users.where("role_id IN (?)", roles.map(&:id))
     elsif enrollment_types
       enrollment_types = enrollment_types.map { |e| "#{e.camelize}Enrollment" }
       if enrollment_types.any?{ |et| !Enrollment.readable_types.keys.include?(et) }
@@ -167,19 +147,37 @@ module UserSearch
   private
 
   def self.complex_sql
-    <<-SQL
-      (EXISTS (SELECT 1 FROM #{Pseudonym.quoted_table_name}
-         WHERE (#{like_condition('pseudonyms.sis_user_id')} OR
-             #{like_condition('pseudonyms.unique_id')})
-           AND pseudonyms.user_id = users.id
-           AND pseudonyms.workflow_state='active')
-       OR (#{like_condition('users.name')})
-       OR EXISTS (SELECT 1 FROM #{CommunicationChannel.quoted_table_name}
-         WHERE communication_channels.user_id = users.id
-           AND communication_channels.path_type = ?
-           AND #{like_condition('communication_channels.path')}
-           AND communication_channels.workflow_state in ('active', 'unconfirmed')))
-    SQL
+    id_queries = ["SELECT id FROM #{User.quoted_table_name} WHERE (#{like_condition('users.name')})"]
+
+    if @include_login || @include_sis
+      pseudonym_conditions = []
+      pseudonym_conditions << like_condition('pseudonyms.unique_id') if @include_login
+      pseudonym_conditions << like_condition('pseudonyms.sis_user_id') if @include_sis
+      id_queries << <<-SQL
+        SELECT user_id FROM #{Pseudonym.quoted_table_name}
+          WHERE (#{pseudonym_conditions.join(' OR ')})
+          AND pseudonyms.workflow_state='active'
+          AND pseudonyms.account_id=:account
+      SQL
+    end
+
+    if @is_id
+      id_queries << "SELECT id FROM #{User.quoted_table_name} WHERE users.id IN (:db_id)"
+    end
+
+    if @include_email
+      id_queries << <<-SQL
+        SELECT communication_channels.user_id FROM #{CommunicationChannel.quoted_table_name}
+          WHERE EXISTS (SELECT 1 FROM #{UserAccountAssociation.quoted_table_name} AS uaa
+                        WHERE uaa.account_id= :account
+                          AND uaa.user_id=communication_channels.user_id)
+            AND communication_channels.path_type = :path_type
+            AND #{like_condition('communication_channels.path')}
+            AND communication_channels.workflow_state IN ('active', 'unconfirmed')
+      SQL
+    end
+
+    "users.id IN (#{id_queries.join("\nUNION\n")})"
   end
 
   def self.gist_search_enabled?
@@ -191,7 +189,7 @@ module UserSearch
   end
 
   def self.like_condition(value)
-    ActiveRecord::Base.like_condition(value, 'lower(?)')
+    ActiveRecord::Base.like_condition(value, 'lower(:pattern)')
   end
 
   def self.wildcard_pattern(value, options)

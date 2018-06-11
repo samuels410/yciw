@@ -87,7 +87,7 @@ Rails.configuration.after_initialize do
     with_each_shard_by_database(Account, :update_all_update_account_associations)
   end
 
-  Delayed::Periodic.cron 'StreamItem.destroy_stream_items', '45 11 * * *' do
+  Delayed::Periodic.cron 'StreamItem.destroy_stream_items', '45 */6 * * *' do
     with_each_shard_by_database(StreamItem, :destroy_stream_items_using_setting)
   end
 
@@ -143,6 +143,10 @@ Rails.configuration.after_initialize do
     with_each_shard_by_database(DelayedMessageScrubber, :scrub)
   end
 
+  Delayed::Periodic.cron 'ConversationBatchScrubber.scrub_all', '0 2 * * *' do
+    with_each_shard_by_database(ConversationBatchScrubber, :scrub)
+  end
+
   Delayed::Periodic.cron 'BounceNotificationProcessor.process', '*/5 * * * *' do
     DatabaseServer.send_in_each_region(
       BounceNotificationProcessor,
@@ -169,19 +173,27 @@ Rails.configuration.after_initialize do
     with_each_shard_by_database(Version::Partitioner, :process)
   end
 
-  if AccountAuthorizationConfig::SAML.enabled?
-    Delayed::Periodic.cron 'AccountAuthorizationConfig::SAML::MetadataRefresher.refresh_providers', '15 0 * * *' do
-      with_each_shard_by_database(AccountAuthorizationConfig::SAML::MetadataRefresher,
+  if AuthenticationProvider::SAML.enabled?
+    Delayed::Periodic.cron 'AuthenticationProvider::SAML::MetadataRefresher.refresh_providers', '15 0 * * *' do
+      with_each_shard_by_database(AuthenticationProvider::SAML::MetadataRefresher,
                                   :refresh_providers)
     end
 
-    AccountAuthorizationConfig::SAML::Federation.descendants.each do |federation|
-      Delayed::Periodic.cron "AccountAuthorizationConfig::SAML::#{federation.class_name}.refresh_providers", '45 0 * * *' do
+    AuthenticationProvider::SAML::Federation.descendants.each do |federation|
+      Delayed::Periodic.cron "AuthenticationProvider::SAML::#{federation.class_name}.refresh_providers", '45 0 * * *' do
         DatabaseServer.send_in_each_region(federation,
                                     :refresh_providers,
-                                    singleton: "AccountAuthorizationConfig::SAML::#{federation.class_name}.refresh_providers")
+                                    singleton: "AuthenticationProvider::SAML::#{federation.class_name}.refresh_providers")
       end
     end
+  end
+
+  Delayed::Periodic.cron 'SisBatchErrors.cleanup_old_errors', '*/15 * * * *', priority: Delayed::LOW_PRIORITY do
+    with_each_shard_by_database(SisBatchError, :cleanup_old_errors)
+  end
+
+  Delayed::Periodic.cron 'AccountReport.delete_old_rows_and_runners', '*/15 * * * *', priority: Delayed::LOW_PRIORITY do
+    with_each_shard_by_database(AccountReport, :delete_old_rows_and_runners)
   end
 
   Delayed::Periodic.cron 'EnrollmentState.recalculate_expired_states', '*/5 * * * *', priority: Delayed::LOW_PRIORITY do
@@ -190,5 +202,13 @@ Rails.configuration.after_initialize do
 
   Delayed::Periodic.cron 'MissingPolicyApplicator.apply_missing_deductions', '*/5 * * * *', priority: Delayed::LOW_PRIORITY do
     with_each_shard_by_database(MissingPolicyApplicator, :apply_missing_deductions)
+  end
+
+  Delayed::Periodic.cron 'Assignment.clean_up_duplicating_assignments', '*/5 * * * *', priority: Delayed::LOW_PRIORITY do
+    with_each_shard_by_database(Assignment, :clean_up_duplicating_assignments)
+  end
+
+  Delayed::Periodic.cron 'abandoned job cleanup', '*/10 * * * *' do
+    Delayed::Worker::HealthCheck.reschedule_abandoned_jobs
   end
 end

@@ -17,7 +17,6 @@
 #
 
 # @API CommMessages
-# @beta
 #
 # API for accessing the messages (emails, sms, twitter, etc) that have
 # been sent to a user.
@@ -104,7 +103,7 @@ class CommMessagesApiController < ApplicationController
 
   # @API List of CommMessages for a user
   #
-  # Retrieve messages sent to a user.
+  # Retrieve a paginated list of messages sent to a user.
   #
   # @argument user_id [Required, String]
   #   The user id for whom you want to retrieve CommMessages

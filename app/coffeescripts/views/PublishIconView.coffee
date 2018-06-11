@@ -16,7 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 define [
-  'compiled/views/PublishButtonView',
+  './PublishButtonView',
   'underscore'
 ], (PublishButtonView, _) ->
 
@@ -27,6 +27,9 @@ define [
 
     tagName: 'span'
     className: 'publish-icon'
+
+    # This value allows the text to include the item title
+    @optionProperty 'title'
 
     # These values allow the default text to be overridden if necessary
     @optionProperty 'publishText'

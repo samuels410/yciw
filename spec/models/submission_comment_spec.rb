@@ -33,7 +33,7 @@ describe SubmissionComment do
   end
 
   it "should create a new instance given valid attributes" do
-    SubmissionComment.create!(@valid_attributes)
+    expect { SubmissionComment.create!(@valid_attributes) }.not_to raise_error
   end
 
   describe 'notifications' do
@@ -155,6 +155,24 @@ This text has a http://www.google.com link in it...
     expect(@item.data.submission_comments.target).to eq [] # not stored on the stream item
     expect(@item.data.submission_comments).to eq [@comment] # but we can still get them
     expect(@item.stream_item_instances.first.read?).to be_truthy
+  end
+
+  it "should mark last_comment_at on the submission" do
+    prepare_test_submission
+    student_comment = @submission.add_comment(:author => @submission.user, :comment => "some comment")
+    expect(@submission.reload.last_comment_at).to be_nil
+
+    draft_comment = @submission.add_comment(:author => @teacher, :comment => "some comment", :draft_comment => true)
+    expect(@submission.reload.last_comment_at).to be_nil
+
+    frd_comment = @submission.add_comment(:author => @teacher, :comment => "some comment")
+    expect(@submission.reload.last_comment_at.to_i).to eq frd_comment.created_at.to_i
+
+    draft_comment.update_attributes(:draft => false, :created_at => 2.days.from_now) # should re-run after update
+    expect(@submission.reload.last_comment_at.to_i).to eq draft_comment.created_at.to_i
+
+    draft_comment.destroy # should re-run after destroy
+    expect(@submission.reload.last_comment_at.to_i).to eq frd_comment.created_at.to_i
   end
 
   it "should not create a stream item for a provisional comment" do
@@ -451,6 +469,39 @@ This text has a http://www.google.com link in it...
           change { @submission_comment.submission.reload.submission_comments_count }.
             from(1).to(2)
         )
+      end
+    end
+  end
+
+  describe "#edited_at" do
+    before(:once) do
+      @comment = SubmissionComment.create!(@valid_attributes)
+    end
+
+    it "is nil for newly-created submission comments" do
+      expect(@comment.edited_at).to be_nil
+    end
+
+    it "remains nil if the submission comment is updated but the 'comment' attribute is unchanged" do
+      @comment.update!(draft: true, hidden: true)
+      expect(@comment.edited_at).to be_nil
+    end
+
+    it "is set if the 'comment' attribute is updated on the submission comment" do
+      now = Time.zone.now
+      Timecop.freeze(now) { @comment.update!(comment: "changing the comment!") }
+      expect(@comment.edited_at).to eql now
+    end
+
+    it "is updated on subsequent changes to the 'comment' attribute" do
+      now = Time.zone.now
+      Timecop.freeze(now) { @comment.update!(comment: "changing the comment!") }
+
+      later = 2.minutes.from_now(now)
+      Timecop.freeze(later) do
+        expect { @comment.update!(comment: "and again, changing it!") }.to change {
+          @comment.edited_at
+        }.from(now).to(later)
       end
     end
   end

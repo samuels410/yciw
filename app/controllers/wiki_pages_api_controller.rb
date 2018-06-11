@@ -168,7 +168,7 @@ class WikiPagesApiController < ApplicationController
   #     curl -X DELETE -H 'Authorization: Bearer <token>' \
   #     https://<canvas>/api/v1/courses/123/pages/14/duplicate
   #
-  # @returns the page that was created
+  # @returns Page
   def duplicate
     return unless authorized_action(@page, @current_user, :create)
     if @page.deleted?
@@ -218,7 +218,7 @@ class WikiPagesApiController < ApplicationController
 
   # @API List pages
   #
-  # List the wiki pages associated with a course or group
+  # A paginated list of the wiki pages associated with a course or group
   #
   # @argument sort [String, "title"|"created_at"|"updated_at"]
   #   Sort results by this field.
@@ -263,11 +263,14 @@ class WikiPagesApiController < ApplicationController
           'wiki_pages.created_at'
         when 'updated_at'
           'wiki_pages.updated_at'
-        else
-          'wiki_pages.id'
       end
-      order_clause += ' DESC' if params[:order] == 'desc'
-      scope = scope.order(order_clause)
+      if order_clause
+        order_clause += ' DESC' if params[:order] == 'desc'
+        scope = scope.order(WikiPage.send(:sanitize_sql, order_clause))
+      end
+      id_clause = "wiki_pages.id"
+      id_clause += ' DESC' if params[:order] == 'desc'
+      scope = scope.order(id_clause)
 
       wiki_pages = Api.paginate(scope, self, pages_route)
 
@@ -430,7 +433,7 @@ class WikiPagesApiController < ApplicationController
 
   # @API List revisions
   #
-  # List the revisions of a page. Callers must have update rights on the page in order to see page history.
+  # A paginated list of the revisions of a page. Callers must have update rights on the page in order to see page history.
   #
   # @example_request
   #     curl -H 'Authorization: Bearer <token>' \

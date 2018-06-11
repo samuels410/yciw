@@ -212,7 +212,7 @@ describe "dashboard" do
       expect(messages[1].text).to eq a2.message
     end
 
-    it "should interpolate the user's domain in global notifications", priority: "1", test_id: 215583 do
+    it "should interpolate the user's domain in global notifications" do
       announcement = @course.account.announcements.create!(:message => "blah blah http://random-survey-startup.ly/?some_GET_parameter_by_which_to_differentiate_results={{ACCOUNT_DOMAIN}}",
                                                            :subject => 'test',
                                                            :start_at => Date.today,
@@ -222,7 +222,7 @@ describe "dashboard" do
       expect(fj("#dashboard .account_notification .notification_message").text).to eq announcement.message.gsub("{{ACCOUNT_DOMAIN}}", @course.account.domain)
     end
 
-    it "should interpolate the user's id in global notifications", priority: "1", test_id: 215584 do
+    it "should interpolate the user's id in global notifications" do
       announcement = @course.account.announcements.create!(:message => "blah blah http://random-survey-startup.ly/?surveys_are_not_really_anonymous={{CANVAS_USER_ID}}",
                                                            :subject => 'test',
                                                            :start_at => Date.today,
@@ -265,9 +265,10 @@ describe "dashboard" do
 
       it "should display course name in course menu", priority: "1", test_id: 215586 do
         f('#global_nav_courses_link').click
-        expect(fj(".ic-NavMenu__headline:contains('Courses')")).to be_displayed
+        expect(driver.current_url).not_to match(/\/courses$/)
+        expect(fj("[aria-label='Global navigation tray'] h2:contains('Courses')")).to be_displayed
         wait_for_ajax_requests
-        expect(fj(".ic-NavMenu-list-item a:contains('#{@course.name}')")).to be_displayed
+        expect(fj("[aria-label='Global navigation tray'] a:contains('#{@course.name}')")).to be_displayed
       end
 
       it "should display student groups in header nav", priority: "2", test_id: 215587 do
@@ -281,10 +282,10 @@ describe "dashboard" do
         get "/"
 
         f('#global_nav_groups_link').click
-        expect(fj(".ic-NavMenu__headline:contains('Groups')")).to be_displayed
+        expect(fj("[aria-label='Global navigation tray'] h2:contains('Groups')")).to be_displayed
         wait_for_ajax_requests
 
-        list = fj(".ic-NavMenu-list-item")
+        list = fj("[aria-label='Global navigation tray']")
         expect(list).to include_text(group.name)
         expect(list).to_not include_text(other_group.name)
       end
@@ -293,14 +294,9 @@ describe "dashboard" do
         expect(f('#global_nav_courses_link').attribute('href')).to match(/\/courses$/)
       end
 
-      it "should only open the courses menu when clicking the courses nav item", priority: "1", test_id: 215613 do
-        f('#global_nav_courses_link').click
-        expect(driver.current_url).not_to match(/\/courses$/)
-      end
-
       it "should go to a course when clicking a course link from the menu", priority: "1", test_id: 215614 do
         f('#global_nav_courses_link').click
-        fj(".ic-NavMenu-list-item a:contains('#{@course.name}')").click
+        fj("[aria-label='Global navigation tray'] li a:contains('#{@course.name}')").click
         expect(driver.current_url).to match "/courses/#{@course.id}"
       end
     end
@@ -323,6 +319,7 @@ describe "dashboard" do
     end
 
     it "should end conferences from stream", priority: "1", test_id: 216355 do
+      skip_if_safari(:alert)
       PluginSetting.create!(:name => "wimba", :settings => {"domain" => "wimba.instructure.com"})
 
       course_with_teacher_logged_in
@@ -383,8 +380,8 @@ describe "dashboard" do
       get "/"
 
       f('#global_nav_courses_link').click
-      expect(fj(".ic-NavMenu__headline:contains('Courses')")).to be_displayed
-      expect(f(".ic-NavMenu__link-list")).not_to include_text(c1.name)
+      expect(fj("[aria-label='Global navigation tray'] h2:contains('Courses')")).to be_displayed
+      expect(f("[aria-label='Global navigation tray']")).not_to include_text(c1.name)
     end
 
     it "should show recent feedback and it should work", priority: "1", test_id: 216373 do
@@ -420,7 +417,7 @@ describe "dashboard" do
         course_with_teacher({:user => @user, :active_course => true, :active_enrollment => true})
         get "/"
         f('#global_nav_courses_link').click
-        expect(fj('.ic-NavMenu-list-item a:contains("All Courses")')).to be_present
+        expect(fj('[aria-label="Global navigation tray"] a:contains("All Courses")')).to be_present
       end
     end
   end

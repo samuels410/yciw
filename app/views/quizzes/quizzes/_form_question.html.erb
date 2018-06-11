@@ -16,7 +16,11 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 %>
 
-<% question_bank_id ||= "" %>
+<% question_bank_id ||= ""
+  object_is_locked = !!js_env.dig(:MASTER_COURSE_DATA, "is_master_course_child_content") &&
+                     !!js_env.dig(:MASTER_COURSE_DATA, "restricted_by_master_course")
+  points_are_locked = object_is_locked && js_env.dig(:MASTER_COURSE_DATA, "master_course_restrictions", :points)
+%>
 
 <form id="question_form_template" class="question_form" style="display: none;">
 <div class="question">
@@ -39,8 +43,8 @@
       <option value="text_only_question"><%= t('question_type.text_only', "Text (no question)") %></option>
     </select>
     <span class="question_points_holder">
-      <span style="padding-left: 20px;"><%= before_label :points, 'pts' %></span>
-      <input class="float_value" type="text" style="width: 25px; min-width: 0;" name="question_points" aria-label="<%= t "label.question.points", "Question point value" %>"/>
+      <span style="padding-<%= direction('left') %>: 20px;"><%= before_label :points, 'pts' %></span>
+      <input class="float_value" type="text" style="width: 25px; min-width: 0;" name="question_points" aria-label="<%= t "label.question.points", "Question point value" %>" <%= 'readonly' if points_are_locked %>/>
     </span>
   </div>
   <div class="links">
@@ -121,7 +125,7 @@
       <%= t('explanations.multi_answer_sets', "In the box below, every place you want to show an answer box, type a reference word (no spaces) surrounded by brackets") %><br/>
       (<%= t(:multi_answer_sets_example, 'i.e. "Roses are [color1], violets are [color2]"') %>)
     </div>
-    <div style="float: right; margin-right: 10%; font-size: 0.8em;">
+    <div style="float: <%= direction('right') %>; margin-<%= direction('right') %>: 10%; font-size: 0.8em;">
       <a href="#" class="toggle_question_content_views_link"><%= t '#editor.switch_editor_html', "HTML Editor" %></a>
       <a href="#" class="toggle_question_content_views_link" style="display:none;"><%= t '#editor.switch_editor_rich_text', "Rich Content Editor" %></a>
     </div>
@@ -182,7 +186,10 @@
       </div>
       <div class="equation_content variables_specified formulas_specified">
         <label class="screenreader-only" for="combinations_input"><%= t("Possible combination count") %></label>
-        <%= t(:offer_combinations, "Offer %{how_many} possible value combinations (max %{max_combinations})", :how_many => raw('<input id="combinations_input" type="text" class="combination_count combinations_option" style="width: 30px;"/>'), :max_combinations => @js_env[:quiz_max_combination_count]) %><br/>
+        <%= t(:offer_combinations, "Offer %{how_many} possible value combinations (max %{max_combinations})",
+              :how_many => raw('<input id="combinations_input" type="text" class="combination_count combinations_option" style="width: 30px;"/>'),
+              :max_combinations => js_env&.dig(:quiz_max_combination_count)) %>
+        <br/>
         <label class="screenreader-only" for="tolerance_input"><%= t("Tolerance value") %></label>
         <%= t(:allow_tolerance, "allow an error margin of +/- %{tolerance}", :tolerance => raw('<input id="tolerance_input" type="text" placeholder="2.0 or 10%" class="combination_answer_tolerance" style="width: 30px;" value="0"/>')) %>
         <button type="button" class="btn compute_combinations combinations_option"><%= t('buttons.generate', "Generate") %></button>
@@ -199,7 +206,7 @@
     </div>
     <div class="form_answers">
     </div>
-    <div style="text-align: right;" class="add_answer">
+    <div style="text-align: <%= direction('right') %>;" class="add_answer">
       <a href="#" class="add_answer_link icon-add"><%= t('links.add_another_answer', "Add Another Answer") %></a>
     </div>
     <div class="matching_answer_incorrect_matches_holder" style="margin-top: 15px;">
@@ -211,7 +218,7 @@
     </div>
     <div class="missing_word_after_answer" style="margin-top: 15px;">
       <b><%= before_label(:missing_word_after, "Text to go after answers") %></b>
-      <div style="float: right; margin-right: 10%; font-size: 0.8em;">
+      <div style="float: <%= direction('right') %>; margin-<%= direction('right') %>: 10%; font-size: 0.8em;">
         <a href="#" class="toggle_text_after_answers_link"><%= t '#editor.switch_editor_html', "HTML Editor" %></a>
         <a href="#" class="toggle_text_after_answers_link" style="display:none;"><%= t '#editor.switch_editor_visual', "Rich Content Editor" %></a>
       </div>

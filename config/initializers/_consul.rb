@@ -16,7 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 
-# this is nmed _consul.rb so that other initializers (cache_store.rb in particular)
+# this is named _consul.rb so that other initializers (cache_store.rb in particular)
 # can talk to Consul
 
 module ConsulInitializer
@@ -29,20 +29,13 @@ module ConsulInitializer
       end
     end
   end
-
-  def self.fallback_to(settings_hash)
-    if settings_hash.present?
-      Canvas::DynamicSettings.fallback_data = settings_hash.with_indifferent_access
-    end
-  end
-
 end
 
 settings = ConfigFile.load("consul")
 ConsulInitializer.configure_with(settings)
-fallback_settings = ConfigFile.load("dynamic_settings")
-ConsulInitializer.fallback_to(fallback_settings)
 
-Canvas::Reloader.on_reload do
+handle_fallbacks = -> do
   Canvas::DynamicSettings.reset_cache!
 end
+handle_fallbacks.call
+Canvas::Reloader.on_reload(&handle_fallbacks)

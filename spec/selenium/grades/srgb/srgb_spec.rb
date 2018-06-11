@@ -17,12 +17,12 @@
 #
 
 require_relative '../../helpers/gradebook_common'
-require_relative '../page_objects/srgb_page'
-require_relative '../page_objects/grading_curve_page'
+require_relative '../pages/srgb_page'
+require_relative '../pages/grading_curve_page'
 
 describe "Screenreader Gradebook" do
   include_context 'in-process server selenium tests'
-  include_context 'reusable_course'
+  include_context 'reusable_gradebook_course'
   include GradebookCommon
 
   let(:default_gradebook) { "/courses/#{@course.id}/gradebook/change_gradebook_version?version=2" }
@@ -161,6 +161,7 @@ describe "Screenreader Gradebook" do
   end
 
   it 'sets default grade', priority: '2', test_id: 615689 do
+    skip_if_safari(:alert)
     num_of_students = 2
     simple_setup(num_of_students)
     SRGB.visit(@course.id)
@@ -375,6 +376,7 @@ describe "Screenreader Gradebook" do
     end
 
     it "should focus on accessible elements when setting default grades", priority: '1', test_id: 209991 do
+      skip_if_safari(:alert)
       SRGB.visit(@course.id)
       SRGB.select_assignment(@second_assignment)
 
@@ -440,6 +442,7 @@ describe "Screenreader Gradebook" do
 
   context "curving grades" do
     it "curves grades", priority: '1',test_id: 615690 do
+      skip_if_safari(:alert)
       basic_point_setup 3
 
       grades = [12,10,11]

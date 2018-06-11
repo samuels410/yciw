@@ -50,10 +50,10 @@ define([
     ok(setLocationStub.withArgs(url).calledOnce);
   });
 
-  test('#handleGradeHistorySelect calls setLocation', function () {
+  test('#handleGradebookHistorySelect calls setLocation', function () {
     const setLocationStub = this.stub(GradebookMenu.prototype, 'setLocation');
     this.wrapper.find('button').simulate('click');
-    document.querySelector('[data-menu-item-id="grade-history"]').click();
+    document.querySelector('[data-menu-item-id="gradebook-history"]').click();
     const url = `${this.wrapper.props().courseUrl}/gradebook/history`;
     ok(setLocationStub.withArgs(url).calledOnce);
   });
@@ -91,11 +91,11 @@ define([
   });
 
   test('Menu Item Separator is third in the PopoverMenu', function () {
-    equal(this.menuItems[2].getAttribute('role'), 'separator');
+    equal(this.menuItems[2].getAttribute('role'), 'presentation');
   });
 
-  test('Grade History Menu Item is fourth in the PopoverMenu', function () {
-    equal(this.menuItems[3].textContent.trim(), 'Grade History…');
+  test('Gradebook History Menu Item is fourth in the PopoverMenu', function () {
+    equal(this.menuItems[3].textContent.trim(), 'Gradebook History…');
   });
 
   QUnit.module('Variant DefaultGradebook with Learning Mastery Disabled', {
@@ -121,11 +121,11 @@ define([
   });
 
   test('Menu Item Separator is second in the PopoverMenu', function () {
-    equal(this.menuItems[1].getAttribute('role'), 'separator');
+    equal(this.menuItems[1].getAttribute('role'), 'presentation');
   });
 
-  test('Grade History Menu Item is second in the PopoverMenu', function () {
-    equal(this.menuItems[2].textContent.trim(), 'Grade History…');
+  test('Gradebook History Menu Item is second in the PopoverMenu', function () {
+    equal(this.menuItems[2].textContent.trim(), 'Gradebook History…');
   });
 
   QUnit.module('Variant DefaultGradebookLearningMastery with Learning Mastery Enabled', {
@@ -165,10 +165,10 @@ define([
   });
 
   test('Menu Item Separator is third in the PopoverMenu', function () {
-    equal(this.menuItems[2].getAttribute('role'), 'separator');
+    equal(this.menuItems[2].getAttribute('role'), 'presentation');
   });
 
-  test('Grade History Menu Item is fourth in the PopoverMenu', function () {
-    equal(this.menuItems[3].textContent.trim(), 'Grade History…');
+  test('Gradebook History Menu Item is fourth in the PopoverMenu', function () {
+    equal(this.menuItems[3].textContent.trim(), 'Gradebook History…');
   });
 });

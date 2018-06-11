@@ -26,20 +26,27 @@ class DeveloperKey < ActiveRecord::Base
   belongs_to :account
 
   has_many :page_views
-  has_many :access_tokens
+  has_many :access_tokens, -> { where(:workflow_state => "active") }
+  has_many :developer_key_account_bindings, inverse_of: :developer_key, dependent: :destroy
 
   has_one :tool_consumer_profile, :class_name => 'Lti::ToolConsumerProfile'
+  serialize :scopes, Array
 
   before_create :generate_api_key
   before_create :set_auto_expire_tokens
+  before_create :set_visible
   before_save :nullify_empty_icon_url
   before_save :protect_default_key
   after_save :clear_cache
+  after_create :create_default_account_binding
+  before_validation :set_require_scopes
+  before_validation :validate_scopes!
 
   validates_as_url :redirect_uri, allowed_schemes: nil
   validate :validate_redirect_uris
 
   scope :nondeleted, -> { where("workflow_state<>'deleted'") }
+  scope :visible, -> { where(visible: true) }
 
   workflow do
     state :active do
@@ -97,9 +104,16 @@ class DeveloperKey < ActiveRecord::Base
     get_special_key("User-Generated")
   end
 
+  def set_visible
+    self.visible = !site_admin?
+    true
+  end
+
   def authorized_for_account?(target_account)
-    return true unless account_id
-    target_account.id == account_id
+    return false unless binding_on_in_account?(target_account)
+    return true if account_id.blank?
+    return true if target_account.id == account_id
+    target_account.account_chain_ids.include?(account_id)
   end
 
   def account_name
@@ -178,5 +192,57 @@ class DeveloperKey < ActiveRecord::Base
       @sns = Aws::SNS::Client.new(settings) if settings
     end
     @sns
+  end
+
+  def account_binding_for(binding_account)
+    # If no account was specified return nil to prevent unneeded searching
+    return if binding_account.blank?
+
+    # First check for explicitly set bindings starting with site admin and working down
+    binding = DeveloperKeyAccountBinding.find_site_admin_cached(self)
+    return binding if binding.present?
+
+    # Search for bindings in the account chain starting with the highest account
+    accounts = Account.account_chain_ids(binding_account).reverse
+    binding = DeveloperKeyAccountBinding.find_in_account_priority(accounts, self.id)
+
+    # If no explicity set bindings were found check for 'allow' bindings
+    binding || DeveloperKeyAccountBinding.find_in_account_priority(accounts.reverse, self.id, false)
+  end
+
+  private
+
+  def binding_on_in_account?(target_account)
+    return true unless target_account.root_account.feature_enabled?(:developer_key_management_ui_rewrite)
+    account_binding_for(target_account)&.workflow_state == DeveloperKeyAccountBinding::ON_STATE
+  end
+
+  def api_token_scoping_on?
+    owner_account.root_account.feature_enabled?(:api_token_scoping)
+  end
+
+  def create_default_account_binding
+    owner_account.developer_key_account_bindings.create!(developer_key: self)
+  end
+
+  def owner_account
+    account || Account.site_admin
+  end
+
+  def set_require_scopes
+    return unless api_token_scoping_on?
+    self.require_scopes = self.scopes.present?
+  end
+
+  def validate_scopes!
+    return true unless api_token_scoping_on?
+    return true if self.scopes.empty?
+    invalid_scopes = self.scopes - TokenScopes::ALL_SCOPES
+    return true if invalid_scopes.empty?
+    self.errors[:scopes] << "cannot contain #{invalid_scopes.join(', ')}"
+  end
+
+  def site_admin?
+    self.account_id.nil?
   end
 end

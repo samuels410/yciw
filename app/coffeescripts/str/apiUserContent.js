@@ -37,6 +37,7 @@ const apiUserContent = {
         id='media_comment_${htmlEscape($(node).data('media_comment_id'))}'
         data-media_comment_type='${htmlEscape($(node).data('media_comment_type'))}'
         class='instructure_inline_media_comment ${htmlEscape(node.nodeName.toLowerCase())}_comment'
+        data-alt='${htmlEscape($(node).attr("data-alt"))}'
       />`
     )
     $link.html($(node).html())
@@ -56,7 +57,7 @@ const apiUserContent = {
     })
 
     // remove any embed tags inside an object tag, to avoid repeated translations
-    $dummy.find('object.instructure_user_content embed').remove()
+    $dummy.find('object.instructure_user_content:not(#kaltura_player) embed').remove()
 
     // if we aren't actually displaying this content but are instead putting
     // it into a RTE, we want to preserve the object/embed tags

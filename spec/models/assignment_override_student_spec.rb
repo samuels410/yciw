@@ -32,7 +32,7 @@ describe AssignmentOverrideStudent do
       expect(@override_student).to be_valid
     end
 
-    it "should always make assignment match the overriden assignment" do
+    it "should always make assignment match the overridden assignment" do
       assignment = assignment_model
       @override_student.assignment = assignment
       expect(@override_student).to be_valid
@@ -83,7 +83,11 @@ describe AssignmentOverrideStudent do
 
     it 'on destroy, recalculates cached due dates on the assignment' do
       override_student = @assignment_override.assignment_override_students.create!(user: @student)
-      expect(DueDateCacher).to receive(:recompute).with(@assignment)
+
+      # Expect DueDateCacher to be called once from AssignmentOverrideStudent after it's destroyed and another time
+      # after it realizes that its corresponding AssignmentOverride can also be destroyed because it now has an empty
+      # set of students.  Hence the specific nature of this expectation.
+      expect(DueDateCacher).to receive(:recompute).with(@assignment).twice
       override_student.destroy
     end
   end
@@ -121,7 +125,7 @@ describe AssignmentOverrideStudent do
   end
 
   def adhoc_override_with_student
-    student_in_course
+    student_in_course(:active_all => true)
     @assignment = assignment_model(:course => @course)
     @ao = AssignmentOverride.new()
     @ao.assignment = @assignment
@@ -137,25 +141,68 @@ describe AssignmentOverrideStudent do
   it "should call destroy its override if its the only student and is deleted" do
     adhoc_override_with_student
 
-    expect(@ao.workflow_state).to eq("active")
+    expect(@ao).to be_active
     @override_student.destroy
-    @ao.reload
-
-    expect(@ao.workflow_state).to eq("deleted")
+    expect(@ao.reload).to be_deleted
   end
 
   describe "clean_up_for_assignment" do
-    it "if callbacks arent run clean_up_for_assignment should delete invalid overrides" do
+    it "if callbacks aren't run clean_up_for_assignment should delete invalid overrides" do
       adhoc_override_with_student
-      #no callbacks
-      Score.where(enrollment_id: @user.enrollments).delete_all
+      Score.where(enrollment_id: @user.enrollments).each(&:destroy_permanently!)
       @user.enrollments.each(&:destroy_permanently!)
 
-      expect(@ao.workflow_state).to eq("active")
+      expect(@override_student).to be_active
+      expect(@ao).to be_active
       AssignmentOverrideStudent.clean_up_for_assignment(@assignment)
-      @ao.reload
 
-      expect(@ao.workflow_state).to eq("deleted")
+      expect(@override_student.reload).to be_deleted
+      expect(@ao.reload).to be_deleted
+    end
+
+    it "should delete overrides for inactive users" do
+      adhoc_override_with_student
+      @user.enrollments.each(&:deactivate)
+
+      expect(@override_student).to be_active
+      AssignmentOverrideStudent.clean_up_for_assignment(@assignment)
+      expect(@override_student.reload).to be_deleted
+    end
+
+    it "should delete overrides for conclude/completed users" do
+      adhoc_override_with_student
+      @user.enrollments.each(&:conclude)
+
+      expect(@override_student).to be_active
+      AssignmentOverrideStudent.clean_up_for_assignment(@assignment)
+      expect(@override_student.reload).to be_deleted
+    end
+
+    it "should not broadcast notifications when processing a cleanup" do
+      Timecop.freeze(1.day.ago) do
+        adhoc_override_with_student
+      end
+      Enrollment.where(:id => @enrollment).update_all(:workflow_state => "deleted") # skip callbacks
+
+      notification_name = "Assignment Due Date Override Changed"
+      @notification = Notification.create! :name => notification_name, :category => "TestImmediately"
+      teacher_in_course(active_all: true)
+      notification_policy_model
+
+      expect(DelayedNotification).to_not receive(:process)
+      AssignmentOverrideStudent.clean_up_for_assignment(@assignment)
+      expect(@ao.reload).to be_deleted
+    end
+
+    it "trying to update an orphaned override student (one without an enrollment) removes it" do
+      adhoc_override_with_student
+      Score.where(enrollment_id: @user.enrollments).each(&:destroy_permanently!)
+      @user.enrollments.each(&:destroy_permanently!)
+
+      # using update instead of touch in order to trigger validations
+      expect { AssignmentOverrideStudent.find(@override_student.id).update(updated_at: Time.zone.now) }.to change {
+        AssignmentOverrideStudent.where(id: @override_student.id).active.count
+      }.from(1).to(0)
     end
   end
 

@@ -324,6 +324,27 @@ describe AppointmentGroupsController, type: :request do
     expect(json['workflow_state']).to eql 'pending'
   end
 
+  it 'should forbid creating an appointment group for a concluded course' do
+    course1 = course_factory(active_all: true)
+    course1.save!
+    course2 = course_factory(active_all: true)
+    course2.save!
+    course2.complete!
+    course2.save!
+    appointment_group_params = {
+      :appointment_group => {
+        :context_codes => [course1.asset_string, course2.asset_string],
+        :title => "bad appointment group",
+        :new_appointments => {'0' => ["2012-01-01 12:00:00", "2012-01-01 13:00:00"] }
+      }
+    }
+    json = api_call(:post, "/api/v1/appointment_groups",
+      {:controller => 'appointment_groups', :action => 'create', :format => 'json'},
+      appointment_group_params, {}, :expected_status => 400)
+    expect(json['error']).to eql "cannot create an appointment group for a concluded course"
+  end
+
+
   it 'should create a new appointment group with a sub_context' do
     json = api_call(:post, "/api/v1/appointment_groups",
                       {:controller => 'appointment_groups', :action => 'create', :format => 'json'},
@@ -381,6 +402,27 @@ describe AppointmentGroupsController, type: :request do
     ag = AppointmentGroup.create!(:title => "something", :new_appointments => [["2012-01-01 12:00:00", "2012-01-01 13:00:00"]], :contexts => [@course])
     json = api_call(:delete, "/api/v1/appointment_groups/#{ag.id}",
                       {:controller => 'appointment_groups', :action => 'destroy', :format => 'json', :id => ag.id.to_s})
+    expect(response).to be_success
+    expect(json.keys.sort).to eql expected_fields
+    expect(json['workflow_state']).to eql 'deleted'
+    expect(ag.reload).to be_deleted
+  end
+
+  it 'should delete an appointment group with appointments' do
+    ag = AppointmentGroup.create!(:title => "something", :new_appointments => [["#{Time.now.year + 1}-01-01 12:00:00",
+                                                                                "#{Time.now.year + 1}-01-01 13:00:00"],
+                                                                               ["#{Time.now.year + 1}-01-01 13:00:00",
+                                                                                "#{Time.now.year + 1}-01-01 14:00:00"]], :contexts => [@course])
+    student_in_course(:course => @course, :active_all => true)
+    ag.appointments.first.reserve_for @student, @me
+    ag.appointments.last.reserve_for @student, @me
+
+    @user = @me
+
+    json = api_call(:delete, "/api/v1/appointment_groups/#{ag.id}",
+                      {:controller => 'appointment_groups', :action => 'destroy', :format => 'json', :id => ag.id.to_s})
+
+    expect(response).to be_success
     expect(json.keys.sort).to eql expected_fields
     expect(json['workflow_state']).to eql 'deleted'
     expect(ag.reload).to be_deleted
@@ -426,7 +468,7 @@ describe AppointmentGroupsController, type: :request do
       expect(json.first['reserved_times']).to include({"id" => event.id, "start_at" => event.start_at.iso8601, "end_at" => event.end_at.iso8601})
     end
   end
-  
+
   types = {
     'users' => proc {
       @ag = AppointmentGroup.create!(:title => "yay", :new_appointments => [["#{Time.now.year + 1}-01-01 12:00:00", "#{Time.now.year + 1}-01-01 13:00:00"], ["#{Time.now.year + 1}-01-01 13:00:00", "#{Time.now.year + 1}-01-01 14:00:00"]], :contexts => [@course])
@@ -498,14 +540,23 @@ describe AppointmentGroupsController, type: :request do
 
   describe "next_appointment" do
     before :once do
-      @ag1 = AppointmentGroup.create!(:title => "past", :contexts => [@course2], :new_appointments =>
-                                       [["#{Time.now.year - 1}-01-01 12:00:00", "#{Time.now.year - 1}-01-01 13:00:00"]])
+      @ag1 = AppointmentGroup.create!(
+        :title => "past",
+        :contexts => [@course2],
+        :new_appointments => [[1.year.ago, 1.year.ago + 1.hour]]
+      )
       @ag1.publish!
-      @ag2 = AppointmentGroup.create!(:title => "future1", :contexts => [@course2],
-                                      :participants_per_appointment => 1, :max_appointments_per_participant => 1,
-                                      :new_appointments =>
-                                       [["#{Time.now.year + 1}-01-01 12:00:00", "#{Time.now.year + 1}-01-01 13:00:00"],
-                                        ["#{Time.now.year + 1}-01-01 13:00:00", "#{Time.now.year + 1}-01-01 14:00:00"]])
+      one_year_from_now = 1.year.from_now
+      @ag2 = AppointmentGroup.create!(
+        :title => "future1",
+        :contexts => [@course2],
+        :participants_per_appointment => 1,
+        :max_appointments_per_participant => 1,
+        :new_appointments => [
+          [one_year_from_now, one_year_from_now + 1.hour],
+          [one_year_from_now + 1.hour, one_year_from_now + 2.hours]
+        ]
+      )
       @ag2.publish!
       @ag2.appointments.first.reserve_for(@student1, @me)
       @path = "/api/v1/appointment_groups/next_appointment?appointment_group_ids[]=#{@ag1.to_param}&appointment_group_ids[]=#{@ag2.to_param}"
@@ -523,6 +574,20 @@ describe AppointmentGroupsController, type: :request do
       @ag2.appointments.last.reserve_for(@student2, @me)
       json = api_call_as_user(@student2, :get, @path, @params)
       expect(json.length).to eq 0
+    end
+
+    it 'doesnt get confused by appointment groups with both past and future' do
+      ag3 = AppointmentGroup.create!(:title => "past and future", :contexts => [@course2],
+        :new_appointments => [
+          [1.month.ago, 1.month.ago + 30.minutes],
+          [1.month.from_now, 1.month.from_now + 30.minutes]
+        ])
+      ag3.publish!
+      @path += "&appointment_group_ids[]=#{ag3.to_param}"
+      @params[:appointment_group_ids].push(ag3.to_param)
+      json = api_call_as_user(@student2, :get, @path, @params)
+      expect(json.length).to eq 1
+      expect(json[0]['id']).to eq ag3.appointments.last.id
     end
   end
 end

@@ -16,30 +16,6 @@ def parallel_processes
 end
 
 namespace :canvas do
-  desc "Compresses static assets"
-  task :compress_assets do
-    assets = FileList.new('public/**/*.js', 'public/**/*.css')
-    mutex = Mutex.new
-    before_bytes = 0
-    after_bytes = 0
-    processed = 0
-
-    require 'parallel'
-
-    Parallel.each(assets, in_threads: parallel_processes, progress: 'compressing assets') do |asset|
-      asset_compressed = "#{asset}.gz"
-      unless File.exists?(asset_compressed)
-        `gzip --best --stdout "#{asset}" > "#{asset_compressed}"`
-        mutex.synchronize do
-          before_bytes += File::Stat.new(asset).size
-          after_bytes += File::Stat.new(asset_compressed).size
-          processed += 1
-        end
-      end
-    end
-    puts "Compressed #{processed} assets, #{before_bytes} -> #{after_bytes} bytes (#{"%.0f" % ((before_bytes.to_f - after_bytes.to_f) / before_bytes * 100)}% reduction)"
-  end
-
   desc "Compile javascript and css assets."
   task :compile_assets do |t, args|
 
@@ -56,6 +32,8 @@ namespace :canvas do
       }
     end
 
+    raise "Error running gulp rev" unless system('yarn run gulp rev')
+
     if compile_css
       # public/dist/brandable_css/brandable_css_bundles_with_deps.json needs
       # to exist before we run handlebars stuff, so we have to do this first
@@ -63,7 +41,6 @@ namespace :canvas do
     end
 
     require 'parallel'
-
     tasks = Hash.new
 
     if build_styleguide
@@ -77,7 +54,14 @@ namespace :canvas do
     generate_tasks = []
     generate_tasks << 'i18n:generate_js' if build_webpack
     build_tasks = []
-    build_tasks << 'js:webpack' if build_webpack
+    if build_webpack
+      # build dev bundles even in prod mode so you can debug with ?optimized_js=0 query string
+      # (except for on jenkins where we set JS_BUILD_NO_UGLIFY anyway so there's no need for an unminified fallback)
+      build_prod = ENV['RAILS_ENV'] == 'production' || ENV['USE_OPTIMIZED_JS'] == 'true' || ENV['USE_OPTIMIZED_JS'] == 'True'
+      dont_need_dev_fallback = build_prod && ENV['JS_BUILD_NO_UGLIFY']
+      build_tasks << 'js:webpack_development' unless dont_need_dev_fallback
+      build_tasks << 'js:webpack_production' if build_prod
+    end
 
     msg = "run " + (generate_tasks + build_tasks).join(", ")
     tasks[msg] = -> {
@@ -108,8 +92,6 @@ namespace :canvas do
     end
     combined_time = times.reduce(:+)
     puts "Finished compiling assets in #{real_time}. parallelism saved #{combined_time - real_time} (#{real_time.to_f / combined_time.to_f * 100.0}%)"
-
-    log_time("gulp rev") { Rake::Task['js:gulp_rev'].invoke }
   end
 
   desc "Just compile css and js for development"
@@ -118,6 +100,22 @@ namespace :canvas do
     ENV["COMPILE_ASSETS_STYLEGUIDE"] = "0"
     ENV["COMPILE_ASSETS_API_DOCS"] = "0"
     Rake::Task['canvas:compile_assets'].invoke
+  end
+
+  desc "Load config/dynamic_settings.yml into the configured consul cluster"
+  task :seed_consul => [:environment] do
+    def load_tree(root, tree)
+      tree.each do |node, subtree|
+        key = [root, node].compact.join('/')
+        if Hash === subtree
+          load_tree(key, subtree)
+        else
+          Imperium::KV.put(key, subtree, cas: 0)
+        end
+      end
+    end
+
+    load_tree(nil, ConfigFile.load('dynamic_settings'))
   end
 end
 
@@ -138,7 +136,9 @@ end
 namespace :db do
   desc "Shows pending db migrations."
   task :pending_migrations => :environment do
-    migrations = ActiveRecord::Migrator.migrations(ActiveRecord::Migrator.migrations_paths)
+    migrations = CANVAS_RAILS5_1 ?
+      ActiveRecord::Migrator.migrations(ActiveRecord::Migrator.migrations_paths) :
+      ActiveRecord::Base.connection.migration_context.migrations
     pending_migrations = ActiveRecord::Migrator.new(:up, migrations).pending_migrations
     pending_migrations.each do |pending_migration|
       tags = pending_migration.tags
@@ -149,7 +149,9 @@ namespace :db do
 
   desc "Shows skipped db migrations."
   task :skipped_migrations => :environment do
-    migrations = ActiveRecord::Migrator.migrations(ActiveRecord::Migrator.migrations_paths)
+    migrations = CANVAS_RAILS5_1 ?
+      ActiveRecord::Migrator.migrations(ActiveRecord::Migrator.migrations_paths) :
+      ActiveRecord::Base.connection.migration_context.migrations
     skipped_migrations = ActiveRecord::Migrator.new(:up, migrations).skipped_migrations
     skipped_migrations.each do |skipped_migration|
       tags = skipped_migration.tags
@@ -161,7 +163,9 @@ namespace :db do
   namespace :migrate do
     desc "Run all pending predeploy migrations"
     task :predeploy => [:environment, :load_config] do
-      migrations = ActiveRecord::Migrator.migrations(ActiveRecord::Migrator.migrations_paths)
+      migrations = CANVAS_RAILS5_1 ?
+        ActiveRecord::Migrator.migrations(ActiveRecord::Migrator.migrations_paths) :
+        ActiveRecord::Base.connection.migration_context.migrations
       migrations = migrations.select { |m| m.tags.include?(:predeploy) }
       ActiveRecord::Migrator.new(:up, migrations).migrate
     end

@@ -20,7 +20,7 @@ import I18n from 'i18n!external_tools'
 import _ from 'underscore'
 import React from 'react'
 import PropTypes from 'prop-types'
-import TextInput from 'jsx/external_apps/components/TextInput'
+import TextInput from '../../external_apps/components/TextInput'
 
 export default React.createClass({
     displayName: 'ConfigurationFormLti2',
@@ -56,6 +56,7 @@ export default React.createClass({
           <TextInput
             ref="registrationUrl"
             id="registrationUrl"
+            name="tool_consumer_url"
             defaultValue={this.props.registrationUrl}
             label={I18n.t('Registration URL')}
             hintText={I18n.t('Example: https://lti-tool-provider-example.herokuapp.com/register')}

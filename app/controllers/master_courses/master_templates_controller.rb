@@ -16,7 +16,6 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 # @API Blueprint Courses
-# @beta
 # Configure blueprint courses
 #
 # @model BlueprintTemplate
@@ -40,6 +39,15 @@
 #         "description": "Time when the last export was completed",
 #         "example": "2013-08-28T23:59:00-06:00",
 #         "type": "datetime"
+#        },
+#       "associated_course_count": {
+#         "description": "Number of associated courses for the template",
+#         "example": 3,
+#         "type": "integer"
+#        },
+#       "latest_migration": {
+#         "description": "Details of the latest migration",
+#         "type": "BlueprintMigration"
 #        }
 #     }
 #   }
@@ -424,7 +432,7 @@ class MasterCourses::MasterTemplatesController < ApplicationController
     max_records = Setting.get('master_courses_history_count', '150').to_i
     items = []
     Shackles.activate(:slave) do
-    (MasterCourses::ALLOWED_CONTENT_TYPES - ['AssignmentGroup']).each do |klass|
+    MasterCourses::CONTENT_TYPES_FOR_UNSYNCED_CHANGES.each do |klass|
       item_scope = case klass
       when 'Attachment'
         @course.attachments
@@ -462,7 +470,7 @@ class MasterCourses::MasterTemplatesController < ApplicationController
   # @API List blueprint migrations
   # @subtopic Blueprint Course History
   #
-  # Shows migrations for the template, starting with the most recent. This endpoint can be called on a
+  # Shows a paginated list of migrations for the template, starting with the most recent. This endpoint can be called on a
   # blueprint course. See also {api:MasterCourses::MasterTemplatesController#imports_index the associated course side}.
   #
   # @example_request
@@ -516,7 +524,7 @@ class MasterCourses::MasterTemplatesController < ApplicationController
   # @API List blueprint imports
   # @subtopic Associated Course History
   #
-  # Shows migrations imported into a course associated with a blueprint, starting with the most recent. See also
+  # Shows a paginated list of migrations imported into a course associated with a blueprint, starting with the most recent. See also
   # {api:MasterCourses::MasterTemplatesController#migrations_index the blueprint course side}.
   #
   # Use 'default' as the subscription_id to use the currently active blueprint subscription.
@@ -616,9 +624,7 @@ class MasterCourses::MasterTemplatesController < ApplicationController
   end
 
   def get_exceptions_by_subscription(subscriptions)
-    results = @mm.import_results.present? ?
-      @mm.import_results.values.index_by{|h| h[:subscription_id]} :
-      Hash[@mm.migration_results.where(:child_subscription_id => subscriptions).where.not(:results => nil).pluck(:child_subscription_id, :results)]
+    results = Hash[@mm.migration_results.where(:child_subscription_id => subscriptions).where.not(:results => nil).pluck(:child_subscription_id, :results)]
 
     exceptions = {}
     subscriptions.each do |sub|
@@ -667,6 +673,10 @@ class MasterCourses::MasterTemplatesController < ApplicationController
   end
 
   def change_classes(klass, columns)
+    # if we skipped it because it's deleted, there's no sense
+    # in going on and seeing if they also edited it first
+    return ['deleted'] if columns.include?("manually_deleted")
+    
     classes = []
     columns.each do |col|
       klass.restricted_column_settings.each do |k, v|

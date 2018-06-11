@@ -1,3 +1,21 @@
+#
+# Copyright (C) 2015 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+#
+
 require File.expand_path(File.dirname(__FILE__) + '/common')
 require File.expand_path(File.dirname(__FILE__) + '/helpers/files_common')
 require File.expand_path(File.dirname(__FILE__) + '/helpers/public_courses_context')
@@ -46,6 +64,7 @@ describe "better_file_browsing" do
       end
 
       it "should delete file", priority: "1", test_id: 133128 do
+        skip_if_safari(:alert)
         delete(0, :cog_icon)
         expect(f("body")).not_to contain_css('.ef-item-row')
       end
@@ -76,6 +95,7 @@ describe "better_file_browsing" do
 
     context "from toolbar menu" do
       it "should delete file from toolbar", priority: "1", test_id: 133105 do
+        skip_if_safari(:alert)
         get "/courses/#{@course.id}/files"
         delete(0, :toolbar_menu)
         expect(f("body")).not_to contain_css('.ef-item-row')
@@ -458,6 +478,13 @@ describe "better_file_browsing" do
       2.times { fj('.ef-plain-link span:contains("Size")').click }
       expect(ff('.ef-name-col__text')[0]).to include_text 'b_file.txt'
       expect(ff('.ef-name-col__text')[1]).to include_text 'example.pdf'
+    end
+
+    it "url-encodes sort header links" do
+      course_with_teacher_logged_in
+      folder = Folder.root_folders(@course).first.sub_folders.create!(name: 'eh?', context: @course)
+      get "/courses/#{@course.id}/files/folder/eh%3F"
+      expect(ff('.ef-plain-link').first.attribute('href')).to include '/files/folder/eh%3F?sort'
     end
   end
 end

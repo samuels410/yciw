@@ -21,7 +21,7 @@ import I18n from 'i18n!external_tools'
 import React from 'react'
 import PropTypes from 'prop-types'
 import Modal from 'react-modal'
-import store from 'jsx/external_apps/lib/ExternalAppsStore'
+import store from '../../external_apps/lib/ExternalAppsStore'
 
 export default React.createClass({
         displayName: 'Lti2ReregistrationUpdateModal',
@@ -66,7 +66,7 @@ export default React.createClass({
         },
 
         render() {
-            return(
+            return (
                 <Modal className="ReactModal__Content--canvas ReactModal__Content--mini-modal"
                        overlayClassName="ReactModal__Overlay--canvas"
                        isOpen={this.state.modalIsOpen}
@@ -98,7 +98,7 @@ export default React.createClass({
                         </div>
                     </div>
                 </Modal>
-            )
+            );
         }
 
     });

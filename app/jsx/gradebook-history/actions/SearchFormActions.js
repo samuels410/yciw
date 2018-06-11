@@ -16,11 +16,11 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import AssignmentApi from 'jsx/gradebook-history/api/AssignmentApi';
-import HistoryActions from 'jsx/gradebook-history/actions/HistoryActions';
-import HistoryApi from 'jsx/gradebook-history/api/HistoryApi';
-import UserApi from 'jsx/gradebook-history/api/UserApi';
-import environment from 'jsx/gradebook-history/environment';
+import AssignmentApi from '../../gradebook-history/api/AssignmentApi';
+import HistoryActions from '../../gradebook-history/actions/HistoryActions';
+import HistoryApi from '../../gradebook-history/api/HistoryApi';
+import UserApi from '../../gradebook-history/api/UserApi';
+import environment from '../../gradebook-history/environment';
 
 const CLEAR_RECORDS = 'CLEAR_RECORDS';
 const FETCH_RECORDS_START = 'FETCH_RECORDS_START';
@@ -83,10 +83,10 @@ const SearchFormActions = {
     };
   },
 
-  getGradeHistory (input) {
+  getGradebookHistory (input) {
     return function (dispatch) {
       dispatch(HistoryActions.fetchHistoryStart());
-      return HistoryApi.getGradeHistory(courseId, input)
+      return HistoryApi.getGradebookHistory(courseId, input)
         .then((response) => {
           dispatch(HistoryActions.fetchHistorySuccess(response.data, response.headers));
         })
@@ -107,9 +107,10 @@ const SearchFormActions = {
     return function (dispatch) {
       dispatch(SearchFormActions.fetchRecordsStart(recordType));
 
+      const enrollmentStates = environment.courseIsConcluded() ? ['completed'] : [];
       const request = recordType === 'assignments' ?
         AssignmentApi.getAssignmentsByName(courseId, searchTerm) :
-        UserApi.getUsersByName(courseId, recordType, searchTerm);
+        UserApi.getUsersByName(courseId, recordType, searchTerm, enrollmentStates);
 
       return request
         .then((response) => {

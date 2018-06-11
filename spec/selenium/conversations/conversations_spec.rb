@@ -28,6 +28,7 @@ describe "conversations new" do
   end
 
   it "should have correct elements on the page when composing a new message", priority: "2", test_id: 86604 do
+    skip_if_chrome('fragile in chrome')
     # For testing media comments button, we need to double Kaltura
     stub_kaltura
     conversations
@@ -66,6 +67,7 @@ describe "conversations new" do
   end
 
   it "should not show an XSS alert when XSS script is typed into a new conversation's message subject and body", priority: "1", test_id: 201426 do
+    skip_if_chrome('fragile in chrome')
     conversations
     script = "<IMG SRC=j&#X41vascript:alert('test2')> or <script>alert('xss');</script>"
     compose course: @course, to: [@s[0], @s[1]], subject: script, body: script
@@ -97,20 +99,21 @@ describe "conversations new" do
     end
 
     it "should have a type dropdown", priority: "1", test_id: 446594 do
-      f("[data-id = 'type-filter']").click
+      element = view_filter
+      element.click
       wait_for_ajaximations
 
       # Verify type filter is open
-      expect(f('.type-filter.open')).to be
+      expect(element.enabled?).to be true
 
       # Verify type filter names and order
-      dropdown_array = ff('#type-filter-bs .text')
-      expect(dropdown_array[0]).to include_text('Inbox')
-      expect(dropdown_array[1]).to include_text('Unread')
-      expect(dropdown_array[2]).to include_text('Starred')
-      expect(dropdown_array[3]).to include_text('Sent')
-      expect(dropdown_array[4]).to include_text('Archived')
-      expect(dropdown_array[5]).to include_text('Submission Comments')
+      options = element.find_elements(tag_name: 'option')
+      expect(options[0].text).to eq 'Inbox'
+      expect(options[1].text).to eq 'Unread'
+      expect(options[2].text).to eq 'Starred'
+      expect(options[3].text).to eq 'Sent'
+      expect(options[4].text).to eq 'Archived'
+      expect(options[5].text).to eq 'Submission Comments'
     end
 
     it "should have action buttons", priority: "1", test_id: 446595 do
@@ -219,6 +222,7 @@ describe "conversations new" do
     end
 
     it "should show a flash message when deleting a message via Trash Button", priority: "1", test_id: 201492 do
+      skip_if_safari(:alert)
       conversations
 
       click_message(0)
@@ -229,6 +233,7 @@ describe "conversations new" do
     end
 
     it "should show a flash message when deleting a message via cog dropdown", priority: "1", test_id: 201493 do
+      skip_if_safari(:alert)
       conversations
 
       click_message(0)
@@ -240,6 +245,7 @@ describe "conversations new" do
     end
 
     it "should archive a message via the admin archive button", priority: "1", test_id: 201494 do
+      skip_if_safari(:alert)
       conversations
 
       click_message(0)
@@ -251,6 +257,7 @@ describe "conversations new" do
     end
 
     it "should archive a message via the cog dropdown", priority: "1", test_id: 201495 do
+      skip_if_safari(:alert)
       conversations
 
       click_message(0)
@@ -291,6 +298,7 @@ describe "conversations new" do
       end
 
       it "should unarchive a message via the admin unarchive button", priority: "1", test_id: 201496 do
+        skip_if_safari(:alert)
         click_archive_button
         # Unarchiving messages requires jobs to run to complete
         run_progress_job
@@ -299,6 +307,7 @@ describe "conversations new" do
       end
 
       it "should unarchive a message via the cog dropdown", priority: "1", test_id: 201497 do
+        skip_if_safari(:alert)
         # Clicks the title-level more options gear menu
         click_more_options(convo:true)
         click_archive_menu_item
@@ -333,31 +342,35 @@ describe "conversations new" do
 
     it "should default to inbox view", priority: "1", test_id: 86601 do
       conversations
-      expect(bootstrap_select_value(view_filter)).to eq 'inbox'
+      expect(selected_view_filter).to eq 'inbox'
       expect(conversation_elements.size).to eq 2
     end
 
     it "should have an unread view", priority: "1", test_id: 197523 do
       conversations
       select_view('unread')
+      expect(selected_view_filter).to eq 'unread'
       expect(conversation_elements.size).to eq 1
     end
 
     it "should have an starred view", priority: "1", test_id: 197524 do
       conversations
       select_view('starred')
+      expect(selected_view_filter).to eq 'starred'
       expect(conversation_elements.size).to eq 2
     end
 
     it "should have an sent view", priority: "1", test_id: 197525 do
       conversations
       select_view('sent')
+      expect(selected_view_filter).to eq 'sent'
       expect(conversation_elements.size).to eq 3
     end
 
     it "should have an archived view", priority: "1", test_id: 197526 do
       conversations
       select_view('archived')
+      expect(selected_view_filter).to eq 'archived'
       expect(conversation_elements.size).to eq 1
     end
 
@@ -392,6 +405,7 @@ describe "conversations new" do
     end
 
     it "should hide the spinner after deleting the last conversation", priority: "1", test_id: 207164 do
+      skip_if_safari(:alert)
       conversations
       select_view('archived')
       expect(conversation_elements.size).to eq 1

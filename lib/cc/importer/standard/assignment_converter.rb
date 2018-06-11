@@ -96,6 +96,8 @@ module CC::Importer::Standard
       assignment["workflow_state"] = get_node_val(meta_doc, "workflow_state") if meta_doc.at_css("workflow_state")
       assignment["external_tool_migration_id"] = get_node_val(meta_doc, "external_tool_identifierref") if meta_doc.at_css("external_tool_identifierref")
       assignment["external_tool_id"] = get_node_val(meta_doc, "external_tool_external_identifier") if meta_doc.at_css("external_tool_external_identifier")
+      assignment["tool_setting"] = get_tool_setting(meta_doc) if meta_doc.at_css('tool_setting').present?
+
       if meta_doc.at_css("saved_rubric_comments comment")
         assignment[:saved_rubric_comments] = {}
         meta_doc.css("saved_rubric_comments comment").each do |comment_node|
@@ -103,6 +105,12 @@ module CC::Importer::Standard
           assignment[:saved_rubric_comments][comment_node['criterion_id']] << comment_node.text.strip
         end
       end
+      if meta_doc.at_css("similarity_detection_tool")
+        node = meta_doc.at_css("similarity_detection_tool")
+        similarity_settings = node.attributes.each_with_object({}) { |(k,v), h| h[k] = v.value }
+        assignment[:similarity_detection_tool] = similarity_settings
+      end
+
       ['title', "allowed_extensions", "grading_type", "submission_types", "external_tool_url", "turnitin_settings"].each do |string_type|
         val = get_node_val(meta_doc, string_type)
         assignment[string_type] = val unless val.nil?
@@ -110,8 +118,9 @@ module CC::Importer::Standard
       ["turnitin_enabled", "vericite_enabled", "peer_reviews",
        "automatic_peer_reviews", "anonymous_peer_reviews", "freeze_on_copy",
        "grade_group_students_individually", "external_tool_new_tab", "moderated_grading",
-       "rubric_use_for_grading", "rubric_hide_score_total", "muted", "has_group_category",
-       "omit_from_final_grade", "intra_group_peer_reviews", "only_visible_to_overrides"].each do |bool_val|
+       "rubric_hide_points", "rubric_hide_outcome_results", "rubric_use_for_grading",
+       "rubric_hide_score_total", "muted", "has_group_category", "omit_from_final_grade",
+       "intra_group_peer_reviews", "only_visible_to_overrides", "post_to_sis"].each do |bool_val|
         val = get_bool_val(meta_doc, bool_val)
         assignment[bool_val] = val unless val.nil?
       end
@@ -140,8 +149,19 @@ module CC::Importer::Standard
           assignment[:assignment_overrides] << override
         end
       end
-
       assignment
+    end
+
+    private
+    def get_tool_setting(meta_doc)
+      tool_setting = {
+        product_code: meta_doc.at_css('tool_setting tool_proxy').attribute('product_code').value,
+        vendor_code: meta_doc.at_css('tool_setting tool_proxy').attribute('vendor_code').value,
+        custom: meta_doc.css("tool_setting custom property").each_with_object({}) { |el, hash| hash[el.attr('name')] = el.text },
+        custom_parameters: meta_doc.css("tool_setting custom_parameters property").each_with_object({}) { |el, hash| hash[el.attr('name')] = el.text }
+      }
+
+      tool_setting
     end
   end
 end

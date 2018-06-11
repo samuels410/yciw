@@ -71,8 +71,11 @@ module.exports = {
   // In prod build, don't attempt to continue if there are any errors.
   bail: process.env.NODE_ENV === 'production',
 
-  // This makes the bundle appear split into separate modules in the devtools in dev/test.
-  devtool: process.env.NODE_ENV === 'production' ? undefined : 'eval',
+  // In production, and when not using JS_BUILD_NO_UGLIFY, generate separate sourcemap files.
+  // In development, generate `eval` sourcemaps.
+  devtool: process.env.NODE_ENV === 'production' ?
+    (process.env.JS_BUILD_NO_UGLIFY ? undefined : 'source-map')
+    : 'eval',
 
   entry: Object.assign({
     vendor: require('./modulesToIncludeInVendorBundle'),
@@ -80,6 +83,11 @@ module.exports = {
   }, bundleEntries, momentLocaleBundles),
 
   output: {
+    // NOTE: hashSalt was added when HashedModuleIdsPlugin was installed, since
+    // chunkhashes are insensitive to moduleid changes. It should be changed again
+    // if this plugin is reconfigured or removed, or if there is another reason to
+    // prevent previously cached assets from being mixed with those from the new build
+    hashSalt: '2018-01-29',
     path: path.join(__dirname, '../public', webpackPublicPath),
 
     // Add /* filename */ comments to generated require()s in the output.
@@ -104,7 +112,6 @@ module.exports = {
       // don't let people import these top-level modules, because then you
       // get :allthethings: ... you need to import particular components
       'instructure-icons$': 'invalid',
-      'instructure-ui$': 'invalid',
 
       backbone: 'Backbone',
       timezone$: 'timezone_core',
@@ -137,6 +144,7 @@ module.exports = {
       /node_modules\/jquery\//,
       /vendor\/md5/,
       /tinymce\/tinymce/, // has 'require' and 'define' but they are from it's own internal closure
+      /i18nliner\/dist\/lib\/i18nliner/ // i18nLiner has a `require('fs')` that it doesn't actually need, ignore it.
     ],
     rules: [
       // to get tinymce to work. see: https://github.com/tinymce/tinymce/issues/2836
@@ -152,11 +160,6 @@ module.exports = {
         loaders: ['imports-loader?this=>window']
       },
 
-      // vendor/i18n.js does not export or define anything, it just creates a global
-      {
-        test: /vendor\/i18n/,
-        loaders: ['exports-loader?I18n']
-      },
       {
         test: /\.js$/,
         include: [
@@ -164,10 +167,11 @@ module.exports = {
           path.resolve(__dirname, '../app/jsx'),
           path.resolve(__dirname, '../app/coffeescripts'),
           path.resolve(__dirname, '../spec/javascripts/jsx'),
+          path.resolve(__dirname, '../spec/coffeescripts'),
           /gems\/plugins\/.*\/app\/jsx\//
         ],
         exclude: [
-          path.resolve(__dirname, '../public/javascripts/vendor/mediaelement-and-player.js'), // remove when we use npm version
+          path.resolve(__dirname, '../public/javascripts/translations'),
           /bower\//,
         ],
         loaders: happify('babel', [
@@ -215,12 +219,12 @@ module.exports = {
         loader: 'json-loader'
       },
       {
-        test: /vendor\/md5/,
-        loader: 'exports-loader?CryptoJS'
+        test: /\.css$/,
+        use: ['style-loader', 'css-loader']
       },
       {
-        test: /\.css$/,
-        loader: 'style-loader!css-loader'
+        test: /\.(png|svg|gif)$/,
+        loader: 'file-loader'
       }
     ]
   },
@@ -237,15 +241,10 @@ module.exports = {
       })
     },
 
-    // A lot of our files expect a global `I18n` variable, this will provide it if it is used
-    new webpack.ProvidePlugin({I18n: 'vendor/i18n'}),
-
     // sets these environment variables in compiled code.
     // process.env.NODE_ENV will make it so react and others are much smaller and don't run their
     // debug/propType checking in prod.
-    new webpack.DefinePlugin({
-      'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
-    }),
+    new webpack.EnvironmentPlugin(['NODE_ENV']),
 
     new WebpackCleanupPlugin({
       exclude: ['selinimum-manifest.json']
@@ -271,6 +270,9 @@ module.exports = {
     // be removed when that issue is fixed
     new webpack.IgnorePlugin(/\.flow$/),
 
+    new webpack.HashedModuleIdsPlugin({
+      hashDigestLength: 10
+    })
   ]
   .concat(process.env.SELINIMUM_RUN || process.env.SELINIMUM_CAPTURE ? [
 
@@ -282,7 +284,7 @@ module.exports = {
 
     // don't include any of the moment locales in the common bundle (otherwise it is huge!)
     // we load them explicitly onto the page in include_js_bundles from rails.
-    new webpack.IgnorePlugin(/^\.\/locale$/, /^moment$/),
+    new webpack.IgnorePlugin(/^\.\/locale$/, /moment$/),
 
     // outputs a json file so Rails knows which hash fingerprints to add to each script url
     new ManifestPlugin({fileName: 'webpack-manifest.json'}),

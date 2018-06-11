@@ -18,8 +18,8 @@
 
 import React from 'react'
 import PropTypes from 'prop-types'
-import Button from 'instructure-ui/lib/components/Button'
-import Tray from 'instructure-ui/lib/components/Tray'
+import Button from '@instructure/ui-core/lib/components/Button'
+import Tray from '@instructure/ui-core/lib/components/Tray'
 import IconX from 'instructure-icons/lib/Solid/IconXSolid'
 import I18n from 'i18n!cyoe_assignment_sidebar'
 import StudentRangeView from './student-ranges-view'
@@ -87,13 +87,11 @@ export default class BreakdownDetails extends React.Component {
 
       return (
         <Tray
-          isOpen={this.props.showDetails}
+          open={this.props.showDetails}
           placement="end"
-          dismissable={false}
-          trapFocus
-          getDefaultFocusElement={() => this.closeButton}
-          onReady={() => document.getElementById('application').setAttribute('aria-hidden', true)}
-          onClose={() => document.getElementById('application').setAttribute('aria-hidden', false)}
+          shouldContainFocus
+          defaultFocusElement={() => this.closeButton}
+          applicationElement={() => document.getElementById('application')}
         >
           <div className="crs-breakdown-details">
             <div className="crs-breakdown-details__content">
@@ -128,6 +126,6 @@ export default class BreakdownDetails extends React.Component {
             </div>
           </div>
         </Tray>
-      )
+      );
     }
   }

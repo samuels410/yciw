@@ -18,35 +18,36 @@
 define [
   'i18n!content_migrations'
   'jquery'
-  'compiled/collections/ProgressingContentMigrationCollection'
-  'compiled/models/ContentMigration'
-  'compiled/collections/DaySubstitutionCollection'
-  'compiled/views/CollectionView'
-  'compiled/views/PaginatedCollectionView'
-  'compiled/views/content_migrations/ProgressingContentMigrationView'
-  'compiled/views/content_migrations/MigrationConverterView'
-  'compiled/views/content_migrations/CommonCartridgeView'
-  'compiled/views/content_migrations/ConverterViewControl'
-  'compiled/views/content_migrations/ZipFilesView'
-  'compiled/views/content_migrations/CopyCourseView'
-  'compiled/views/content_migrations/MoodleZipView'
-  'compiled/views/content_migrations/CanvasExportView'
-  'compiled/views/content_migrations/QTIZipView'
-  'compiled/views/content_migrations/subviews/ChooseMigrationFileView'
-  'compiled/views/content_migrations/subviews/FolderPickerView'
-  'compiled/views/content_migrations/subviews/SelectContentCheckboxView'
-  'compiled/views/content_migrations/subviews/QuestionBankView'
-  'compiled/views/content_migrations/subviews/CourseFindSelectView'
-  'compiled/views/content_migrations/subviews/DateShiftView'
-  'compiled/views/content_migrations/subviews/DaySubstitutionView'
+  '../../collections/ProgressingContentMigrationCollection'
+  '../../models/ContentMigration'
+  '../../collections/DaySubstitutionCollection'
+  '../../views/CollectionView'
+  '../../views/PaginatedCollectionView'
+  '../../views/content_migrations/ProgressingContentMigrationView'
+  '../../views/content_migrations/MigrationConverterView'
+  '../../views/content_migrations/CommonCartridgeView'
+  '../../views/content_migrations/ConverterViewControl'
+  '../../views/content_migrations/ZipFilesView'
+  '../../views/content_migrations/CopyCourseView'
+  '../../views/content_migrations/MoodleZipView'
+  '../../views/content_migrations/CanvasExportView'
+  '../../views/content_migrations/QTIZipView'
+  '../../views/content_migrations/subviews/ChooseMigrationFileView'
+  '../../views/content_migrations/subviews/FolderPickerView'
+  '../../views/content_migrations/subviews/SelectContentCheckboxView'
+  '../../views/content_migrations/subviews/QuestionBankView'
+  '../../views/content_migrations/subviews/CourseFindSelectView'
+  '../../views/content_migrations/subviews/DateShiftView'
+  '../../views/content_migrations/subviews/DaySubstitutionView'
   'jst/content_migrations/ProgressingContentMigrationCollection'
-  'compiled/views/content_migrations/ExternalToolContentView'
-  'compiled/views/content_migrations/subviews/ExternalToolLaunchView'
-  'compiled/views/ExternalTools/ExternalContentReturnView'
-  'compiled/models/ExternalTool'
+  '../../views/content_migrations/ExternalToolContentView'
+  '../../views/content_migrations/subviews/ExternalToolLaunchView'
+  '../../views/ExternalTools/ExternalContentReturnView'
+  '../../models/ExternalTool'
   'vendor/jquery.ba-tinypubsub'
   'jst/content_migrations/subviews/DaySubstitutionCollection'
-  'compiled/views/content_migrations/subviews/OverwriteAssessmentContentView'
+  '../../views/content_migrations/subviews/OverwriteAssessmentContentView'
+  '../../views/content_migrations/subviews/ImportQuizzesNextView'
 ], (I18n, $,
     ProgressingContentMigrationCollection,
     ContentMigrationModel,
@@ -76,7 +77,8 @@ define [
     ExternalTool,
     pubsub,
     daySubCollectionTemplate,
-    OverwriteAssessmentContentView) ->
+    OverwriteAssessmentContentView,
+    ImportQuizzesNextView) ->
   ConverterViewControl.setModel new ContentMigrationModel
                                  course_id: ENV.COURSE_ID
                                  daySubCollection: daySubCollection
@@ -97,6 +99,9 @@ define [
                                  template: progressingMigrationCollectionTemplate
                                  emptyMessage: -> I18n.t('no_migrations_running', "There are no migrations currently running")
                                  itemView: ProgressingContentMigrationView
+  questionBankView = new QuestionBankView
+                        model: ConverterViewControl.getModel()
+                        questionBanks: ENV.QUESTION_BANKS
 
   progressingCollectionView.getStatusView = (migProgress) ->
     if getView = ConverterViewControl.getView(migProgress.get('migration_type'))?.view?.getStatusView
@@ -163,9 +168,7 @@ define [
 
             selectContent:       new SelectContentCheckboxView(model: ConverterViewControl.getModel())
 
-            questionBank:        new QuestionBankView
-                                   model: ConverterViewControl.getModel()
-                                   questionBanks: ENV.QUESTION_BANKS
+            questionBank:        questionBankView
 
             dateShift:        new DateShiftView
                                 model: ConverterViewControl.getModel()
@@ -198,11 +201,16 @@ define [
                                    fileSizeLimit: ENV.UPLOAD_LIMIT
 
             selectContent:       new SelectContentCheckboxView(model: ConverterViewControl.getModel())
+
+            questionBank:        questionBankView
+
+            importQuizzesNext:     new ImportQuizzesNextView
+                                  model: ConverterViewControl.getModel()
+                                  quizzesNextEnabled: ENV.QUIZZES_NEXT_ENABLED
+                                  questionBank: questionBankView
+
             overwriteAssessmentContent: new OverwriteAssessmentContentView(model: ConverterViewControl.getModel())
 
-            questionBank:        new QuestionBankView
-                                   questionBanks: ENV.QUESTION_BANKS
-                                   model: ConverterViewControl.getModel()
 
             dateShift:        new DateShiftView
                                 model: ConverterViewControl.getModel()
@@ -211,6 +219,9 @@ define [
                                 oldStartDate: ENV.OLD_START_DATE
                                 oldEndDate: ENV.OLD_END_DATE
 
+            quizzes_next_enabled: ENV.QUIZZES_NEXT_ENABLED
+            quizzes_next_configured_root: ENV.QUIZZES_NEXT_CONFIGURED_ROOT
+
   ConverterViewControl.register
     key: 'qti_converter'
     view: new QTIZipView
@@ -218,8 +229,16 @@ define [
                                    model: ConverterViewControl.getModel()
                                    fileSizeLimit: ENV.UPLOAD_LIMIT
 
+            questionBank:        questionBankView
+
+            importQuizzesNext:     new ImportQuizzesNextView
+                                  model: ConverterViewControl.getModel()
+                                  quizzesNextEnabled: ENV.QUIZZES_NEXT_ENABLED
+                                  questionBank: questionBankView
+
             overwriteAssessmentContent: new OverwriteAssessmentContentView(model: ConverterViewControl.getModel())
-            questionBank:        new QuestionBankView(questionBanks: ENV.QUESTION_BANKS, model: ConverterViewControl.getModel())
+            quizzes_next_enabled: ENV.QUIZZES_NEXT_ENABLED
+            quizzes_next_configured_root: ENV.QUIZZES_NEXT_CONFIGURED_ROOT
 
 
 

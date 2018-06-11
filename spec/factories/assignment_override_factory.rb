@@ -33,22 +33,57 @@ module Factories
   end
 
   def create_section_override_for_assignment(assignment_or_quiz, opts={})
+    opts_with_default = opts.reverse_merge({
+      due_at: 2.days.from_now,
+      due_at_overridden: true,
+      set_type: "CourseSection",
+      course_section: assignment_or_quiz.context.default_section,
+      title: "test override",
+      workflow_state: "active"
+    })
+
     ao = assignment_or_quiz.assignment_overrides.build
-    ao.due_at = opts[:due_at] || 2.days.from_now
-    ao.set_type = "CourseSection"
-    #make sure the default due date is overridden with our override due date
-    ao.due_at_overridden = true
-    ao.set = opts[:course_section] || assignment_or_quiz.context.default_section
-    ao.title = "test override"
+    ao.due_at = opts_with_default[:due_at]
+    ao.due_at_overridden = opts_with_default[:due_at_overridden]
+    ao.set_type = opts_with_default[:set_type]
+    ao.set = opts_with_default[:course_section]
+    ao.title = opts_with_default[:title]
+    ao.workflow_state = opts_with_default[:workflow_state]
     ao.save!
     ao
   end
-  alias :create_section_override_for_quiz :create_section_override_for_assignment
+  alias create_section_override_for_quiz create_section_override_for_assignment
+
+  def create_group_override_for_assignment(assignment, opts={})
+    group_category = group_category(context: assignment.context)
+    group_opts = opts.merge({context: group_category})
+    group = opts[:group] || group(group_opts)
+    group.add_user(opts[:user], 'accepted', opts[:moderator]) if opts[:user]
+    opts_with_default = opts.reverse_merge({
+      due_at: 2.days.from_now,
+      due_at_overridden: true,
+      set_type: "Group",
+      group: group,
+      title: "group override",
+      workflow_state: "active"
+    })
+
+    ao = assignment.assignment_overrides.build
+    ao.due_at = opts_with_default[:due_at]
+    ao.due_at_overridden = opts_with_default[:due_at_overridden]
+    ao.set_type = opts_with_default[:set_type]
+    ao.set = opts_with_default[:group]
+    ao.title = opts_with_default[:title]
+    ao.workflow_state = opts_with_default[:workflow_state]
+    ao.save!
+    ao
+  end
 
   def create_adhoc_override_for_assignment(assignment_or_quiz, users, opts={})
     assignment_override_model(opts.merge(assignment: assignment_or_quiz))
     @override.set = nil
     @override.set_type = 'ADHOC'
+    @override.due_at = opts[:due_at]
     @override.save!
 
     users = Array.wrap(users)

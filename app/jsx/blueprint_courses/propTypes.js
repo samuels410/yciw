@@ -55,7 +55,7 @@ propTypes.courseInfo = shape({
   sis_course_id: string,
 })
 
-propTypes.lockableAttribute = oneOf(['points', 'content', 'due_dates', 'availability_dates', 'settings'])
+propTypes.lockableAttribute = oneOf(['points', 'content', 'due_dates', 'availability_dates', 'settings', 'deleted'])
 propTypes.lockableAttributeList = arrayOf(propTypes.lockableAttribute)
 
 propTypes.migrationException = shape({
@@ -66,7 +66,7 @@ propTypes.migrationExceptionList = arrayOf(propTypes.migrationException)
 
 propTypes.migrationChange = shape({
   asset_id: string.isRequired,
-  asset_type: oneOf(['assignment', 'quiz', 'discussion_topic', 'wiki_page', 'attachment', 'context_module']).isRequired,
+  asset_type: oneOf(['assignment', 'quiz', 'discussion_topic', 'wiki_page', 'attachment', 'context_module', 'learning_outcome', 'learning_outcome_group', 'announcement']).isRequired,
   asset_name: string.isRequired,
   change_type: oneOf(['created', 'updated', 'deleted']).isRequired,
   htnl_url: string,

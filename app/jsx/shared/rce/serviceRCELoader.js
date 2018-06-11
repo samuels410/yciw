@@ -18,21 +18,13 @@
 
 import $ from 'jquery'
 import _ from 'underscore'
-import {refreshFn as refreshToken} from 'jsx/shared/jwt'
-import editorOptions from 'jsx/shared/rce/editorOptions'
-import loadEventListeners from 'jsx/shared/rce/loadEventListeners'
-import polyfill from 'jsx/shared/rce/polyfill'
+import {refreshFn as refreshToken} from '../jwt'
+import editorOptions from '../rce/editorOptions'
+import loadEventListeners from '../rce/loadEventListeners'
+import polyfill from '../rce/polyfill'
 import splitAssetString from 'compiled/str/splitAssetString'
 
-function getSidebarSource(source_name) {
-  var ret = undefined
-  if (source_name === 'fake') {
-    ret = require("canvas-rce/lib/sidebar/sources/fake")
-  }
-  return ret
-}
-
-  let RCELoader = {
+  const RCELoader = {
     preload() {
       this.loadRCE(function(){})
     },
@@ -44,15 +36,17 @@ function getSidebarSource(source_name) {
 
       this.loadRCE(function(RCE) {
         RCE.renderIntoDiv(renderingTarget, propsForRCE, function(remoteEditor) {
-          callback(textarea, polyfill.wrapEditor(remoteEditor))
+          remoteEditor.mceInstance().on('init', () => callback(textarea, polyfill.wrapEditor(remoteEditor)))
         })
       })
     },
 
     loadSidebarOnTarget(target, callback) {
+      if (ENV.RICH_CONTENT_SKIP_SIDEBAR) {
+        return
+      }
       let context = splitAssetString(ENV.context_asset_string)
       let props = {
-        source: getSidebarSource(ENV.RICH_CONTENT_SIDEBAR_SOURCE),
         jwt: ENV.JWT,
         refreshToken: refreshToken(ENV.JWT),
         host: ENV.RICH_CONTENT_APP_HOST,
@@ -89,6 +83,7 @@ function getSidebarSource(source_name) {
       require.ensure([], (require) => {
         const first = !this.RCE
         this.RCE = require('canvas-rce/lib/async')
+        require('./initA11yChecker')
         if (first) {
           this.loadEventListeners()
           this.loadingFlag = false

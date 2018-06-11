@@ -25,6 +25,8 @@ class Quizzes::TakeQuizPresenter
     :submission_data,
     :answers
 
+  delegate :one_question_at_a_time?, :cant_go_back?, :require_lockdown_browser?, to: :quiz
+
   def initialize(quiz, submission, params)
     self.quiz = quiz
     self.submission = submission
@@ -35,27 +37,11 @@ class Quizzes::TakeQuizPresenter
   end
 
   def current_questions
-    @current_questions ||= if quiz.cant_go_back?
-      question_ids = all_questions.map { |question| question[:id] }
-      first_unread_question = question_ids.detect{ |question_id|
-        !submission_data[:"_question_#{question_id}_read"]
-      }
-      [submission.question(first_unread_question)]
-    elsif params[:question_id]
-      [submission.question(params[:question_id])]
-    elsif one_question_at_a_time?
-      [all_questions.first]
-    else
-      all_questions
-    end.compact
+    @current_questions ||= determine_current_questions
   end
 
   def all_questions
-    @all_questions ||= submission.questions_as_object.compact
-  end
-
-  def one_question_at_a_time?
-    quiz.one_question_at_a_time?
+    @all_questions ||= submission.questions.compact
   end
 
   def previous_question_viewable?
@@ -66,16 +52,8 @@ class Quizzes::TakeQuizPresenter
     next_question.nil? || !one_question_at_a_time?
   end
 
-  def cant_go_back?
-    quiz.cant_go_back?
-  end
-
   def can_go_back?
     !cant_go_back?
-  end
-
-  def require_lockdown_browser?
-    quiz.require_lockdown_browser?
   end
 
   def form_class
@@ -204,6 +182,16 @@ class Quizzes::TakeQuizPresenter
     )
   end
 
+  private
+
+  def first_unread_question
+    question_ids = all_questions.map { |question| question[:id] }
+    first_unread = question_ids.detect do |question_id|
+      !submission_data[:"_question_#{question_id}_read"]
+    end
+    [submission.question(first_unread)] if first_unread
+  end
+
   def form_action_params(session, user)
     url_params = { :user_id => user && user.id }
     if session['lockdown_browser_popup']
@@ -211,7 +199,6 @@ class Quizzes::TakeQuizPresenter
     end
     url_params
   end
-  private :form_action_params
 
   # Build an optimized set of the so-far answered questions for quick access.
   #
@@ -247,6 +234,16 @@ class Quizzes::TakeQuizPresenter
 
     _answers
   end
-  private :resolve_answers
 
+  def determine_current_questions
+    if quiz.cant_go_back?
+      first_unread_question || [all_questions.last]
+    elsif params[:question_id]
+      [submission.question(params[:question_id])]
+    elsif one_question_at_a_time?
+      [all_questions.first]
+    else
+      all_questions
+    end.compact
+  end
 end

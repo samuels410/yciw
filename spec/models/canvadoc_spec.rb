@@ -63,7 +63,7 @@ describe 'Canvadoc' do
     end
 
     it "ignores annotatable if unavailable" do
-      stub_upload.with(@doc.attachment.authenticated_s3_url, {})
+      stub_upload.with(@doc.attachment.public_url, {})
       @doc.upload annotatable: true
     end
   end
@@ -119,6 +119,13 @@ describe 'Canvadoc' do
     it "... unless canvadocs isn't configured" do
       disable_canvadocs
       expect(@doc).not_to be_available
+    end
+  end
+
+  describe "#has_annotations?" do
+    it "has annotations when true" do
+      @doc.has_annotations = true
+      expect(@doc).to have_annotations
     end
   end
 end

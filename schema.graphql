@@ -1,0 +1,786 @@
+# A list of students that an `AssignmentOverride` applies to
+type AdhocStudents {
+  students: [User]
+}
+
+type Assignment implements Node, Timestamped {
+  # legacy canvas id
+  _id: ID!
+  assignmentGroup: AssignmentGroup
+  assignmentOverrides(
+    # Returns the elements in the list that come after the specified global ID.
+    after: String
+
+    # Returns the elements in the list that come before the specified global ID.
+    before: String
+
+    # Returns the first _n_ elements from the list.
+    first: Int
+
+    # Returns the last _n_ elements from the list.
+    last: Int
+  ): AssignmentOverrideConnection
+  course: Course
+  createdAt: DateTime
+  description: String
+  discussion: Discussion
+
+  # when this assignment is due
+  dueAt: DateTime
+  gradingType: GradingType
+  htmlUrl: URL
+  id: ID!
+  lockAt: DateTime
+  muted: Boolean
+  name: String
+  needsGradingCount: Int
+
+  # specifies that this assignment is only assigned to students for whom an
+  #        `AssignmentOverride` applies.
+  onlyVisibleToOverrides: Boolean
+
+  # the assignment is out of this many points
+  pointsPossible: Float
+
+  # determines the order this assignment is displayed in in its assignment group
+  position: Int
+  quiz: Quiz
+  state: AssignmentState!
+  submissionTypes: [SubmissionType!]
+
+  # submissions for this assignment
+  submissionsConnection(
+    # Returns the elements in the list that come after the specified global ID.
+    after: String
+
+    # Returns the elements in the list that come before the specified global ID.
+    before: String
+    filter: SubmissionFilter
+
+    # Returns the first _n_ elements from the list.
+    first: Int
+
+    # Returns the last _n_ elements from the list.
+    last: Int
+  ): SubmissionConnection
+  unlockAt: DateTime
+  updatedAt: DateTime
+}
+
+# The connection type for Assignment.
+type AssignmentConnection {
+  # A list of edges.
+  edges: [AssignmentEdge]
+
+  # Information to aid in pagination.
+  pageInfo: PageInfo!
+}
+
+# An edge in a connection.
+type AssignmentEdge {
+  # A cursor for use in pagination.
+  cursor: String!
+
+  # The item at the end of the edge.
+  node: Assignment
+}
+
+input AssignmentFilter {
+  #     only return assignments for the given grading period. Defaults to the
+  # current grading period. Pass `null` to not filter by grading period.
+  gradingPeriodId: ID
+}
+
+type AssignmentGroup implements Node, Timestamped {
+  # legacy canvas id
+  _id: ID!
+  assignmentsConnection(
+    # Returns the elements in the list that come after the specified global ID.
+    after: String
+
+    # Returns the elements in the list that come before the specified global ID.
+    before: String
+
+    # Returns the first _n_ elements from the list.
+    first: Int
+
+    # Returns the last _n_ elements from the list.
+    last: Int
+  ): AssignmentConnection
+  createdAt: DateTime
+  groupWeight: Float
+  id: ID!
+  name: String
+  position: Int
+  rules: AssignmentGroupRules
+  state: AssignmentGroupState!
+  updatedAt: DateTime
+}
+
+# The connection type for AssignmentGroup.
+type AssignmentGroupConnection {
+  # A list of edges.
+  edges: [AssignmentGroupEdge]
+
+  # Information to aid in pagination.
+  pageInfo: PageInfo!
+}
+
+# An edge in a connection.
+type AssignmentGroupEdge {
+  # A cursor for use in pagination.
+  cursor: String!
+
+  # The item at the end of the edge.
+  node: AssignmentGroup
+}
+
+type AssignmentGroupRules {
+  # The highest N assignments are not included in grade calculations
+  dropHighest: Int
+
+  # The lowest N assignments are not included in grade calculations
+  dropLowest: Int
+  neverDrop: [Assignment]
+}
+
+# States that Assignment Group can be in
+enum AssignmentGroupState {
+  available
+  deleted
+}
+
+input AssignmentInput {
+  courseId: ID!
+  name: String!
+}
+
+type AssignmentOverride implements Timestamped {
+  # legacy canvas id
+  _id: ID!
+  allDay: Boolean
+  assignment: Assignment
+  createdAt: DateTime
+  dueAt: DateTime
+  lockAt: DateTime
+
+  # This object specifies what students this override applies to
+  set: AssignmentOverrideSet
+  title: String
+  unlockAt: DateTime
+  updatedAt: DateTime
+}
+
+# The connection type for AssignmentOverride.
+type AssignmentOverrideConnection {
+  # A list of edges.
+  edges: [AssignmentOverrideEdge]
+
+  # Information to aid in pagination.
+  pageInfo: PageInfo!
+}
+
+# An edge in a connection.
+type AssignmentOverrideEdge {
+  # A cursor for use in pagination.
+  cursor: String!
+
+  # The item at the end of the edge.
+  node: AssignmentOverride
+}
+
+# Objects that can be assigned overridden dates
+union AssignmentOverrideSet = AdhocStudents | Group | Section
+
+# States that an Assignment can be in
+enum AssignmentState {
+  deleted
+  published
+  unpublished
+}
+
+type Course implements Node, Timestamped {
+  # legacy canvas id
+  _id: ID!
+  assignmentGroupsConnection(
+    # Returns the elements in the list that come after the specified global ID.
+    after: String
+
+    # Returns the elements in the list that come before the specified global ID.
+    before: String
+
+    # Returns the first _n_ elements from the list.
+    first: Int
+
+    # Returns the last _n_ elements from the list.
+    last: Int
+  ): AssignmentGroupConnection
+  assignmentsConnection(
+    # Returns the elements in the list that come after the specified global ID.
+    after: String
+
+    # Returns the elements in the list that come before the specified global ID.
+    before: String
+    filter: AssignmentFilter
+
+    # Returns the first _n_ elements from the list.
+    first: Int
+
+    # Returns the last _n_ elements from the list.
+    last: Int
+  ): AssignmentConnection
+
+  # course short name
+  courseCode: String
+  createdAt: DateTime
+  gradingPeriodsConnection(
+    # Returns the elements in the list that come after the specified global ID.
+    after: String
+
+    # Returns the elements in the list that come before the specified global ID.
+    before: String
+
+    # Returns the first _n_ elements from the list.
+    first: Int
+
+    # Returns the last _n_ elements from the list.
+    last: Int
+  ): GradingPeriodConnection
+  groupsConnection(
+    # Returns the elements in the list that come after the specified global ID.
+    after: String
+
+    # Returns the elements in the list that come before the specified global ID.
+    before: String
+
+    # Returns the first _n_ elements from the list.
+    first: Int
+
+    # Returns the last _n_ elements from the list.
+    last: Int
+  ): GroupConnection
+  id: ID!
+  name: String!
+
+  # returns permission information for the current user in this course
+  permissions: CoursePermissions
+  sectionsConnection(
+    # Returns the elements in the list that come after the specified global ID.
+    after: String
+
+    # Returns the elements in the list that come before the specified global ID.
+    before: String
+
+    # Returns the first _n_ elements from the list.
+    first: Int
+
+    # Returns the last _n_ elements from the list.
+    last: Int
+  ): SectionConnection
+  state: CourseWorkflowState!
+
+  # all the submissions for assignments in this course
+  submissionsConnection(
+    # Returns the elements in the list that come after the specified global ID.
+    after: String
+
+    # Returns the elements in the list that come before the specified global ID.
+    before: String
+    filter: SubmissionFilter
+
+    # Returns the first _n_ elements from the list.
+    first: Int
+
+    # Returns the last _n_ elements from the list.
+    last: Int
+    orderBy: [SubmissionOrderCriteria]
+
+    # Only return submissions for the given students.
+    studentIds: [ID!]!
+  ): SubmissionConnection
+  updatedAt: DateTime
+  usersConnection(
+    # Returns the elements in the list that come after the specified global ID.
+    after: String
+
+    # Returns the elements in the list that come before the specified global ID.
+    before: String
+    filter: CourseUsersFilter
+
+    # Returns the first _n_ elements from the list.
+    first: Int
+
+    # Returns the last _n_ elements from the list.
+    last: Int
+
+    # Only include users with the given ids.
+    #
+    # **This field is deprecated, use `filter: {userIds}` instead.**
+    userIds: [ID!]
+  ): UserConnection
+}
+
+# Users in a course can be returned based on these enrollment states
+enum CourseFilterableEnrollmentState {
+  active
+  completed
+  creation_pending
+  inactive
+  invited
+  rejected
+}
+
+type CoursePermissions {
+  becomeUser: Boolean
+  manageGrades: Boolean
+  sendMessages: Boolean
+  viewAllGrades: Boolean
+  viewAnalytics: Boolean
+}
+
+input CourseUsersFilter {
+  #       only return users with the given enrollment state. defaults
+  #       to `invited`, `creation_pending`, `active`
+  enrollmentStates: [CourseFilterableEnrollmentState!]
+
+  # only include users with the given ids
+  userIds: [ID!]
+}
+
+# States that Courses can be in
+enum CourseWorkflowState {
+  available
+  claimed
+  completed
+  created
+  deleted
+}
+
+# an ISO8601 formatted time string
+scalar DateTime
+
+type Discussion implements Node, Timestamped {
+  # legacy canvas id
+  _id: ID!
+  createdAt: DateTime
+  id: ID!
+  updatedAt: DateTime
+}
+
+type Enrollment implements Node, Timestamped {
+  # legacy canvas id
+  _id: ID!
+  course: Course
+  createdAt: DateTime
+  grades(
+    # The grading period to return grades for. If not specified, will use the
+    # current grading period (or the course grade for courses that don't use
+    # grading periods)
+    gradingPeriodId: ID
+  ): Grades
+  id: ID!
+  lastActivityAt: DateTime
+  section: Section
+  state: EnrollmentWorkflowState!
+  type: EnrollmentType!
+  updatedAt: DateTime
+  user: User
+}
+
+enum EnrollmentType {
+  DesignerEnrollment
+  ObserverEnrollment
+  StudentEnrollment
+  StudentViewEnrollment
+  TaEnrollment
+  TeacherEnrollment
+}
+
+enum EnrollmentWorkflowState {
+  active
+  completed
+  creation_pending
+  deleted
+  inactive
+  invited
+  rejected
+}
+
+# Contains grade information for a course or grading period
+type Grades {
+  currentGrade: String
+
+  #     The current score includes all graded assignments
+  currentScore: Float
+  finalGrade: String
+
+  #     The final score includes all assignments (ungraded assignments are counted as 0 points)
+  finalScore: Float
+}
+
+type GradingPeriod implements Node, Timestamped {
+  # legacy canvas id
+  _id: ID!
+
+  #     assignments can only be graded before the grading period closes
+  closeDate: DateTime
+  createdAt: DateTime
+  endDate: DateTime
+  id: ID!
+  startDate: DateTime
+  title: String
+  updatedAt: DateTime
+
+  #     used to calculate how much the assignments in this grading period
+  #     contribute to the overall grade
+  weight: Float
+}
+
+# The connection type for GradingPeriod.
+type GradingPeriodConnection {
+  # A list of edges.
+  edges: [GradingPeriodEdge]
+
+  # Information to aid in pagination.
+  pageInfo: PageInfo!
+}
+
+# An edge in a connection.
+type GradingPeriodEdge {
+  # A cursor for use in pagination.
+  cursor: String!
+
+  # The item at the end of the edge.
+  node: GradingPeriod
+}
+
+enum GradingType {
+  gpa_scale
+  letter_grade
+  not_graded
+  pass_fail
+  percent
+  points
+}
+
+type Group implements Timestamped {
+  # legacy canvas id
+  _id: ID!
+  createdAt: DateTime
+  membersConnection(
+    # Returns the elements in the list that come after the specified global ID.
+    after: String
+
+    # Returns the elements in the list that come before the specified global ID.
+    before: String
+
+    # Returns the first _n_ elements from the list.
+    first: Int
+
+    # Returns the last _n_ elements from the list.
+    last: Int
+  ): GroupMembershipConnection
+  name: String
+  updatedAt: DateTime
+}
+
+# The connection type for Group.
+type GroupConnection {
+  # A list of edges.
+  edges: [GroupEdge]
+
+  # Information to aid in pagination.
+  pageInfo: PageInfo!
+}
+
+# An edge in a connection.
+type GroupEdge {
+  # A cursor for use in pagination.
+  cursor: String!
+
+  # The item at the end of the edge.
+  node: Group
+}
+
+type GroupMembership implements Timestamped {
+  # legacy canvas id
+  _id: ID!
+  createdAt: DateTime
+  state: GroupMembershipState!
+  updatedAt: DateTime
+  user: User
+}
+
+# The connection type for GroupMembership.
+type GroupMembershipConnection {
+  # A list of edges.
+  edges: [GroupMembershipEdge]
+
+  # Information to aid in pagination.
+  pageInfo: PageInfo!
+}
+
+# An edge in a connection.
+type GroupMembershipEdge {
+  # A cursor for use in pagination.
+  cursor: String!
+
+  # The item at the end of the edge.
+  node: GroupMembership
+}
+
+enum GroupMembershipState {
+  accepted
+  deleted
+  invited
+  rejected
+  requested
+}
+
+type Mutation {
+  createAssignment(assignment: AssignmentInput!): Assignment
+}
+
+# An object with an ID.
+interface Node {
+  # ID of the object.
+  id: ID!
+}
+
+enum NodeType {
+  Assignment
+  Course
+  Enrollment
+  GradingPeriod
+  Section
+  User
+}
+
+enum OrderDirection {
+  ascending
+  descending
+}
+
+# Information about pagination in a connection.
+type PageInfo {
+  # When paginating forwards, the cursor to continue.
+  endCursor: String
+
+  # When paginating forwards, are there more items?
+  hasNextPage: Boolean!
+
+  # When paginating backwards, are there more items?
+  hasPreviousPage: Boolean!
+
+  # When paginating backwards, the cursor to continue.
+  startCursor: String
+}
+
+type PageViewAnalysis {
+  # This number (0-3) is intended to give an idea of how the student is doing relative to others in the course
+  level: Int
+
+  # The maximum number of views/participations in this course
+  max: Int
+
+  # The number of views/participations this student has
+  total: Int
+}
+
+type Query {
+  # All courses viewable by the current user
+  allCourses: [Course]
+
+  # Fetches an object given its type and legacy ID
+  legacyNode(_id: ID!, type: NodeType!): Node
+
+  # Fetches an object given its ID.
+  node(
+    # ID of the object.
+    id: ID!
+  ): Node
+}
+
+type Quiz implements Node, Timestamped {
+  # legacy canvas id
+  _id: ID!
+  createdAt: DateTime
+  id: ID!
+  updatedAt: DateTime
+}
+
+type Section implements Node, Timestamped {
+  # legacy canvas id
+  _id: ID!
+  createdAt: DateTime
+  id: ID!
+  name: String!
+  updatedAt: DateTime
+}
+
+# The connection type for Section.
+type SectionConnection {
+  # A list of edges.
+  edges: [SectionEdge]
+
+  # Information to aid in pagination.
+  pageInfo: PageInfo!
+}
+
+# An edge in a connection.
+type SectionEdge {
+  # A cursor for use in pagination.
+  cursor: String!
+
+  # The item at the end of the edge.
+  node: Section
+}
+
+# basic information about a students activity in a course
+type StudentSummaryAnalytics {
+  pageViews: PageViewAnalysis
+  participations: PageViewAnalysis
+  tardinessBreakdown: TardinessBreakdown
+}
+
+type Submission implements Node, Timestamped {
+  assignment: Assignment
+  createdAt: DateTime
+
+  # how many points are being deducted due to late policy
+  deductedPoints: Float
+
+  # the submission grade *before* late policy deductions were applied
+  enteredGrade: String
+
+  # the submission score *before* late policy deductions were applied
+  enteredScore: Float
+
+  # excused assignments are ignored when calculating grades
+  excused: Boolean
+  grade: String
+  gradedAt: DateTime
+  gradingStatus: String
+  id: ID!
+  score: Float
+  state: SubmissionState
+  submissionStatus: String
+  submittedAt: DateTime
+  updatedAt: DateTime
+  user: User
+}
+
+# The connection type for Submission.
+type SubmissionConnection {
+  # A list of edges.
+  edges: [SubmissionEdge]
+
+  # Information to aid in pagination.
+  pageInfo: PageInfo!
+}
+
+# An edge in a connection.
+type SubmissionEdge {
+  # A cursor for use in pagination.
+  cursor: String!
+
+  # The item at the end of the edge.
+  node: Submission
+}
+
+input SubmissionFilter {
+  states: [SubmissionState!] = [submitted, pending_review, graded]
+}
+
+input SubmissionOrderCriteria {
+  direction: OrderDirection
+  field: SubmissionOrderField!
+}
+
+enum SubmissionOrderField {
+  _id
+  gradedAt
+}
+
+enum SubmissionState {
+  deleted
+  graded
+  pending_review
+  submitted
+  unsubmitted
+}
+
+# Types of submissions an assignment accepts
+enum SubmissionType {
+  attendance
+  discussion_topic
+  external_tool
+  media_recording
+  none
+  not_graded
+  on_paper
+  online_quiz
+  online_text_entry
+  online_upload
+  online_url
+  wiki_page
+}
+
+# statistics based on timeliness of student submissions
+type TardinessBreakdown {
+  late: Float
+  missing: Float
+  onTime: Float
+  total: Int
+}
+
+# Contains timestamp metadata
+interface Timestamped {
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+scalar URL
+
+type User implements Node, Timestamped {
+  # legacy canvas id
+  _id: ID!
+  avatarUrl: URL
+  createdAt: DateTime
+  email: String
+  enrollments(
+    # only return enrollments for this course
+    courseId: ID
+  ): [Enrollment]!
+  id: ID!
+  name: String
+
+  # A short name the user has selected, for use in conversations or other less formal places through the site.
+  shortName: String
+
+  # The name of the user that is should be used for sorting groups of users, such as in the gradebook.
+  sortableName: String
+  summaryAnalytics(
+    # returns summary analytics for this course
+    courseId: ID!
+  ): StudentSummaryAnalytics
+  updatedAt: DateTime
+}
+
+# The connection type for User.
+type UserConnection {
+  # A list of edges.
+  edges: [UserEdge]
+
+  # Information to aid in pagination.
+  pageInfo: PageInfo!
+}
+
+# An edge in a connection.
+type UserEdge {
+  # A cursor for use in pagination.
+  cursor: String!
+
+  # The item at the end of the edge.
+  node: User
+}

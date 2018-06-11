@@ -129,8 +129,8 @@ module AssignmentsCommon
   end
 
   def manually_create_assignment(assignment_title = 'new assignment')
-    get "/courses/#{@course.id}/assignments"
-    expect_new_page_load { f('.new_assignment').click }
+    # directly navigate via url
+    get "/courses/#{@course.id}/assignments/new"
     replace_content(f('#assignment_name'), assignment_title)
   end
 
@@ -153,7 +153,7 @@ module AssignmentsCommon
     @section1 = @course.course_sections.create!(:name => 'Section A')
     @section2 = @course.course_sections.create!(:name => 'Section B')
     @course.student_enrollments.each do |enrollment|
-      Score.where(enrollment_id: enrollment).delete_all
+      Score.where(enrollment_id: enrollment).each(&:destroy_permanently!)
       enrollment.destroy_permanently! # get rid of existing student enrollments, mess up section enrollment
     end
     # Overridden lock dates for 2nd section - different dates, but still in future

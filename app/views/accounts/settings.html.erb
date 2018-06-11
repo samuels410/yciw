@@ -14,9 +14,6 @@
 #
 # You should have received a copy of the GNU Affero General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
-%>
-
-<%
   @active_tab = "settings"
   add_crumb t(:settings_crumb, "Settings")
   js_bundle :account_settings
@@ -33,10 +30,7 @@
     }
   end
 %>
-
-
 <% content_for :right_side do %>
-  <%= render :partial => "courses_right_side" unless @account.site_admin? %>
   <%= render :partial => "additional_settings_right_side" %>
 <% end %>
 <h1 class='screenreader-only'><%= t(:page_header_title, "Account Settings") %></h1>
@@ -47,7 +41,7 @@
     }
     fieldset.nested {
       margin-top: 0;
-      margin-left: 20px;
+      margin-<%= direction('left') %>: 20px;
     }
     legend{
       font-size: 1.1em;
@@ -115,11 +109,6 @@
                              [[no_language, nil]] + available_locales.invert.sort_by { |desc, _| Canvas::ICU.collation_key(desc) },
                              {:selected => @context.default_locale}, {:class => 'locale'} %>
                 <%= render :partial => 'shared/locale_warning' %>
-                <p class="unbreakable"><%= mt :transifex_message, <<-TEXT, :transifex_url => "https://www.transifex.com/instructure/canvas-crowdsource/"
-Join the [Canvas Translation Community](%{transifex_url})
-TEXT
-                %>
-                </p>
                 <p style="font-size: 0.9em;"><%= t(:default_language_description, "This will override any browser/OS language settings. Preferred languages can still be set at the course/user level.") %></p>
               </td>
             </tr>
@@ -155,7 +144,7 @@ TEXT
                   </tr>
 
                   <% unless @account.non_canvas_auth_configured?
-                    # if the account has a account_authorization_config,
+                    # if the account has a authentication_provider,
                     # we'll control this setting from that page
                   %>
                     <tr>
@@ -181,6 +170,15 @@ TEXT
                       <p style="font-size: 0.9em;"><%= t("This is a comma separated list of URL's to trust.  Trusting any URL's in this list will bypass the CSRF token when logging in to Canvas.") %></p>
                     </td>
                   </tr>
+
+                  <% if can_do(@context, @current_user, :manage_account_settings) %>
+                    <tr>
+                      <td><%= settings.blabel :default_dashboard_view, t("Default View for Dashboard") %></td>
+                      <td>
+                        <%= settings.select :default_dashboard_view, options_for_select(dashboard_view_options(@account), @account.default_dashboard_view) %>
+                      </td>
+                    </tr>
+                  <% end %>
 
                   <tr>
                     <td colspan="2"><%= settings.check_box :prevent_course_renaming_by_teachers, :checked => @account.settings[:prevent_course_renaming_by_teachers] %>
@@ -298,6 +296,28 @@ TEXT
 
         <%= render partial: 'additional_settings', locals: { f: f } %>
 
+        <% if !@account.site_admin? && @account.root_account? && @account.grants_right?(@current_user, :manage_site_settings) %>
+          <% TermsOfService.ensure_terms_for_account(@account) %>
+          <% js_env(:TERMS_OF_SERVICE_CUSTOM_CONTENT => @account.terms_of_service_content&.content) %>
+          <% js_bundle :terms_of_service_modal%>
+          <fieldset>
+            <legend><%= t("Acceptable Use Policy") %></legend>
+            <%= f.fields_for :terms_of_service do |tos| %>
+              <%= tos.label :terms_type, t("License Type") %>
+              <% if TermsOfService.type_dropdown_options_for_account(@account)[0][1] == "built_in:default" %>
+                <label> (<%= t("Old Policy") %>)</label>
+              <% end %>
+              <%= tos.select :terms_type, options_for_select(TermsOfService.type_dropdown_options_for_account(@account), @account.terms_of_service.terms_type) %>
+              <br>
+              <%= tos.check_box :passive, :checked => @account.terms_of_service.passive %>
+              <%= tos.label :passive, t("Allow passive acceptance of Terms of Service")%>
+            <% end %>
+          </fieldset>
+          <div id="custom_tos_rce_container" style="<%= hidden %>">
+            <textarea name="account[terms_of_service][content]"></textarea>
+          </div>
+          <div id="terms_of_service_preview_link"></div>
+        <% end %>
         <% if !@account.site_admin? &&
                @account.root_account? &&
                @account.feature_enabled?(:google_docs_domain_restriction) &&
@@ -314,8 +334,13 @@ TEXT
 
         <% unless @account.site_admin? %>
           <fieldset>
-            <legend><%= t(:quiz_ip_filters_title, "Quiz IP Address Filters")%>
-              <%= link_to("<i class='icon-question standalone-icon'></i>".html_safe, '#', :class => 'ip_help_link no-hover', :title => t(:quiz_ip_filters_help_tooltip, "What are Quiz IP Filters?")) %></legend>
+            <h2 class="screenreader-only"><%= t('Quiz IP Address Filters') %></h2>
+            <legend><%= t('Quiz IP Address Filters') %>
+              <button class='Button Button--icon-action ip_help_link' type='button'>
+                <i class='icon-question'></i>
+                <span class='screenreader-only'><%= t(:quiz_ip_filters_help_tooltip, "What are Quiz IP Filters?") %></span>
+              </button>
+            </legend>
 
             <div id="ip_filters_dialog" style="display: none;">
               <h2><%= t(:quiz_ip_filters_help_title, "What are Quiz IP Filters?") %></h2>
@@ -348,6 +373,7 @@ TEXT
         <% end %>
 
         <fieldset>
+          <h2 class="screenreader-only"><%= t('Features') %></h2>
           <legend><%= t(:features_title, "Features") %></legend>
           <%= f.fields_for :settings do |settings| %>
             <% if @account.root_account? %>
@@ -360,10 +386,11 @@ TEXT
                   <%= settings.check_box :admins_can_view_notifications, :checked => @account.settings[:admins_can_view_notifications] %>
                   <%= settings.label :admins_can_view_notifications, :en => "Admins can view notifications" %>
                 </div>
-                <div>
+                <!-- The 'Prefer Office 365 file viewer' setting is disabled until we can get it working. See Content team. -->
+                <!-- <div>
                   <%= settings.check_box :canvadocs_prefer_office_online, :checked => @account.settings[:canvadocs_prefer_office_online] %>
                   <%= settings.label :canvadocs_prefer_office_online, :en => "Prefer Office 365 file viewer" %>
-                </div>
+                </div> -->
                 <% unless @account.site_admin? %>
                   <div>
                     <%= f.check_box :enable_user_notes, :checked => @account.enable_user_notes %>
@@ -458,6 +485,7 @@ TEXT
                 <%= settings.check_box :author_email_in_notifications, :checked => @account.author_email_in_notifications? %>
                 <%= settings.label     :author_email_in_notifications, :en => "Show the email address of sender for user interaction Notifications" %>
               </div>
+
             <% end %>
             <% unless @account.site_admin? %>
               <div>
@@ -472,12 +500,20 @@ TEXT
               </div>
             <% end %>
           <% end %>
+
           <%= f.fields_for :services do |services| %>
             <% Account.services_exposed_to_ui_hash(:setting, @current_user, @account).sort_by { |k,h| Canvas::ICU.collation_key(h[:name]) }.each do |key, service| %>
               <div>
                 <%= services.check_box key, :checked => @account.service_enabled?(key) %>
                 <%= services.label key, service[:name] + " " %>
               </div>
+              <% if key == :avatars %>
+                <div id="account_settings_gravatar_checkbox">
+                  <%= hidden_field_tag "account[settings][enable_gravatar]", "0", id: "hidden_account_settings_enable_gravatar" %>
+                  <%= check_box_tag "account[settings][enable_gravatar]", "1", @account.enable_gravatar? %>
+                  <%= label_tag "account[settings][enable_gravatar]", t("Enable Gravatar") %>
+                </div>
+              <% end %>
             <% end %>
           <% end %>
         </fieldset>
@@ -514,22 +550,26 @@ TEXT
             <% end %>
           </fieldset>
 
-          <% if @account.feature_enabled?(:plagiarism_detection_platform) || @account.settings[:enable_turnitin] %>
-            <fieldset id="turnitin_settings">
-              <legend><%= t("Similarity Detection Platform") %></legend>
-              <table class="formtable">
-                <tr>
-                  <td><%= f.blabel :turnitin_pledge, en: "Similarity Pledge" %></td>
-                  <td>
-                    <span style="font-size: 0.9em;">
-                      <%= t(:turnitin_pledge_help, "students must check a box acknowledging that they agree with this pledge") %>
-                    </span>
-                    <%= f.text_area :turnitin_pledge, :style => "width: 90%; height: 50px;" %>
-                  </td>
-                </tr>
-              </table>
-            </fieldset>
-          <% end %>
+          <fieldset id="turnitin_settings">
+            <legend><%= t("Similarity Detection Platform") %></legend>
+            <table class="formtable">
+              <tr>
+                <td><%= f.blabel :turnitin_pledge, en: "Similarity Pledge" %></td>
+                <td>
+                  <span style="font-size: 0.9em;">
+                    <%= t(:turnitin_pledge_help, "students must check a box acknowledging that they agree with this pledge") %>
+                  </span>
+                  <%= f.text_area :turnitin_pledge, :style => "width: 90%; height: 50px;" %>
+                </td>
+              </tr>
+              <tr>
+                <td><label for="account_turnitin_originality"><%= I18n.t('Students can see originality score') %></label></td>
+                <td>
+                  <%= f.select :turnitin_originality, options_for_select(turnitin_originality_options, @account.turnitin_originality)%>
+                </td>
+              </tr>
+            </table>
+          </fieldset>
 
           <% if @account.settings[:enable_turnitin] %>
             <fieldset id="turnitin_settings">
@@ -575,7 +615,8 @@ TEXT
 
         <% if @account.root_account? and not (exposed_services = Account.services_exposed_to_ui_hash(:service, @current_user)).empty? %>
           <fieldset>
-            <legend><%= t(:enabled_web_serices_title, "Enabled Web Services") %></legend>
+            <h2 class="screenreader-only"><%= t('Enabled Web Services') %></h2>
+            <legend><%= t('Enabled Web Services') %></legend>
             <%= f.fields_for :services do |services| %>
               <% exposed_services.sort_by { |k,h| Canvas::ICU.collation_key(h[:name]) }.each do |key, service| %>
                 <div>
@@ -608,6 +649,7 @@ acknowledge that you have read and agreed to the
 
         <% if @account.root_account? && !@account.site_admin? %>
           <fieldset>
+            <h2 class="screenreader-only"><%= t('Who Can Create New Courses') %></h2>
             <legend><%= t(:create_courses_title, "Who Can Create New Courses") %></legend>
             <div style="font-size: 0.8em;"><%= t(:create_courses_description, "(Account Administrators can always create courses)") %></div>
             <%= f.fields_for :settings do |settings| %>
@@ -654,10 +696,10 @@ acknowledge that you have read and agreed to the
                                       :class => 'notification_from_name_option' %>
             <%= settings.label :outgoing_email_default_name_option_default, :en => "Default Canvas Setting" %>
           </div>
-          <div style='padding-left: 2em;'>
+          <div style='padding-<%= direction('left') %>: 2em;'>
             <strong><%= t 'notifications.example', 'Example:' %></strong>
             <blockquote>
-              <table class="formtable" style='margin-left: 1.5em;'>
+              <table class="formtable" style='margin-<%= direction('left') %>: 1.5em;'>
               <tr>
                 <td><%= t 'notifications.from', 'From' %></td>
                 <td><%= HostUrl.outgoing_email_default_name %> <%= '<notifications@instructure.com>' %></td>
@@ -687,17 +729,17 @@ acknowledge that you have read and agreed to the
                                       :class => 'notification_from_name_option' %>
             <%= settings.label :outgoing_email_default_name_option_custom, :en => 'Custom "From" Name' %>
           </div>
-          <div style='padding-left: 2em;'>
+          <div style='padding-<%= direction('left') %>: 2em;'>
             <p>
               <%= t('notifications.custom_name_description', 'If selected, this will replace all other branding sent in Canvas notifications.') %>
               <br/>
               <%= text_field_tag 'account[settings][outgoing_email_default_name]', @account.settings[:outgoing_email_default_name] %>
             </p>
           </div>
-          <div style='padding-left: 2em;'>
+          <div style='padding-<%= direction('left') %>: 2em;'>
             <strong><%= t 'notifications.example', 'Example:' %></strong>
             <blockquote>
-            <table class="formtable" style='margin-left: 1.5em;'>
+            <table class="formtable" style='margin-<%= direction('left') %>: 1.5em;'>
               <tr>
                 <td><%= t 'notifications.from', 'From' %></td>
                 <td><strong id='custom_default_name_display'></strong> <%= '<notifications@instructure.com>' %></td>
@@ -733,7 +775,7 @@ acknowledge that you have read and agreed to the
             </tr>
           </table>
 
-          <table style="margin-left: 1.5em;" cellspacing="0" class="formtable">
+          <table style="margin-<%= direction('left') %>: 1.5em;" cellspacing="0" class="formtable">
             <tr>
               <td>
                 <b><%= t('notifications.external_services_warning_label', 'Pop-up Message Content:') %></b>
@@ -939,6 +981,14 @@ acknowledge that you have read and agreed to the
             </p>
           <% end %>
         </div>
+
+        <% if @account.root_account.trust_exists? %>
+          <div class="ic-Form-control">
+            <%= f.check_box :domain_specific, :checked => !!@account.root_account.settings[:default_announcement_domain_specific] %>
+            <%= f.label :domain_specific, t("Only show announcement on current account domain") %>
+          </div>
+        <% end %>
+
         <% if @account.site_admin? %>
           <div class="ic-Checkbox-group">
             <div class="ic-Form-control ic-Form-control--checkbox">
@@ -1094,7 +1144,7 @@ acknowledge that you have read and agreed to the
                   (<%= extra_text %>)
                 <% end %>
                 <% if last_complete.workflow_state == 'complete' %>
-                  <%= link_to "<i class='icon-download'></i>".html_safe, context_url(last_complete.account, :context_file_download_url, last_complete.attachment.id), 'aria-label' => t('Download Report'), 'title' => t('Download Report') %>
+                  <%= link_to "<i class='icon-download'></i>".html_safe, context_url(last_complete.account, :context_file_download_url, last_complete.attachment.id, download_frd: 1), 'aria-label' => t('Download Report'), 'title' => t('Download Report') %>
                 <% end %>
               <% else %>
                 <%= t 'report_last_run_never', 'Never' %>

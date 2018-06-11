@@ -20,10 +20,10 @@ import React from 'react'
 import PropTypes from 'prop-types'
 import $ from 'jquery'
 import I18n from 'i18n!eportfolio'
-import Modal, {ModalHeader, ModalBody, ModalFooter } from 'instructure-ui/lib/components/Modal'
-import Button from 'instructure-ui/lib/components/Button'
-import Heading from 'instructure-ui/lib/components/Heading'
-import Select from 'instructure-ui/lib/components/Select'
+import Modal, {ModalHeader, ModalBody, ModalFooter } from '@instructure/ui-core/lib/components/Modal'
+import Button from '@instructure/ui-core/lib/components/Button'
+import Heading from '@instructure/ui-core/lib/components/Heading'
+import Select from '@instructure/ui-core/lib/components/Select'
 
   var MoveToDialog = React.createClass({
     propTypes: {
@@ -96,12 +96,13 @@ import Select from 'instructure-ui/lib/components/Select'
         source: this.props.source.label
       })
       return (
-        <Modal ref='modal' isOpen={this.state.isOpen}
+        <Modal ref='modal' open={this.state.isOpen}
           modalSize='small'
           label={dialogLabel}
           closeButtonLabel={I18n.t('Cancel')}
-          onReady={this.handleReady}
-          onRequestClose={this.handleRequestClose}
+          applicationElement={() => document.getElementById('application')}
+          onOpen={this.handleReady}
+          onDismiss={this.handleRequestClose}
           onClose={this.handleClose}
         >
           <ModalHeader>
@@ -115,7 +116,7 @@ import Select from 'instructure-ui/lib/components/Select'
             <Button id='MoveToDialog__move' variant='primary' onClick={this.handleMove}>{I18n.t('Move')}</Button>
           </ModalFooter>
         </Modal>
-      )
+      );
     }
   });
 export default MoveToDialog

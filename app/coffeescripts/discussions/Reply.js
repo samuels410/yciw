@@ -19,11 +19,11 @@ import Backbone from 'Backbone'
 import _ from 'underscore'
 import I18n from 'i18n!discussions.reply'
 import $ from 'jquery'
-import Entry from 'compiled/models/Entry'
+import Entry from '../models/Entry'
 import htmlEscape from 'str/htmlEscape'
 import replyAttachmentTemplate from 'jst/discussions/_reply_attachment'
-import preventDefault from 'compiled/fn/preventDefault'
-import KeyboardShortcuts from 'compiled/views/editor/KeyboardShortcuts'
+import preventDefault from '../fn/preventDefault'
+import KeyboardShortcuts from '../views/editor/KeyboardShortcuts'
 import stripTags from 'str/stripTags'
 import RichContentEditor from 'jsx/shared/rce/RichContentEditor'
 import 'jquery.instructure_forms'
@@ -97,17 +97,33 @@ class Reply {
     return this.trigger('edit', this)
   }
 
+  createTextArea(id) {
+    return (
+      $('<textarea/>')
+        .addClass('reply-textarea')
+        .attr('id', id)
+        .attr('aria-hidden', 'true')
+    )
+  }
+
+  replaceTextArea(textAreaId) {
+    RichContentEditor.destroyRCE(this.textArea)
+    this.textArea = this.createTextArea(textAreaId)
+    this.textArea.val(this.content)
+    $(`#tinymce-parent-of-${textAreaId}`).replaceWith(this.textArea)
+  }
+
   // #
   // Hides the TinyMCE editor
   //
   // @api public
   hide () {
+    const textAreaId = this.textArea.attr('id')
     this.content = RichContentEditor.callOnRCE(this.textArea, 'get_code')
-    RichContentEditor.destroyRCE(this.textArea)
     this.form.removeClass('replying')
     this.discussionEntry.removeClass('replying')
-    this.textArea.val(this.content)
     this.editing = false
+    this.replaceTextArea(textAreaId)
     this.trigger('hide', this)
     return this.discussionEntry.find('.discussion-reply-action').focus()
   }

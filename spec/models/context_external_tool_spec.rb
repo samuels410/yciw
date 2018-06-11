@@ -26,6 +26,67 @@ describe ContextExternalTool do
     @course.update_attribute(:account, @account)
   end
 
+  describe '#duplicated_in_context?' do
+    shared_examples_for 'detects duplication in contexts' do
+      let(:context) { raise 'Override in spec' }
+      let(:settings) do
+        {
+          "editor_button" => {
+            "icon_url"=>"http://www.example.com/favicon.ico",
+            "text"=>"Example",
+            "url"=>"http://www.example.com",
+            "selection_height"=>400,
+            "selection_width"=>600
+          }
+        }
+      end
+      let(:tool) do
+        ContextExternalTool.create!(
+          settings: settings,
+          context: context,
+          name: 'test tool',
+          consumer_key: 'key',
+          shared_secret: 'secret',
+          url: 'http://www.tool.com/launch'
+        )
+      end
+
+      it 'returns true if tool with matching settings if found' do
+        second_tool = tool.dup
+        expect(second_tool.duplicated_in_context?).to eq true
+      end
+
+      it 'returns true if settings is blank and url matches' do
+        tool.update_attributes!(settings: {})
+        second_tool = tool.dup
+        expect(second_tool.duplicated_in_context?).to eq true
+      end
+
+      it 'returns false if tool with matching settings is not found' do
+        expect(tool.duplicated_in_context?).to eq false
+      end
+
+      it 'returns false if settings is blank and url does not match' do
+        tool.update_attributes!(settings: {})
+        second_tool = tool.dup
+        second_tool.url = 'http://www.test.com/a-different-url'
+        expect(second_tool.duplicated_in_context?).to eq false
+      end
+    end
+
+    context 'duplicated in account chain' do
+      it_behaves_like 'detects duplication in contexts' do
+        let(:context) { account_model }
+      end
+    end
+
+    context 'duplicated in course' do
+      it_behaves_like 'detects duplication in contexts' do
+        let(:context) { course_model }
+      end
+    end
+  end
+
   describe '#content_migration_configured?' do
     let(:tool) do
       ContextExternalTool.new.tap do |t|
@@ -237,6 +298,12 @@ describe ContextExternalTool do
       @tool2 = @course.context_external_tools.create!(:name => "a", :domain => "www.google.com", :consumer_key => '12345', :shared_secret => 'secret')
       @found_tool = ContextExternalTool.find_external_tool("http://www.google.com/coolness", Course.find(@course.id))
       expect(@found_tool).to eql(@tool)
+    end
+
+    it "should not match on domain if domain is nil" do
+      @tool = @course.context_external_tools.create!(:name => "a", :url => "http://www.google.com/coolness", :consumer_key => '12345', :shared_secret => 'secret')
+      @found_tool = ContextExternalTool.find_external_tool("http://malicious.domain./hahaha", Course.find(@course.id))
+      expect(@found_tool).to be_nil
     end
 
     it "should match on url or domain for a tool that has both" do
@@ -897,6 +964,22 @@ describe ContextExternalTool do
 
     it "should raise RecordNotFound if the id is invalid" do
       expect { ContextExternalTool.find_for("horseshoes", @course, :course_navigation) }.to raise_error(ActiveRecord::RecordNotFound)
+    end
+
+    it "should not find a course tool with workflow_state deleted" do
+      tool = new_external_tool @course
+      tool.course_navigation = {:url => "http://www.example.com", :text => "Example URL"}
+      tool.workflow_state = 'deleted'
+      tool.save!
+      expect { ContextExternalTool.find_for(tool.id, @course, :course_navigation) }.to raise_error(ActiveRecord::RecordNotFound)
+    end
+
+    it "should not find an account tool with workflow_state deleted" do
+      tool = new_external_tool @account
+      tool.account_navigation = {:url => "http://www.example.com", :text => "Example URL"}
+      tool.workflow_state = 'deleted'
+      tool.save!
+      expect { ContextExternalTool.find_for(tool.id, @account, :account_navigation) }.to raise_error(ActiveRecord::RecordNotFound)
     end
   end
 

@@ -153,7 +153,7 @@ class StreamItem < ActiveRecord::Base
 
   ROOT_DISCUSSION_ENTRY_LIMIT = 3
   def generate_data(object)
-    self.context ||= object.context rescue nil
+    self.context ||= object.try(:context) unless object.is_a?(Message)
 
     case object
     when DiscussionTopic
@@ -195,7 +195,7 @@ class StreamItem < ActiveRecord::Base
       raise "Unexpected stream item type: #{object.class}"
     end
     if self.context_type
-      res['context_short_name'] = Rails.cache.fetch(['short_name_lookup', self.context_type, self.context_id].cache_key) do
+      res['context_short_name'] = Rails.cache.fetch(['short_name_lookup', "#{self.context_type.underscore}_#{self.context_id}"].cache_key) do
         self.context.short_name rescue ''
       end
     end
@@ -367,6 +367,13 @@ class StreamItem < ActiveRecord::Base
     unless user_ids.empty?
       # touch all the users to invalidate the cache
       User.where(:id => user_ids.to_a).touch_all
+    end
+
+    Shackles.activate(:deploy) do
+      Shard.current.database_server.unshackle do
+        StreamItem.connection.execute("VACUUM ANALYZE #{StreamItem.quoted_table_name}")
+        StreamItemInstance.connection.execute("VACUUM ANALYZE #{StreamItemInstance.quoted_table_name}")
+      end
     end
 
     count

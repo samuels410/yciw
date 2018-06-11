@@ -19,7 +19,7 @@
 require_relative '../sharding_spec_helper'
 
 describe GradeCalculator do
-  before :once do
+  before :each do
     course_with_student active_all: true
   end
 
@@ -64,6 +64,22 @@ describe GradeCalculator do
       }.not_to raise_error
     end
 
+    it "weighted grading periods: compute_scores does not raise an error if no grading period score objects exist" do
+      grading_period_set = @course.root_account.grading_period_groups.create!(weighted: true)
+      grading_period_set.enrollment_terms << @course.enrollment_term
+      grading_period_set.grading_periods.create!(
+        title: "A Grading Period",
+        start_date: 10.days.ago,
+        end_date: 10.days.from_now,
+        weight: 50
+      )
+      Score.where(enrollment: @course.student_enrollments).destroy_all
+
+      grade_calculator = GradeCalculator.new(@user.id, @course.id)
+
+      expect { grade_calculator.compute_scores }.not_to raise_error
+    end
+
     it "can compute scores for users with deleted enrollments when grading periods are used" do
       grading_period_set = @course.root_account.grading_period_groups.create!
       grading_period_set.enrollment_terms << @course.enrollment_term
@@ -99,8 +115,77 @@ describe GradeCalculator do
       }.to change{stale_score.reload.workflow_state}.from('active').to('deleted')
     end
 
+    it "gracefully handles missing submissions" do
+      # Create at least one alternate section for this course
+      section = @course.course_sections.create!(name: 'Section #2')
+
+      # Enroll multiple students in a course
+      students = [@student]
+      students << course_with_student(active_all: true, course: @course).user
+      students << course_with_student(active_all: true, course: @course).user
+
+      # Enroll the last student into both sections
+      course_with_student(active_all: true, course: @course, user: students[-1], section: section, allow_multiple_enrollments: true)
+
+      # Create an assignment...
+      assignments = []
+      assignments << @course.assignments.create!(title: 'Assignment #1', points_possible: 10)
+
+      # ...and grade it for the three students
+      students.each { |student| assignments[0].grade_student(student, grade: '5', grader: @teacher) }
+
+      # Conclude all enrollments for the last student so no submissions are created for them...
+      @course.enrollments.where(user_id: students.last).map(&:conclude)
+
+      # ...and create an assignment now so there's no corresponding submission for the concluded user
+      assignments << @course.assignments.create!(title: 'Assignment #2', points_possible: 10)
+      assignments << @course.assignments.create!(title: 'Assignment #3', points_possible: 10)
+
+      # ...and grade it for the first two students
+      assignments[1..2].each do |assignment|
+        students[0..1].each { |student| assignment.grade_student(student, grade: '6', grader: @teacher) }
+      end
+
+      # Update the assignment group to drop the lowest score
+      assignments.first.assignment_group.rules_hash = { drop_lowest: 1 }
+      assignments.first.assignment_group.save!
+
+      calculator = GradeCalculator.new(students.map(&:id), @course)
+      computed_scores = calculator.compute_scores
+
+      # Verify the grades for the third student are what we expect
+      expect(computed_scores[2][:current][:grade]).to eq(50.0)
+      expect(computed_scores[2][:final][:grade]).to eq(50.0)
+    end
+
     context "sharding" do
       specs_require_sharding
+
+      let(:seed_assignment_groups_with_scores) do
+        now = Time.zone.now
+        groups = []
+        assignments = []
+        submissions = []
+        @shard1.activate do
+          account = Account.create!
+          course_with_student(active_all: true, account: account, user: @user)
+          @course.update_attribute(:group_weighting_scheme, "percent")
+          groups <<
+            @course.assignment_groups.create!(name: "some group 1", group_weight: 50) <<
+            @course.assignment_groups.create!(name: "some group 2", group_weight: 50)
+          asgt_opts = { due_at: now, points_possible: 10 }
+          assignments <<
+            @course.assignments.create!(title: "Some Assignment 1", assignment_group: groups[0], **asgt_opts) <<
+            @course.assignments.create!(title: "Some Assignment 2", assignment_group: groups[1], **asgt_opts) <<
+            @course.assignments.create!(title: "Some Assignment 3", assignment_group: groups[1], **asgt_opts)
+          submissions <<
+            assignments[0].submissions.find_by!(user: @user) <<
+            assignments[1].submissions.find_by!(user: @user)
+        end
+        submissions[0].update_column(:score, 5.0)
+        submissions[1].update_column(:score, 2.5)
+        groups
+      end
 
       it "should delete irrelevant cross-shard scores" do
         @user = User.create!
@@ -180,6 +265,24 @@ describe GradeCalculator do
         expect(Enrollment.shard(@course.shard).where(user_id: @user.global_id).first.computed_final_score).to eql(17.5)
         expect(Enrollment.shard(@course.shard).where(user_id: @user.global_id).first.computed_current_score(grading_period_id: @grading_period.id)).to eql(20.0)
         expect(Enrollment.shard(@course.shard).where(user_id: @user.global_id).first.computed_final_score(grading_period_id: @grading_period.id)).to eql(10.0)
+      end
+
+      it("should update cross-shard scores with assignment groups") do
+        @user = User.create!
+
+        allow(GradeCalculator).to receive(:recompute_final_score) {}
+        groups = seed_assignment_groups_with_scores
+
+        allow(GradeCalculator).to receive(:recompute_final_score).and_call_original
+        GradeCalculator.recompute_final_score(@user.id, @course.id)
+
+        enrollment = Enrollment.shard(@course.shard).where(user_id: @user.global_id).first
+        expect(enrollment.computed_current_score).to be(37.5)
+        expect(enrollment.computed_final_score).to be(31.25)
+        expect(enrollment.computed_current_score(assignment_group_id: groups[0].id)).to be(50.0)
+        expect(enrollment.computed_final_score(assignment_group_id: groups[0].id)).to be(50.0)
+        expect(enrollment.computed_current_score(assignment_group_id: groups[1].id)).to be(25.0)
+        expect(enrollment.computed_final_score(assignment_group_id: groups[1].id)).to be(12.5)
       end
     end
 
@@ -313,7 +416,7 @@ describe GradeCalculator do
       end
 
       context "muted assignments" do
-        before do
+        before :each do
           @assignment2.mute!
         end
 
@@ -348,13 +451,14 @@ describe GradeCalculator do
           expect(scores[:final][:grade]).to eq 25
         end
 
-        it "should be impossible to save grades that considered muted assignments" do
-          @course.update_attribute(:group_weighting_scheme, "percent")
+        it "saves unmuted scores" do
+          @assignment.mute!
           calc = GradeCalculator.new [@user.id],
-                                     @course.id,
-                                     :ignore_muted => false
-           # save_scores is a private method
-          expect { calc.send(:save_scores) }.to raise_error("Can't save scores when ignore_muted is false")
+                                     @course.id
+          calc.compute_and_save_scores
+          score = Enrollment.where(user_id: @user.id, course_id: @course.id).first.find_score(course_score: true)
+          expect(score.unposted_current_score).to eq 50
+          expect(score.current_score).to be_nil
         end
       end
     end
@@ -613,55 +717,957 @@ describe GradeCalculator do
     it "should convert NaN to NULL" do
       calc = GradeCalculator.new [@user.id], @course.id
       score = 0/0.0
-      expect(calc.send(:number_or_null, score)).to eql('NULL')
+      expect(calc.send(:number_or_null, score)).to eql('NULL::float')
     end
 
     it "should convert nil to NULL" do
       calc = GradeCalculator.new [@user.id], @course.id
       score = nil
-      expect(calc.send(:number_or_null, score)).to eql('NULL')
+      expect(calc.send(:number_or_null, score)).to eql('NULL::float')
+    end
+  end
+
+  describe 'memoization' do
+    it 'only fetches groups once' do
+      expect(GradeCalculator).to receive(:new).twice.and_call_original
+      expect(@course).to receive(:assignment_groups).once.and_call_original
+      GradeCalculator.new(@student.id, @course).compute_and_save_scores
+    end
+
+    it 'only fetches assignments once' do
+      expect(GradeCalculator).to receive(:new).twice.and_call_original
+      expect(@course).to receive(:assignments).once.and_call_original
+      GradeCalculator.new(@student.id, @course).compute_and_save_scores
+    end
+
+    it 'only fetches submissions once' do
+      expect(GradeCalculator).to receive(:new).twice.and_call_original
+      expect(@course).to receive(:submissions).once.and_call_original
+      GradeCalculator.new(@student.id, @course).compute_and_save_scores
+    end
+
+    it 'only fetches grading periods once' do
+      expect(GradeCalculator).to receive(:new).twice.and_call_original
+      expect(GradingPeriod).to receive(:for).once.and_call_original
+      GradeCalculator.new(@student.id, @course).compute_and_save_scores
+    end
+
+    it 'only fetches enrollments once' do
+      expect(GradeCalculator).to receive(:new).twice.and_call_original
+      expect(Enrollment).to receive(:shard).once.and_call_original
+      GradeCalculator.new(@student.id, @course).compute_and_save_scores
+    end
+  end
+
+  describe 'GradeCalculator.recompute_final_score' do
+    it 'accepts a course' do
+      expect(GradeCalculator).to receive(:new).with([@student.id], @course, Hash).
+        and_return(double('GradeCalculator', compute_and_save_scores: 'hi'))
+      GradeCalculator.recompute_final_score(@student.id, @course)
+    end
+
+    it 'accepts a course id' do
+      expect(GradeCalculator).to receive(:new).with([@student.id], Course, Hash).
+        and_return(double('GradeCalculator', compute_and_save_scores: 'hi'))
+      GradeCalculator.recompute_final_score(@student.id, @course.id)
+    end
+
+    it 'fetches assignments for GradeCalculator' do
+      expect(@course).to receive_message_chain(:assignments, :published, :gradeable, :to_a => [5,6])
+      expect(GradeCalculator).to receive(:new).with([@student.id], @course, hash_including(assignments: [5,6])).
+        and_return(double('GradeCalculator', compute_and_save_scores: 'hi'))
+      GradeCalculator.recompute_final_score(@student.id, @course)
+    end
+
+    it 'does not fetch assignments if they are already passed' do
+      expect(@course).not_to receive(:assignments)
+      expect(GradeCalculator).to receive(:new).with([@student.id], @course, hash_including(assignments: [5,6])).
+        and_return(double('GradeCalculator', compute_and_save_scores: 'hi'))
+      GradeCalculator.recompute_final_score(@student.id, @course, assignments: [5,6])
+    end
+
+    it 'fetches groups for GradeCalculator' do
+      expect(@course).to receive_message_chain(:assignment_groups, :active, :to_a => [5,6])
+      expect(GradeCalculator).to receive(:new).with([@student.id], @course, hash_including(groups: [5,6])).
+        and_return(double('GradeCalculator', compute_and_save_scores: 'hi'))
+      GradeCalculator.recompute_final_score(@student.id, @course)
+    end
+
+    it 'does not fetch groups if they are already passed' do
+      expect(@course).not_to receive(:assignment_groups)
+      expect(GradeCalculator).to receive(:new).with([@student.id], @course, hash_including(groups: [5,6])).
+        and_return(double('GradeCalculator', compute_and_save_scores: 'hi'))
+      GradeCalculator.recompute_final_score(@student.id, @course, groups: [5,6])
+    end
+
+    it 'fetches periods for GradeCalculator' do
+      expect(GradingPeriod).to receive(:for).with(@course).and_return([5,6])
+      expect(GradeCalculator).to receive(:new).with([@student.id], @course, hash_including(periods: [5,6])).
+        and_return(double('GradeCalculator', compute_and_save_scores: 'hi'))
+      GradeCalculator.recompute_final_score(@student.id, @course)
+    end
+
+    it 'does not fetch periods if they are already passed' do
+      expect(GradingPeriod).not_to receive(:for)
+      expect(GradeCalculator).to receive(:new).with([@student.id], @course, hash_including(periods: [5,6])).
+        and_return(double('GradeCalculator', compute_and_save_scores: 'hi'))
+      GradeCalculator.recompute_final_score(@student.id, @course, periods: [5,6])
     end
   end
 
   describe '#compute_and_save_scores' do
-    before(:once) do
-      @first_period, @second_period = grading_periods(count: 2)
-      @first_assignment = @course.assignments.create!(
-        due_at: 1.day.from_now(@first_period.start_date),
-        points_possible: 100
-      )
-      @second_assignment = @course.assignments.create!(
-        due_at: 1.day.from_now(@second_period.start_date),
-        points_possible: 100
-      )
+    before :each do
+      @now = Time.zone.now
+      @grading_period_options = { count: 2, weights: [30, 70], start_dates: [1, 2].map { |n| @now + n.months }}
 
-      @first_assignment.grade_student(@student, grade: 25, grader: @teacher)
-      @second_assignment.grade_student(@student, grade: 75, grader: @teacher)
-      # update_column to avoid callbacks on submission that would trigger the grade calculator
-      submission_for_first_assignment.update_column(:score, 99.6)
-      submission_for_second_assignment.update_column(:score, 95.0)
+      assignment_group_weights = [45.0, 55.0]
+      @assignment_groups = []
+      @assignments = []
+
+      @assignment_groups = Array.new(2) do |assignment_group_idx|
+        assignment_group = @course.assignment_groups.create!(
+          name: "Assignment Group ##{assignment_group_idx}",
+          group_weight: assignment_group_weights[assignment_group_idx],
+          rules: "drop_lowest:1\n"
+        )
+        assignments = Array.new(3) do |assignment_idx|
+          @course.assignments.create!(
+            title: "AG#{assignment_group_idx} Assignment ##{assignment_idx}",
+            assignment_group: assignment_group,
+            # Each assignment group spans only one grading period
+            due_at: @grading_period_options[:start_dates][assignment_group_idx] + (assignment_idx + 1).days,
+            points_possible: 150 # * (assignment_idx + 1)
+          )
+        end
+
+        assignments[1].mute!
+
+        @assignments.push(*assignments)
+        assignment_group
+      end
+
+      assignment_scores = [
+        # Assignment Group 1
+        35.0,  # dropped
+        99.6,  # muted
+        142.7,
+
+        # Assignment Group 2
+        42.0,  # dropped
+        95.0,  # muted
+        131.4
+      ]
+      @assignments.zip(assignment_scores).each do |assignment_score_pair|
+        submission = Submission.find_by(user: @student, assignment: assignment_score_pair[0])
+
+        # update_column to avoid callbacks on submission that would trigger the grade calculator.
+        # For these specs we want control over when the grade calculator is kicked off
+        # rubocop:disable Rails/SkipsModelValidations
+        submission.update_column(:score, assignment_score_pair[1])
+        # rubocop:enable Rails/SkipsModelValidations
+      end
+
+      @dropped_assignments = [0, 3].map { |i| @assignments[i] }
+      @dropped_submissions = @dropped_assignments.map { |a| Submission.find_by(assignment: a, user: @student) }
     end
 
+    let(:student_enrollment) { @student.enrollments.first }
     let(:scores) { @student.enrollments.first.scores.index_by(&:grading_period_id) }
-    let(:overall_course_score) { scores[nil] }
-    let(:submission_for_first_assignment) { Submission.find_by(user: @student, assignment: @first_assignment) }
-    let(:submission_for_second_assignment) { Submission.find_by(user: @student, assignment: @second_assignment) }
+    let(:overall_course_score) { @student.enrollments.first.scores.find_by(course_score: true) }
+    let(:submission_for_first_assignment) { Submission.find_by(user: @student, assignment: @assignments[1]) }
+    let(:submission_for_second_assignment) { Submission.find_by(user: @student, assignment: @assignments[4]) }
 
-    it 'updates the overall course score' do
-      GradeCalculator.new(@student.id, @course).compute_and_save_scores
-      expect(overall_course_score.current_score).to eq(97.3)
+    context 'without grading periods' do
+      describe 'overall course score' do
+        context 'with the percent weighting scheme' do
+          before :each do
+            # rubocop:disable Rails/SkipsModelValidations
+            @course.update_column(:group_weighting_scheme, 'percent')
+            # rubocop:enable Rails/SkipsModelValidations
+            GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          end
+
+          it 'posted current course score is updated' do
+            # 142.7 / 150 * 0.45 + 131.4 / 150 * 0.55
+            expect(overall_course_score.current_score).to eq(90.99)
+          end
+
+          it 'posted current course points are updated' do
+            # 142.7 / 150 * 0.45 + 131.4 / 150 * 0.55
+            expect(overall_course_score.current_points).to eq(90.99)
+          end
+
+          it 'posted final course score is updated' do
+            # (0 + 142.7) / 300 * 0.45 + (0 + 131.4) / 300 * 0.55
+            expect(overall_course_score.final_score).to eq(45.50)
+          end
+
+          it 'posted final course points are updated' do
+            # (0 + 142.7) / 300 * 0.45 + (0 + 131.4) / 300 * 0.55
+            expect(overall_course_score.final_points).to eq(45.50)
+          end
+
+          it 'unposted current course score is updated' do
+            # (99.6 + 142.7) / 300 * 0.45 + (95.0 + 131.4) / 300 * 0.55
+            expect(overall_course_score.unposted_current_score).to eq(77.85)
+          end
+
+          it 'unposted current course points are updated' do
+            # (99.6 + 142.7) / 300 * 0.45 + (95.0 + 131.4) / 300 * 0.55
+            expect(overall_course_score.unposted_current_points).to eq(77.85)
+          end
+
+          it 'unposted final course score is updated' do
+            # (99.6 + 142.7) / 300 * 0.45 + (95.0 + 131.4) / 300 * 0.55
+            expect(overall_course_score.unposted_final_score).to eq(77.85)
+          end
+
+          it 'unposted final course points are updated' do
+            # (99.6 + 142.7) / 300 * 0.45 + (95.0 + 131.4) / 300 * 0.55
+            expect(overall_course_score.unposted_final_points).to eq(77.85)
+          end
+        end
+
+        context 'without a weighting scheme' do
+          before :each do
+            GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          end
+
+          it 'current posted course score is updated' do
+            # (142.7 + 131.4) / 300
+            expect(overall_course_score.current_score).to eq(91.37)
+          end
+
+          it 'current posted course points are updated' do
+            # 142.7 + 131.4
+            expect(overall_course_score.current_points).to eq(274.10)
+          end
+
+          it 'current final course score is updated' do
+            # (0 + 142.7 + 0 + 131.4) / 600
+            expect(overall_course_score.final_score).to eq(45.68)
+          end
+
+          it 'current final course points are updated' do
+            # 0 + 142.7 + 0 + 131.4
+            expect(overall_course_score.final_points).to eq(274.10)
+          end
+
+          it 'unposted current course score is updated' do
+            # (99.6 + 142.7 + 95.0 + 131.4) / 600
+            expect(overall_course_score.unposted_current_score).to eq(78.12)
+          end
+
+          it 'unposted current course points are updated' do
+            # 99.6 + 142.7 + 95.0 + 131.4
+            expect(overall_course_score.unposted_current_points).to eq(468.70)
+          end
+
+          it 'unposted final course score is updated' do
+            # (99.6 + 142.7 + 95.0 + 131.4) / 600
+            expect(overall_course_score.unposted_final_score).to eq(78.12)
+          end
+
+          it 'unposted final course points are updated' do
+            # 99.6 + 142.7 + 95.0 + 131.4
+            expect(overall_course_score.unposted_final_points).to eq(468.70)
+          end
+        end
+
+        it 'schedules assignment score statistic updates as a singleton' do
+          calculator = GradeCalculator.new(@student.id, @course)
+          expect(AssignmentScoreStatisticsGenerator).to receive(:update_score_statistics_in_singleton).with(@course.id)
+
+          calculator.compute_and_save_scores
+        end
+
+        it 'does not update score statistics when calculating scores for muted assignments' do
+          calculator = GradeCalculator.new(@student.id, @course, ignore_muted: false)
+          expect(AssignmentScoreStatisticsGenerator).not_to receive(:update_score_statistics_in_singleton).with(@course.id)
+          calculator.compute_and_save_scores
+        end
+      end
+
+      describe 'assignment group scores' do
+        let(:assignment_group_scores) do
+          student_enrollment.scores.where.not(assignment_group_id: nil).order(assignment_group_id: :asc)
+        end
+
+        context 'with the percent weighting scheme' do
+          before :each do
+            # rubocop:disable Rails/SkipsModelValidations
+            @course.update_column(:group_weighting_scheme, 'percent')
+            # rubocop:enable Rails/SkipsModelValidations
+            GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          end
+
+          it 'posted current assignment group scores are updated' do
+            # [142.7 / 150, 131.4 / 150]
+            expect(assignment_group_scores.map(&:current_score)).to eq([95.13, 87.60])
+          end
+
+          it 'posted current assignment group points are updated' do
+            # [142.7, 131.4]
+            expect(assignment_group_scores.map(&:current_points)).to eq([142.70, 131.40])
+          end
+
+          it 'posted final assignment group scores are updated' do
+            # [142.7 / 150, 131.4 / 150]
+            expect(assignment_group_scores.map(&:final_score)).to eq([47.57, 43.80])
+          end
+
+          it 'posted final assignment group points are updated' do
+            # [0 + 142.7, 0 + 131.4]
+            expect(assignment_group_scores.map(&:final_points)).to eq([142.70, 131.40])
+          end
+
+          it 'unposted current assignment group scores are updated' do
+            # [142.7 / 150, 131.4 / 150]
+            expect(assignment_group_scores.map(&:unposted_current_score)).to eq([80.77, 75.47])
+          end
+
+          it 'unposted current assignment group points are updated' do
+            # 99.6 + 142.7 + 95.0 + 131.4
+            expect(assignment_group_scores.map(&:unposted_current_points)).to eq([242.30, 226.40])
+          end
+
+          it 'unposted final assignment group scores are updated' do
+            # (99.6 + 142.7 + 95.0 + 131.4) / 600
+            expect(assignment_group_scores.map(&:unposted_final_score)).to eq([80.77, 75.47])
+          end
+
+          it 'unposted final assignment group points are updated' do
+            # 99.6 + 142.7 + 95.0 + 131.4
+            expect(assignment_group_scores.map(&:unposted_final_points)).to eq([242.30, 226.40])
+          end
+        end
+
+        context 'without a weighting scheme' do
+          before :each do
+            GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          end
+
+          it 'posted current assignment group scores are updated' do
+            # [142.7 / 150, 131.4 / 150]
+            expect(assignment_group_scores.map(&:current_score)).to eq([95.13, 87.60])
+          end
+
+          it 'posted current assignment group points are updated' do
+            # [142.7, 131.4]
+            expect(assignment_group_scores.map(&:current_points)).to eq([142.70, 131.40])
+          end
+
+          it 'posted final assignment group scores are updated' do
+            # [142.7 / 150, 131.4 / 150]
+            expect(assignment_group_scores.map(&:final_score)).to eq([47.57, 43.80])
+          end
+
+          it 'posted final assignment group points are updated' do
+            # [0 + 142.7, 0 + 131.4]
+            expect(assignment_group_scores.map(&:final_points)).to eq([142.70, 131.40])
+          end
+
+          it 'unposted current assignment group scores are updated' do
+            # [142.7 / 150, 131.4 / 150]
+            expect(assignment_group_scores.map(&:unposted_current_score)).to eq([80.77, 75.47])
+          end
+
+          it 'unposted current assignment group points are updated' do
+            # 99.6 + 142.7 + 95.0 + 131.4
+            expect(assignment_group_scores.map(&:unposted_current_points)).to eq([242.30, 226.40])
+          end
+
+          it 'unposted final assignment group scores are updated' do
+            # (99.6 + 142.7 + 95.0 + 131.4) / 600
+            expect(assignment_group_scores.map(&:unposted_final_score)).to eq([80.77, 75.47])
+          end
+
+          it 'unposted final assignment group points are updated' do
+            # 99.6 + 142.7 + 95.0 + 131.4
+            expect(assignment_group_scores.map(&:unposted_final_points)).to eq([242.30, 226.40])
+          end
+        end
+      end
     end
 
-    it 'updates all grading period scores' do
-      GradeCalculator.new(@student.id, @course).compute_and_save_scores
-      expect(scores[@first_period.id].current_score).to eq(99.6)
-      expect(scores[@second_period.id].current_score).to eq(95.0)
+    context 'with grading periods' do
+      before :each do
+        @grading_periods = grading_periods(@grading_period_options)
+        @first_period, @second_period = @grading_periods
+      end
+
+      it 'updates all grading period scores' do
+        GradeCalculator.new(@student.id, @course).compute_and_save_scores
+        expect(scores[@first_period.id].current_score).to eq(95.13)
+        expect(scores[@second_period.id].current_score).to eq(87.6)
+      end
+
+      it 'updates all grading period score metadata' do
+        GradeCalculator.new(@student.id, @course).compute_and_save_scores
+        expected_metadata = [
+          {
+            'current' => {
+              'dropped' => [@dropped_submissions[0].id]
+            },
+            'final' => {
+              'dropped' => [@dropped_submissions[0].id]
+            }
+          },
+          {
+            'current' => {
+              'dropped' => [@dropped_submissions[1].id]
+            },
+            'final' => {
+              'dropped' => [@dropped_submissions[1].id]
+            }
+          }
+        ]
+        expect(scores[@first_period.id].score_metadata.calculation_details).to eq(expected_metadata[0])
+        expect(scores[@second_period.id].score_metadata.calculation_details).to eq(expected_metadata[1])
+      end
+
+      it 'does not update grading period scores if update_all_grading_period_scores is false' do
+        calculator = GradeCalculator.new(@student.id, @course, update_all_grading_period_scores: false)
+        expect { calculator.compute_and_save_scores }.
+          not_to (change { @student.enrollments.first.scores.where.not(grading_period_id: nil).map(&:updated_at) })
+      end
+
+      it 'schedules assignment score statistic updates as a singleton' do
+        calculator = GradeCalculator.new(@student.id, @course)
+        expect(AssignmentScoreStatisticsGenerator).to receive(:update_score_statistics_in_singleton).with(@course.id)
+
+        calculator.compute_and_save_scores
+      end
+
+      context 'when a grading period is provided' do
+        it 'updates the grading period score' do
+          GradeCalculator.new(@student.id, @course, grading_period: @first_period).compute_and_save_scores
+          expect(scores[@first_period.id].current_score).to eq(95.13)
+        end
+
+        it 'updates the overall course score' do
+          GradeCalculator.new(@student.id, @course, grading_period: @first_period).compute_and_save_scores
+          expect(overall_course_score.current_score).to eq(91.37)
+        end
+
+        it 'does not update score statistics when calculating non-course scores' do
+          calculator_options = { grading_period: @first_period, update_course_score: false }
+          calculator = GradeCalculator.new(@student.id, @course, calculator_options)
+          expect(AssignmentScoreStatisticsGenerator).not_to receive(:update_score_statistics_in_singleton).with(@course.id)
+          calculator.compute_and_save_scores
+        end
+
+        it 'does not update scores for other grading periods' do
+          calculator = GradeCalculator.new(@student.id, @course, grading_period: @first_period)
+          expect { calculator.compute_and_save_scores }.
+            not_to (change { @student.enrollments.first.scores.where(grading_period: @second_period) })
+        end
+
+        it 'does not update the overall course score if update_course_score is false' do
+          calculator_options = { grading_period: @first_period, update_course_score: false }
+          calculator = GradeCalculator.new(@student.id, @course, calculator_options)
+
+          expect { calculator.compute_and_save_scores }.
+              not_to (change { @student.enrollments.first.scores.find_by(course_score: true) })
+        end
+
+        it 'does not restore previously deleted score if grading period is deleted too' do
+          score = scores[@first_period.id]
+          @first_period.destroy
+          GradeCalculator.new(@student.id, @course, grading_period: @first_period).compute_and_save_scores
+          expect(score.reload).to be_deleted
+        end
+      end
+
+      context 'when grading periods are weighted' do
+        before :each do
+          group = @first_period.grading_period_group
+          group.update!(weighted: true)
+          @ungraded_assignment = @course.assignments.create!(
+            due_at: 1.day.from_now(@second_period.start_date),
+            points_possible: 100 # these will be considered for final scores below
+          )
+        end
+
+        it 'calculates the course score from weighted grading period scores' do
+          @first_period.update!(weight: 25.0)
+          @second_period.update!(weight: 75.0)
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          # GP1: 142.7 / 150 * 100 = 95.13
+          # GP2: 131.4 / 150 * 100 = 87.60
+          # Course: 95.13 * 0.25 + 87.60 * 0.75 = 89.48
+          expect(overall_course_score.current_score).to eq(89.48)
+          # GP1: (142.7 + 0) / 300 * 100 = 47.57
+          # GP2: (131.4 + 0) / (300 + 100) * 100 = 32.85
+          # Course: 47.57 * 0.25 + 32.85 * 0.75 = 36.53
+          expect(overall_course_score.final_score).to eq(36.53)
+        end
+
+        it 'up-scales grading period weights which add up to less than 100 percent' do
+          @first_period.update!(weight: 25.0)
+          @second_period.update!(weight: 50.0)
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          # GP1: 142.7 / 150 * 100 = 95.13
+          # GP2: 131.4 / 150 * 100 = 87.60
+          # Course: (95.13 * 0.25 + 87.60 * 0.50) / (0.25 + 0.50) = 90.11
+          expect(overall_course_score.current_score).to eq(90.11)
+          # GP1: (142.7 + 0) / 300 * 100 = 47.57
+          # GP2: (131.4 + 0) / (300 + 100) * 100 = 32.85
+          # Course: (47.57 * 0.25 + 32.85 * 0.50) / (0.25 + 0.50) = 37.76
+          expect(overall_course_score.final_score).to eq(37.76)
+        end
+
+        it 'does not down-scale grading period weights which add up to greater than 100 percent' do
+          @first_period.update!(weight: 100.0)
+          @second_period.update!(weight: 50.0)
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          # GP1: 142.7 / 150 * 100 = 95.13
+          # GP2: 131.4 / 150 * 100 = 87.60
+          # Course: 95.13 * 1.00 + 87.60 * 0.50 = 138.93
+          expect(overall_course_score.current_score).to eq(138.93)
+          # GP1: (142.7 + 0) / 300 * 100 = 47.57
+          # GP2: (131.4 + 0) / (300 + 100) * 100 = 32.85
+          # Course: 47.57 * 1.00 + 32.85 * 0.50 = 64.00
+          expect(overall_course_score.final_score).to eq(64.0)
+        end
+
+        it 'sets current course score to zero when all grading period weights are zero' do
+          @first_period.update!(weight: 0)
+          @second_period.update!(weight: 0)
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          expect(overall_course_score.current_score).to eq(0.0)
+        end
+
+        it 'sets final course score to zero when all grading period weights are zero' do
+          @first_period.update!(weight: 0)
+          @second_period.update!(weight: 0)
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          expect(overall_course_score.final_score).to eq(0.0)
+        end
+
+        it 'sets current course score to zero when all grading period weights are nil' do
+          @first_period.update!(weight: nil)
+          @second_period.update!(weight: nil)
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          expect(overall_course_score.current_score).to eq(0.0)
+        end
+
+        it 'sets current course score to zero when all grading period weights are nil or zero' do
+          @first_period.update!(weight: 0.0)
+          @second_period.update!(weight: nil)
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          expect(overall_course_score.current_score).to eq(0.0)
+        end
+
+        it 'sets final course score to zero when all grading period weights are nil' do
+          @first_period.update!(weight: nil)
+          @second_period.update!(weight: nil)
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          expect(overall_course_score.final_score).to eq(0.0)
+        end
+
+        it 'sets final course score to zero when all grading period weights are nil or zero' do
+          @first_period.update!(weight: 0.0)
+          @second_period.update!(weight: nil)
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          expect(overall_course_score.final_score).to eq(0.0)
+        end
+
+        it 'treats grading periods with nil weights as zero when some grading period ' \
+        'weights are nil and computing current score' do
+          @first_period.update!(weight: nil)
+          @second_period.update!(weight: 50.0)
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          expect(overall_course_score.current_score).to eq(87.6)
+        end
+
+        it 'treats grading periods with nil weights as zero when some grading period ' \
+        'weights are nil and computing final score' do
+          @first_period.update!(weight: nil)
+          @second_period.update!(weight: 50.0)
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          expect(overall_course_score.final_score).to eq(32.85)
+        end
+
+        it 'sets current course score to nil when all grading period current scores are nil' do
+          @first_period.update!(weight: 25.0)
+          @second_period.update!(weight: 75.0)
+          # update_all to avoid callbacks on submission that would trigger the grade calculator
+          # rubocop:disable Rails/SkipsModelValidations
+          @student.submissions.update_all(score: nil)
+          # rubocop:enable Rails/SkipsModelValidations
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          expect(overall_course_score.current_score).to be_nil
+        end
+
+        it 'sets final course score to zero when all grading period final scores are nil' do
+          @first_period.update!(weight: 25.0)
+          @second_period.update!(weight: 75.0)
+          # update_all to avoid callbacks on assignment that would trigger the grade calculator
+          # rubocop:disable Rails/SkipsModelValidations
+          @course.assignments.update_all(omit_from_final_grade: true)
+          # rubocop:enable Rails/SkipsModelValidations
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          expect(overall_course_score.final_score).to eq(0.0)
+        end
+
+        it 'does not consider grading periods with nil current score when computing course current score' do
+          @first_period.update!(weight: 25.0)
+          @second_period.update!(weight: 75.0)
+          # update_column to avoid callbacks on submission that would trigger the grade calculator
+          # rubocop:disable Rails/SkipsModelValidations
+          Submission.where(user: @student, assignment: @assignments[0..2]).update_all(score: nil)
+          # rubocop:enable Rails/SkipsModelValidations
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          # GP1: 0 / 150 * 100 = 0
+          # GP2: 131.4 / 150 * 100 = 87.60
+          # Course: (0 * 0 + 87.60 * 0.75) / (0 + 0.75) = 87.60
+          expect(overall_course_score.current_score).to eq(87.60)
+        end
+
+        it 'considers grading periods with nil final score as having zero score when computing course final score' do
+          @first_period.update!(weight: 25.0)
+          @second_period.update!(weight: 75.0)
+          # update_column to avoid callbacks on assignment that would trigger the grade calculator
+          # rubocop:disable Rails/SkipsModelValidations
+          Assignment.where(id: @assignments[0..2].map(&:id)).update_all(omit_from_final_grade: true)
+          # rubocop:enable Rails/SkipsModelValidations
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          # GP1: 0
+          # GP2: (131.4 + 0) / (300 + 100) * 100 = 32.85
+          # Course: 32.85 * 0.75 = 24.64
+          expect(overall_course_score.final_score).to eq(24.64)
+        end
+
+        it 'sets course current score to zero when all grading period current scores are zero' do
+          @first_period.update!(weight: 25.0)
+          @second_period.update!(weight: 75.0)
+          # update_all to avoid callbacks on submission that would trigger the grade calculator
+          # rubocop:disable Rails/SkipsModelValidations
+          @student.submissions.update_all(score: 0.0)
+          # rubocop:enable Rails/SkipsModelValidations
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          expect(overall_course_score.current_score).to eq(0.0)
+        end
+
+        it 'sets course final score to zero when all grading period final scores are zero' do
+          @first_period.update!(weight: 25.0)
+          @second_period.update!(weight: 75.0)
+          # update_all to avoid callbacks on submission that would trigger the grade calculator
+          # rubocop:disable Rails/SkipsModelValidations
+          @student.submissions.update_all(score: 0.0)
+          # rubocop:enable Rails/SkipsModelValidations
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          expect(overall_course_score.final_score).to eq(0.0)
+        end
+
+        it 'sets course current score to nil when all grading period current scores are nil ' \
+        'and all grading period weights are nil' do
+          @first_period.update!(weight: nil)
+          @second_period.update!(weight: nil)
+          # update_all to avoid callbacks on submission that would trigger the grade calculator
+          # rubocop:disable Rails/SkipsModelValidations
+          @student.submissions.update_all(score: nil)
+          # rubocop:enable Rails/SkipsModelValidations
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          expect(overall_course_score.current_score).to be_nil
+        end
+
+        it 'sets course final score to zero when all grading period final scores are nil and all ' \
+        'grading period weights are nil' do
+          @first_period.update!(weight: nil)
+          @second_period.update!(weight: nil)
+          # update_all to avoid callbacks on assignment that would trigger the grade calculator
+          # rubocop:disable Rails/SkipsModelValidations
+          @course.assignments.update_all(omit_from_final_grade: true)
+          # rubocop:enable Rails/SkipsModelValidations
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          expect(overall_course_score.final_score).to eq(0.0)
+        end
+
+        it 'sets course current score to zero when all grading period current scores are zero ' \
+        'and all grading period weights are zero' do
+          @first_period.update!(weight: 0.0)
+          @second_period.update!(weight: 0.0)
+          # update_all to avoid callbacks on submission that would trigger the grade calculator
+          # rubocop:disable Rails/SkipsModelValidations
+          @student.submissions.update_all(score: 0.0)
+          # rubocop:enable Rails/SkipsModelValidations
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          expect(overall_course_score.current_score).to eq(0.0)
+        end
+
+        it 'sets course final score to zero when all grading period final scores are zero and ' \
+        'all grading period weights are zero' do
+          @first_period.update!(weight: 0.0)
+          @second_period.update!(weight: 0.0)
+          # update_all to avoid callbacks on submission that would trigger the grade calculator
+          # rubocop:disable Rails/SkipsModelValidations
+          @student.submissions.update_all(score: 0.0)
+          # rubocop:enable Rails/SkipsModelValidations
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          expect(overall_course_score.final_score).to eq(0.0)
+        end
+
+        it 'sets course current score to nil when all grading period current scores are nil and ' \
+        'all grading period weights are zero' do
+          @first_period.update!(weight: 0.0)
+          @second_period.update!(weight: 0.0)
+          # update_all to avoid callbacks on submission that would trigger the grade calculator
+          # rubocop:disable Rails/SkipsModelValidations
+          @student.submissions.update_all(score: nil)
+          # rubocop:enable Rails/SkipsModelValidations
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          expect(overall_course_score.current_score).to be_nil
+        end
+
+        it 'sets course final score to zero when all grading period final scores are nil and all ' \
+        'grading period weights are zero' do
+          @first_period.update!(weight: 0.0)
+          @second_period.update!(weight: 0.0)
+          # update_all to avoid callbacks on assignment that would trigger the grade calculator
+          # rubocop:disable Rails/SkipsModelValidations
+          @course.assignments.update_all(omit_from_final_grade: true)
+          # rubocop:enable Rails/SkipsModelValidations
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          expect(overall_course_score.final_score).to eq(0.0)
+        end
+
+        it 'sets course current score to zero when all grading period current scores are zero and ' \
+        'all grading period weights are nil' do
+          @first_period.update!(weight: nil)
+          @second_period.update!(weight: nil)
+          # update_all to avoid callbacks on submission that would trigger the grade calculator
+          # rubocop:disable Rails/SkipsModelValidations
+          @student.submissions.update_all(score: 0.0)
+          # rubocop:enable Rails/SkipsModelValidations
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          expect(overall_course_score.current_score).to eq(0.0)
+        end
+
+        it 'sets course final score to zero when all grading period final scores are zero and all ' \
+        'grading period weights are nil' do
+          @first_period.update!(weight: nil)
+          @second_period.update!(weight: nil)
+          # update_all to avoid callbacks on submission that would trigger the grade calculator
+          # rubocop:disable Rails/SkipsModelValidations
+          @student.submissions.update_all(score: 0.0)
+          # rubocop:enable Rails/SkipsModelValidations
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          expect(overall_course_score.final_score).to eq(0.0)
+        end
+      end
+
+      describe 'assignment group scores' do
+        let(:assignment_group_scores) do
+          student_enrollment.scores.where.not(assignment_group_id: nil).order(assignment_group_id: :asc)
+        end
+
+        context 'with the percent weighting scheme' do
+          before :each do
+            @course.update_column(:group_weighting_scheme, 'percent')
+            GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          end
+
+          it 'posted current assignment group scores are updated' do
+            # [142.7 / 150, 131.4 / 150]
+            expect(assignment_group_scores.map(&:current_score)).to eq([95.13, 87.60])
+          end
+
+          it 'posted current assignment group points are updated' do
+            # [142.7, 131.4]
+            expect(assignment_group_scores.map(&:current_points)).to eq([142.70, 131.40])
+          end
+
+          it 'posted final assignment group scores are updated' do
+            # [142.7 / 150, 131.4 / 150]
+            expect(assignment_group_scores.map(&:final_score)).to eq([47.57, 43.80])
+          end
+
+          it 'posted final assignment group points are updated' do
+            # [0 + 142.7, 0 + 131.4]
+            expect(assignment_group_scores.map(&:final_points)).to eq([142.70, 131.40])
+          end
+
+          it 'unposted current assignment group scores are updated' do
+            # [142.7 / 150, 131.4 / 150]
+            expect(assignment_group_scores.map(&:unposted_current_score)).to eq([80.77, 75.47])
+          end
+
+          it 'unposted current assignment group points are updated' do
+            # 99.6 + 142.7 + 95.0 + 131.4
+            expect(assignment_group_scores.map(&:unposted_current_points)).to eq([242.30, 226.40])
+          end
+
+          it 'unposted final assignment group scores are updated' do
+            # (99.6 + 142.7 + 95.0 + 131.4) / 600
+            expect(assignment_group_scores.map(&:unposted_final_score)).to eq([80.77, 75.47])
+          end
+
+          it 'unposted final assignment group points are updated' do
+            # 99.6 + 142.7 + 95.0 + 131.4
+            expect(assignment_group_scores.map(&:unposted_final_points)).to eq([242.30, 226.40])
+          end
+        end
+
+        context 'without a weighting scheme' do
+          before :each do
+            GradeCalculator.new(@student.id, @course).compute_and_save_scores
+          end
+
+          it 'posted current assignment group scores are updated' do
+            # [142.7 / 150, 131.4 / 150]
+            expect(assignment_group_scores.map(&:current_score)).to eq([95.13, 87.60])
+          end
+
+          it 'posted current assignment group points are updated' do
+            # [142.7, 131.4]
+            expect(assignment_group_scores.map(&:current_points)).to eq([142.70, 131.40])
+          end
+
+          it 'posted final assignment group scores are updated' do
+            # [142.7 / 150, 131.4 / 150]
+            expect(assignment_group_scores.map(&:final_score)).to eq([47.57, 43.80])
+          end
+
+          it 'posted final assignment group points are updated' do
+            # [0 + 142.7, 0 + 131.4]
+            expect(assignment_group_scores.map(&:final_points)).to eq([142.70, 131.40])
+          end
+
+          it 'unposted current assignment group scores are updated' do
+            # [142.7 / 150, 131.4 / 150]
+            expect(assignment_group_scores.map(&:unposted_current_score)).to eq([80.77, 75.47])
+          end
+
+          it 'unposted current assignment group points are updated' do
+            # 99.6 + 142.7 + 95.0 + 131.4
+            expect(assignment_group_scores.map(&:unposted_current_points)).to eq([242.30, 226.40])
+          end
+
+          it 'unposted final assignment group scores are updated' do
+            # (99.6 + 142.7 + 95.0 + 131.4) / 600
+            expect(assignment_group_scores.map(&:unposted_final_score)).to eq([80.77, 75.47])
+          end
+
+          it 'unposted final assignment group points are updated' do
+            # 99.6 + 142.7 + 95.0 + 131.4
+            expect(assignment_group_scores.map(&:unposted_final_points)).to eq([242.30, 226.40])
+          end
+        end
+      end
     end
 
-    it 'does not update grading period scores if update_all_grading_period_scores is false' do
-      GradeCalculator.new(@student.id, @course, update_all_grading_period_scores: false).compute_and_save_scores
-      expect(scores[@first_period.id].current_score).to eq(25.0)
-      expect(scores[@second_period.id].current_score).to eq(75.0)
+    it 'updates the overall course score metadata' do
+      expected_metadata = {
+        'current' => {
+          'dropped' => @dropped_submissions.map(&:id)
+        },
+        'final' => {
+          'dropped' => @dropped_submissions.map(&:id)
+        }
+      }
+      metadata = overall_course_score.score_metadata
+      orig_updated_at = metadata.updated_at
+      GradeCalculator.new(@student.id, @course).compute_and_save_scores
+      metadata.reload
+      expect(metadata.calculation_details).to eq(expected_metadata)
+      expect(orig_updated_at).to be < metadata.updated_at
+    end
+
+    it 'updates the overall course score metadata when only_update_course_gp_metadata: true' do
+      expected_metadata = {
+        'current' => {
+          'dropped' => @dropped_submissions.map(&:id)
+        },
+        'final' => {
+          'dropped' => @dropped_submissions.map(&:id)
+        }
+      }
+      metadata = overall_course_score.score_metadata
+      orig_updated_at = metadata.updated_at
+      GradeCalculator.new(@student.id, @course, only_update_course_gp_metadata: true).compute_and_save_scores
+      metadata.reload
+      expect(metadata.calculation_details).to eq(expected_metadata)
+      expect(orig_updated_at).to be < metadata.updated_at
+    end
+
+    it 'does not update the overall course score when only_update_course_gp_metadata: true' do
+      updated_at = overall_course_score.updated_at
+      GradeCalculator.new(@student.id, @course, only_update_course_gp_metadata: true).compute_and_save_scores
+      overall_course_score.reload
+      expect(overall_course_score.updated_at).to eq(updated_at)
+    end
+
+    context 'when given only_update_points: true' do
+      before :each do
+        GradeCalculator.new(@student.id, @course).compute_and_save_scores
+        initial_scores = Score.where(enrollment: @course.enrollments.find_by(user: @student)).order(id: :asc)
+        updated_score_attributes = {
+          current_points: nil,
+          current_score: nil,
+          final_points: nil,
+          final_score: nil,
+          unposted_current_points: nil,
+          unposted_current_score: nil,
+          unposted_final_points: nil,
+          unposted_final_score: nil
+        }
+        # rubocop:disable Rails/SkipsModelValidations
+        initial_scores.update_all(updated_score_attributes)
+        # rubocop:enable Rails/SkipsModelValidations
+
+        GradeCalculator.new(@student.id, @course, only_update_points: true).compute_and_save_scores
+        @final_scores = Score.where(enrollment: @course.enrollments.find_by(user: @student)).order(id: :asc).to_a
+      end
+
+      it 'updates current_points' do
+        final_current_points = @final_scores.map(&:current_points)
+
+        expect(final_current_points).to all(be_present)
+      end
+
+      it 'updates unposted_current_points' do
+        final_unposted_current_points = @final_scores.map(&:unposted_current_points)
+
+        expect(final_unposted_current_points).to all(be_present)
+      end
+
+      it 'updates final_points' do
+        final_final_points = @final_scores.map(&:final_points)
+
+        expect(final_final_points).to all(be_present)
+      end
+
+      it 'updates unposted_final_points' do
+        final_unposted_final_points = @final_scores.map(&:unposted_final_points)
+
+        expect(final_unposted_final_points).to all(be_present)
+      end
+
+      it 'updates current_score' do
+        final_current_score = @final_scores.map(&:current_score)
+
+        expect(final_current_score).to all(be_nil)
+      end
+
+      it 'updates unposted_current_score' do
+        final_unposted_current_score = @final_scores.map(&:unposted_current_score)
+
+        expect(final_unposted_current_score).to all(be_nil)
+      end
+
+      it 'updates final_score' do
+        final_final_score = @final_scores.map(&:final_score)
+
+        expect(final_final_score).to all(be_nil)
+      end
+
+      it 'updates unposted_final_score' do
+        final_unposted_final_score = @final_scores.map(&:unposted_final_score)
+
+        expect(final_unposted_final_score).to all(be_nil)
+      end
     end
 
     it 'restores and updates previously deleted scores' do
@@ -670,272 +1676,56 @@ describe GradeCalculator do
       expect(overall_course_score.reload).to be_active
     end
 
-    context 'grading period is provided' do
-      it 'updates the grading period score' do
-        GradeCalculator.new(@student.id, @course, grading_period: @first_period).compute_and_save_scores
-        expect(scores[@first_period.id].current_score).to eq(99.6)
-      end
-
-      it 'updates the overall course score' do
-        GradeCalculator.new(@student.id, @course, grading_period: @first_period).compute_and_save_scores
-        expect(overall_course_score.current_score).to eq(97.3)
-      end
-
-      it 'does not update scores for other grading periods' do
-        GradeCalculator.new(@student.id, @course, grading_period: @first_period).compute_and_save_scores
-        expect(scores[@second_period.id].current_score).to eq(75.0)
-      end
-
-      it 'does not update the overall course score if update_course_score is false' do
-        GradeCalculator.new(
-          @student.id, @course, grading_period: @first_period, update_course_score: false
-        ).compute_and_save_scores
-        expect(overall_course_score.current_score).to eq(50.0)
-      end
-
-      it 'does not restore previously deleted score if grading period is deleted too' do
-        score = scores[@first_period.id]
-        @first_period.destroy
-        GradeCalculator.new(@student.id, @course, grading_period: @first_period).compute_and_save_scores
-        expect(score.reload).to be_deleted
-      end
-    end
-
-    context 'weighted grading periods' do
-      before(:once) do
-        group = @first_period.grading_period_group
-        group.update!(weighted: true)
-        @ungraded_assignment = @course.assignments.create!(
-          due_at: 1.day.from_now(@second_period.start_date),
-          points_possible: 100
-        )
-      end
-
-      it 'calculates the course score from weighted grading period scores' do
-        @first_period.update!(weight: 25.0)
-        @second_period.update!(weight: 75.0)
+    context("assignment group scores") do
+      before(:each) do
+        @group1 = @course.assignment_groups.create!(name: "some group 1")
+        @assignment1 = @course.assignments.create!(name: "assignment 1", points_possible: 20, assignment_group: @group1)
+        @assignment1.grade_student(@student, grade: 12, grader: @teacher)
+        @group2 = @course.assignment_groups.create!(name: "some group 2")
+        @assignment2 = @course.assignments.create!(name: "assignment 2", points_possible: 20, assignment_group: @group2)
+        @assignment2.grade_student(@student, grade: 18, grader: @teacher)
         GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        # (99.6 * 0.25) + (95.0 * 0.75) = 96.15
-        expect(overall_course_score.current_score).to eq(96.15)
-        # (99.6 * 0.25) + (47.5 * 0.75) = 60.525 rounds to 60.53
-        expect(overall_course_score.final_score).to eq(60.53)
       end
 
-      it 'up-scales grading period weights which add up to less than 100 percent' do
-        @first_period.update!(weight: 25.0)
-        @second_period.update!(weight: 50.0)
+      let(:student_scores) { @student.enrollments.first.scores }
+
+      it "stores separate assignment group scores for each of a student’s enrollments" do
+        (1..2).each do |i|
+          section = @course.course_sections.create!(name: "section #{i}")
+          @course.enroll_user(@student, 'StudentEnrollment', section: section,
+                              enrollment_state: 'active', allow_multiple_enrollments: true)
+        end
         GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        # (99.6 * 0.25) + (95.0 * 0.50) = 72.4
-        # 72.4 / (0.25 + 0.50) = 96.5333 rounded to 96.53
-        expect(overall_course_score.current_score).to eq(96.53)
-        # (99.6 * 0.25) + (47.5 * 0.50) = 48.65
-        # 48.65 / (0.25 + 0.50) = 64.8666 rounded to 64.87
-        expect(overall_course_score.final_score).to eq(64.87)
+        scored_enrollment_ids = Score.where(assignment_group_id: @group1.id).map(&:enrollment_id)
+        expect(scored_enrollment_ids).to contain_exactly *(@student.enrollments.map(&:id))
       end
 
-      it 'does not down-scale grading period weights which add up to greater than 100 percent' do
-        @first_period.update!(weight: 100.0)
-        @second_period.update!(weight: 50.0)
+      it "creates a course score for the student if one does not exist, but assignment group scores exist" do
+        student_enrollment = @course.student_enrollments.find_by(user_id: @student)
+        student_enrollment.find_score(course_score: true).destroy_permanently!
         GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        # (99.6 * 1.0) + (95.0 * 0.5) = 147.1
-        expect(overall_course_score.current_score).to eq(147.1)
-        # (99.6 * 1.0) + (47.5 * 0.5) = 123.35
-        expect(overall_course_score.final_score).to eq(123.35)
+        expect(student_enrollment.find_score(course_score: true)).to be_present
       end
 
-      it 'sets current course score to zero when all grading period weights are zero' do
-        @first_period.update!(weight: 0)
-        @second_period.update!(weight: 0)
+      it "updates active score rows for assignment groups if they already exist" do
+        orig_score_id = student_scores.first.id
+        @assignment1.grade_student(@student, grade: 15, grader: @teacher)
         GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        expect(overall_course_score.current_score).to eq(0.0)
+        new_score_id = student_scores.first.id
+        expect(orig_score_id).to be new_score_id
       end
 
-      it 'sets final course score to zero when all grading period weights are zero' do
-        @first_period.update!(weight: 0)
-        @second_period.update!(weight: 0)
+      it "activates previously soft deleted assignment group scores when updating them" do
+        student_scores.update_all(workflow_state: 'deleted')
         GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        expect(overall_course_score.final_score).to eq(0.0)
+        expect(student_scores.map(&:workflow_state).uniq).to contain_exactly('active')
       end
 
-      it 'sets current course score to zero when all grading period weights are nil' do
-        @first_period.update!(weight: nil)
-        @second_period.update!(weight: nil)
-        GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        expect(overall_course_score.current_score).to eq(0.0)
-      end
-
-      it 'sets current course score to zero when all grading period weights are nil or zero' do
-        @first_period.update!(weight: 0.0)
-        @second_period.update!(weight: nil)
-        GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        expect(overall_course_score.current_score).to eq(0.0)
-      end
-
-      it 'sets final course score to zero when all grading period weights are nil' do
-        @first_period.update!(weight: nil)
-        @second_period.update!(weight: nil)
-        GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        expect(overall_course_score.final_score).to eq(0.0)
-      end
-
-      it 'sets final course score to zero when all grading period weights are nil or zero' do
-        @first_period.update!(weight: 0.0)
-        @second_period.update!(weight: nil)
-        GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        expect(overall_course_score.final_score).to eq(0.0)
-      end
-
-      it 'treats grading periods with nil weights as zero when some grading period ' \
-        'weights are nil and computing current score' do
-        @first_period.update!(weight: nil)
-        @second_period.update!(weight: 50.0)
-        GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        expect(overall_course_score.current_score).to eq(95.0)
-      end
-
-      it 'treats grading periods with nil weights as zero when some grading period ' \
-        'weights are nil and computing final score' do
-        @first_period.update!(weight: nil)
-        @second_period.update!(weight: 50.0)
-        GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        expect(overall_course_score.final_score).to eq(47.50)
-      end
-
-      it 'sets current course score to nil when all grading period current scores are nil' do
-        @first_period.update!(weight: 25.0)
-        @second_period.update!(weight: 75.0)
-        # update_all to avoid callbacks on submission that would trigger the grade calculator
-        @student.submissions.update_all(score: nil)
-        GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        expect(overall_course_score.current_score).to be_nil
-      end
-
-      it 'sets final course score to zero when all grading period final scores are nil' do
-        @first_period.update!(weight: 25.0)
-        @second_period.update!(weight: 75.0)
-        # update_all to avoid callbacks on assignment that would trigger the grade calculator
-        @course.assignments.update_all(omit_from_final_grade: true)
-        GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        expect(overall_course_score.final_score).to eq(0.0)
-      end
-
-      it 'does not consider grading periods with nil current score when computing course current score' do
-        @first_period.update!(weight: 25.0)
-        @second_period.update!(weight: 75.0)
-        # update_column to avoid callbacks on submission that would trigger the grade calculator
-        submission_for_first_assignment.update_column(:score, nil)
-        GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        # (0.0 * 0.0) + (95.0 * 0.75) = 71.25
-        # 71.25 / (0.0 + 0.75) = 95.0
-        expect(overall_course_score.current_score).to eq(95.0)
-      end
-
-      it 'considers grading periods with nil final score as having zero score when computing course final score' do
-        @first_period.update!(weight: 25.0)
-        @second_period.update!(weight: 75.0)
-        # update_column to avoid callbacks on assignment that would trigger the grade calculator
-        @first_assignment.update_column(:omit_from_final_grade, true)
-        GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        # (0.0 * 0.25) + (47.5 * 0.75) = 35.625 rounded to 35.63
-        expect(overall_course_score.final_score).to eq(35.63)
-      end
-
-      it 'sets course current score to zero when all grading period current scores are zero' do
-        @first_period.update!(weight: 25.0)
-        @second_period.update!(weight: 75.0)
-        # update_all to avoid callbacks on submission that would trigger the grade calculator
-        @student.submissions.update_all(score: 0.0)
-        GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        expect(overall_course_score.current_score).to eq(0.0)
-      end
-
-      it 'sets course final score to zero when all grading period final scores are zero' do
-        @first_period.update!(weight: 25.0)
-        @second_period.update!(weight: 75.0)
-        # update_all to avoid callbacks on submission that would trigger the grade calculator
-        @student.submissions.update_all(score: 0.0)
-        GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        expect(overall_course_score.final_score).to eq(0.0)
-      end
-
-      it 'sets course current score to nil when all grading period current scores are nil ' \
-        'and all grading period weights are nil' do
-        @first_period.update!(weight: nil)
-        @second_period.update!(weight: nil)
-        # update_all to avoid callbacks on submission that would trigger the grade calculator
-        @student.submissions.update_all(score: nil)
-        GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        expect(overall_course_score.current_score).to be_nil
-      end
-
-      it 'sets course final score to zero when all grading period final scores are nil and all ' \
-        'grading period weights are nil' do
-        @first_period.update!(weight: nil)
-        @second_period.update!(weight: nil)
-        # update_all to avoid callbacks on assignment that would trigger the grade calculator
-        @course.assignments.update_all(omit_from_final_grade: true)
-        GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        expect(overall_course_score.final_score).to eq(0.0)
-      end
-
-      it 'sets course current score to zero when all grading period current scores are zero ' \
-        'and all grading period weights are zero' do
-        @first_period.update!(weight: 0.0)
-        @second_period.update!(weight: 0.0)
-        # update_all to avoid callbacks on submission that would trigger the grade calculator
-        @student.submissions.update_all(score: 0.0)
-        GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        expect(overall_course_score.current_score).to eq(0.0)
-      end
-
-      it 'sets course final score to zero when all grading period final scores are zero and ' \
-        'all grading period weights are zero' do
-        @first_period.update!(weight: 0.0)
-        @second_period.update!(weight: 0.0)
-        # update_all to avoid callbacks on submission that would trigger the grade calculator
-        @student.submissions.update_all(score: 0.0)
-        GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        expect(overall_course_score.final_score).to eq(0.0)
-      end
-
-      it 'sets course current score to nil when all grading period current scores are nil and ' \
-        'all grading period weights are zero' do
-        @first_period.update!(weight: 0.0)
-        @second_period.update!(weight: 0.0)
-        # update_all to avoid callbacks on submission that would trigger the grade calculator
-        @student.submissions.update_all(score: nil)
-        GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        expect(overall_course_score.current_score).to be_nil
-      end
-
-      it 'sets course final score to zero when all grading period final scores are nil and all ' \
-        'grading period weights are zero' do
-        @first_period.update!(weight: 0.0)
-        @second_period.update!(weight: 0.0)
-        # update_all to avoid callbacks on assignment that would trigger the grade calculator
-        @course.assignments.update_all(omit_from_final_grade: true)
-        GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        expect(overall_course_score.final_score).to eq(0.0)
-      end
-
-      it 'sets course current score to zero when all grading period current scores are zero and ' \
-        'all grading period weights are nil' do
-        @first_period.update!(weight: nil)
-        @second_period.update!(weight: nil)
-        # update_all to avoid callbacks on submission that would trigger the grade calculator
-        @student.submissions.update_all(score: 0.0)
-        GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        expect(overall_course_score.current_score).to eq(0.0)
-      end
-
-      it 'sets course final score to zero when all grading period final scores are zero and all ' \
-        'grading period weights are nil' do
-        @first_period.update!(weight: nil)
-        @second_period.update!(weight: nil)
-        # update_all to avoid callbacks on submission that would trigger the grade calculator
-        @student.submissions.update_all(score: 0.0)
-        GradeCalculator.new(@student.id, @course).compute_and_save_scores
-        expect(overall_course_score.final_score).to eq(0.0)
+      it "inserts score rows for assignment groups unless they already exist" do
+        expect do
+          @course.assignment_groups.create!(name: "yet another group")
+          GradeCalculator.new(@student.id, @course).compute_and_save_scores
+        end.to change{ Score.count }.by(1)
       end
     end
   end
@@ -963,12 +1753,12 @@ describe GradeCalculator do
     a.grade_student @student, grade: 25, grader: @teacher
     calc = GradeCalculator.new([@student.id], @course)
     grade_info = calc.compute_scores.first[:current]
-    expect(grade_info).to eq({:grade => 50, :total => 25, :possible => 50})
+    expect(grade_info).to eq({grade: 50, total: 25, possible: 50, dropped: []})
   end
 
   # We should keep this in sync with GradeCalculatorSpec.coffee
   context "GradeCalculatorSpec.coffee examples" do
-    before do
+    before :each do
       @group = @group1 = @course.assignment_groups.create!(:name => 'group 1')
     end
 
@@ -990,11 +1780,19 @@ describe GradeCalculator do
       end
     end
 
-    def check_grades(current, final)
+    def check_grades(current, final, check_current: true, check_final: true)
       GradeCalculator.recompute_final_score(@student.id, @course.id)
       @enrollment.reload
-      expect(@enrollment.computed_current_score).to eq current
-      expect(@enrollment.computed_final_score).to eq final
+      expect(@enrollment.computed_current_score).to eq current if check_current
+      expect(@enrollment.computed_final_score).to eq final if check_final
+    end
+
+    def check_current_grade(current)
+      check_grades(current, nil, check_current: true, check_final: false)
+    end
+
+    def check_final_grade(final)
+      check_grades(nil, final, check_current: false, check_final: true)
     end
 
     it "should work without assignments or submissions" do
@@ -1015,6 +1813,78 @@ describe GradeCalculator do
 
       @group.update_attribute(:rules, 'drop_lowest:1')
       check_grades(200.0, 150.0)
+    end
+
+    it "muted assignments are not considered for the drop list when computing " \
+      "current grade for students (they are just excluded from the computation entirely)" do
+      set_grades([[4, 10], [3, 10], [9, 10]])
+      @group.update_attribute(:rules, 'drop_lowest:1')
+      @assignments.first.mute!
+      # 4/10 is excluded from the computation because it's muted
+      # 3/10 is dropped for being the lowest
+      # 9/10 is included
+      # 9/10 => 90.0%
+      check_current_grade(90.0)
+    end
+
+    it "ungraded assignments are not considered for the drop list when computing " \
+      "current grade for students (they are just excluded from the computation entirely)" do
+      set_grades([[nil, 20], [3, 10], [9, 10]])
+      @group.update_attribute(:rules, 'drop_lowest:1')
+      # nil/20 is excluded from the computation because it's not graded
+      # 3/10 is dropped for being the lowest
+      # 9/10 is included
+      # 9/10 => 90.0%
+      check_current_grade(90.0)
+    end
+
+    it "ungraded + muted assignments are not considered for the drop list when " \
+      "computing current grade for students (they are just excluded from the computation entirely)" do
+      set_grades([[nil, 20], [4, 10], [3, 10], [9, 10]])
+      @group.update_attribute(:rules, 'drop_lowest:1')
+      @assignments.second.mute!
+      # nil/20 is excluded from the computation because it's not graded
+      # 4/10 is exclued from the computation because it's muted
+      # 3/10 is dropped for being the lowest
+      # 9/10 is included
+      # 9/10 => 90.0%
+      check_current_grade(90.0)
+    end
+
+    it "ungraded assignments are treated as 0/points_possible for the drop list " \
+      "when computing final grade for students" do
+      set_grades([[nil, 20], [3, 10], [9, 10]])
+      @group.update_attribute(:rules, 'drop_lowest:1')
+      # nil/20 is treated as 0/20 because it's not graded
+      # 3/10 is included
+      # 9/10 is included
+      # 12/20 => 60.0%
+      check_final_grade(60.0)
+    end
+
+    it "muted assignments are not considered for the drop list when computing " \
+      "final grade for students (but they are included as 0/10 in the final computation)" do
+      set_grades([[4, 10], [3, 10], [9, 10]])
+      @group.update_attribute(:rules, 'drop_lowest:1')
+      @assignments.first.mute!
+      # 4/10 is ignored for drop rules because it is muted. it is included
+      # 3/10 is dropped for being the lowest
+      # 9/10 is included
+      # (4/10 is treated as 0/10 because it is muted) + 9/10 = 9/20 => 45.0%
+      check_final_grade(45.0)
+    end
+
+    it "ungraded are treated as 0/points_possible for the drop list and muted " \
+      "assignments are ignored for the drop list when computing final grade for students" do
+      set_grades([[nil, 20], [4, 10], [3, 10], [9, 10]])
+      @group.update_attribute(:rules, 'drop_lowest:1')
+      @assignments.second.mute!
+      # nil/20 is treated as 0/20 because it's not graded. it is dropped.
+      # 4/10 is ignored for drop rules because it is muted. it is included.
+      # 3/10 is included
+      # 9/10 is included
+      # (4/10 is treated as 0/10 because it is muted) + 3/10 + 9/10 = 12/30 => 40.0%
+      check_final_grade(40.0)
     end
 
     it 'should "work" when no submissions have points possible' do
@@ -1119,8 +1989,9 @@ describe GradeCalculator do
     end
 
     context "assignment groups with 0 points possible" do
-      before do
-        @group1.update_attribute :group_weight, 50
+      before :each do
+        @group1.group_weight = 50
+        @group1.save!
         @group2 = @course.assignment_groups.create! :name => 'group 2',
                                                     :group_weight => 25
         @group3 = @course.assignment_groups.create! :name => 'empty group',
@@ -1150,13 +2021,13 @@ describe GradeCalculator do
     end
 
     context "grading periods" do
-      before :once do
+      before :each do
         student_in_course active_all: true
         @gp1, @gp2 = grading_periods count: 2
-        @a1, @a2 = [@gp1, @gp2].map { |gp|
+        @a1, @a2 = [@gp1, @gp2].map do |gp|
           @course.assignments.create! due_at: 1.minute.from_now(gp.start_date),
             points_possible: 100
-        }
+        end
         @a1.grade_student(@student, grade: 25, grader: @teacher)
         @a2.grade_student(@student, grade: 75, grader: @teacher)
       end
@@ -1200,38 +2071,119 @@ describe GradeCalculator do
         GradeCalculator.new([user.id], course.id).compute_scores.first[:final]
       end
 
+      def find_submission(assignment)
+        assignment.submissions.where(user_id: @user.id).first.id
+      end
+
       context "DA" do
-        before do
+        before :each do
           set_up_course_for_differentiated_assignments
         end
         it "should calculate scores based on visible assignments only" do
-          # 5 + 15 + 10 + 20 + 10
-          expect(final_grade_info(@user, @course)[:total]).to eq 60
-          expect(final_grade_info(@user, @course)[:possible]).to eq 100
+          # Non-overridden assignments are not visible to this student at all even though she's been graded on them
+          # because the assignment is only visible to overrides. Therefore only the (first three) overridden assignments
+          # ever count towards her final grade in all these specs
+          # 5 + 15 + 10
+          expect(final_grade_info(@user, @course)[:total]).to eq 30
+          expect(final_grade_info(@user, @course)[:possible]).to eq 60
         end
         it "should drop the lowest visible when that rule is in place" do
-          @group.update_attribute(:rules, 'drop_lowest:1')
-          # 5 + 15 + 10 + 20 + 10 - 5
-          expect(final_grade_info(@user, @course)[:total]).to eq 55
-          expect(final_grade_info(@user, @course)[:possible]).to eq 80
+          @group.update_attribute(:rules, 'drop_lowest:1') # rubocop:disable Rails/SkipsModelValidations
+          # 5 + 15 + 10 - 5
+          expect(final_grade_info(@user, @course)[:total]).to eq 25
+          expect(final_grade_info(@user, @course)[:possible]).to eq 40
+          expect(final_grade_info(@user, @course)[:dropped]).to eq [find_submission(@overridden_lowest)]
         end
         it "should drop the highest visible when that rule is in place" do
-          @group.update_attribute(:rules, 'drop_highest:1')
-          # 5 + 15 + 10 + 20 + 10 - 20
-          expect(final_grade_info(@user, @course)[:total]).to eq 40
-          expect(final_grade_info(@user, @course)[:possible]).to eq 80
+          @group.update_attribute(:rules, 'drop_highest:1') # rubocop:disable Rails/SkipsModelValidations
+          # 5 + 15 + 10 - 15
+          expect(final_grade_info(@user, @course)[:total]).to eq 15
+          expect(final_grade_info(@user, @course)[:possible]).to eq 40
+          expect(final_grade_info(@user, @course)[:dropped]).to eq [find_submission(@overridden_highest)]
         end
         it "should not count an invisible assignment with never drop on" do
+          # rubocop:disable Rails/SkipsModelValidations
           @group.update_attribute(:rules, "drop_lowest:2\nnever_drop:#{@overridden_lowest.id}")
-          # 5 + 15 + 10 + 20 + 10 - 10 - 10
-          expect(final_grade_info(@user, @course)[:total]).to eq 40
-          expect(final_grade_info(@user, @course)[:possible]).to eq 60
+          # rubocop:enable Rails/SkipsModelValidations
+          # 5 + 15 + 10 - 10
+          expect(final_grade_info(@user, @course)[:total]).to eq 20
+          expect(final_grade_info(@user, @course)[:possible]).to eq 40
+          expect(final_grade_info(@user, @course)[:dropped]).to eq [find_submission(@overridden_middle)]
+        end
+        it "saves scores for all assignment group and enrollment combinations" do
+          @group.update_attribute(:rules, "drop_lowest:2\nnever_drop:#{@overridden_lowest.id}")
+          user_ids = @course.enrollments.map(&:user_id).uniq
+          group_ids = @assignments.map(&:assignment_group_id).uniq
+          GradeCalculator.new(user_ids, @course.id).compute_and_save_scores
+          expect(Score.where(assignment_group_id: group_ids).count).to eq @course.enrollments.count * group_ids.length
+          expect(ScoreMetadata.where(score_id: Score.where(assignment_group_id: group_ids)).count).to eq 2
+        end
+        it "saves dropped submission to group score metadata" do
+          @group.update_attribute(:rules, "drop_lowest:2\nnever_drop:#{@overridden_lowest.id}")
+          GradeCalculator.new(@user.id, @course.id).compute_and_save_scores
+          enrollment = Enrollment.find_by(user_id: @user.id, course_id: @course.id)
+          score = enrollment.find_score(assignment_group: @group)
+          expect(score.score_metadata.calculation_details).to eq ({
+            'current' => {'dropped' => [find_submission(@overridden_middle)]},
+            'final' => {'dropped' => [find_submission(@overridden_middle)]}
+          })
+        end
+
+        it "does not include muted assignments in the dropped submission list in group score metadata" do
+          @group.update_attribute(:rules, "drop_lowest:2\nnever_drop:#{@overridden_lowest.id}")
+          @overridden_middle.mute!
+          GradeCalculator.new(@user.id, @course.id).compute_and_save_scores
+          enrollment = Enrollment.where(user_id: @user.id, course_id: @course.id).first
+          score = enrollment.find_score(assignment_group: @group)
+          expect(score.score_metadata.calculation_details).to eq({
+            'current' => {'dropped' => []},
+            'final' => {'dropped' => []}
+          })
+        end
+
+        it "saves dropped submissions to course score metadata" do
+          @group.update_attribute(:rules, "drop_lowest:2\nnever_drop:#{@overridden_lowest.id}")
+          GradeCalculator.new(@user.id, @course.id).compute_and_save_scores
+          enrollment = Enrollment.where(user_id: @user.id, course_id: @course.id).first
+          score = enrollment.find_score(course_score: true)
+          expect(score.score_metadata.calculation_details).to eq({
+            'current' => {'dropped' => [find_submission(@overridden_middle)]},
+            'final' => {'dropped' => [find_submission(@overridden_middle)]}
+          })
+        end
+
+        it "does not include muted assignments in the dropped submission list in course score metadata" do
+          @group.update_attribute(:rules, "drop_lowest:2\nnever_drop:#{@overridden_lowest.id}")
+          @overridden_middle.mute!
+          GradeCalculator.new(@user.id, @course.id).compute_and_save_scores
+          enrollment = Enrollment.where(user_id: @user.id, course_id: @course.id).first
+          score = enrollment.find_score(course_score: true)
+          expect(score.score_metadata.calculation_details).to eq({
+            'current' => {'dropped' => []},
+            'final' => {'dropped' => []}
+          })
+        end
+
+        it "updates existing course score metadata" do
+          @group.update_attribute(:rules, "drop_lowest:2\nnever_drop:#{@overridden_lowest.id}")
+          GradeCalculator.new(@user.id, @course.id).compute_and_save_scores
+          enrollment = Enrollment.where(user_id: @user.id, course_id: @course.id).first
+          score = enrollment.find_score(course_score: true)
+          metadata = score.score_metadata
+
+          @group.update_attribute(:rules, 'drop_highest:1')
+          expect { GradeCalculator.new(@user.id, @course.id).compute_and_save_scores }.not_to change{ScoreMetadata.count}
+          metadata.reload
+          expect(metadata.calculation_details).to eq ({
+            'current' => {'dropped' => [find_submission(@overridden_highest)]},
+            'final' => {'dropped' => [find_submission(@overridden_highest)]}
+          })
         end
       end
     end
 
     context "excused assignments" do
-      before :once  do
+      before :each do
         student_in_course(active_all: true)
         @a1 = @course.assignments.create! points_possible: 10
         @a2 = @course.assignments.create! points_possible: 90
@@ -1256,7 +2208,7 @@ describe GradeCalculator do
 
       describe "#invalidate_caches" do
         it 'calls GradeSummaryPresenter.invalidate_cache' do
-          expect(GradeSummaryPresenter).to receive(:invalidate_cache).once
+          expect(GradeSummaryPresenter).to receive(:invalidate_cache).twice
           GradeCalculator.new(@student.id, @course).compute_and_save_scores
         end
       end

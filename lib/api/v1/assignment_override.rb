@@ -127,10 +127,10 @@ module Api::V1::AssignmentOverride
         errors << "invalid student_ids #{student_ids.inspect}"
         students = []
       else
-        # look up all the active students since the assignment will affect all
-        # active students in the course on this override and not just what the
+        # look up all students since the assignment will affect all current and
+        # previous students in the course on this override and not just what the
         # teacher can see that were sent in the request object
-        students = api_find_all(assignment.context.students.active, student_ids)
+        students = api_find_all(assignment.context.all_students, student_ids)
         students = students.distinct if students.is_a?(ActiveRecord::Relation)
         students = students.uniq if students.is_a?(Array)
 
@@ -291,6 +291,7 @@ module Api::V1::AssignmentOverride
         else
           # link will be saved with the override
           link = override.assignment_override_students.build
+          link.workflow_state = 'active'
           link.assignment_override = override
           link.user = student
           override.changed_student_ids << student.id
@@ -301,6 +302,7 @@ module Api::V1::AssignmentOverride
         override.changed_student_ids.merge(defunct_student_ids)
         override.assignment_override_students.
           where(:user_id => defunct_student_ids.to_a).
+          in_batches.
           delete_all
       end
     end
@@ -427,6 +429,8 @@ module Api::V1::AssignmentOverride
       assignment.errors.add(:base, error)
     end
 
+    raise ActiveRecord::RecordInvalid.new(assignment) if assignment.errors.any?
+
     if prepared_overrides[:overrides_to_delete].any?
       assignment.assignment_overrides.where(id: prepared_overrides[:overrides_to_delete]).destroy_all
     end
@@ -436,6 +440,10 @@ module Api::V1::AssignmentOverride
     prepared_overrides[:overrides_to_create].each(&:save!)
     prepared_overrides[:overrides_to_update].each(&:save!)
 
+    @overrides_affected = prepared_overrides[:overrides_to_delete].size +
+      prepared_overrides[:overrides_to_create].size + prepared_overrides[:overrides_to_update].size
+
+    assignment.touch # invalidate cached list of overrides for the assignment
     assignment.run_if_overrides_changed_later!
   end
 

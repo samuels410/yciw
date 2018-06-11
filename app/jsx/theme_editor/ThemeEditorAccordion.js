@@ -18,124 +18,107 @@
 
 import React from 'react'
 import PropTypes from 'prop-types'
-import I18n from 'i18n!theme_editor'
-import ThemeEditorColorRow from './ThemeEditorColorRow'
-import ThemeEditorImageRow from './ThemeEditorImageRow'
-import RangeInput from './RangeInput'
-import customTypes from './PropTypes'
+import I18n from 'i18nObj'
 import $ from 'jquery'
 import 'jqueryui/accordion'
+import Text from '@instructure/ui-core/lib/components/Text'
+import ThemeEditorColorRow from './ThemeEditorColorRow'
+import ThemeEditorImageRow from './ThemeEditorImageRow'
+import ThemeEditorVariableGroup from './ThemeEditorVariableGroup'
+import RangeInput from './RangeInput'
+import customTypes from './PropTypes'
 
-  const activeIndexKey = 'Theme__editor-accordion-index'
+const activeIndexKey = 'Theme__editor-accordion-index'
 
-export default React.createClass({
+export default class ThemeEditorAccordion extends React.Component {
+  static propTypes = {
+    variableSchema: customTypes.variableSchema,
+    brandConfigVariables: PropTypes.object.isRequired,
+    changedValues: PropTypes.object.isRequired,
+    changeSomething: PropTypes.func.isRequired,
+    getDisplayValue: PropTypes.func.isRequired,
+    themeState: PropTypes.object,
+    handleThemeStateChange: PropTypes.func
+  }
 
-    displayName: 'ThemeEditorAccordion',
+  state = {
+    expandedIndex: Number(window.sessionStorage.getItem(activeIndexKey))
+  }
 
-    propTypes: {
-      variableSchema: customTypes.variableSchema,
-      brandConfigVariables: PropTypes.object.isRequired,
-      changedValues: PropTypes.object.isRequired,
-      changeSomething: PropTypes.func.isRequired,
-      getDisplayValue: PropTypes.func.isRequired
-    },
+  setStoredAccordionIndex(index) {
+    window.sessionStorage.setItem(activeIndexKey, index)
+  }
 
-    componentDidMount() {
-      this.initAccordion()
-    },
+  handleToggle = (event, expanded, index) => {
+    this.setState(
+      {
+        expandedIndex: index
+      },
+      () => {
+        this.setStoredAccordionIndex(index)
+      }
+    )
+  }
 
-    getStoredAccordionIndex(){
-    // Note that "Number(null)" returns 0
-      return Number(window.sessionStorage.getItem(activeIndexKey))
-    },
+  renderRow = varDef => {
+    const props = {
+      key: varDef.variable_name,
+      currentValue: this.props.brandConfigVariables[varDef.variable_name],
+      userInput: this.props.changedValues[varDef.variable_name],
+      onChange: this.props.changeSomething.bind(null, varDef.variable_name),
+      placeholder: this.props.getDisplayValue(varDef.variable_name),
+      themeState: this.props.themeState,
+      handleThemeStateChange: this.props.handleThemeStateChange,
+      varDef
+    }
 
-    setStoredAccordionIndex(index){
-      window.sessionStorage.setItem(activeIndexKey, index)
-    },
-
-    // Returns the index of the current accordion pane open
-    getCurrentIndex(){
-      return $(this.getDOMNode()).accordion('option','active')
-    },
-
-    // Remembers which accordion pane is open
-    rememberActiveIndex(){
-      var index = this.getCurrentIndex()
-      this.setStoredAccordionIndex(index)
-    },
-
-    initAccordion(){
-      const index = this.getStoredAccordionIndex()
-      $(this.getDOMNode()).accordion({
-        active: index,
-        header: "h3",
-        heightStyle: "content",
-        beforeActivate: function ( event, ui) {
-          var previewIframe = $('#previewIframe');
-          if ($.trim(ui.newHeader[0].innerText) === 'Login Screen') {
-            var loginPreview = previewIframe.contents().find('#login-preview');
-            if (loginPreview) previewIframe.scrollTo(loginPreview);
-          } else {
-            previewIframe.scrollTo(0);
-          }
-        },
-        activate: this.rememberActiveIndex
-      });
-    },
-
-    renderRow(varDef) {
-      var props = {
-        key: varDef.variable_name,
-        currentValue: this.props.brandConfigVariables[varDef.variable_name],
-        userInput: this.props.changedValues[varDef.variable_name],
-        onChange: this.props.changeSomething.bind(null, varDef.variable_name),
-        placeholder: this.props.getDisplayValue(varDef.variable_name),
-        varDef: varDef
-      };
-
-      switch (varDef.type) {
-        case 'color':
-          return <ThemeEditorColorRow {...props} />
-        case 'image':
-          return <ThemeEditorImageRow {...props} />
-        case 'percentage':
-          const defaultValue = props.currentValue || props.placeholder;
-          return <RangeInput
+    switch (varDef.type) {
+      case 'color':
+        return <ThemeEditorColorRow {...props} />
+      case 'image':
+        return <ThemeEditorImageRow {...props} />
+      case 'percentage':
+        const defaultValue = props.currentValue || props.placeholder
+        return (
+          <RangeInput
             key={varDef.variable_name}
             labelText={varDef.human_name}
             min={0}
             max={1}
             step={0.1}
             defaultValue={defaultValue ? parseFloat(defaultValue) : 0.5}
-            name={'brand_config[variables][' + varDef.variable_name + ']'}
+            name={`brand_config[variables][${varDef.variable_name}]`}
+            variableKey={varDef.variable_name}
             onChange={value => props.onChange(value)}
+            themeState={props.themeState}
+            handleThemeStateChange={props.handleThemeStateChange}
             formatValue={value => I18n.toPercentage(value * 100, {precision: 0})}
           />
-        default:
-          return null
-      }
-    },
-
-    render() {
-      return (
-        <div className="accordion ui-accordion--mini Theme__editor-accordion">
-          {this.props.variableSchema.map(variableGroup =>
-            [
-              <h3>
-                <a href="#">
-                  <div className="te-Flex">
-                    <span className="te-Flex__block">{variableGroup.group_name}</span>
-                    <i className="Theme__editor-accordion-icon icon-mini-arrow-right" />
-                  </div>
-                </a>
-              </h3>
-            ,
-              <div>
-                {variableGroup.variables.map(this.renderRow)}
-              </div>
-            ]
-          )}
-        </div>
-      )
+        )
+      default:
+        return null
     }
-  })
+  }
+
+  render() {
+    return (
+      <div>
+        {this.props.variableSchema.map((variableGroup, index) => (
+          <ThemeEditorVariableGroup
+            key={variableGroup.group_name}
+            summary={
+              <Text as="h3" weight="bold">
+                {variableGroup.group_name}
+              </Text>
+            }
+            index={index}
+            expanded={index === this.state.expandedIndex}
+            onToggle={this.handleToggle}
+          >
+            {variableGroup.variables.map(this.renderRow)}
+          </ThemeEditorVariableGroup>
+        ))}
+      </div>
+    )
+  }
+}

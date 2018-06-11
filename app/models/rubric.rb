@@ -111,8 +111,14 @@ class Rubric < ActiveRecord::Base
   # a rubric_association are 'grading' and 'bookmark'.  Confusing,
   # I know.
   def destroy_for(context)
-    rubric_associations.where(:context_id => context, :context_type => context.class.to_s).
-        update_all(:bookmarked => false, :updated_at => Time.now.utc)
+    ras = rubric_associations.where(:context_id => context, :context_type => context.class.to_s)
+    if context.class.to_s == 'Course'
+      # if rubric is removed at the course level, we want to destroy any
+      # assignment associations found in the context of the course
+      ras.each(&:destroy)
+    else
+      ras.update_all(:bookmarked => false, :updated_at => Time.now.utc)
+    end
     unless rubric_associations.bookmarked.exists?
       self.destroy
     end
@@ -140,7 +146,7 @@ class Rubric < ActiveRecord::Base
   end
 
   def alignments_need_update?
-    data_changed? || workflow_state_changed?
+    saved_change_to_data? || saved_change_to_workflow_state?
   end
 
   def data_outcome_ids
@@ -210,6 +216,40 @@ class Rubric < ActiveRecord::Base
     self
   end
 
+  def update_learning_outcome_criteria(outcome)
+    self.data.each do |criterion|
+      update_learning_outcome_criterion(criterion, outcome) if criterion[:learning_outcome_id] == outcome.id
+    end
+    if self.data_changed?
+      self.points_possible = total_points_from_criteria(self.data)
+      self.save!
+    end
+  end
+
+  def update_learning_outcome_criterion(criterion, outcome)
+    criterion[:description] = outcome.short_description
+    criterion[:long_description] = outcome.description
+    criterion[:points] = outcome.points_possible
+    criterion[:mastery_points] = outcome.mastery_points
+    criterion[:ratings] = outcome.rubric_criterion.nil? ? [] : generate_criterion_ratings(outcome, criterion[:id])
+  end
+
+  def generate_criterion_ratings(outcome, criterion_id)
+    outcome.rubric_criterion[:ratings].map do |rating|
+      criterion_rating(rating, criterion_id)
+    end
+  end
+
+  def criterion_rating(rating_data, criterion_id)
+    {
+      description: (rating_data[:description] || t("No Description")).strip,
+      long_description: (rating_data[:long_description] || "").strip,
+      points: rating_data[:points].to_f || 0,
+      criterion_id: criterion_id,
+      id: unique_item_id(rating_data[:id])
+    }
+  end
+
   def will_change_with_update?(params)
     params ||= {}
     return true if params[:free_form_criterion_comments] && !!self.free_form_criterion_comments != (params[:free_form_criterion_comments] == '1')
@@ -227,7 +267,6 @@ class Rubric < ActiveRecord::Base
   def generate_criteria(params)
     @used_ids = {}
     title = params[:title] || t('context_name_rubric', "%{course_name} Rubric", :course_name => context.name)
-    points_possible = 0
     criteria = []
     (params[:criteria] || {}).each do |idx, criterion_data|
       criterion = {}
@@ -237,8 +276,8 @@ class Rubric < ActiveRecord::Base
       criterion_data[:id].strip! if criterion_data[:id]
       criterion_data[:id] = nil if criterion_data[:id] && criterion_data[:id].empty?
       criterion[:id] = unique_item_id(criterion_data[:id])
+      criterion[:criterion_use_range] = [true, 'true'].include?(criterion_data[:criterion_use_range])
       ratings = []
-      points = 0
       if criterion_data[:learning_outcome_id].present?
         outcome = LearningOutcome.where(id: criterion_data[:learning_outcome_id]).first
         if outcome
@@ -248,27 +287,26 @@ class Rubric < ActiveRecord::Base
         end
       end
       (criterion_data[:ratings] || {}).each do |jdx, rating_data|
-        rating = {}
-        rating[:description] = (rating_data[:description] || t('no_description', "No Description")).strip
-        rating[:long_description] = (rating_data[:long_description] || "").strip
-        rating[:points] = rating_data[:points].to_f || 0
-        rating[:criterion_id] = criterion[:id]
-        rating_data[:id].strip! if rating_data[:id]
-        rating[:id] = unique_item_id(rating_data[:id])
+        rating_data[:id]&.strip!
+        rating = criterion_rating(rating_data, criterion[:id])
         ratings[jdx.to_i] = rating
       end
       criterion[:ratings] = ratings.select{|r| r}.sort_by{|r| [-1 * (r[:points] || 0), r[:description] || CanvasSort::First]}
       criterion[:points] = criterion[:ratings].map{|r| r[:points]}.max || 0
-      points_possible += criterion[:points] unless criterion[:ignore_for_scoring]
       criteria[idx.to_i] = criterion
     end
     criteria = criteria.compact
+    points_possible = total_points_from_criteria(criteria)
     CriteriaData.new(criteria, points_possible, title)
+  end
+
+  def total_points_from_criteria(criteria)
+    criteria.reject { |c| c[:ignore_for_scoring] }.map { |c| c[:points] }.reduce(:+)
   end
 
   def update_assessments_for_new_criteria(new_criteria)
     criteria = self.data
-    end
+  end
 
   # undo innocuous changes introduced by migrations which break `will_change_with_update?`
   def self.normalize(criteria)

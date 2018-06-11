@@ -62,122 +62,11 @@
       <% end %>
     </ul>
     <% if @assignment.submission_types && @assignment.submission_types.match(/online_upload/) %>
-    <%= form_tag(context_url(@context, :controller => :submissions, :assignment_id => @assignment.id, :action => :create), {:id => "submit_online_upload_form", :class => "submit_assignment_form", :multipart => true }) do %>
-    <%= hidden_field :submission, :submission_type, :value => "online_upload" %>
-    <%= hidden_field :submission, :attachment_ids, :value => "", :id => "submission_attachment_ids" %>
-    <table class="formtable" style="width: 100%;">
-      <tr>
-        <td colspan="2">
-          <%= t :upload_or_choose_file, "Upload a file, or choose a file you've already uploaded." %>
-            <%= render :partial => "assignments/group_submission_reminder" if @assignment.has_group_category? %>
-        </td>
-      </tr><tr>
-        <td><%= blabel :attachment, :uploaded_data, :en => "File", id: 'attachmentLabel' %></td>
-        <td>
-          <a href="#" class="add_another_file_link">
-            <i class="icon-add" aria-hidden="true"></i>
-            <%= t 'links.add_another_file', "Add Another File" %>
-          </a>
-          <div id="submission_attachment_blank" class="submission_attachment" style="display: none;">
-            <input aria-labelledby="attachmentLabel" type="file" name="attachments[-1][uploaded_data]" class="input-file"/>
-            <a href="#" class="remove_attachment_link no-hover" style="display: none;"><i class="icon-end" aria-hidden="true"></i><span class="screenreader-only"><%= t('remove empty attachment')%></span></a>
-            <% if @assignment.allowed_extensions.present? -%>
-              <div class='bad_ext_msg error_message' style="display: none">
-                <%= t 'errors.unacceptable_file_type', "This file type is not allowed. Accepted file types are: %{allowed_extensions_list}", :allowed_extensions_list => @assignment.allowed_extensions.to_sentence %>
-              </div>
-            <% end -%>
-          </div>
-        </td>
-      </tr>
-      <% unless @current_user.attachments.active.empty? %>
-      <tr>
-        <td></td>
-        <td style="font-size: 0.8em;">
-        <a href="#" class="toggle_uploaded_files_link"><%= t 'links.find_file', "Click here to find a file you've already uploaded" %></a><br/>
-        <div id="uploaded_files" style="display: none;">
-          <% folders = @current_user.folders.active %>
-          <% content = (render :partial => "files/nested_content", :object => (folders.select{|f| !f.parent_folder_id}), :locals => {:folders => folders}) %>
-          <%= t(:no_files, "No Files") if @current_user.attachments.active.empty? || !content || content.strip.empty? %>
-          <%= content %>
-        </div>
-        </td>
-      </tr>
-      <% end %>
-      <tr>
-        <td colspan="2">
-          <%= text_area :submission, :comment, :class => 'submission_comment_textarea', :placeholder => t('comments_placeholder', 'Comments...'), :title => t('additional_comments', 'Additional comments') %>
-        </td>
-      </tr>
-      <%= render :partial => "group_comment" %>
-      <% if @assignment.turnitin_enabled? %>
-        <%= render :partial => "turnitin" %>
-      <% end %>
-      <% if @assignment.vericite_enabled? %>
-        <%= render :partial => "vericite" %>
-      <% end %>
-      <% if @assignment.tool_settings_tool.present? ||
-         @assignment.vericite_enabled? ||
-         @assignment.turnitin_enabled? %>
-        <tr>
-          <td colspan="2">
-            <label class='checkbox'>
-              <input type="checkbox" class='turnitin_pledge' name="turnitin_pledge" value="1"/>
-              <%= @similarity_pledge %>
-            </label>
-          </td>
-        </tr>
-      <% end %>
-      <tr>
-        <td colspan="2" class='button-container'>
-          <button type="button" class='cancel_button btn'><%= t '#buttons.cancel', "Cancel" %></button>
-          <button type="submit" class="btn btn-primary" id="submit_file_button"><%= t 'buttons.submit_assignment', "Submit Assignment" %></button>
-        </td>
-      </tr><tr style="display: none;">
-        <td colspan="2" style="text-align: center;">
-          <%= t 'messages.submitting', "Submitting..." %> <img src=""/>
-        </td>
-      </tr>
-    </table>
-    <% end %>
+      <%= render :partial => 'assignments/submit_online_upload', locals: { eula_url: eula_url } %>
     <% end %>
 
     <% if @assignment.submission_types && @assignment.submission_types.match(/online_text_entry/) %>
-    <%= form_tag(context_url(@context, :controller => :submissions, :assignment_id => @assignment.id, :action => :create), {:id => "submit_online_text_entry_form", :class => "submit_assignment_form"}) do %>
-    <%= hidden_field :submission, :submission_type, :value => "online_text_entry" %>
-    <table class="formtable" style="width: 100%;">
-      <tr>
-        <td>
-        <%= t 'instructions.online_text_entry', "Copy and paste or type your submission right here." %>
-            <%= render :partial => "assignments/group_submission_reminder" if @assignment.has_group_category? %>
-        </td>
-      </tr><tr>
-        <td>
-          <div style="text-align: right; font-size: 0.8em;">
-            <a class="switch_text_entry_submission_views" href="#"><%= t '#editor.switch_editor_html', "HTML Editor" %></a>
-            <a class="switch_text_entry_submission_views" href="#" style="display:none"><%= t '#editor.switch_editor_rich_text', "Rich Content Editor" %></a>
-          </div>
-          <%= text_area :submission, :body, :style => "width: 100%; height: 250px;" %>
-        </td>
-      </tr><tr>
-        <td>
-          <%= text_area :submission, :comment, :class => 'submission_comment_textarea', :placeholder => t('comments_placeholder', 'Comments...'), :title => t('additional_comments', 'Additional comments') %>
-        </td>
-      </tr>
-      <%= render :partial => "group_comment" %>
-      <% if @assignment.turnitin_enabled? %>
-        <%= render :partial => "turnitin" %>
-      <% end %>
-      <% if @assignment.vericite_enabled? %>
-        <%= render :partial => "vericite" %>
-      <% end %>
-      <tr>
-        <td class='button-container'>
-          <button type="button" class='cancel_button btn'><%= t '#buttons.cancel', "Cancel" %></button>
-          <button type="submit" class="btn btn-primary"><%= t 'buttons.submit_assignment', "Submit Assignment" %></button>
-        </td>
-      </tr>
-    </table>
-    <% end %>
+      <%= render :partial => 'assignments/submit_online_text_entry', locals: { eula_url: eula_url } %>
     <% end %>
 
     <% if @assignment.submission_types && @assignment.submission_types.match(/online_url/) %>
@@ -197,7 +86,7 @@
         </td>
       </tr><tr>
         <td colspan="2" style="text-align: center;">
-          <div style="text-align: left;">
+          <div style="text-align: <%= direction('left') %>;">
             <%= text_area :submission, :comment, :class => 'submission_comment_textarea', :placeholder => t('comments_placeholder', 'Comments...'), :title => t('additional_comments', 'Additional comments') %>
           </div>
         </td>
@@ -227,7 +116,7 @@
       cursor: pointer;
       -moz-border-radius: 3px;
       width: 80%;
-      padding-right: 20px;
+      padding-<%= direction('right') %>: 20px;
     }
     #google_docs_tree li.file:hover {
       background-color: #eee;
@@ -239,11 +128,11 @@
       background-color: #ddd;
     }
     #google_docs_tree li.file .filename {
-      float: left;
+      float: <%= direction('left') %>;
       max-width: 98%;
     }
     #google_docs_tree li.file .popout {
-      float: right;
+      float: <%= direction('right') %>;
     }
     </style>
     <% if show_google_docs %>
@@ -287,7 +176,7 @@
                 </td>
               </tr><tr>
                 <td colspan="2" style="text-align: center;">
-                  <div style="text-align: left;">
+                  <div style="text-align: <%= direction('left') %>;">
                     <%= text_area :submission, :comment, :class => 'submission_comment_textarea', :placeholder => t('comments_placeholder', 'Comments...'), :title => t('additional_comments', 'Additional comments') %>
                   </div>
                 </td>
@@ -351,7 +240,7 @@
                   </div>
                 </div>
                 <a href="#" class="record_media_comment_link btn" style="font-size: 1.1em;"><%= image_tag "record.gif", :alt => '' %> <%= t 'buttons.record_media', "Record / Upload Media" %></a>
-                <div id="media_media_recording_submission" style="display: none; float: left; width: auto; border: 2px solid #444;">
+                <div id="media_media_recording_submission" class="pull-left" style="display: none; width: auto; border: 2px solid #444;">
                 </div>
                 <div class="clear"></div>
               </div>
@@ -359,7 +248,7 @@
           </tr>
           <tr>
             <td colspan="2" style="text-align: center;">
-              <div style="text-align: left;">
+              <div style="text-align: <%= direction('left') %>;">
                 <%= text_area :submission, :comment, :class => 'submission_comment_textarea', :placeholder => t('comments_placeholder', 'Comments...'), :title => t('additional_comments', 'Additional comments') %>
               </div>
             </td>
@@ -384,7 +273,10 @@
       <div id="submit_from_external_tool_form_<%= external_tool.id %>" style="padding: 5px 5px 0 5px;"></div>
     <% end %>
 
-    <% if @external_tools.length > 3 %>
+    <% if @external_tools.length > 3
+      user_group = @assignment.group_category.try(:group_for, @current_user)
+      file_upload_path = user_group ? api_v1_group_files_path(user_group) : "/api/v1/courses/#{@context.id}/assignments/#{@assignment.id}/submissions/#{@current_user.id}/files"
+    %>
       <%= form_tag(context_url(@context, :controller => :submissions, :assignment_id => @assignment.id, :action => :create), {:id => "submit_from_external_tool_form", :class => "submit_assignment_form" }) do %>
         <%= hidden_field :submission, :submission_type, :value => "online_url", :id => 'external_tool_submission_type' %>
         <%= hidden_field :submission, :filename, :id => 'external_tool_filename' %>
@@ -392,7 +284,7 @@
         <%= hidden_field :submission, :url, :id => 'external_tool_url' %>
         <%= hidden_field :submission, :content_type, :id => 'external_tool_content_type' %>
         <a href="<%= context_url(@context, :homework_submissions_context_external_tools_url) %>" id="external_tools_url"></a>
-        <a href="/api/v1/courses/<%= @context.id %>/assignments/<%= @assignment.id %>/submissions/<%= @current_user.id %>/files" id="homework_file_url"></a>
+        <a href="<%= file_upload_path %>" id="homework_file_url"></a>
         <table role="presentation" class="formtable" style="width: 100%;">
           <tr>
             <td colspan="2">
@@ -421,7 +313,7 @@
             </td>
           </tr><tr>
             <td colspan="2" style="text-align: center;">
-              <div style="text-align: left;">
+              <div style="text-align: <%= direction('left') %>;">
                 <%= text_area :submission, :comment, :class => 'submission_comment_textarea', :style => "height: 16px;", :placeholder => t('comments_placeholder', 'Comments...'), :title => t('additional_comments', 'Additional comments') %>
               </div>
             </td>

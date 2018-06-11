@@ -25,15 +25,15 @@ module Api::V1::Submission
   include Api::V1::User
   include Api::V1::SubmissionComment
 
-  def submission_json(submission, assignment, current_user, session, context = nil, includes = [])
+  def submission_json(submission, assignment, current_user, session, context = nil, includes = [], params)
     context ||= assignment.context
-    hash = submission_attempt_json(submission, assignment, current_user, session, context)
+    hash = submission_attempt_json(submission, assignment, current_user, session, context, params)
 
     if includes.include?("submission_history")
       if submission.quiz_submission && assignment.quiz && !assignment.quiz.anonymous_survey?
         hash['submission_history'] = submission.quiz_submission.versions.map do |ver|
           ver.model.submission && ver.model.submission.without_versioned_attachments do
-            quiz_submission_attempt_json(ver.model, assignment, current_user, session, context)
+            quiz_submission_attempt_json(ver.model, assignment, current_user, session, context, params)
           end
         end
       else
@@ -43,7 +43,7 @@ module Api::V1::Submission
         end
         hash['submission_history'] = histories.map do |ver|
           ver.without_versioned_attachments do
-            submission_attempt_json(ver, assignment, current_user, session, context)
+            submission_attempt_json(ver, assignment, current_user, session, context, params)
           end
         end
       end
@@ -86,6 +86,14 @@ module Api::V1::Submission
       hash['assignment_visible'] = submission.assignment_visible_to_user?(submission.user)
     end
 
+    if includes.include?('submission_status')
+      hash['submission_status'] = submission.submission_status
+    end
+
+    if includes.include?('grading_status')
+      hash['grading_status'] = submission.grading_status
+    end
+
     hash
   end
 
@@ -95,7 +103,7 @@ module Api::V1::Submission
   SUBMISSION_JSON_METHODS = %w(late missing seconds_late entered_grade entered_score).freeze
   SUBMISSION_OTHER_FIELDS = %w(attachments discussion_entries).freeze
 
-  def submission_attempt_json(attempt, assignment, user, session, context = nil)
+  def submission_attempt_json(attempt, assignment, user, session, context = nil, params)
     context ||= assignment.context
     includes = Array.wrap(params[:include])
 
@@ -136,7 +144,7 @@ module Api::V1::Submission
       hash['media_comment'] = media_comment_json(:media_id => attempt.media_comment_id, :media_type => attempt.media_comment_type)
     end
 
-    if attempt.originality_reports.present?
+    if show_originality_reports?(attempt)
        hash['has_originality_report'] = true
     end
 
@@ -159,9 +167,10 @@ module Api::V1::Submission
       attachments << attempt.attachment if attempt.attachment && attempt.attachment.context_type == 'Submission' && attempt.attachment.context_id == attempt.id
       hash['attachments'] = attachments.map do |attachment|
         attachment.skip_submission_attachment_lock_checks = true
+        includes = includes.include?('canvadoc_document_id') ? ['preview_url', 'canvadoc_document_id'] : ['preview_url']
         atjson = attachment_json(attachment, user, {},
                                  submission_attachment: true,
-                                 include: ['preview_url'],
+                                 include: includes,
                                  enable_annotations: true, # we want annotations on submission's attachment preview_urls
                                  moderated_grading_whitelist: attempt.moderated_grading_whitelist)
         attachment.skip_submission_attachment_lock_checks = false
@@ -204,8 +213,8 @@ module Api::V1::Submission
     }
   end
 
-  def quiz_submission_attempt_json(attempt, assignment, user, session, context = nil)
-    hash = submission_attempt_json(attempt.submission, assignment, user, session, context)
+  def quiz_submission_attempt_json(attempt, assignment, user, session, context = nil, params)
+    hash = submission_attempt_json(attempt.submission, assignment, user, session, context, params)
     hash.each_key{|k| hash[k] = attempt[k] if attempt[k]}
     hash[:submission_data] = attempt[:submission_data]
     hash[:submitted_at] = attempt[:finished_at]
@@ -241,7 +250,7 @@ module Api::V1::Submission
     }).order(:created_at).to_a
 
     attachment = attachments.pop
-    attachments.each { |a| a.destroy_permanently! }
+    attachments.each(&:destroy_permanently_plus)
 
     anonymous = assignment.context.feature_enabled?(:anonymous_grading)
 
@@ -251,7 +260,7 @@ module Api::V1::Submission
       stale ||= (attachment.created_at < Setting.get('submission_zip_ttl_minutes', '60').to_i.minutes.ago)
       stale ||= (attachment.created_at < (updated_at || assignment.submissions.maximum(:submitted_at)))
       if stale
-        attachment.destroy_permanently!
+        attachment.destroy_permanently_plus
         attachment = nil
       end
     end
@@ -275,7 +284,7 @@ module Api::V1::Submission
 
   def rubric_assessment_json(rubric_assessment)
     hash = {}
-    rubric_assessment.data.each do |rating|
+    rubric_assessment.data&.each do |rating|
       hash[rating[:criterion_id]] = rating.slice(:points, :comments)
     end
     hash
@@ -314,6 +323,10 @@ module Api::V1::Submission
   end
 
   private
+
+  def show_originality_reports?(submission)
+    submission.originality_reports.present?
+  end
 
   def speed_grader_url(submission, assignment, provisional_grade)
     speed_grader_course_gradebook_url(

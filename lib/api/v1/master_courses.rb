@@ -17,10 +17,14 @@
 
 module Api::V1::MasterCourses
   def master_template_json(template, user, session, opts={})
-    api_json(template, user, session, :only => %w(id course_id), :methods => %w{last_export_completed_at})
+    hash = api_json(template, user, session, :only => %w(id course_id), :methods => %w{last_export_completed_at associated_course_count})
+    migration = template.active_migration
+    hash[:latest_migration] = master_migration_json(migration, user, session) if migration
+    hash
   end
 
   def master_migration_json(migration, user, session, opts={})
+    migration.expire_if_necessary!
     hash = api_json(migration, user, session,
       :only => %w(id user_id workflow_state created_at exports_started_at imports_queued_at imports_completed_at comment))
     if opts[:subscription]
@@ -45,17 +49,13 @@ module Api::V1::MasterCourses
       course_external_tool_url(:course_id => asset.context.id, :id => asset.id)
     when 'LearningOutcome'
       course_outcome_url(:course_id => asset.context.id, :id => asset.id)
+    when 'LearningOutcomeGroup'
+      course_outcome_group_url(:course_id => asset.context.id, :id => asset.id)
     else
       polymorphic_url([asset.context, asset])
     end
 
-    asset_name = if asset.respond_to?(:display_name)
-      asset.display_name
-    elsif asset.respond_to?(:title)
-      asset.title
-    else
-      asset.name
-    end
+    asset_name = Context.asset_name(asset)
 
     json = {
       asset_id: asset.id,

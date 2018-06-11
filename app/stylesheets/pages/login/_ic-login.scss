@@ -114,7 +114,7 @@ body.ic-Login-Body { // apply the background to the body element so that you don
   display: block;
   position:relative;
   top: auto;
-  left: auto;
+  #{direction(left)}: auto;
   max-width: 400px;
 }
 
@@ -137,11 +137,11 @@ body.ic-Login-Body { // apply the background to the body element so that you don
 
 .ic-Login-header__links {
   flex: 1;
-  text-align: right;
+  text-align: direction(right);
   @include fontSize(13px);
   line-height: 1.3;
   box-sizing: border-box;
-  padding-left: $ic-sp;
+  padding-#{direction(left)}: $ic-sp;
 
   .ic-Login__link {
     display: block;
@@ -161,6 +161,13 @@ body.ic-Login-Body { // apply the background to the body element so that you don
     label {
       color: var(--ic-brand-Login-Content-label-text-color);
     }
+
+    input[type="checkbox"] {
+      &:focus {
+        outline: 1px solid var(--ic-brand-Login-Content-password-text-color);
+        outline-offset: 1px;
+      }
+    }
   }
   .ic-Login__actions--right {
     flex: 1;
@@ -169,7 +176,7 @@ body.ic-Login-Body { // apply the background to the body element so that you don
   }
   .ic-Login__actions--left {
     flex: 1;
-    text-align: left;
+    text-align: direction(left);
   }
   .ic-Form-control {
     margin-bottom: 0; // override to help vertical alignment
@@ -246,14 +253,25 @@ body.ic-Login-Body #footer.ic-app-footer {
 body.ic-Login-Body #footer.ic-Login-footer {
   display: block !important;
 }
-
 // end
+
 .ic-Login-footer {
+  .terms-of-service__link {
+    button {
+      color: var(--ic-brand-Login-footer-link-color) !important;
+    }
+  }
   .ic-Login-footer__logo-link {
     display: block;
     text-align: center;
     .ic-Instructure-Logo {
       fill: var(--ic-brand-Login-instructure-logo);
+    }
+    &:hover,
+    &:focus {
+      span {
+      border-bottom: 1px solid var(--ic-brand-Login-footer-link-color);
+      }
     }
   }
   // hide icon that gets added thru jquery
@@ -261,15 +279,22 @@ body.ic-Login-Body #footer.ic-Login-footer {
   .ic-Login-footer__links {
     padding: $ic-sp;
     text-align: center;
-    a, .menu-item__text {
+    a, .menu-item__text, .external {
       color: var(--ic-brand-Login-footer-link-color);
       @include fontSize(11px);
       padding: 0 $ic-sp/2;
       white-space: nowrap;
       text-decoration: underline;
-      &:hover {
+
+      &:hover,
+      &:focus {
         background-color: none;
         color: var(--ic-brand-Login-footer-link-color-hover);
+        text-decoration: none;
+      }
+      // to counteract specificity being used in _external_link stylesheet
+      span {
+      text-decoration: none;
       }
     }
   }
@@ -326,7 +351,7 @@ body.ic-Login-Body #footer.ic-Login-footer {
 
 .ic-Login-confirmation__actions {
   margin-top: $ic-sp*2;
-  text-align: right;
+  text-align: direction(right);
 }
 
 ////
@@ -362,6 +387,11 @@ body.body--login-confirmation {
   background: $ic-color-light;
   border-bottom-left-radius: $baseBorderRadius;
   border-bottom-right-radius: $baseBorderRadius;
+
+  .terms_of_service_link {
+    position: relative;
+    top: -2px; //make the link show on the same alignment as the paragraph
+  }
 }
 
 .ic-Login-confirmation__auth-icon {
@@ -369,5 +399,5 @@ body.body--login-confirmation {
   max-width: 72px;
   height: auto;
   vertical-align: middle;
-  margin-right: $ic-sp;
+  margin-#{direction(right)}: $ic-sp;
 }

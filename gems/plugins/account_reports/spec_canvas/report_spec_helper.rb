@@ -33,9 +33,12 @@ module ReportSpecHelper
                                        :account => account,
                                        :report_type => type)
     account_report.parameters = parameters
-    account_report.save
-    AccountReports.available_reports[type].proc.call(account_report)
-    account_report
+    account_report.save!
+    if AccountReport.available_reports[type]
+      AccountReports.generate_report(account_report)
+    end
+    run_jobs
+    account_report.reload
   end
 
   def parse_report(report, options = {})
@@ -72,5 +75,20 @@ module ReportSpecHelper
     all_parsed.unshift(header) if options[:header]
     all_parsed
   end
+end
 
+RSpec::Matchers.define :eq_stringified_array do |expected|
+  stringify_csv_record = ->(item) {
+    if item.nil?
+      nil
+    elsif item.is_a? Array
+      item.map { |arr_item| stringify_csv_record.call(arr_item) }
+    else
+      item.to_s
+    end
+  }
+
+  match do |actual|
+    actual == expected.map { |item| stringify_csv_record.call(item) }
+  end
 end

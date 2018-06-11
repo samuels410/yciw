@@ -128,11 +128,21 @@ describe ApplicationController do
       expect { controller.js_env(:REAL_SLIM_SHADY => 'poser') }.to raise_error("js_env key REAL_SLIM_SHADY is already taken")
     end
 
+    it "should overwrite a key if told explicitly to do so" do
+      controller.js_env :REAL_SLIM_SHADY => 'please stand up'
+      controller.js_env({:REAL_SLIM_SHADY => 'poser'}, true)
+      expect(controller.js_env[:REAL_SLIM_SHADY]).to eq 'poser'
+    end
+
     it 'gets appropriate settings from the root account' do
       root_account = double(global_id: 1, feature_enabled?: false, open_registration?: true, settings: {})
       allow(HostUrl).to receive_messages(file_host: 'files.example.com')
       controller.instance_variable_set(:@domain_root_account, root_account)
       expect(controller.js_env[:SETTINGS][:open_registration]).to be_truthy
+    end
+
+    it 'sets LTI_LAUNCH_FRAME_ALLOWANCES' do
+      expect(@controller.js_env[:LTI_LAUNCH_FRAME_ALLOWANCES]).to eq Lti::Launch::FRAME_ALLOWANCES
     end
 
     context "sharding" do
@@ -142,6 +152,13 @@ describe ApplicationController do
         controller.instance_variable_set(:@domain_root_account, Account.default)
         expect(controller.js_env[:DOMAIN_ROOT_ACCOUNT_ID]).to eq Account.default.global_id
       end
+    end
+
+    it 'matches against weird http_accept headers' do
+      # sometimes we get browser requests for an endpoint that just pass */* as
+      # the accept header. I don't think we can simulate this in a test, so
+      # this test just verifies the condition in js_env works across updates
+      expect(Mime::Type.new("*/*") == "*/*").to be_truthy
     end
   end
 
@@ -454,6 +471,65 @@ describe ApplicationController do
 
       let(:content_tag) { ContentTag.create(content: tool, url: tool.url)}
 
+      context 'display type' do
+        before do
+          allow(controller).to receive(:named_context_url).and_return('wrong_url')
+          allow(controller).to receive(:render)
+          allow(controller).to receive_messages(js_env:[])
+          controller.instance_variable_set(:"@context", course)
+          allow(content_tag).to receive(:id).and_return(42)
+          allow(controller).to receive(:require_user) { user_model }
+          allow(controller).to receive(:lti_launch_params) {{}}
+          content_tag.update_attributes!(context: assignment_model)
+        end
+
+        context 'display_type == "full_width' do
+          before do
+            tool.settings[:assignment_selection] = { "display_type" => "full_width" }
+            tool.save!
+          end
+
+          it 'uses the tool setting display type if the "display" parameter is absent' do
+            expect(Lti::AppUtil).to receive(:display_template).with('full_width')
+            controller.send(:content_tag_redirect, course, content_tag, nil)
+          end
+
+          it 'does not use the assignment lti header' do
+            controller.send(:content_tag_redirect, course, content_tag, nil)
+            expect(assigns[:prepend_template]).to be_blank
+          end
+
+          it 'does not display the assignment edit sidebar' do
+            controller.send(:content_tag_redirect, course, content_tag, nil)
+            expect(assigns[:append_template]).to_not be_present
+          end
+        end
+
+        it 'gives priority to the "display" parameter' do
+          expect(Lti::AppUtil).to receive(:display_template).with('borderless')
+          controller.params['display'] = 'borderless'
+          controller.send(:content_tag_redirect, course, content_tag, nil)
+        end
+
+        it 'does not raise an error if the display type of the placement is not set' do
+          tool.settings[:assignment_selection] = {}
+          tool.save!
+          expect do
+            controller.send(:content_tag_redirect, course, content_tag, nil)
+          end.not_to raise_exception
+        end
+
+        it 'does display the assignment lti header if the display type is not "full_width"' do
+          controller.send(:content_tag_redirect, course, content_tag, nil)
+          expect(assigns[:prepend_template]).to be_present
+        end
+
+        it 'does display the assignment edit sidebar if display type is not "full_width"' do
+          controller.send(:content_tag_redirect, course, content_tag, nil)
+          expect(assigns[:append_template]).to be_present
+        end
+      end
+
       it 'returns the full path for the redirect url' do
         expect(controller).to receive(:named_context_url).with(course, :context_url, {:include_host => true})
         expect(controller).to receive(:named_context_url).with(course, :context_external_content_success_url, 'external_tool_redirect', {:include_host => true}).and_return('wrong_url')
@@ -614,6 +690,7 @@ describe ApplicationController do
       allow(controller.request).to receive(:get?).and_return(false)
       allow(controller.request).to receive(:head?).and_return(false)
       allow(controller.request).to receive(:path).and_return('/non-api/endpoint')
+      controller.instance_variable_set(:@current_user, User.new)
       controller.instance_variable_set(:@pseudonym_session, "session-authenticated")
       controller.params[controller.request_forgery_protection_token] = "bogus"
       controller.request.headers['X-CSRF-Token'] = "bogus"
@@ -719,6 +796,48 @@ describe ApplicationController do
         end
         controller.send(:get_all_pertinent_contexts, include_groups: true, only_contexts: "group_#{@other_group.id},group_#{@group.id}")
         expect(controller.instance_variable_get(:@contexts).select{|c| c.is_a?(Group)}).to eq [@group]
+      end
+
+      it 'must select all cross-shard courses the user belongs to' do
+        user_factory(active_all: true)
+        controller.instance_variable_set(:@context, @user)
+
+        account = Account.create!
+        enrollment1 = course_with_teacher(user: @user, active_all: true, account: account)
+        course1 = enrollment1.course
+
+        enrollment2 = @shard1.activate do
+          account = Account.create!
+          course_with_teacher(user: @user, active_all: true, account: account)
+        end
+        course2 = enrollment2.course
+
+        controller.send(:get_all_pertinent_contexts, cross_shard: true)
+        contexts = controller.instance_variable_get(:@contexts)
+        expect(contexts).to include course1, course2
+      end
+
+      it 'must select only the specified cross-shard courses when only_contexts is included' do
+        user_factory(active_all: true)
+        controller.instance_variable_set(:@context, @user)
+
+        account = Account.create!
+        enrollment1 = course_with_teacher(user: @user, active_all: true, account: account)
+        course1 = enrollment1.course
+
+        enrollment2 = @shard1.activate do
+          account = Account.create!
+          course_with_teacher(user: @user, active_all: true, account: account)
+        end
+        course2 = enrollment2.course
+
+        controller.send(:get_all_pertinent_contexts, {
+          cross_shard: true,
+          only_contexts: "Course_#{course2.id}",
+        })
+        contexts = controller.instance_variable_get(:@contexts)
+        expect(contexts).to_not include course1
+        expect(contexts).to include course2
       end
     end
   end
@@ -970,11 +1089,12 @@ describe CoursesController do
   describe "set_js_wiki_data" do
     before :each do
       course_with_teacher_logged_in :active_all => true
+      @course.wiki_pages.create!(:title => 'blah').set_as_front_page!
+      @course.reload
       @course.default_view = "wiki"
       @course.show_announcements_on_home_page = true
       @course.home_page_announcement_limit = 5
       @course.save!
-      @course.wiki_pages.create!(:title => 'blah').set_as_front_page!
     end
 
     it "should populate js_env with course_home setting" do
@@ -1042,6 +1162,114 @@ describe CoursesController do
       expect(data['is_master_course_child_content']).to be_truthy
       expect(data['restricted_by_master_course']).to be_truthy
       expect(data['master_course_restrictions']).to eq({:content => true})
+    end
+  end
+
+  context 'validate_scopes' do
+    let(:account_with_feature_enabled) do
+      account = double()
+      allow(account).to receive(:feature_enabled?).with(:api_token_scoping).and_return(true)
+      account
+    end
+
+    let(:account_with_feature_disabled) do
+      account = double()
+      allow(account).to receive(:feature_enabled?).with(:api_token_scoping).and_return(false)
+      account
+    end
+
+    context 'api_token_scoping feature enabled' do
+      before do
+        controller.instance_variable_set(:@domain_root_account, account_with_feature_enabled)
+      end
+
+      it 'does not affect session based api requests' do
+        allow(controller).to receive(:request).and_return(double({
+          params: {}
+        }))
+        expect(controller.send(:validate_scopes)).to be_nil
+      end
+
+      it 'does not affect api requests that use an access token with an unscoped developer key' do
+        user = user_model
+        developer_key = DeveloperKey.create!
+        token = AccessToken.create!(user: user, developer_key: developer_key)
+        controller.instance_variable_set(:@access_token, token)
+        allow(controller).to receive(:request).and_return(double({
+          params: {},
+          method: 'GET'
+        }))
+        expect(controller.send(:validate_scopes)).to be_nil
+      end
+
+      it 'raises AccessTokenScopeError if scopes do not match' do
+        user = user_model
+        developer_key = DeveloperKey.create!(require_scopes: true)
+        token = AccessToken.create!(user: user, developer_key: developer_key)
+        controller.instance_variable_set(:@access_token, token)
+        allow(controller).to receive(:request).and_return(double({
+          params: {},
+          method: 'GET'
+        }))
+        expect { controller.send(:validate_scopes) }.to raise_error(AuthenticationMethods::AccessTokenScopeError)
+      end
+
+      it 'allows adequately scoped requests through' do
+        user = user_model
+        developer_key = DeveloperKey.create!(require_scopes: true)
+        token = AccessToken.create!(user: user, developer_key: developer_key, scopes: ['url:GET|/api/v1/accounts'])
+        controller.instance_variable_set(:@access_token, token)
+        allow(controller).to receive(:request).and_return(double({
+          params: {},
+          method: 'GET',
+          path: '/api/v1/accounts'
+        }))
+        expect(controller.send(:validate_scopes)).to be_nil
+      end
+
+      it 'allows HEAD requests' do
+        user = user_model
+        developer_key = DeveloperKey.create!(require_scopes: true)
+        token = AccessToken.create!(user: user, developer_key: developer_key, scopes: ['url:GET|/api/v1/accounts'])
+        controller.instance_variable_set(:@access_token, token)
+        allow(controller).to receive(:request).and_return(double({
+          params: {},
+          method: 'HEAD',
+          path: '/api/v1/accounts'
+        }))
+        expect(controller.send(:validate_scopes)).to be_nil
+      end
+
+      it 'strips includes for adequately scoped requests' do
+        user = user_model
+        developer_key = DeveloperKey.create!(require_scopes: true)
+        token = AccessToken.create!(user: user, developer_key: developer_key, scopes: ['url:GET|/api/v1/accounts'])
+        controller.instance_variable_set(:@access_token, token)
+        allow(controller).to receive(:request).and_return(double({
+          method: 'GET',
+          path: '/api/v1/accounts'
+        }))
+        params = double()
+        expect(params).to receive(:delete).with(:include)
+        expect(params).to receive(:delete).with(:includes)
+        allow(controller).to receive(:params).and_return(params)
+        controller.send(:validate_scopes)
+      end
+    end
+
+    context 'api_token_scoping feature disabled' do
+      before do
+        controller.instance_variable_set(:@domain_root_account, account_with_feature_disabled)
+      end
+
+      after do
+        controller.instance_variable_set(:@domain_root_account, nil)
+      end
+
+      it "does nothing" do
+        expect(controller).not_to receive(:api_request?)
+        controller.send(:validate_scopes)
+      end
     end
   end
 end

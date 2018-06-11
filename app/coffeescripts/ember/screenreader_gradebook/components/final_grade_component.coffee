@@ -17,10 +17,10 @@
 
 define [
   'ember'
-  'compiled/util/round'
+  '../../../util/round'
   'jsx/gradebook/GradingSchemeHelper'
   'i18n!sr_gradebook'
-], (Ember, round, GradingSchemeHelper, I18n) ->
+], (Ember, round, {scoreToGrade}, I18n) ->
 
   FinalGradeGradesComponent = Ember.Component.extend
 
@@ -35,17 +35,17 @@ define [
 
     pointRatio: ( ->
       "#{I18n.n @get('student.total_grade.score')} / #{I18n.n @get('student.total_grade.possible')}"
-    ).property("weighted_grades", "student.total_grade.score", "student.total_grade.possible")
+    ).property("hide_points_possible", "student.total_grade.score", "student.total_grade.possible")
 
     letterGrade:(->
       percent = @get("student.total_percent")
-      GradingSchemeHelper.scoreToGrade(percent, @get('gradingStandard'))
+      scoreToGrade(percent, @get('gradingStandard'))
     ).property('gradingStandard', 'percent')
 
     showGrade: Ember.computed.bool('student.total_grade.possible')
 
     showPoints:(->
-      !!(!@get("weighted_grades") && @get("student.total_grade"))
-    ).property("weighted_grades","student.total_grade")
+      !!(!@get("hide_points_possible") && @get("student.total_grade"))
+    ).property("hide_points_possible","student.total_grade")
 
     showLetterGrade: Ember.computed.bool("gradingStandard")

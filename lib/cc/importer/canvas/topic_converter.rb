@@ -24,11 +24,11 @@ module CC::Importer::Canvas
       announcements = []
 
       @manifest.css('resource[type=imsdt_xmlv1p1]').each do |res|
-        cc_path = File.join @unzipped_file_path, res.at_css('file')['href']
+        cc_path = @package_root.item_path res.at_css('file')['href']
         cc_id = res['identifier']
         canvas_id = get_node_att(res, 'dependency', 'identifierref')
         if canvas_id && meta_res = @manifest.at_css(%{resource[identifier="#{canvas_id}"]})
-          canvas_path = File.join @unzipped_file_path, meta_res.at_css('file')['href']
+          canvas_path = @package_root.item_path meta_res.at_css('file')['href']
           meta_node = open_file_xml(canvas_path)
         else
           meta_node = nil
@@ -68,7 +68,7 @@ module CC::Importer::Canvas
         topic['workflow_state'] = wf_state if wf_state.present?
         topic['group_category'] = get_node_val(meta_doc, 'group_category')
         topic['todo_date'] = get_time_val(meta_doc, 'todo_date')
-        %w(has_group_category allow_rating only_graders_can_rate sort_by_rating).each do |setting|
+        %w(has_group_category allow_rating only_graders_can_rate sort_by_rating locked).each do |setting|
           get_bool_val(meta_doc, setting).tap { |val| topic[setting] = val unless val.nil? }
         end
         if asmnt_node = meta_doc.at_css('assignment')

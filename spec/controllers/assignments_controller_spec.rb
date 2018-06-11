@@ -17,6 +17,8 @@
 #
 
 require File.expand_path(File.dirname(__FILE__) + '/../sharding_spec_helper')
+require File.expand_path(File.dirname(__FILE__) + '/../spec_helper.rb')
+require File.expand_path(File.dirname(__FILE__) + '/../lti2_spec_helper')
 
 describe AssignmentsController do
   before :once do
@@ -120,6 +122,24 @@ describe AssignmentsController do
       expect(assigns[:js_env][:SIS_NAME]).to eq('Foo Bar')
     end
 
+    it "js_env POST_TO_SIS_DEFAULT is false when sis_default_grade_export is false on the account" do
+      user_session(@teacher)
+      a = @course.account
+      a.settings[:sis_default_grade_export] = {locked: false, value: false}
+      a.save!
+      get 'index', params: {:course_id => @course.id}
+      expect(assigns[:js_env][:POST_TO_SIS_DEFAULT]).to eq(false)
+    end
+
+    it "js_env POST_TO_SIS_DEFAULT is true when sis_default_grade_export is true on the account" do
+      user_session(@teacher)
+      a = @course.account
+      a.settings[:sis_default_grade_export] = {locked: false, value: true}
+      a.save!
+      get 'index', params: {:course_id => @course.id}
+      expect(assigns[:js_env][:POST_TO_SIS_DEFAULT]).to eq(true)
+    end
+
     it "should set QUIZ_LTI_ENABLED in js_env if quizzes 2 is available" do
       user_session @teacher
       @course.context_external_tools.create!(
@@ -129,12 +149,29 @@ describe AssignmentsController do
         :tool_id => 'Quizzes 2',
         :url => 'http://example.com/launch'
       )
+      @course.root_account.settings[:provision] = {'lti' => 'lti url'}
+      @course.root_account.save!
+      @course.root_account.enable_feature! :quizzes_next
+      @course.enable_feature! :quizzes_next
       get 'index', params: {course_id: @course.id}
       expect(assigns[:js_env][:QUIZ_LTI_ENABLED]).to be true
     end
 
     it "should not set QUIZ_LTI_ENABLED in js_env if quizzes 2 is not available" do
       user_session @teacher
+      get 'index', params: {course_id: @course.id}
+      expect(assigns[:js_env][:QUIZ_LTI_ENABLED]).to be false
+    end
+
+    it "should not set QUIZ_LTI_ENABLED in js_env if quizzes_next is not enabled" do
+      user_session @teacher
+      @course.context_external_tools.create!(
+        :name => 'Quizzes.Next',
+        :consumer_key => 'test_key',
+        :shared_secret => 'test_secret',
+        :tool_id => 'Quizzes 2',
+        :url => 'http://example.com/launch'
+      )
       get 'index', params: {course_id: @course.id}
       expect(assigns[:js_env][:QUIZ_LTI_ENABLED]).to be false
     end
@@ -177,6 +214,55 @@ describe AssignmentsController do
         expect(assigns[:js_env][:PERMISSIONS][:manage_assignments]).to be_falsey
         expect(assigns[:js_env][:PERMISSIONS][:manage]).to be_falsey
         expect(assigns[:js_env][:PERMISSIONS][:manage_course]).to be_truthy
+      end
+    end
+
+    describe "per-assignment permissions" do
+      let(:js_permissions) { assigns[:js_env][:PERMISSIONS] }
+
+      before(:each) do
+        @course.enable_feature!(:moderated_grading)
+
+        @editable_assignment = @course.assignments.create!(
+          moderated_grading: true,
+          grader_count: 2,
+          final_grader: @teacher
+        )
+
+        user_session(@teacher)
+      end
+
+      context "when Anonymous Moderated Marking is on" do
+        let(:assignment_permissions) { assigns[:js_env][:PERMISSIONS][:by_assignment_id] }
+
+        before(:once) do
+          @course.root_account.enable_feature!(:anonymous_moderated_marking)
+
+          ta_in_course(active_all: true)
+
+          @noneditable_assignment = @course.assignments.create!(
+            moderated_grading: true,
+            grader_count: 2,
+            final_grader: @ta
+          )
+        end
+
+        it "sets the 'update' attribute for an editable assignment to true" do
+          get 'index', params: {course_id: @course.id}
+          expect(assignment_permissions[@editable_assignment.id][:update]).to eq(true)
+        end
+
+        it "sets the 'update' attribute for a non-editable assignment to false" do
+          get 'index', params: {course_id: @course.id}
+          expect(assignment_permissions[@noneditable_assignment.id][:update]).to eq(false)
+        end
+      end
+
+      context "when Anonymous Moderated Marking is off" do
+        it "does not set permissions in js_env for individual assignments" do
+          get 'index', params: {course_id: @course.id}
+          expect(js_permissions).not_to include(:by_assignment_id)
+        end
       end
     end
   end
@@ -258,6 +344,63 @@ describe AssignmentsController do
         expect(permissions[:edit_grades]).to eq false
       end
     end
+
+    context "when Anonymous Moderated Grading is enabled" do
+      before :once do
+        @course.root_account.enable_feature!(:anonymous_moderated_marking)
+        course_with_user('TeacherEnrollment', {active_all: true, course: @course})
+        @other_teacher = @user
+        @assignment = @course.assignments.create!(
+          moderated_grading: true,
+          final_grader: @other_teacher,
+          grader_count: 2,
+          workflow_state: 'published'
+        )
+      end
+
+      it "renders the page when the current user is the selected moderator" do
+        user_session(@other_teacher)
+        get 'show_moderate', params: {course_id: @course.id, assignment_id: @assignment.id}
+        assert_status(200)
+      end
+
+      it "renders unauthorized when the current user is not the selected moderator" do
+        user_session(@teacher)
+        get 'show_moderate', params: {course_id: @course.id, assignment_id: @assignment.id}
+        assert_unauthorized
+      end
+
+      it "renders unauthorized when no moderator is selected and the user is not an admin" do
+        @assignment.update!(final_grader: nil)
+        user_session(@teacher)
+        get 'show_moderate', params: {course_id: @course.id, assignment_id: @assignment.id}
+        assert_status(401)
+      end
+
+      it "renders unauthorized when no moderator is selected and the user is an admin without " \
+      "'Select Final Grade for Moderation' permission" do
+        @course.account.role_overrides.create!(role: admin_role, enabled: false, permission: :select_final_grade)
+        @assignment.update!(final_grader: nil)
+        user_session(account_admin_user)
+        get 'show_moderate', params: {course_id: @course.id, assignment_id: @assignment.id}
+        assert_status(401)
+      end
+
+      it "renders the page when the current user is an admin and not the selected moderator" do
+        account_admin_user(account: @course.root_account)
+        user_session(@admin)
+        get 'show_moderate', params: {course_id: @course.id, assignment_id: @assignment.id}
+        assert_status(200)
+      end
+
+      it "renders the page when no moderator is selected and the user is an admin with " \
+      "'Select Final Grade for Moderation' permission" do
+        @assignment.update!(final_grader: nil)
+        user_session(account_admin_user)
+        get 'show_moderate', params: {course_id: @course.id, assignment_id: @assignment.id}
+        assert_status(200)
+      end
+    end
   end
 
   describe "GET 'show'" do
@@ -267,6 +410,13 @@ describe AssignmentsController do
 
       get 'show', params: {:course_id => @course.id, :id => Assignment.maximum(:id) + 100}
       assert_status(404)
+    end
+
+    it "doesn't fail on a public course with a nil user" do
+      course = course_factory(:active_all => true, :is_public => true)
+      assignment = assignment_model(:course => course, :submission_types => "online_url")
+      get 'show', params: {:course_id => course.id, :id => assignment.id}
+      assert_status(200)
     end
 
     it "should return unauthorized if not enrolled" do
@@ -318,6 +468,24 @@ describe AssignmentsController do
       get 'show', params: {:course_id => @course.id, :id => @assignment.id}
       expect(response).to be_success
       expect(assigns[:current_user_submission]).not_to be_nil
+      expect(assigns[:assigned_assessments]).to eq []
+    end
+
+    it "should assign (active) peer review requests" do
+      @assignment.peer_reviews = true
+      @assignment.save!
+      @student1 = @student
+      @student2 = student_in_course(:active_all => true).user
+      @student3 = student_in_course(:enrollment_state => 'inactive').user
+      sub1 = @assignment.submit_homework(@student1, :submission_type => 'online_url', :url => 'http://www.example.com/1')
+      sub2 = @assignment.submit_homework(@student2, :submission_type => 'online_url', :url => 'http://www.example.com/2')
+      sub3 = @assignment.submit_homework(@student3, :submission_type => 'online_url', :url => 'http://www.example.com/3')
+      sub2.assign_assessor(sub1)
+      sub3.assign_assessor(sub1)
+      user_session(@student1)
+      get 'show', :params => { :course_id => @course.id, :id => @assignment.id }
+      expect(assigns[:current_user_submission]).to eq sub1
+      expect(assigns[:assigned_assessments].map(&:submission)).to eq [sub2]
     end
 
     it "should redirect to wiki page if assignment is linked to wiki page" do
@@ -366,8 +534,9 @@ describe AssignmentsController do
     it "should not show locked external tool assignments" do
       user_session(@student)
 
-      @assignment.lock_at = Time.now - 1.week
-      @assignment.unlock_at = Time.now + 1.week
+      @assignment.lock_at = 1.week.ago
+      @assignment.due_at = 10.days.ago
+      @assignment.unlock_at = 2.weeks.ago
       @assignment.submission_types = 'external_tool'
       @assignment.save
       # This is usually a ContentExternalTool, but it only needs to
@@ -419,6 +588,8 @@ describe AssignmentsController do
         Setting.set('enable_page_views', 'db')
         @old_thread_context = Thread.current[:context]
         Thread.current[:context] = { request_id: SecureRandom.uuid }
+        allow(BasicLTI::Sourcedid).to receive(:encryption_secret) {'encryption-secret-5T14NjaTbcYjc4'}
+        allow(BasicLTI::Sourcedid).to receive(:signing_secret) {'signing-secret-vp04BNqApwdwUYPUI'}
       end
 
       after do
@@ -634,6 +805,12 @@ describe AssignmentsController do
       expect(assigns[:js_env][:SELECTED_CONFIG_TOOL_TYPE]).to eq tool.class.to_s
     end
 
+    it "bootstrap the assignment originality report visibility settings to js_env" do
+      user_session(@teacher)
+      get 'edit', params: {:course_id => @course.id, :id => @assignment.id}
+      expect(assigns[:js_env][:REPORT_VISIBILITY_SETTING]).to eq('immediate')
+    end
+
     it "js_env DUE_DATE_REQUIRED_FOR_ACCOUNT is true when AssignmentUtil.due_date_required_for_account? == true" do
       user_session(@teacher)
       allow(AssignmentUtil).to receive(:due_date_required_for_account?).and_return(true)
@@ -655,46 +832,110 @@ describe AssignmentsController do
       expect(assigns[:js_env][:SIS_NAME]).to eq('Foo Bar')
     end
 
-    it "bootstraps the correct message_handler id for LTI 2 tools to js_env" do
+    describe 'js_env ANONYMOUS_MODERATED_MARKING_ENABLED' do
+      before(:each) do
+        user_session(@teacher)
+      end
+
+      it 'is true when the root account has Anonymous Moderated Marking enabled' do
+        @course.root_account.enable_feature!(:anonymous_moderated_marking)
+        get :edit, params: { course_id: @course.id, id: @assignment.id }
+        expect(assigns[:js_env][:ANONYMOUS_MODERATED_MARKING_ENABLED]).to be true
+      end
+
+      it 'is false when the root account does not have Anonymous Moderated Marking enabled' do
+        get :edit, params: { course_id: @course.id, id: @assignment.id }
+        expect(assigns[:js_env][:ANONYMOUS_MODERATED_MARKING_ENABLED]).to be false
+      end
+    end
+
+    it 'js_env AVAILABLE_MODERATORS includes the name and id for each available moderator' do
       user_session(@teacher)
-      account = @course.account
-      product_family = Lti::ProductFamily.create(
-        vendor_code: '123',
-        product_code: 'abc',
-        vendor_name: 'acme',
-        root_account: account
-      )
+      @course.root_account.enable_feature!(:anonymous_moderated_marking)
+      @assignment.update!(grader_count: 2, moderated_grading: true)
+      get :edit, params: { course_id: @course.id, id: @assignment.id }
+      expected_moderators = @course.instructors.map { |user| { name: user.name, id: user.id } }
+      expect(assigns[:js_env][:AVAILABLE_MODERATORS]).to match_array expected_moderators
+    end
 
-      tool_proxy = Lti:: ToolProxy.create(
-        shared_secret: 'shared_secret',
-        guid: 'guid',
-        product_version: '1.0beta',
-        lti_version: 'LTI-2p0',
-        product_family: product_family,
-        context: @course,
-        workflow_state: 'active',
-        raw_data: 'some raw data'
-      )
+    it 'js_env MODERATED_GRADING_MAX_GRADER_COUNT is the max grader count for the assignment' do
+      user_session(@teacher)
+      get :edit, params: { course_id: @course.id, id: @assignment.id }
+      expect(assigns[:js_env][:MODERATED_GRADING_MAX_GRADER_COUNT]).to eq @assignment.moderated_grading_max_grader_count
+    end
 
-      resource_handler = Lti::ResourceHandler.create(
-        resource_type_code: 'code',
-        name: 'resource name',
-        tool_proxy: tool_proxy
-      )
+    describe 'js_env ANONYMOUS_INSTRUCTOR_ANNOTATIONS_ENABLED' do
+      before(:each) do
+        user_session(@teacher)
+      end
 
-      message_handler = Lti::MessageHandler.create(
-        message_type: 'basic-lti-launch-request',
-        launch_path: 'https://samplelaunch/blti',
-        resource_handler: resource_handler
-      )
+      after(:each) do
+        ENV.delete('ANONYMOUS_INSTRUCTOR_ANNOTATIONS')
+      end
 
-      allow_any_instance_of(AssignmentConfigurationToolLookup).to receive(:create_subscription).and_return true
-      Lti::ToolProxyBinding.create(context: @course, tool_proxy: tool_proxy)
-      @assignment.tool_settings_tool = message_handler
-      @assignment.save!
+      it 'is true when the ANONYMOUS_INSTRUCTOR_ANNOTATIONS environment variable is set to true' do
+        ENV['ANONYMOUS_INSTRUCTOR_ANNOTATIONS'] = 'true'
+        get 'edit', params: { course_id: @course.id, id: @assignment.id }
 
-      get 'edit', params: {:course_id => @course.id, :id => @assignment.id}
-      expect(assigns[:js_env][:SELECTED_CONFIG_TOOL_ID]).to eq message_handler.id
+        expect(assigns[:js_env][:ANONYMOUS_INSTRUCTOR_ANNOTATIONS_ENABLED]).to be true
+      end
+
+      it 'is false when the ANONYMOUS_INSTRUCTOR_ANNOTATIONS environment variable is set to false' do
+        ENV['ANONYMOUS_INSTRUCTOR_ANNOTATIONS'] = 'false'
+        get 'edit', params: { course_id: @course.id, id: @assignment.id }
+
+        expect(assigns[:js_env][:ANONYMOUS_INSTRUCTOR_ANNOTATIONS_ENABLED]).to be false
+      end
+
+      it 'is false when the ANONYMOUS_INSTRUCTOR_ANNOTATIONS environment variable is not set' do
+        get 'edit', params: { course_id: @course.id, id: @assignment.id }
+
+        expect(assigns[:js_env][:ANONYMOUS_INSTRUCTOR_ANNOTATIONS_ENABLED]).to be false
+      end
+    end
+
+    context 'plagiarism detection platform' do
+      include_context 'lti2_spec_helper'
+
+      let(:service_offered) do
+        [
+          {
+            "endpoint" => "http://originality.docker/eula",
+            "action" => ["GET"],
+            "@id" => "http://originality.docker/lti/v2/services#vnd.Canvas.Eula",
+            "@type" => "RestService"
+          }
+        ]
+      end
+
+      before do
+        allow_any_instance_of(AssignmentConfigurationToolLookup).to receive(:create_subscription).and_return true
+        allow(Lti::ToolProxy).to receive(:find_active_proxies_for_context).with(@course) { Lti::ToolProxy.where(id: tool_proxy.id) }
+        tool_proxy.resources << resource_handler
+        tool_proxy.update_attributes!(context: @course)
+
+        AssignmentConfigurationToolLookup.create!(
+          assignment: @assignment,
+          tool: message_handler,
+          tool_type: 'Lti::MessageHandler',
+          tool_id: message_handler.id
+        )
+      end
+
+      it "bootstraps the correct message_handler id for LTI 2 tools to js_env" do
+        user_session(@teacher)
+        get 'edit', params: {:course_id => @course.id, :id => @assignment.id}
+        expect(assigns[:js_env][:SELECTED_CONFIG_TOOL_ID]).to eq message_handler.id
+      end
+
+      it "bootstraps the correct EULA link for the associated LTI 2 tool" do
+        tool_proxy.raw_data['tool_profile']['service_offered'] = service_offered
+        tool_proxy.save!
+
+        user_session(@student)
+        get 'show', params: {:course_id => @course.id, :id => @assignment.id}
+        expect(assigns[:js_env][:EULA_URL]).to eq service_offered[0]['endpoint']
+      end
     end
 
     context "redirects" do
@@ -745,6 +986,27 @@ describe AssignmentsController do
         user_session(@teacher)
         get 'edit', params: {:course_id => @course.id, :id => @assignment.id}
         expect(assigns[:js_env][:dummy]).to be nil
+      end
+    end
+
+    describe 'js_env ANONYMOUS_GRADING_ENABLED' do
+      before(:each) do
+        @course.account.enable_feature!(:anonymous_moderated_marking)
+        user_session(@teacher)
+      end
+
+      it 'is false when the anonymous marking flag is not enabled' do
+        get 'edit', params: { course_id: @course.id, id: @assignment.id }
+
+        expect(assigns[:js_env][:ANONYMOUS_GRADING_ENABLED]).to be false
+      end
+
+      it 'is true when the anonymous marking flag is enabled' do
+        @course.enable_feature!(:anonymous_marking)
+
+        get 'edit', params: { course_id: @course.id, id: @assignment.id }
+
+        expect(assigns[:js_env][:ANONYMOUS_GRADING_ENABLED]).to be true
       end
     end
   end

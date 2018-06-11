@@ -143,6 +143,7 @@ module CanvasSanitize #:nodoc:
           'colgroup' => ['span', 'width'].freeze,
           'img' => ['align', 'alt', 'height', 'src', 'width'].freeze,
           'iframe' => ['src', 'width', 'height', 'name', 'align', 'frameborder', 'scrolling',
+                       'allow', # TODO: remove explicit allow with domain whitelist account setting
                        'sandbox', 'allowfullscreen','webkitallowfullscreen','mozallowfullscreen'].freeze,
           'ol' => ['start', 'type'].freeze,
           'q' => ['cite'].freeze,
@@ -158,7 +159,7 @@ module CanvasSanitize #:nodoc:
                       'allowscriptaccess', 'width', 'height'].freeze,
           'video' => ['name', 'src', 'allowfullscreen', 'muted', 'poster', 'width', 'height', 'controls', 'playsinline'].freeze,
           'track' => ['default', 'kind', 'label', 'src', 'srclang'].freeze,
-          'audio' => ['name', 'src', 'muted'].freeze,
+          'audio' => ['name', 'src', 'muted', 'controls'].freeze,
           'font' => ['face', 'color', 'size'].freeze,
           # MathML
           'annotation' => ['href', 'xref', 'definitionURL', 'encoding', 'cd', 'name', 'src'].freeze,
@@ -399,7 +400,7 @@ module CanvasSanitize #:nodoc:
     def fully_sanitize_fields
       fields_hash = self.class.fully_sanitize_fields_config || {}
       fields_hash.each do |field, config|
-        next unless self.changes[field].present?
+        next unless self.attribute_changed?(field)
         config ||= Sanitize::Config::RESTRICTED
         config = Sanitize::Config::RESTRICTED if config.empty?
         # Doesn't try to sanitize nil

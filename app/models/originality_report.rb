@@ -21,7 +21,11 @@ class OriginalityReport < ActiveRecord::Base
   belongs_to :submission
   belongs_to :attachment
   belongs_to :originality_report_attachment, class_name: "Attachment"
-  validates :attachment, :submission, presence: true
+
+  has_one :lti_link, class_name: 'Lti::Link', as: :linkable, inverse_of: :linkable, dependent: :destroy
+  accepts_nested_attributes_for :lti_link, allow_destroy: true
+
+  validates :submission, presence: true
   validates :workflow_state, inclusion: { in: ['scored', 'error', 'pending'] }
   validates :originality_score, inclusion: { in: 0..100, message: 'score must be between 0 and 100' }, allow_nil: true
 
@@ -41,23 +45,48 @@ class OriginalityReport < ActiveRecord::Base
     super(options).tap do |h|
       h[:file_id] = h.delete :attachment_id
       h[:originality_report_file_id] = h.delete :originality_report_attachment_id
-      if h[:link_id].present?
-        tool_setting = Lti::ToolSetting.find_by(resource_link_id: h.delete(:link_id))
-        h[:tool_setting] = { resource_url: tool_setting.resource_url,
-                             resource_type_code:tool_setting.resource_type_code }
+      if lti_link.present?
+        h[:tool_setting] = { resource_url: lti_link.resource_url,
+                             resource_type_code:lti_link.resource_type_code }
       end
     end
   end
 
-  def report_launch_url
-    if link_id.present?
-      course_assignment_resource_link_id_url(course_id: assignment.context_id,
+  def report_launch_path
+    if lti_link.present?
+      course_assignment_resource_link_id_path(course_id: assignment.context_id,
                                              assignment_id: assignment.id,
-                                             resource_link_id: link_id,
+                                             resource_link_id: lti_link.resource_link_id,
                                              host: HostUrl.context_host(assignment.context),
                                              display: 'borderless')
     else
       originality_report_url
+    end
+  end
+
+  def asset_key
+    return Attachment.asset_string(attachment_id) if attachment_id.present?
+    Submission.asset_string(submission_id)
+  end
+
+  def copy_to_group_submissions!
+    return if submission.group_id.blank?
+    group_submissions = assignment.submissions.where.not(id: submission.id).where(group: submission.group)
+    group_submissions.find_each do |s|
+      copy_of_report = self.dup
+
+      # We don't want a single submission to have
+      # multiple originality reports with the same
+      # attachment/submission combo hanging around.
+      s.originality_reports.where(
+        attachment_id: attachment_id
+      ).destroy_all
+
+      copy_of_report.update!(submission: s)
+      lti_link&.dup&.update!(
+        linkable: copy_of_report,
+        resource_link_id: nil
+      )
     end
   end
 

@@ -268,6 +268,16 @@ describe Quizzes::QuizSubmission do
         # now when a score is updated we have a real grader associated!
         expect(qs.submission.reload.grader_id).to eq @user.id
       end
+
+      it "should save a new version of submission" do
+        qs = @quiz.generate_submission(@user)
+        qs.submission_data = { "question_1" => "1658" }
+        Quizzes::SubmissionGrader.new(qs).grade_submission
+
+        qs.reload
+        expect { qs.update_scores(:submission_version_number => 1, :fudge_points => 3) }.
+          to change { qs.submission.versions.count }.by 1
+      end
     end
 
     describe '#backup_submission_data' do
@@ -1364,8 +1374,8 @@ describe Quizzes::QuizSubmission do
         @quiz = @course.quizzes.create! title: 'Test Quiz'
         @submission = @quiz.quiz_submissions.build
       end
-      it "takes ids from questions_as_object" do
-        allow(@submission).to receive(:questions_as_object).and_return [{"id" => 2}, {"id" => 3}]
+      it "takes ids from questions" do
+        allow(@submission).to receive(:questions).and_return [{"id" => 2}, {"id" => 3}]
 
         expect(@submission.quiz_question_ids).to eq [2, 3]
       end
@@ -1404,27 +1414,52 @@ describe Quizzes::QuizSubmission do
 
     describe 'broadcast policy' do
       before :once do
-        Notification.create(:name => 'Submission Graded')
-        Notification.create(:name => 'Submission Grade Changed')
-        Notification.create(:name => 'Submission Needs Grading')
+        Notification.create(:name => 'Submission Graded', :category => 'TestImmediately')
+        Notification.create(:name => 'Submission Grade Changed', :category => 'TestImmediately')
+        Notification.create(:name => 'Submission Needs Grading', :category => 'TestImmediately')
         @course.offer
-        student_in_course(active_all: true)
+        student_in_course(active_all: true, active_cc: true)
         teacher_in_course(active_all: true)
+        @observer = user_factory(active_all: true, active_cc: true)
+        @course.enroll_user(@observer, 'ObserverEnrollment', active_all: true,
+          active_cc: true, associated_user_id: @student.id)
+        # Admittedly weird for a student to observe himself, but make sure we
+        # don't send duplicates.
+        @course.enroll_user(@student, 'ObserverEnrollment', active_all: true,
+          active_cc: true, associated_user_id: @student.id)
+        @other_student = user_factory(active_all: true, active_cc: true)
+        @other_observer = user_factory(active_all: true, active_cc: true)
+        @course.enroll_user(@other_student, 'StudentEnrollment', active_all: true,
+          active_cc: true, associated_user_id: @student.id)
+        @course.enroll_user(@other_observer, 'ObserverEnrollment', active_all: true,
+          active_cc: true, associated_user_id: @other_student.id)
         assignment_quiz([], course: @course, user: @teacher)
         @submission = @quiz.generate_submission(@student)
       end
 
       it 'sends a graded notification after grading the quiz submission' do
         expect(@submission.messages_sent).not_to include 'Submission Graded'
+        expect(@student.messages.where(notification_name: "Submission Graded").length).to eq 0
+        expect(@observer.messages.where(notification_name: "Submission Graded").length).to eq 0
         Quizzes::SubmissionGrader.new(@submission).grade_submission
         expect(@submission.reload.messages_sent.keys).to include 'Submission Graded'
+        expect(@student.messages.where(notification_name: "Submission Graded").length).to eq 1
+        expect(@observer.messages.where(notification_name: "Submission Graded").length).to eq 1
+        expect(@other_student.messages.where(notification_name: "Submission Graded").length).to eq 0
+        expect(@other_observer.messages.where(notification_name: "Submission Graded").length).to eq 0
       end
 
       it 'sends a grade changed notification after re-grading the quiz submission' do
+        expect(@student.messages.where(notification_name: "Submission Grade Changed").length).to eq 0
+        expect(@observer.messages.where(notification_name: "Submission Grade Changed").length).to eq 0
         Quizzes::SubmissionGrader.new(@submission).grade_submission
         @submission.score = @submission.score + 5
         @submission.save!
         expect(@submission.reload.messages_sent.keys).to include('Submission Grade Changed')
+        expect(@student.messages.where(notification_name: "Submission Grade Changed").length).to eq 1
+        expect(@observer.messages.where(notification_name: "Submission Grade Changed").length).to eq 1
+        expect(@other_student.messages.where(notification_name: "Submission Grade Changed").length).to eq 0
+        expect(@other_observer.messages.where(notification_name: "Submission Grade Changed").length).to eq 0
       end
 
       it 'does not send any "graded" or "grade changed" notifications for a submission with essay questions before they have been graded' do
@@ -1530,6 +1565,24 @@ describe Quizzes::QuizSubmission do
         other_enrollment = @course.enroll_teacher(other_teacher, :section => other_section, :limit_privileges_to_course_section => true)
         other_enrollment.accept
         expect(@quiz_submission.teachers).to_not include other_teacher
+      end
+    end
+
+    describe '#delete_ignores' do
+      before :once do
+        student_in_course(active_all: true, course: @course)
+        @ignore = Ignore.create!(user: @student, asset: @quiz, purpose: 'submitting')
+      end
+
+      it 'should delete ignores when the user completes the submission' do
+        qs = @quiz.generate_submission(@student)
+        qs.complete!
+        expect {@ignore.reload}.to raise_error ActiveRecord::RecordNotFound
+      end
+
+      it 'should not delete ignores when the quiz submission is updated, but not completed' do
+        @quiz.generate_submission(@student)
+        expect(@ignore.reload).to eq @ignore
       end
     end
   end

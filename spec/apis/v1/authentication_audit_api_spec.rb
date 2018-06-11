@@ -198,6 +198,9 @@ describe "AuthenticationAudit API", type: :request do
             "name" => @user.name,
             "sortable_name" => @user.sortable_name,
             "short_name" => @user.short_name,
+            "sis_user_id"=>nil,
+            "integration_id"=>nil,
+            "sis_import_id"=>nil,
             "login_id" => @pseudonym.unique_id
           }]
         end

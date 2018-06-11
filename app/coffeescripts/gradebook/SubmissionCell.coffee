@@ -18,18 +18,18 @@
 define [
   'jquery'
   'underscore'
-  'i18n!gradebook'
+  'i18nObj'
   'jsx/shared/helpers/numberHelper'
   'jsx/gradebook/shared/helpers/GradeFormatHelper'
-  'compiled/gradebook/GradebookTranslations'
+  '../gradebook/GradebookTranslations'
   'jsx/grading/helpers/OutlierScoreHelper'
   'str/htmlEscape'
-  'compiled/gradebook/Turnitin'
-  'compiled/util/round'
+  '../gradebook/Turnitin'
+  '../util/round'
   'jquery.ajaxJSON'
   'jquery.instructure_misc_helpers' # raw
 ], ($, _, I18n, numberHelper, GradeFormatHelper, GRADEBOOK_TRANSLATIONS,
-  OutlierScoreHelper, htmlEscape, {extractDataTurnitin}, round) ->
+  { default: OutlierScoreHelper }, htmlEscape, {extractDataTurnitin}, round) ->
 
   class SubmissionCell
 
@@ -149,7 +149,7 @@ define [
 
       cellCommentHTML = if !opts.student.isConcluded && !opts.isLocked
         """
-        <a href="#" data-user-id=#{opts.submission.user_id} data-assignment-id=#{opts.assignment.id} class="gradebook-cell-comment"><span class="gradebook-cell-comment-label">submission comments</span></a>
+        <a href="#" data-user-id=#{opts.submission.user_id} data-assignment-id=#{opts.assignment.id} class="gradebook-cell-comment"><span class="gradebook-cell-comment-label hide-text">submission comments</span></a>
         """
       else
         ''
@@ -174,7 +174,12 @@ define [
       classes.push('resubmitted') if submission.grade_matches_current_submission == false
       classes.push('late') if submission.late
       classes.push('ungraded') if ''+assignment.submission_types is "not_graded"
-      classes.push('muted') if assignment.muted
+      if assignment.anonymous_grading and (assignment.muted or assignment.moderation_in_progress)
+        classes.push('anonymous')
+      else if assignment.moderation_in_progress
+        classes.push('moderated')
+      else if assignment.muted
+        classes.push('muted')
       classes.push(submission.submission_type) if submission.submission_type
       classes
 
@@ -247,6 +252,12 @@ define [
   class SubmissionCell.pass_fail extends SubmissionCell
 
     states = ['pass', 'fail', '']
+    STATE_MAPPING =
+      pass: 'pass'
+      complete: 'pass'
+      fail: 'fail'
+      incomplete: 'fail'
+
     classFromSubmission = (submission) ->
       if submission.excused
         "EX"
@@ -270,7 +281,7 @@ define [
         ''
       SubmissionCell::cellWrapper("""
         <button
-          data-value="#{htmlEscape cssClass}"
+          data-value="#{htmlEscape(options.submission.entered_grade || options.submission.grade || '')}"
           class="Button Button--icon-action gradebook-checkbox gradebook-checkbox-#{htmlEscape cssClass} #{htmlEscape(editable)}"
           type="button"
           aria-label="#{htmlEscape cssClass}"><span class="screenreader-only">#{htmlEscape(passFailMessage(cssClass))}</span>#{checkboxButtonTemplate(iconClass)}</button>
@@ -291,12 +302,12 @@ define [
         .bind('click', (event) =>
           event.preventDefault()
           currentValue = @$input.data('value')
-          if currentValue is 'pass'
-            newValue = 'fail'
-          else if currentValue is 'fail'
+          if currentValue is 'complete'
+            newValue = 'incomplete'
+          else if currentValue is 'incomplete'
             newValue = ''
           else
-            newValue = 'pass'
+            newValue = 'complete'
           @transitionValue(newValue)
         ).focus()
 
@@ -308,14 +319,15 @@ define [
         .removeClass('gradebook-checkbox-pass gradebook-checkbox-fail')
         .addClass('gradebook-checkbox-' + classFromSubmission(rawGrade: newValue))
         .addClass('dontblur')
-        .attr('aria-label', passFailMessage(newValue))
+        .attr('aria-label', passFailMessage(STATE_MAPPING[newValue]))
         .data('value', newValue)
       @$input.find('i')
         .removeClass()
         .addClass(iconClassFromSubmission(rawGrade: newValue))
 
     loadValue: () ->
-      @val = @opts.item[@opts.column.field].grade || ""
+      submission = @opts.item[@opts.column.field]
+      @val = submission.entered_grade || submission.grade || ""
 
     serializeValue: () ->
       @$input.data('value')

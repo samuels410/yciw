@@ -84,7 +84,9 @@ module Importers
       end
       hide_from_students = hash[:hide_from_students] if !hash[:hide_from_students].nil?
       state = hash[:workflow_state]
-      if state || !hide_from_students.nil?
+      if state && migration.for_master_course_import?
+        item.workflow_state = state
+      elsif state || !hide_from_students.nil?
         if state == 'active' && !item.unpublished? && Canvas::Plugin.value_to_boolean(hide_from_students) == false
           item.workflow_state = 'active'
         else
@@ -99,11 +101,6 @@ module Importers
       item.todo_date = Canvas::Migration::MigratorHelper.get_utc_time_from_timestamp(hash[:todo_date])
 
       migration.add_imported_item(item)
-
-      if hash[:assignment].present?
-        item.assignment = Importers::AssignmentImporter.import_from_migration(
-          hash[:assignment], context, migration)
-      end
 
       (hash[:contents] || []).each do |sub_item|
         next if sub_item[:type] == 'embedded_content'
@@ -225,6 +222,13 @@ module Importers
         allow_save = false
       end
       if allow_save && hash[:migration_id]
+        if hash[:assignment].present?
+          hash[:assignment][:title] ||= item.title
+          item.assignment = Importers::AssignmentImporter.import_from_migration(
+            hash[:assignment], context, migration)
+        else
+          item.assignment = nil
+        end
         if item.changed?
           item.user = nil
         end

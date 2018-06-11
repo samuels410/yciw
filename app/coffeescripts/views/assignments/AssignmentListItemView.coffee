@@ -19,25 +19,24 @@ define [
   'i18n!assignments'
   'Backbone'
   'jquery'
-  'underscore'
   'jsx/shared/conditional_release/CyoeHelper'
-  'compiled/models/Assignment'
-  'compiled/views/PublishIconView'
-  'compiled/views/LockIconView'
-  'compiled/views/assignments/DateDueColumnView'
-  'compiled/views/assignments/DateAvailableColumnView'
-  'compiled/views/assignments/CreateAssignmentView'
-  'compiled/views/SisButtonView'
-  'compiled/views/MoveDialogView'
-  'compiled/fn/preventDefault'
+  'jsx/move_item'
+  '../../models/Assignment'
+  '../PublishIconView'
+  '../LockIconView'
+  './DateDueColumnView'
+  './DateAvailableColumnView'
+  './CreateAssignmentView'
+  '../SisButtonView'
+  '../../fn/preventDefault'
   'jst/assignments/AssignmentListItem'
   'jst/assignments/_assignmentListItemScore'
-  'compiled/util/round'
-  'compiled/views/assignments/AssignmentKeyBindingsMixin'
+  '../../util/round'
+  './AssignmentKeyBindingsMixin'
   'jqueryui/tooltip'
-  'compiled/behaviors/tooltip'
-  'compiled/jquery.rails_flash_notifications'
-], (I18n, Backbone, $, _, CyoeHelper, Assignment, PublishIconView, LockIconView, DateDueColumnView, DateAvailableColumnView, CreateAssignmentView, SisButtonView, MoveDialogView, preventDefault, template, scoreTemplate, round, AssignmentKeyBindingsMixin) ->
+  '../../behaviors/tooltip'
+  '../../jquery.rails_flash_notifications'
+], (I18n, Backbone, $, CyoeHelper, MoveItem, Assignment, PublishIconView, LockIconView, DateDueColumnView, DateAvailableColumnView, CreateAssignmentView, SisButtonView, preventDefault, template, scoreTemplate, round, AssignmentKeyBindingsMixin) ->
 
   class AssignmentListItemView extends Backbone.View
     @mixin AssignmentKeyBindingsMixin
@@ -54,7 +53,6 @@ define [
     @child 'dateAvailableColumnView', '[data-view=date-available]'
     @child 'editAssignmentView',      '[data-view=edit-assignment]'
     @child 'sisButtonView',           '[data-view=sis-button]'
-    @child 'moveAssignmentView',      '[data-view=moveAssignment]'
 
     els:
       '.edit_assignment': '$editAssignmentButton'
@@ -68,6 +66,9 @@ define [
       'mousedown': 'stopMoveIfProtected'
       'click .icon-lock': 'onUnlockAssignment'
       'click .icon-unlock': 'onLockAssignment'
+      'click .move_assignment': 'onMove'
+      'click .duplicate-failed-retry': 'onDuplicateFailedRetry'
+      'click .duplicate-failed-cancel': 'onDuplicateFailedCancel'
 
     messages:
       confirm: I18n.t('Are you sure you want to delete this assignment?')
@@ -81,15 +82,18 @@ define [
       @model.assignmentView = @
 
       @model.on('change:hidden', @toggleHidden)
+      @model.set('disabledForModeration', !@canEdit())
 
       if @canManage()
         @model.on('change:published', @updatePublishState)
 
         # re-render for attributes we are showing
-        attrs = ["name", "points_possible", "due_at", "lock_at", "unlock_at", "modules", "published"]
-        observe = _.map(attrs, (attr) -> "change:#{attr}").join(" ")
+        attrs = ["name", "points_possible", "due_at", "lock_at", "unlock_at", "modules", "published", "workflow_state"]
+        observe = attrs.map((attr) -> "change:#{attr}").join(" ")
         @model.on(observe, @render)
       @model.on 'change:submission', @updateScore
+
+      @model.pollUntilFinishedDuplicating() if @model.isDuplicating()
 
     initializeChildViews: ->
       @publishIconView = false
@@ -97,13 +101,11 @@ define [
       @sisButtonView = false
       @editAssignmentView = false
       @dateAvailableColumnView = false
-      @moveAssignmentView = false
 
       if @canManage()
         @publishIconView = new PublishIconView({
           model: @model,
-          publishText: I18n.t("Unpublished. Click to publish %{name}", name: @model.get('name')),
-          unpublishText: I18n.t("Published. Click to unpublish %{name}", name: @model.get('name'))
+          title: @model.get('name')
         })
         @lockIconView = new LockIconView({
           model: @model,
@@ -114,15 +116,6 @@ define [
           content_type: 'assignment'
         })
         @editAssignmentView = new CreateAssignmentView(model: @model)
-        @moveAssignmentView = new MoveDialogView
-          model: @model
-          nested: true
-          parentCollection: @model.collection.view?.parentCollection
-          parentLabelText: @messages.ag_move_label
-          parentKey: 'assignment_group_id'
-          childKey: 'assignments'
-          closeTarget: @$el.find('a[id*=manage_link]')
-          saveURL: -> "#{ENV.URLS.assignment_sort_base_url}/#{@parentListView.value()}/reorder"
 
         if @isGraded() && @model.postToSISEnabled() && @model.published()
           @sisButtonView = new SisButtonView
@@ -133,6 +126,31 @@ define [
 
       @dateDueColumnView       = new DateDueColumnView(model: @model)
       @dateAvailableColumnView = new DateAvailableColumnView(model: @model)
+
+    # Public: Called when move menu item is selected
+    #
+    # Returns nothing.
+    onMove: () =>
+      @moveTrayProps =
+        title: I18n.t('Move Assignment')
+        items: [
+          id: @model.get('id')
+          title: @model.get('name')
+        ]
+        moveOptions:
+          groupsLabel:  @messages.ag_move_label
+          groups: MoveItem.backbone.collectionToGroups(@model.collection.view?.parentCollection, (col) => col.get('assignments'))
+        onMoveSuccess: (res) =>
+          keys =
+            model: 'assignments'
+            parent: 'assignment_group_id'
+          MoveItem.backbone.reorderAcrossCollections(res.data.order, res.groupId, @model, keys)
+        focusOnExit: =>
+          document.querySelector("#assignment_#{@model.id} a[id*=manage_link]")
+        formatSaveUrl: ({ groupId }) ->
+          "#{ENV.URLS.assignment_sort_base_url}/#{groupId}/reorder"
+
+      MoveItem.renderTray(@moveTrayProps, document.getElementById('not_right_side'))
 
     updatePublishState: =>
       @$('.ig-row').toggleClass('ig-published', @model.get('published'))
@@ -146,7 +164,6 @@ define [
       @editAssignmentView.remove()      if @editAssignmentView
       @dateDueColumnView.remove()       if @dateDueColumnView
       @dateAvailableColumnView.remove() if @dateAvailableColumnView
-      @moveAssignmentView.remove() if @moveAssignmentView
 
       super
       # reset the model's view property; it got overwritten by child views
@@ -157,12 +174,7 @@ define [
 
       if @editAssignmentView
         @editAssignmentView.hide()
-        @editAssignmentView.setTrigger @$editAssignmentButton
-
-      if @moveAssignmentView
-        @moveAssignmentView.hide()
-        if @canMove()
-          @moveAssignmentView.setTrigger @$moveAssignmentButton
+        @editAssignmentView.setTrigger @$editAssignmentButton if @canEdit()
 
       @updateScore() if @canReadGrades()
 
@@ -190,6 +202,7 @@ define [
       data.canManage = @canManage()
       data = @_setJSONForGrade(data) unless data.canManage
 
+      data.canEdit = @canEdit()
       data.canMove = @canMove()
       data.canDelete = @canDelete()
       data.canDuplicate = @canDuplicate()
@@ -208,23 +221,23 @@ define [
         data.alignTextClass = 'align-right'
 
       if @model.isQuiz()
-        data.menu_tools = ENV.quiz_menu_tools
-        _.each data.menu_tools, (tool) =>
+        data.menu_tools = ENV.quiz_menu_tools || []
+        data.menu_tools.forEach (tool) =>
           tool.url = tool.base_url + "&quizzes[]=#{@model.get("quiz_id")}"
       else if @model.isDiscussionTopic()
-        data.menu_tools = ENV.discussion_topic_menu_tools
-        _.each data.menu_tools, (tool) =>
+        data.menu_tools = ENV.discussion_topic_menu_tools || []
+        data.menu_tools.forEach (tool) =>
           tool.url = tool.base_url + "&discussion_topics[]=#{@model.get("discussion_topic")?.id}"
       else
-        data.menu_tools = ENV.assignment_menu_tools
-        _.each data.menu_tools, (tool) =>
+        data.menu_tools = ENV.assignment_menu_tools || []
+        data.menu_tools.forEach (tool) =>
           tool.url = tool.base_url + "&assignments[]=#{@model.get("id")}"
 
       if modules = @model.get('modules')
         moduleName = modules[0]
         has_modules = modules.length > 0
         joinedNames = modules.join(",")
-        _.extend data, {
+        Object.assign data, {
           modules: modules
           module_count: modules.length
           module_name: moduleName
@@ -237,17 +250,31 @@ define [
     addAssignmentToList: (response) =>
       return unless response
       assignment = new Assignment(response)
-      # The positions here are not always consistent with what is in the DB,
-      # so treat the position here as "canonical" to make the UI behave properly.
-      targetPosition = @model.get('position') + 1
-      assignment.set('position', targetPosition)
-      @model.collection.insertModel(assignment)
+      # Force the positions to match what is in the db.
+      @model.collection.forEach((a) =>
+        a.set('position', response.new_positions[a.get('id')])
+      )
+      @model.collection.add(assignment)
       @focusOnAssignment(response)
 
     onDuplicate: (e) =>
       return unless @canDuplicate()
       e.preventDefault()
       @model.duplicate(@addAssignmentToList)
+
+    onDuplicateFailedRetry: (e) =>
+      e.preventDefault()
+      originalAssignment = @model.collection.get(@model.originalAssignmentID())
+      $button = $(e.target)
+      $button.prop('disabled', true)
+      originalAssignment.duplicate((response) =>
+        @addAssignmentToList(response)
+        @delete(silent: true)
+      ).always -> $button.prop('disabled', false)
+
+    onDuplicateFailedCancel: (e) =>
+      e.preventDefault()
+      @delete(silent: true)
 
     onDelete: (e) =>
       e.preventDefault()
@@ -267,23 +294,31 @@ define [
     onLockAssignment: (e) =>
       e.preventDefault()
 
-    delete: ->
-      @model.destroy success: =>
-        $.screenReaderFlashMessage(I18n.t('Assignment was deleted'))
+    delete: (opts = { silent: false }) ->
+      callbacks = {}
+      unless opts.silent
+        callbacks.success = -> $.screenReaderFlashMessage(I18n.t('Assignment was deleted'))
+      @model.destroy(callbacks)
       @$el.remove()
 
-    canDelete: ->
-      (@userIsAdmin or @model.canDelete()) && !@model.isRestrictedByMasterCourse()
+    hasIndividualPermissions: ->
+      ENV.PERMISSIONS.by_assignment_id?
 
-    isDuplicableAssignment: ->
-      !@model.is_quiz_assignment() && !@model.isDiscussionTopic()
+    canDelete: ->
+      result = (@userIsAdmin or @model.canDelete()) && !@model.isRestrictedByMasterCourse()
+      if @hasIndividualPermissions() then result && @canEdit() else result
 
     canDuplicate: ->
-      # For now, forbid duplicating quizzes. We will implement that later.
-      (@userIsAdmin || @canManage()) && @isDuplicableAssignment()
+      (@userIsAdmin || @canManage()) && @model.canDuplicate()
 
     canMove: ->
       @userIsAdmin or (@canManage() and @model.canMove())
+
+    canEdit: ->
+      if !@hasIndividualPermissions()
+        return @userIsAdmin or @canManage()
+
+      @userIsAdmin or (@canManage() and ENV.PERMISSIONS.by_assignment_id[@model.id].update)
 
     canManage: ->
       ENV.PERMISSIONS.manage

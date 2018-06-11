@@ -60,26 +60,25 @@ describe "assignment rubrics" do
 
     it "should add a new rubric", priority: "2", test_id: 56587 do
       get "/courses/#{@course.id}/outcomes"
-      expect_new_page_load do
-        f('#popoverMenu button').click
-        f('[data-reactid*="manage-rubrics"]').click
-      end
+      expect_new_page_load{f(' .manage_rubrics').click}
+
       expect do
        f('.add_rubric_link').click
-       f('.add_criterion_link').click
-       set_value(f('.criterion_description input[name = "description"]'), 'criterion 1')
-       f(' .ok_button').click
+       f('#add_criterion_container a:nth-of-type(1)').click
+       f('#add_criterion_button').click
+       set_value(f('#edit_criterion_form .description'), 'criterion 1')
+       f('.ui-dialog-buttonset .save_button').click
        wait_for_ajaximations
        f('#criterion_2 .add_rating_link_after').click
-       f('#criterion_2 tbody tr td:nth-of-type(2) .edit_rating_link').click
 
        expect(f('#flash_screenreader_holder')).to have_attribute("textContent", "New Rating Created")
        set_value(f('.rating_description'), 'rating 1')
-       f(' .ok_button').click
+       fj('.ui-dialog-buttonset:visible .save_button').click
+       wait_for_ajaximations
        submit_form('#edit_rubric_form')
        wait_for_ajaximations
       end.to change(Rubric, :count).by(1)
-      expect(f('.rubric_table tbody tr:nth-of-type(3) .criterion_description_value')).
+      expect(f('.rubric_table tbody tr:nth-of-type(3) .description_title')).
                                 to include_text('criterion 1')
       expect(f('.rubric_table tbody tr:nth-of-type(3) .ratings td:nth-of-type(2) .rating_description_value')).
           to include_text('rating 1')
@@ -116,6 +115,7 @@ describe "assignment rubrics" do
     end
 
     it "should use an existing rubric to use for grading", priority: "2", test_id: 114344 do
+      skip_if_safari(:alert)
       assignment_with_rubric(10)
       course_rubric = outcome_with_rubric
       course_rubric.associate_with(@course, @course, purpose: 'grading')
@@ -156,7 +156,7 @@ describe "assignment rubrics" do
       full_rubric_button = f('.toggle_full_rubric')
       expect(full_rubric_button).to be_displayed
       full_rubric_button.click
-      fj('#rubric_holder .criterion:visible .rating').click
+      set_value(fj('#rubric_holder .criterion:visible .criterion_points'), '2.5')
       f('#rubric_holder .save_rubric_button').click
 
       expect(f('#rubric_summary_container .rubric_total')).to include_text '2.5'
@@ -180,6 +180,7 @@ describe "assignment rubrics" do
     end
 
     it "should not adjust points when importing an outcome to an assignment", priority: "1", test_id: 2896223 do
+      skip_if_safari(:alert)
       create_assignment_with_points(2)
 
       outcome_with_rubric
@@ -274,19 +275,15 @@ describe "assignment rubrics" do
 
       get "/courses/#{@course.id}/assignments/#{@assignment.id}"
 
-      f("#rubric_#{@rubric.id}").find_element(:css, ".long_description_link").click
-      expect(f("#rubric_long_description_dialog div.displaying .long_description").
-          text).to eq "<b>This text should not be bold</b>"
-      close_visible_dialog
+      expect(f("#rubric_#{@rubric.id} .long_description").text).
+        to eq "<b>This text should not be bold</b>"
 
       get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}"
 
       f(".toggle_full_rubric").click
       wait_for_ajaximations
-      f('#criterion_1 .long_description_link').click
-      expect(f('#rubric_long_description_dialog')).to be_displayed
-      expect(f("#rubric_long_description_dialog div.displaying .long_description")).
-          to include_text "<b>This text should not be bold</b>"
+      f(".criterion_description .long_description_link").click
+      expect(f(".ui-dialog div.long_description").text).to eq "<b>This text should not be bold</b>"
     end
 
     it "should follow learning outcome ignore_for_scoring", priority: "2", test_id: 220328 do
@@ -307,6 +304,7 @@ describe "assignment rubrics" do
       expect(f('.total_points_holder .assessing')).to include_text "out of 5"
       f("#rubric_#{@rubric.id} tbody tr:nth-child(2) .ratings td:nth-child(1)").click
       expect(f('.rubric_total')).to include_text "5"
+      scroll_into_view('.save_rubric_button')
       f('.save_rubric_button').click
       expect(f('.grading_value')).to have_attribute(:value, '5')
     end
@@ -372,6 +370,213 @@ describe "assignment rubrics" do
       f("#rubric_#{@rubric.id} .edit_rubric_link").click
       expect(is_checked(".grading_rubric_checkbox:visible")).to be_truthy
     end
+
+    it "allows user to set a long description", priority: "1", test_id: 220341 do
+      assignment_with_editable_rubric(10, 'Assignment Rubric')
+
+      get "/courses/#{@assignment.course.id}/assignments/#{@assignment.id}"
+
+      f('.rubric_title .icon-edit').click
+      wait_for_ajaximations
+
+      hover_and_click('.criterion:nth-of-type(1) tbody tr td:nth-of-type(1) .edit_rating_link')
+      wait_for_ajaximations
+
+      set_value(f('#edit_rating_form .rating_long_description'), 'long description')
+
+      f('.ui-dialog-buttonset .save_button').click
+      wait_for_ajaximations
+      submit_form('#edit_rubric_form')
+      wait_for_ajaximations
+
+      expect(fj('.criterion:visible .rating_long_description')).to include_text "long description"
+    end
+
+    it "deletes new criterion when user cancels creation", priority: "1", test_id: 220342 do
+      assignment_with_editable_rubric(10, 'Assignment Rubric')
+
+      get "/courses/#{@assignment.course.id}/assignments/#{@assignment.id}"
+
+      f('.rubric_title .icon-edit').click
+      wait_for_ajaximations
+
+      expect(ffj(".criterion:visible").count).to eq 1
+      f('#add_criterion_container a:nth-of-type(1)').click
+      f('#add_criterion_button').click
+      wait_for_ajaximations
+
+      f('.ui-dialog-buttonset .cancel_button').click
+      wait_for_ajaximations
+
+      expect(ffj(".criterion:visible").count).to eq 1
+    end
+
+    context "ranged ratings" do
+      before(:each) do
+        @course.account.root_account.enable_feature!(:rubric_criterion_range)
+        @assignment = @course.assignments.create(name: 'assignment with rubric')
+        outcome_with_rubric
+        @rubric.associate_with(@assignment, @course, purpose: 'grading')
+      end
+
+      it "should hide range option when using custom ratings", priority: "1", test_id: 220336 do
+        get "/courses/#{@course.id}/assignments/#{@assignment.id}"
+
+        f(' .rubric_title .icon-edit').click
+        wait_for_ajaximations
+
+        expect(ffj(".criterion_use_range:visible").count).to eq 1
+        f('.rubric_custom_rating').click
+        wait_for_ajaximations
+
+        expect(f(".rubric_container")).not_to contain_jqcss(".criterion_use_range:visible")
+      end
+
+      it "should hide range option when using learning outcomes", priority: "1", test_id: 220336 do
+        get "/courses/#{@course.id}/assignments/#{@assignment.id}"
+
+        f(' .rubric_title .icon-edit').click
+        wait_for_ajaximations
+
+        expect(f('.criterion:nth-of-type(1) .criterion_use_range_div').css_value('display')).to eq 'none'
+      end
+
+      it "should show min points when range is selected", priority: "1", test_id: 220337 do
+        get "/courses/#{@course.id}/assignments/#{@assignment.id}"
+
+        f(' .rubric_title .icon-edit').click
+        wait_for_ajaximations
+
+        fj('.criterion_use_range:visible').click()
+        wait_for_ajaximations
+
+        expect(ffj(".range_rating:visible").count).to eq 2
+      end
+
+      it "should adjust the min points of a rating and the neighboring max points", priority: "1", test_id: 220338 do
+        @rubric.data[1][:criterion_use_range] = true
+        @rubric.save!
+
+        get "/courses/#{@course.id}/assignments/#{@assignment.id}"
+
+        f(' .rubric_title .icon-edit').click
+        wait_for_ajaximations
+
+        # The min points of the rating being edited should start at 3.
+        expect(ffj('.range_rating:visible .min_points')[0]).to include_text "3"
+
+        # The max points of the rating to the right should start at 3.
+        expect(ff('.criterion:nth-of-type(2) tbody tr td:nth-of-type(2) .points')[1]).to include_text "3"
+
+        hover_and_click('.criterion:nth-of-type(2) tbody tr td:nth-of-type(1) .edit_rating_link')
+        wait_for_ajaximations
+
+        set_value(f('#edit_rating_form .min_points'), '2')
+
+        f('.ui-dialog-buttonset .save_button').click
+        wait_for_ajaximations
+        submit_form('#edit_rubric_form')
+        wait_for_ajaximations
+
+        # The min points of the cell being edited should now be 2.
+        expect(ffj('.range_rating:visible .min_points')[0]).to include_text "2"
+
+        # The max points of the cell to the right should now be 2.
+        expect(ff('.criterion:nth-of-type(3) .points')[1]).to include_text "2"
+
+        # The min points of the cell to the right should not have changed.
+        expect(ffj('.range_rating:visible .min_points')[1]).to include_text "0"
+      end
+
+      it "should display explicit rating when range is infinitely small", priority: "1", test_id: 220339 do
+        @rubric.data[1][:criterion_use_range] = true
+        @rubric.save!
+
+        get "/courses/#{@course.id}/assignments/#{@assignment.id}"
+
+        f(' .rubric_title .icon-edit').click
+        wait_for_ajaximations
+
+        range_rating_element = '.criterion:nth-of-type(2) tbody tr td:nth-of-type(1) .range_rating'
+        expect(f(range_rating_element).css_value('display')).to eq 'inline'
+        hover_and_click('.criterion:nth-of-type(2) tbody tr td:nth-of-type(1) .edit_rating_link')
+        wait_for_ajaximations
+
+        set_value(f('#edit_rating_form .min_points'), '2')
+        set_value(f('#edit_rating_form input[name="points"]'), '2')
+
+        f('.ui-dialog-buttonset .save_button').click
+        wait_for_ajaximations
+
+        range_rating_element = '.criterion:nth-of-type(3) tbody tr td:nth-of-type(1) .range_rating'
+        expect(f(range_rating_element).css_value('display')).to eq 'none'
+      end
+
+      it "should cap the range expansion based on neighboring cells", priority: "1", test_id: 220340 do
+        @rubric.data[1][:criterion_use_range] = true
+        @rubric.save!
+
+        get "/courses/#{@course.id}/assignments/#{@assignment.id}"
+
+        f(' .rubric_title .icon-edit').click
+        wait_for_ajaximations
+
+        hover_and_click('.criterion:nth-of-type(2) tbody tr td:nth-of-type(2) .edit_rating_link')
+        wait_for_ajaximations
+
+        set_value(f('#edit_rating_form .min_points'), '-1')
+        set_value(f('#edit_rating_form input[name="points"]'), '100')
+
+        f('.ui-dialog-buttonset .save_button').click
+        wait_for_ajaximations
+        submit_form('#edit_rubric_form')
+        wait_for_ajaximations
+
+        # The max points of the cell being edited should now be 5.
+        expect(ff('.criterion:nth-of-type(3) .points')[1]).to include_text "5"
+
+        # The min points of the cell being edited should now be 0.
+        expect(ff('.criterion:nth-of-type(3) .min_points')[1]).to include_text "0"
+      end
+    end
+
+    context "criterion copy" do
+      before(:each) do
+        @course.account.root_account.enable_feature!(:rubric_criterion_range)
+        @assignment = @course.assignments.create(name: 'assignment with rubric')
+        outcome_with_rubric
+        @rubric.associate_with(@assignment, @course, purpose: 'grading')
+      end
+
+      it "should copy an existing criterion", priority: "1", test_id: 220342 do
+        get "/courses/#{@course.id}/assignments/#{@assignment.id}"
+
+        f(' .rubric_title .icon-edit').click
+        wait_for_ajaximations
+
+        f('#add_criterion_container a:nth-of-type(1)').click
+        f('#criterion_duplicate_menu ul li:nth-of-type(2)').click
+        wait_for_ajaximations
+        f('.ui-dialog-buttonset .save_button').click
+
+        wait_for_ajaximations
+
+        expect(ffj('.criterion:visible .description_title')[2]).to include_text "no outcome row"
+      end
+
+      it "should copy an existing learning outcome", priority: "1", test_id: 220343 do
+        get "/courses/#{@course.id}/assignments/#{@assignment.id}"
+
+        f(' .rubric_title .icon-edit').click
+        wait_for_ajaximations
+
+        f('#add_criterion_container a:nth-of-type(1)').click
+        f('#criterion_duplicate_menu ul li:nth-of-type(1)').click
+        wait_for_ajaximations
+
+        expect(ffj('.criterion:visible .description_title')[2]).to include_text "Outcome row"
+      end
+    end
   end
 
   context "assignment rubrics as a student" do
@@ -426,8 +631,9 @@ describe "assignment rubrics" do
 
       get "/courses/#{@course.id}/assignments/#{@assignment.id}"
 
-      f(".criterion_description .long_description_link").click
-      expect(f("#content")).not_to contain_jqcss('.ui-dialog .save_button:visible')
+      expect(f("#content")).to contain_css(".criterion_description .long_description")
+      expect(f("#content")).not_to contain_jqcss(".criterion_description .long_description_link:visible")
+      expect(f("#content")).not_to contain_jqcss(".criterion_description .edit_criterion_link:visible")
     end
   end
 

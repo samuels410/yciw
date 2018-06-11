@@ -23,7 +23,7 @@ There are three steps to uploading a file directly via POST:
 
 ### Step 1: Telling Canvas about the file upload and getting a token
 
-The first step is to POST to the relevant API endpoint, depending one where
+The first step is to POST to the relevant API endpoint, depending on where
 you want to create the file. For example, to <a href="courses.html">add a file to a course</a>, you'd
 POST to `/api/v1/courses/:course_id/files`. Or to <a href="submissions.html">upload a file as part of a student homework submission</a>, as the student you'd POST to
 `/api/v1/courses/:course_id/assignments/:assignment_id/submissions/self/files`.
@@ -38,6 +38,7 @@ Arguments:
   <dt>parent_folder_path</dt> <dd>The path of the folder to store the file in. The path separator is the forward slash `/`, never a back slash. The folder will be created if it does not already exist. This parameter only applies to file uploads in a context that has folders, such as a user, a course, or a group. If this and parent_folder_id are sent an error will be returned. If neither is given, a default folder will be used.</dd>
   <dt>folder</dt> <dd>[deprecated] Use parent_folder_path instead.</dd>
   <dt>on_duplicate</dt> <dd>How to handle duplicate filenames. If `overwrite`, then this file upload will overwrite any other file in the folder with the same name. If `rename`, then this file will be renamed if another file in the folder exists with the given name. If no parameter is given, the default is `overwrite`. This doesn't apply to file uploads in a context that doesn't have folders.</dd>
+  <dt>success_include[]</dt> <dd>An array of additional information to include in the upload success response. See <a href="files.html#method.files.api_show">Files API</a> for more information.</dd>
 </dl>
 
 Example Request:
@@ -101,7 +102,7 @@ The access token is not sent with this request.
 Example Response:
 
     HTTP/1.1 301 Moved Permanently
-    Location: https://<canvas>/api/v1/s3_success/1234?uuid=ABCDE
+    Location: https://<canvas>/api/v1/files/1234/create_success?uuid=ABCDE
 
 IMPORTANT:  The request is signed, and will be denied if any parameters
 from the `upload_params` response are added, removed or modified.  The
@@ -115,12 +116,18 @@ current directory.
 
 ### Step 3: Confirm the upload's success
 
-If Step 2 is successful, the response will be a 3XX redirect with a
-Location header set as normal. The application needs to perform a POST to
-this location in order to complete the upload, otherwise the new file may
-not be marked as available. This request is back against Canvas again,
-and needs to be authenticated using the normal API access token
+If Step 2 is successful, the response will be either a 3XX redirect or
+201 Created with a Location header set as normal.
+
+In the case of a 3XX redirect, the application needs to perform a POST
+to this location in order to complete the upload, otherwise the new file
+may not be marked as available. This request is back against Canvas
+again, and needs to be authenticated using the normal API access token
 authentication.
+
+In the case of a 201 Created, the upload has been complete and the
+Canvas JSON representation of the file can be retrieved with a GET from
+the provided Location.
 
 Example Request:
 

@@ -19,25 +19,9 @@
 import I18n from 'i18n!zip_file_options_form'
 import React from 'react'
 import PropTypes from 'prop-types'
-import Modal from 'jsx/shared/modal'
-import ModalContent from 'jsx/shared/modal-content'
-import ModalButtons from 'jsx/shared/modal-buttons'
-
-  const modalOverrides = {
-    overlay : {
-      backgroundColor: 'rgba(0,0,0,0.5)'
-    },
-    content : {
-      position: 'static',
-      top: '0',
-      left: '0',
-      right: 'auto',
-      bottom: 'auto',
-      borderRadius: '0',
-      border: 'none',
-      padding: '0'
-    }
-  };
+import Modal from '../shared/modal'
+import ModalContent from '../shared/modal-content'
+import ModalButtons from '../shared/modal-buttons'
 
   var ZipFileOptionsForm = React.createClass({
 
@@ -66,7 +50,6 @@ import ModalButtons from 'jsx/shared/modal-buttons'
           isOpen={!!this.props.fileOptions}
           ref='canvasModal'
           title= { I18n.t('zip_options', 'Zip file options') }
-          style={modalOverrides}
           onRequestClose = {this.props.onClose}
         >
           <ModalContent>

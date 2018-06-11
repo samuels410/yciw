@@ -449,7 +449,7 @@ describe "More Standard Common Cartridge importing" do
     @copy_to.name = "alt name"
     @copy_to.course_code = "alt name"
 
-    @migration = Object.new
+    @migration = ContentMigration.new
     allow(@migration).to receive(:to_import).and_return(nil)
     allow(@migration).to receive(:context).and_return(@copy_to)
     allow(@migration).to receive(:import_object?).and_return(true)
@@ -557,7 +557,6 @@ describe "More Standard Common Cartridge importing" do
     XML
 
     doc = Nokogiri::XML(resources)
-    @converter.unzipped_file_path = 'testing/'
     @converter.get_all_resources(doc)
     expect(@converter.resources['a1'][:href]).to eq 'a1/a1.html'
     expect(@converter.resources['w1'][:files].first[:href]).to eq 'w1/w1.html'
@@ -669,6 +668,30 @@ describe "other cc files" do
     end
   end
 
+  describe "cc optional html file to page conversation" do
+    it "should do some possibly broken converting" do
+      Account.default.enable_feature!(:common_cartridge_page_conversion)
+      import_cc_file("cc_file_to_page_test.zip")
+      img = @course.attachments.where(:migration_id => "I_00001_R_1").first
+
+      page = @course.wiki_pages.where(:migration_id => "I_00001_R").first
+      expect(page.title).to eq "Some kind of file or page thingy"
+      expect(page.body).to match_ignoring_whitespace("<p>THis is an image or something <img src=\"/courses/#{@course.id}/files/#{img.id}/preview\"></p>")
+
+      tag = @course.context_module_tags.first
+      expect(tag.content).to eq page
+    end
+
+    it "should just bring them over as files without the feature" do
+      import_cc_file("cc_file_to_page_test.zip")
+      expect(@course.wiki_pages.count).to eq 0
+
+      att = @course.attachments.where(:migration_id => "I_00001_R").first
+      tag = @course.context_module_tags.first
+      expect(tag.content).to eq att
+    end
+  end
+
   describe "cc pattern match questions" do
     it "should produce a warning" do
       next unless Qti.qti_enabled?
@@ -685,6 +708,13 @@ describe "other cc files" do
       expect(issues.any?{|i| i.include?("This package includes APIP file(s)")}).to be_truthy
       expect(issues.any?{|i| i.include?("This package includes IWB file(s)")}).to be_truthy
       expect(issues.any?{|i| i.include?("This package includes EPub3 file(s)")}).to be_truthy
+    end
+  end
+
+  describe "cc syllabus intendeduse" do
+    it "should import" do
+      import_cc_file("cc_syllabus.zip")
+      expect(@course.reload.syllabus_body).to include("<p>beep beep</p>")
     end
   end
 end

@@ -31,6 +31,22 @@
 #   Api.paginate bookmarked_collection, ...
 #
 module BookmarkedCollection
+  class Bookmark < Array
+    def <=>(other)
+      length = [self.size, other.size].min
+      length.times do |i|
+        if self[i].nil? && other[i].nil?
+          next
+        elsif self[i].nil?
+          return 1
+        elsif other[i].nil?
+          return -1
+        else
+          return self[i] <=> other[i]
+        end
+      end
+    end
+  end
   class SimpleBookmarker
     def initialize(model, *columns)
       @model = model
@@ -38,13 +54,13 @@ module BookmarkedCollection
     end
 
     def bookmark_for(object)
-      object.attributes.values_at *@columns
+      Bookmark.new object.attributes.values_at(*@columns)
     end
 
     TYPE_MAP = {
       string: -> (val) { val.is_a?(String) },
       integer: -> (val) { val.is_a?(Integer) },
-      datetime: -> (val) { val.is_a?(String) && !!(DateTime.parse(val) rescue false) }
+      datetime: -> (val) { val.is_a?(DateTime) || val.is_a?(Time) || val.is_a?(String) && !!(DateTime.parse(val) rescue false) }
     }
 
     def validate(bookmark)
@@ -65,7 +81,7 @@ module BookmarkedCollection
     end
 
     def order_by
-      @order_by ||= @columns.map { |col| column_order(col) }.join(', ')
+      @order_by ||= Arel.sql(@columns.map { |col| column_order(col) }.join(', '))
     end
 
     def column_order(col_name)

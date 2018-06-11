@@ -16,28 +16,9 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import $ from 'jquery';
-import cheaterDepaginate, { consumePagesInOrder } from 'jsx/shared/CheatDepaginator';
-import _ from 'lodash';
-
-const submissionsParams = {
-  exclude_response_fields: ['preview_url'],
-  response_fields: [
-    'id', 'user_id', 'url', 'score', 'grade', 'submission_type', 'submitted_at', 'assignment_id',
-    'grade_matches_current_submission', 'attachments', 'late', 'missing', 'workflow_state', 'excused',
-    'points_deducted', 'seconds_late', 'cached_due_date', 'entered_score', 'entered_grade', 'grading_period_id'
-  ]
-};
-
-let pendingStudentsForSubmissions;
-let submissionsLoaded;
-let studentsLoaded;
-let submissionChunkCount;
-let gotSubmissionChunkCount;
-let submissionsLoading = false;
-let submissionURL;
-let submissionChunkSize;
-let submissionChunkCb;
+import $ from 'jquery'
+import cheaterDepaginate from '../shared/CheatDepaginator'
+import StudentContentDataLoader from './default_gradebook/DataLoader/StudentContentDataLoader'
 
 function getStudentIds (courseId) {
   const url = `/courses/${courseId}/gradebook/user_ids`;
@@ -58,123 +39,33 @@ function getContextModules (url) {
 }
 
 function getCustomColumns (url) {
-  return $.ajaxJSON(url, 'GET', { include_hidden: true });
+  return cheaterDepaginate(url, { include_hidden: true });
 }
 
-function gotSubmissionsChunk (data) {
-  gotSubmissionChunkCount++;
-  submissionChunkCb(data);
-
-  if (gotSubmissionChunkCount === submissionChunkCount && studentsLoaded.isResolved()) {
-    submissionsLoaded.resolve();
-  }
-}
-
-function getPendingSubmissions () {
-  while (pendingStudentsForSubmissions.length) {
-    const studentIds = pendingStudentsForSubmissions.splice(0, submissionChunkSize);
-    submissionChunkCount++;
-    $.ajaxJSON(
-      submissionURL,
-      'GET',
-      { student_ids: studentIds, ...submissionsParams },
-      gotSubmissionsChunk
-    );
-  }
-}
-
-function getSubmissions (url, cb, chunkSize) {
-  submissionURL = url;
-  submissionChunkCb = cb;
-  submissionChunkSize = chunkSize;
-
-  submissionsLoaded = $.Deferred();
-  submissionChunkCount = 0;
-  gotSubmissionChunkCount = 0;
-
-  submissionsLoading = true;
-  getPendingSubmissions();
-  return submissionsLoaded;
-}
-
-function getStudents (options, gotStudentIds) {
-  const url = options.studentsURL;
-  const params = options.studentsParams;
-  const studentChunkCb = options.studentsPageCb;
-
-  pendingStudentsForSubmissions = [];
-  studentsLoaded = $.Deferred();
-
-  const gotStudentPage = (students) => {
-    studentChunkCb(students);
-
-    const studentIds = _.map(students, 'id');
-    [].push.apply(pendingStudentsForSubmissions, studentIds);
-
-    if (submissionsLoading) {
-      getPendingSubmissions();
-    }
-  };
-
-  const studentData = [];
-  const pageCallback = consumePagesInOrder(gotStudentPage, studentData);
-
-  function getStudentPage (studentIds, page) {
-    return $.ajaxJSON(
-      url,
-      'GET',
-      { ...params, per_page: options.perPage, user_ids: studentIds },
-      (response) => { pageCallback(response, page) }
-    );
-  }
-
-  gotStudentIds.then((data) => {
-    const loadedStudentIds = options.loadedStudentIds || [];
-    const allStudentIds = data.user_ids;
-
-    const studentIdsToLoad = _.difference(allStudentIds, loadedStudentIds);
-
-    if (studentIdsToLoad.length === 0) {
-      studentsLoaded.resolve([]);
-      submissionsLoaded.resolve([]);
-    }
-
-    const studentIdChunks = _.chunk(studentIdsToLoad, options.perPage);
-    const studentRequests = studentIdChunks.map((studentIds, chunkIndex) => (
-      getStudentPage(studentIds, chunkIndex + 1) // `page is 1-based index`
-    ));
-
-    $.when(...studentRequests)
-      .then(() => {
-        studentsLoaded.resolve(studentData);
-      })
-      .fail(() => {
-        studentsLoaded.reject();
-      });
-  });
-
-  return studentsLoaded;
-}
-
-function getDataForColumn (column, url, params, cb) {
-  const columnUrl = url.replace(/:id/, column.id);
-  const augmentedCallback = data => cb(column, data);
+function getDataForColumn (columnId, url, params, cb) {
+  const columnUrl = url.replace(/:id/, columnId);
+  const augmentedCallback = data => cb(columnId, data);
   return cheaterDepaginate(columnUrl, params, augmentedCallback);
 }
 
-function getCustomColumnData (url, params, cb, customColumnsDfd, waitForDfds) {
+function getCustomColumnData (options, customColumnsDfd, waitForDfds) {
+  const url = options.customColumnDataURL;
+  const params = options.customColumnDataParams;
+  const cb = options.customColumnDataPageCb;
   const customColumnDataLoaded = $.Deferred();
 
   if (url) {
-    let customColumnDataDfds;
-
     // waitForDfds ensures that custom column data is loaded *last*
     $.when(...waitForDfds).then(() => {
-      customColumnsDfd.then((customColumns) => {
-        customColumnDataDfds = customColumns.map(col => getDataForColumn(col, url, params, cb));
-
+      if (options.customColumnIds) {
+        const customColumnDataDfds = options.customColumnIds.map(columnId => getDataForColumn(columnId, url, params, cb));
         $.when(...customColumnDataDfds).then(() => customColumnDataLoaded.resolve());
-      });
+      } else {
+        customColumnsDfd.then((customColumns) => {
+          const customColumnDataDfds = customColumns.map(col => getDataForColumn(col.id, url, params, cb));
+          $.when(...customColumnDataDfds).then(() => customColumnDataLoaded.resolve());
+        });
+      }
     });
   }
 
@@ -194,18 +85,31 @@ function loadGradebookData (opts) {
     gotGradingPeriodAssignments = getGradingPeriodAssignments(opts.courseId);
   }
   const gotCustomColumns = getCustomColumns(opts.customColumnsURL);
-  const gotStudents = getStudents(opts, gotStudentIds);
+
+  const studentContentDataLoader = new StudentContentDataLoader({
+    loadedStudentIds: opts.loadedStudentIds,
+    onStudentsChunkLoaded: opts.studentsPageCb,
+    onSubmissionsChunkLoaded: opts.submissionsChunkCb,
+    studentsChunkSize: opts.perPage,
+    studentsParams: opts.studentsParams,
+    studentsUrl: opts.studentsURL,
+    submissionsChunkSize: opts.submissionsChunkSize,
+    submissionsUrl: opts.submissionsURL
+  })
+
   const gotContextModules = getContextModules(opts.contextModulesURL);
-  const gotSubmissions = getSubmissions(opts.submissionsURL, opts.submissionsChunkCb, opts.submissionsChunkSize);
+
+  const gotStudents = $.Deferred()
+  const gotSubmissions = $.Deferred()
+
+  gotStudentIds.then(async data => {
+    await studentContentDataLoader.load(data.user_ids)
+    gotStudents.resolve()
+    gotSubmissions.resolve()
+  })
 
   // Custom Column Data will load only after custom columns and all submissions.
-  const gotCustomColumnData = getCustomColumnData(
-    opts.customColumnDataURL,
-    opts.customColumnDataParams,
-    opts.customColumnDataPageCb,
-    gotCustomColumns,
-    [gotSubmissions]
-  );
+  const gotCustomColumnData = getCustomColumnData(opts, gotCustomColumns, [gotSubmissions]);
 
   return {
     gotAssignmentGroups,

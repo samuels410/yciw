@@ -143,7 +143,8 @@ class ContentMigrationsController < ApplicationController
 
     Folder.root_folders(@context) # ensure course root folder exists so file imports can run
 
-    @migrations = Api.paginate(@context.content_migrations.order("id DESC"), self, api_v1_course_content_migration_list_url(@context))
+    scope = @context.content_migrations.where(child_subscription_id: nil).order('id DESC')
+    @migrations = Api.paginate(scope, self, api_v1_course_content_migration_list_url(@context))
     @migrations.each{|mig| mig.check_for_pre_processing_timeout }
     content_migration_json_hash = content_migrations_json(@migrations, @current_user, session)
 
@@ -172,6 +173,9 @@ class ContentMigrationsController < ApplicationController
       js_env(:OLD_END_DATE => datetime_string(@context.conclude_at, :verbose))
       js_env(:SHOW_SELECT => @current_user.manageable_courses.count <= 100)
       js_env(:CONTENT_MIGRATIONS_EXPIRE_DAYS => ContentMigration.expire_days)
+      js_env(:QUIZZES_NEXT_CONFIGURED_ROOT => @context.root_account.feature_allowed?(:quizzes_next) &&
+             @context.root_account.feature_enabled?(:import_to_quizzes_next))
+      js_env(:QUIZZES_NEXT_ENABLED => @context.feature_enabled?(:quizzes_next) && @context.quiz_lti_tool.present?)
       set_tutorial_js_env
     end
   end
@@ -502,5 +506,4 @@ class ContentMigrationsController < ApplicationController
       render :json => @content_migration.errors, :status => :bad_request
     end
   end
-
 end

@@ -27,8 +27,10 @@ class MasterCourses::ChildContentTag < ActiveRecord::Base
                                      :calendar_event,
                                      :context_external_tool,
                                      :context_module,
+                                     :content_tag,
                                      :discussion_topic,
                                      :learning_outcome,
+                                     :learning_outcome_group,
                                      :rubric,
                                      :wiki_page,
                                      quiz: 'Quizzes::Quiz'

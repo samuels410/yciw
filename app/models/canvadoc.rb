@@ -27,7 +27,7 @@ class Canvadoc < ActiveRecord::Base
   def upload(opts = {})
     return if document_id.present?
 
-    url = attachment.authenticated_s3_url(expires_in: 7.days)
+    url = attachment.public_url(expires_in: 7.days)
 
     opts.delete(:annotatable) unless Canvadocs.annotations_supported?
 
@@ -58,10 +58,7 @@ class Canvadoc < ActiveRecord::Base
   end
 
   def has_annotations?
-    account_context = attachment.context.try(:account)
-    account_context ||= attachment.context.try(:root_account)
-    new_annotations_enabled = account_context&.feature_enabled?(:new_annotations)
-    new_annotations_enabled || annotations == true
+    Canvadocs.annotations_supported? || has_annotations == true
   end
 
   def self.mime_types
@@ -74,6 +71,25 @@ class Canvadoc < ActiveRecord::Base
       application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
       application/vnd.openxmlformats-officedocument.presentationml.presentation
       application/vnd.openxmlformats-officedocument.wordprocessingml.document
+    ].to_json)
+  end
+
+  def self.submission_mime_types
+    JSON.parse Setting.get('canvadoc_submission_mime_types', %w[
+      application/excel
+      application/msword
+      application/pdf
+      application/vnd.ms-excel
+      application/vnd.ms-powerpoint
+      application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      application/vnd.openxmlformats-officedocument.presentationml.presentation
+      application/vnd.openxmlformats-officedocument.wordprocessingml.document
+      image/bmp
+      image/jpeg
+      image/jpg
+      image/png
+      image/tif
+      image/tiff
     ].to_json)
   end
 

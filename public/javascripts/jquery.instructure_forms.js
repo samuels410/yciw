@@ -31,6 +31,7 @@ import './jquery.instructure_date_and_time' /* date_field, time_field, datetime_
 import './jquery.instructure_misc_helpers' /* /\$\.uniq/ */
 import 'compiled/jquery.rails_flash_notifications'
 import './vendor/jquery.scrollTo'
+import { uploadFile as rawUploadFile } from 'jsx/shared/upload_file'
 
   // Intercepts the default form submission process.  Uses the form tag's
   // current action and method attributes to know where to submit to.
@@ -296,29 +297,20 @@ import './vendor/jquery.scrollTo'
         $.ajaxJSON(options.url, options.method, data, options.success, options.error);
       }
     };
+    const uploadUrl = options.uploadDataUrl || "/files/pending";
     var uploadFile = function(parameters, file) {
-      $.ajaxJSON(options.uploadDataUrl || "/files/pending", 'POST', parameters, function(data) {
-        try {
-        if(data && data.upload_url) {
-          var post_params = data.upload_params;
-          var old_name = $(file).attr('name');
-          $(file).attr('name', data.file_param);
-          $.ajaxJSONFiles(data.upload_url, 'POST', post_params, $(file), function(data) {
-            attachments.push(data);
-            $(file).attr('name', old_name);
-            next.call($this);
-          }, function(data) {
-            $(file).attr('name', old_name);
-            (options.upload_error || options.error).call($this, data);
-          }, {onlyGivenParameters: true });
-        } else {
-          (options.upload_error || options.error).call($this, data);
-        }
-        } finally {}
-
-      }, function() {
-        return (options.upload_error || options.error).apply(this, arguments);
-      });
+      // we want the s3 success url in the preflight response, not embedded in
+      // the upload_url. the latter doesn't work with the new ajax mechanism
+      parameters.no_redirect = true;
+      file = file.files[0]
+      rawUploadFile(uploadUrl, parameters, file)
+        .then((data) => {
+          attachments.push(data);
+          next.call($this);
+        })
+        .catch((error) => {
+          (options.upload_error || options.error).call($this, error);
+        });
     };
     var next = function() {
       var item = list.shift();
@@ -326,12 +318,14 @@ import './vendor/jquery.scrollTo'
         var attrs = $.extend({
           'name': item.name,
           'on_duplicate': 'rename',
+          'no_redirect': true,
           'attachment[folder_id]': options.folder_id,
           'attachment[intent]': options.intent,
           'attachment[asset_string]': options.asset_string,
           'attachment[filename]': item.name,
+          'attachment[size]': item.size,
           'attachment[context_code]': options.context_code,
-          'attachment[duplicate_handling]': 'rename'
+          'attachment[on_duplicate]': 'rename'
         }, options.formDataTarget == 'uploadDataUrl' ? options.formData : {});
         if (item.files.length === 1) {
           attrs['attachment[content_type]'] = item.files[0].type;
@@ -1145,8 +1139,6 @@ import './vendor/jquery.scrollTo'
       var field = $form.find('[name="'+name+'"]');
       if (!field.length) {return;}
       field.attr({'aria-required': 'true'});
-      // TODO: enable this, maybe when Safari supports it
-      // field.attr({required: true});
       field.each(function() {
         if (!this.id) {return;}
         var label = $('label[for="'+this.id+'"]');

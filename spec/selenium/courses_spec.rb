@@ -80,7 +80,7 @@ describe "courses" do
         get "/courses/#{@course.id}"
         course_status_buttons = ff('#course_status_actions button')
         expect(course_status_buttons.first).not_to have_class('disabled')
-        expect(course_status_buttons.first.text).to eq 'Unpublish'
+        expect(course_status_buttons.first.text).to eq ' Unpublish'
         expect(course_status_buttons.last).to have_class('disabled')
         expect(course_status_buttons.last.text).to eq 'Published'
         expect_new_page_load { course_status_buttons.first.click }
@@ -302,11 +302,12 @@ describe "courses" do
 
       get "/courses/#{course1.id}/grades/#{student.id}"
 
-      select = f('#course_url')
+      select = f('#course_select_menu')
       options = select.find_elements(:css, 'option')
       expect(options.length).to eq 2
       wait_for_ajaximations
-      expect_new_page_load{ click_option('#course_url', course2.name) }
+      click_option('#course_select_menu', course2.name)
+      expect_new_page_load { f('#apply_select_menus').click }
       expect(f('#breadcrumbs .home + li a')).to include_text(course2.name)
     end
 
@@ -533,18 +534,17 @@ describe "courses" do
     html = "<p>#{text}</p>"
     @course.announcements.create!(:title => "something", :message => html)
 
+    @course.wiki_pages.create!(:title => 'blah').set_as_front_page!
+
+    @course.reload
     @course.default_view = "wiki"
     @course.show_announcements_on_home_page = true
     @course.home_page_announcement_limit = 5
     @course.save!
-    @course.wiki_pages.create!(:title => 'blah').set_as_front_page!
 
     get "/courses/#{@course.id}"
 
     expect(f('#announcements_on_home_page')).to be_displayed
-    expect(f('#announcements_on_home_page')).to contain_css("button")
-    f('#announcements_on_home_page button').click
-
     expect(f('#announcements_on_home_page')).to include_text(text)
     expect(f('#announcements_on_home_page')).to_not include_text(html)
   end

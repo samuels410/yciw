@@ -19,11 +19,11 @@ define [
   'jquery'
   'underscore'
   'Backbone'
-  'compiled/collections/GroupCollection'
-  'compiled/collections/GroupUserCollection'
-  'compiled/collections/UnassignedGroupUserCollection'
-  'compiled/models/progressable'
-  'compiled/backbone-ext/DefaultUrlMixin'
+  '../collections/GroupCollection'
+  '../collections/GroupUserCollection'
+  '../collections/UnassignedGroupUserCollection'
+  '../models/progressable'
+  '../backbone-ext/DefaultUrlMixin'
 ], ($, _, Backbone, GroupCollection, GroupUserCollection, UnassignedGroupUserCollection, progressable, DefaultUrlMixin) ->
 
   class GroupCategory extends Backbone.Model
@@ -45,6 +45,7 @@ define [
       @_groups = new GroupCollection models,
         category: this
         loadAll: true
+        markInactiveStudents: @collection?.options?.markInactiveStudents
       if @get('groups_count') is 0 or models?.length
         @_groups.loadedAll = true
       else

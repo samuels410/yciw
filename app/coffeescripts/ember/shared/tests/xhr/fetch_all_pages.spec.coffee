@@ -34,20 +34,27 @@ define [
       #  in every setup.
       Ember.testing = false
       fixtures.create()
+      @server = sinon.createFakeServer()
 
-  asyncTest 'passes records through by default', ->
+    teardown: ->
+      @server.restore()
+
+  test 'passes records through by default', (assert) ->
+    start = assert.async()
     fetchAllPages(ENV.numbers_url).promise.then (records) ->
       start()
       deepEqual(records.get('content'), [1, 2, 3])
 
 
-  asyncTest 'populates existing array if provided', ->
+  test 'populates existing array if provided', (assert) ->
+    start = assert.async()
     myArray = ArrayProxy.create({content: []})
     fetchAllPages(ENV.numbers_url, records: myArray).promise.then ->
       start()
       deepEqual(myArray.get('content'), [1, 2, 3])
 
-  asyncTest 'calls process if provided', ->
+  test 'calls process if provided', (assert) ->
+    start = assert.async()
     fetchAllPages(ENV.numbers_url, process: (response) ->
       response.map (x) -> x * 2
     ).promise.then (records) ->

@@ -62,24 +62,20 @@ module AttachmentHelper
   end
 
   def render_or_redirect_to_stored_file(attachment:, verifier: nil, inline: false)
-    set_cache_header(attachment)
+    set_cache_header(attachment, inline)
     if safer_domain_available?
       redirect_to safe_domain_file_url(attachment, @safer_domain_host, verifier, !inline)
-    elsif Attachment.local_storage?
+    elsif attachment.stored_locally?
       @headers = false if @files_domain
       send_file(attachment.full_filename, :type => attachment.content_type_with_encoding, :disposition => (inline ? 'inline' : 'attachment'), :filename => attachment.display_name)
-    elsif inline && should_proxy_attachment?(attachment)
+    elsif inline && attachment.can_be_proxied?
       send_file_headers!( :length=> attachment.s3object.content_length, :filename=>attachment.filename, :disposition => 'inline', :type => attachment.content_type_with_encoding)
       render body: attachment.s3object.get.body.read
+    elsif inline
+      redirect_to authenticated_inline_url(attachment)
     else
-      redirect_to(inline ? attachment.inline_url : attachment.download_url)
+      redirect_to authenticated_download_url(attachment)
     end
-  end
-
-  def should_proxy_attachment?(attachment)
-    attachment.mime_class == 'html' && attachment.size < Setting.get('max_inline_html_proxy_size', 128 * 1024).to_i ||
-      attachment.mime_class == 'flash' && attachment.size < Setting.get('max_swf_proxy_size', 1024 * 1024).to_i ||
-      attachment.content_type == 'text/css' && attachment.size < Setting.get('max_css_proxy_size', 64 * 1024).to_i
   end
 
   # checks if for the current root account there's a 'files' domain
@@ -93,12 +89,21 @@ module AttachmentHelper
     !!@safer_domain_host
   end
 
-  def set_cache_header(attachment)
-    unless attachment.content_type.match(/\Atext/) || attachment.extension == '.html' || attachment.extension == '.htm'
+  def set_cache_header(attachment, inline)
+    # TODO [RECNVS-73]
+    # instfs JWTs cannot be shared across users, so we cannot cache them across
+    # users. while most browsers will only service one user and caching
+    # independent of user would not be detrimental, we cannot guarantee that.
+    # so we can't let the browser cache the instfs redirect. we should still
+    # investigate opportunities to reuse JWTs when the same user requests the
+    # same file within a reasonable window of time, so that the URL redirected
+    # too can still take advantage of browser caching.
+    unless attachment.instfs_hosted? || attachment.content_type.match(/\Atext/) || attachment.extension == '.html' || attachment.extension == '.htm'
       cancel_cache_buster
-      #set cache to expoire in 1 day, max-age take seconds, and Expires takes a date
-      response.headers["Cache-Control"] = "private, max-age=86400"
-      response.headers["Expires"] = 1.day.from_now.httpdate
+      # set cache to expire whenever the s3 url does (or one day if local or inline proxy), max-age take seconds, and Expires takes a date
+      ttl = attachment.stored_locally? || (inline && attachment.can_be_proxied?) ? 1.day : attachment.url_ttl
+      response.headers["Cache-Control"] = "private, max-age=#{ttl.seconds.to_s}"
+      response.headers["Expires"] = ttl.from_now.httpdate
     end
   end
 

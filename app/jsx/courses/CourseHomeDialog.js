@@ -19,17 +19,17 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import axios from 'axios'
-import Modal, {ModalHeader, ModalBody, ModalFooter} from 'instructure-ui/lib/components/Modal'
-import Heading from 'instructure-ui/lib/components/Heading'
-import RadioInputGroup from 'instructure-ui/lib/components/RadioInputGroup'
-import RadioInput from 'instructure-ui/lib/components/RadioInput'
-import Button from 'instructure-ui/lib/components/Button'
-import Typography from 'instructure-ui/lib/components/Typography'
-import Link from 'instructure-ui/lib/components/Link'
-import ScreenReaderContent from 'instructure-ui/lib/components/ScreenReaderContent'
-import AccessibleContent from 'instructure-ui/lib/components/AccessibleContent'
+import Modal, {ModalHeader, ModalBody, ModalFooter} from '@instructure/ui-core/lib/components/Modal'
+import Heading from '@instructure/ui-core/lib/components/Heading'
+import RadioInputGroup from '@instructure/ui-core/lib/components/RadioInputGroup'
+import RadioInput from '@instructure/ui-core/lib/components/RadioInput'
+import Button from '@instructure/ui-core/lib/components/Button'
+import Text from '@instructure/ui-core/lib/components/Text'
+import Link from '@instructure/ui-core/lib/components/Link'
+import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent'
+import AccessibleContent from '@instructure/ui-core/lib/components/AccessibleContent'
 import I18n from 'i18n!course_home_dialog'
-import plainStoreShape from 'jsx/shared/proptypes/plainStoreShape'
+import plainStoreShape from '../shared/proptypes/plainStoreShape'
 
 class CourseHomeDialog extends React.Component {
   static propTypes = {
@@ -52,7 +52,6 @@ class CourseHomeDialog extends React.Component {
   constructor (props) {
     super(props)
     this.state = props.store.getState()
-    this.appElement = document.getElementById('application')
   }
 
   renderWikiLabelContent () {
@@ -60,12 +59,12 @@ class CourseHomeDialog extends React.Component {
     if (wikiFrontPageTitle) {
       return (
         <span>
-          <Typography size="small" color="secondary">
+          <Text size="small" color="secondary">
             &nbsp;&nbsp;
             <i>{wikiFrontPageTitle}</i>
             &nbsp;
             [<Link href={wikiUrl}>{I18n.t('Change')}</Link>]
-          </Typography>
+          </Text>
         </span>
       )
     }
@@ -127,66 +126,68 @@ class CourseHomeDialog extends React.Component {
       I18n.t('Before publishing your course, you must either publish a module in the Modules page, or choose a different home page.') :
       I18n.t("Select what you'd like to display on the home page.")
 
-    return (<Modal
-      isOpen={this.props.open}
-      transition="fade"
-      label={I18n.t('Choose Course Home Page')}
-      closeButtonLabel={I18n.t("Close")}
-      onReady={this.onReady}
-      onRequestClose={this.props.onRequestClose}
-      onClose={this.onClose}
-    >
-      <ModalHeader>
-        <Heading tag="h2" level="h3">{I18n.t('Choose Home Page')}</Heading>
-      </ModalHeader>
-      <ModalBody>
-        <div className="content-box-mini" style={{marginTop: '0'}}>
-          <AccessibleContent>
-            <Typography weight="bold" size="small">
-              {instructions}
-            </Typography>
-          </AccessibleContent>
-        </div>
-        <RadioInputGroup
-          description={<ScreenReaderContent>{instructions}</ScreenReaderContent>}
-          name="course[default_view]"
-          onChange={this.onChange}
-          defaultValue={selectedDefaultView}
-        >
-          {inputs.map(input =>
-            <RadioInput
-              key={input.value}
-              checked={input.checked}
-              value={input.value}
-              label={input.label}
-              disabled={input.disabled}
-            />)
+    return (
+      <Modal
+        open={this.props.open}
+        transition="fade"
+        label={I18n.t('Choose Course Home Page')}
+        closeButtonLabel={I18n.t('Close')}
+        applicationElement={() => document.getElementById('application')}
+        onDismiss={this.props.onRequestClose}
+        onClose={this.onClose}
+      >
+        <ModalHeader>
+          <Heading tag="h2" level="h3">{I18n.t('Choose Home Page')}</Heading>
+        </ModalHeader>
+        <ModalBody>
+          <div className="content-box-mini" style={{marginTop: '0'}}>
+            <AccessibleContent>
+              <Text weight="bold" size="small">
+                {instructions}
+              </Text>
+            </AccessibleContent>
+          </div>
+          <RadioInputGroup
+            description={<ScreenReaderContent>{instructions}</ScreenReaderContent>}
+            name="course[default_view]"
+            onChange={this.onChange}
+            defaultValue={selectedDefaultView}
+          >
+            {inputs.map(input =>
+              <RadioInput
+                key={input.value}
+                checked={input.checked}
+                value={input.value}
+                label={input.label}
+                disabled={input.disabled}
+              />)
+            }
+          </RadioInputGroup>
+
+          {
+            wikiFrontPageTitle ? (
+              null
+            ) : (
+              <div className="content-box-mini">
+              * <Link href={wikiUrl}>{I18n.t('Front page must be set first')}
+              </Link></div>
+            )
           }
-        </RadioInputGroup>
 
-        {
-          wikiFrontPageTitle ? (
-            null
-          ) : (
-            <div className="content-box-mini">
-            * <Link href={wikiUrl}>{I18n.t('Front page must be set first')}
-            </Link></div>
-          )
-        }
+        </ModalBody>
 
-      </ModalBody>
-
-      <ModalFooter>
-        <Button onClick={this.props.onRequestClose}>{I18n.t('Cancel')}</Button>&nbsp;
-        <Button
-          onClick={this.onSubmit}
-          disabled={this.props.isPublishing && this.state.selectedDefaultView === 'modules'}
-          variant="primary"
-        >{
-          this.props.isPublishing ? I18n.t('Choose and Publish') : I18n.t('Save')
-        }</Button>
-      </ModalFooter>
-    </Modal>)
+        <ModalFooter>
+          <Button onClick={this.props.onRequestClose}>{I18n.t('Cancel')}</Button>&nbsp;
+          <Button
+            onClick={this.onSubmit}
+            disabled={this.props.isPublishing && this.state.selectedDefaultView === 'modules'}
+            variant="primary"
+          >{
+            this.props.isPublishing ? I18n.t('Choose and Publish') : I18n.t('Save')
+          }</Button>
+        </ModalFooter>
+      </Modal>
+    );
   }
 
   componentDidMount () {
@@ -197,13 +198,7 @@ class CourseHomeDialog extends React.Component {
     this.props.store.removeChangeListener(this.onStoreChange)
   }
 
-  onReady = () => {
-    this.appElement.setAttribute('aria-hidden', 'true')
-  }
-
   onClose = () => {
-    this.appElement.removeAttribute('aria-hidden')
-
     // this (unnecessary?) setTimeout fixes returning focus in ie11
     window.setTimeout(() => {
       const returnFocusTo = this.props.returnFocusTo

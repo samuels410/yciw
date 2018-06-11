@@ -25,7 +25,21 @@ Delayed::Backend::Base.class_eval do
   end
 end
 
-Delayed::Settings.max_attempts              = 15
+# if the method was defined by a previous module, use the existing
+# implementation, but provide a default otherwise
+module Delayed::Backend::DefaultJobAccount
+  def account
+    if defined?(super)
+      super
+    else
+      Account.default
+    end
+  end
+end
+Delayed::Backend::ActiveRecord::Job.include(Delayed::Backend::DefaultJobAccount)
+Delayed::Backend::Redis::Job.include(Delayed::Backend::DefaultJobAccount)
+
+Delayed::Settings.max_attempts              = 1
 Delayed::Settings.queue                     = "canvas_queue"
 Delayed::Settings.sleep_delay               = ->{ Setting.get('delayed_jobs_sleep_delay', '2.0').to_f }
 Delayed::Settings.sleep_delay_stagger       = ->{ Setting.get('delayed_jobs_sleep_delay_stagger', '2.0').to_f }
@@ -34,6 +48,8 @@ Delayed::Settings.select_random_from_batch  = ->{ Setting.get('jobs_select_rando
 Delayed::Settings.num_strands               = ->(strand_name){ Setting.get("#{strand_name}_num_strands", nil) }
 Delayed::Settings.worker_procname_prefix    = ->{ "#{Shard.current(:delayed_jobs).id}~" }
 Delayed::Settings.pool_procname_suffix      = " (#{Canvas.revision})" if Canvas.revision
+Delayed::Settings.worker_health_check_type  = Delayed::CLI.instance&.config&.dig('health_check', 'type')&.to_sym || :none
+Delayed::Settings.worker_health_check_config = Delayed::CLI.instance&.config&.[]('health_check')
 
 Delayed::Settings.default_job_options = ->{
   {
@@ -46,6 +62,22 @@ Delayed::Periodic.add_overrides(ConfigFile.load('periodic_jobs') || {})
 
 if ActiveRecord::Base.configurations[Rails.env]['queue']
   ActiveSupport::Deprecation.warn("A queue section in database.yml is no longer supported. Please run migrations, then remove it.")
+end
+
+# configure autoscaling plugin
+if (config = Delayed::CLI.instance&.config&.[](:auto_scaling))
+  require 'jobs_autoscaling'
+  if config[:asg_name]
+    aws_config = config[:aws_config] || {}
+    aws_config[:region] ||= ApplicationController.region
+    action = JobsAutoscaling::AwsAction.new(asg_name: config[:asg_name],
+                                            aws_config: aws_config,
+                                            instance_id: ApplicationController.instance_id)
+  else
+    action = JobsAutoscaling::LoggerAction.new
+  end
+  autoscaler = JobsAutoscaling::Monitor.new(action: action)
+  autoscaler.activate!
 end
 
 Delayed::Worker.on_max_failures = proc do |job, err|
@@ -73,6 +105,10 @@ Delayed::Worker.lifecycle.around(:perform) do |worker, job, &block|
 
   LiveEvents.set_context(job.live_events_context)
 
+  HostUrl.reset_cache!
+  old_root_account = Attachment.current_root_account
+  Attachment.current_root_account = job.account
+
   starting_mem = Canvas.sample_memory()
   starting_cpu = Process.times()
   lag = ((Time.now - job.run_at) * 1000).round
@@ -84,6 +120,7 @@ Delayed::Worker.lifecycle.around(:perform) do |worker, job, &block|
   stats = ["delayedjob.queue", "delayedjob.queue.tag.#{obj_tag}.#{method_tag}", "delayedjob.queue.shard.#{shard_id}"]
   stats << "delayedjob.queue.jobshard.#{job.shard.id}" if job.respond_to?(:shard)
   CanvasStatsd::Statsd.timing(stats, lag)
+
   begin
     stats = ["delayedjob.perform", "delayedjob.perform.tag.#{obj_tag}.#{method_tag}", "delayedjob.perform.shard.#{shard_id}"]
     stats << "delayedjob.perform.jobshard.#{job.shard.id}" if job.respond_to?(:shard)
@@ -95,6 +132,8 @@ Delayed::Worker.lifecycle.around(:perform) do |worker, job, &block|
     ending_mem = Canvas.sample_memory()
     user_cpu = ending_cpu.utime - starting_cpu.utime
     system_cpu = ending_cpu.stime - starting_cpu.stime
+
+    Attachment.current_root_account = old_root_account
 
     LiveEvents.clear_context!
 
@@ -116,16 +155,16 @@ Delayed::Worker.lifecycle.around(:work_queue_pop) do |worker, config, &block|
   end
 end
 
-Delayed::Worker.lifecycle.before(:perform) do |_job|
+Delayed::Worker.lifecycle.before(:perform) do |_worker, _job|
   # Since AdheresToPolicy::Cache uses an instance variable class cache lets clear
   # it so we start with a clean slate.
   AdheresToPolicy::Cache.clear
   LoadAccount.clear_shard_cache
 end
 
-Delayed::Worker.lifecycle.around(:perform) do |job, &block|
+Delayed::Worker.lifecycle.around(:perform) do |worker, job, &block|
   CanvasStatsd::Statsd.batch do
-    block.call(job)
+    block.call(worker, job)
   end
 end
 

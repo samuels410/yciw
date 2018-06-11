@@ -30,14 +30,16 @@ describe AssignmentOverride do
     @override_student.save!
 
     @override.destroy
+    @override_student.reload
     expect(AssignmentOverride.where(id: @override).first).not_to be_nil
-    expect(@override.workflow_state).to eq 'deleted'
-    expect(AssignmentOverrideStudent.where(:id => @override_student).first).to be_nil
+    expect(@override).to be_deleted
+    expect(AssignmentOverrideStudent.where(:id => @override_student).first).not_to be_nil
+    expect(@override_student).to be_deleted
   end
 
   it 'should allow deletes to invalid objects' do
     override = assignment_override_model(course: @course)
-    # make it invalide
+    # make it invalid
     AssignmentOverride.where(id: override).update_all(assignment_id: nil, quiz_id: nil)
     expect(override.reload).to be_invalid
     override.destroy
@@ -94,6 +96,8 @@ describe AssignmentOverride do
     @override_student.save!
 
     @override.destroy
+    expect(@override_student.reload).to be_deleted
+
     @override2 = assignment_override_model(:assignment => @assignment)
     @override_student2 = @override2.assignment_override_students.build
     @override_student2.user = @student
@@ -188,8 +192,8 @@ describe AssignmentOverride do
 
     it "should propagate student errors" do
       student = student_in_course(course: @override.assignment.context, name: 'Johnny Manziel').user
-      @override.assignment_override_students.create(user: student)
-      @override.assignment_override_students.build(user: student)
+      @override.assignment_override_students.create(user: student, workflow_state: 'active')
+      @override.assignment_override_students.build(user: student, workflow_state: 'active')
       expect(@override).not_to be_valid
       expect(@override.errors[:assignment_override_students].first.type).to eq :taken
     end
@@ -371,6 +375,37 @@ describe AssignmentOverride do
       end
       @override.valid? # trigger bookkeeping
       expect(@override.title).to eq '4 students'
+    end
+  end
+
+  describe "#title_from_students" do
+    before :each do
+      @assignment_override = AssignmentOverride.new
+      allow(AssignmentOverride).to receive(:title_from_student_count)
+    end
+
+    it "returns 'No Students' when passed in nil" do
+      expect(@assignment_override.title_from_students(nil)).to eql('No Students')
+    end
+
+    it "returns 'No Students' when pass in an empty array" do
+      expect(@assignment_override.title_from_students([])).to eql('No Students')
+    end
+
+    it "calls AssignmentOverride.title_from_student_count when called with a non-empty array" do
+      expect(AssignmentOverride).to receive(:title_from_student_count)
+
+      @assignment_override.title_from_students(["A Student"])
+    end
+  end
+
+  describe ".title_from_student_count" do
+    it "returns '1 student' when passed in 1" do
+      expect(AssignmentOverride.title_from_student_count(1)).to eql('1 student')
+    end
+
+    it "returns '42 students' when passed in 42" do
+      expect(AssignmentOverride.title_from_student_count(42)).to eql('42 students')
     end
   end
 
@@ -727,24 +762,24 @@ describe AssignmentOverride do
       @override.save
     end
 
-    it "does not trigger when non-applicable override is created" do
-      expect(DueDateCacher).to receive(:recompute).never
+    it "triggers when override without a due_date is created" do
+      expect(DueDateCacher).to receive(:recompute)
       @assignment.assignment_overrides.create
     end
 
-    it "does not trigger when non-applicable override deleted" do
+    it "triggers when override without a due_date deleted" do
       @override.clear_due_at_override
       @override.save
 
-      expect(DueDateCacher).to receive(:recompute).never
+      expect(DueDateCacher).to receive(:recompute)
       @override.destroy
     end
 
-    it "does not trigger when non-applicable override undeleted" do
+    it "triggers when override without a due_date undeleted" do
       @override.clear_due_at_override
       @override.destroy
 
-      expect(DueDateCacher).to receive(:recompute).never
+      expect(DueDateCacher).to receive(:recompute)
       @override.workflow_state = 'active'
       @override.save
     end

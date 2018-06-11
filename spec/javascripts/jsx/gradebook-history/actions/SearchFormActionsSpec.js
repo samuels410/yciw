@@ -16,7 +16,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Fixtures from 'spec/jsx/gradebook-history/Fixtures';
+import environment from 'jsx/gradebook-history/environment';
 import GradebookHistoryStore from 'jsx/gradebook-history/store/GradebookHistoryStore';
 import HistoryActions from 'jsx/gradebook-history/actions/HistoryActions';
 import HistoryApi from 'jsx/gradebook-history/api/HistoryApi';
@@ -30,6 +30,7 @@ import SearchFormActions, {
   FETCH_RECORDS_NEXT_PAGE_FAILURE
 } from 'jsx/gradebook-history/actions/SearchFormActions';
 import UserApi from 'jsx/gradebook-history/api/UserApi';
+import Fixtures from '../../gradebook-history/Fixtures';
 
 QUnit.module('SearchFormActions', function () {
   const response = {
@@ -110,10 +111,10 @@ QUnit.module('SearchFormActions', function () {
   });
 });
 
-QUnit.module('SearchFormActions getGradeHistory', {
+QUnit.module('SearchFormActions getGradebookHistory', {
   setup () {
     this.response = Fixtures.historyResponse();
-    this.getGradeHistoryStub = this.stub(HistoryApi, 'getGradeHistory')
+    this.getGradebookHistoryStub = this.stub(HistoryApi, 'getGradebookHistory')
       .returns(Promise.resolve(this.response));
 
     this.dispatchSpy = this.spy(GradebookHistoryStore, 'dispatch');
@@ -122,7 +123,7 @@ QUnit.module('SearchFormActions getGradeHistory', {
 
 test('dispatches fetchHistoryStart', function () {
   const fetchSpy = this.spy(HistoryActions, 'fetchHistoryStart');
-  const promise = this.dispatchSpy(SearchFormActions.getGradeHistory({}));
+  const promise = this.dispatchSpy(SearchFormActions.getGradebookHistory({}));
   return promise.then(() => {
     strictEqual(fetchSpy.callCount, 1);
   });
@@ -130,7 +131,7 @@ test('dispatches fetchHistoryStart', function () {
 
 test('dispatches fetchHistorySuccess on success', function () {
   const fetchSpy = this.spy(HistoryActions, 'fetchHistorySuccess');
-  const promise = this.dispatchSpy(SearchFormActions.getGradeHistory({}));
+  const promise = this.dispatchSpy(SearchFormActions.getGradebookHistory({}));
   return promise.then(() => {
     strictEqual(fetchSpy.callCount, 1);
     deepEqual(fetchSpy.firstCall.args[0], this.response.data);
@@ -139,9 +140,9 @@ test('dispatches fetchHistorySuccess on success', function () {
 });
 
 test('dispatches fetchHistoryFailure on failure', function () {
-  this.getGradeHistoryStub.returns(Promise.reject(new Error('FAIL')));
+  this.getGradebookHistoryStub.returns(Promise.reject(new Error('FAIL')));
   const fetchSpy = this.spy(HistoryActions, 'fetchHistoryFailure');
-  const promise = this.dispatchSpy(SearchFormActions.getGradeHistory({}));
+  const promise = this.dispatchSpy(SearchFormActions.getGradebookHistory({}));
   return promise.then(() => {
     strictEqual(fetchSpy.callCount, 1);
   });
@@ -156,6 +157,7 @@ QUnit.module('SearchFormActions getSearchOptions', {
 
     this.getUsersByNameStub = this.stub(UserApi, 'getUsersByName')
       .returns(Promise.resolve(this.userResponse));
+    this.courseIsConcludedStub = this.stub(environment, 'courseIsConcluded');
 
     this.dispatchSpy = this.spy(GradebookHistoryStore, 'dispatch');
   }
@@ -185,6 +187,32 @@ test('dispatches fetchRecordsFailure on failure', function () {
   const promise = this.dispatchSpy(SearchFormActions.getSearchOptions('students', 'Norval'));
   return promise.then(() => {
     strictEqual(fetchSpy.callCount, 1);
+  });
+});
+
+test('calls getUsersByName with empty array for enrollmentStates if course is not concluded', function() {
+  this.courseIsConcludedStub.returns(false);
+
+  UserApi.getUsersByName.restore();
+  const getUsersSpy = this.spy(UserApi, 'getUsersByName');
+
+  const promise = this.dispatchSpy(SearchFormActions.getSearchOptions('students', 'Norval'));
+  return promise.then(() => {
+    strictEqual(getUsersSpy.callCount, 1);
+    deepEqual(getUsersSpy.firstCall.args[3], []);
+  });
+});
+
+test('calls getUsersByName with enrollmentStates of ["completed"] if course is concluded', function() {
+  this.courseIsConcludedStub.returns(true);
+
+  UserApi.getUsersByName.restore();
+  const getUsersSpy = this.spy(UserApi, 'getUsersByName');
+
+  const promise = this.dispatchSpy(SearchFormActions.getSearchOptions('students', 'Norval'));
+  return promise.then(() => {
+    strictEqual(getUsersSpy.callCount, 1);
+    deepEqual(getUsersSpy.firstCall.args[3], ['completed']);
   });
 });
 

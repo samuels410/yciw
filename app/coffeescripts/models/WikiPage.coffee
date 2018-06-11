@@ -18,10 +18,10 @@
 define [
   'underscore'
   'Backbone'
-  'compiled/models/WikiPageRevision'
-  'compiled/models/Assignment'
-  'compiled/backbone-ext/DefaultUrlMixin'
-  'compiled/str/splitAssetString'
+  '../models/WikiPageRevision'
+  '../models/Assignment'
+  '../backbone-ext/DefaultUrlMixin'
+  '../str/splitAssetString'
   'i18n!pages'
 ], (_, Backbone, WikiPageRevision, Assignment, DefaultUrlMixin,
     splitAssetString, I18n) ->
@@ -31,7 +31,7 @@ define [
   class WikiPage extends Backbone.Model
     @mixin DefaultUrlMixin
     resourceName: 'pages'
-    idAttribute: 'url'
+    idAttribute: 'page_id'
 
     initialize: (attributes, options) ->
       super

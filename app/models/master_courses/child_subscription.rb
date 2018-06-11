@@ -41,7 +41,7 @@ class MasterCourses::ChildSubscription < ActiveRecord::Base
   self.content_tag_association = :child_content_tags
 
   def invalidate_course_cache
-    if self.workflow_state_changed?
+    if self.saved_change_to_workflow_state?
       Rails.cache.delete(self.class.course_cache_key(self.child_course))
     end
   end
@@ -105,5 +105,9 @@ class MasterCourses::ChildSubscription < ActiveRecord::Base
       c.quizzes,
       c.wiki_pages
     ]
+  end
+
+  def last_migration_id
+    child_course.content_migrations.where(child_subscription_id: self).order('id desc').limit(1).pluck(:id).first
   end
 end

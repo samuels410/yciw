@@ -16,17 +16,10 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-@import "components/ic-badge";
-
-.EditPage {
-  .EditPage__Header {
-    border-bottom: 1px solid $ic-border-light;
-    padding-bottom: 15px;
-  }
-
-  .EditPage__Form {
-    margin-top: 10px;
-  }
+.EditPage__Header {
+  border-bottom: 1px solid $ic-border-light;
+  padding-bottom: 15px;
+  margin-bottom: 20px;
 }
 
 .EditPage__Options-Input {
@@ -44,13 +37,12 @@
 }
 
 .sectionItem {
-  padding-left: 20px;
+  padding-#{direction(left)}: 20px;
 }
 
 .AppointmentGroupList__List {
   width: 100%;
   margin-top: 10px;
-  margin-left: 30px;
 }
 
 .AppointmentGroupList__Appointment {
@@ -60,22 +52,7 @@
 .AppointmentGroupList__MessageButton {
   margin-top: 10px;
   width: 100%;
-  margin-left: 30px;
-}
-
-.AppointmentGroupList__Appointment-timeLabel {
-  display: inline-block;
-  width: 180px;
-}
-
-.AppointmentGroupList__Badge--unreserved {
-  @include ic-badge-maker(20px, $ic-color-medium-light, $ic-color-dark);
-  border: 1px solid $ic-border-light;
-}
-
-.AppointmentGroupList__Badge--reserved {
-  @include ic-badge-maker(20px, $ic-color-success, $ic-color-light);
-  border: 1px solid $ic-border-light;
+  margin-#{direction(left)}: 30px;
 }
 
 .AppointmentGroupList__Icon--reserved {
@@ -84,11 +61,6 @@
 
 .AppointmentGroupList__Icon--unreserved {
   color: $ic-color-medium;
-}
-
-.AppointmentGroupList__Badge {
-  min-width: 70px;
-  margin-right: 10px;
 }
 
 .ContextSelector__Dropdown {
@@ -107,15 +79,18 @@
   width: 135px;
 }
 
-.TimeBlockSelectorRow .col-xs {
-  flex-basis: auto;
+.TimeBlockSelectorRow {  // until container supports flex this is a wrapping div for alignment
+  font-family: $ic-font-family;
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: $ic-sp;
 }
 
-.TimeBlockSelector__DivideSection-Input {
-  width: 40px;
+.TimeBlockSelectorColumn {
+  margin-#{direction(right)}: $ic-sp;
 }
 
-.TimeBlockSelectorRow__Date,
+.TimeBlockSelectorRow__Date,  // will remove once inputs are switched over to use instui
 .TimeBlockSelectorRow__StartTime,
 .TimeBlockSelectorRow__EndTime {
   width: 130px;
@@ -129,7 +104,7 @@
     box-shadow: 0 0 1px $ic-color-dark;
     background: $ic-color-medium-light;
     padding: 2px 10px;
-    margin-right: 5px;
+    margin-#{direction(right)}: 5px;
     border-radius: 12px;
     display: inline-block;
     font-size: 0.9em;

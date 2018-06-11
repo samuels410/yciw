@@ -62,15 +62,15 @@ describe "scheduler" do
 
       get "/calendar2"
       click_scheduler_link
-      wait_for_ajaximations
       click_appointment_link
-      wait_for_ajaximations
       reserve_appointment_manual(0, "my comments")
       expect(agenda_item).to include_text "Reserved"
       agenda_item.click
       expect(f('.event-details-content')).to include_text "my comments"
 
       load_month_view
+      # navigate to the next month for end of month
+      f('.navigate_next').click unless Time.now.utc.month == (Time.now.utc + 1.day).month
       f('.fc-event').click
       expect(f('.event-details-content')).to include_text "my comments"
     end
@@ -318,7 +318,8 @@ describe "scheduler" do
       create_appointment_group(
         max_appointments_per_participant: 1,
         new_appointments: [
-          [ 1.hour.ago, 30.minutes.ago ]
+          # this can fail if run in the first 2 seconds of the month.
+          [ 2.seconds.ago, 1.second.ago ]
         ]
       )
       AppointmentGroup.last.appointments.first.reserve_for(@student, @teacher)

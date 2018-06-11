@@ -21,11 +21,11 @@ define [
   'underscore'
   'Backbone'
   'jsx/shared/conditional_release/CyoeHelper'
-  'compiled/views/PublishIconView'
-  'compiled/views/LockIconView'
-  'compiled/views/assignments/DateDueColumnView'
-  'compiled/views/assignments/DateAvailableColumnView'
-  'compiled/views/SisButtonView'
+  '../PublishIconView'
+  '../LockIconView'
+  '../assignments/DateDueColumnView'
+  '../assignments/DateAvailableColumnView'
+  '../SisButtonView'
   'jst/quizzes/QuizItemView'
   'jquery.disableWhileLoading'
 ], (I18n, $, _, Backbone, CyoeHelper, PublishIconView, LockIconView, DateDueColumnView, DateAvailableColumnView, SisButtonView, template) ->
@@ -65,7 +65,10 @@ define [
       @sisButtonView = false
 
       if @canManage()
-        @publishIconView = new PublishIconView(model: @model)
+        @publishIconView = new PublishIconView({
+          model: @model,
+          title: @model.get('title')
+        })
         @lockIconView = new LockIconView({
           model: @model,
           unlockedText: I18n.t("%{name} is unlocked. Click to lock.", name: @model.get('title')),

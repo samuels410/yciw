@@ -92,7 +92,7 @@ describe "speed grader submissions" do
       wait_for_ajax_requests
 
       #add comment
-      f('#add_a_comment > textarea').send_keys('grader comment')
+      f('#add_a_comment textarea').send_keys('grader comment')
       submit_form('#add_a_comment')
       expect(f('#comments > .comment')).to be_displayed
     end
@@ -234,17 +234,12 @@ describe "speed grader submissions" do
       add_attachment_student_assignment(filename, @students[0], fullpath)
 
       get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}"
-      expect(f('#speedgrader_iframe')).to be_displayed
+      image_element = f('#iframe_holder img')
 
-      in_frame("speedgrader_iframe") do
-        # validates the image\attachment is inside the iframe as expected
-        image_element = f('img')
-
-        if Attachment.local_storage?
-          expect(image_element.attribute('src')).to include('download')
-        else
-          expect(image_element.attribute('src')).to include('amazonaws')
-        end
+      if Attachment.local_storage?
+        expect(image_element.attribute('src')).to include('download')
+      else
+        expect(image_element.attribute('src')).to include('amazonaws')
       end
     end
 
@@ -334,6 +329,71 @@ describe "speed grader submissions" do
         wait_for_ajaximations
         expect(Delayed::Job.find_by_tag('Submission#submit_to_turnitin')).not_to be_nil
         expect(f('#grade_container .submission_pending')).not_to be_nil
+      end
+    end
+
+    context "LTI Plagiarism Platform" do
+      before(:each) do
+        @assignment.save!
+      end
+
+      it "displays a pending icon if submission status is pending", priority: "1" do
+        student_submission
+        @submission.originality_reports.create!(workflow_state: 'pending')
+
+        get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}"
+        wait_for_ajaximations
+
+        turnitin_icon = f('#grade_container .submission_pending')
+        expect(turnitin_icon).not_to be_nil
+        turnitin_icon.click
+        wait_for_ajaximations
+        expect(f('#grade_container .turnitin_info')).not_to be_nil
+      end
+
+      it "displays a score if submission has an originality report", priority: "1" do
+        student_submission
+        @submission.originality_reports.create!(originality_score: 96)
+
+        get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}"
+        wait_for_ajaximations
+
+        expect(f('#grade_container .turnitin_similarity_score')).to include_text "96%"
+      end
+
+      it "displays an error icon if submission status is error", priority: "2" do
+        student_submission
+        @submission.originality_reports.create!(workflow_state: 'error')
+
+        get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}"
+        wait_for_ajaximations
+
+        turnitin_icon = f('#grade_container .submission_error')
+        expect(turnitin_icon).not_to be_nil
+        turnitin_icon.click
+        wait_for_ajaximations
+        expect(f('#grade_container .turnitin_info')).not_to be_nil
+        expect(f('#grade_container .turnitin_resubmit_button')).not_to be_nil
+      end
+
+      context 'when group is present' do
+        let(:submission_one) { student_submission }
+        let!(:group) do
+          group = submission_one.assignment.course.groups.create!(name: 'group one')
+          group.add_user(submission_one.user)
+          submission_one.update!(group: group)
+          group
+        end
+
+        it "displays a score if submission has an originality report", priority: "1" do
+          report = submission_one.originality_reports.create!(originality_score: 96)
+          report.copy_to_group_submissions!
+
+          get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}"
+          wait_for_ajaximations
+
+          expect(f('#grade_container .turnitin_similarity_score')).to include_text "96%"
+        end
       end
     end
   end

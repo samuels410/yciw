@@ -75,6 +75,7 @@ class ContextModulesController < ApplicationController
       module_file_details = load_module_file_details if @context.grants_right?(@current_user, session, :manage_content)
       js_env :course_id => @context.id,
         :CONTEXT_URL_ROOT => polymorphic_path([@context]),
+        :DUPLICATE_ENABLED => @domain_root_account.feature_enabled?(:duplicate_modules),
         :FILES_CONTEXTS => [{asset_string: @context.asset_string}],
         :MODULE_FILE_DETAILS => module_file_details,
         :MODULE_FILE_PERMISSIONS => {
@@ -120,7 +121,7 @@ class ContextModulesController < ApplicationController
 
       if item.present? && item.published? && item.context_module.published?
         rules = ConditionalRelease::Service.rules_for(@context, @current_user, item, session)
-        rule = conditional_release(item, conditional_release_rules: rules)
+        rule = conditional_release_rule_for_module_item(item, conditional_release_rules: rules)
 
         # locked assignments always have 0 sets, so this check makes it not return 404 if locked
         # but instead progress forward and return a warning message if is locked later on
@@ -266,6 +267,9 @@ class ContextModulesController < ApplicationController
     if authorized_action(@context.context_modules.temp_record, @current_user, :update)
       m = @context.context_modules.not_deleted.first
 
+      # A hash where the key is the module id and the value is the module position
+      order_before = Hash[@context.context_modules.not_deleted.pluck(:id, :position)]
+
       m.update_order(params[:order].split(","))
       # Need to invalidate the ordering cache used by context_module.rb
       @context.touch
@@ -273,8 +277,12 @@ class ContextModulesController < ApplicationController
       # I'd like to get rid of this saving every module, but we have to
       # update the list of prerequisites since a reorder can cause
       # prerequisites to no longer be valid
-      @modules = @context.context_modules.not_deleted
-      @modules.each{|m| m.save_without_touching_context }
+      @modules = @context.context_modules.not_deleted.to_a
+      @modules.each do |m|
+        m.updated_at = Time.now
+        m.save_without_touching_context
+        Canvas::LiveEvents.module_updated(m) if m.position != order_before[m.id]
+      end
       @context.touch
 
       # # Background this, not essential that it happen right away
@@ -523,8 +531,10 @@ class ContextModulesController < ApplicationController
         graded: @tag.graded?,
         content_details: content_details(@tag, @current_user),
         assignment_id: @tag.assignment.try(:id),
-        is_cyoe_able: cyoe_able?(@tag)
+        is_cyoe_able: cyoe_able?(@tag),
+        is_duplicate_able: @tag.duplicate_able?,
       )
+      @context.touch
       render json: json
     end
   end

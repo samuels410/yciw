@@ -113,7 +113,7 @@ describe 'new ui' do
     end
 
     it 'should not override high contrast theme', priority: "2", test_id: 244898 do
-      BrandableCSS.save_default_css! # make sure variable css file is up to date
+      BrandableCSS.save_default!('css') # make sure variable css file is up to date
       get '/profile/settings'
       f('.ic-Super-toggle__switch').click
       wait_for_ajaximations
@@ -156,8 +156,7 @@ describe 'new ui' do
       expect(global_nav_courses_link).to be_displayed
       global_nav_courses_link.click
       wait_for_ajaximations
-      course_link_list = fj('ul.ic-NavMenu__link-list')
-      course_link_list.find_element(:link_text, 'All Courses').click
+      fj("[aria-label='Global navigation tray'] a:contains('All Courses')").click
 
       # and now actually go to the "/courses" page and make sure it shows up there too as "unpublisned"
       wait_for_ajaximations

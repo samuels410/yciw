@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
-require_relative '../page_objects/global_grades_page'
+require_relative '../pages/global_grades_page'
 require_relative './weighting_setup'
 require_relative './a_gradebook_shared_example'
 
@@ -31,6 +31,7 @@ describe 'gradezilla' do
 
     if @grading_period_index
       GlobalGrades.select_grading_period(@course, grading_period_titles[@grading_period_index])
+      wait_for_ajax_requests
     end
     GlobalGrades.get_score_for_course(@course)
   end

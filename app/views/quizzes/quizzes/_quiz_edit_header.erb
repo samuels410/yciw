@@ -27,12 +27,12 @@
 <div class="header-bar-right">
   <div class="header-group-left">
     <span id="quiz_display_points_possible">
-      <%= t("Points %{n}", :n => raw("<span style=\"margin-left:5px\" class=\"points_possible\">#{@quiz.points_possible}</span>")) %>
+      <%= t("Points %{n}", :n => raw("<span style=\"margin-#{direction('left')}:5px\" class=\"points_possible\">#{@quiz.points_possible}</span>")) %>
     </span>
 
     <% if @quiz.published? %>
       <span id='quiz-draft-state' class='published-status published'>
-        <i class="icon-publish"></i><span class="screenreader-only"><%= t("Published") %></span>
+        <i class="icon-publish icon-Solid"></i><span class="screenreader-only"><%= t("Published") %></span>
         <%= t("Published") %>
       </span>
     <% else %>
@@ -46,8 +46,7 @@
   <div class="header-group-right">
     <div class="admin-links al-dropdown__container">
       <a class="al-trigger btn" role="button" aria-haspopup="true" aria-owns="manage-toolbar" href="#">
-        <i class="icon-settings"></i>
-        <i class="icon-mini-arrow-down"></i>
+        <i class="icon-more" aria-hidden="true"></i>
         <span class="screenreader-only"><%= admin_manage_title %></span>
       </a>
       <ul id="manage-toolbar" class="al-options" role="menu" tabindex="0" aria-hidden="true" aria-expanded="false">

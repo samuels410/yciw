@@ -98,6 +98,7 @@ class SplitUsers
     private
 
     def split_users(user, merge_data)
+      # user is the active user that was the destination of the user merge
       user.shard.activate do
         ActiveRecord::Base.transaction do
           records = merge_data.user_merge_data_records
@@ -115,36 +116,40 @@ class SplitUsers
       end
     end
 
+    # source_user is the destination user of the user merge
+    # user is the old user that is being restored
     def move_records_to_old_user(source_user, user, records)
       fix_communication_channels(source_user, user, records.where(context_type: 'CommunicationChannel'))
-      move_user_observers(source_user, user, records.where(context_type: 'UserObserver', previous_user_id: user))
+      move_user_observers(source_user, user, records.where(context_type: ['UserObserver', 'UserObservationLink'], previous_user_id: user))
       move_attachments(source_user, user, records.where(context_type: 'Attachment'))
       enrollment_ids = records.where(context_type: 'Enrollment', previous_user_id: user).pluck(:context_id)
       enrollments = Enrollment.where(id: enrollment_ids).where.not(user_id: user)
-      courses = []
-      enrollments.each do |e|
+      enrollments_to_update = enrollments.reject do |e|
         # skip conflicting enrollments
-        next if Enrollment.where(user_id: user,
-                                 course_section_id: e.course_section_id,
-                                 type: e.type,
-                                 role_id: e.role_id).where.not(id: e).shard(e.shard).exists?
-
-        e.user_id = user
-        e.save_without_callbacks
-        courses << e.course_id
+        Enrollment.where(user_id: user,
+                         course_section_id: e.course_section_id,
+                         type: e.type,
+                         role_id: e.role_id).where.not(id: e).shard(e.shard).exists?
       end
+      Enrollment.where(id: enrollments_to_update).update_all(user_id: user.id, updated_at: Time.now.utc)
+      courses = enrollments_to_update.map(&:course_id)
       transfer_enrollment_data(source_user, user, Course.where(id: courses))
-
+      handle_submissions(source_user, user, records)
       account_users_ids = records.where(context_type: 'AccountUser').pluck(:context_id)
       AccountUser.where(id: account_users_ids).update_all(user_id: user.id)
       restore_worklow_states_from_records(records)
     end
 
+    # source_user is the destination user of the user merge
+    # user is the old user that is being restored
     def fix_communication_channels(source_user, user, cc_records)
       if source_user.shard != user.shard
-        user.shard.activate do
+        source_user.shard.activate do
           # remove communication channels that didn't exist prior to the merge
-          CommunicationChannel.where(id: cc_records.where(previous_workflow_state: 'non_existent').pluck(:context_id)).delete_all
+          ccs = CommunicationChannel.where(id: cc_records.where(previous_workflow_state: 'non_existent').pluck(:context_id))
+          DelayedMessage.where(communication_channel_id: ccs).delete_all
+          NotificationPolicy.where(communication_channel: ccs).delete_all
+          ccs.delete_all
         end
       end
       # move moved communication channels back
@@ -159,11 +164,11 @@ class SplitUsers
 
     def move_user_observers(source_user, user, records)
       # skip when the user observer is between the two users. Just undlete the record
-      not_obs = UserObserver.where(user_id: [source_user, user], observer_id: [source_user, user])
-      obs = UserObserver.where(id: records.pluck(:context_id)).where.not(id: not_obs)
+      not_obs = UserObservationLink.where(user_id: [source_user, user], observer_id: [source_user, user])
+      obs = UserObservationLink.where(id: records.pluck(:context_id)).where.not(id: not_obs)
 
-      source_user.user_observers.where(id: obs).update_all(user_id: user.id)
-      source_user.user_observees.where(id: obs).update_all(observer_id: user.id)
+      source_user.as_student_observation_links.where(id: obs).update_all(user_id: user.id)
+      source_user.as_observer_observation_links.where(id: obs).update_all(observer_id: user.id)
     end
 
     def move_attachments(source_user, user, records)
@@ -198,7 +203,9 @@ class SplitUsers
     end
 
     def transfer_enrollment_data(source_user, target_user, courses)
-      Shard.partition_by_shard(courses) do |shard_course|
+      # use a partition proc so that we only run on the actual course shard, not all
+      # shards associated with the course
+      Shard.partition_by_shard(courses, ->(course) { course.shard }) do |shard_course|
         source_user_id = source_user.id
         target_user_id = target_user.id
         ENROLLMENT_DATA_UPDATES.each do |update|
@@ -210,18 +217,29 @@ class SplitUsers
                   (update[:foreign_key] || :user_id) => source_user_id).
             update_all((update[:foreign_key] || :user_id) => target_user_id)
         end
-        # avoid conflicting submissions for the unique index on user and assignment
-        handle_submissions(courses, source_user, target_user, target_user_id)
       end
     end
 
-    def handle_submissions(courses, source_user, target_user, target_user_id)
-      source_user.submissions.where(assignment_id: Assignment.where(context_id: courses)).
-        where.not(assignment_id: target_user.submissions.select(:assignment_id)).
-        update_all(user_id: target_user_id)
-      source_user.quiz_submissions.where(quiz_id: Quizzes::Quiz.where(context_id: courses)).
-        where.not(quiz_id: target_user.quiz_submissions.select(:quiz_id)).
-        update_all(user_id: target_user_id)
+    def handle_submissions(source_user, user, records)
+      [[:submissions, 'fk_rails_8d85741475'],
+       [:'quizzes/quiz_submissions', 'fk_rails_04850db4b4']].each do |table, foreign_key|
+        model = table.to_s.classify.constantize
+
+        ids = records.where(context_type: model.to_s, previous_user_id: user).pluck(:context_id)
+        other_ids = records.where(context_type: model.to_s, previous_user_id: source_user).pluck(:context_id)
+
+        model.transaction do
+          # there is a unique index on assignment_id and user_id or quiz_id
+          # and user_id. Unique indexes are checked after every row during
+          # an update statement to get around this and to allow us to swap
+          # we are setting the user_id to the negative user_id and then back
+          # to the user_id after the conflicting rows have been updated.
+          model.connection.execute("SET CONSTRAINTS #{model.connection.quote_table_name(foreign_key)} DEFERRED")
+          model.where(id: ids).update_all(user_id: -user.id)
+          model.where(id: other_ids).update_all(user_id: source_user.id)
+          model.where(id: ids).update_all(user_id: user.id)
+        end
+      end
     end
 
     def restore_worklow_states_from_records(records)

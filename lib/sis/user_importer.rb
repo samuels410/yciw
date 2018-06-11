@@ -19,9 +19,9 @@
 module SIS
   class UserImporter < BaseImporter
 
-    def process(updates_every, messages)
+    def process(messages)
       start = Time.now
-      importer = Work.new(@batch, @root_account, @logger, updates_every, messages)
+      importer = Work.new(@batch, @root_account, @logger, messages)
       User.skip_updating_account_associations do
         User.process_as_sis(@sis_options) do
           Pseudonym.process_as_sis(@sis_options) do
@@ -47,11 +47,10 @@ module SIS
           :pseudos_to_set_sis_batch_ids, :users_to_add_account_associations,
           :users_to_update_account_associations
 
-      def initialize(batch, root_account, logger, updates_every, messages)
+      def initialize(batch, root_account, logger, messages)
         @batch = batch
         @root_account = root_account
         @logger = logger
-        @updates_every = updates_every
         @batched_users = []
         @messages = messages
         @success_count = 0
@@ -70,13 +69,44 @@ module SIS
         raise ImportError, "No user_id given for a user" if user.user_id.blank?
         raise ImportError, "No login_id given for user #{user.user_id}" if user.login_id.blank?
         raise ImportError, "Improper status for user #{user.user_id}" unless user.status =~ /\A(active|deleted)/i
+        return if @batch.skip_deletes? && user.status =~ /deleted/i
 
         @batched_users << user
-        process_batch if @batched_users.size >= @updates_every
+        process_batch if @batched_users.size >= Setting.get("sis_user_batch_size", "100").to_i
       end
 
       def any_left_to_process?
         return @batched_users.size > 0
+      end
+
+      def infer_user_name(user_row, prior_name = nil)
+        if user_row.full_name.present?
+          user_row.full_name
+        elsif user_row.first_name.present? || user_row.last_name.present?
+          [user_row.first_name, user_row.last_name].join(' ')
+        elsif prior_name.present?
+          prior_name
+        elsif user_row.sortable_name.present?
+          user_row.sortable_name
+        elsif user_row.short_name.present?
+          user_row.short_name
+        elsif user_row.login_id.present?
+          user_row.login_id
+        else
+          raise ImportError, "No name given for user"
+        end
+      end
+
+      def infer_sortable_name(user_row, prior_sortable_name = nil)
+        if user_row.sortable_name.present?
+          user_row.sortable_name
+        elsif user_row.full_name.present?
+          nil # force User model to infer sortable name from the full name
+        elsif user_row.last_name.present? || user_row.first_name.present?
+          [user_row.last_name, user_row.first_name].join(', ')
+        else
+          prior_sortable_name
+        end
       end
 
       def process_batch
@@ -92,42 +122,37 @@ module SIS
             pseudo = @root_account.pseudonyms.where(sis_user_id: user_row.user_id.to_s).take
             pseudo_by_login = @root_account.pseudonyms.active.by_unique_id(user_row.login_id).take
             pseudo ||= pseudo_by_login
-            pseudo ||= @root_account.pseudonyms.active.by_unique_id(user_row.email).take if user_row.email.present?
 
             status_is_active = !(user_row.status =~ /\Adeleted/i)
             if pseudo
               if pseudo.sis_user_id && pseudo.sis_user_id != user_row.user_id
-                @messages << I18n.t("An existing Canvas user with the SIS ID %{user_id} has already claimed %{other_user_id}'s user_id requested login information, skipping", user_id: pseudo.sis_user_id, other_user_id: user_row.user_id)
+                message = I18n.t("An existing Canvas user with the SIS ID %{user_id} has already claimed %{other_user_id}'s user_id requested login information, skipping", user_id: pseudo.sis_user_id, other_user_id: user_row.user_id)
+                @messages << SisBatch.build_error(user_row.csv, message, sis_batch: @batch, row: user_row.lineno, row_info: user_row)
                 next
               end
               if pseudo_by_login && (pseudo != pseudo_by_login && status_is_active ||
-                !ActiveRecord::Base.connection.select_value("SELECT 1 FROM #{Pseudonym.quoted_table_name} WHERE #{Pseudonym.to_lower_column(Pseudonym.connection.quote(pseudo.unique_id))}=#{Pseudonym.to_lower_column(Pseudonym.connection.quote(user_row.login_id))} LIMIT 1"))
+                !Pseudonym.where("LOWER(?)=LOWER(?)", pseudo.unique_id, user_row.login_id).exists?)
                 id_message = pseudo_by_login.sis_user_id ? 'SIS ID' : 'Canvas ID'
                 user_id = pseudo_by_login.sis_user_id || pseudo_by_login.user_id
-                @messages << I18n.t("An existing Canvas user with the %{user_id} has already claimed %{other_user_id}'s user_id requested login information, skipping", user_id: "#{id_message} #{user_id.to_s}", other_user_id: user_row.user_id)
+                message = I18n.t("An existing Canvas user with the %{user_id} has already claimed %{other_user_id}'s user_id requested login information, skipping", user_id: "#{id_message} #{user_id.to_s}", other_user_id: user_row.user_id)
+                @messages << SisBatch.build_error(user_row.csv, message, sis_batch: @batch, row: user_row.lineno, row_info: user_row)
                 next
               end
 
               user = pseudo.user
               unless user.stuck_sis_fields.include?(:name)
-                user.name = "#{user_row.first_name} #{user_row.last_name}"
-                user.name = user_row.full_name if user_row.full_name.present?
+                user.name = infer_user_name(user_row, user.name)
               end
               unless user.stuck_sis_fields.include?(:sortable_name)
-                user.sortable_name = user_row.last_name.present? && user_row.first_name.present? ? "#{user_row.last_name}, #{user_row.first_name}" : "#{user_row.first_name}#{user_row.last_name}"
-                user.sortable_name = nil if user_row.full_name.present? # force User model to infer sortable name from the full name
-                user.sortable_name = user_row.sortable_name if user_row.sortable_name.present?
+                user.sortable_name = infer_sortable_name(user_row, user.sortable_name)
               end
               unless user.stuck_sis_fields.include?(:short_name)
                 user.short_name = user_row.short_name if user_row.short_name.present?
               end
             else
               user = User.new
-              user.name = "#{user_row.first_name} #{user_row.last_name}"
-              user.name = user_row.full_name if user_row.full_name.present?
-              user.sortable_name = user_row.last_name.present? && user_row.first_name.present? ? "#{user_row.last_name}, #{user_row.first_name}" : "#{user_row.first_name}#{user_row.last_name}"
-              user.sortable_name = nil if user_row.full_name.present? # force User model to infer sortable name from the full name
-              user.sortable_name = user_row.sortable_name if user_row.sortable_name.present?
+              user.name = infer_user_name(user_row)
+              user.sortable_name = infer_sortable_name(user_row)
               user.short_name = user_row.short_name if user_row.short_name.present?
             end
 
@@ -141,24 +166,15 @@ module SIS
 
             if !status_is_active && !user.new_record?
               if user.id == @batch&.user_id
-                @messages << "Can't remove yourself user_id '#{user_row.user_id}'"
+                message = "Can't remove yourself user_id '#{user_row.user_id}'"
+                @messages << SisBatch.build_error(user_row.csv, message, sis_batch: @batch, row: user_row.lineno, row_info: user_row)
                 next
               end
-              # if this user is deleted, we're just going to make sure the user isn't enrolled in anything in this root account and
-              # delete the pseudonym.
-              enrollment_ids = @root_account.enrollments.active.where(user_id: user).where.not(:workflow_state => 'deleted').pluck(:id)
-              if enrollment_ids.any?
-                Enrollment.where(id: enrollment_ids).update_all(updated_at: Time.now.utc, workflow_state: 'deleted')
-                EnrollmentState.where(enrollment_id: enrollment_ids).update_all(state: 'deleted', state_is_current: true)
-              end
 
-              d = enrollment_ids.count
-              d += @root_account.all_group_memberships.active.where(user_id: user).update_all(updated_at: Time.now.utc, workflow_state: 'deleted')
-              d += user.account_users.shard(@root_account).where(account_id: @root_account.all_accounts).update_all(updated_at: Time.now.utc, workflow_state: 'deleted')
-              d += user.account_users.shard(@root_account).where(account_id: @root_account).update_all(updated_at: Time.now.utc, workflow_state: 'deleted')
-              if d > 0
-                should_update_account_associations = true
-              end
+              # if this user is deleted and there are no more active logins,
+              # we're going to delete any enrollments for this root account and
+              # delete this pseudonym.
+              should_update_account_associations = remove_enrollments_if_last_login(user, user_row.user_id)
             end
 
             pseudo ||= Pseudonym.new
@@ -173,7 +189,8 @@ module SIS
                 end
               end
               unless (pseudo.authentication_provider = @authentication_providers[user_row.authentication_provider_id])
-                @messages << "unrecognized authentication provider #{user_row.authentication_provider_id} for #{user_row.user_id}, skipping"
+                message = "unrecognized authentication provider #{user_row.authentication_provider_id} for #{user_row.user_id}, skipping"
+                @messages << SisBatch.build_error(user_row.csv, message, sis_batch: @batch, row: user_row.lineno, row_info: user_row)
                 next
               end
             else
@@ -185,9 +202,11 @@ module SIS
             if pseudo_by_integration && status_is_active && pseudo_by_integration != pseudo
               id_message = pseudo_by_integration.sis_user_id ? 'SIS ID' : 'Canvas ID'
               user_id = pseudo_by_integration.sis_user_id || pseudo_by_integration.user_id
-              @messages << I18n.t("An existing Canvas user with the %{user_id} has already claimed %{other_user_id}'s requested integration_id, skipping", user_id: "#{id_message} #{user_id.to_s}", other_user_id: user_row.user_id)
+              message = I18n.t("An existing Canvas user with the %{user_id} has already claimed %{other_user_id}'s requested integration_id, skipping", user_id: "#{id_message} #{user_id.to_s}", other_user_id: user_row.user_id)
+              @messages << SisBatch.build_error(user_row.csv, message, sis_batch: @batch, row: user_row.lineno, row_info: user_row)
+              next
             end
-            pseudo.integration_id = user_row.integration_id if user_row.integration_id
+            pseudo.integration_id = user_row.integration_id if user_row.integration_id.present?
             pseudo.account = @root_account
             pseudo.workflow_state = status_is_active ? 'active' : 'deleted'
             if pseudo.new_record? && status_is_active
@@ -216,8 +235,8 @@ module SIS
                 if user.changed?
                   user_touched = true
                   if !user.save && user.errors.size > 0
-                    add_user_warning(user.errors.first.join(" "), user_row.user_id, user_row.login_id)
-                    raise ImportError, user.errors.first.join(" ")
+                    message = generate_user_warning(user.errors.first.join(" "), user_row.user_id, user_row.login_id)
+                    raise ImportError, message
                   end
                 elsif @batch
                   @users_to_set_sis_batch_ids << user.id
@@ -226,13 +245,20 @@ module SIS
                 if pseudo.changed?
                   pseudo.sis_batch_id = @batch.id if @batch
                   if !pseudo.save_without_broadcasting && pseudo.errors.size > 0
-                    add_user_warning(pseudo.errors.first.join(" "), user_row.user_id, user_row.login_id)
-                    raise ImportError, pseudo.errors.first.join(" ")
+                    message = generate_user_warning(pseudo.errors.first.join(" "), user_row.user_id, user_row.login_id)
+                    raise ImportError, message
                   end
                 end
               end
+            rescue ImportError
+              @messages << SisBatch.build_error(user_row.csv, message, sis_batch: @batch, row: user_row.lineno, row_info: user_row)
+              next
             rescue => e
-              Canvas::Errors.capture_exception(:sis_import, e)
+              # something broke
+              error = Canvas::Errors.capture_exception(:sis_import, e)
+              er = error[:error_report]
+              message = generate_user_warning("Something broke with this user. Contact Support with ErrorReport id: #{er}", user_row.user_id, user_row.login_id)
+              @messages << SisBatch.build_error(user_row.csv, message, sis_batch: @batch, row: user_row.lineno, backtrace: e.backtrace, row_info: user_row)
               next
             end
 
@@ -268,6 +294,7 @@ module SIS
               cc.user_id = user.id
               cc.pseudonym_id = pseudo.id
               cc.path = user_row.email
+              cc.bounce_count = 0 if cc.path_changed?
               cc.workflow_state = status_is_active ? 'active' : 'retired'
               newly_active = cc.path_changed? || (cc.active? && cc.workflow_state_changed?)
               if cc.changed?
@@ -303,7 +330,9 @@ module SIS
                 end
               end
             elsif user_row.email.present? && EmailAddressValidator.valid?(user_row.email) == false
-              @messages << "The email address associated with user '#{user_row.user_id}' is invalid (email: '#{user_row.email}')"
+              message = "The email address associated with user '#{user_row.user_id}' is invalid (email: '#{user_row.email}')"
+              @messages << SisBatch.build_error(user_row.csv, message, sis_batch: @batch, row: user_row.lineno, row_info: user_row)
+              next
             end
 
             if pseudo.changed?
@@ -326,15 +355,39 @@ module SIS
         end
       end
 
+      def remove_enrollments_if_last_login(user, user_id)
+        return false if @root_account.pseudonyms.active.where(user_id: user).
+          where("sis_user_id != ? OR sis_user_id IS NULL",  user_id).exists?
+
+        enrollment_ids = @root_account.enrollments.active.where(user_id: user).
+          where.not(workflow_state: 'deleted').pluck(:id)
+        if enrollment_ids.any?
+          Enrollment.where(id: enrollment_ids).update_all(updated_at: Time.now.utc, workflow_state: 'deleted')
+          EnrollmentState.where(enrollment_id: enrollment_ids).update_all(state: 'deleted', state_is_current: true)
+        end
+
+        d = enrollment_ids.count
+        d += @root_account.all_group_memberships.active.where(user_id: user).
+          update_all(updated_at: Time.now.utc, workflow_state: 'deleted')
+        d += user.account_users.shard(@root_account).where(account_id: @root_account.all_accounts).
+          update_all(updated_at: Time.now.utc, workflow_state: 'deleted')
+        d += user.account_users.shard(@root_account).where(account_id: @root_account).
+          update_all(updated_at: Time.now.utc, workflow_state: 'deleted')
+        if d > 0
+          should_update_account_associations = true
+        end
+        should_update_account_associations
+      end
+
       private
 
-      def add_user_warning(message, user_id, login_id)
+      def generate_user_warning(message, user_id, login_id)
         user_message = generate_readable_error_message(
           message: message,
           user_id: user_id,
           login_id: login_id
         )
-        @messages << user_message
+        user_message
       end
 
       ERRORS_TO_REASONS = {

@@ -11,9 +11,21 @@ const karmaConfig = {
   exclude: [],
 
   // 'dots', 'progress', 'junit', 'growl', 'coverage', 'spec'
-  reporters: ['progress'],
+  reporters: ['spec', 'junit'],
   // enable the verbose reporter if you want to have more information of where/how specs fail
   // reporters: ['verbose'],
+
+  // this is to make a nice "spec failures" report in the jenkins build instead of having to look at the log output
+  junitReporter: {
+    outputDir: 'coverage-js/junit-reports',
+    outputFile: `karma-${process.env.JSPEC_GROUP || 'all'}.xml`,
+    useBrowserName: false, // don't add browser name to report and classes names
+  },
+  specReporter: {
+    maxLogLines: 50, // limit number of lines logged per test
+    suppressErrorSummary: false, // print error summary
+    showSpecTiming: true, // print the time elapsed for each spec
+  },
 
   port: 9876,
 
@@ -27,7 +39,7 @@ const karmaConfig = {
   // - Firefox
   // - Opera (has to be installed with `npm install karma-opera-launcher`)
   // - Safari (only Mac; has to be installed with `npm install karma-safari-launcher`)
-  // - PhantomJS
+  // - PhantomJS (has to be installed with `npm install karma-phantomjs-launcher`))
   // - IE (only Windows; has to be installed with `npm install karma-ie-launcher`)
   browsers: ['Chrome'],
 

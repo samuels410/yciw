@@ -1,3 +1,21 @@
+#
+# Copyright (C) 2013 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+#
+
 require 'hash_view'
 
 class ArgumentView < HashView
@@ -79,14 +97,14 @@ class ArgumentView < HashView
 
   def swagger_type
     type = (types.first || 'string')
+    type = "number" if type.downcase == "float"
     builtin?(type) ? type.downcase : type
   end
 
   def swagger_format
-    case swagger_type
-    when 'integer' then 'int64'
-    else nil
-    end
+    type = (types.first || 'string')
+    return "int64" if swagger_type == "integer"
+    return "float" if type.downcase == "float"
   end
 
   def optional?

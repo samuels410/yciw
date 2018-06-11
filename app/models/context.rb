@@ -54,6 +54,12 @@ module Context
       Eportfolio: :Eportfolio
   }.freeze
 
+  def clear_cached_short_name
+    self.class.connection.after_transaction_commit do
+      Rails.cache.delete(['short_name_lookup', self.asset_string].cache_key)
+    end
+  end
+
   def add_aggregate_entries(entries, feed)
     entries.each do |entry|
       user = entry.user || feed.user
@@ -89,19 +95,17 @@ module Context
       context = context.respond_to?(:account) ? context.account : context.parent_account
       context_codes << context.asset_string if context
     end
-    codes_order = {}
-    context_codes.each_with_index{|c, idx| codes_order[c] = idx }
     associations = RubricAssociation.bookmarked.for_context_codes(context_codes).include_rubric
-    associations = associations.to_a.select{|a| a.rubric }.uniq{|a| [a.rubric_id, a.context_code] }
-    contexts = associations.group_by{|a| a.context_code }.map do |code, associations|
-      context_name = associations.first.context_name
-      res = {
+    associations = associations.to_a.select(&:rubric).uniq{|a| [a.rubric_id, a.context_code] }
+    contexts = associations.group_by(&:context_code).map do |code, code_associations|
+      context_name = code_associations.first.context_name
+      {
         :rubrics => associations.length,
         :context_code => code,
         :name => context_name
       }
     end
-    contexts.sort_by{|c| codes_order[c[:context_code]] || CanvasSort::Last }
+    Canvas::ICU.collate_by(contexts) { |r| r[:name] }
   end
 
   def active_record_types
@@ -149,6 +153,11 @@ module Context
     result
   end
 
+  def self.context_code_for(record)
+    raise ArgumentError unless record.respond_to?(:context_type) && record.respond_to?(:context_id)
+    "#{record.context_type.underscore}_#{record.context_id}"
+  end
+
   def self.find_polymorphic(context_type, context_id)
     klass_name = context_type.classify.to_sym
     if CONTEXT_TYPES.include?(klass_name)
@@ -191,6 +200,14 @@ module Context
     res
   rescue => e
     nil
+  end
+
+  def self.asset_name(asset)
+    name = asset.display_name.presence if asset.respond_to?(:display_name)
+    name ||= asset.title.presence if asset.respond_to?(:title)
+    name ||= asset.short_description.presence if asset.respond_to?(:short_description)
+    name ||= asset.name if asset.respond_to?(:name)
+    name || ''
   end
 
   def self.get_account(context)

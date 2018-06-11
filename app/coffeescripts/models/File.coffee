@@ -18,9 +18,10 @@
 define [
   'jquery'
   'underscore'
-  'compiled/models/FilesystemObject'
+  '../models/FilesystemObject'
+  'jsx/shared/upload_file'
   'jquery.ajaxJSON'
-], ($, _, FilesystemObject) ->
+], ($, _, FilesystemObject, uploader) ->
 
   # Simple model for creating an attachment in canvas
   #
@@ -50,33 +51,29 @@ define [
     save: (attrs = {}, options = {}) ->
       return super unless @get('file')
       @set attrs
+
       dfrd = $.Deferred()
-      el = @get('file')
-      name = (el.value || el.name).split(/[\/\\]/).pop()
-      $.ajaxJSON @preflightUrl, 'POST', {name, on_duplicate: 'rename'},
-        (data) =>
-          @saveFrd data, dfrd, el, options
-        (error) =>
-          dfrd.reject(error)
-          options.error?(error)
+      onUpload = (data) =>
+        @set(data)
+        dfrd.resolve(data)
+        options.success?(data)
+      onError = (error) =>
+        dfrd.reject(error)
+        options.error?(error)
+
+      file = @get('file')
+      filename = (file.value || file.name).split(/[\/\\]/).pop()
+      file = file.files[0]
+      preflightData =
+        name: filename
+        on_duplicate: 'rename'
+      uploader.uploadFile(@preflightUrl, preflightData, file)
+        .then(onUpload)
+        .catch(onError)
+
       dfrd
 
-    saveFrd: (data, dfrd, el, options) =>
-      # account for attachments wrapped in array per JSON API format
-      if data.attachments && data.attachments[0]
-        data = data.attachments[0]
-      @uploadParams = data.upload_params
-      @set @uploadParams
-      el.name = data.file_param
-      @url = -> data.upload_url
-      FilesystemObject::save.call this, null,
-        multipart: true
-        success: (data) =>
-          dfrd.resolve(data)
-          options.success?(data)
-        error: (error) =>
-          dfrd.reject(error)
-          options.error?(error)
+    isFile: true
 
     toJSON: ->
       return super unless @get('file')

@@ -31,10 +31,16 @@ class LiveEventsObserver < ActiveRecord::Observer
           :attachment,
           :user,
           :user_account_association,
-          :account_notification
+          :account_notification,
+          :course_section,
+          :context_module,
+          :content_tag
 
+  NOP_UPDATE_FIELDS = [ "updated_at", "sis_batch_id" ].freeze
   def after_update(obj)
-    changes = obj.changes
+    changes = obj.saved_changes
+    return nil if changes.except(*NOP_UPDATE_FIELDS).empty?
+
     obj.class.connection.after_transaction_commit do
     case obj
     when ContentExport
@@ -52,6 +58,8 @@ class LiveEventsObserver < ActiveRecord::Observer
       Canvas::LiveEvents.enrollment_updated(obj)
     when EnrollmentState
       Canvas::LiveEvents.enrollment_state_updated(obj)
+    when GroupCategory
+      Canvas::LiveEvents.group_category_updated(obj)
     when Group
       Canvas::LiveEvents.group_updated(obj)
     when GroupMembership
@@ -80,6 +88,12 @@ class LiveEventsObserver < ActiveRecord::Observer
       end
     when User
       Canvas::LiveEvents.user_updated(obj)
+    when CourseSection
+      Canvas::LiveEvents.course_section_updated(obj)
+    when ContextModule
+      Canvas::LiveEvents.module_updated(obj)
+    when ContentTag
+      Canvas::LiveEvents.module_item_updated(obj) if obj.tag_type == "context_module"
     end
     end
   end
@@ -119,6 +133,12 @@ class LiveEventsObserver < ActiveRecord::Observer
       Canvas::LiveEvents.account_notification_created(obj)
     when User
       Canvas::LiveEvents.user_created(obj)
+    when CourseSection
+      Canvas::LiveEvents.course_section_created(obj)
+    when ContextModule
+      Canvas::LiveEvents.module_created(obj)
+    when ContentTag
+      Canvas::LiveEvents.module_item_created(obj) if obj.tag_type == "context_module"
     end
     end
   end

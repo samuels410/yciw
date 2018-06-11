@@ -23,7 +23,7 @@
   &, ul {
     @include reset-list;
   }
-  ul { margin-left: 8px; }
+  ul { margin-#{direction(left)}: 8px; }
   li a {
     padding-bottom: 2px;
     display: flex;
@@ -31,13 +31,16 @@
     &.active { background-color: $activeBG; }
   }
   li[aria-selected="true"] > a {
-    @include tab-focus();
+    outline: thin dotted #333;
+    outline: 5px auto -webkit-focus-ring-color;
+    outline-offset: -2px;
+    text-decoration: none;
   }
   .preview-thumbnail-holder {
     display: inline-block;
     width: 42px;
     height: 42px;
-    padding-right: 6px;
+    padding-#{direction(right)}: 6px;
     .preview-thumbnail {
       max-width: 100%;
       max-height: 100%;
@@ -45,13 +48,12 @@
   }
   .icon-folder:before, .icon-folder-locked:before {
     @include fontSize(11px);
-    padding-right: $ic-sp/2;
+    padding-#{direction(right)}: $ic-sp/2;
     vertical-align: middle;
   }
 
   i[class*=icon-], i[class^=icon-] { color: $ic-font-color-dark }
 
   .icon-mini-arrow-right { transition: transform 0.2s }
-  .expanded .icon-mini-arrow-right { transform: rotate(90deg) }
+  .expanded .icon-mini-arrow-right:before { transform: rotate(90deg) }
 }
-

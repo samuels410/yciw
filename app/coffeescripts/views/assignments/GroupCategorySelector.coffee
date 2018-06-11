@@ -21,10 +21,10 @@ define [
   'underscore'
   'jquery'
   'jst/assignments/GroupCategorySelector'
-  'compiled/jquery/toggleAccessibly',
+  '../../jquery/toggleAccessibly',
   'jsx/due_dates/StudentGroupStore',
-  'compiled/views/groups/manage/GroupCategoryCreateView',
-  'compiled/models/GroupCategory',
+  '../groups/manage/GroupCategoryCreateView',
+  '../../models/GroupCategory',
 ], (I18n, Backbone, _, $, template, toggleAccessibly, StudentGroupStore, GroupCategoryCreateView, GroupCategory) ->
 
   class GroupCategorySelector extends Backbone.View
@@ -50,6 +50,10 @@ define [
       events[ "change #{HAS_GROUP_CATEGORY}" ] = 'toggleGroupCategoryOptions'
       events
 
+    initialize: (options) ->
+      super
+      @renderSectionsAutocomplete = options.renderSectionsAutocomplete
+
     @optionProperty 'parentModel'
     @optionProperty 'groupCategories'
     @optionProperty 'nested'
@@ -61,7 +65,7 @@ define [
 
     render: =>
       selectedID = @parentModel.groupCategoryId()
-      if !@parentModel.canGroup() or _.isEmpty(@groupCategories)
+      if _.isEmpty(@groupCategories)
         StudentGroupStore.setSelectedGroupSet(null)
       else if !selectedID? or !_.findWhere(@groupCategories, {id: selectedID.toString()})?
         StudentGroupStore.setSelectedGroupSet('blank')
@@ -87,14 +91,25 @@ define [
         @$groupCategoryID.toggleAccessibly true
       view.open()
 
+    groupDiscussionChecked: =>
+      @$hasGroupCategory.prop('checked')
+
+    disableGroupDiscussionCheckbox: =>
+      @$hasGroupCategory.prop('disabled', true)
+
+    enableGroupDiscussionCheckbox: =>
+      @$hasGroupCategory.prop('disabled', false)
+
     toggleGroupCategoryOptions: =>
-      isGrouped = @$hasGroupCategory.prop('checked')
+      isGrouped = @groupDiscussionChecked()
       @$groupCategoryOptions.toggleAccessibly isGrouped
 
       selectedGroupSetId = if isGrouped then @$groupCategoryID.val() else null
       StudentGroupStore.setSelectedGroupSet(selectedGroupSetId)
       if isGrouped and _.isEmpty(@groupCategories)
         @showGroupCategoryCreateDialog()
+
+      @renderSectionsAutocomplete() if @renderSectionsAutocomplete?
 
     toJSON: =>
       frozenAttributes = @parentModel.frozenAttributes?() || []

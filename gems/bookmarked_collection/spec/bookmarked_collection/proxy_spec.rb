@@ -71,5 +71,65 @@ describe BookmarkedCollection::Proxy do
     it 'should not set next_bookmark if the page was the last' do
       expect(@proxy.paginate(:per_page => @scope.count).next_bookmark).to be_nil
     end
+
+    context 'filtering' do
+      before do
+        middle_item = @scope.limit(2).last
+        bookmarker = BookmarkedCollection::SimpleBookmarker.new(@scope.klass, :id)
+        @proxy = BookmarkedCollection.wrap(bookmarker, @scope)
+        @proxy = BookmarkedCollection.filter(@proxy) do |item|
+          item != middle_item
+        end
+      end
+
+      it "excludes the middle item" do
+        pager = @proxy.paginate(per_page: 6)
+        expect(pager).to eq [@scope.first, @scope.last]
+        expect(pager.next_bookmark).to be_nil
+      end
+
+      it "repeats the subpager when there are excluded items" do
+        pager = @proxy.paginate(per_page: 1)
+        expect(pager).to eq [@scope.first]
+        expect(pager.next_bookmark).not_to be_nil
+        pager = @proxy.paginate(page: pager.next_page, per_page: 1)
+        expect(pager).to eq [@scope.last]
+        expect(pager.next_bookmark).to be_nil
+      end
+
+      it "gets the next_bookmark right on a boundary" do
+        pager = @proxy.paginate(per_page: 2)
+        expect(pager).to eq [@scope.first, @scope.last]
+        expect(pager.next_bookmark).to be_nil
+      end
+    end
+
+    context 'transforming' do
+      before do
+        bookmarker = BookmarkedCollection::SimpleBookmarker.new(@scope.klass, :id)
+        @proxy = BookmarkedCollection.wrap(bookmarker, @scope)
+        @proxy = BookmarkedCollection.transform(@proxy) { |_| 'transformed' }
+      end
+
+      it "transforms the items" do
+        pager = @proxy.paginate(per_page: 3)
+        expect(pager).to eql(3.times.map { |_| 'transformed' })
+        expect(pager.next_bookmark).to be_nil
+      end
+
+      it "paginates properly" do
+        pager = @proxy.paginate(per_page: 1)
+        expect(pager).to eql(['transformed'])
+        expect(pager.next_bookmark).not_to be_nil
+
+        pager = @proxy.paginate(per_page: 1, page: pager.bookmark_to_page(pager.next_bookmark))
+        expect(pager).to eql(['transformed'])
+        expect(pager.next_bookmark).not_to be_nil
+
+        pager = @proxy.paginate(per_page: 1, page: pager.bookmark_to_page(pager.next_bookmark))
+        expect(pager).to eql(['transformed'])
+        expect(pager.next_bookmark).to be_nil
+      end
+    end
   end
 end

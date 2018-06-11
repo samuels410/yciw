@@ -40,6 +40,7 @@ function defaultResponse () {
           event_type: 'grade_change',
           grade_after: '21',
           grade_before: '19',
+          grade_current: '22',
           graded_anonymously: false,
           id: '123456',
           points_possible_after: '25',
@@ -53,7 +54,7 @@ function defaultResponse () {
         }
       ],
       linked: {
-        assignments: [{ id: 1, name: 'Rustic Rubber Duck', grading_type: 'points' }],
+        assignments: [{ id: 1, name: 'Rustic Rubber Duck', grading_type: 'points', points_possible: 26 }],
         users: [{ id: 100, name: 'Ms. Twillie Jones' }, { id: 110, name: 'Norval Abbott' }]
       }
     },
@@ -77,7 +78,7 @@ test('fetchHistorySuccess creates an action with type FETCH_HISTORY_SUCCESS', fu
   strictEqual(fetchHistorySuccess(response.data, response.headers).type, FETCH_HISTORY_SUCCESS);
 });
 
-test('fetchHistorySuccess creates an actions with history items in payload', function () {
+test('fetchHistorySuccess creates an action with history items in payload', function () {
   const response = defaultResponse();
   const expectedItems = [
     {
@@ -88,13 +89,71 @@ test('fetchHistorySuccess creates an actions with history items in payload', fun
       grader: 'Ms. Twillie Jones',
       gradeAfter: '21',
       gradeBefore: '19',
+      gradeCurrent: '22',
       id: '123456',
       pointsPossibleBefore: '25',
       pointsPossibleAfter: '25',
+      pointsPossibleCurrent: '26',
       student: 'Norval Abbott'
     }
   ];
   deepEqual(fetchHistorySuccess(response.data, response.headers).payload.items, expectedItems);
+});
+
+test('fetchHistorySuccess returns "0" pointsPossibleCurrent when an assignment is zero', function () {
+  const response = {
+    data: {
+      events: [{ links: {} }],
+      linked: {
+        assignments: [{ points_possible: 0 }]
+      }
+    },
+    headers: {}
+  };
+  const { pointsPossibleCurrent } = fetchHistorySuccess(response.data, response.headers).payload.items[0]
+  strictEqual(pointsPossibleCurrent, '0');
+});
+
+test('fetchHistorySuccess returns "–" pointsPossibleCurrent when an assignment has no points possible', function () {
+  const response = {
+    data: {
+      events: [{ links: {} }],
+      linked: {
+        assignments: [{ points_possible: null }]
+      }
+    },
+    headers: {}
+  };
+  const { pointsPossibleCurrent } = fetchHistorySuccess(response.data, response.headers).payload.items[0]
+  strictEqual(pointsPossibleCurrent, '–');
+});
+
+test('fetchHistorySuccess returns "–" pointsPossibleAfter when an assignment now has no points possible', function () {
+  const response = {
+    data: {
+      events: [{ points_possible_after: null, links: {} }],
+      linked: {
+        assignments: [{ points_possible: null }]
+      }
+    },
+    headers: {}
+  };
+  const { pointsPossibleAfter } = fetchHistorySuccess(response.data, response.headers).payload.items[0];
+  strictEqual(pointsPossibleAfter, '–');
+});
+
+test('fetchHistorySuccess returns "–" pointsPossibleBefore when an assignment had no points possible', function () {
+  const response = {
+    data: {
+      events: [{ points_possible_before: null, links: {} }],
+      linked: {
+        assignments: [{ points_possible: null }]
+      }
+    },
+    headers: {}
+  };
+  const { pointsPossibleBefore } = fetchHistorySuccess(response.data, response.headers).payload.items[0];
+  strictEqual(pointsPossibleBefore, '–');
 });
 
 test('fetchHistorySuccess creates an action with history next page link in payload', function () {
@@ -133,9 +192,11 @@ test('fetchHistoryNextPageSuccess creates an action with history items in payloa
       grader: 'Ms. Twillie Jones',
       gradeAfter: '21',
       gradeBefore: '19',
+      gradeCurrent: '22',
       id: '123456',
       pointsPossibleBefore: '25',
       pointsPossibleAfter: '25',
+      pointsPossibleCurrent: '26',
       student: 'Norval Abbott'
     }
   ];

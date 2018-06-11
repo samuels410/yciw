@@ -24,7 +24,7 @@ class GradeSummaryAssignmentPresenter
     @current_user = current_user
     @assignment = assignment
     @submission = submission
-    @originality_reports = @submission.originality_reports if @submission
+    @originality_reports = @submission.originality_reports_for_display if @submission
   end
 
   def originality_report?
@@ -176,14 +176,14 @@ class GradeSummaryAssignmentPresenter
 
   def plagiarism(type)
     if type == 'vericite'
-      plagData = submission.vericite_data(true)
+      plag_data = submission.vericite_data(true)
     else
-      plagData = submission.originality_data
+      plag_data = submission.originality_data
     end
     t = if is_text_entry?
-          plagData[submission.asset_string]
+          plag_data[submission.asset_string]
         elsif is_online_upload? && file
-          plagData[file.asset_string]
+          plag_data[file.asset_string]
         end
     t.try(:[], :state) ? t : nil
   end
@@ -191,7 +191,7 @@ class GradeSummaryAssignmentPresenter
   def grade_distribution
     @grade_distribution ||= begin
       if stats = @summary.assignment_stats[assignment.id]
-        [stats.max, stats.min, stats.avg].map { |stat| stat.to_f.round(1) }
+        [stats.maximum, stats.minimum, stats.mean].map { |stat| stat.to_f.round(1) }
       end
     end
   end
@@ -205,13 +205,13 @@ class GradeSummaryAssignmentPresenter
   end
 
   def file
-    @file ||= submission.attachments.detect{|a| is_plagiarism_attachment?(a) }
+    @file ||= submission.attachments.detect{|a| plagiarism_attachment?(a) }
   end
 
-  def is_plagiarism_attachment?(a)
-    @originality_reports.find_by(attachment: a, submission: submission) ||
-    (submission.turnitin_data && submission.turnitin_data[a.asset_string]) ||
-    (submission.vericite_data(true) && submission.vericite_data(true)[a.asset_string])
+  def plagiarism_attachment?(a)
+    @originality_reports.any? { |o| o.attachment == a } ||
+    (submission.turnitin_data && submission.turnitin_data[a.asset_string]).present? ||
+    (submission.vericite_data(true) && submission.vericite_data(true)[a.asset_string]).present?
   end
 
   def comments

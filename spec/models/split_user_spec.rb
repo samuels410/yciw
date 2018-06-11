@@ -116,14 +116,14 @@ describe SplitUsers do
       it 'should handle user_observers' do
         observer1 = user_model
         observer2 = user_model
-        user1.observers << observer1
-        user2.observers << observer2
+        user1.linked_observers << observer1
+        user2.linked_observers << observer2
         UserMerge.from(user1).into(user2)
 
         SplitUsers.split_db_users(user2)
 
-        expect(user1.observers).to eq [observer1]
-        expect(user2.observers).to eq [observer2]
+        expect(user1.linked_observers).to eq [observer1]
+        expect(user2.linked_observers).to eq [observer2]
       end
 
       it 'should handle attachments' do
@@ -148,48 +148,48 @@ describe SplitUsers do
       end
 
       it 'should handle when observing merged user' do
-        user2.observers << user1
+        user2.linked_observers << user1
         UserMerge.from(user1).into(user2)
 
         SplitUsers.split_db_users(user2)
 
-        expect(user1.user_observees).to eq UserObserver.where(user_id: user2, observer_id: user1)
-        expect(user2.user_observers).to eq UserObserver.where(user_id: user2, observer_id: user1)
+        expect(user1.as_observer_observation_links).to eq UserObservationLink.where(user_id: user2, observer_id: user1)
+        expect(user2.as_student_observation_links).to eq UserObservationLink.where(user_id: user2, observer_id: user1)
       end
 
 
-      it 'should handle user_observees' do
+      it 'should handle as_observer_observation_links' do
         observee1 = user_model
         observee2 = user_model
-        observee1.observers << user1
-        observee2.observers << user2
+        observee1.linked_observers << user1
+        observee2.linked_observers << user2
         UserMerge.from(user1).into(user2)
 
         SplitUsers.split_db_users(user2)
 
-        expect(user1.user_observees).to eq observee1.user_observers
-        expect(user2.user_observees).to eq observee2.user_observers
+        expect(user1.as_observer_observation_links).to eq observee1.as_student_observation_links
+        expect(user2.as_observer_observation_links).to eq observee2.as_student_observation_links
       end
 
       it 'should handle duplicate user_observers' do
         observer1 = user_model
         observee1 = user_model
-        observee1.observers << user1
-        observee1.observers << user2
-        user1.observers << observer1
-        user2.observers << observer1
+        observee1.linked_observers << user1
+        observee1.linked_observers << user2
+        user1.linked_observers << observer1
+        user2.linked_observers << observer1
         UserMerge.from(user1).into(user2)
         SplitUsers.split_db_users(user2)
 
-        expect(user1.user_observees.count).to eq 1
-        expect(user2.user_observees.count).to eq 1
-        expect(user1.observers).to eq [observer1]
-        expect(user2.observers).to eq [observer1]
+        expect(user1.as_observer_observation_links.count).to eq 1
+        expect(user2.as_observer_observation_links.count).to eq 1
+        expect(user1.linked_observers).to eq [observer1]
+        expect(user2.linked_observers).to eq [observer1]
 
-        expect(user1.user_observees.first.workflow_state).to eq 'active'
-        expect(user2.user_observees.first.workflow_state).to eq 'active'
-        expect(user1.user_observers.first.workflow_state).to eq 'active'
-        expect(user2.user_observers.first.workflow_state).to eq 'active'
+        expect(user1.as_observer_observation_links.first.workflow_state).to eq 'active'
+        expect(user2.as_observer_observation_links.first.workflow_state).to eq 'active'
+        expect(user1.as_student_observation_links.first.workflow_state).to eq 'active'
+        expect(user2.as_student_observation_links.first.workflow_state).to eq 'active'
       end
 
       it 'should only split users from merge_data when specified' do
@@ -314,6 +314,7 @@ describe SplitUsers do
       UserMerge.from(user1).into(user2)
       expect(submission1.reload.user).to eq user1
       expect(submission2.reload.user).to eq user2
+      Submission.where(id: submission1).update_all(workflow_state: 'deleted')
       SplitUsers.split_db_users(user2)
       expect(submission1.reload.user).to eq user1
       expect(submission2.reload.user).to eq user2
@@ -392,6 +393,9 @@ describe SplitUsers do
 
         @shard1.activate do
           UserMerge.from(user1).into(@user2)
+          cc = @user2.reload.communication_channels.where(path: 'user1@example.com').take
+          n = Notification.create!(name: 'Assignment Createds', subject: 'Tests', category: 'TestNevers')
+          NotificationPolicy.create(notification: n, communication_channel: cc, frequency: 'immediately')
           SplitUsers.split_db_users(@user2)
         end
 

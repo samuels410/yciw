@@ -8,6 +8,7 @@ FROM instructure/ruby-passenger:2.4
 ENV APP_HOME /usr/src/app/
 ENV RAILS_ENV "production"
 ENV NGINX_MAX_UPLOAD_SIZE 10g
+ENV YARN_VERSION 1.6.0-1
 
 # Work around github.com/zertosh/v8-compile-cache/issues/2
 # This can be removed once yarn pushes a release including the fixed version
@@ -16,18 +17,20 @@ ENV DISABLE_V8_COMPILE_CACHE 1
 
 USER root
 WORKDIR /root
-RUN curl -sL https://deb.nodesource.com/setup_6.x | bash - \
-  && curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add - \
-  && echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list \
+RUN curl -sL https://deb.nodesource.com/setup_8.x | bash - \
+  && curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - \
+  && echo "deb https://dl.yarnpkg.com/debian/ stable main" > /etc/apt/sources.list.d/yarn.list \
   && printf 'path-exclude /usr/share/doc/*\npath-exclude /usr/share/man/*' > /etc/dpkg/dpkg.cfg.d/01_nodoc \
+  && echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+  && curl -sS https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - \
   && apt-get update -qq \
   && apt-get install -qqy --no-install-recommends \
        nodejs \
-       yarn \
+       yarn="$YARN_VERSION" \
        libxmlsec1-dev \
        python-lxml \
        libicu-dev \
-       postgresql-client \
+       postgresql-client-9.5 \
        unzip \
        fontforge \
   && apt-get clean \
@@ -36,8 +39,7 @@ RUN curl -sL https://deb.nodesource.com/setup_6.x | bash - \
 
 RUN if [ -e /var/lib/gems/$RUBY_MAJOR.0/gems/bundler-* ]; then BUNDLER_INSTALL="-i /var/lib/gems/$RUBY_MAJOR.0"; fi \
   && gem uninstall --all --ignore-dependencies --force $BUNDLER_INSTALL bundler \
-  && gem install bundler --no-document -v 1.15.2 \
-  && gem update --system --no-document \
+  && gem install bundler --no-document -v 1.16.1 \
   && find $GEM_HOME ! -user docker | xargs chown docker:docker
 
 # We will need sfnt2woff in order to build fonts
@@ -55,10 +57,11 @@ COPY Gemfile      ${APP_HOME}
 COPY Gemfile.d    ${APP_HOME}Gemfile.d
 COPY config       ${APP_HOME}config
 COPY gems         ${APP_HOME}gems
+COPY packages     ${APP_HOME}packages
 COPY script       ${APP_HOME}script
 COPY package.json ${APP_HOME}
 COPY yarn.lock    ${APP_HOME}
-RUN find gems -type d ! -user docker -print0 | xargs -0 chown -h docker:docker
+RUN find gems packages -type d ! -user docker -print0 | xargs -0 chown -h docker:docker
 
 # Install deps as docker to avoid sadness w/ npm lifecycle hooks
 USER docker
@@ -69,15 +72,22 @@ USER root
 COPY . $APP_HOME
 RUN mkdir -p .yardoc \
              app/stylesheets/brandable_css_brands \
+             app/views/info \
+             client_apps/canvas_quizzes/dist \
              client_apps/canvas_quizzes/node_modules \
+             client_apps/canvas_quizzes/tmp \
+             config/locales/generated \
              gems/canvas_i18nliner/node_modules \
              gems/selinimum/node_modules \
              log \
              node_modules \
+             packages/canvas-planner/lib \
+             packages/canvas-planner/node_modules \
              public/dist \
              public/doc/api \
              public/javascripts/client_apps \
              public/javascripts/compiled \
+             public/javascripts/translations \
              tmp \
              /home/docker/.bundler/ \
              /home/docker/.cache/yarn \

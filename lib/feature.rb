@@ -19,7 +19,7 @@
 class Feature
   ATTRS = [:feature, :display_name, :description, :applies_to, :state,
            :root_opt_in, :enable_at, :beta, :development,
-           :release_notes_url, :custom_transition_proc,
+           :release_notes_url, :custom_transition_proc, :visible_on,
            :after_state_change_proc, :autoexpand, :touch_context].freeze
   attr_reader *ATTRS
 
@@ -95,19 +95,54 @@ class Feature
   #     # queue a delayed_job to perform any nontrivial processing
   #     after_state_change_proc:  ->(user, context, old_state, new_state) { ... }
   #   }
+  VALID_STATES = %w(on allowed hidden hidden_in_prod).freeze
+  VALID_APPLIES_TO = %w(Course Account RootAccount User).freeze
 
   def self.register(feature_hash)
     @features ||= {}
     feature_hash.each do |feature_name, attrs|
+      validate_attrs(attrs)
       next if attrs[:development] && production_environment?
       feature = feature_name.to_s
       @features[feature] = Feature.new({feature: feature}.merge(attrs))
     end
   end
 
+  def self.validate_attrs(attrs)
+    raise 'invalid state' unless VALID_STATES.include? attrs[:state]
+    raise 'invalid applies_to' unless VALID_APPLIES_TO.include? attrs[:applies_to]
+  end
+
   # TODO: register built-in features here
   # (plugins may register additional features during application initialization)
   register(
+    'refactor_of_sis_imports' =>
+      {
+        display_name: -> {I18n.t('SIS Import Refactor')},
+        description: -> {I18n.t(<<END
+The engine that processes SIS imports has been refactored to better handle the
+stability of large SIS imports. The functionality of SIS imports has not changed.
+END
+        )},
+        applies_to: 'RootAccount',
+        state: 'allowed'
+      },
+    'section_specific_discussions' =>
+    {
+      display_name: -> { I18n.t('Section Specific Discussions') },
+      description: -> { I18n.t('Allows creating discussions for a specific section') },
+      applies_to: 'Account',
+      state: 'hidden',
+      development: true,
+    },
+    'permissions_v2_ui' =>
+    {
+      display_name: -> { I18n.t('Updated Permissions Page') },
+      description: -> { I18n.t('Use the new interface for managing permissions') },
+      applies_to: 'Account',
+      state: 'hidden',
+      development: true,
+    },
     'google_docs_domain_restriction' =>
     {
       display_name: -> { I18n.t('features.google_docs_domain_restriction', 'Google Docs Domain Restriction') },
@@ -189,6 +224,14 @@ END
       state: 'allowed',
       root_opt_in: false
     },
+    'outcome_extra_credit' =>
+    {
+      display_name: -> { I18n.t('Allow Outcome Extra Credit') },
+      description:  -> { I18n.t('If enabled, allows more than the maximum possible score on an Outcome to be given on a rubric.')},
+      applies_to: 'Course',
+      state: 'allowed',
+      root_opt_in: true
+    },
     'post_grades' =>
     {
       display_name: -> { I18n.t('features.post_grades', 'Post Grades to SIS') },
@@ -209,17 +252,37 @@ END
 New Gradebook enables an early release of new Gradebook enhancements.
 END
       applies_to: 'Course',
-      state: 'hidden',
+      state: 'allowed',
       root_opt_in: true,
       beta: true,
 
       custom_transition_proc: ->(user, context, _from_state, transitions) do
         if context.is_a?(Course)
-          user_may_change_flag = context.account.grants_right?(user, :manage_account_settings)
-          transitions['on']['locked'] = !user_may_change_flag if transitions&.dig('on')
-          transitions['off']['locked'] = !user_may_change_flag if transitions&.dig('off')
+          if !context.grants_right?(user, :change_course_state)
+            transitions['on']['locked'] = true if transitions&.dig('on')
+            transitions['off']['locked'] = true if transitions&.dig('off')
+          else
+            should_lock = context.gradebook_backwards_incompatible_features_enabled?
+            transitions['on']['locked'] = should_lock if transitions&.dig('on')
+            transitions['off']['locked'] = should_lock if transitions&.dig('off')
+          end
         elsif context.is_a?(Account)
           transitions['on']['locked'] = true if transitions&.dig('on')
+
+          new_gradebook_feature_flag = FeatureFlag.where(feature: :new_gradebook, state: :on)
+          all_active_sub_account_ids = Account.sub_account_ids_recursive(context.id)
+          relevant_accounts = Account.joins(:feature_flags).where(id: [context.id].concat(all_active_sub_account_ids))
+          relevant_courses = Course.joins(:feature_flags).where(account_id: all_active_sub_account_ids)
+
+          accounts_with_feature = relevant_accounts.merge(new_gradebook_feature_flag)
+          courses_with_feature = relevant_courses.merge(new_gradebook_feature_flag)
+
+          if accounts_with_feature.exists? || courses_with_feature.exists?
+            transitions['off'] ||= {}
+            transitions['off']['locked'] = true
+            transitions['off']['warning'] =
+              I18n.t("This feature can't be disabled because there is at least one sub-account or course with this feature enabled.")
+          end
         end
       end
     },
@@ -237,11 +300,21 @@ END
     },
     'recurring_calendar_events' =>
     {
-      display_name: -> { I18n.t('Recurring Calendar Events') },
-      description: -> { I18n.t("Allows the scheduling of recurring calendar events") },
+      display_name: -> { I18n.t('Duplicating Calendar Events') },
+      description: -> { I18n.t("Allows the duplication of Calendar Events") },
       applies_to: 'Course',
       state: 'hidden',
       root_opt_in: true,
+      beta: true
+    },
+    'duplicate_modules' =>
+    {
+      display_name: -> { I18n.t('Duplicate Modules') },
+      description: -> { I18n.t("Allows the duplicating of modules in Canvas") },
+      applies_to: 'Account',
+      state: 'hidden',
+      root_opt_in: true,
+      development: true,
       beta: true
     },
     'allow_opt_out_of_inbox' =>
@@ -326,6 +399,14 @@ END
       beta: true,
       root_opt_in: true
     },
+    'membership_service_for_lti_tools' =>
+    {
+      display_name: -> { I18n.t('Membership Service Configuration') },
+      description: -> { I18n.t('If enabled, OAuth 1.0a signing may be used by LTI tools to access the Membership Service API') },
+      applies_to: 'RootAccount',
+      state: 'hidden',
+      root_opt_in: true
+    },
     'new_sis_integrations' =>
     {
       display_name: -> { I18n.t('Enable new SIS integration settings') },
@@ -344,14 +425,14 @@ END
       beta: true
     },
     'bulk_sis_grade_export' =>
-      {
-        display_name: -> { I18n.t('Allow Bulk Grade Export to SIS') },
-        description:  -> { I18n.t('Allows teachers to mark grade data to be exported in bulk to SIS integrations.') },
-        applies_to: 'RootAccount',
-        state: 'hidden',
-        root_opt_in: true,
-        beta: true
-      },
+    {
+      display_name: -> { I18n.t('Allow Bulk Grade Export to SIS') },
+      description:  -> { I18n.t('Allows teachers to mark grade data to be exported in bulk to SIS integrations.') },
+      applies_to: 'RootAccount',
+      state: 'hidden',
+      root_opt_in: true,
+      beta: true
+    },
     'notification_service' =>
     {
       display_name: -> { I18n.t('Use remote service for notifications') },
@@ -400,6 +481,66 @@ END
       development: true,
       root_opt_in: true
     },
+    'responsive_layout' =>
+    {
+      display_name: -> { I18n.t('Responsive Layout') },
+      description: -> { I18n.t('This is a feature to allow the development of a responsive layout ') },
+      applies_to: 'RootAccount',
+      state: 'hidden',
+      development: true,
+      root_opt_in: false
+    },
+    'allow_rtl' =>
+    {
+      display_name: -> { I18n.t('Allow RTL users to see RTL interface') },
+      description: -> { I18n.t('This feature enables users of right-to-left (RTL) languages to see the RTL layout under development. Eventually, this will become the default behavior and this option will be removed.') },
+      applies_to: 'RootAccount',
+      state: 'allowed',
+      beta: true,
+    },
+    'force_rtl' =>
+    {
+      display_name: -> { I18n.t('Turn on RTL Even For Non-RTL Languages') },
+      description: -> { I18n.t('This is just a dev-only feature you can turn on to get a preview of how pages would look in a RTL environment, without having to change your language to one that is normally RTL ') },
+      applies_to: 'User',
+      state: 'hidden',
+      development: true,
+    },
+    'include_byte_order_mark_in_gradebook_exports' =>
+    {
+      display_name: -> { I18n.t('Include Byte-Order Mark in Gradebook Exports') },
+      description: -> { I18n.t('Optionally include a byte-order mark in Gradebook exports so they can be imported into Excel for users in some locales.') },
+      applies_to: 'User',
+      state: 'allowed'
+    },
+    'use_semi_colon_field_separators_in_gradebook_exports' =>
+    {
+      display_name: -> { I18n.t('Use semicolons to separate fields in Gradebook Exports') },
+      description: -> { I18n.t('Use semicolons instead of commas to separate fields in Gradebook exports so they can be imported into Excel for users in some locales.') },
+      applies_to: 'User',
+      state: 'allowed',
+      custom_transition_proc: ->(_user, context, _from_state, transitions) do
+        if context.feature_enabled?(:autodetect_field_separators_for_gradebook_exports)
+          transitions['on'] ||= {}
+          transitions['on']['locked'] = true
+          transitions['on']['warning'] = I18n.t("This feature can't be enabled while autodetection of field separators is enabled")
+        end
+      end
+    },
+    'autodetect_field_separators_for_gradebook_exports' =>
+    {
+      display_name: -> { I18n.t('Autodetect field separators in Gradebook Exports') },
+      description: -> { I18n.t('Attempt to detect an appropriate field separator in Gradebook exports based on the number format for your language.') },
+      applies_to: 'User',
+      state: 'allowed',
+      custom_transition_proc: ->(_user, context, _from_state, transitions) do
+        if context.feature_enabled?(:use_semi_colon_field_separators_in_gradebook_exports)
+          transitions['on'] ||= {}
+          transitions['on']['locked'] = true
+          transitions['on']['warning'] = I18n.t("This feature can't be enabled while semicolons are forced to be field separators")
+        end
+      end
+    },
     'anonymous_grading' => {
       display_name: -> { I18n.t('Anonymous Grading') },
       description: -> { I18n.t("Anonymous grading forces student names to be hidden in SpeedGrader™") },
@@ -417,9 +558,8 @@ END
       display_name: -> { I18n.t('Account Course and User Search') },
       description: -> { I18n.t('Updated UI for searching and displaying users and courses within an account.') },
       applies_to: 'Account',
-      state: 'hidden',
+      state: 'allowed',
       beta: true,
-      development: true,
       root_opt_in: true,
       touch_context: true
     },
@@ -467,30 +607,6 @@ END
       root_opt_in: true,
       touch_context: true
     },
-    'new_annotations' =>
-    {
-      display_name: -> { I18n.t('New Annotations') },
-      description: -> { I18n.t('Use the new document annotation tool') },
-      applies_to: 'Account',
-      state: 'hidden',
-      beta: true,
-      root_opt_in: true,
-      custom_transition_proc: ->(_, _, from_state, transitions) do
-        if from_state == 'on'
-          transitions['off'] = { 'locked' => true, 'message' => I18n.t('This feature cannot be disabled once it has been turned on.') }
-          transitions['allowed'] = { 'locked' => true, 'message' => I18n.t('This feature cannot be disabled once it has been turned on.') }
-        end
-      end
-    },
-    'plagiarism_detection_platform' =>
-    {
-      display_name: -> { I18n.t('Plagiarism Detection Platform') },
-      description: -> { I18n.t('Enable the plagiarism detection platform') },
-      applies_to: 'RootAccount',
-      state: 'hidden',
-      beta: true,
-      root_opt_in: true
-    },
     'master_courses' =>
     {
       display_name: -> { I18n.t('Blueprint Courses') }, # this won't be confusing at all
@@ -509,15 +625,6 @@ END
       beta: true,
       root_opt_in: true,
     },
-    'new_gradebook_history' =>
-    {
-      display_name: -> { I18n.t('New Gradebook History') },
-      description: -> { I18n.t('Enable New Gradebook History page.') },
-      applies_to: "RootAccount",
-      state: "hidden",
-      beta: true,
-      development: true,
-    },
     'new_user_tutorial' =>
     {
       display_name: -> { I18n.t('New User Tutorial')},
@@ -534,32 +641,76 @@ END
       beta: true,
       development: false
     },
-    'quizzes2_exporter' =>
+    'rubric_criterion_range' =>
     {
-      display_name: -> { I18n.t('Export to Quizzes 2 format') },
-      description: -> { I18n.t('Export an existing quiz to new Quizzes 2 format') },
+      display_name: -> { I18n.t('Rubric Criterion Range') },
+      description: -> { I18n.t('Specify max and min points to clarify boundaries of a rubric criterion rating.') },
       applies_to: "RootAccount",
-      state: "hidden_in_prod",
+      state: "allowed",
       root_opt_in: true
     },
-    'lti_2_auth_url_registration' =>
-    {
-      display_name: -> { I18n.t('Send Authorization URL in LTI2 Registration') },
-      description: -> { I18n.t("If enabled, 'oauth2_access_token_url' will be sent in LTI2 registration launch") },
+    'encrypted_sourcedids' => {
+      display_name: -> { I18n.t('Encrypted Sourcedids for Basic Outcomes') },
+      description: -> { I18n.t('If enabled, Sourcedids used by Canvas for Basic Outcomes will be encrypted.') },
       applies_to: 'RootAccount',
-      state: 'hidden',
-      beta: false,
-      root_opt_in: true
+      state: 'allowed'
     },
-    'graphql' =>
+    'quizzes_next' =>
     {
-      display_name: -> { I18n.t("GraphQL API") },
-      description: -> { I18n.t("EXPERIMENTAL GraphQL API.") },
-      applies_to: "RootAccount",
-      state: "hidden",
+      display_name: -> { I18n.t('Quizzes') + '.' + I18n.t('Next') },
+      description: -> { I18n.t('Create assessments with Quizzes.Next and migrate existing Canvas Quizzes.') },
+      applies_to: 'Course',
+      state: 'allowed',
+      beta: true,
+      visible_on: ->(context) do
+        root_account = context.root_account
+        is_provisioned = Rails.env.development? || root_account.settings&.dig(:provision, 'lti').present?
+
+        if is_provisioned
+          FeatureFlag.where(
+            feature: 'quizzes_next',
+            context: root_account
+          ).first_or_create!(state: 'on') # if it's local or previously provisioned, FF is on
+        end
+        is_provisioned
+      end
+    },
+    'import_to_quizzes_next' =>
+    {
+      display_name: -> { I18n.t('Quizzes.Next Importing') },
+      description: -> { I18n.t('Allow importing of QTI and Common Cartridge into Quizzes.Next.') },
+      applies_to: 'RootAccount',
       beta: true,
       development: true,
+      state: 'allowed'
     },
+    'developer_key_management' =>
+    {
+      display_name: -> { I18n.t('Developer Key management')},
+      description: -> { I18n.t('New Features for Developer Key management') },
+      applies_to: 'RootAccount',
+      state: 'hidden'
+    },
+    'developer_key_management_ui_rewrite' =>
+    {
+      display_name: -> { I18n.t('Developer Key management UI Rewrite')},
+      description: -> { I18n.t('React UI rewrite Developer Key management') },
+      applies_to: 'RootAccount',
+      state: 'hidden'
+    },
+    'common_cartridge_page_conversion' => {
+      display_name: -> { I18n.t('Common Cartridge HTML File to Page Conversion') },
+      description: -> { I18n.t('If enabled, Common Cartridge importers will convert HTML files into Pages') },
+      applies_to: 'Course',
+      state: 'hidden',
+      beta: true
+    },
+    'api_token_scoping' => {
+      display_name: -> { I18n.t('API Token Scoping')},
+      description: -> { I18n.t('If enabled, scopes will be validated on API requests if the developer key being used requires scopes.') },
+      applies_to: 'RootAccount',
+      state: 'hidden'
+    }
   )
 
   def self.definitions

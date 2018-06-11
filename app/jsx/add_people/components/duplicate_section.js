@@ -20,12 +20,12 @@ import I18n from 'i18n!roster'
 import React  from 'react'
 import PropTypes from 'prop-types'
 import shapes from './shapes'
-import Table from 'instructure-ui/lib/components/Table'
-import ScreenReaderContent from 'instructure-ui/lib/components/ScreenReaderContent'
-import TextInput from 'instructure-ui/lib/components/TextInput'
-import RadioInput from 'instructure-ui/lib/components/RadioInput'
-import Typography from 'instructure-ui/lib/components/Typography'
-import Link from 'instructure-ui/lib/components/Link'
+import Table from '@instructure/ui-core/lib/components/Table'
+import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent'
+import TextInput from '@instructure/ui-core/lib/components/TextInput'
+import RadioInput from '@instructure/ui-core/lib/components/RadioInput'
+import Text from '@instructure/ui-core/lib/components/Text'
+import Link from '@instructure/ui-core/lib/components/Link'
 
   const CREATE_NEW = '__CREATE_NEW__';
   const SKIP = '__SKIP';
@@ -116,12 +116,12 @@ import Link from 'instructure-ui/lib/components/Link'
         const checked = duplicateSet.selectedUserId === dupe.user_id;
         return (
           <tr key={k}>
-            <td>
+            <th scope="row">
               <RadioInput
                 value={dupe.user_id} name={duplicateSet.address} onChange={this.onSelectDuplicate} checked={checked}
                 label={<ScreenReaderContent>{I18n.t('Click to select user %{name}', {name: dupe.user_name})}</ScreenReaderContent>}
               />
-            </td>
+            </th>
             <td>{dupe.user_name}</td>
             <td>{dupe.email}</td>
             <td>{dupe.login_id}</td>
@@ -136,7 +136,7 @@ import Link from 'instructure-ui/lib/components/Link'
           // render the row as an editor
           rows.push(
             <tr key={duplicateSet.address + CREATE_NEW} className="create-new">
-              <td>
+              <th scope="row">
                 <RadioInput
                   value={CREATE_NEW}
                   name={duplicateSet.address}
@@ -145,7 +145,7 @@ import Link from 'instructure-ui/lib/components/Link'
                   label={<ScreenReaderContent>{I18n.t('Click to create a new user for %{address}',
                                                   {address: duplicateSet.address})}</ScreenReaderContent>}
                 />
-              </td>
+              </th>
               <td>
                 <TextInput
                   required
@@ -175,13 +175,13 @@ import Link from 'instructure-ui/lib/components/Link'
           // render the row as a hint to the user
           rows.push(
             <tr key={duplicateSet.address + CREATE_NEW} className="create-new" >
-              <td>
+              <th scope="row" >
                 <RadioInput
                   value={CREATE_NEW} name={duplicateSet.address} onChange={this.onSelectNewForDuplicate} checked={false}
                   label={<ScreenReaderContent>{I18n.t('Click to create a new user for %{login}',
                                                     {login: duplicateSet.address})}</ScreenReaderContent>}
                 />
-              </td>
+              </th>
               <td colSpan="5" >
                 <Link
                   onClick={this.onSelectNewForDuplicate}
@@ -196,12 +196,12 @@ import Link from 'instructure-ui/lib/components/Link'
       // finally, the skip this user row
       rows.push(
         <tr key={duplicateSet.address + SKIP} className="skip-addr">
-          <td>
+          <th scope="row">
             <RadioInput
               value={SKIP} name={duplicateSet.address} onChange={this.onSkipDuplicate} checked={duplicateSet.skip}
               label={<ScreenReaderContent>{I18n.t('Click to skip %{address}', {address: duplicateSet.address})}</ScreenReaderContent>}
             />
-          </td>
+          </th>
           <td colSpan="5" >
             <Link onClick={this.onSkipDuplicate}>{I18n.t('Don’t add this user for now.')}</Link>
           </td>
@@ -216,10 +216,10 @@ import Link from 'instructure-ui/lib/components/Link'
         <div className="addpeople__duplicates namelist" key={`dupe_${this.props.duplicates.address}`}>
           <Table
             caption={
-              <Typography>
+              <Text>
                 {I18n.t('Possible matches for "%{address}". Select the correct one below or create a new user.',
                       {address: this.props.duplicates.address})}
-              </Typography>
+              </Text>
             }
           >
             <thead>

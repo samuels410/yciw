@@ -22,7 +22,7 @@
    for_context ||= false
    context = @context
    context = context.context if context.is_a?(Group)
-   show_grading = !@assignment || @assignment.submission_types != 'online_quiz'
+   show_grading = !@assignment || !%w{online_quiz not_graded}.include?(@assignment.submission_types)
    rubric_association = assessment.rubric_association if assessment
 %>
 <% cache(['rubric_render3',
@@ -33,7 +33,8 @@
          editable,
          edit_view,
          assessing,
-         show_grading].join('/')) do %>
+         show_grading,
+         @domain_root_account.feature_enabled?(:rubric_criterion_range)].join('/')) do %>
 <div
   class="rubric_container rubric <%= "assessing" if assessing %> <%= "for_grading" if rubric_association.try(:use_for_grading) %>"
   id="<%= rubric ? "rubric_#{rubric.id}" : "default_rubric" %>"
@@ -42,7 +43,7 @@
 >
   <div class="screenreader-only"><h2><%= t 'rubric', "Rubric" %></h2></div>
   <div class="rubric_title">
-    <div style="float: right; <%= hidden unless editable && edit_view %>" class="links displaying">
+    <div style="<%= hidden unless editable && edit_view %>" class="links displaying pull-right">
       <% hash = rubric_association ? {:rubric_association_id => rubric_association.id} : {} %>
       <a
         href="<%= context_url(context, :context_rubric_url, rubric ? rubric.id : "{{ id }}", hash) %>"
@@ -95,7 +96,7 @@
         <% end %>
       </div>
     </div>
-    <div style="float: right; font-size: 0.8em; display: none;" class="links displaying locked">
+    <div style="float: <%= direction('right') %>; font-size: 0.8em; display: none;" class="links displaying locked">
       <span style="<%= hidden if editable %>"><%= t 'messages.locked', "Can't change a rubric once you've started using it." %></span>
       <% if for_context %>
         <a href="<%= context_url(context, :context_rubric_url, rubric ? rubric.id : "{{ id }}") %>" class="delete_rubric_url" style="display: none;">&nbsp;</a>
@@ -104,10 +105,10 @@
       <% end %>
     </div>
 
-    <div class="editing" style="float: right;">
+    <div class="editing" style="float: <%= direction('right') %>;">
       <a href="<%= search_rubrics_url(:q => "") %>" class="find_rubric_link icon-search" style="<%= hidden unless !rubric || can_do(rubric_association, @current_user, :update) %>" title="<%= t 'titles.find_existing_rubric', "Find Existing Rubric" %>"><%= t 'links.find_a_rubric', "Find a Rubric" %></a>
     </div>
-    <div class="editing" style="text-align: left">
+    <div class="editing" style="text-align: <%= direction('left') %>">
       <label for="rubric-title"><%= t('title', "Title:") %></label>
       <input id="rubric-title" type="text" class="no-margin-bottom" name="title" value="<%= rubric.title rescue t('defaults.rubric_title', "Some Rubric") %>" style="width: 200px;" maxlength="255" aria-label="<%= t('title', "Title:") %>"/>
       <a href="<%= search_rubrics_url(:q => "") %>" style="display: none;"><%= image_tag "find.png", :alt => '' %> <%= t 'links.find_rubric', "Find Rubric" %></a>
@@ -136,7 +137,6 @@
     <th scope="col"><%= t 'headers.criteria', "Criteria" %></th>
     <th scope="col"><%= t 'headers.ratings', "Ratings" %></th>
     <th scope="col"><%= t 'headers.points', "Pts" %></th>
-    <th scope="col" class="editing">&nbsp;</th>
   </tr>
 </thead>
 <tbody>
@@ -147,9 +147,9 @@
     <% end %>
   <% end %>
   <%= render :partial => "shared/rubric_criterion", :object => nil %>
-  <tr class="summary" style="<%= hidden if rubric_association && rubric_association.hide_score_total %>">
+  <tr class="summary">
     <td colspan="4">
-      <div style="float: right;" class="total_points_holder">
+      <div class="total_points_holder" style="float: <%= direction('right') %>; <%= hidden if rubric_association && rubric_association.hide_score_total %>">
         <span><%= before_label :total_points, "Total Points" %>
           <% ot(:out_of, "%{points} *out of %{total}*", :points => capture { %>
             <span class="rubric_total">
@@ -164,9 +164,8 @@
             %>
         </span>
       </div>
-      <div style="float: left;" class="editing">
-      <a href="#" aria-label='<%= t("Add Criterion") %>' class="icon-plus add_criterion_link"><%= t("Criterion") %></a>
-      &nbsp;&nbsp;<a href="#" class="icon-search find_outcome_link outcome"><%= t 'links.find_outcome', "Find Outcome" %></a>
+      <div class="editing pull-left">
+        <span id="add_criterion_holder" class="criterion_link"></span>
       </div>
       <div class="clear"></div>
     </td>

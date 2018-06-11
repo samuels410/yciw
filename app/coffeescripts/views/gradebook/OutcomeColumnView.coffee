@@ -18,10 +18,10 @@
 define [
   'underscore'
   'Backbone'
-  'compiled/util/Popover'
-  'compiled/models/grade_summary/Outcome'
+  '../../util/Popover'
+  '../../models/grade_summary/Outcome'
   'd3'
-  'i18n!outcomes'
+  'i18nObj'
   'jst/outcomes/outcomePopover'
 ], (_, {View}, Popover, Outcome, d3, I18n, popover_template) ->
 

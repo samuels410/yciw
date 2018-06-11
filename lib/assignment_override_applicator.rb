@@ -82,68 +82,70 @@ module AssignmentOverrideApplicator
     cache_key = [user, assignment_or_quiz, 'overrides'].cache_key
     Rails.cache.delete(cache_key) if assignment_or_quiz.reload_overrides_cache?
     RequestCache.cache("overrides_for_assignment_and_user", cache_key) do
-    Rails.cache.fetch(cache_key) do
-      next [] if self.has_invalid_args?(assignment_or_quiz, user)
-      context = assignment_or_quiz.context
+      Rails.cache.fetch(cache_key) do
+        next [] if self.has_invalid_args?(assignment_or_quiz, user)
+        context = assignment_or_quiz.context
 
-      if (context.user_has_been_admin?(user) || context.user_has_no_enrollments?(user)) && context.grants_right?(user, :read_as_admin)
-        overrides = assignment_or_quiz.assignment_overrides
-        if assignment_or_quiz.current_version?
-          visible_user_ids = context.enrollments_visible_to(user).select(:user_id)
+        context.shard.activate do
+          if (context.user_has_been_admin?(user) || context.user_has_no_enrollments?(user)) && context.grants_right?(user, :read_as_admin)
+            overrides = assignment_or_quiz.assignment_overrides
+            if assignment_or_quiz.current_version?
+              visible_user_ids = context.enrollments_visible_to(user).select(:user_id)
 
-          overrides = if overrides.loaded?
-                        ovs, adhoc_ovs = overrides.select{|ov| ov.workflow_state == 'active'}.
-                          partition {|ov| ov.set_type != 'ADHOC' }
+              overrides = if overrides.loaded?
+                            ovs, adhoc_ovs = overrides.select{|ov| ov.workflow_state == 'active'}.
+                              partition {|ov| ov.set_type != 'ADHOC' }
 
-                        preload_student_ids_for_adhoc_overrides(adhoc_ovs, visible_user_ids)
-                        ovs + adhoc_ovs.select{|ov| ov.preloaded_student_ids.any?}
-                      else
-                        ovs = overrides.active.where.not(set_type: 'ADHOC').to_a
-                        adhoc_ovs = overrides.active.visible_students_only(visible_user_ids).to_a
-                        preload_student_ids_for_adhoc_overrides(adhoc_ovs, visible_user_ids)
+                            preload_student_ids_for_adhoc_overrides(adhoc_ovs, visible_user_ids)
+                            ovs + adhoc_ovs.select{|ov| ov.preloaded_student_ids.any?}
+                          else
+                            ovs = overrides.active.where.not(set_type: 'ADHOC').to_a
+                            adhoc_ovs = overrides.active.visible_students_only(visible_user_ids).to_a
+                            preload_student_ids_for_adhoc_overrides(adhoc_ovs, visible_user_ids)
 
-                        ovs + adhoc_ovs
-                      end
-        else
-          overrides = current_override_version(assignment_or_quiz, overrides)
+                            ovs + adhoc_ovs
+                          end
+            else
+              overrides = current_override_version(assignment_or_quiz, overrides)
+            end
+
+            unless ConditionalRelease::Service.enabled_in_context?(assignment_or_quiz.context)
+              overrides = overrides.select { |override| override.try(:set_type) != 'Noop' }
+            end
+
+            return overrides
+          end
+
+          overrides = []
+
+          # priority: adhoc, group, section (do not exclude deleted)
+          adhoc = adhoc_override(assignment_or_quiz, user)
+          overrides << adhoc.assignment_override if adhoc
+
+          if ObserverEnrollment.observed_students(context, user).empty?
+            group = group_override(assignment_or_quiz, user)
+            overrides << group if group
+            sections = section_overrides(assignment_or_quiz, user)
+            overrides += sections if sections
+          else
+            observed = observer_overrides(assignment_or_quiz, user)
+            overrides += observed if observed
+          end
+
+          unless assignment_or_quiz.current_version?
+            overrides = current_override_version(assignment_or_quiz, overrides)
+          end
+
+          overrides.compact.select(&:active?)
         end
-
-        unless ConditionalRelease::Service.enabled_in_context?(assignment_or_quiz.context)
-          overrides = overrides.select { |override| override.try(:set_type) != 'Noop' }
-        end
-
-        return overrides
       end
-
-      overrides = []
-
-      # priority: adhoc, group, section (do not exclude deleted)
-      adhoc = adhoc_override(assignment_or_quiz, user)
-      overrides << adhoc.assignment_override if adhoc
-
-      if ObserverEnrollment.observed_students(context, user).empty?
-        group = group_override(assignment_or_quiz, user)
-        overrides << group if group
-        sections = section_overrides(assignment_or_quiz, user)
-        overrides += sections if sections
-      else
-        observed = observer_overrides(assignment_or_quiz, user)
-        overrides += observed if observed
-      end
-
-      unless assignment_or_quiz.current_version?
-        overrides = current_override_version(assignment_or_quiz, overrides)
-      end
-
-      overrides.compact.select(&:active?)
-    end
     end
   end
 
   def self.preload_student_ids_for_adhoc_overrides(adhoc_overrides, visible_user_ids)
     if adhoc_overrides.any?
       override_ids_to_student_ids = {}
-      scope = AssignmentOverrideStudent.where(assignment_override_id: adhoc_overrides)
+      scope = AssignmentOverrideStudent.where(assignment_override_id: adhoc_overrides).active
       scope = if ActiveRecord::Relation === visible_user_ids
           return adhoc_overrides if visible_user_ids.is_a?(ActiveRecord::NullRelation)
           scope.
@@ -153,7 +155,7 @@ module AssignmentOverrideApplicator
           scope.where(user_id: visible_user_ids)
         end
 
-      scope.pluck(:assignment_override_id, :user_id).each do |ov_id, user_id|
+      scope.distinct.pluck(:assignment_override_id, :user_id).each do |ov_id, user_id|
         override_ids_to_student_ids[ov_id] ||= []
         override_ids_to_student_ids[ov_id] << user_id
       end
@@ -175,7 +177,7 @@ module AssignmentOverrideApplicator
       overrides.first
     else
       key = assignment_or_quiz.is_a?(Quizzes::Quiz) ? :quiz_id : :assignment_id
-      AssignmentOverrideStudent.where(key => assignment_or_quiz, :user_id => user).first
+      AssignmentOverrideStudent.where(key => assignment_or_quiz, :user_id => user).active.first
     end
   end
 
@@ -196,8 +198,6 @@ module AssignmentOverrideApplicator
       else
         assignment_or_quiz.assignment_overrides.where(:set_type => 'Group', :set_id => group.id).first
       end
-    else
-      nil
     end
   end
 
@@ -408,7 +408,8 @@ module AssignmentOverrideApplicator
     ActiveRecord::Associations::Preloader.new.preload(assignments, [:quiz, :assignment_overrides])
 
     if assignments.any?
-      override_students = AssignmentOverrideStudent.where(:assignment_id => assignments, :user_id => user).index_by(&:assignment_id)
+      override_students =
+        AssignmentOverrideStudent.where(assignment_id: assignments, user_id: user).active.index_by(&:assignment_id)
       assignments.each do |a|
         a.preloaded_override_students ||= {}
         a.preloaded_override_students[user.id] = Array(override_students[a.id])
@@ -421,7 +422,7 @@ module AssignmentOverrideApplicator
     ActiveRecord::Associations::Preloader.new.preload(quizzes, :assignment_overrides)
 
     if quizzes.any?
-      override_students = AssignmentOverrideStudent.where(:quiz_id => quizzes, :user_id => user).index_by(&:quiz_id)
+      override_students = AssignmentOverrideStudent.where(quiz_id: quizzes, user_id: user).active.index_by(&:quiz_id)
       quizzes.each do |q|
         q.preloaded_override_students ||= {}
         q.preloaded_override_students[user.id] = Array(override_students[q.id])

@@ -16,18 +16,17 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 define [
-  'i18n!groups'
   'jquery'
   'underscore'
   'Backbone'
-  'compiled/views/CollectionView'
-  'compiled/views/groups/manage/GroupCategoryView'
-  'compiled/views/groups/manage/GroupCategoryCreateView'
-  'compiled/models/GroupCategory'
+  '../../CollectionView'
+  './GroupCategoryView'
+  './GroupCategoryCreateView'
+  '../../../models/GroupCategory'
   'jst/groups/manage/groupCategories'
   'jst/groups/manage/groupCategoryTab'
   'jqueryui/tabs'
-], (I18n, $, _, {View}, CollectionView, GroupCategoryView, GroupCategoryCreateView, GroupCategory, groupCategoriesTemplate, tabTemplate) ->
+], ($, _, {View}, CollectionView, GroupCategoryView, GroupCategoryCreateView, GroupCategory, groupCategoriesTemplate, tabTemplate) ->
 
   class GroupCategoriesView extends CollectionView
 

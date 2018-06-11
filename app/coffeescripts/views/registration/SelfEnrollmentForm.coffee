@@ -20,11 +20,10 @@ define [
   'jquery'
   'underscore'
   'Backbone'
-  'i18n!registration'
-  'compiled/registration/registrationErrors'
+  '../../registration/registrationErrors'
   'jquery.instructure_forms'
   'jquery.ajaxJSON'
-], ($, _, Backbone, I18n, registrationErrors) ->
+], ($, _, Backbone, registrationErrors) ->
 
   class SelfEnrollmentForm extends Backbone.View
     events:
@@ -53,7 +52,7 @@ define [
 
       @$el.attr 'action', switch @action
         when 'create' then '/users'
-        when 'log_in' then '/login'
+        when 'log_in' then '/login/canvas'
         when 'enroll' then @enrollUrl
 
     success: (data) =>

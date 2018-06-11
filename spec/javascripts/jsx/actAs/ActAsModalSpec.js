@@ -21,11 +21,11 @@ import { shallow } from 'enzyme'
 import ActAsModal from 'jsx/actAs/ActAsModal'
 import ActAsMask from 'jsx/actAs/ActAsMask'
 import ActAsPanda from 'jsx/actAs/ActAsPanda'
-import Button from 'instructure-ui/lib/components/Button'
-import Avatar from 'instructure-ui/lib/components/Avatar'
-import Table from 'instructure-ui/lib/components/Table'
-import Typography from 'instructure-ui/lib/components/Typography'
-import Spinner from 'instructure-ui/lib/components/Spinner'
+import Button from '@instructure/ui-core/lib/components/Button'
+import Avatar from '@instructure/ui-core/lib/components/Avatar'
+import Table from '@instructure/ui-core/lib/components/Table'
+import Text from '@instructure/ui-core/lib/components/Text'
+import Spinner from '@instructure/ui-core/lib/components/Spinner'
 
 QUnit.module('ActAsModal', {
   setup () {
@@ -37,9 +37,15 @@ QUnit.module('ActAsModal', {
         avatar_image_url: 'testImageUrl',
         sortable_name: 'bar, baz',
         email: 'testUser@test.com',
-        login_id: 'qux',
-        sis_id: 555,
-        integration_id: 222
+        pseudonyms: [{
+          login_id: 'qux',
+          sis_id: 555,
+          integration_id: 222
+        }, {
+          login_id: 'tic',
+          sis_id: 777,
+          integration_id: 888
+        }]
       }
     }
   }
@@ -66,13 +72,13 @@ test('it renders avatar with user image url', function () {
 
 test('it renders the table with correct user information', function () {
   const wrapper = shallow(<ActAsModal {...this.props} />)
-  const table = wrapper.find(Table)
+  const tables = wrapper.find(Table)
 
-  ok(table.exists())
+  ok(tables.length === 3)
 
   const textContent = []
-  table.find('tr').forEach((row) => {
-    row.find(Typography).forEach((rowContent) => {
+  tables.find('tr').forEach((row) => {
+    row.find(Text).forEach((rowContent) => {
       textContent.push(rowContent.props().children)
     })
   })
@@ -83,9 +89,11 @@ test('it renders the table with correct user information', function () {
   ok(tableText.indexOf(user.short_name) > -1)
   ok(tableText.indexOf(user.sortable_name) > -1)
   ok(tableText.indexOf(user.email) > -1)
-  ok(tableText.indexOf(user.login_id) > -1)
-  ok(tableText.indexOf(user.sis_id) > -1)
-  ok(tableText.indexOf(user.integration_id) > -1)
+  user.pseudonyms.forEach((pseudonym) => {
+    ok(tableText.indexOf(pseudonym.login_id) > -1)
+    ok(tableText.indexOf(pseudonym.sis_id) > -1)
+    ok(tableText.indexOf(pseudonym.integration_id) > -1)
+  })
 })
 
 test('it should only display loading spinner if state is loading', function (assert) {

@@ -18,9 +18,9 @@
 
 import React from 'react';
 import { mount, shallow } from 'enzyme';
-import Spinner from 'instructure-ui/lib/components/Spinner';
-import Table from 'instructure-ui/lib/components/Table';
-import Typography from 'instructure-ui/lib/components/Typography';
+import Spinner from '@instructure/ui-core/lib/components/Spinner';
+import Table from '@instructure/ui-core/lib/components/Table';
+import Text from '@instructure/ui-core/lib/components/Text';
 import { SearchResultsComponent } from 'jsx/gradebook-history/SearchResults';
 
 function defaultHistoryItems () {
@@ -33,9 +33,11 @@ function defaultHistoryItems () {
       grader: 'Ms. Twillie Jones',
       gradeAfter: '21',
       gradeBefore: '19',
+      gradeCurrent: '22',
       id: '123456',
       pointsPossibleBefore: '25',
       pointsPossibleAfter: '25',
+      pointsPossibleCurrent: '30',
       student: 'Norval Abbott',
       time: '11:16pm'
     }
@@ -89,7 +91,8 @@ test('Table has column headers in correct order', function () {
     'Grader',
     'Assignment',
     'Before',
-    'After'
+    'After',
+    'Current'
   ];
   const wrapper = mount(<SearchResultsComponent {...defaultProps()} />);
   const headerNodes = wrapper.find('thead').find('tr').find('th').nodes;
@@ -124,7 +127,7 @@ test('shows a Spinner if requestingResults true', function () {
 test('Table shows text if request was made but no results were found', function () {
   const props = { ...defaultProps(), fetchHistoryStatus: 'success', historyItems: [] };
   const wrapper = mount(<SearchResultsComponent {...props} />);
-  const textBox = wrapper.find(Typography);
+  const textBox = wrapper.find(Text);
   ok(textBox.exists());
   equal(textBox.text(), 'No results found.');
   wrapper.unmount();
@@ -134,7 +137,7 @@ test('shows text indicating that the end of results was reached', function () {
   const historyItems = defaultHistoryItems();
   const props = { ...defaultProps(), nextPage: '', requestingResults: false, historyItems };
   const wrapper = mount(<SearchResultsComponent {...props} />);
-  const textBox = wrapper.find(Typography);
+  const textBox = wrapper.find(Text);
   ok(textBox.exists());
   equal(textBox.text(), 'No more results to load.');
   wrapper.unmount();

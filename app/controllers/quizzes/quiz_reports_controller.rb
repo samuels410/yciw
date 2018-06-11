@@ -190,7 +190,6 @@ class Quizzes::QuizReportsController < ApplicationController
   end
 
   # @API Abort the generation of a report, or remove a previously generated one
-  # @beta
   #
   # This API allows you to cancel a previous request you issued for a report to
   # be generated. Or in the case of an already generated report, you'd like to
@@ -213,11 +212,11 @@ class Quizzes::QuizReportsController < ApplicationController
 
       # case 1: remove a generated report:
       if statistics.csv_attachment.present?
-        statistics.csv_attachment.destroy_permanently!
+        statistics.csv_attachment.destroy_permanently_plus
         # progress will be present only if the CSV was generated asynchronously
         statistics.progress.destroy if statistics.progress.present?
       # case 2: abort the generation process if we can:
-      elsif !statistics.progress.present?
+      elsif statistics.progress.blank?
         reject! 'report is not being generated', 422
       elsif !statistics.csv_generation_abortable?
         reject! 'report generation can not be aborted', 422

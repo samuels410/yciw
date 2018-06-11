@@ -78,6 +78,10 @@ require 'action_controller_test_process'
 #           "example": "2012-01-01T01:00:00Z",
 #           "type": "datetime"
 #         },
+#         "edited_at" : {
+#           "example": "2012-01-02T01:00:00Z",
+#           "type": "datetime"
+#         },
 #         "media_comment": {
 #           "$ref": "MediaComment"
 #         }
@@ -114,11 +118,12 @@ class SubmissionsController < ApplicationController
       return render_user_not_found
     end
 
-    @rubric_association = @submission.rubric_association_with_assessing_user_id
     @visible_rubric_assessments = @submission.visible_rubric_assessments_for(@current_user)
     @assessment_request = @submission.assessment_requests.where(assessor_id: @current_user).first
     if authorized_action(@submission, @current_user, :read)
-      @submission&.mark_read(@current_user)
+      if @submission&.user_id == @current_user.id
+        @submission&.mark_read(@current_user)
+      end
       respond_to do |format|
         @submission.limit_comments(@current_user, session)
         format.html
@@ -244,12 +249,11 @@ class SubmissionsController < ApplicationController
 
     submission_params = params[:submission].permit(
       :body, :url, :submission_type, :comment, :group_comment,
-      :media_comment_type, :media_comment_id, :attachment_ids => []
+      :media_comment_type, :media_comment_id, :eula_agreement_timestamp,
+      :attachment_ids => []
     )
-    submission_params[:attachments] = params[:submission][:attachments].compact.uniq
-    if @context.root_account.feature_enabled?(:submissions_folder)
-      submission_params[:attachments] = self.class.copy_attachments_to_submissions_folder(@context, submission_params[:attachments])
-    end
+    submission_params[:group_comment] = value_to_boolean(submission_params[:group_comment])
+    submission_params[:attachments] = self.class.copy_attachments_to_submissions_folder(@context, params[:submission][:attachments].compact.uniq)
 
     begin
       @submission = @assignment.submit_homework(@current_user, submission_params)
@@ -273,8 +277,11 @@ class SubmissionsController < ApplicationController
         end
         format.json do
           if api_request?
-            render :json => submission_json(@submission, @assignment, @current_user, session, @context, %{submission_comments attachments}),
-              :status => :created, :location => api_v1_course_assignment_submission_url(@context, @assignment, @current_user)
+            includes = %|submission_comments attachments|
+            json = submission_json(@submission, @assignment, @current_user, session, @context, includes, params)
+            render json: json,
+              status: :created,
+              location: api_v1_course_assignment_submission_url(@context, @assignment, @current_user)
           else
             render :json => @submission.as_json(:include => :submission_comments), :status => :created,
               :location => course_gradebook_url(@submission.assignment.context)
@@ -357,6 +364,8 @@ class SubmissionsController < ApplicationController
       return false
     end
 
+    always_permitted = always_permitted_create_params
+
     # Make sure that the submitted parameters match what we expect
     submission_params = (['submission_type'] + API_SUBMISSION_TYPES[submission_type]).sort
     params[:submission].slice!(*submission_params)
@@ -372,6 +381,8 @@ class SubmissionsController < ApplicationController
     if params[:submission].has_key?(:body)
       params[:submission][:body] = process_incoming_html_content(params[:submission][:body])
     end
+
+    params[:submission].merge!(always_permitted)
     return true
   end
   private :process_api_submission_params
@@ -559,6 +570,11 @@ class SubmissionsController < ApplicationController
   end
   private :resubmit_to_plagiarism
 
+  def always_permitted_create_params
+    always_permitted_params = [:eula_agreement_timestamp].freeze
+    params.require(:submission).permit(always_permitted_params)
+  end
+
   def update
     @assignment = @context.assignments.active.find(params[:assignment_id])
     @user = @context.all_students.find(params[:id])
@@ -660,10 +676,7 @@ class SubmissionsController < ApplicationController
 
     respond_to do |format|
       if attachment.zipped?
-        if Attachment.s3_storage?
-          format.html { redirect_to attachment.inline_url }
-          format.zip { redirect_to attachment.inline_url }
-        else
+        if attachment.stored_locally?
           cancel_cache_buster
 
           format.html do
@@ -679,6 +692,10 @@ class SubmissionsController < ApplicationController
               :disposition => 'inline'
             })
           end
+        else
+          inline_url = authenticated_inline_url(attachment)
+          format.html { redirect_to inline_url }
+          format.zip { redirect_to inline_url }
         end
         format.json { render :json => attachment.as_json(:methods => :readable_size) }
       else

@@ -17,10 +17,10 @@
 #
 
 define [
-  'compiled/collections/PaginatedCollection'
-  'compiled/collections/GroupUserCollection'
-  'compiled/models/Group'
-  'compiled/util/natcompare'
+  '../collections/PaginatedCollection'
+  '../collections/GroupUserCollection'
+  '../models/Group'
+  '../util/natcompare'
 ], (PaginatedCollection, GroupUserCollection, Group, natcompare) ->
 
   class GroupCollection extends PaginatedCollection
@@ -29,6 +29,7 @@ define [
 
     @optionProperty 'category'
     @optionProperty 'loadAll'
+    @optionProperty 'markInactiveStudents'
 
     _defaultUrl: ->
       if @forCourse
@@ -44,3 +45,16 @@ define [
         @url = "/api/v1/group_categories/#{@category.id}/groups?per_page=50"
       else
         @url = super
+
+    fetchAll: ->
+      @fetchAllDriver(success: @fetchNext)
+
+    fetchNext: =>
+      if @canFetch 'next'
+        @fetch(page: 'next', success: @fetchNext)
+      else
+        @trigger('finish')
+
+    fetchAllDriver: (options = {}) ->
+      options.data = Object.assign per_page: 20, include: "can_message", options.data || {}
+      @fetch options

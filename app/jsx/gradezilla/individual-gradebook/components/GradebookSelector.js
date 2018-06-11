@@ -19,9 +19,9 @@
 import { head, tail } from 'underscore'
 import React from 'react'
 import PropTypes from 'prop-types'
-import Select from 'instructure-ui/lib/components/Select'
-import Typography from 'instructure-ui/lib/components/Typography'
-import ScreenReaderContent from 'instructure-ui/lib/components/ScreenReaderContent'
+import Select from '@instructure/ui-core/lib/components/Select'
+import Text from '@instructure/ui-core/lib/components/Text'
+import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent'
 import I18n from 'i18n!gradebook'
 
   const INDIVIDUAL_GRADEBOOK = 'IndividualGradebook';
@@ -63,10 +63,10 @@ import I18n from 'i18n!gradebook'
       });
     }
 
-    selectGradeHistory () { this.setLocation(`${this.props.courseUrl}/gradebook/history`); }
+    selectGradebookHistory () { this.setLocation(`${this.props.courseUrl}/gradebook/history`); }
 
     selectDefaultGradebook () {
-      this.setLocation(`${this.props.courseUrl}/gradebook/change_gradebook_version?version=gradezilla`);
+      this.setLocation(`${this.props.courseUrl}/gradebook/change_gradebook_version?version=default`);
     }
 
     handleOnChange (e) {
@@ -74,7 +74,7 @@ import I18n from 'i18n!gradebook'
         'individual-gradebook': this.selectIndividualGradebook.bind(this),
         'learning-mastery': this.selectLearningMastery.bind(this),
         'default-gradebook': this.selectDefaultGradebook.bind(this),
-        'grade-history': this.selectGradeHistory.bind(this)
+        'gradebook-history': this.selectGradebookHistory.bind(this)
       };
       valueFunctionMap[e.target.value]();
     }
@@ -85,8 +85,8 @@ import I18n from 'i18n!gradebook'
         modifiedVariant = `${modifiedVariant}LearningMastery`;
       }
       const optionsForGradebook = {
-        IndividualGradebook: ['IndividualGradebook', 'LearningMastery', 'DefaultGradebook', 'GradeHistory'],
-        IndividualGradebookLearningMastery: ['LearningMastery', 'IndividualGradebook', 'DefaultGradebook', 'GradeHistory'],
+        IndividualGradebook: ['IndividualGradebook', 'LearningMastery', 'DefaultGradebook', 'GradebookHistory'],
+        IndividualGradebookLearningMastery: ['LearningMastery', 'IndividualGradebook', 'DefaultGradebook', 'GradebookHistory'],
       };
       const options = optionsForGradebook[modifiedVariant];
       return [
@@ -113,15 +113,15 @@ import I18n from 'i18n!gradebook'
       return <option value={key} key={key}>{I18n.t('Gradebook…')}</option>;
     }
 
-    renderGradeHistoryOption () {
-      const key = 'grade-history';
-      return <option value={key} key={key}>{I18n.t('Grade History…')}</option>;
+    renderGradebookHistoryOption () {
+      const key = 'gradebook-history';
+      return <option value={key} key={key}>{I18n.t('Gradebook History…')}</option>;
     }
 
     render () {
       return (
         <div style={{display: 'flex', alignItems: 'center'}}>
-          <Typography>{I18n.t('Gradebook')}</Typography>
+          <Text>{I18n.t('Gradebook')}</Text>
           &nbsp;
           <Select
             onChange={this.handleOnChange}

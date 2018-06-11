@@ -18,7 +18,7 @@
 
 import React, { Component } from 'react';
 import { bool, func, node, string } from 'prop-types';
-import Button from 'instructure-ui/lib/components/Button';
+import Button from '@instructure/ui-core/lib/components/Button';
 import ArrowOpenLeft from 'instructure-icons/lib/Line/IconArrowOpenLeftLine';
 import ArrowOpenRight from 'instructure-icons/lib/Line/IconArrowOpenRightLine';
 
@@ -47,23 +47,25 @@ export default class Carousel extends Component {
   render () {
     const leftArrow = (
       <Button
+        disabled={this.props.disabled}
         ref={(button) => { this.leftArrow = button }}
         variant="icon"
         onClick={this.handleLeftArrowClick}
         size="small"
       >
-        <ArrowOpenLeft />
+        <ArrowOpenLeft title={this.props.leftArrowDescription} />
       </Button>
     );
 
     const rightArrow = (
       <Button
+        disabled={this.props.disabled}
         ref={(button) => { this.rightArrow = button }}
         variant="icon"
         onClick={this.handleRightArrowClick}
         size="small"
       >
-        <ArrowOpenRight />
+        <ArrowOpenRight title={this.props.rightArrowDescription} />
       </Button>
     );
 
@@ -86,14 +88,18 @@ export default class Carousel extends Component {
 }
 
 Carousel.defaultProps = {
-  id: null
+  id: null,
+  showBorderBottom: true
 };
 
 Carousel.propTypes = {
   id: string,
   children: node.isRequired,
+  disabled: bool.isRequired,
   displayLeftArrow: bool.isRequired,
   displayRightArrow: bool.isRequired,
   onLeftArrowClick: func.isRequired,
-  onRightArrowClick: func.isRequired
+  onRightArrowClick: func.isRequired,
+  leftArrowDescription: string.isRequired,
+  rightArrowDescription: string.isRequired
 };

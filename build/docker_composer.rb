@@ -17,6 +17,7 @@
 
 require "yaml"
 require "fileutils"
+require "open3"
 require "English"
 require_relative "./docker_utils"
 
@@ -111,6 +112,7 @@ class DockerComposer
       docker_compose "build #{services.join(" ")}"
       prepare_volumes
       start_services
+      update_postgis
       db_prepare unless using_snapshot? # already set up, just need to migrate
     end
 
@@ -127,6 +129,15 @@ class DockerComposer
     def prepare_volumes
       docker_compose_up "data_loader"
       wait_for "data_loader"
+    end
+
+    # To prevent errors similar to: OperationalError: could not access file "$libdir/postgis-X.X
+    # These happen when your docker image expects one version of PostGIS but the volume has a different one.  This
+    # should noop if there's no mismatch in the version of PostGIS
+    # https://hub.docker.com/r/mdillon/postgis/
+    def update_postgis
+      puts "Updating PostGIS"
+      docker "exec --user postgres #{ENV["COMPOSE_PROJECT_NAME"]}_postgres_1 update-postgis.sh"
     end
 
     def db_prepare
@@ -172,6 +183,7 @@ class DockerComposer
 
       tasks = []
       tasks << "ci:disable_structure_dump"
+      tasks << "db:migrate:predeploy"
       tasks << "db:migrate"
       tasks << "ci:prepare_test_shards" if ENV["PREPARE_TEST_DATABASE"] == "1"
       tasks << "canvas:quizzes:create_event_partitions"
@@ -226,12 +238,22 @@ class DockerComposer
     end
 
     def docker(args)
-      system "docker #{args}" or raise("`docker #{args}` failed")
+      out, err, status = Open3.capture3("docker #{args}")
+      puts out
+      if !status.success?
+        $stderr.puts err
+        raise("`docker #{args}` failed")
+      end
     end
 
     def docker_compose(args)
       file_args = COMPOSE_FILES.map { |f| "-f #{f}" }.join(" ")
-      system "docker-compose #{file_args} #{args}" or raise("`docker-compose #{args}` failed")
+      out, err, status = Open3.capture3("docker-compose #{file_args} #{args}")
+      puts out
+      if !status.success?
+        $stderr.puts err
+        raise("`docker-compose #{file_args} #{args}` failed")
+      end
     end
 
     def service_config(key)
@@ -253,7 +275,7 @@ class DockerComposer
 end
 
 begin
-  DockerComposer.run
+  DockerComposer.run if __FILE__ == $0
 rescue
   $stderr.puts "ERROR: #{$ERROR_INFO}"
   exit 1

@@ -77,13 +77,13 @@
   load_blueprint_courses_ui
 -%>
 <%= render :partial => "layouts/head" %>
-<body class="<%= (@body_classes).uniq.join(" ") %>">
+<body class="<%= (@body_classes).uniq.join(" ") %> lato-font-not-loaded-yet">
 <%if @real_current_user && @real_current_user != @current_user %>
-  <div class="screenreader-only">
+  <div role="alert" class="screenreader-only">
     <% if @current_user.fake_student? %>
         <%= t("You are currently logged into Student View") %>
       <% else %>
-        <%= t("You are currently masquerading as %{user_name}", :user_name => @current_user.short_name) %>
+        <%= t("You are currently acting as %{user_name}", :user_name => @current_user.short_name) %>
     <% end %>
   </div>
 <% end %>
@@ -94,7 +94,7 @@
   <%= render(:partial => 'shared/new_nav_header') unless @headers == false %>
 
   <div id="instructure_ajax_error_box">
-    <div style="text-align: right; background-color: #fff;"><a href="#" class="close_instructure_ajax_error_box_link"><%= t('links.close', 'Close') %></a></div>
+    <div style="text-align: <%= direction('right') %>; background-color: #fff;"><a href="#" class="close_instructure_ajax_error_box_link"><%= t('links.close', 'Close') %></a></div>
     <iframe id="instructure_ajax_error_result" src="about:blank" style="border: 0;" title="<%= t('Error') %>"></iframe>
   </div>
 
@@ -211,9 +211,6 @@
         <% end %>
       <% end %>
     </div>
-  <% cache('global_dialogs_render') do %>
-    <%= render :partial => "shared/global_dialogs" %>
-  <% end %>
   <div id='aria_alerts' class='hide-text affix' role="alert" aria-live="assertive"></div>
   <div id='StudentTray__Container'></div>
   <% if tutorials_enabled? %>

@@ -102,21 +102,26 @@ class GradebooksController < ApplicationController
 
     ags_json = light_weight_ags_json(@presenter.groups, {student: @presenter.student})
 
-    grading_scheme = @context.grading_standard.try(:data) ||
-                     GradingStandard.default_grading_standard
-
-    js_env(submissions: submissions_json,
-           assignment_groups: ags_json,
-           group_weighting_scheme: @context.group_weighting_scheme,
-           show_total_grade_as_points: @context.settings[:show_total_grade_as_points],
-           grading_scheme: grading_scheme,
-           grading_period_set: grading_period_group_json,
-           grading_period: grading_period,
-           grading_periods: @grading_periods,
-           effective_due_dates: effective_due_dates,
-           exclude_total: @exclude_total,
-           student_outcome_gradebook_enabled: @context.feature_enabled?(:student_outcome_gradebook),
-           student_id: @presenter.student_id)
+    js_env(
+      submissions: submissions_json,
+      assignment_groups: ags_json,
+      assignment_sort_options: @presenter.sort_options,
+      group_weighting_scheme: @context.group_weighting_scheme,
+      show_total_grade_as_points: @context.show_total_grade_as_points?,
+      grading_scheme: @context.grading_standard_or_default.data,
+      current_grading_period_id: @current_grading_period_id,
+      current_assignment_sort_order: @presenter.assignment_order,
+      grading_period_set: grading_period_group_json,
+      grading_period: grading_period,
+      grading_periods: @grading_periods,
+      courses_with_grades: courses_with_grades_json,
+      effective_due_dates: effective_due_dates,
+      exclude_total: @exclude_total,
+      save_assignment_order_url: course_save_assignment_order_url(@context),
+      student_outcome_gradebook_enabled: @context.feature_enabled?(:student_outcome_gradebook),
+      student_id: @presenter.student_id,
+      students: @presenter.students.as_json(include_root: false)
+    )
   end
 
   def save_assignment_order
@@ -181,42 +186,13 @@ class GradebooksController < ApplicationController
     if authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
       @last_exported_gradebook_csv = GradebookCsv.last_successful_export(course: @context, user: @current_user)
       set_current_grading_period if grading_periods?
-      set_js_env
+      set_gradebook_env
       set_tutorial_js_env
       @course_is_concluded = @context.completed?
       @post_grades_tools = post_grades_tools
 
-      version = @current_user.preferred_gradebook_version
-      if @context.feature_enabled?(:new_gradebook)
-        if Rails.env.development?
-          # params[:version] is a temporary gradezilla feature to help devs flip back and forth
-          # between gradebook versions. This param should never be used in the UI.
-          case params[:version]
-          when 'srgb'
-            render :screenreader and return
-          when '2'
-            render :gradebook and return
-          when 'gradezilla-individual'
-            render 'gradebooks/gradezilla/individual' and return
-          when 'gradezilla-gradebook'
-            render 'gradebooks/gradezilla/gradebook' and return
-          else # fallback to the current user's preferences hash
-            render 'gradebooks/gradezilla/individual' and return if individual_view?(version)
-            render 'gradebooks/gradezilla/gradebook' and return
-          end
-        else
-          render 'gradebooks/gradezilla/individual' and return if individual_view?(version)
-          render 'gradebooks/gradezilla/gradebook' and return
-        end
-      else
-        render :screenreader and return if individual_view?(version)
-        render :gradebook and return
-      end
+      render_gradebook
     end
-  end
-
-  def individual_view?(version)
-    %w(individual srgb).include?(version)
   end
 
   def post_grades_ltis
@@ -313,21 +289,19 @@ class GradebooksController < ApplicationController
     @agp_json ||= GradingPeriod.periods_json(active_grading_periods, @current_user)
   end
 
-  def set_js_env
+  def old_gradebook_env
     @gradebook_is_editable = @context.grants_right?(@current_user, session, :manage_grades)
     per_page = Setting.get('api_max_per_page', '50').to_i
     teacher_notes = @context.custom_gradebook_columns.not_deleted.where(teacher_notes: true).first
-    ag_includes = [:assignments, :assignment_visibility]
-    chunk_size = if @context.assignments.published.count < Setting.get('gradebook2.assignments_threshold', '20').to_i
-                   Setting.get('gradebook2.submissions_chunk_size', '35').to_i
-                 else
-                   Setting.get('gradebook2.many_submissions_chunk_size', '10').to_i
-                 end
-    js_env STUDENT_CONTEXT_CARDS_ENABLED: @domain_root_account.feature_enabled?(:student_context_cards)
-    env = {
+    ag_includes = [:assignments, :assignment_visibility, :grades_published]
+    last_exported_attachment = @last_exported_gradebook_csv.try(:attachment)
+    grading_standard = @context.grading_standard_or_default
+    {
+      STUDENT_CONTEXT_CARDS_ENABLED: @domain_root_account.feature_enabled?(:student_context_cards),
       GRADEBOOK_OPTIONS: {
         api_max_per_page: per_page,
-        chunk_size: chunk_size,
+        chunk_size: Setting.get('gradebook2.submissions_chunk_size', '10').to_i,
+        anonymous_moderated_marking_enabled: anonymous_moderated_marking_enabled?,
         assignment_groups_url: api_v1_course_assignment_groups_url(
           @context,
           include: ag_includes,
@@ -367,19 +341,18 @@ class GradebooksController < ApplicationController
         context_code: @context.asset_string,
         context_sis_id: @context.sis_source_id,
         group_weighting_scheme: @context.group_weighting_scheme,
-        grading_standard: (
-          @context.grading_standard_enabled? &&
-          (@context.grading_standard.try(:data) || GradingStandard.default_grading_standard)
-        ),
-        default_grading_standard: GradingStandard.default_grading_standard,
+        grading_standard: @context.grading_standard_enabled? && grading_standard.data,
+        default_grading_standard: grading_standard.data,
         course_is_concluded: @context.completed?,
         course_name: @context.name,
         gradebook_is_editable: @gradebook_is_editable,
         context_allows_gradebook_uploads: @context.allows_gradebook_uploads?,
         gradebook_import_url: new_course_gradebook_upload_path(@context),
         setting_update_url: api_v1_course_settings_url(@context),
-        show_total_grade_as_points: @context.settings[:show_total_grade_as_points],
-        publish_to_sis_enabled: @context.allows_grade_publishing_by(@current_user) && @gradebook_is_editable,
+        show_total_grade_as_points: @context.show_total_grade_as_points?,
+        publish_to_sis_enabled: (
+          !!@context.sis_source_id && @context.allows_grade_publishing_by(@current_user) && @gradebook_is_editable
+        ),
         publish_to_sis_url: context_url(@context, :context_details_url, anchor: 'tab-grade-publishing'),
         speed_grader_enabled: @context.allows_speed_grader?,
         active_grading_periods: active_grading_periods_json,
@@ -399,8 +372,8 @@ class GradebooksController < ApplicationController
         ),
         export_gradebook_csv_url: course_gradebook_csv_url,
         gradebook_csv_progress: @last_exported_gradebook_csv.try(:progress),
-        attachment_url: @last_exported_gradebook_csv.try(:attachment).try(:download_url),
-        attachment: @last_exported_gradebook_csv.try(:attachment),
+        attachment_url: authenticated_download_url(last_exported_attachment),
+        attachment: last_exported_attachment,
         sis_app_url: Setting.get('sis_app_url', nil),
         sis_app_token: Setting.get('sis_app_token', nil),
         list_students_by_sortable_name_enabled: @context.list_students_by_sortable_name?,
@@ -410,7 +383,7 @@ class GradebooksController < ApplicationController
         gradebook_column_order_settings_url: save_gradebook_column_order_course_gradebook_url,
         post_grades_ltis: post_grades_ltis,
         post_grades_feature: post_grades_feature?,
-        sections: sections_json(@context.active_course_sections, @current_user, session),
+        sections: sections_json(@context.active_course_sections, @current_user, session, [], allow_sis_ids: true),
         settings_update_url: api_v1_course_gradebook_settings_update_url(@context),
         settings: gradebook_settings.fetch(@context.id, {}),
         login_handle_name: @context.root_account.settings[:login_handle_name],
@@ -418,8 +391,15 @@ class GradebooksController < ApplicationController
         version: params.fetch(:version, nil)
       }
     }
+  end
 
-    env = new_gradebook_env(env) if @context.feature_enabled?(:new_gradebook)
+  def set_gradebook_env
+    env = old_gradebook_env
+
+    if new_gradebook_enabled?
+      env = env.deep_merge(new_gradebook_env)
+    end
+
     js_env(env)
   end
 
@@ -430,25 +410,18 @@ class GradebooksController < ApplicationController
   end
 
   def history
-    if authorized_action(@context, @current_user, :manage_grades)
-      return new_history if @context.root_account.feature_enabled?(:new_gradebook_history)
+    if authorized_action(@context, @current_user, %i[manage_grades view_all_grades])
+      crumbs.delete_if { |crumb| crumb[0] == "Grades" }
+      add_crumb(t("Gradebook History"),
+                context_url(@context, controller: :gradebooks, action: :history))
+      @page_title = t("Gradebook History")
+      @body_classes << "full-width padless-content"
+      js_bundle :gradebook_history
+      js_env(
+        COURSE_IS_CONCLUDED: @context.is_a?(Course) && @context.completed?
+      )
 
-      #
-      # Temporary disabling of this page for large courses
-      # We need some reworking of the gradebook history to allow using it
-      # in large courses in a performant manner. Until that happens, we're
-      # disabling it over a certain threshold.
-      #
-      submissions_count = @context.submissions.not_placeholder.count
-      submissions_limit = Setting.get('gradebook_history_submission_count_threshold', '0').to_i
-      if submissions_limit == 0 || submissions_count <= submissions_limit
-        # TODO this whole thing could go a LOT faster if you just got ALL the versions of ALL the submissions in this course then did a ruby sort_by day then grader
-        @days = SubmissionList.days(@context)
-      end
-
-      respond_to do |format|
-        format.html
-      end
+      render html: "", layout: true
     end
   end
 
@@ -481,7 +454,7 @@ class GradebooksController < ApplicationController
 
         submission = submission.permit(:grade, :score, :excuse, :excused,
           :graded_anonymously, :provisional, :final,
-          :comment, :media_comment_id).to_unsafe_h
+          :comment, :media_comment_id, :group_comment).to_unsafe_h
 
         submission[:grader] = @current_user
         submission.delete(:provisional) unless @assignment.moderated_grading?
@@ -559,7 +532,8 @@ class GradebooksController < ApplicationController
 
   def submissions_json
     @submissions.map do |sub|
-      json = sub.as_json(Submission.json_serialization_full_parameters)
+      submission_history_methods = { include: { submission_history: { methods: %i[late missing] } } }
+      json = sub.as_json(Submission.json_serialization_full_parameters.merge(submission_history_methods))
       json['submission']['assignment_visible'] = sub.assignment_visible_to_user?(sub.user)
       json['submission']['provisional_grade_id'] = sub.provisional_grade_id if sub.provisional_grade_id
       json
@@ -601,10 +575,6 @@ class GradebooksController < ApplicationController
       return redirect_to polymorphic_url([@context, @assignment])
     end
 
-    if !canvadoc_annotations_enabled_in_firefox? &&
-        submisions_attachment_crocodocable_in_firefox?(@assignment.submissions)
-        flash[:notice] = t("Warning: Crocodoc has limitations when used in Firefox. Comments will not always be saved.")
-    end
     grading_role = if moderated_grading_enabled_and_no_grades_published
       if @context.grants_right?(@current_user, :moderate_grades)
         :moderator
@@ -615,23 +585,30 @@ class GradebooksController < ApplicationController
       :grader
     end
 
+    @can_comment_on_submission = !@context.completed? && !@context_enrollment.try(:completed?)
+
     respond_to do |format|
       format.html do
         @headers = false
         @outer_frame = true
+        @anonymous_moderated_marking_enabled = anonymous_moderated_marking_enabled?
         log_asset_access([ "speed_grader", @context ], "grades", "other")
         env = {
-          :CONTEXT_ACTION_SOURCE => :speed_grader,
-          :settings_url => speed_grader_settings_course_gradebook_path,
-          :force_anonymous_grading => force_anonymous_grading?(@assignment),
-          :grading_role => grading_role,
-          :grading_type => @assignment.grading_type,
-          :lti_retrieve_url => retrieve_course_external_tools_url(
+          CONTEXT_ACTION_SOURCE: :speed_grader,
+          settings_url: speed_grader_settings_course_gradebook_path,
+          force_anonymous_grading: force_anonymous_grading?(@assignment),
+          grading_role: grading_role,
+          grading_type: @assignment.grading_type,
+          lti_retrieve_url: retrieve_course_external_tools_url(
             @context.id, assignment_id: @assignment.id, display: 'borderless'
           ),
-          :course_id => @context.id,
-          :assignment_id => @assignment.id,
-          :assignment_title => @assignment.title
+          anonymous_moderated_marking_enabled: @anonymous_moderated_marking_enabled,
+          course_id: @context.id,
+          assignment_id: @assignment.id,
+          assignment_title: @assignment.title,
+          can_comment_on_submission: @can_comment_on_submission,
+          show_help_menu_item: show_help_link?,
+          help_url: help_link_url
         }
         if [:moderator, :provisional_grader].include?(grading_role)
           env[:provisional_status_url] = api_v1_course_assignment_provisional_status_path(@context.id, @assignment.id)
@@ -707,7 +684,7 @@ class GradebooksController < ApplicationController
   def grading_period_assignments
     return unless authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
 
-    grading_period_assignments = GradebookGradingPeriodAssignments.new(@context)
+    grading_period_assignments = GradebookGradingPeriodAssignments.new(@context, gradebook_settings)
     render json: { grading_period_assignments: grading_period_assignments.to_h }
   end
 
@@ -734,70 +711,77 @@ class GradebooksController < ApplicationController
 
   private
 
-  def new_gradebook_env(env)
-    development_mode_enabled = !!ENV['GRADEBOOK_DEVELOPMENT']
-    graded_late_or_missing_submissions_exist =
-      development_mode_enabled &&
-      (@context.submissions.graded.late.exists? || @context.submissions.graded.missing.exists?)
+  def anonymous_moderated_marking_enabled?
+    @context.root_account.feature_enabled?(:anonymous_moderated_marking)
+  end
 
-    options = {
-      colors: gradebook_settings.fetch(:colors, {}),
-      graded_late_or_missing_submissions_exist: graded_late_or_missing_submissions_exist,
-      gradezilla: true,
-      new_gradebook_development_enabled: development_mode_enabled,
-      late_policy: @context.late_policy.as_json(include_root: false)
+  def new_gradebook_env
+    graded_late_submissions_exist = @context.submissions.graded.late.exists?
+
+    {
+      GRADEBOOK_OPTIONS: {
+        colors: gradebook_settings.fetch(:colors, {}),
+        graded_late_submissions_exist: graded_late_submissions_exist,
+        grading_schemes: GradingStandard.for(@context).as_json(include_root: false),
+        gradezilla: true,
+        new_gradebook_development_enabled: new_gradebook_development_enabled?,
+        late_policy: @context.late_policy.as_json(include_root: false)
+      }
     }
-    env.deep_merge({ GRADEBOOK_OPTIONS: options })
   end
 
-  def set_gradebook_warnings(groups, assignments)
-    @assignments_in_bad_groups = Set.new
-
-    if @context.group_weighting_scheme == "percent"
-      assignments_by_group = assignments.group_by(&:assignment_group_id)
-      bad_groups = groups.select do |group|
-        group_assignments = assignments_by_group[group.id] || []
-        points_in_group = group_assignments.map(&:points_possible).compact.sum
-        points_in_group.zero?
-      end
-
-      bad_group_ids = bad_groups.map(&:id)
-      bad_assignment_ids = assignments_by_group.
-        slice(*bad_group_ids).
-        values.
-        flatten
-
-      @assignments_in_bad_groups.replace bad_assignment_ids
-
-      warning = t('invalid_assignment_groups_warning',
-                  {:one => "Score does not include %{groups} because " \
-                           "it has no points possible",
-                   :other => "Score does not include %{groups} because " \
-                           "they have no points possible"},
-                  :groups => bad_groups.map(&:name).to_sentence,
-                  :count  => bad_groups.size)
+  def gradebook_version
+    # params[:version] is a development-only convenience for engineers.
+    # This param should never be used outside of development.
+    if Rails.env.development? && params.include?(:version)
+      params[:version]
     else
-      if assignments.all? { |a| (a.points_possible || 0).zero? }
-        warning = t(:no_assignments_have_points_warning,
-                    "Can't compute score until an assignment " \
-                    "has points possible")
-      end
+      @current_user.preferred_gradebook_version
     end
-
-    js_env :total_grade_warning => warning if warning
   end
 
-  def new_history
-    # remove Grades crumb added by default in this controller
-    crumbs.delete_if { |crumb| crumb[0] == "Grades" }
-    add_crumb(t("Gradebook History"),
-              context_url(@context, controller: :gradebooks, action: :history))
-    @page_title = t("Gradebook History")
-    @body_classes << "full-width padless-content"
-    js_bundle :react_gradebook_history
-    js_env({})
+  def new_gradebook_enabled?
+    # params[:new_gradebook] is a development-only convenience for engineers.
+    # This param should never be used outside of development.
+    if Rails.env.development? && params.include?(:new_gradebook)
+      params[:new_gradebook] == "true"
+    else
+      @context.feature_enabled?(:new_gradebook)
+    end
+  end
 
-    render html: "", layout: true
+  def new_gradebook_development_enabled?
+    # params[:new_gradebook_development] is a development-only convenience for engineers.
+    # This param should never be used outside of development.
+    if Rails.env.development? && params.include?(:new_gradebook_development)
+      params[:new_gradebook_development] == "true"
+    else
+      !!ENV['GRADEBOOK_DEVELOPMENT']
+    end
+  end
+
+  def render_gradebook
+    if ["srgb", "individual"].include?(gradebook_version)
+      render_individual_gradebook
+    else
+      render_default_gradebook
+    end
+  end
+
+  def render_default_gradebook
+    if new_gradebook_enabled?
+      render "gradebooks/gradezilla/gradebook"
+    else
+      render :gradebook
+    end
+  end
+
+  def render_individual_gradebook
+    if new_gradebook_enabled?
+      render "gradebooks/gradezilla/individual"
+    else
+      render :screenreader
+    end
   end
 
   def percentage(weight)
@@ -894,26 +878,6 @@ class GradebooksController < ApplicationController
     grading_period_group.present? && !grading_period_group.display_totals_for_all_grading_periods?
   end
 
-  def submisions_attachment_crocodocable_in_firefox?(submissions)
-    !(Canvadocs.hijack_crocodoc_sessions? && @assignment.context.account.feature_enabled?(:new_annotations)) &&
-    request.user_agent.to_s =~ /Firefox/ &&
-    submissions.
-      joins("left outer join #{submissions.connection.quote_table_name('canvadocs_submissions')} cs on cs.submission_id = submissions.id").
-      joins("left outer join #{CrocodocDocument.quoted_table_name} on cs.crocodoc_document_id = crocodoc_documents.id").
-      joins("left outer join #{Canvadoc.quoted_table_name} on cs.canvadoc_id = canvadocs.id").
-      where("cs.crocodoc_document_id IS NOT null or cs.canvadoc_id IS NOT null").
-      exists?
-  end
-
-  def canvadoc_annotations_enabled_in_firefox?
-    # this really means crocodoc enabled in canvadocs while using firefox
-    request.user_agent.to_s =~ /Firefox/ &&
-    Canvadocs.enabled? &&
-    Canvadocs.annotations_supported? &&
-    !@assignment.context.account.feature_enabled?(:new_annotations) &&
-    @assignment.submission_types.include?('online_upload')
-  end
-
   def grade_summary_presenter
     options = presenter_options
     if options.key?(:grading_period_id)
@@ -969,5 +933,21 @@ class GradebooksController < ApplicationController
 
   def gradebook_settings
     @current_user.preferences.fetch(:gradebook_settings, {})
+  end
+
+  def courses_with_grades_json
+    courses = @presenter.courses_with_grades
+    courses << @context if courses.empty?
+
+    courses.map do |course|
+      grading_period_set_id = GradingPeriodGroup.for_course(course)&.id
+
+      {
+        id: course.id,
+        nickname: course.nickname_for(@current_user),
+        url: context_url(course, :context_grades_url),
+        grading_period_set_id: grading_period_set_id.try(:to_s)
+      }
+    end.as_json
   end
 end

@@ -46,12 +46,13 @@ module SIS
         raise ImportError, "No group_id given for a group user" if group_id.blank?
         raise ImportError, "No user_id given for a group user" if user_id.blank?
         raise ImportError, "Improper status \"#{status}\" for a group user" unless status =~ /\A(accepted|deleted)/i
+        return if @batch.skip_deletes? && status =~ /deleted/i
 
         pseudo = @root_account.pseudonyms.where(sis_user_id: user_id).take
         user = pseudo.try(:user)
 
         group = @groups_cache[group_id]
-        group ||= @root_account.all_groups.where(sis_source_id: group_id).take
+        group ||= @root_account.all_groups.where(sis_source_id: group_id).preload(:context).take
         @groups_cache[group.sis_source_id] = group if group
 
         raise ImportError, "User #{user_id} didn't exist for group user" unless user
@@ -68,6 +69,10 @@ module SIS
           group_membership.workflow_state = 'accepted'
         when /deleted/i
           group_membership.workflow_state = 'deleted'
+        end
+
+        if group.context.is_a?(Course) && !group.context.all_real_users.where(id: user.id).exists?
+          raise ImportError, "User #{user_id} doesn't have an enrollment in the course of group #{group_id}."
         end
 
         if group_membership.valid?

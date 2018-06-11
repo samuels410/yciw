@@ -36,7 +36,7 @@ class GradebookSettingsController < ApplicationController
   private
 
   def gradebook_settings_params
-    params.require(:gradebook_settings).permit(
+    gradebook_settings_params = params.require(:gradebook_settings).permit(
       {
         filter_columns_by: [
           :context_module_id,
@@ -48,6 +48,7 @@ class GradebookSettingsController < ApplicationController
         ],
         selected_view_options_filters: []
       },
+      :enter_grades_as,
       :show_concluded_enrollments,
       :show_inactive_enrollments,
       :show_unpublished_assignments,
@@ -58,6 +59,12 @@ class GradebookSettingsController < ApplicationController
       :sort_rows_by_direction,
       { colors: [ :late, :missing, :resubmitted, :dropped, :excused ] }
     )
+    gradebook_settings_params[:enter_grades_as] = params[:gradebook_settings][:enter_grades_as]
+    gradebook_settings_params.permit!
+  end
+
+  def valid_colors(color_params)
+    color_params.select { |_key, value| value =~ /^#([0-9A-F]{3}){1,2}$/i }
   end
 
   def nilify_strings(hash)
@@ -97,7 +104,7 @@ class GradebookSettingsController < ApplicationController
       gradebook_settings: {
        @context.id => nilify_strings(gradebook_settings_params.except(:colors).to_h),
        # when new_gradebook is the only gradebook this can change to .fetch('colors')
-       colors: gradebook_settings_params.fetch('colors', {}).to_unsafe_h
+       colors: valid_colors(gradebook_settings_params.fetch('colors', {})).to_unsafe_h
       }
     })
   end

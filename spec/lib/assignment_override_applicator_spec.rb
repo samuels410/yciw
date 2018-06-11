@@ -16,7 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-require File.expand_path(File.dirname(__FILE__) + '/../spec_helper.rb')
+require_relative '../sharding_spec_helper'
 
 describe AssignmentOverrideApplicator do
   def create_group_override
@@ -97,6 +97,23 @@ describe AssignmentOverrideApplicator do
       expect(@overridden_assignment.overridden_for_user.id).to eq @student.id
       expect(AssignmentOverrideApplicator).to receive(:overrides_for_assignment_and_user).never
       @reoverridden_assignment = AssignmentOverrideApplicator.assignment_overridden_for(@overridden_assignment, @student)
+    end
+
+    it "ignores soft deleted Assignment Override Students" do
+      now = Time.zone.now.change(usec: 0)
+      adhoc_override = assignment_override_model(:assignment => @assignment)
+      override_student = adhoc_override.assignment_override_students.create!(user: @student)
+      adhoc_override.override_due_at(7.days.from_now(now))
+      adhoc_override.save!
+      override_student.update!(workflow_state: 'deleted')
+
+      adhoc_override = assignment_override_model(:assignment => @assignment)
+      adhoc_override.assignment_override_students.create!(user: @student)
+      adhoc_override.override_due_at(2.days.from_now(now))
+      adhoc_override.save!
+
+      overriden_assignment = AssignmentOverrideApplicator.assignment_overridden_for(@assignment, @student)
+      expect(overriden_assignment.due_at).to eq(adhoc_override.due_at)
     end
 
     context "give teachers the more lenient of override.due_at or assignment.due_at" do
@@ -248,6 +265,26 @@ describe AssignmentOverrideApplicator do
       end
 
       it "should order section overrides by position" # see TODO in implementation
+
+      context "sharding" do
+        specs_require_sharding
+
+        it "should not break when running for a teacher on a different shard" do
+          @shard1.activate do
+            @teacher = User.create!
+          end
+          teacher_in_course(:user => @teacher, :course => @course, :active_all => true)
+
+          @adhoc_override = assignment_override_model(:assignment => @assignment)
+          @adhoc_override.assignment_override_students.create!(:user => @student)
+          allow(ActiveRecord::Base.connection).to receive(:use_qualified_names?).and_return(true)
+
+          @shard1.activate do
+            ovs = AssignmentOverrideApplicator.overrides_for_assignment_and_user(@assignment, @teacher)
+            expect(ovs).to eq [@adhoc_override]
+          end
+        end
+      end
     end
 
     context 'adhoc overrides' do
@@ -763,7 +800,7 @@ describe AssignmentOverrideApplicator do
 
     it "should return a readonly assignment object" do
       expect(@overridden).to be_readonly
-      expect{ @overridden.save! }.to raise_exception ActiveRecord::ReadOnlyRecord
+      expect{ @overridden.save!(validate: false) }.to raise_exception ActiveRecord::ReadOnlyRecord
     end
 
     it "should cast datetimes to the active time zone" do
@@ -863,14 +900,14 @@ describe AssignmentOverrideApplicator do
 
     it "should use raw UTC time for datetime fields" do
       Time.zone = 'Alaska'
-      @assignment = create_assignment(
-        :due_at => 5.days.from_now,
-        :unlock_at => 6.days.from_now,
-        :lock_at => 7.days.from_now)
+      @assignment = create_assignment(due_at: 5.days.from_now, unlock_at: 4.days.from_now, lock_at: 7.days.from_now)
       collapsed = AssignmentOverrideApplicator.collapsed_overrides(@assignment, [])
-      expect(collapsed[:due_at].class).to eq Time; expect(collapsed[:due_at]).to eq @assignment.due_at.utc
-      expect(collapsed[:unlock_at].class).to eq Time; expect(collapsed[:unlock_at]).to eq @assignment.unlock_at.utc
-      expect(collapsed[:lock_at].class).to eq Time; expect(collapsed[:lock_at]).to eq @assignment.lock_at.utc
+      expect(collapsed[:due_at].class).to eq Time
+      expect(collapsed[:due_at]).to eq @assignment.due_at.utc
+      expect(collapsed[:unlock_at].class).to eq Time
+      expect(collapsed[:unlock_at]).to eq @assignment.unlock_at.utc
+      expect(collapsed[:lock_at].class).to eq Time
+      expect(collapsed[:lock_at]).to eq @assignment.lock_at.utc
     end
 
     it "should not use raw UTC time for date fields" do

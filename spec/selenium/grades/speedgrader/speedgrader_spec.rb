@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015 - present Instructure, Inc.
+# Copyright (C) 2018 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -21,9 +21,10 @@ require_relative "../../helpers/groups_common"
 require_relative "../../helpers/assignments_common"
 require_relative "../../helpers/quizzes_common"
 require_relative "../../helpers/speed_grader_common"
-require_relative "../page_objects/speedgrader_page"
+require_relative "../pages/speedgrader_page"
 require_relative "../../assignments/page_objects/assignment_page"
 require_relative "../../assignments/page_objects/submission_detail_page"
+require 'benchmark'
 
 describe 'Speedgrader' do
   include_context "in-process server selenium tests"
@@ -37,6 +38,7 @@ describe 'Speedgrader' do
     [
       {
         description: 'Awesomeness',
+        long_description: 'For real the most awesome thing',
         points: 10,
         id: 'crit1',
         ratings: [
@@ -58,15 +60,13 @@ describe 'Speedgrader' do
     ]
   end
 
-  def let_speedgrader_load
+  def wait_for_grade_input
     wait = Selenium::WebDriver::Wait.new(timeout: 5)
     wait.until { Speedgrader.grade_input.attribute('value') != "" }
   end
 
   context 'grading' do
-
-    context 'should display grades correctly' do
-
+    describe 'displays grades correctly' do
       before(:each) do
         init_course_with_students 2
         user_session(@teacher)
@@ -77,8 +77,8 @@ describe 'Speedgrader' do
           title: 'Complete?',
           grading_type: 'pass_fail'
         )
-        @assignment.grade_student @students[0], grade: 'complete', grader: @teacher
-        @assignment.grade_student @students[1], grade: 'incomplete', grader: @teacher
+        @assignment.grade_student @students.first, grade: 'complete', grader: @teacher
+        @assignment.grade_student @students.second, grade: 'incomplete', grader: @teacher
 
         grader_speedgrader_assignment('complete', 'incomplete', false)
       end
@@ -109,6 +109,16 @@ describe 'Speedgrader' do
       before(:once) do
         init_course_with_students
         @quiz = seed_quiz_with_submission
+      end
+
+      it "page should load in acceptable time ", priority:"1" do
+        page_load_time = Benchmark.measure do
+          Speedgrader.visit(@course.id,@quiz.assignment_id)
+          wait_for_grade_input
+        end
+        Rails.logger.debug "SpeedGrader for course #{@course.id} and assignment"\
+                             " #{@quiz.assignment_id} loaded in #{page_load_time.real} seconds"
+        expect(page_load_time.real).to be > 0.0
       end
 
       before(:each) do
@@ -148,7 +158,7 @@ describe 'Speedgrader' do
 
       it 'should allow pass grade on assignments worth 0 points', priority: "1", test_id: 400127 do
         get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}#"
-        let_speedgrader_load
+        wait_for_grade_input
         expect(Speedgrader.grade_input['value']).to eq('complete')
         expect(f('#grade_container label')).to include_text('(0 / 0)')
       end
@@ -156,13 +166,13 @@ describe 'Speedgrader' do
       it 'should display pass/fail correctly when total points possible is changed', priority: "1", test_id: 419289 do
         @assignment.update_attributes(points_possible: 1)
         get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}#"
-        let_speedgrader_load
+        wait_for_grade_input
         expect(Speedgrader.grade_input['value']).to eq('complete')
         expect(f('#grade_container label')).to include_text('(1 / 1)')
       end
     end
 
-    context 'Using a rubric saves grades' do
+    context 'Using a rubric' do
       before :once do
         init_course_with_students
         @teacher = @user
@@ -181,51 +191,102 @@ describe 'Speedgrader' do
         rubric.reload
       end
 
-      before :each do
+      it "properly shows the view longer description link" do
         user_session(@teacher)
         get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}#"
         f('button.toggle_full_rubric').click
-        [f('#rating_rat1'), f('#rating_rat5')].each(&:click)
-        f('button.save_rubric_button').click
-        wait_for_ajax_requests
+        expect(fj('#criterion_crit1 .long_description_link:visible')).to be_present
       end
 
-      it 'in speedgrader', priority: "1", test_id: 164016 do
-        expect(Speedgrader.grade_input).to have_value '15'
-        expect(f('#grading span.rubric_total')).to include_text '15'
+      describe 'saves grades in' do
+        before :each do
+          user_session(@teacher)
+          get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}#"
+          f('button.toggle_full_rubric').click
+          [f('#rating_rat1'), f('#rating_rat5')].each(&:click)
+          f('button.save_rubric_button').click
+          wait_for_ajax_requests
+        end
+
+        it 'speedgrader', priority: "1", test_id: 164016 do
+          expect(Speedgrader.grade_input).to have_value '15'
+          expect(f('#grading span.rubric_total')).to include_text '15'
+        end
+
+        it 'assignment page ', priority: "1", test_id: 217611 do
+          get "/courses/#{@course.id}/grades/#{@students[0].id}"
+          f("#submission_#{@assignment.id}  i.icon-rubric").click
+
+          expect(f('#criterion_crit1 span.criterion_rating_points')).to include_text '10'
+          expect(f('#criterion_crit2 span.criterion_rating_points')).to include_text '5'
+        end
+
+        it 'submissions page', priority: "1", test_id: 217612 do
+          get "/courses/#{@course.id}/assignments/#{@assignment.id}/submissions/#{@students[0].id}"
+          f('a.assess_submission_link').click
+          wait_for_animations
+
+          expect(f('#criterion_crit1 input.criterion_points')).to have_value '10'
+          expect(f('#criterion_crit2 input.criterion_points')).to have_value '5'
+
+          replace_content f('#criterion_crit1 input.criterion_points'), '5'
+          scroll_into_view('button.save_rubric_button')
+          f('button.save_rubric_button').click
+
+          el = f("#student_grading_#{@assignment.id}")
+          expect(el).to have_value '10'
+        end
+      end
+    end
+
+    context 'rubric with outcomes' do
+      before :once do
+        init_course_with_students
+        @teacher = @user
+        @assignment = @course.assignments.create!(
+          title: 'Outcome Rubric',
+          points_possible: 8
+        )
+
+        rubric = outcome_with_rubric
+        rubric.save!
+        rubric.associate_with(@assignment, @course, purpose: 'grading')
+        rubric.reload
       end
 
-      it 'in assignment page ', priority: "1", test_id: 217611 do
-        get "/courses/#{@course.id}/grades/#{@students[0].id}"
-        f("#submission_#{@assignment.id}  i.icon-rubric").click
+      describe 'flashes a warning when grade changes in' do
+        before :each do
+          user_session(@teacher)
+        end
 
-        expect(f('#criterion_crit1 span.criterion_rating_points')).to include_text '10'
-        expect(f('#criterion_crit2 span.criterion_rating_points')).to include_text '5'
-      end
+        it 'speedgrader' do
+          get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}#"
+          f('button.toggle_full_rubric').click
+          replace_content f('.learning_outcome_criterion input.criterion_points'), '5'
+          f('button.save_rubric_button').click
+          wait_for_ajax_requests
+          expect_flash_message :warning
+        end
 
-      it 'in submissions page', priority: "1", test_id: 217612 do
-        get "/courses/#{@course.id}/assignments/#{@assignment.id}/submissions/#{@students[0].id}"
-        f('a.assess_submission_link').click
-        wait_for_animations
-
-        expect(f('#criterion_crit1 input.criterion_points')).to have_value '10'
-        expect(f('#criterion_crit2 input.criterion_points')).to have_value '5'
-
-        replace_content f('#criterion_crit1 input.criterion_points'), '5'
-        scroll_into_view('button.save_rubric_button')
-        f('button.save_rubric_button').click
-
-        el = f("#student_grading_#{@assignment.id}")
-        expect(el).to have_value '10'
+        it 'submissions page' do
+          get "/courses/#{@course.id}/assignments/#{@assignment.id}/submissions/#{@students[0].id}"
+          f('a.assess_submission_link').click
+          wait_for_animations
+          replace_content f('.learning_outcome_criterion input.criterion_points'), '5'
+          scroll_into_view('button.save_rubric_button')
+          f('button.save_rubric_button').click
+          wait_for_ajax_requests
+          expect_flash_message :warning
+        end
       end
     end
 
     context 'Using a rubric to grade' do
-      it 'should display correct grades for student', priority: "1", test_id: 164205 do
+      it 'should display correct grades for student with proper selected ratings', priority: "1", test_id: 164205 do
         course_with_student_logged_in(active_all: true)
-        rubric_model
+        rubric = outcome_with_rubric
         @assignment = @course.assignments.create!(name: 'assignment with rubric', points_possible: 10)
-        @association = @rubric.associate_with(
+        @association = rubric.associate_with(
           @assignment,
           @course,
           purpose: 'grading',
@@ -236,20 +297,24 @@ describe 'Speedgrader' do
           submission_type: "online_text_entry",
           has_rubric_assessment: true
         )
+        criterion1 = rubric.criteria.first
+        criterion2 = rubric.criteria.last
         @assessment = @association.assess(
           user: @student,
           assessor: @teacher,
           artifact: @submission,
           assessment: {
             assessment_type: 'grading',
-            criterion_crit1: { points: 5 }
+            "criterion_#{criterion1[:id]}": { points: 3 },
+            "criterion_#{criterion2[:id]}": { points: 0 }
           }
         )
         get "/courses/#{@course.id}/assignments/#{@assignment.id}/submissions/#{@student.id}"
         f('a.assess_submission_link').click
-
-        expect(f('#rating_rat2')).to have_class('selected')
-        expect(f('#rating_rat2 .points')).to include_text('5')
+        expect(ff("#criterion_#{criterion1[:id]} .selected").length).to eq 1
+        expect(f("#criterion_#{criterion1[:id]} .selected")).to include_text('3')
+        expect(ff("#criterion_#{criterion2[:id]} .selected").length).to eq 1
+        expect(f("#criterion_#{criterion2[:id]} .selected")).to include_text('0')
       end
     end
   end
@@ -349,6 +414,9 @@ describe 'Speedgrader' do
       list = ff('#questions .user_points input')
       replace_content list[1], "1", :tab_out => true
       replace_content f('#fudge_points_entry'), "7", :tab_out => true
+
+      # after_fudge_points_total is updated, even before update button is clicked
+      expect(f('#after_fudge_points_total')).to include_text '8'
 
       expect_new_page_load {f('button.update-scores').click}
       expect(f('#after_fudge_points_total')).to include_text '8'
@@ -614,7 +682,7 @@ describe 'Speedgrader' do
   def grader_speedgrader_assignment(grade1, grade2, clear_grade=true)
     get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}#"
 
-    let_speedgrader_load
+    wait_for_grade_input
     expect(Speedgrader.grade_input).to have_value grade1
     Speedgrader.click_next_student_btn
     expect(Speedgrader.grade_input).to have_value grade2

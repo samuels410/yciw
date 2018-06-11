@@ -21,7 +21,7 @@ import I18n from 'i18n!external_tools'
 import React from 'react'
 import PropTypes from 'prop-types'
 import Modal from 'react-modal'
-import store from 'jsx/external_apps/lib/ExternalAppsStore'
+import store from '../../external_apps/lib/ExternalAppsStore'
 
   const modalOverrides = {
     overlay : {
@@ -124,7 +124,7 @@ export default React.createClass({
               </div>
             </Modal>
           </li>
-        )
+        );
       }
       return false;
     }

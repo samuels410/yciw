@@ -216,8 +216,8 @@ class AppointmentGroupsController < ApplicationController
 
   # @API List appointment groups
   #
-  # Retrieve the list of appointment groups that can be reserved or managed by
-  # the current user.
+  # Retrieve the paginated list of appointment groups that can be reserved or
+  # managed by the current user.
   #
   # @argument scope [String, "reservable"|"manageable"]
   #   Defaults to "reservable"
@@ -345,6 +345,15 @@ class AppointmentGroupsController < ApplicationController
   #        -H "Authorization: Bearer <token>"
   def create
     contexts = get_contexts
+    # Don't let people create new appointment groups for concluded courses.  Ideally
+    # we would have a check on update as well but there may be existing ones and
+    # it would be very delicate to write one in a way that doesn't accidentally
+    # break the ability to edit those.
+    if contexts.any? { |c| c.concluded? }
+      return render json: { error: t('cannot create an appointment group for a concluded course') },
+        status: :bad_request
+    end
+
     raise ActiveRecord::RecordNotFound unless contexts.present?
 
     publish = value_to_boolean(params[:appointment_group].delete(:publish))
@@ -490,7 +499,7 @@ class AppointmentGroupsController < ApplicationController
   def destroy
     if authorized_action(@group, @current_user, :delete)
       @group.cancel_reason = params[:cancel_reason]
-      if @group.destroy
+      if @group.destroy(@current_user)
         render :json => appointment_group_json(@group, @current_user, session)
       else
         render :json => @group.errors, :status => :bad_request
@@ -500,9 +509,9 @@ class AppointmentGroupsController < ApplicationController
 
   # @API List user participants
   #
-  # List users that are (or may be) participating in this appointment group.
-  # Refer to the Users API for the response fields. Returns no results for
-  # appointment groups with the "Group" participant_type.
+  # A paginated list of users that are (or may be) participating in this
+  # appointment group.  Refer to the Users API for the response fields. Returns
+  # no results for appointment groups with the "Group" participant_type.
   #
   # @argument registration_status ["all"|"registered"|"registered"]
   #   Limits results to the a given participation status, defaults to "all"
@@ -512,9 +521,9 @@ class AppointmentGroupsController < ApplicationController
 
   # @API List student group participants
   #
-  # List student groups that are (or may be) participating in this appointment
-  # group. Refer to the Groups API for the response fields. Returns no results
-  # for appointment groups with the "User" participant_type.
+  # A paginated list of student groups that are (or may be) participating in
+  # this appointment group. Refer to the Groups API for the response fields.
+  # Returns no results for appointment groups with the "User" participant_type.
   #
   # @argument registration_status ["all"|"registered"|"registered"]
   #   Limits results to the a given participation status, defaults to "all"
@@ -540,6 +549,7 @@ class AppointmentGroupsController < ApplicationController
     # since the UI only cares about the date to jump to, it might not make a difference in many cases
     events = ag_scope.preload(:appointments => :child_events).to_a.map do |ag|
       ag.appointments.detect do |appointment|
+        appointment.start_at > Time.zone.now &&
         appointment.child_events_for(@current_user).empty? &&
           (appointment.participants_per_appointment.nil? ||
            appointment.child_events.count < appointment.participants_per_appointment)

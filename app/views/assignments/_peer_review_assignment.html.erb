@@ -17,7 +17,7 @@
 %>
 
 <li class="peer_review <%= request.try_rescue(:workflow_state) || 'assigned' %>" id="review_request_<%= request ? request.id : 'blank' %>" style="<%= hidden unless request %>">
-  <span style="float: left;">
+  <span class="pull-left">
     <% if request && request.completed? %>
       <i class="icon-check" aria-hidden="true"></i>
       <span class="screenreader-only"><%= I18n.t("Finished") %></span>
@@ -31,7 +31,7 @@
     </a>
   </span>
   <span class="user_id" style="display: none;"><%= request.try_rescue(:asset).try_rescue(:user_id) || nbsp %></span>
-  <div style="float: right;" class="review_links">
+  <div style="float: <%= direction('right') %>;" class="review_links">
     <% user = request.try_rescue(:assessor).try_rescue(:name)
        user ||= t 'titles.user_default', "User"
        reminder = t 'titles.remind_reviewer', "Remind %{user} about Assessment", :user => user
@@ -42,9 +42,14 @@
       style="<%= hidden if request && request.completed? %>"
       href="<%= context_url(@context, :context_assignment_remind_peer_review_url, @assignment.id, request ? request.id : '{{ id }}') %>">
       <span class="screenreader-only"><%= reminder %></span>
-      <i class="icon-alerts" aria-hidden="true"></i>
+      <i class="icon-alerts" aria-hidden="true" title="<%= reminder %>"></i>
     </a>
-    <a class="delete_review_link no-hover" href="<%= context_url(@context, :context_assignment_delete_peer_review_url, @assignment.id, request ? request.id : '{{ id }}') %>"><i class="icon-trash" title="<%= t('Delete') %>"></i></a>
+    <a
+      class="delete_review_link no-hover"
+      href="<%= context_url(@context, :context_assignment_delete_peer_review_url, @assignment.id, request ? request.id : '{{ id }}') %>">
+      <span class="screenreader-only"><%= t('Delete') %></span>
+      <i class="icon-trash" aria-hidden="true" title="<%= t('Delete') %>"></i>
+    </a>
   </div>
   <div class="clear"></div>
 </li>

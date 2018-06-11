@@ -19,13 +19,14 @@ require [
   'jquery'
   'underscore'
   'Backbone'
-  'compiled/userSettings'
-  'compiled/collections/OutcomeSummaryCollection'
-  'compiled/views/grade_summary/OutcomeSummaryView'
+  '../userSettings'
+  '../collections/OutcomeSummaryCollection'
+  '../views/grade_summary/OutcomeSummaryView'
   'jsx/grading/GradeSummary'
   'jqueryui/tabs'
   'jquery.disableWhileLoading'
-], ($, _, Backbone, userSettings, OutcomeSummaryCollection, OutcomeSummaryView, GradeSummary) ->
+], ($, _, Backbone, userSettings, OutcomeSummaryCollection,
+  OutcomeSummaryView, GradeSummary) ->
   # Ensure the gradebook summary code has had a chance to setup all its handlers
   GradeSummary.setup()
 
@@ -60,6 +61,8 @@ require [
       tab = ui.newPanel.attr('id')
       router.navigate("#tab-#{tab}", {trigger: true})
       userSettings.contextSet('grade_summary_tab', tab)
+
+  GradeSummary.renderSelectMenuGroup()
 
   router = new GradebookSummaryRouter
   Backbone.history.start()

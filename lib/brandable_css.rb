@@ -23,6 +23,7 @@ module BrandableCSS
   APP_ROOT = defined?(Rails) && Rails.root || Pathname.pwd
   CONFIG = YAML.load_file(APP_ROOT.join('config/brandable_css.yml')).freeze
   BRANDABLE_VARIABLES = JSON.parse(File.read(APP_ROOT.join(CONFIG['paths']['brandable_variables_json']))).freeze
+  MIGRATION_NAME = 'RegenerateBrandFilesBasedOnNewDefaults'.freeze
 
   use_compressed = (defined?(Rails) && Rails.env.production?) || (ENV['RAILS_ENV'] == 'production')
   SASS_STYLE = ENV['SASS_STYLE'] || ((use_compressed ? 'compressed' : 'nested')).freeze
@@ -106,8 +107,51 @@ module BrandableCSS
       end.freeze
     end
 
+    def things_that_go_into_defaults_md5
+      variables_map.each_with_object({}) do |(variable_name, config), memo|
+        default = config['default']
+        if config['type'] == 'image'
+          # to make consistent md5s whether the cdn is enabled or not, don't include hostname in defaults
+          default = ActionController::Base.helpers.image_path(default, host: '')
+        end
+        memo[variable_name] = default
+      end.freeze
+    end
+
+    def migration_version
+      # ActiveRecord usually uses integer timestamps to generate migration versions but any integer
+      # will work, so we just use the result of stripping out the alphabetic characters from the md5
+      default_variables_md5_without_migration_check.gsub(/[a-z]/, '').to_i.freeze
+    end
+
+    def check_if_we_need_to_create_a_db_migration
+      path = ActiveRecord::Migrator.migrations_paths.first
+      migrations = CANVAS_RAILS5_1 ?
+        ActiveRecord::Migrator.migrations(path) :
+        ActiveRecord::MigrationContext.new(path).migrations
+      ['predeploy', 'postdeploy'].each do |pre_or_post|
+        migration = migrations.find { |m| m.name == MIGRATION_NAME + pre_or_post.camelize }
+        # they can't have the same id, so we just add 1 to the postdeploy one
+        expected_version = (pre_or_post == 'predeploy') ? migration_version : (migration_version + 1)
+        raise DefaultMD5NotUpToDateError unless migration && migration.version == expected_version
+      end
+    end
+
+    def skip_migration_check?
+      # our canvas_rspec build doesn't even run `yarn install` or `gulp rev` so since
+      # they are not expecting all the frontend assets to work, this check isn't useful
+      Rails.env.test? && !Rails.root.join('public', 'dist', 'rev-manifest.json').exist?
+    end
+
     def default_variables_md5
-      @default_variables_md5 ||= Digest::MD5.hexdigest(variables_map_with_image_urls.to_json)
+      @default_variables_md5 ||= begin
+        check_if_we_need_to_create_a_db_migration unless skip_migration_check?
+        default_variables_md5_without_migration_check
+      end
+    end
+
+    def default_variables_md5_without_migration_check
+      Digest::MD5.hexdigest(things_that_go_into_defaults_md5.to_json).freeze
     end
 
     def handle_urls(value, config, css_urls)
@@ -164,18 +208,18 @@ module BrandableCSS
       end
     end
 
+    def all_brand_variable_values_as_json(active_brand_config=nil)
+      all_brand_variable_values(active_brand_config).to_json
+    end
+
     def all_brand_variable_values_as_js(active_brand_config=nil)
-      "CANVAS_ACTIVE_BRAND_VARIABLES = #{all_brand_variable_values(active_brand_config).to_json};"
+      "CANVAS_ACTIVE_BRAND_VARIABLES = #{all_brand_variable_values_as_json(active_brand_config)};"
     end
 
     def all_brand_variable_values_as_css(active_brand_config=nil)
       ":root {
         #{all_brand_variable_values(active_brand_config, true).map{ |k, v| "--#{k}: #{v};"}.join("\n")}
       }"
-    end
-
-    def branded_scss_folder
-      Pathname.new(CONFIG['paths']['branded_scss_folder'])
     end
 
     def public_brandable_css_folder
@@ -186,77 +230,40 @@ module BrandableCSS
       public_brandable_css_folder.join('default')
     end
 
-    def default_brand_json_file
-      default_brand_folder.join("variables-#{default_variables_md5}.json")
+    def default_brand_file(type, high_contrast=false)
+      default_brand_folder.join("variables#{high_contrast ? '-high_contrast' : ''}-#{default_variables_md5}.#{type}")
     end
 
-    def default_brand_js_file
-      default_brand_folder.join("variables-#{default_variables_md5}.js")
+    def high_contrast_overrides
+      Class.new do
+        def get_value(variable_name)
+          {"ic-brand-primary" => "#0770A3", "ic-link-color" => "#0073A7"}[variable_name]
+        end
+      end.new
     end
 
-    def default_brand_css_file
-      default_brand_folder.join("variables-#{default_variables_md5}.css")
+    def default(type, high_contrast=false)
+      bc = high_contrast ? high_contrast_overrides : nil
+      send("all_brand_variable_values_as_#{type}", bc)
     end
 
-    def default_json
-      all_brand_variable_values.to_json
-    end
-
-    def default_js
-      all_brand_variable_values_as_js
-    end
-
-    def default_css
-      all_brand_variable_values_as_css
-    end
-
-    def save_default_json!
+    def save_default!(type, high_contrast=false)
       default_brand_folder.mkpath
-      default_brand_json_file.write(default_json)
-      move_default_json_to_s3_if_enabled!
-    end
-
-    def save_default_js!
-      default_brand_folder.mkpath
-      default_brand_js_file.write(default_js)
-      move_default_js_to_s3_if_enabled!
-    end
-
-    def save_default_css!
-      default_brand_folder.mkpath
-      default_brand_css_file.write(default_css)
-      move_default_css_to_s3_if_enabled!
+      default_brand_file(type, high_contrast).write(default(type, high_contrast))
+      move_default_to_s3_if_enabled!(type, high_contrast)
     end
 
     def save_default_files!
-      save_default_json!
-      save_default_js!
-      save_default_css!
-    end
-
-    def move_default_json_to_s3_if_enabled!
-      return unless defined?(Canvas) && Canvas::Cdn.enabled?
-      s3_uploader.upload_file(public_default_json_path)
-      begin
-        File.delete(default_brand_json_file)
-      rescue Errno::ENOENT # continue if something else deleted it in another process
+      [true, false].each do |high_contrast|
+        ['js', 'css', 'json'].each { |type| save_default!(type, high_contrast) }
       end
     end
 
-    def move_default_js_to_s3_if_enabled!
+    def move_default_to_s3_if_enabled!(type, high_contrast=false)
       return unless defined?(Canvas) && Canvas::Cdn.enabled?
-      s3_uploader.upload_file(public_default_js_path)
+      s3_uploader.upload_file(public_default_path(type, high_contrast))
       begin
-        File.delete(default_brand_js_file)
-      rescue Errno::ENOENT # continue if something else deleted it in another process
-      end
-    end
-
-    def move_default_css_to_s3_if_enabled!
-      return unless defined?(Canvas) && Canvas::Cdn.enabled?
-      s3_uploader.upload_file(public_default_css_path)
-      begin
-        File.delete(default_brand_css_file)
+        File.delete(default_brand_file(type, high_contrast))
       rescue Errno::ENOENT # continue if something else deleted it in another process
       end
     end
@@ -265,16 +272,8 @@ module BrandableCSS
       @s3_uploaderer ||= Canvas::Cdn::S3Uploader.new
     end
 
-    def public_default_json_path
-      "dist/brandable_css/default/variables-#{default_variables_md5}.json"
-    end
-
-    def public_default_js_path
-      "dist/brandable_css/default/variables-#{default_variables_md5}.js"
-    end
-
-    def public_default_css_path
-      "dist/brandable_css/default/variables-#{default_variables_md5}.css"
+    def public_default_path(type, high_contrast=false)
+      "dist/brandable_css/default/variables#{high_contrast ? '-high_contrast' : ''}-#{default_variables_md5}.#{type}"
     end
 
     def variants
@@ -295,13 +294,13 @@ module BrandableCSS
           memo[k] = v.symbolize_keys.slice(:combinedChecksum, :includesNoVariables)
         end.freeze
       elsif defined?(Rails) && Rails.env.production?
-        raise "#{file.expand_path} does not exist. You need to run #{cli} before you can serve css."
+        raise "#{file.expand_path} does not exist. You need to run brandable_css before you can serve css."
       else
         # for dev/test there might be cases where you don't want it to raise an exception
         # if you haven't ran `brandable_css` and the manifest file doesn't exist yet.
         # eg: you want to test a controller action and you don't care that it links
         # to a css file that hasn't been created yet.
-        default_value = {combinedChecksum: "Error: unknown css checksum. you need to run #{cli}"}.freeze
+        default_value = {:combinedChecksum => "Error: unknown css checksum. you need to run brandable_css"}.freeze
         @combined_checksums = Hash.new(default_value).freeze
       end
     end
@@ -319,53 +318,26 @@ module BrandableCSS
         object[variant] = cache_for(bundle_path, variant)
       end
     end
-
-    def cli
-      './node_modules/.bin/brandable_css'
-    end
-
-    def compile_all!
-      run_cli!
-    end
-
-    def compile_brand!(brand_id, opts=nil)
-      run_cli!('--brand-id', brand_id, opts)
-    end
-
-    private
-
-    def run_cli!(*args)
-      opts = args.extract_options!
-      # this makes sure the symlinks to app/stylesheets/plugins/analytics, etc exist
-      # so their scss files can be picked up and compiled with everything else
-      require 'config/initializers/plugin_symlinks'
-
-      command = [cli].push(*args).shelljoin
-      msg = "running BrandableCSS CLI: #{command}"
-      Rails.logger.try(:debug, msg) if defined?(Rails)
-
-      percent_complete = 0
-      Open3.popen2e(command) do |_stdin, stdout_and_stderr, wait_thr|
-        error_output = []
-        stdout_and_stderr.each do |line|
-          Rails.logger.try(:debug, line.chomp!) if defined?(Rails)
-          error_output.push(line)
-          # This is a good-enough-for-now approximation to show the progress
-          # bar in the UI.  Since we don't know exactly how many files there are,
-          # it will progress towards 100% but never quite hit it until it is complete.
-          # Each tick it will cut 4% of the remaining percentage. Meaning it will look like
-          # it goes fast at first but then slows down, but will always keep moving.
-          if opts && opts[:on_progress] && line.starts_with?('compiled ')
-            percent_complete += (100.0 - percent_complete) * 0.04
-            opts[:on_progress].call(percent_complete)
-          end
-        end
-        unless wait_thr.value.success?
-          STDERR.puts error_output.join("\n")
-          raise("Error #{msg}")
-        end
-      end
-    end
   end
 
+  class DefaultMD5NotUpToDateError < RuntimeError
+    def initialize
+      super <<-END
+
+You have made changes to either app/stylesheets/brandable_variables.json or one of the images it
+references so you need to rename the db migrations that makes sure when this change is deployed it
+makes a new .css file for the css variables for each brand based on these new defaults.
+To do that, run this command and then restart your rails process. (for local dev, if you want the
+changes to show up in the ui, make sure you also run `rake db:migrate`).
+
+mv db/migrate/*_#{MIGRATION_NAME.underscore}_predeploy.rb \\
+   db/migrate/#{BrandableCSS.migration_version}_#{MIGRATION_NAME.underscore}_predeploy.rb \\
+&& \\
+mv db/migrate/*_#{MIGRATION_NAME.underscore}_postdeploy.rb \\
+   db/migrate/#{BrandableCSS.migration_version + 1}_#{MIGRATION_NAME.underscore}_postdeploy.rb
+
+FYI, current variables are: #{BrandableCSS.things_that_go_into_defaults_md5}
+END
+    end
+  end
 end

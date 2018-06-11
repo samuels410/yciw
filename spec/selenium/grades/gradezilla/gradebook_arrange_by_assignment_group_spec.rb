@@ -17,8 +17,8 @@
 
 require_relative '../../helpers/gradezilla_common'
 require_relative '../../helpers/assignment_overrides'
-require_relative '../page_objects/gradezilla_page'
-require_relative '../page_objects/gradezilla_cells_page'
+require_relative '../pages/gradezilla_page'
+require_relative '../pages/gradezilla_cells_page'
 
 describe "Gradezilla view menu" do
   include_context "in-process server selenium tests"
@@ -36,7 +36,7 @@ describe "Gradezilla view menu" do
     it "defaults arrange by to assignment group in the grid", priority: "1", test_id: 220028 do
       expect(Gradezilla::Cells.get_grade(@student_1, @first_assignment)).to eq @assignment_1_points
       expect(Gradezilla::Cells.get_grade(@student_1, @second_assignment)).to eq @assignment_2_points
-      expect(Gradezilla::Cells.get_grade(@student_1, @third_assignment)).to eq "-"
+      expect(Gradezilla::Cells.get_grade(@student_1, @third_assignment)).to eq "–"
     end
 
     it "shows default arrange by in the menu" do
@@ -51,7 +51,7 @@ describe "Gradezilla view menu" do
 
       expect(Gradezilla::Cells.get_grade(@student_1, @first_assignment)).to eq @assignment_1_points
       expect(Gradezilla::Cells.get_grade(@student_1, @second_assignment)).to eq @assignment_2_points
-      expect(Gradezilla::Cells.get_grade(@student_1, @third_assignment)).to eq "-"
+      expect(Gradezilla::Cells.get_grade(@student_1, @third_assignment)).to eq "–"
     end
   end
 
@@ -64,18 +64,18 @@ describe "Gradezilla view menu" do
       Gradezilla.click_assignment_group_header_options(@group.name,'Grade - Low to High')
       gradebook_student_names = Gradezilla.fetch_student_names
 
-      expect(gradebook_student_names[0]).to eq(@course.students[1].name)
-      expect(gradebook_student_names[1]).to eq(@course.students[2].name)
-      expect(gradebook_student_names[2]).to eq(@course.students[0].name)
+      expect(gradebook_student_names[0]).to eq(@student_name_2)
+      expect(gradebook_student_names[1]).to eq(@student_name_3)
+      expect(gradebook_student_names[2]).to eq(@student_name_1)
     end
 
     it "sorts assignments by grade - High to Low", priority: "1", test_id: 3253346 do
       Gradezilla.click_assignment_group_header_options(@group.name,'Grade - High to Low')
       gradebook_student_names = Gradezilla.fetch_student_names
 
-      expect(gradebook_student_names[0]).to eq(@course.students[0].name)
-      expect(gradebook_student_names[1]).to eq(@course.students[2].name)
-      expect(gradebook_student_names[2]).to eq(@course.students[1].name)
+      expect(gradebook_student_names[0]).to eq(@student_name_1)
+      expect(gradebook_student_names[1]).to eq(@student_name_3)
+      expect(gradebook_student_names[2]).to eq(@student_name_2)
     end
   end
 end

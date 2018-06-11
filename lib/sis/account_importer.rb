@@ -53,6 +53,7 @@ module SIS
         @logger.debug("Processing Account #{[account_id, parent_account_id, status, name].inspect}")
 
         raise ImportError, "No account_id given for an account" if account_id.blank?
+        return if @batch.skip_deletes? && status =~ /deleted/i
 
         parent = nil
         if !parent_account_id.blank?
@@ -72,7 +73,9 @@ module SIS
         account ||= @root_account.sub_accounts.new
 
         account.root_account = @root_account
-        account.parent_account = parent ? parent : @root_account
+        if account.new_record? || !account.stuck_sis_fields.include?(:parent_account_id) || Account.sis_stickiness_options[:add_sis_stickiness]
+          account.parent_account = parent ? parent : @root_account
+        end
 
         # only update the name on new records, and ones that haven't been changed since the last sis import
         account.name = name if name.present? && (account.new_record? || (!account.stuck_sis_fields.include?(:name)))
@@ -84,6 +87,8 @@ module SIS
           if status =~ /active/i
             account.workflow_state = 'active'
           elsif status =~ /deleted/i
+            raise ImportError, "Cannot delete the sub_account with ID: #{account_id} because it has active sub accounts." if account.sub_accounts.active.exists?
+            raise ImportError, "Cannot delete the sub_account with ID: #{account_id} because it has active courses." if account.courses.active.exists?
             account.workflow_state = 'deleted'
           end
         end

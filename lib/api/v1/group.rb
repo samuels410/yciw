@@ -27,29 +27,42 @@ module Api::V1::Group
   }
 
   API_GROUP_MEMBERSHIP_JSON_OPTS = {
-    :only => %w(id group_id user_id workflow_state moderator)
-  }
+    :only => %w(id group_id user_id workflow_state moderator).freeze
+  }.freeze
 
-  API_PERMISSIONS_TO_INCLUDE = [:create_discussion_topic, :join, :create_announcement] # permission keys need to be symbols
+  # permission keys need to be symbols
+  API_PERMISSIONS_TO_INCLUDE = [:create_discussion_topic, :join, :create_announcement].freeze
 
   def group_json(group, user, session, options = {})
+    options.reverse_merge!(include_inactive_users: false)
     includes = options[:include] || []
     permissions_to_include = API_PERMISSIONS_TO_INCLUDE if includes.include?('permissions')
 
     hash = api_json(group, user, session, API_GROUP_JSON_OPTS, permissions_to_include)
     hash.merge!(context_data(group))
     image = group.avatar_attachment
-    hash['avatar_url'] = image && thumbnail_image_url(image, image.uuid)
+    hash['avatar_url'] = image && thumbnail_image_url(image)
     hash['role'] = group.group_category.role if group.group_category
     #hash['leader_id'] = group.leader_id
     hash['leader'] = group.leader ? user_display_json(group.leader, group) : nil
 
     if includes.include?('users')
       users = group.grants_right?(@current_user, :read_as_admin) ?
-        group.users.order_by_sortable_name.distinct : group.participating_users_in_context(sort: true).distinct
+        group.users.order_by_sortable_name.distinct :
+        group.participating_users_in_context(sort: true, include_inactive_users: options[:include_inactive_users]).distinct
+      active_user_ids = nil
+      if options[:include_inactive_users]
+        active_user_ids = group.participating_users_in_context.pluck('id').to_set
+      end
 
       # TODO: this should be switched to user_display_json
-      hash['users'] = users.map{ |u| user_json(u, user, session) }
+      hash['users'] = users.map { |u|
+        json = user_json(u, user, session)
+        if options[:include_inactive_users] && active_user_ids
+          json['active'] = active_user_ids.include?(u.id)
+        end
+        json
+      }
     end
     if includes.include?('group_category')
       hash['group_category'] = group.group_category && group_category_json(group.group_category, user, session)
@@ -58,8 +71,8 @@ module Api::V1::Group
       hash['is_favorite'] = group.favorite_for_user?(user)
     end
     hash['html_url'] = group_url(group) if includes.include? 'html_url'
-    hash['sis_group_id'] = group.sis_source_id if group.context_type == 'Account' && group.account.grants_any_right?(user, session, :read_sis, :manage_sis)
-    hash['sis_import_id'] = group.sis_batch_id if group.context_type == 'Account' && group.account.grants_right?(user, session, :manage_sis)
+    hash['sis_group_id'] = group.sis_source_id if group.root_account.grants_any_right?(user, session, :read_sis, :manage_sis)
+    hash['sis_import_id'] = group.sis_batch_id if group.root_account.grants_right?(user, session, :manage_sis)
     hash['has_submission'] = group.submission?
     hash['concluded'] = group.context.concluded? || group.context.deleted?
     hash['tabs'] = tabs_available_json(group, user, session, ['external']) if includes.include?('tabs')
@@ -80,7 +93,10 @@ module Api::V1::Group
     if includes.include?('just_created')
       hash['just_created'] = membership.just_created || false
     end
-    if membership.group.context_type == 'Account' && membership.group.account.grants_right?(user, session, :manage_sis)
+    if membership.group.root_account.grants_any_right?(user, session, :read_sis, :manage_sis)
+      hash['sis_group_id'] = membership.group.sis_source_id
+    end
+    if membership.group.root_account.grants_right?(user, session, :manage_sis)
       hash['sis_import_id'] = membership.sis_batch_id
     end
     hash

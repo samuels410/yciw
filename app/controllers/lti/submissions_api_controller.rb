@@ -15,10 +15,9 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
-# @API Originality Reports
-# @internal
-#
-# LTI API for Submissions
+module Lti
+# @API Plagiarism Detection Submissions
+# **LTI API for Plagiarism Detection Submissions (Must use <a href="jwt_access_tokens.html">JWT access tokens</a> with this API).**
 #
 # @model Submission
 #     {
@@ -67,6 +66,11 @@
 #           "example": 134,
 #           "type": "integer"
 #         },
+#         "eula_agreement_timestamp": {
+#           "description": "UTC timestamp showing when the user agreed to the EULA (if given by the tool provider)",
+#           "example": "1508250487578",
+#           "type": "string"
+#         },
 #         "workflow_state": {
 #           "description": "The current state of the submission",
 #           "example": "submitted",
@@ -81,12 +85,12 @@
 #           }
 #         },
 #         "attachments": {
-#           "description": "Files that are attached to the submission"
+#           "description": "Files that are attached to the submission",
 #           "type": "File"
 #         }
 #       }
 #     }
-
+#
 # @model File
 #     {
 #       "id": "File",
@@ -122,7 +126,6 @@
 #         }
 #       }
 #     }
-module Lti
   class SubmissionsApiController < ApplicationController
     include Lti::Ims::AccessTokenHelper
     include Api::V1::Submission
@@ -218,6 +221,9 @@ module Lti
       submission_attributes = %w(id body url submitted_at assignment_id user_id submission_type workflow_state attempt attachments)
       sub_hash = filtered_json(model: submission, whitelist: submission_attributes)
       sub_hash[:user_id] = Lti::Asset.opaque_identifier_for(User.find(sub_hash[:user_id]))
+      if submission.turnitin_data[:eula_agreement_timestamp].present?
+        sub_hash[:eula_agreement_timestamp] = submission.turnitin_data[:eula_agreement_timestamp]
+      end
       attachments = submission.versioned_attachments
       sub_hash[:attachments] = attachments.map { |a| attachment_json(a) }
       sub_hash

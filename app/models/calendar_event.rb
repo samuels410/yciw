@@ -26,6 +26,7 @@ class CalendarEvent < ActiveRecord::Base
   include CopyAuthorizedLinks
   include TextHelper
   include HtmlTextHelper
+  include Plannable
 
   include MasterCourses::Restrictor
   restrict_columns :content, [:title, :description]
@@ -119,8 +120,6 @@ class CalendarEvent < ActiveRecord::Base
   def effective_context
     effective_context_code && ActiveRecord::Base.find_by_asset_string(effective_context_code) || context
   end
-
-  scope :order_by_start_at, -> { order(:start_at) }
 
   scope :active, -> { where("calendar_events.workflow_state<>'deleted'") }
   scope :are_locked, -> { where(:workflow_state => 'locked') }
@@ -278,8 +277,8 @@ class CalendarEvent < ActiveRecord::Base
   ]
 
   def sync_child_events
-    locked_changes = LOCKED_ATTRIBUTES.select { |attr| send("#{attr}_changed?") }
-    cascaded_changes = CASCADED_ATTRIBUTES.select { |attr| send("#{attr}_changed?") }
+    locked_changes = LOCKED_ATTRIBUTES.select { |attr| saved_change_to_attribute?(attr) }
+    cascaded_changes = CASCADED_ATTRIBUTES.select { |attr| saved_change_to_attribute?(attr) }
     child_events.are_locked.update_all Hash[locked_changes.map{ |attr| [attr, send(attr)] }] if locked_changes.present?
     child_events.are_unlocked.update_all Hash[cascaded_changes.map{ |attr| [attr, send(attr)] }] if cascaded_changes.present?
   end
@@ -288,7 +287,7 @@ class CalendarEvent < ActiveRecord::Base
   def sync_parent_event
     return unless parent_event
     return if appointment_group
-    return unless start_at_changed? || end_at_changed? || workflow_state_changed?
+    return unless saved_change_to_start_at? || saved_change_to_end_at? || saved_change_to_workflow_state?
     return if @skip_sync_parent_event
     parent_event.cache_child_event_ranges! unless workflow_state == 'deleted'
   end
@@ -377,7 +376,7 @@ class CalendarEvent < ActiveRecord::Base
     whenever {
       appointment_group && parent_event &&
       deleted? &&
-      workflow_state_changed? &&
+      saved_change_to_workflow_state? &&
       @updating_user &&
       context == appointment_group.participant_for(@updating_user)
     }
@@ -399,7 +398,7 @@ class CalendarEvent < ActiveRecord::Base
     whenever {
       appointment_group && parent_event &&
       deleted? &&
-      workflow_state_changed?
+      saved_change_to_workflow_state?
     }
     data { {
       :updating_user_name => @updating_user.name,
@@ -613,7 +612,7 @@ class CalendarEvent < ActiveRecord::Base
         event.end.icalendar_tzid = 'UTC'
       end
 
-      if @event.all_day
+      if @event.all_day && @event.all_day_date
         event.start = Date.new(@event.all_day_date.year, @event.all_day_date.month, @event.all_day_date.day)
         event.start.ical_params = {"VALUE"=>["DATE"]}
         event.end = event.start

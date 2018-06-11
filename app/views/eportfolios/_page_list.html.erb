@@ -20,14 +20,15 @@
   <h2>
     <%= @category.name %>
     <% if can_do(@portfolio, @current_user, :manage) %>
-    <div style="float: right; margin-right: 10px; font-size: 0.8em;">
+    <div style="float: <%= direction('right') %>; margin-<%= direction('right') %>: 10px; font-size: 0.8em;">
       <a href="#" class="manage_pages_link" style="font-style: italic;" title="<%= t('titles.manage_pages', "Add, remove or rearrange pages for this section") %>"><%= manage_pages_link_text %></a>
     </div>
     <% end %>
   </h2>
   <div>
     <div class="editing_box" style="font-size: 0.8em;">
-      <%= t(:edit_instructions, "Click any page name to rename it, or click and drag to reorder.") %>
+      <%= t("Rename or reorder a page via the settings menu next to the page name. Alternatively, click a page's name to rename it or drag a page's name to reorder it.") %>
+
     </div>
     <div class="displaying_box" style="font-size: 0.8em;">
       <%= t('headers.page_list', "Pages for this section") %>

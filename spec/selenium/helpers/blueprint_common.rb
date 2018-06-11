@@ -137,18 +137,16 @@ module BlueprintCourseCommon
     # and make sure the data has arrived
     # this turned out to be messier than one would think
     def open_courses_list
-      keep_trying = true
-      try = 0
-      while keep_trying && try < 4 # keep clicking the courses button until it opens
-        try += 1
-        begin
-          f('.bca-course-details__wrapper button').click
-          f('.bca-table__course-row')
-          keep_trying = false
-        rescue
-          keep_trying = true
-        end
-      end
+      details_wrapper = f('.bca-course-details__wrapper')
+      wait_for_ajaximations
+
+      # Clicking the button was not reliable.
+      # Focusing the filter textbox has the side effect of opening the courses list.
+      driver.execute_script("document.querySelector('.bca-course-filter input').focus()")
+      wait_for_ajaximations
+
+      # confirm it's open
+      expect(details_wrapper).to contain_css('.bca-table__course-row')
     end
 
     # reutrn the <tboey> holding the list of avaiable courses
@@ -199,10 +197,8 @@ module BlueprintCourseCommon
     # click the Save button and wait for it to complete
     def do_save
       save_button().click
-      expect(f('#flash_message_holder')).to contain_css('div') # the alert saying the save completed
+      expect(f('#flashalert_message_holder')).to contain_css('div') # the alert saying the save completed
     end
-
-
 
     shared_context "blueprint courses files context" do
 

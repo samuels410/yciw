@@ -18,8 +18,8 @@
 define [
   'Backbone'
   'jst/content_migrations/CommonCartridge'
-  'compiled/views/content_migrations/MigrationView'
-],(Backbone, template, MigrationView) -> 
+  './MigrationView'
+],(Backbone, template, MigrationView) ->
   class CommonCartridge extends MigrationView
     template: template
 
@@ -28,3 +28,4 @@ define [
     @child 'dateShift', '.dateShift'
     @child 'selectContent', '.selectContent'
     @child 'overwriteAssessmentContent', '.overwriteAssessmentContent'
+    @child 'importQuizzesNext', '.importQuizzesNext'

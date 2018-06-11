@@ -80,6 +80,7 @@ describe "GradeChangeAudit API", type: :request do
         arguments[:account_id] = Shard.global_id_for(account).to_s
         query_string << "account_id=#{arguments[:account_id]}"
       end
+      arguments[:include] = options.delete(:include) if options.key?(:include)
 
       path = "/api/v1/audit/grade_change/#{type.pluralize}/#{id}"
       path += "?" + query_string.join('&') if query_string.present?
@@ -133,19 +134,29 @@ describe "GradeChangeAudit API", type: :request do
       api_call_as_user(user, :get, path, arguments, {}, {}, options.slice(:expected_status))
     end
 
-    def expect_event_for_context(context, event, options={})
+    def events_for_context(context, options={})
       json = options.delete(:json)
       json ||= fetch_for_context(context, options)
-      expect(json['events'].map{ |e| [e['id'], e['event_type']] })
-                    .to include([event.id, event.event_type])
+      json['events'].map { |e| [e['id'], e['event_type']] }
+    end
+
+    def expect_event_for_context(context, event, options={})
+      json = fetch_for_context(context, options)
+      events = events_for_context(context, options.merge(json: json))
+      expect(events).to include([event.id, event.event_type])
       json
     end
 
-    def expect_event_for_course_and_contexts(contexts, event, options={})
+    def events_for_course_and_contexts(contexts, options)
       json = options.delete(:json)
       json ||= fetch_for_course_and_other_contexts(contexts, options)
-      expect(json['events'].map{ |e| [e['id'], e['event_type']] })
-        .to include([event.id, event.event_type])
+      json['events'].map{ |e| [e['id'], e['event_type']] }
+    end
+
+    def expect_event_for_course_and_contexts(contexts, event, options={})
+      json = fetch_for_course_and_other_contexts(contexts, options)
+      events = events_for_course_and_contexts(contexts, options.merge(json: json))
+      expect(events).to include([event.id, event.event_type])
       json
     end
 
@@ -165,7 +176,7 @@ describe "GradeChangeAudit API", type: :request do
       json
     end
 
-    def test_course_and_contexts
+    def test_course_and_contexts(student: @student)
       # course assignment
       contexts = { course: @course, assignment: @assignment }
       yield(contexts)
@@ -173,7 +184,7 @@ describe "GradeChangeAudit API", type: :request do
       contexts[:grader] = @teacher
       yield(contexts)
       # course assignment grader student
-      contexts[:student] = @student
+      contexts[:student] = student
       yield(contexts)
       # course assignment student
       contexts.delete(:grader)
@@ -185,7 +196,7 @@ describe "GradeChangeAudit API", type: :request do
       contexts = { course: @course, grader: @teacher}
       yield(contexts)
       # course grader student
-      contexts[:student] = @student
+      contexts[:student] = student
       yield(contexts)
     end
 
@@ -202,6 +213,58 @@ describe "GradeChangeAudit API", type: :request do
       end
     end
 
+    context "section visibility" do
+      before do
+        new_section = @course.course_sections.create!
+        @ta = User.create
+        @course.enroll_user(@ta, "TaEnrollment", limit_privileges_to_course_section: true, section: new_section)
+        @student_in_new_section = User.create!
+        @course.enroll_user(@student_in_new_section, "StudentEnrollment", enrollment_state: "active", section: new_section)
+        submission = @assignment.grade_student(@student_in_new_section, grade: 8, grader: @teacher).first
+        @event_visible_to_ta = Auditors::GradeChange.record(submission)
+      end
+
+      context "course" do
+        it "returns grade change events for students within the current user's section visibility" do
+          events = events_for_context(@course, user: @ta)
+          expect(events).to include([@event_visible_to_ta.id, @event_visible_to_ta.event_type])
+        end
+
+        it "returns grade change events for rejected enrollments" do
+          @course.student_enrollments.find_by(user_id: @student_in_new_section).update!(workflow_state: "rejected")
+          events = events_for_context(@course, user: @ta)
+          expect(events).to include([@event_visible_to_ta.id, @event_visible_to_ta.event_type])
+        end
+
+        it "returns grade change events for deleted enrollments" do
+          @course.student_enrollments.find_by(user_id: @student_in_new_section).destroy
+          events = events_for_context(@course, user: @ta)
+          expect(events).to include([@event_visible_to_ta.id, @event_visible_to_ta.event_type])
+        end
+
+        it "does not return grade change events for students outside of the current user's section visibility" do
+          events = events_for_context(@course, user: @ta)
+          expect(events).not_to include([@event.id, @event.event_type])
+        end
+      end
+
+      context "course + other context" do
+        it "returns grade change events for students within the current user's section visibility" do
+          test_course_and_contexts(student: @student_in_new_section) do |contexts|
+            events = events_for_course_and_contexts(contexts, user: @ta)
+            expect(events).to include([@event_visible_to_ta.id, @event_visible_to_ta.event_type])
+          end
+        end
+
+        it "does not return grade change events for students outside of the current user's section visibility" do
+          test_course_and_contexts do |contexts|
+            events = events_for_course_and_contexts(contexts, user: @ta)
+            expect(events).not_to include([@event.id, @event.event_type])
+          end
+        end
+      end
+    end
+
     describe "arguments" do
       before do
         record = Auditors::GradeChange::Record.new(
@@ -211,7 +274,7 @@ describe "GradeChangeAudit API", type: :request do
         @event2 = Auditors::GradeChange::Stream.insert(record)
       end
 
-      it "should recognize :start_time" do
+      it "recognizes :start_time" do
         json = expect_event_for_context(@assignment, @event, start_time: 12.hours.ago)
 
         forbid_event_for_context(@assignment, @event2, start_time: 12.hours.ago, json: json)
@@ -231,7 +294,7 @@ describe "GradeChangeAudit API", type: :request do
         end
       end
 
-      it "should recognize :end_time" do
+      it "recognizes :end_time" do
         json = expect_event_for_context(@assignment, @event2, end_time: 12.hours.ago)
         forbid_event_for_context(@assignment, @event, end_time: 12.hours.ago, json: json)
 
@@ -249,6 +312,29 @@ describe "GradeChangeAudit API", type: :request do
           forbid_event_for_course_and_contexts(contexts, @event, end_time: 12.hours.ago, json: json)
         end
       end
+
+      it "includes a grade_current key when passed 'current_grade' in the include param" do
+        events = fetch_for_context(@assignment, include: ["current_grade"])["events"]
+        expect(events.first).to have_key "grade_current"
+      end
+
+      it "returns a grade_current of 'N/A' if a grade is not available" do
+        @submission.destroy
+        events = fetch_for_context(@assignment, include: ["current_grade"])["events"]
+        event = events.find { |e| e["id"] == @event2.id }
+        expect(event["grade_current"]).to eq "N/A"
+      end
+
+      it "does not include a grade_current key when 'current_grade' is not in the include param" do
+        events = fetch_for_context(@assignment, include: [])["events"]
+        expect(events.first).not_to have_key "grade_current"
+      end
+
+      it "does not include a grade_current key in the absence of an include param" do
+        events = fetch_for_context(@assignment)["events"]
+        expect(events.first).not_to have_key "grade_current"
+      end
+
     end
 
     context "deleted entities" do
@@ -390,11 +476,13 @@ describe "GradeChangeAudit API", type: :request do
         end
       end
 
-      it "should not authorize the endpoints with :view_grade_changes and :manage_grades permissions revoked" do
+      it "should not authorize the endpoints with :view_all_grades, :view_grade_changes and :manage_grades revoked" do
         RoleOverride.manage_role_override(@account_user.account, @account_user.role,
           :view_grade_changes.to_s, override: false)
         RoleOverride.manage_role_override(@account_user.account, @account_user.role,
           :manage_grades.to_s, override: false)
+        RoleOverride.manage_role_override(@account_user.account, @account_user.role,
+          :view_all_grades.to_s, override: false)
 
         fetch_for_context(@course, expected_status: 401)
         fetch_for_context(@assignment, expected_status: 401)
@@ -433,6 +521,11 @@ describe "GradeChangeAudit API", type: :request do
         end
 
         it "returns a 200 on for_course" do
+          fetch_for_context(@course, expected_status: 200, user: @teacher)
+        end
+
+        it "returns a 200 on for_course for a concluded course" do
+          @course.complete!
           fetch_for_context(@course, expected_status: 200, user: @teacher)
         end
 

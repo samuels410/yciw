@@ -21,12 +21,12 @@ define [
   'i18n!content_migrations'
   'jst/content_migrations/ProgressingContentMigration'
   'jst/content_migrations/ProgressingIssues'
-  'compiled/views/PaginatedCollectionView'
-  'compiled/views/content_migrations/ContentMigrationIssueView'
-  'compiled/views/content_migrations/ProgressBarView'
-  'compiled/views/content_migrations/ProgressStatusView'
-  'compiled/views/content_migrations/SelectContentView'
-  'compiled/views/content_migrations/SourceLinkView'
+  '../PaginatedCollectionView'
+  './ContentMigrationIssueView'
+  './ProgressBarView'
+  './ProgressStatusView'
+  './SelectContentView'
+  './SourceLinkView'
 ], ($, Backbone, I18n, template, progressingIssuesTemplate, PaginatedCollectionView, ContentMigrationIssueView, ProgressBarView, ProgressStatusView, SelectContentView, SourceLinkView) ->
   class ProgressingContentMigrationView extends Backbone.View
     template: template
@@ -96,6 +96,7 @@ define [
                          collection: @issues
                          itemView: ContentMigrationIssueView
                          template: progressingIssuesTemplate
+                         autoFetch: true
       @$migrationIssues.html issuesCollectionView.render().el
 
       progressStatus = new ProgressStatusView

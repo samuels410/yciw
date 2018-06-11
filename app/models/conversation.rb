@@ -50,13 +50,15 @@ class Conversation < ActiveRecord::Base
       map(&:conversation)
   end
 
-  def self.private_hash_for(users_or_user_ids)
+  def self.private_hash_for(users_or_user_ids, context_code=nil)
     if (users_or_user_ids.first.is_a?(User))
       user_ids = Shard.birth.activate { users_or_user_ids.map(&:id) }
     else
       user_ids = users_or_user_ids
     end
-    Digest::SHA1.hexdigest(user_ids.uniq.sort.join(','))
+    str = user_ids.uniq.sort.join(',')
+    str += "|#{context_code}" if context_code
+    Digest::SHA1.hexdigest(str)
   end
 
   def bulk_insert_participants(user_ids, options = {})
@@ -75,13 +77,15 @@ class Conversation < ActiveRecord::Base
   def self.initiate(users, private, options = {})
     users = users.uniq(&:id)
     user_ids = users.map(&:id)
-    private_hash = private ? private_hash_for(users) : nil
+    context_code = options[:context_type] && options[:context_id] && "#{options[:context_type]}_#{options[:context_id]}"
+    private_hash = private ? private_hash_for(users, context_code) : nil
     transaction do
       if private
         conversation = users.first.all_conversations.where(private_hash: private_hash).first.try(:conversation)
-        # for compatibility during migration, before ConversationParticipant has finished populating
-        if Setting.get('populate_conversation_participants_private_hash_complete', '0') == '0'
-          conversation ||= Conversation.where(private_hash: private_hash).first
+        if !conversation && context_code
+          # try to match with an existing conversation but make sure the context matches
+          conversation = users.first.all_conversations.where(private_hash: private_hash_for(users)).joins(:conversation).
+            where(:conversations => {:context_type => options[:context_type], :context_id => options[:context_id]}).first.try(:conversation)
         end
       end
       unless conversation
@@ -118,6 +122,10 @@ class Conversation < ActiveRecord::Base
   # conversations with more recipients than this should force individual messages
   def self.max_group_conversation_size
     Setting.get("max_group_conversation_size", 100).to_i
+  end
+
+  def can_add_participants?(users)
+    (users.map(&:id) + conversation_participants.pluck(:user_id)).uniq.count <= self.class.max_group_conversation_size + 1
   end
 
   def add_participants(current_user, users, options={})
@@ -647,7 +655,8 @@ class Conversation < ActiveRecord::Base
     # look up participants across all shards
     shards = conversations.map(&:associated_shards).flatten.uniq
     Shard.with_each_shard(shards) do
-      user_map = Shackles.activate(:slave) do
+      shackles_env = conversations.any?{|c| c.updated_at && c.updated_at > 10.seconds.ago} ? :master : :slave
+      user_map = Shackles.activate(shackles_env) do
         User.select("users.id, users.updated_at, users.short_name, users.name, users.avatar_image_url, users.avatar_image_source, last_authored_at, conversation_id").
           joins(:all_conversations).
           where(:conversation_participants => { :conversation_id => conversations }).

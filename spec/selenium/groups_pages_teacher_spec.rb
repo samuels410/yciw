@@ -16,8 +16,10 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 require_relative 'common'
+require_relative 'announcements/announcement_index_page'
+require_relative 'announcements/announcement_new_edit_page'
 require_relative 'helpers/groups_common'
-require_relative 'helpers/announcements_common'
+require_relative 'helpers/legacy_announcements_common'
 require_relative 'helpers/discussions_common'
 require_relative 'helpers/wiki_and_tiny_common'
 require_relative 'helpers/files_common'
@@ -55,48 +57,129 @@ describe "groups" do
       it_behaves_like 'home_page', :teacher
     end
 
-    #-------------------------------------------------------------------------------------------------------------------
-    describe "announcements page" do
-      it_behaves_like 'announcements_page', :teacher
+    describe "announcements page v2" do
+      it_behaves_like 'announcements_page_v2', :teacher
 
-      it "should allow teachers to see announcements", priority: "1", test_id: 287049 do
-        @announcement = @testgroup.first.announcements.create!(title: 'Group Announcement', message: 'Group', user: @students.first)
-        verify_member_sees_announcement
+      it "should allow teachers to see announcements" do
+        @announcement = @testgroup.first.announcements.create!(
+          title: 'Group Announcement',
+          message: 'Group',
+          user: @students.first
+        )
+        AnnouncementIndex.visit_groups_index(@testgroup.first)
+        expect(ff('.ic-announcement-row').size).to eq 1
       end
 
-      it "should allow teachers to create an announcement", priority: "1", test_id: 287050 do
-
+      it "should allow teachers to create an announcement" do
         # Checks that initial user can create an announcement
-        create_group_announcement_manually("Announcement by #{@teacher.name}",'sup')
-        expect(ff('.discussion-topic').size).to eq 1
+        AnnouncementNewEdit.create_group_announcement(@testgroup.first,
+          "Announcement by #{@teacher.name}", 'sup')
+        get announcements_page
+        expect(ff('.ic-announcement-row').size).to eq 1
       end
 
-      it "should allow teachers to delete their own group announcements", priority: "1", test_id: 326522 do
-        @testgroup.first.announcements.create!(title: 'Student Announcement', message: 'test message', user: @teacher)
+      it "should allow teachers to delete their own group announcements" do
+        skip_if_safari(:alert)
+        @testgroup.first.announcements.create!(
+          title: 'Student Announcement',
+          message: 'test message',
+          user: @teacher
+        )
 
         get announcements_page
-        expect(ff('.discussion-topic').size).to eq 1
-        delete_via_gear_menu
-        expect(f("#content")).not_to contain_css('.discussion-topic')
+        expect(ff('.ic-announcement-row').size).to eq 1
+        AnnouncementIndex.delete_announcement_manually("Student Announcement")
+        expect(f(".announcements-v2__wrapper")).not_to contain_css('.ic-announcement-row')
       end
 
-      it "should allow teachers to delete group member announcements", priority: "1", test_id: 326523 do
-        @testgroup.first.announcements.create!(title: 'Student Announcement', message: 'test message', user: @students.first)
+      it "should allow teachers to delete group member announcements" do
+        skip_if_safari(:alert)
+        @testgroup.first.announcements.create!(
+          title: 'Student Announcement',
+          message: 'test message', user:
+          @students.first
+        )
 
         get announcements_page
-        expect(ff('.discussion-topic').size).to eq 1
-        delete_via_gear_menu
-        expect(f("#content")).not_to contain_css('.discussion-topic')
+        expect(ff('.ic-announcement-row').size).to eq 1
+        AnnouncementIndex.delete_announcement_manually("Student Announcement")
+        expect(f(".announcements-v2__wrapper")).not_to contain_css('.ic-announcement-row')
       end
 
-      it "should let teachers edit their own announcements", priority: "1", test_id: 312865 do
-        @testgroup.first.announcements.create!(title: 'Test Announcement', message: 'test message', user: @teacher)
-        edit_group_announcement
+      it "should let teachers see announcement details" do
+        announcement = @testgroup.first.announcements.create!(
+          title: 'Test Announcement',
+          message: 'test message',
+          user: @teacher
+        )
+        get announcements_page
+        expect_new_page_load { AnnouncementIndex.click_on_announcement(announcement.title) }
+        expect(f('.discussion-title').text).to eq 'Test Announcement'
+        expect(f('.message').text).to eq 'test message'
       end
 
-      it "should let teachers edit group member announcements", priority: "2", test_id: 323325 do
-        @testgroup.first.announcements.create!(title: 'Your Announcement', message: 'test message', user: @students.first)
-        edit_group_announcement
+      it "edit button from announcement details works on teachers announcement" do
+        announcement = @testgroup.first.announcements.create!(
+          title: 'Test Announcement',
+          message: 'test message',
+          user: @teacher
+        )
+        url_base = AnnouncementNewEdit.full_individual_announcement_url(
+          @testgroup.first,
+          announcement
+        )
+        get url_base
+        expect_new_page_load { f('.edit-btn').click }
+        expect(driver.current_url).to include "#{url_base}/edit"
+        expect(f('#content-wrapper')).not_to contain_css('#sections_autocomplete_root input')
+      end
+
+      it "edit page should succeed for their own announcements" do
+        announcement = @testgroup.first.announcements.create!(
+          title: "Announcement by #{@user.name}",
+          message: 'The Force Awakens',
+          user: @teacher
+        )
+        AnnouncementNewEdit.edit_group_announcement(@testgroup.first, announcement,
+          "Canvas will be rewritten in chicken")
+        announcement.reload
+        # Editing *appends* to existing message, and the resulting announcement's
+        # message is wrapped in paragraph tags
+        expect(announcement.message).to eq(
+          "<p>The Force AwakensCanvas will be rewritten in chicken</p>"
+        )
+      end
+
+      it "should let teachers edit group member announcements" do
+        announcement = @testgroup.first.announcements.create!(
+          title: 'Your Announcement',
+          message: 'test message',
+          user: @students.first
+        )
+        url_base = AnnouncementNewEdit.full_individual_announcement_url(
+          @testgroup.first,
+          announcement
+        )
+        get url_base
+        expect_new_page_load { f('.edit-btn').click }
+        expect(driver.current_url).to include "#{url_base}/edit"
+        expect(f('#content-wrapper')).not_to contain_css('#sections_autocomplete_root input')
+      end
+
+      it "edit page should succeed for group member announcements" do
+        announcement = @testgroup.first.announcements.create!(
+          title: "Announcement by #{@user.name}",
+          message: 'The Force Awakens',
+          user: @students.first
+        )
+        AnnouncementNewEdit.edit_group_announcement(@testgroup.first, announcement,
+          "Canvas will be rewritten in chicken")
+        announcement.reload
+        # Editing *appends* to existing message, and the resulting announcement's
+        # message is wrapped in paragraph tags
+        expect(announcement.message).to eq(
+          "<p>The Force AwakensCanvas will be rewritten in chicken</p>"
+        )
       end
     end
 
@@ -151,6 +234,7 @@ describe "groups" do
       end
 
       it "should allow teachers to delete their group discussions", priority: "1", test_id: 329627 do
+        skip_if_safari(:alert)
         DiscussionTopic.create!(context: @testgroup.first, user: @teacher,
                                 title: 'Group Discussion', message: 'Group')
         get discussions_page
@@ -204,6 +288,7 @@ describe "groups" do
       end
 
       it "should allow teacher to delete a folder", priority: "2", test_id: 304184 do
+        skip_if_safari(:alert)
         get files_page
         add_folder
         delete(0, :toolbar_menu)
@@ -211,6 +296,7 @@ describe "groups" do
       end
 
       it "should allow a teacher to delete a file", priority: "2", test_id: 304183 do
+        skip_if_safari(:alert)
         add_test_files
         get files_page
         delete(0, :toolbar_menu)

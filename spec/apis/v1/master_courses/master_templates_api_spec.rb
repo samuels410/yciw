@@ -58,11 +58,16 @@ describe MasterCourses::MasterTemplatesController, type: :request do
 
     it "should return stuff" do
       time = 2.days.ago
-      @template.master_migrations.create!(:imports_completed_at => time, :workflow_state => 'completed')
+      @template.add_child_course!(Course.create!)
+      mig = @template.master_migrations.create!(:imports_completed_at => time, :workflow_state => 'completed')
+      @template.update_attribute(:active_migration_id, mig.id)
       json = api_call(:get, @url, @params)
       expect(json['id']).to eq @template.id
       expect(json['course_id']).to eq @course.id
       expect(json['last_export_completed_at']).to eq time.iso8601
+      expect(json['associated_course_count']).to eq 1
+      expect(json['latest_migration']['id']).to eq mig.id
+      expect(json['latest_migration']['workflow_state']).to eq 'completed'
     end
   end
 
@@ -225,6 +230,13 @@ describe MasterCourses::MasterTemplatesController, type: :request do
         json = api_call(:get, "/api/v1/courses/#{@course.id}/blueprint_templates/default/migrations", @base_params.merge(:action => 'migrations_index'))
         pairs = json.map{|hash| [hash['id'], hash['workflow_state']]}
         expect(pairs).to eq [[migration2.id, 'queued'], [@migration.id, 'completed']]
+      end
+
+      it "should resolve an expired job if necessary" do
+        MasterCourses::MasterMigration.where(:id => @migration.id).update_all(:created_at => 3.days.ago)
+        json = api_call(:get, "/api/v1/courses/#{@course.id}/blueprint_templates/default/migrations/#{@migration.id}",
+          @base_params.merge(:action => 'migrations_show', :id => @migration.to_param))
+        expect(json['workflow_state']).to eq 'exports_failed'
       end
     end
 
@@ -426,31 +438,6 @@ describe MasterCourses::MasterTemplatesController, type: :request do
       ])
     end
 
-    it "works with the old import results format" do
-      import_results = {}
-      @migration.migration_results.each do |r|
-        import_results[r.content_migration_id] = {:skipped => r.skipped_items, :subscription_id => r.child_subscription_id}
-      end
-      @migration.update_attribute(:import_results, import_results)
-      MasterCourses::MigrationResult.where(:master_migration_id => @migration).delete_all # make sure they're gone
-
-      json = api_call_as_user(@admin, :get, "/api/v1/courses/#{@master.id}/blueprint_templates/default/migrations/#{@migration.id}/details",
-        :controller => 'master_courses/master_templates', :format => 'json', :template_id => 'default',
-        :id => @migration.to_param, :course_id => @master.to_param, :action => 'migration_details')
-      expect(json).to match_array([
-        {"asset_id"=>@page.id,"asset_type"=>"wiki_page","asset_name"=>"Unicorn","change_type"=>"created",
-          "html_url"=>"http://www.example.com/courses/#{@master.id}/pages/unicorn","locked"=>true,"exceptions"=>[]},
-        {"asset_id"=>@quiz.id,"asset_type"=>"quiz","asset_name"=>"TestQuiz","change_type"=>"created",
-          "html_url"=>"http://www.example.com/courses/#{@master.id}/quizzes/#{@quiz.id}","locked"=>false,"exceptions"=>[]},
-        {"asset_id"=>@assignment.id,"asset_type"=>"assignment","asset_name"=>"Blah","change_type"=>"deleted",
-          "html_url"=>"http://www.example.com/courses/#{@master.id}/assignments/#{@assignment.id}",
-          "locked"=>false,"exceptions"=>[{"course_id"=>@minions.last.id, "conflicting_changes"=>["points"]}]},
-        {"asset_id"=>@file.id,"asset_type"=>"attachment","asset_name"=>"I Can Rename Files Too",
-          "change_type"=>"updated","html_url"=>"http://www.example.com/courses/#{@master.id}/files/#{@file.id}",
-          "locked"=>false,"exceptions"=>[{"course_id"=>@minions.first.id, "conflicting_changes"=>["content"]}]}
-      ])
-    end
-
     it "returns change information from the minion side" do
       skip 'Requires QtiMigrationTool' unless Qti.qti_enabled?
 
@@ -513,6 +500,7 @@ describe MasterCourses::MasterTemplatesController, type: :request do
         @page = @master.wiki_pages.create! :title => 'Old News'
         @ann = @master.announcements.create! :title => 'Boring', :message => 'Yawn'
         @file = attachment_model(:context => @master, :display_name => 'Some File')
+        @folder = @master.folders.create!(:name => 'Blargh')
         @template.content_tag_for(@file).update_attribute(:restrictions, {:content => true})
         run_master_migration
       end
@@ -521,6 +509,7 @@ describe MasterCourses::MasterTemplatesController, type: :request do
     it 'detects creates, updates, and deletes since the last sync' do
       @ann.destroy
       @file.update_attribute(:display_name, 'Renamed')
+      @folder.update_attribute(:name, 'Blergh')
       @new_page = @master.wiki_pages.create! :title => 'New News'
 
       json = api_call_as_user(@admin, :get, "/api/v1/courses/#{@master.id}/blueprint_templates/default/unsynced_changes",
@@ -532,7 +521,9 @@ describe MasterCourses::MasterTemplatesController, type: :request do
        {"asset_id"=>@file.id,"asset_type"=>"attachment","asset_name"=>"Renamed","change_type"=>"updated",
         "html_url"=>"http://www.example.com/courses/#{@master.id}/files/#{@file.id}","locked"=>true},
        {"asset_id"=>@new_page.id,"asset_type"=>"wiki_page","asset_name"=>"New News","change_type"=>"created",
-        "html_url"=>"http://www.example.com/courses/#{@master.id}/pages/new-news","locked"=>false}
+        "html_url"=>"http://www.example.com/courses/#{@master.id}/pages/new-news","locked"=>false},
+       {"asset_id"=>@folder.id,"asset_type"=>"folder","asset_name"=>"Blergh","change_type"=>"updated",
+        "html_url"=>"http://www.example.com/courses/#{@master.id}/folders/#{@folder.id}","locked"=>false},
       ])
     end
 

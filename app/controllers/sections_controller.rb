@@ -92,7 +92,7 @@ class SectionsController < ApplicationController
   include Api::V1::Section
 
   # @API List course sections
-  # Returns the list of sections for this course.
+  # A paginated list of the list of sections for this course.
   #
   # @argument include[] [String, "students"|"avatar_url"|"enrollments"|"total_students"|"passback_status"]
   #   - "students": Associations to include with the group. Note: this is only
@@ -118,7 +118,7 @@ class SectionsController < ApplicationController
       unless params[:all].present?
         sections = Api.paginate(sections, self, api_v1_course_sections_url)
       end
-      
+
       render :json => sections_json(sections, @current_user, session, includes)
     end
   end
@@ -130,7 +130,10 @@ class SectionsController < ApplicationController
   #   The name of the section
   #
   # @argument course_section[sis_section_id] [String]
-  #   The sis ID of the section
+  #   The sis ID of the section. Must have manage_sis permission to set. This is ignored if caller does not have permission to set.
+  #
+  # @argument course_section[integration_id] [String]
+  #   The integration_id of the section. Must have manage_sis permission to set. This is ignored if caller does not have permission to set.
   #
   # @argument course_section[start_at] [DateTime]
   #   Section start date in ISO8601 format, e.g. 2011-01-01T01:00Z
@@ -148,15 +151,18 @@ class SectionsController < ApplicationController
   def create
     if authorized_action(@context.course_sections.temp_record, @current_user, :create)
       sis_section_id = params[:course_section].try(:delete, :sis_section_id)
-      can_manage_sis = api_request? && sis_section_id.present? &&
-        @context.root_account.grants_right?(@current_user, session, :manage_sis)
+      integration_id = params[:course_section].try(:delete, :integration_id)
+      can_manage_sis = api_request? && @context.root_account.grants_right?(@current_user, session, :manage_sis)
 
-      if can_manage_sis && value_to_boolean(params[:enable_sis_reactivation])
+      if can_manage_sis && sis_section_id.present? && value_to_boolean(params[:enable_sis_reactivation])
         @section = @context.course_sections.where(:sis_source_id => sis_section_id, :workflow_state => 'deleted').first
         @section.workflow_state = 'active' if @section
       end
       @section ||= @context.course_sections.build(course_section_params)
-      @section.sis_source_id = sis_section_id if can_manage_sis
+      if can_manage_sis
+        @section.sis_source_id = sis_section_id.presence
+        @section.integration_id = integration_id.presence
+      end
 
       respond_to do |format|
         if @section.save
@@ -243,7 +249,10 @@ class SectionsController < ApplicationController
   #   The name of the section
   #
   # @argument course_section[sis_section_id] [String]
-  #   The sis ID of the section
+  #   The sis ID of the section. Must have manage_sis permission to set.
+  #
+  # @argument course_section[integration_id] [String]
+  #   The integration_id of the section. Must have manage_sis permission to set.
   #
   # @argument course_section[start_at] [DateTime]
   #   Section start date in ISO8601 format, e.g. 2011-01-01T01:00Z
@@ -259,15 +268,17 @@ class SectionsController < ApplicationController
     params[:course_section] ||= {}
     if authorized_action(@section, @current_user, :update)
       params[:course_section][:sis_source_id] = params[:course_section].delete(:sis_section_id) if api_request?
-      if sis_id = params[:course_section].delete(:sis_source_id)
-        if sis_id != @section.sis_source_id && @section.root_account.grants_right?(@current_user, session, :manage_sis)
-          if sis_id == ''
-            @section.sis_source_id = nil
-          else
-            @section.sis_source_id = sis_id
-          end
+      sis_id = params[:course_section].delete(:sis_source_id)
+      integration_id = params[:course_section].delete(:integration_id)
+      if sis_id || integration_id
+        if @section.root_account.grants_right?(@current_user, :manage_sis)
+          @section.sis_source_id = (sis_id == '') ?  nil : sis_id if sis_id
+          @section.integration_id = (integration_id == '') ?  nil : integration_id if integration_id
+        else
+          return render json: { message: "You must have manage_sis permission to update sis attributes" }, status: :unauthorized if api_request?
         end
       end
+
       respond_to do |format|
         if @section.update_attributes(course_section_params)
           @context.touch

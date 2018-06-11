@@ -1,5 +1,5 @@
-
-# Copyright (C) 2012 Instructure, Inc.
+#
+# Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -234,7 +234,7 @@ describe Quizzes::QuizzesApiController, type: :request do
                         'Accept' => 'application/vnd.api+json')
         @json = @json.fetch('quizzes').map { |q| q.with_indifferent_access }
         expect(@json).to match_array [
-          Quizzes::QuizSerializer.new(@quiz, scope: @user, controller: controller, session: session).
+          Quizzes::QuizApiSerializer.new(@quiz, scope: @user, controller: controller, session: session).
           as_json[:quiz].with_indifferent_access
         ]
       end
@@ -272,7 +272,7 @@ describe Quizzes::QuizzesApiController, type: :request do
         @course.reload
         @quiz = @course.quizzes.first
         expect(@json).to match_array [
-          Quizzes::QuizSerializer.new(@quiz, scope: @user, controller: controller, session: session).
+          Quizzes::QuizApiSerializer.new(@quiz, scope: @user, controller: controller, session: session).
           as_json[:quiz].with_indifferent_access
         ]
       end
@@ -793,11 +793,39 @@ describe Quizzes::QuizzesApiController, type: :request do
           @current_user = @teacher
         end
 
+        it "should allow changing due_at and lock_at with 'fancy midnight'" do
+          quiz_params = {due_at: 'Sun, 18 Mar 2018', lock_at: 'Sun, 18 Mar 2018', unlock_at: 'Fri, 16 Mar 2018', quiz_type: 'assignment'}
+          api_params = {due_at: 'Sat, 17 Mar 2018', lock_at: 'Sat, 17 Mar 2018', unlock_at: 'Fri, 16 Mar 2018'}
+          api_update_quiz(quiz_params, api_params, expected_status: 200)
+          expect(@quiz.reload.due_at.iso8601).to eq('2018-03-17T23:59:59Z')
+          expect(@quiz.reload.lock_at.iso8601).to eq('2018-03-17T23:59:59Z')
+        end
+
+        it "should allow changing due_at with 'fancy midnight'" do
+          quiz_params = {due_at: 'Sun, 18 Mar 2018', lock_at: 'Sun, 18 Mar 2018', unlock_at: 'Fri, 16 Mar 2018', quiz_type: 'assignment'}
+          api_params = {due_at: 'Sat, 17 Mar 2018'}
+          api_update_quiz(quiz_params, api_params, expected_status: 200)
+          expect(@quiz.reload.due_at.iso8601).to eq('2018-03-17T23:59:59Z')
+        end
+
+        it "should allow changing lock_at with 'fancy midnight'" do
+          quiz_params = {due_at: 'Sun, 18 Mar 2018', lock_at: 'Mon, 19 Mar 2018', unlock_at: 'Fri, 16 Mar 2018', quiz_type: 'assignment'}
+          api_params = {lock_at: 'Sun, 18 Mar 2018'}
+          api_update_quiz(quiz_params, api_params, expected_status: 200)
+          expect(@quiz.reload.lock_at.iso8601).to eq('2018-03-18T23:59:59Z')
+        end
+
         it "allows changing the due date to another date in an open grading period" do
           due_date = 3.days.from_now.iso8601
           @quiz = create_quiz(due_at: 7.days.from_now)
           call_update({ due_at: due_date }, 200)
           expect(@quiz.reload.due_at).to eq due_date
+        end
+
+        it "allows dates within the same minute to be considered equal" do
+          quiz_params = {due_at: 'Sun, 18 Mar 2018', lock_at: 'Sun, 18 Mar 2018', unlock_at: 'Fri, 16 Mar 2018', quiz_type: 'assignment'}
+          api_params = {due_at: '2018-03-27 23:59:59 ', lock_at: '2018-03-27 23:59:00'}
+          api_update_quiz(quiz_params, api_params, expected_status: 200)
         end
 
         it "allows changing the due date when the quiz is only visible to overrides" do

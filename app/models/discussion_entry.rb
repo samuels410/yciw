@@ -75,14 +75,16 @@ class DiscussionEntry < ActiveRecord::Base
 
   on_create_send_to_streams do
     if self.root_entry_id.nil?
+      participants = discussion_topic.active_participants_with_visibility
+
       # If the topic has been going for more than two weeks, only show
       # people who have been participating in the topic
       if self.created_at > self.discussion_topic.created_at + 2.weeks
-        DiscussionEntry.active.
+        participants.map(&:id) & DiscussionEntry.active.
           where('discussion_topic_id=? AND created_at > ?', self.discussion_topic_id, 2.weeks.ago).
           distinct.pluck(:user_id)
       else
-        self.discussion_topic.active_participants
+        participants
       end
     else
       []
@@ -129,15 +131,17 @@ class DiscussionEntry < ActiveRecord::Base
     elsif !message || message.empty?
       raise "Message body cannot be blank"
     else
-      entry = DiscussionEntry.new(:message => message)
-      entry.discussion_topic_id = self.discussion_topic_id
-      entry.parent_entry = self
-      entry.user = user
-      if entry.grants_right?(user, :create)
-        entry.save!
-        entry
-      else
-        raise IncomingMail::Errors::ReplyToLockedTopic
+      self.shard.activate do
+        entry = DiscussionEntry.new(:message => message)
+        entry.discussion_topic_id = self.discussion_topic_id
+        entry.parent_entry = self
+        entry.user = user
+        if entry.grants_right?(user, :create)
+          entry.save!
+          entry
+        else
+          raise IncomingMail::Errors::ReplyToLockedTopic
+        end
       end
     end
   end
@@ -177,7 +181,7 @@ class DiscussionEntry < ActiveRecord::Base
   end
 
   def update_discussion
-    if %w(workflow_state message attachment_id editor_id).any? { |a| self.changed.include?(a) }
+    if %w(workflow_state message attachment_id editor_id).any? { |a| self.saved_change_to_attribute?(a) }
       dt = self.discussion_topic
       loop do
         dt.touch
@@ -459,11 +463,9 @@ class DiscussionEntry < ActiveRecord::Base
 
     DiscussionEntry.where(id: id). update_all([
       'rating_count = COALESCE(rating_count, 0) + ?,
-        rating_sum = COALESCE(rating_sum, 0) + ?,
-        updated_at = ?',
+        rating_sum = COALESCE(rating_sum, 0) + ?',
       count_delta,
-      sum_delta,
-      Time.current
+      sum_delta
     ])
     self.discussion_topic.update_materialized_view
   end

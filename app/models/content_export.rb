@@ -99,7 +99,7 @@ class ContentExport < ActiveRecord::Base
     when USER_DATA
       export_user_data(opts)
     when QUIZZES2
-      return unless root_account.feature_enabled?(:quizzes2_exporter)
+      return unless context.feature_enabled?(:quizzes_next)
       export_quizzes2
     else
       export_course(opts)
@@ -213,9 +213,11 @@ class ContentExport < ActiveRecord::Base
           export_type: QUIZZES2
         )
         self.settings[:quizzes2][:qti_export] = {}
-        self.settings[:quizzes2][:qti_export][:url] = self.attachment.download_url
+        self.settings[:quizzes2][:qti_export][:url] = self.attachment.public_download_url
         self.progress = 100
         mark_exported
+      else
+        mark_failed
       end
     rescue
       add_error("Error running export to Quizzes 2.", $!)
@@ -296,11 +298,15 @@ class ContentExport < ActiveRecord::Base
   end
 
   def create_key(obj, prepend="")
-    if for_master_migration?
+    if for_master_migration? && !is_external_object?(obj)
       master_migration.master_template.migration_id_for(obj, prepend) # because i'm too scared to use normal migration ids
     else
       CC::CCHelper.create_key(obj, prepend)
     end
+  end
+
+  def is_external_object?(obj)
+    obj.is_a?(ContextExternalTool) && obj.context_type == "Account"
   end
 
   # Method Summary
@@ -420,7 +426,7 @@ class ContentExport < ActiveRecord::Base
   alias_method :destroy_permanently!, :destroy
   def destroy
     self.workflow_state = 'deleted'
-    self.attachment.destroy_permanently! if self.attachment
+    self.attachment&.destroy_permanently_plus
     save!
   end
 

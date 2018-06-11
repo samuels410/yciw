@@ -22,7 +22,7 @@ import PropTypes from 'prop-types'
 import shapes from './shapes'
 import DuplicateSection from './duplicate_section'
 import MissingPeopleSection from './missing_people_section'
-import Alert from 'instructure-ui/lib/components/Alert'
+import Alert from '@instructure/ui-core/lib/components/Alert'
 
   class PeopleValidationIssues extends React.Component {
     static propTypes = {
@@ -93,7 +93,7 @@ import Alert from 'instructure-ui/lib/components/Alert'
       }
       return (
         <div className="peopleValidationissues__duplicates">
-          <Alert variant="warning" dismissable={false}>
+          <Alert variant="warning">
             {I18n.t('There were several possible matches with the import. Please resolve them below.')}
           </Alert>
           {duplicateAddresses.map((address) => {
@@ -124,7 +124,7 @@ import Alert from 'instructure-ui/lib/components/Alert'
 
       return (
         <div className="peoplevalidationissues__missing">
-          <Alert variant="warning" dismissable={false}>{alertText}</Alert>
+          <Alert variant="warning">{alertText}</Alert>
           <MissingPeopleSection
             inviteUsersURL={this.props.inviteUsersURL}
             missing={this.props.missing}

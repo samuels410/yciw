@@ -1,6 +1,12 @@
 <div class="group-user-name ellipsis">
   <i class="icon-drag-handle" aria-hidden="true"></i>
   {{name}}
+  {{#if is_inactive}}
+    <span style="margin-left:0.5em" class="label"
+          title="{{#t}}This user is currently not able to access the course{{/t}}">
+      {{#t}}inactive{{/t}}
+    </span>
+  {{/if}}
 </div>
 {{#if isLeader}}<i class="icon-user group-leader"
   aria-label="{{#t 'group_leader'}}Group Leader{{/t}}"
@@ -22,7 +28,7 @@
        class="al-trigger group-user-actions"
        data-kyle-menu-options='{"appendMenuTo": "body"}'
        role="button">
-        <i class="icon-settings"></i><i class="icon-mini-arrow-down"></i>
+        <i class="icon-more" aria-hidden="true"></i>
         <span class="screenreader-only">
           {{#t "edit_group_membership"}}Edit {{name}}'s membership{{/t}}
         </span>

@@ -57,15 +57,16 @@ class AdminsController < ApplicationController
   # @argument user_id [Required, Integer]
   #   The id of the user to promote.
   #
-  # @argument role [String] (deprecated)
-  #   The user's admin relationship with the account will be created with the
-  #   given role. Defaults to 'AccountAdmin'.
+  # @argument role [String]
+  #   [DEPRECATED] The user's admin relationship with the account will be
+  #   created with the given role. Defaults to 'AccountAdmin'.
   #
   # @argument role_id [Integer]
   #   The user's admin relationship with the account will be created with the
   #   given role. Defaults to the built-in role for 'AccountAdmin'.
   #
-  # @argument send_confirmation [Boolean] Send a notification email to
+  # @argument send_confirmation [Boolean]
+  #   Send a notification email to
   #   the new admin if true. Default is true.
   #
   # @returns Admin
@@ -101,9 +102,9 @@ class AdminsController < ApplicationController
   #
   # Remove the rights associated with an account admin role from a user.
   #
-  # @argument role [String] (Deprecated)
-  #   Account role to remove from the user. Defaults to 'AccountAdmin'. Any
-  #   other account role must be specified explicitly.
+  # @argument role [String]
+  #   [DEPRECATED] Account role to remove from the user. Defaults to
+  #   'AccountAdmin'. Any other account role must be specified explicitly.
   #
   # @argument role_id [Integer]
   #   The user's admin relationship with the account will be created with the
@@ -122,7 +123,7 @@ class AdminsController < ApplicationController
 
   # @API List account admins
   #
-  # List the admins in the account
+  # A paginated list of the admins in the account
   #
   # @argument user_id[] [[Integer]]
   #   Scope the results to those with user IDs equal to any of the IDs specified here.
@@ -143,7 +144,9 @@ class AdminsController < ApplicationController
 
   def require_role
     @role = Role.get_role_by_id(params[:role_id]) if params[:role_id]
-    @role ||= @context.get_account_role_by_name(params[:role]) if params[:role]
-    @role ||= Role.get_built_in_role("AccountAdmin")
+    @context.shard.activate do
+      @role ||= @context.get_account_role_by_name(params[:role]) if params[:role]
+      @role ||= Role.get_built_in_role("AccountAdmin")
+    end
   end
 end

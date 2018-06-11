@@ -39,6 +39,7 @@ class WikiPage < ActiveRecord::Base
   restrict_columns :content, [:body, :title]
   restrict_columns :settings, [:editing_roles]
   restrict_assignment_columns
+  restrict_columns :state, [:workflow_state]
 
   after_update :post_to_pandapub_when_revised
 
@@ -172,6 +173,8 @@ class WikiPage < ActiveRecord::Base
 
   has_a_broadcast_policy
   simply_versioned :exclude => SIMPLY_VERSIONED_EXCLUDE_FIELDS, :when => Proc.new { |wp|
+    # always create a version when restoring a deleted page
+    next true if wp.workflow_state_changed? && wp.workflow_state_was == 'deleted'
     # :user_id and :updated_at do not merit creating a version, but should be saved
     exclude_fields = [:user_id, :updated_at].concat(SIMPLY_VERSIONED_EXCLUDE_FIELDS).map(&:to_s)
     (wp.changes.keys.map(&:to_s) - exclude_fields).present?
@@ -424,7 +427,8 @@ class WikiPage < ActiveRecord::Base
     }
     opts_with_default = default_opts.merge(opts)
     result = WikiPage.new({
-      :title => opts_with_default[:copy_title] ? opts_with_default[:copy_title] : get_copy_title(self, t("Copy")),
+      :title =>
+        opts_with_default[:copy_title] ? opts_with_default[:copy_title] : get_copy_title(self, t("Copy"), self.title),
       :wiki_id => self.wiki_id,
       :context_id => self.context_id,
       :context_type => self.context_type,
@@ -436,13 +440,11 @@ class WikiPage < ActiveRecord::Base
       :view_count => 0,
       :todo_date => self.todo_date
     })
-    if self.assignment
-      if opts_with_default[:duplicate_assignment]
+    if self.assignment && opts_with_default[:duplicate_assignment]
         result.assignment = self.assignment.duplicate({
           :duplicate_wiki_page => false,
           :copy_title => result.title
         })
-      end
     end
     result
   end
@@ -466,7 +468,7 @@ class WikiPage < ActiveRecord::Base
   end
 
   def post_to_pandapub_when_revised
-    if revised_at_changed?
+    if saved_change_to_revised_at?
       CanvasPandaPub.post_update(
         "/private/wiki_page/#{self.global_id}/update", {
           revised_at: self.revised_at

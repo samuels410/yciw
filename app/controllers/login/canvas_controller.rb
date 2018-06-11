@@ -19,6 +19,7 @@
 class Login::CanvasController < ApplicationController
   include Login::Shared
 
+  before_action :validate_auth_type
   before_action :forbid_on_files_domain
   before_action :run_login_hooks, only: [:new, :create]
   before_action :fix_ms_office_redirects, only: :new
@@ -115,9 +116,9 @@ class Login::CanvasController < ApplicationController
     if found
       # Call for some cleanups that should be run when a user logs in
       user = pseudonym.login_assertions_for_user
-      session[:login_aac] ||= pseudonym.authentication_provider ||
-        @domain_root_account.canvas_authentication_provider ||
-        @domain_root_account.authentication_providers.active.where(auth_type: 'ldap').first
+      session[:login_aac] ||= pseudonym.authentication_provider_id ||
+        @domain_root_account.canvas_authentication_provider&.id ||
+        @domain_root_account.authentication_providers.active.where(auth_type: 'ldap').first&.id
       successful_login(user, pseudonym)
     else
       unsuccessful_login t("Invalid username or password")
@@ -125,6 +126,10 @@ class Login::CanvasController < ApplicationController
   end
 
   protected
+
+  def validate_auth_type
+    @domain_root_account.authentication_providers.where(auth_type: params[:controller].sub(%r{^login/}, '')).active.take!
+  end
 
   def unsuccessful_login(message)
     if request.format.json?
@@ -139,7 +144,7 @@ class Login::CanvasController < ApplicationController
   def maybe_render_mobile_login(status = nil)
     if mobile_device?
       @login_handle_name = @domain_root_account.login_handle_name_with_inference
-      @login_handle_is_email = @login_handle_name == AccountAuthorizationConfig.default_login_handle_name
+      @login_handle_is_email = @login_handle_name == AuthenticationProvider.default_login_handle_name
       js_env(
         GOOGLE_ANALYTICS_KEY: Setting.get('google_analytics_key', nil),
       )

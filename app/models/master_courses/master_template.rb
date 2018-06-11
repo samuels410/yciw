@@ -45,6 +45,8 @@ class MasterCourses::MasterTemplate < ActiveRecord::Base
   after_save :invalidate_course_cache
   after_update :sync_default_restrictions
 
+  after_destroy :destroy_subscriptions_later
+
   def set_defaults
     unless self.default_restrictions.present?
       self.default_restrictions = {:content => true}
@@ -52,35 +54,43 @@ class MasterCourses::MasterTemplate < ActiveRecord::Base
   end
 
   def invalidate_course_cache
-    if self.workflow_state_changed?
+    if self.saved_change_to_workflow_state?
       Rails.cache.delete(self.class.course_cache_key(self.course))
     end
   end
 
   def sync_default_restrictions
     if self.use_default_restrictions_by_type
-      if self.use_default_restrictions_by_type_changed? || self.default_restrictions_by_type_changed?
+      if self.saved_change_to_use_default_restrictions_by_type? || self.saved_change_to_default_restrictions_by_type?
         MasterCourses::RESTRICTED_OBJECT_TYPES.each do |type|
           new_type_restrictions = self.default_restrictions_by_type[type] || {}
           count = self.master_content_tags.where(:use_default_restrictions => true, :content_type => type).
             update_all(:restrictions => new_type_restrictions)
           next unless count > 0
 
-          old_type_restrictions = self.default_restrictions_by_type_was[type] || {}
+          old_type_restrictions = self.default_restrictions_by_type_before_last_save[type] || {}
           if new_type_restrictions.any?{|setting, locked| locked && !old_type_restrictions[setting]} # tightened restrictions
             self.touch_all_content_for_tags(type)
           end
         end
       end
     else
-      if self.default_restrictions_changed?
+      if self.saved_change_to_default_restrictions?
         count = self.master_content_tags.where(:use_default_restrictions => true).
           update_all(:restrictions => self.default_restrictions)
-        if count > 0 && self.default_restrictions.any?{|setting, locked| locked && !self.default_restrictions_was[setting]} # tightened restrictions
+        if count > 0 && self.default_restrictions.any?{|setting, locked| locked && !self.default_restrictions_before_last_save[setting]} # tightened restrictions
           self.touch_all_content_for_tags
         end
       end
     end
+  end
+
+  def destroy_subscriptions_later
+    self.send_later_if_production(:destroy_subscriptions)
+  end
+
+  def destroy_subscriptions
+    self.child_subscriptions.active.each(&:destroy)
   end
 
   def touch_all_content_for_tags(only_content_type=nil)
@@ -139,6 +149,15 @@ class MasterCourses::MasterTemplate < ActiveRecord::Base
     course.master_course_templates.active.for_full_course.first
   end
 
+  def self.master_course_for_child_course(course_id)
+    course_id = course_id.id if course_id.is_a?(Course)
+    mt_table = self.table_name
+    cs_table = MasterCourses::ChildSubscription.table_name
+    Course.joins("INNER JOIN #{MasterCourses::MasterTemplate.quoted_table_name} ON #{mt_table}.course_id=courses.id AND #{mt_table}.workflow_state='active'").
+      joins("INNER JOIN #{MasterCourses::ChildSubscription.quoted_table_name} ON #{cs_table}.master_template_id=#{mt_table}.id AND #{cs_table}.workflow_state='active'").
+      where("#{cs_table}.child_course_id = ?", course_id).first
+  end
+
   def self.preload_index_data(templates)
     child_counts = MasterCourses::ChildSubscription.active.where(:master_template_id => templates).
       joins(:child_course).where.not(:courses => {:workflow_state => "deleted"}).group(:master_template_id).count
@@ -175,6 +194,10 @@ class MasterCourses::MasterTemplate < ActiveRecord::Base
     self.shard.activate do
       Course.shard(self.shard).not_deleted.where(:id => self.child_subscriptions.active.select(:child_course_id))
     end
+  end
+
+  def associated_course_count
+    self.child_subscriptions.active.count
   end
 
   def active_migration_running?
@@ -244,6 +267,10 @@ class MasterCourses::MasterTemplate < ActiveRecord::Base
     end
   end
 
+  def default_restrictions_by_type_for_api
+    default_restrictions_by_type.map{|k, v| [k.constantize.table_name.singularize, v] }.to_h
+  end
+
   def self.create_associations_from_sis(root_account, associations, messages, migrating_user=nil)
     associations.keys.each_slice(50) do |master_sis_ids|
       templates = self.active.for_full_course.joins(:course).
@@ -280,11 +307,7 @@ class MasterCourses::MasterTemplate < ActiveRecord::Base
         end
 
         if migrating_user && needs_migration
-          begin
-            MasterCourses::MasterMigration.start_new_migration!(template, migrating_user)
-          rescue MasterCourses::MasterMigration::MigrationRunningError
-            # meh
-          end
+          MasterCourses::MasterMigration.start_new_migration!(template, migrating_user, :retry_later => true)
         end
       end
     end

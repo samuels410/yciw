@@ -21,14 +21,23 @@ $menu-item-text-hover-focus-color: $ic-font-color-dark;
 $menu-item-text-disabled-color: $ic-font-color-dark;
 $menu-item-keyboard-shortcut-color: $ic-font-color-dark;
 
+[dir=rtl] {
+  .mce-container, .mce-container *, .mce-widget, .mce-widget *, .mce-reset {
+    text-align: right;
+  }
+}
+
 // puts the blue glow around each little color sqare in the tinyMCE text/bg color picker
 .mce-container .mce-grid td.mce-grid-cell div:focus{
-  @include tab-focus();
+  outline: thin dotted #333;
+  outline: 5px auto -webkit-focus-ring-color;
+  outline-offset: -2px;
+  text-decoration: none;
 }
 
 .mce-container .mce-primary {
   @if $use_high_contrast {
-    @include canvas-button($ic-brand-primary, $ic-color-light);
+    @include canvas-button(#0770A3, $ic-color-light);
   } @else {
     @include canvas-button(
       var(--ic-brand-button--primary-bgd),

@@ -16,20 +16,21 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+import 'jqueryui/dialog'
 import I18n from 'i18n!account_settings'
 import $ from 'jquery'
-import EditorConfig from './tinymce.config'
+import htmlEscape from 'str/htmlEscape'
+import RichContentEditor from 'jsx/shared/rce/RichContentEditor'
+import 'jqueryui/tabs'
 import globalAnnouncements from './global_announcements'
 import './jquery.ajaxJSON'
 import './jquery.instructure_date_and_time' // date_field, time_field, datetime_field, /\$\.datetime/
 import './jquery.instructure_forms' // formSubmit, getFormData, validateForm
-import 'jqueryui/dialog'
 import './jquery.instructure_misc_helpers' // replaceTags
 import './jquery.instructure_misc_plugins' // confirmDelete, showIf, /\.log/
 import './jquery.loadingImg'
 import './vendor/date' // Date.parse
 import './vendor/jquery.scrollTo'
-import 'jqueryui/tabs'
 
   export function openReportDescriptionLink (event) {
     event.preventDefault();
@@ -208,6 +209,15 @@ import 'jqueryui/tabs'
     $(".turnitin_account_settings").change(function() {
       $(".confirm_turnitin_settings_link").text(I18n.t('links.turnitin.confirm_settings', "confirm Turnitin settings"));
     });
+
+    $("input[name='account[services][avatars]']").change(function() {
+      if(this.checked) {
+        $("#account_settings_gravatar_checkbox").show();
+      } else {
+        $("#account_settings_gravatar_checkbox").hide();
+      }
+    }).change();
+
     $(".confirm_turnitin_settings_link").click(function(event) {
       event.preventDefault();
       var $link = $(this);
@@ -283,8 +293,11 @@ import 'jqueryui/tabs'
         width: 560
       });
 
-      $('<a href="#"><i class="icon-question standalone-icon"></i></a>')
-        .click(function(event){
+      $(`<button class="Button Button--icon-action" type="button">
+        <i class="icon-question"></i>
+        <span class="screenreader-only">${htmlEscape(I18n.t("About this service"))}</span>
+      </button>`)
+        .click((event) => {
           event.preventDefault();
           $dialog.dialog('open');
         })
@@ -292,15 +305,15 @@ import 'jqueryui/tabs'
     });
 
     function displayCustomEmailFromName(){
-      var displayText = $('#account_settings_outgoing_email_default_name').val();
+      let displayText = $('#account_settings_outgoing_email_default_name').val();
       if (displayText == '') {
         displayText = I18n.t('custom_text_blank', '[Custom Text]');
       }
       $('#custom_default_name_display').text(displayText);
     }
-    $('.notification_from_name_option').on('change', function(){
-      var $useCustom = $('#account_settings_outgoing_email_default_name_option_custom');
-      var $customName = $('#account_settings_outgoing_email_default_name');
+    $('.notification_from_name_option').on('change', () => {
+      const $useCustom = $('#account_settings_outgoing_email_default_name_option_custom');
+      const $customName = $('#account_settings_outgoing_email_default_name');
       if ($useCustom.attr('checked')) {
         $customName.removeAttr('disabled');
         $customName.focus()
@@ -309,7 +322,7 @@ import 'jqueryui/tabs'
         $customName.attr('disabled', 'disabled');
       }
     });
-    $('#account_settings_outgoing_email_default_name').on('keyup', function(){
+    $('#account_settings_outgoing_email_default_name').on('keyup', () =>{
       displayCustomEmailFromName();
     });
     // Setup initial display state
@@ -323,4 +336,32 @@ import 'jqueryui/tabs'
     $('#account_settings_global_includes').change(function() {
       $('#global_includes_warning_message_wrapper').toggleClass('alert', this.checked);
     }).trigger('change');
+
+    const $rce_container = $('#custom_tos_rce_container')
+    $('#terms_of_service_modal').hide()
+    if ($rce_container.length > 0) {
+      const $textarea = $rce_container.find('textarea');
+      RichContentEditor.preloadRemoteModule();
+      if ($("#account_terms_of_service_terms_type").find(":selected").text() === 'Custom') {
+        $('#terms_of_service_modal').show()
+        $rce_container.show();
+        setTimeout (() => {
+          RichContentEditor.loadNewEditor($textarea, { manageParent: true, defaultContent: ENV.TERMS_OF_SERVICE_CUSTOM_CONTENT || ''})
+        }, 1000);
+      }
+      $( "#account_terms_of_service_terms_type" ).change(function() {
+        if (this.value === 'custom') {
+          $('#terms_of_service_modal').show()
+          $rce_container.show();
+          RichContentEditor.loadNewEditor($textarea, {
+            focus: true,
+            manageParent: true,
+            defaultContent: ENV.TERMS_OF_SERVICE_CUSTOM_CONTENT || ''
+          });
+        } else {
+          $rce_container.hide();
+          $('#terms_of_service_modal').hide()
+        }
+      });
+    }
   });

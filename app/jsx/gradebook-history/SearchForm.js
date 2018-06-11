@@ -21,15 +21,16 @@ import { connect } from 'react-redux';
 import { arrayOf, func, shape, string } from 'prop-types';
 import I18n from 'i18n!gradebook_history';
 import moment from 'moment';
-import Autocomplete from 'instructure-ui/lib/components/Autocomplete';
-import Button from 'instructure-ui/lib/components/Button';
-import Container from 'instructure-ui/lib/components/Container';
-import DateInput from 'instructure-ui/lib/components/DateInput';
-import FormFieldGroup from 'instructure-ui/lib/components/FormFieldGroup';
-import Spinner from 'instructure-ui/lib/components/Spinner';
-import ScreenReaderContent from 'instructure-ui/lib/components/ScreenReaderContent';
-import SearchFormActions from 'jsx/gradebook-history/actions/SearchFormActions';
-import { showFlashAlert } from 'jsx/shared/FlashAlert';
+import Autocomplete from '@instructure/ui-core/lib/components/Autocomplete';
+import Button from '@instructure/ui-core/lib/components/Button';
+import Container from '@instructure/ui-core/lib/components/Container';
+import DateInput from '@instructure/ui-core/lib/components/DateInput';
+import FormFieldGroup from '@instructure/ui-core/lib/components/FormFieldGroup';
+import { GridCol } from '@instructure/ui-core/lib/components/Grid';
+import Spinner from '@instructure/ui-core/lib/components/Spinner';
+import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent';
+import SearchFormActions from '../gradebook-history/actions/SearchFormActions';
+import { showFlashAlert } from '../shared/FlashAlert';
 
 const recordShape = shape({
   fetchStatus: string.isRequired,
@@ -46,7 +47,7 @@ class SearchFormComponent extends Component {
     assignments: recordShape.isRequired,
     graders: recordShape.isRequired,
     students: recordShape.isRequired,
-    getGradeHistory: func.isRequired,
+    getGradebookHistory: func.isRequired,
     clearSearchOptions: func.isRequired,
     getSearchOptions: func.isRequired,
     getSearchOptionsNextPage: func.isRequired,
@@ -57,8 +58,8 @@ class SearchFormComponent extends Component {
       assignment: '',
       grader: '',
       student: '',
-      from: '',
-      to: ''
+      from: { value: '', conversionFailed: false },
+      to: { value: '', conversionFailed: false }
     },
     messages: {
       assignments: I18n.t('Type a few letters to start searching'),
@@ -68,7 +69,7 @@ class SearchFormComponent extends Component {
   };
 
   componentDidMount () {
-    this.props.getGradeHistory(this.state.selected);
+    this.props.getGradebookHistory(this.state.selected);
   }
 
   componentWillReceiveProps ({
@@ -78,7 +79,7 @@ class SearchFormComponent extends Component {
     students
   }) {
     if (this.props.fetchHistoryStatus === 'started' && fetchHistoryStatus === 'failure') {
-      showFlashAlert({ message: I18n.t('Error loading grade history. Try again?') });
+      showFlashAlert({ message: I18n.t('Error loading gradebook history. Try again?') });
     }
 
     if (assignments.fetchStatus === 'success' && assignments.items.length === 0) {
@@ -116,22 +117,22 @@ class SearchFormComponent extends Component {
     }
   }
 
-  setSelectedFrom = (from) => {
-    const startOfFrom = from ? moment(from).startOf('day').format() : '';
+  setSelectedFrom = (_, from, _rawValue, rawConversionFailed) => {
+    const startOfFrom = from ? moment(from).startOf('day').toISOString() : '';
     this.setState(prevState => ({
       selected: {
         ...prevState.selected,
-        from: startOfFrom
+        from: { value: startOfFrom, conversionFailed: rawConversionFailed }
       }
     }));
   }
 
-  setSelectedTo = (to) => {
-    const endOfTo = to ? moment(to).endOf('day').format() : '';
+  setSelectedTo = (_, to, _rawValue, rawConversionFailed) => {
+    const endOfTo = to ? moment(to).endOf('day').toISOString() : '';
     this.setState(prevState => ({
       selected: {
         ...prevState.selected,
-        to: endOfTo
+        to: { value: endOfTo, conversionFailed: rawConversionFailed }
       }
     }));
   }
@@ -166,21 +167,25 @@ class SearchFormComponent extends Component {
     }));
   }
 
-  hasOneDate () {
-    const { from, to } = this.state.selected;
-    return (from !== '' && !to) || (!from && to !== '');
+  hasToBeforeFrom () {
+    return moment(this.state.selected.from.value).diff(moment(this.state.selected.to.value), 'seconds') >= 0;
   }
 
-  hasNoDates () {
-    return !this.state.selected.from && !this.state.selected.to;
+  hasDateInputErrors () {
+    return this.dateInputErrors().length > 0 ||
+      this.state.selected.from.conversionFailed ||
+      this.state.selected.to.conversionFailed;
   }
 
-  hasFromBeforeTo () {
-    return moment(this.state.selected.to).diff(moment(this.state.selected.from), 'seconds') >= 0;
-  }
+  dateInputErrors = () => {
+    if (this.hasToBeforeFrom()) {
+      return [{
+        type: 'error',
+        text: I18n.t('\'From\' date must be before \'To\' date')
+      }];
+    }
 
-  hasValidTimeFrame () {
-    return this.hasFromBeforeTo() || this.hasOneDate() || this.hasNoDates();
+    return [];
   }
 
   promptUserEntry = () => {
@@ -194,10 +199,19 @@ class SearchFormComponent extends Component {
     });
   }
 
-  handleSearchEntry = (event) => {
-    const target = event.target.id;
-    const searchTerm = event.target.value;
+  handleAssignmentChange = (_event, value) => {
+    this.handleSearchEntry('assignments', value);
+  }
 
+  handleGraderChange = (_event, value) => {
+    this.handleSearchEntry('graders', value);
+  }
+
+  handleStudentChange = (_event, value) => {
+    this.handleSearchEntry('students', value);
+  }
+
+  handleSearchEntry = (target, searchTerm) => {
     if (searchTerm.length <= 2) {
       if (this.props[target].items.length > 0) {
         this.props.clearSearchOptions(target);
@@ -211,11 +225,7 @@ class SearchFormComponent extends Component {
   }
 
   handleSubmit = () => {
-    if (!this.hasValidTimeFrame()) {
-      return;
-    }
-
-    this.props.getGradeHistory(this.state.selected);
+    this.props.getGradebookHistory(this.state.selected);
   }
 
   filterNone = options => (
@@ -232,19 +242,20 @@ class SearchFormComponent extends Component {
 
   render () {
     return (
-      <Container as="div" margin="0 0 xx-large x-small">
+      <Container as="div" margin="0 0 xx-large">
         <FormFieldGroup
           description={<ScreenReaderContent>{I18n.t('Search Form')}</ScreenReaderContent>}
           as="div"
           layout="columns"
-          colSpacing="large"
-          vAlign="bottom"
+          colSpacing="small"
+          vAlign="top"
           startAt="large"
         >
           <FormFieldGroup
             description={<ScreenReaderContent>{I18n.t('Users')}</ScreenReaderContent>}
             as="div"
             layout="columns"
+            vAlign="top"
             startAt="medium"
           >
             <Autocomplete
@@ -257,7 +268,7 @@ class SearchFormComponent extends Component {
               loadingOption={<Spinner size="small" title={I18n.t('Loading Students')} />}
               onBlur={this.promptUserEntry}
               onChange={this.setSelectedStudent}
-              onInputChange={this.handleSearchEntry}
+              onInputChange={this.handleStudentChange}
             >
               {this.renderAsOptions(this.props.students.items)}
             </Autocomplete>
@@ -271,7 +282,7 @@ class SearchFormComponent extends Component {
               loadingOption={<Spinner size="small" title={I18n.t('Loading Graders')} />}
               onBlur={this.promptUserEntry}
               onChange={this.setSelectedGrader}
-              onInputChange={this.handleSearchEntry}
+              onInputChange={this.handleGraderChange}
             >
               {this.renderAsOptions(this.props.graders.items)}
             </Autocomplete>
@@ -285,15 +296,18 @@ class SearchFormComponent extends Component {
               loadingOption={<Spinner size="small" title={I18n.t('Loading Assignments')} />}
               onBlur={this.promptUserEntry}
               onChange={this.setSelectedAssignment}
-              onInputChange={this.handleSearchEntry}
+              onInputChange={this.handleAssignmentChange}
             >
               {this.renderAsOptions(this.props.assignments.items)}
             </Autocomplete>
           </FormFieldGroup>
+
           <FormFieldGroup
             description={<ScreenReaderContent>{I18n.t('Dates')}</ScreenReaderContent>}
             layout="columns"
             startAt="small"
+            vAlign="top"
+            messages={this.dateInputErrors()}
           >
             <DateInput
               label={I18n.t('Start Date')}
@@ -308,13 +322,19 @@ class SearchFormComponent extends Component {
               onDateChange={this.setSelectedTo}
             />
           </FormFieldGroup>
-          <Button
-            onClick={this.handleSubmit}
-            type="submit"
-            variant="primary"
-          >
-            {I18n.t('Filter')}
-          </Button>
+
+          <GridCol width="auto">
+            <div style={{ margin: "1.85rem 0 0 0" }}>
+              <Button
+                onClick={this.handleSubmit}
+                type="submit"
+                variant="primary"
+                disabled={this.hasDateInputErrors()}
+              >
+                {I18n.t('Filter')}
+              </Button>
+            </div>
+          </GridCol>
         </FormFieldGroup>
       </Container>
     );
@@ -344,8 +364,8 @@ const mapStateToProps = state => (
 
 const mapDispatchToProps = dispatch => (
   {
-    getGradeHistory: (input) => {
-      dispatch(SearchFormActions.getGradeHistory(input));
+    getGradebookHistory: (input) => {
+      dispatch(SearchFormActions.getGradebookHistory(input));
     },
     getSearchOptions: (recordType, searchTerm) => {
       dispatch(SearchFormActions.getSearchOptions(recordType, searchTerm));

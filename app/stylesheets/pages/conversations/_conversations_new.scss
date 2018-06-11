@@ -16,6 +16,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+@import "deprecated/bootstrap/mixins";
 @import "vendor/bootstrap/button-groups";
 @import "components/autocomplete";
 
@@ -24,6 +25,10 @@
 .ic-Layout-contentMain,
 .conversations {
   height: 100%;
+}
+
+.conversations {
+  overflow: hidden;
 }
 
 .ic-Layout-wrapper {
@@ -102,7 +107,7 @@
   }
 
   .actions {
-    margin-right: $ic-sp;
+    margin-#{direction(right)}: $ic-sp;
   }
 }
 
@@ -114,7 +119,7 @@
 }
 
 .filters {
-  margin-right: $ic-sp;
+  margin-#{direction(right)}: $ic-sp;
 
   /* TODO: make sure we still need this with the frd filters (may not be selects) */
   select {
@@ -143,8 +148,8 @@
 #help-btn {
   color: #333;
   position: relative;
-  left: 8px;
-  float: right;
+  #{direction(left)}: 8px;
+  float: direction(right);
 
   &:hover, &:focus {
     color: #0088cc;
@@ -153,7 +158,7 @@
 
   .icon-mini-arrow-down {
     position: relative;
-    right: 5px;
+    #{direction(right)}: 5px;
   }
 }
 
@@ -161,7 +166,7 @@
   display: block;
 
   .ac-input-box {
-    float: left;
+    float: direction(left);
     min-height: 0;
     height: 38px;
     padding: 6px 12px;
@@ -179,7 +184,7 @@
   }
 
   .ac-input {
-    margin-left: 0;
+    margin-#{direction(left)}: 0;
   }
 
   input {
@@ -187,11 +192,12 @@
   }
 
   .btn {
-    float: left;
+    float: direction(left);
   }
 }
 
 .messaging-wrapper {
+  display: flex;
   position: absolute;
   bottom: 0;
   top: 112px;
@@ -199,9 +205,10 @@
 }
 
 .message-list-scroller {
-  border-right: 1px solid #bfbfbf;
+  border-#{direction(right)}: 1px solid #bfbfbf;
   height: 100%;
   overflow: auto;
+  max-width: 400px;
 }
 
 .message-list {
@@ -218,24 +225,61 @@
     padding: 0 10px;
   }
 
+  .collectionViewItems {
+    padding-bottom: 60px;
+  }
+
+  // individual message container
   .messages > li {
     background: $ic-color-light;
     box-sizing: border-box;
     cursor: pointer;
-    height: 90px;
-    padding: 8px 12px 8px 32px;
-    position: relative;
+    height: 140px;
+    padding: 20px 10px;
     border-bottom: 1px solid $ic-border-light;
+    display: flex;
+    overflow: hidden;
 
     &.active {
       background: $ic-bg-light-primary;
     }
+
     &:hover {
       box-shadow: inset -4px 0px 0px var(--ic-brand-primary);
     }
-    &:hover .message-actions a, .message-actions a:focus {
-      left: 0;
+
+    .message-left-column {
+      width: 25px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
+
+    .message-middle-column {
+      flex-grow: 1;
+      padding: 0 10px;
+      max-width: calc(100% - 70px); // 70px comes from the padding of the parent + the width of the siblings
+    }
+
+    .message-right-column {
+      width: 25px;
+      display: flex;
+      justify-content: space-between;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    &.active, &:hover {
+      .star-btn {
+        transform: translateX(0);
+      }
+    }
+  }
+
+  .date {
+    color: var(--ic-brand-primary);
+    @include fontSize(13px);
+    margin-bottom: 10px;
   }
 
   .author {
@@ -244,22 +288,110 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    @include fontSize(13px);
+    @include fontSize(14px);
     font-weight: bold;
     margin: 0;
+    color: $ic-color-dark;
   }
 
-  .date {
-    color: var(--ic-brand-primary);
+  .subject {
+    @include fontSize(16px);
+    color: $ic-color-medium-darker;
+    max-width: 80%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: normal;
+    margin: 0;
+
+    &:focus {
+      outline: 0;
+    }
   }
 
   .summary {
-    color: $ic-font-color-dark;
+    @include fontSize(16px);
+    color: $ic-color-medium;
     height: 40px;
     margin: 0 24px 0 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .message-count {
+    @include fontSize(13px);
+    background-color: $ic-color-dark;
+    padding: 4px 7px;
+    border-radius: 4px;
+    text-shadow: none;
+  }
+
+  .select-checkbox {
+    position: relative;
+    #{direction(left)}: 5px;
+    margin-bottom: 8px;
+    top: -2px;
+  }
+
+  .read-state {
+    box-sizing: border-box;
+    display: inline-block;
+    margin: 3px;
+    height: 16px;
+    width: 16px;
+
+    &:focus {
+      outline: none;
+      box-shadow: 0 0 0 1px var(--ic-link-color);
+    }
+
+    &:before {
+      content: '';
+      display: block;
+      height: 16px;
+      width: 16px;
+      border-radius: 50%;
+      box-shadow: none;
+      background: var(--ic-brand-primary);
+    }
+
+    &.read {
+      &:before {
+        box-shadow: 0 0 0 1px var(--ic-link-color);
+        background: none;
+      }
+    }
+  }
+
+  .star-btn {
+    color: $ic-color-medium-darker;
+    display: inline-block;
+    font-family: 'Hiragino Kaku Gothic Pro', 'Lucida Sans Unicode', 'Arial Unicode MS';
+    @include fontSize($ic-font-size--medium);
+    transform: translateX(50px);
+    text-decoration: none;
+
+    &:focus, &.active {
+      transform: translateX(0);
+    }
+
+    &:focus {
+      outline: none;
+      box-shadow: inset 0 0 0 1px var(--ic-link-color);
+    }
+
+    &:before {
+      content: '\2606';
+    }
+
+    &.active {
+      color: $ic-color-alert;
+      text-shadow: 0 0 1px $ic-color-alert;
+      &:before {
+        content: '\2605';
+      }
+    }
   }
 
   p {
@@ -269,155 +401,31 @@
   }
 }
 
-.subject {
-  margin: 0;
-  @include fontSize(13px);
-  display: block;
-  max-width: 80%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-
-  &:focus {
-    outline: 0;
-  }
-}
-h2.subject {
-  font-weight: bold;
-}
-
-.message-full-participants {
-  display: none;
-}
-
-.message-summarized-participants:focus, .message-full-participants:focus {
-  outline: 0;
-}
-
-.message-count {
-  @include fontSize(11px);
-  position: absolute;
-  right: 13px;
-  top: 43%;
-  background-color: $ic-color-dark;
-  text-shadow: none;
-}
-
-.message-actions {
-  left: 8px;
-  position: absolute;
-  top: 8px;
-
-  a {
-    position: relative;
-  }
-
-  li {
-    margin-bottom: 8px;
-  }
-
-  .read-state {
-    background: $ic-color-dark;
-    border-radius: 5px;
-    box-sizing: border-box;
-    display: inline-block;
-    height: 10px;
-    margin: 3px;
-    width: 10px;
-
-    &::before {
-      content: "";
-      position: absolute;
-      top: -0.25rem;
-      left: -0.25rem;
-      right: -0.25rem;
-      bottom: -0.25rem;
-      border: 1px solid var(--ic-brand-primary);
-      border-radius: 50%;
-      opacity: 0;
-      transform: scale(0.01);
-      transition: all 0.2s;
-    }
-
-    &:focus {
-      outline: none;
-      &::before {
-        opacity: 1;
-        transform: scale(1);
-      }
-    }
-
-    &.read {
-      background: var(--ic-brand-primary);
-      left: -9999px;
-    }
-  }
-
-  .star-btn {
-    color: $ic-font-color-dark;
-    display: inline-block;
-    font-family: 'Hiragino Kaku Gothic Pro', 'Lucida Sans Unicode', 'Arial Unicode MS';
-    @include fontSize($ic-font-size--medium);
-    left: -9999em;
-
-    &:hover {
-      text-decoration: none;
-    }
-
-    &:focus {
-      color: #333;
-      text-decoration: none;
-    }
-
-    &:focus, &.active {
-      left: 0;
-    }
-
-    &.active {
-      &:before, &:after {
-        position: absolute;
-      }
-      &:before {
-        color: $ic-color-alert;
-        content: "\2605";
-      }
-      &:focus {
-        color: #333;
-        &:after {
-          content: "\2606";
-          color: #333;
-          z-index: 5;
-          top: 0; left: 0;
-        }
-      }
-    }
-  }
-}
-
 .open-message {
   @include accessibility-prompt;
-  left: -9999px;
+  #{direction(left)}: -9999px;
   position: absolute;
   &:focus {
-    left: auto; top: auto;
-    right: 0; bottom: 0;
+    #{direction(left)}: auto; top: auto;
+    #{direction(right)}: 0; bottom: 0;
     z-index: 1;
     width: auto; height: auto;
   }
 }
 
 .message-detail.span8 {
-  margin-left: 0;
+  margin-#{direction(left)}: 0;
   width: 68.08511%;
   height: 100%;
   overflow: auto;
+  flex-grow: 1;
 
   &:focus {
     outline: none;
   }
 
   .subject {
-    float: left;
+    float: direction(left);
   }
 
   .no-messages {
@@ -445,7 +453,6 @@ h2.subject {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    height: 40px;
     padding: 0 12px;
     border-bottom: 1px solid $ic-border-light;
 
@@ -461,7 +468,6 @@ h2.subject {
   }
 
   .message-content > li {
-
     margin: 0 12px;
     padding: 24px 0;
     border-bottom: 1px solid $ic-border-light;
@@ -489,8 +495,8 @@ h2.subject {
 
   .user-info {
     .avatar {
-      float: left;
-      margin-right: 8px;
+      float: direction(left);
+      margin-#{direction(right)}: 8px;
     }
 
     .context {
@@ -510,12 +516,12 @@ h2.subject {
   .date {
     color: darken($ic-color-neutral, 50);
     position: absolute;
-    right: 10px;
+    #{direction(right)}: 10px;
     top: 0;
   }
 
   .actions {
-    right: 9999em;
+    #{direction(right)}: 9999em;
     position: relative;
     top: 0;
     margin: 20px 10px 0 8px;
@@ -523,7 +529,7 @@ h2.subject {
 
   .actions li {
     border: none;
-    float: left;
+    float: direction(left);
     margin:0 0 0 8px;
     padding: 0;
   }
@@ -541,13 +547,13 @@ h2.subject {
 }
 
 .touch .message-detail .actions {
-  right: -7px;
+  #{direction(right)}: -7px;
   top: 24px;
 }
 
 .touch .message-item-view:hover, .touch .message-metadata.hover {
   .date {
-    right: 0;
+    #{direction(right)}: 0;
   }
 }
 
@@ -555,7 +561,7 @@ h2.subject {
 
   .actions {
     display: block;
-    right: -7px;
+    #{direction(right)}: -7px;
   }
 }
 
@@ -583,8 +589,8 @@ i.icon-ok:before {
 
 input.dropdown-search {
   display: block;
-  margin-left: auto;
-  margin-right: auto;
+  margin-#{direction(left)}: auto;
+  margin-#{direction(right)}: auto;
   width: 90%;
 }
 

@@ -18,7 +18,7 @@
 
 import GradingTypes from './grading-types'
 import I18n from 'i18n!cyoe_assignment_sidebar'
-import numberHelper from 'jsx/shared/helpers/numberHelper'
+import numberHelper from '../helpers/numberHelper'
 
   // stack overflow suggests this implementation
 const isNumeric = (n) => {
@@ -77,7 +77,7 @@ const percentToPoints = (score, assignment) => {
   if (score === 0) { return '0' }
   const percent = numberHelper.parse(score)
   const pointsPossible = Number(assignment.points_possible) || 100
-  return Math.ceil(percent * pointsPossible)
+  return parseFloat((percent * pointsPossible).toFixed(2))
 }
 
 const percentToLetterGrade = (score, assignment) => {

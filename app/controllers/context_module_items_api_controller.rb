@@ -172,6 +172,38 @@
 #           "description": "(Present only if requested through include[]=content_details) If applicable, returns additional details specific to the associated object",
 #           "example": {"points_possible": 20, "due_at": "2012-12-31T06:00:00-06:00", "unlock_at": "2012-12-31T06:00:00-06:00", "lock_at": "2012-12-31T06:00:00-06:00"},
 #           "$ref": "ContentDetails"
+#         },
+#         "published": {
+#           "description": "(Optional) Whether this module item is published. This field is present only if the caller has permission to view unpublished items.",
+#           "type": "boolean",
+#           "example": true
+#         }
+#       }
+#     }
+#
+# @model ModuleItemSequenceNode
+#     {
+#       "id": "ModuleItemSequenceNode",
+#       "description": "",
+#       "properties": {
+#         "prev": {
+#           "description": "The previous ModuleItem in the sequence",
+#           "$ref": "ModuleItem"
+#         },
+#         "current": {
+#           "description": "The ModuleItem being queried",
+#           "$ref": "ModuleItem",
+#           "example": {"id": 768, "module_id": 123, "title": "A lonely page", "type": "Page"}
+#         },
+#         "next": {
+#           "description": "The next ModuleItem in the sequence",
+#           "$ref": "ModuleItem",
+#           "example": {"id": 769, "module_id": 127, "title": "Project 1", "type": "Assignment"}
+#         },
+#         "mastery_path": {
+#           "type": "object",
+#           "description": "The conditional release rule for the module item, if applicable",
+#           "example": {"locked": true, "assignment_sets": [], "selected_set_id": null, "awaiting_choice": false, "still_processing": false, "modules_url": "/courses/11/modules", "choose_url": "/courses/11/modules/items/9/choose", "modules_tab_disabled": false}
 #         }
 #       }
 #     }
@@ -182,15 +214,19 @@
 #       "description": "",
 #       "properties": {
 #         "items": {
-#           "description": "an array containing one hash for each appearence of the asset in the module sequence (up to 10 total)",
-#           "example": [{"prev": null, "current": {"id": 768, "module_id": 123, "title": "A lonely page", "type": "Page"}, "next": {"id": 769, "module_id": 127, "title": "Project 1", "type": "Assignment"}}],
+#           "description": "an array containing one ModuleItemSequenceNode for each appearence of the asset in the module sequence (up to 10 total)",
+#           "example": [{"prev": null,
+#                        "current": {"id": 768, "module_id": 123, "title": "A lonely page", "type": "Page"},
+#                        "next": {"id": 769, "module_id": 127, "title": "Project 1", "type": "Assignment"},
+#                        "mastery_path": {"locked": true, "assignment_sets": [], "selected_set_id": null, "awaiting_choice": false, "still_processing": false, "modules_url": "/courses/11/modules", "choose_url": "/courses/11/modules/items/9/choose", "modules_tab_disabled": false}}],
 #           "type": "array",
-#           "items": { "type": "object" }
+#           "items": { "$ref": "ModuleItemSequenceNode" }
 #         },
 #         "modules": {
 #           "description": "an array containing each Module referenced above",
 #           "type": "array",
-#           "items": { "$ref": "Module" }
+#           "items": { "$ref": "Module" },
+#           "example": [{"id": 123, "name": "Overview"}, {"id": 127, "name": "Imaginary Numbers"}]
 #         }
 #       }
 #     }
@@ -205,7 +241,7 @@ class ContextModuleItemsApiController < ApplicationController
 
   # @API List module items
   #
-  # List the items in a module
+  # A paginated list of the items in a module
   #
   # @argument include[] [String, "content_details"]
   #   If included, will return additional details specific to the content
@@ -366,8 +402,6 @@ class ContextModuleItemsApiController < ApplicationController
       item_params[:url] = params[:module_item][:external_url]
 
       if (@tag = @module.add_item(item_params)) && set_position && set_completion_requirement
-        @tag.workflow_state = 'unpublished'
-        @tag.save
         @module.touch
         render :json => module_item_json(@tag, @current_user, session, @module, nil)
       elsif @tag
@@ -496,7 +530,7 @@ class ContextModuleItemsApiController < ApplicationController
   def select_mastery_path
     return unless authorized_action(@context, @current_user, :read)
     return unless @student == @current_user || authorized_action(@context, @current_user, :manage_assignments)
-    return render json: { message: 'mastery paths not enabled' }, status: :bad_request unless ConditionalRelease::Service.enabled_in_context?(@context)
+    return render json: { message: 'mastery paths not enabled' }, status: :bad_request unless cyoe_enabled?(@context)
     return render json: { message: 'assignment_set_id required' }, status: :bad_request unless params[:assignment_set_id]
 
     get_module_item
@@ -595,8 +629,8 @@ class ContextModuleItemsApiController < ApplicationController
   MAX_SEQUENCES = 10
   # @API Get module item sequence
   #
-  # Given an asset in a course, find the ModuleItem it belongs to, and also the previous and next Module Items
-  # in the course sequence.
+  # Given an asset in a course, find the ModuleItem it belongs to, the previous and next Module Items
+  # in the course sequence, and also any applicable mastery path rules
   #
   # @argument asset_type [String, "ModuleItem"|"File"|"Page"|"Discussion"|"Assignment"|"Quiz"|"ExternalTool"]
   #   The type of asset to find module sequence information for. Use the ModuleItem if it is known
@@ -684,6 +718,11 @@ class ContextModuleItemsApiController < ApplicationController
         if ix < tag_ids.size - 1
           hash[:next] = module_item_json(needed_tags[tag_ids[ix + 1]], @current_user, session)
         end
+        if cyoe_enabled?(@context)
+          is_student = @context.grants_right?(@current_user, session, :participate_as_student)
+          opts = { context: @context, user: @current_user, session: session, is_student: is_student }
+          hash[:mastery_path] = conditional_release_rule_for_module_item(needed_tags[tag_ids[ix]], opts)
+        end
         result[:items] << hash
       end
       modules = needed_tags.values.map(&:context_module).uniq
@@ -715,6 +754,51 @@ class ContextModuleItemsApiController < ApplicationController
 
       @item.context_module_action(@current_user, :read)
       render :json => { :message => t('OK') }
+    end
+  end
+
+  # @API Duplicate module item
+  #
+  # Makes a copy of an assignment, discussion or wiki page module item, within the same module.
+  # It also creates a duplicate copy of the assignment, discussion, or wiki page.
+  #
+  # @example_request
+  #
+  #     curl https://<canvas>/api/v1/courses/<course_id>/modules/items/<item_id>/duplicate \
+  #       -X POST \
+  #       -H 'Authorization: Bearer <token>'
+  #
+  include ContextModulesHelper
+  def duplicate
+    original_tag = @context.context_module_tags.not_deleted.find(params[:id])
+    if authorized_action(original_tag.context_module, @current_user, :update)
+      if original_tag.duplicate_able?
+        new_content = original_tag.content.duplicate
+        new_content.save!
+        new_tag = original_tag.context_module.add_item({
+          type: original_tag.content_type,
+          indent: original_tag.indent,
+          id: new_content.id,
+        })
+
+        new_tag.insert_at(original_tag.position + 1)
+
+        json = new_tag.as_json
+        json['new_positions'] = new_tag.context_module.content_tags.select(:id, :position)
+        json['content_tag'].merge!(
+          publishable: module_item_publishable?(new_tag),
+          published: new_tag.published?,
+          publishable_id: module_item_publishable_id(new_tag),
+          unpublishable: module_item_unpublishable?(new_tag),
+          graded: new_tag.graded?,
+          content_details: content_details(new_tag, @current_user),
+          assignment_id: new_tag.assignment.try(:id),
+          is_duplicate_able: new_tag.duplicate_able?,
+        )
+        render json: json
+      else
+        render :status => 400, :json => { :message => t("Item cannot be duplicated") }
+      end
     end
   end
 

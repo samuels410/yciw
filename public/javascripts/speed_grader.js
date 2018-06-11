@@ -19,13 +19,16 @@
 /*global jsonData*/
 import React from 'react';
 import ReactDOM from 'react-dom';
-import Alert from 'instructure-ui/lib/components/Alert';
-import MGP from 'jsx/speed_grader/gradingPeriod';
+import Alert from '@instructure/ui-core/lib/components/Alert';
+import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent';
+import TextArea from '@instructure/ui-core/lib/components/TextArea';
 import OutlierScoreHelper from 'jsx/grading/helpers/OutlierScoreHelper';
 import quizzesNextSpeedGrading from 'jsx/grading/quizzesNextSpeedGrading';
 import StatusPill from 'jsx/grading/StatusPill';
+import JQuerySelectorCache from 'jsx/shared/helpers/JQuerySelectorCache';
 import numberHelper from 'jsx/shared/helpers/numberHelper';
 import GradeFormatHelper from 'jsx/gradebook/shared/helpers/GradeFormatHelper';
+import SpeedGraderSettingsMenu from 'jsx/speed_grader/SpeedGraderSettingsMenu'
 import studentViewedAtTemplate from 'jst/speed_grader/student_viewed_at';
 import submissionsDropdownTemplate from 'jst/speed_grader/submissions_dropdown';
 import speechRecognitionTemplate from 'jst/speed_grader/speech_recognition';
@@ -40,7 +43,13 @@ import userSettings from 'compiled/userSettings';
 import htmlEscape from './str/htmlEscape';
 import rubricAssessment from './rubric_assessment';
 import SpeedgraderSelectMenu from './speed_grader_select_menu';
-import SpeedgraderHelpers from './speed_grader_helpers';
+import SpeedgraderHelpers, {
+  isAnonymousModeratedMarkingEnabled,
+  setupAnonymizableId,
+  setupAnonymizableStudentId,
+  setupAnonymizableUserId,
+  setupIsAnonymous
+} from './speed_grader_helpers';
 import turnitinInfoTemplate from 'jst/_turnitinInfo';
 import turnitinScoreTemplate from 'jst/_turnitinScore';
 import vericiteInfoTemplate from 'jst/_vericiteInfo';
@@ -59,100 +68,141 @@ import './jquery.templateData';
 import './media_comments';
 import 'compiled/jquery/mediaCommentThumbnail';
 import 'compiled/jquery.rails_flash_notifications';
-import 'jquery.elastic';
 import 'jquery-getscrollbarwidth';
 import './vendor/jquery.scrollTo';
 import './vendor/ui.selectmenu';
+import './jquery.disableWhileLoading';
+import 'compiled/jquery/fixDialogButtons';
 
-// PRIVATE VARIABLES AND FUNCTIONS
-// all of the $ variables here are to speed up access to dom nodes,
-// so that the jquery selector does not have to be run every time.
-// note, this assumes that this js file is being loaded at the bottom of the page
-// so that all these dom nodes already exists.
-var $window = $(window),
-    $full_width_container = $('#full_width_container'),
-    $left_side = $('#left_side'),
-    $resize_overlay = $('#resize_overlay'),
-    $right_side = $('#right_side'),
-    $width_resizer = $('#width_resizer'),
-    $gradebook_header = $('#gradebook_header'),
-    assignmentUrl = $('#assignment_url').attr('href'),
-    $rightside_inner = $('#rightside_inner'),
-    $moderation_bar = $('#moderation_bar'),
-    $moderation_tabs_div = $('#moderation_tabs'),
-    $moderation_tabs = $('#moderation_tabs > ul > li'),
-    $moderation_tab_2nd = $moderation_tabs.eq(1),
-    $moderation_tab_final = $moderation_tabs.eq(2),
-    $new_mark_container = $('#new_mark_container'),
-    $new_mark_link = $('#new_mark_link'),
-    $new_mark_link_menu_item = $new_mark_link.parent(),
-    $new_mark_copy_link1 = $('#new_mark_copy_link1'),
-    $new_mark_copy_link2 = $('#new_mark_copy_link2'),
-    $new_mark_copy_link2_menu_item = $new_mark_copy_link2.parent(),
-    $new_mark_final_link = $('#new_mark_final_link'),
-    $new_mark_final_link_menu_item = $new_mark_final_link.parent(),
-    $not_gradeable_message = $('#not_gradeable_message'),
-    $comments = $('#comments'),
-    $comment_blank = $('#comment_blank').removeAttr('id').detach(),
-    $comment_attachment_blank = $('#comment_attachment_blank').removeAttr('id').detach(),
-    $add_a_comment = $('#add_a_comment'),
-    $add_a_comment_submit_button = $add_a_comment.find('button:submit'),
-    $add_a_comment_textarea = $add_a_comment.find('textarea'),
-    $comment_attachment_input_blank = $('#comment_attachment_input_blank').detach(),
-    fileIndex = 1,
-    $add_attachment = $('#add_attachment'),
-    $submissions_container = $('#submissions_container'),
-    $iframe_holder = $('#iframe_holder'),
-    $avatar_image = $('#avatar_image'),
-    $x_of_x_students = $('#x_of_x_students_frd'),
-    $grded_so_far = $('#x_of_x_graded'),
-    $average_score = $('#average_score'),
-    $this_student_does_not_have_a_submission = $('#this_student_does_not_have_a_submission').hide(),
-    $this_student_has_a_submission = $('#this_student_has_a_submission').hide(),
-    $rubric_assessments_select = $('#rubric_assessments_select'),
-    $grade_container = $('#grade_container'),
-    $grade = $grade_container.find('input, select'),
-    $score = $grade_container.find('.score'),
-    $deduction_box = $('#deduction-box'),
-    $points_deducted = $('#points-deducted'),
-    $final_grade = $('#final-grade'),
-    $average_score_wrapper = $('#average-score-wrapper'),
-    $submission_details = $('#submission_details'),
-    $multiple_submissions = $('#multiple_submissions'),
-    $submission_late_notice = $('#submission_late_notice'),
-    $submission_not_newest_notice = $('#submission_not_newest_notice'),
-    $enrollment_inactive_notice = $('#enrollment_inactive_notice'),
-    $enrollment_concluded_notice = $('#enrollment_concluded_notice'),
-    $closed_gp_notice = $('#closed_gp_notice'),
-    $submission_files_container = $('#submission_files_container'),
-    $submission_files_list = $('#submission_files_list'),
-    $submission_attachment_viewed_at = $('#submission_attachment_viewed_at_container'),
-    $submission_file_hidden = $('#submission_file_hidden').removeAttr('id').detach(),
-    $assignment_submission_turnitin_report_url = $('#assignment_submission_turnitin_report_url'),
-    $assignment_submission_originality_report_url = $('#assignment_submission_originality_report_url'),
-    $assignment_submission_resubmit_to_turnitin_url = $('#assignment_submission_resubmit_to_turnitin_url'),
-    $assignment_submission_vericite_report_url = $('#assignment_submission_vericite_report_url'),
-    $assignment_submission_resubmit_to_vericite_url = $('#assignment_submission_resubmit_to_vericite_url'),
-    $rubric_full = $('#rubric_full'),
-    $rubric_full_resizer_handle = $('#rubric_full_resizer_handle'),
-    $no_annotation_warning = $('#no_annotation_warning'),
-    $comment_submitted = $('#comment_submitted'),
-    $comment_submitted_message = $('#comment_submitted_message'),
-    $comment_saved = $('#comment_saved'),
-    $comment_saved_message = $('#comment_saved_message'),
-    $selectmenu = null,
-    browserableCssClasses = /^(image|html|code)$/,
-    snapshotCache = {},
-    sectionToShow,
-    header,
-    studentLabel = I18n.t('student', 'Student'),
-    groupLabel = I18n.t('group', 'Group'),
-    gradeeLabel = studentLabel,
-    utils,
-    sessionTimer,
-    isAdmin = _.include(ENV.current_user_roles, 'admin'),
-    showSubmissionOverride,
-    EG;
+const selectors = new JQuerySelectorCache();
+const SPEEDGRADER_COMMENT_TEXTAREA_MOUNT_POINT = 'speedgrader_comment_textarea_mount_point';
+
+let isAnonymous
+let anonymizableId
+let anonymizableUserId
+let anonymizableStudentId
+
+let $window
+let $full_width_container
+let $left_side
+let $resize_overlay
+let $right_side
+let $width_resizer
+let $gradebook_header
+let assignmentUrl
+let $rightside_inner
+let $moderation_bar
+let $moderation_tabs_div
+let $moderation_tabs
+let $moderation_tab_2nd
+let $moderation_tab_final
+let $new_mark_container
+let $new_mark_link
+let $new_mark_link_menu_item
+let $new_mark_copy_link1
+let $new_mark_copy_link2
+let $new_mark_copy_link2_menu_item
+let $new_mark_final_link
+let $new_mark_final_link_menu_item
+let $not_gradeable_message
+let $comments
+let $comment_blank
+let $comment_attachment_blank
+let $add_a_comment
+let $add_a_comment_submit_button
+let $add_a_comment_textarea
+let $comment_attachment_input_blank
+let fileIndex
+let $add_attachment
+let $submissions_container
+let $iframe_holder
+let $avatar_image
+let $x_of_x_students
+let $grded_so_far
+let $average_score
+let $this_student_does_not_have_a_submission
+let $this_student_has_a_submission
+let $grade_container
+let $grade
+let $score
+let $deduction_box
+let $points_deducted
+let $final_grade
+let $average_score_wrapper
+let $submission_details
+let $multiple_submissions
+let $submission_late_notice
+let $submission_not_newest_notice
+let $enrollment_inactive_notice
+let $enrollment_concluded_notice
+let $submission_files_container
+let $submission_files_list
+let $submission_attachment_viewed_at
+let $submission_file_hidden
+let $assignment_submission_turnitin_report_url
+let $assignment_submission_originality_report_url
+let $assignment_submission_vericite_report_url
+let $assignment_submission_resubmit_to_vericite_url
+let $rubric_holder
+let $rubric_full_resizer_handle
+let $no_annotation_warning
+let $comment_submitted
+let $comment_submitted_message
+let $comment_saved
+let $comment_saved_message
+let $selectmenu
+let browserableCssClasses
+let snapshotCache
+let sectionToShow
+let header
+let studentLabel
+let groupLabel
+let gradeeLabel
+let utils
+let sessionTimer
+let isAdmin
+let showSubmissionOverride
+let EG
+
+function setupHandleFragmentChanged () {
+  if (!EG.isHandleFragmentChangedSet) {
+    window.addEventListener('hashchange', EG.handleFragmentChanged);
+    EG.isHandleFragmentChangedSet = true
+    return true
+  }
+  return false
+}
+
+function teardownHandleFragmentChanged () {
+  if (EG.isHandleFragmentChangedSet) {
+    window.removeEventListener('hashchange', EG.handleFragmentChanged);
+    EG.isHandleFragmentChangedSet = false
+    return true
+  }
+  return false
+}
+
+function setupBeforeLeavingSpeedgrader () {
+  if (!EG.isBeforeLeavingSpeedgraderSet) {
+    window.addEventListener('beforeunload', EG.beforeLeavingSpeedgrader);
+    EG.isBeforeLeavingSpeedgraderSet = true
+    return true
+  }
+  return false
+}
+
+function teardownBeforeLeavingSpeedgrader () {
+  if (EG.isBeforeLeavingSpeedgraderSet) {
+    window.removeEventListener('beforeunload', EG.beforeLeavingSpeedgrader);
+    EG.isBeforeLeavingSpeedgraderSet = false
+    return true
+  }
+  return false
+}
+
+function unexcuseSubmission (grade, submission, assignment) {
+  return grade === "" && submission.excused && assignment.grading_type === "pass_fail";
+}
 
 utils = {
   getParam: function(name){
@@ -168,29 +218,88 @@ utils = {
     // this is for backwards compatability, we used to store the value as
     // strings "true" or "false", but now we store boolean true/false values.
     var settingVal = userSettings.get("eg_hide_student_names");
-    return settingVal === true || settingVal === "true" || ENV.force_anonymous_grading;
+    return settingVal === true ||
+      settingVal === "true" ||
+      ENV.force_anonymous_grading
   }
 };
+
+function sectionSelectionOptions (courseSections, groupGradingModeEnabled = false, selectedSectionId = null) {
+  if (courseSections.length <= 1 || groupGradingModeEnabled) {
+    return [];
+  }
+
+  let selectedSectionName = I18n.t('All Sections');
+  const sectionOptions = [
+    {
+      [anonymizableId]: 'section_all',
+      data: {
+        'section-id': "all"
+      },
+      name: I18n.t('Show all sections'),
+      className: {
+        raw: 'section_all'
+      },
+      anonymizableId
+    }
+  ];
+
+  courseSections.forEach((section) => {
+    if (section.id === selectedSectionId) {
+      selectedSectionName = section.name;
+    }
+
+    sectionOptions.push({
+      [anonymizableId]: `section_${section.id}`,
+      data: {
+        "section-id": section.id
+      },
+      name: I18n.t('Change section to %{sectionName}', { sectionName: section.name }),
+      className: {
+        raw: `section_${section.id} ${ selectedSectionId === section.id ? 'selected' : '' }`
+      },
+      anonymizableId
+    });
+  });
+
+  return [
+    {
+      name: `Showing: ${selectedSectionName}`,
+      options: sectionOptions
+    }
+  ];
+}
 
 function mergeStudentsAndSubmission() {
   jsonData.studentsWithSubmissions = jsonData.context.students;
   jsonData.studentMap = {};
-  $.each(jsonData.studentsWithSubmissions, function(_, student){
-    jsonData.studentMap[student.id] = student;
-    jsonData.studentMap[student.id].enrollments = [];
-    this.section_ids = $.map($.grep(jsonData.context.enrollments, function(enrollment, _){
-      if(enrollment.user_id === student.id) {
-        jsonData.studentMap[student.id].enrollments.push(enrollment);
-        return true;
-      }
-    }), function(enrollment){
-      return enrollment.course_section_id;
-    });
-    this.submission = $.grep(jsonData.submissions, function(submission, _){
-      return submission.user_id === student.id;
-    })[0];
+  jsonData.studentEnrollmentMap = {};
+  jsonData.studentSectionIdsMap = {};
+  jsonData.submissionsMap = {};
 
-    this.submission_state = SpeedgraderHelpers.submissionState(this, ENV.grading_role);
+  jsonData.context.enrollments.forEach((enrollment) => {
+    const enrollmentAnonymizableUserId = enrollment[anonymizableUserId]
+    jsonData.studentEnrollmentMap[enrollmentAnonymizableUserId] = jsonData.studentEnrollmentMap[enrollmentAnonymizableUserId] || [];
+    jsonData.studentSectionIdsMap[enrollmentAnonymizableUserId] = jsonData.studentSectionIdsMap[enrollmentAnonymizableUserId] || {};
+
+    jsonData.studentEnrollmentMap[enrollmentAnonymizableUserId].push(enrollment);
+    jsonData.studentSectionIdsMap[enrollmentAnonymizableUserId][enrollment.course_section_id] = true;
+  });
+
+  jsonData.submissions.forEach((submission) => {
+    jsonData.submissionsMap[submission[anonymizableUserId]] = submission;
+  });
+
+  jsonData.studentsWithSubmissions.forEach((student, index) => {
+    /* eslint-disable no-param-reassign */
+    student.enrollments = jsonData.studentEnrollmentMap[student[anonymizableId]];
+    student.section_ids = Object.keys(jsonData.studentSectionIdsMap[student[anonymizableId]]);
+    student.submission = jsonData.submissionsMap[student[anonymizableId]];
+    student.submission_state = SpeedgraderHelpers.submissionState(student, ENV.grading_role);
+    student.index = index;
+    /* eslint-enable no-param-reassign */
+
+    jsonData.studentMap[student[anonymizableId]] = student;
   });
 
   // handle showing students only in a certain section.
@@ -212,15 +321,19 @@ function mergeStudentsAndSubmission() {
     }
   }
 
-  //by defaut the list is sorted alphbetically by student last name so we dont have to do any more work here,
-  // if the cookie to sort it by submitted_at is set we need to sort by submitted_at.
-  var hideStudentNames = utils.shouldHideStudentNames();
+  // by default the list is sorted alphabetically by student last name so we
+  // don't have to do any more work here, if the cookie to sort it by
+  // submitted_at is set we need to sort by submitted_at.
+  if (isAnonymous) {
+    jsonData.studentsWithSubmissions.sort(EG.compareStudentsBy(student => student.anonymous_id))
 
-  if(hideStudentNames) {
+    // update index again to be in line with the anonymous_id sorting
+    jsonData.studentsWithSubmissions.forEach((student, index) => {
+      student.index = index /* eslint-disable-line no-param-reassign */
+    })
+  } else if (utils.shouldHideStudentNames() && userSettings.get('eg_sort_by') === 'alphabetically') {
     window.jsonData.studentsWithSubmissions.sort(EG.compareStudentsBy(function (student) {
-      return student &&
-        student.submission &&
-        student.submission.id;
+      return student && student.submission && student.submission.id;
     }));
   } else if (userSettings.get("eg_sort_by") == "submitted_at") {
     window.jsonData.studentsWithSubmissions.sort(EG.compareStudentsBy(function (student) {
@@ -249,31 +362,53 @@ function mergeStudentsAndSubmission() {
   }
 }
 
-// xsslint safeString.identifier MENU_PARTS_DELIMITER
-var MENU_PARTS_DELIMITER = '----☃----'; // something random and unlikely to be in a person's name
+function changeToSection (sectionId) {
+  if (sectionId === 'all') {
+    // We're removing all filters and resetting to default
+    userSettings.contextRemove('grading_show_only_section');
+  } else {
+    userSettings.contextSet('grading_show_only_section', sectionId);
+  }
+
+  window.location.reload();
+}
 
 function initDropdown(){
   var hideStudentNames = utils.shouldHideStudentNames();
   $("#hide_student_names").attr('checked', hideStudentNames);
-  var optionsHtml = $.map(jsonData.studentsWithSubmissions, function(s, idx){
-    var name = s.name.replace(MENU_PARTS_DELIMITER, ""),
-        className = SpeedgraderHelpers.classNameBasedOnStudent(s);
 
-    if(hideStudentNames) {
-      name = I18n.t('nth_student', "Student %{n}", {'n': idx + 1});
+  const optionsArray = jsonData.studentsWithSubmissions.map((student, index) => {
+    const {submission_state, submission} = student
+    let {name} = student
+    const className = SpeedgraderHelpers.classNameBasedOnStudent({submission_state, submission})
+    if (hideStudentNames || isAnonymous) {
+      name = I18n.t("Student %{number}", {number: index + 1})
     }
 
-    return '<option value="' + s.id + '" class="' + htmlEscape(className.raw) + ' ui-selectmenu-hasIcon">' + htmlEscape(name) + MENU_PARTS_DELIMITER + htmlEscape(className.formatted) + MENU_PARTS_DELIMITER + htmlEscape(className.raw) + '</option>';
-  }).join("");
+    return {[anonymizableId]: student[anonymizableId], anonymizableId, name, className};
+  })
 
-  $selectmenu = new SpeedgraderSelectMenu(optionsHtml, MENU_PARTS_DELIMITER);
-  $selectmenu.appendTo("#combo_box_container", function(){
-    EG.handleStudentChanged();
+  const sectionSelectionOptionList = sectionSelectionOptions(
+    jsonData.context.active_course_sections,
+    jsonData.GROUP_GRADING_MODE,
+    sectionToShow
+  );
+
+  $selectmenu = new SpeedgraderSelectMenu(sectionSelectionOptionList.concat(optionsArray));
+  $selectmenu.appendTo("#combo_box_container", (event) => {
+    const newStudentOrSection = $(event.target).val()
+
+    if (newStudentOrSection && newStudentOrSection.match(/^section_(\d+|all)$/)) {
+      const sectionId = newStudentOrSection.replace(/^section_/, '');
+      changeToSection(sectionId);
+    } else {
+      EG.handleStudentChanged();
+    }
   });
 
   if (jsonData.context.active_course_sections.length && jsonData.context.active_course_sections.length > 1 && !jsonData.GROUP_GRADING_MODE) {
-    var $selectmenu_list = $selectmenu.jquerySelectMenu().data('selectmenu').list,
-    $menu = $("#section-menu");
+    const $selectmenu_list = $selectmenu.data('selectmenu').list;
+    const $menu = $("#section-menu");
 
 
     $menu.find('ul').append($.raw($.map(jsonData.context.active_course_sections, function(section, i){
@@ -289,8 +424,7 @@ function initDropdown(){
       .hide()
       .menu()
       .delegate('a', 'click mousedown', function(){
-        userSettings[$(this).data('section-id') == 'all' ? 'contextRemove' : 'contextSet']('grading_show_only_section', $(this).data('section-id'));
-        window.location.reload();
+        changeToSection($(this).data('section-id'));
       });
 
     if (sectionToShow) {
@@ -305,7 +439,7 @@ function initDropdown(){
         .addClass('selected');
     }
 
-    $selectmenu.jquerySelectMenu().selectmenu( 'option', 'open', function(){
+    $selectmenu.selectmenu( 'option', 'open', function(){
       $selectmenu_list.find('li:first').css('margin-top', $selectmenu_list.find('li').height() + 'px');
       $menu.show().css({
         'left'   : $selectmenu_list.css('left'),
@@ -320,172 +454,207 @@ function initDropdown(){
   }
 }
 
-header = {
-  elements: {
-    mute: {
-      icon: $('#mute_link i'),
-      label: $('#mute_link .mute_label'),
-      link: $('#mute_link'),
-      modal: $('#mute_dialog')
-    },
-    unmute: {
-      modal: $('#unmute_dialog')
-    },
-    nav: $gradebook_header.find('#prev-student-button, #next-student-button'),
-    settings: {
-      form: $('#settings_form'),
-      link: $('#settings_link')
-    },
-    keyinfo: {
-      icon: $('#keyboard-shortcut-info-icon')
-    }
-  },
-  courseId: utils.getParam('courses'),
-  assignmentId: utils.getParam('assignment_id'),
-  init: function(){
-    this.muted = this.elements.mute.link.data('muted');
-    this.addEvents();
-    this.createModals();
-    return this;
-  },
-  addEvents: function(){
-    this.elements.nav.click($.proxy(this.toAssignment, this));
-    this.elements.mute.link.click($.proxy(this.onMuteClick, this));
-    this.elements.settings.form.submit(this.submitSettingsForm.bind(this));
-    this.elements.settings.link.click(this.showSettingsModal.bind(this));
-    this.elements.keyinfo.icon.click(this.keyboardShortcutInfoModal.bind(this));
-  },
-  createModals: function(){
-    this.elements.settings.form.dialog({
-      autoOpen: false,
-      modal: true,
-      resizable: false,
-      width: 400
-    }).fixDialogButtons();
-    // FF hack - when reloading the page, firefox seems to "remember" the disabled state of this
-    // button. So here we'll manually re-enable it.
-    this.elements.settings.form.find(".submit_button").removeAttr('disabled')
-    this.elements.mute.modal.dialog({
-      autoOpen: false,
-      buttons: [{
-        text: I18n.t('cancel_button', 'Cancel'),
-        click: $.proxy(function(){
-          this.elements.mute.modal.dialog('close');
-        }, this)
-      },{
-        text: I18n.t('mute_assignment', 'Mute Assignment'),
-        class: 'btn-primary btn-mute',
-        click: $.proxy(function(){
-          this.toggleMute();
-          this.elements.mute.modal.dialog('close');
-        }, this)
-      }],
-      modal: true,
-      resizable: false,
-      title: this.elements.mute.modal.data('title'),
-      width: 400
-    });
-    this.elements.unmute.modal.dialog({
-      autoOpen: false,
-      buttons: [{
-        text: I18n.t('Cancel'),
-        click: $.proxy(function () {
-          this.elements.unmute.modal.dialog('close');
-        }, this)
-      }, {
-        text: I18n.t('Unmute Assignment'),
-        class: 'btn-primary btn-unmute',
-        click: $.proxy(function () {
-          this.toggleMute();
-          this.elements.unmute.modal.dialog('close');
-        }, this)
-      }],
-      modal: true,
-      resizable: false,
-      title: this.elements.unmute.modal.data('title'),
-      width: 400
-    });
-  },
-
-  toAssignment: function(e){
-    e.preventDefault();
-    var classes = e.target.getAttribute("class").split(" ");
-    if (_.contains(classes, "prev")) {
-      EG.prev();
-    } else if (_.contains(classes, "next")) {
-      EG.next();
-    }
-  },
-
-  keyboardShortcutInfoModal: function(e) {
-    var questionMarkKeyDown = $.Event('keydown', { keyCode: 191 });
-    $(document).trigger(questionMarkKeyDown);
-  },
-
-  submitSettingsForm: function(e){
-    e.preventDefault();
-
-    userSettings.set('eg_sort_by', $('#eg_sort_by').val());
-    if (!ENV.force_anonymous_grading) {
-      userSettings.set('eg_hide_student_names', $("#hide_student_names").prop('checked'));
-    }
-
-    $(e.target).find(".submit_button").attr('disabled', true).text(I18n.t('buttons.saving_settings', "Saving Settings..."));
-    var gradeByQuestion = $("#enable_speedgrader_grade_by_question").prop('checked');
-    $.post(ENV.settings_url, {
-      enable_speedgrader_grade_by_question: gradeByQuestion
-    }).then(function() {
-      window.location.reload();
-    });
-  },
-
-  showSettingsModal: function(e){
-    e.preventDefault();
-    this.elements.settings.form.dialog('open');
-  },
-
-  onMuteClick: function(e){
-    e.preventDefault();
-    if (this.muted) {
-      this.elements.unmute.modal.dialog('open');
-    } else {
-      this.elements.mute.modal.dialog('open');
-    }
-  },
-
-  muteUrl: function(){
-    return '/courses/' + this.courseId + '/assignments/' + this.assignmentId + '/mute';
-  },
-
-  toggleMute: function(){
-    this.muted = !this.muted;
-    var label = this.muted ? I18n.t('unmute_assignment', 'Unmute Assignment') : I18n.t('mute_assignment', 'Mute Assignment'),
-    action = this.muted ? 'mute' : 'unmute',
-    actions = {
-      /* Mute action */
-      mute: function(){
-        this.elements.mute.icon.removeClass("icon-unmuted").addClass("icon-muted");
-        $.ajaxJSON(this.muteUrl(), 'put', { status: true }, $.proxy(function(res){
-          this.elements.mute.label.text(label);
-        }, this));
+function setupHeader () {
+  return {
+    elements: {
+      mute: {
+        icon: $('#mute_link i'),
+        label: $('#mute_link .mute_label'),
+        link: $('#mute_link'),
+        modal: $('#mute_dialog')
       },
-
-      /* Unmute action */
-      unmute: function(){
-        this.elements.mute.icon.removeClass("icon-muted").addClass("icon-unmuted");
-        $.ajaxJSON(this.muteUrl(), 'put', { status: false }, $.proxy(function(res){
-          this.elements.mute.label.text(label);
-        }, this));
+      unmute: {
+        modal: $('#unmute_dialog')
+      },
+      nav: $gradebook_header.find('#prev-student-button, #next-student-button'),
+      settings: {
+        form: $('#settings_form'),
+        link: $('#settings_link')
+      },
+      keyinfo: {
+        icon: $('#keyboard-shortcut-info-icon')
       }
-    };
+    },
+    courseId: utils.getParam('courses'),
+    assignmentId: utils.getParam('assignment_id'),
+    init () {
+      this.muted = this.elements.mute.link.data('muted');
+      this.addEvents();
+      this.createModals();
+      return this;
+    },
+    addEvents () {
+      this.elements.nav.click($.proxy(this.toAssignment, this));
+      this.elements.mute.link.click($.proxy(this.onMuteClick, this));
 
-    actions[action].apply(this);
+      this.elements.settings.form.submit(this.submitSettingsForm.bind(this));
+      if (!isAnonymous) {
+        this.elements.settings.link.click(this.showSettingsModal.bind(this));
+      }
+      this.elements.keyinfo.icon.click(this.keyboardShortcutInfoModal.bind(this));
+    },
+    createModals () {
+      this.elements.settings.form.dialog({
+        autoOpen: false,
+        modal: true,
+        resizable: false,
+        width: 400
+      }).fixDialogButtons();
+      // FF hack - when reloading the page, firefox seems to "remember" the disabled state of this
+      // button. So here we'll manually re-enable it.
+      this.elements.settings.form.find(".submit_button").removeAttr('disabled')
+
+      this.elements.mute.modal.dialog({
+        autoOpen: false,
+        buttons: [{
+          text: I18n.t('cancel_button', 'Cancel'),
+          click: $.proxy(function(){
+            this.elements.mute.modal.dialog('close');
+          }, this)
+        },{
+          text: I18n.t('mute_assignment', 'Mute Assignment'),
+          class: 'btn-primary btn-mute',
+          click: $.proxy(function(){
+            this.toggleMute();
+            this.elements.mute.modal.dialog('close');
+          }, this)
+        }],
+        modal: true,
+        resizable: false,
+        title: this.elements.mute.modal.data('title'),
+        width: 400
+      });
+      this.elements.unmute.modal.dialog({
+        autoOpen: false,
+        buttons: [{
+          text: I18n.t('Cancel'),
+          click: $.proxy(function () {
+            this.elements.unmute.modal.dialog('close');
+          }, this)
+        }, {
+          text: I18n.t('Unmute Assignment'),
+          class: 'btn-primary btn-unmute',
+          click: $.proxy(function () {
+            this.toggleMute();
+            this.elements.unmute.modal.dialog('close');
+          }, this)
+        }],
+        modal: true,
+        resizable: false,
+        title: this.elements.unmute.modal.data('title'),
+        width: 400
+      });
+    },
+
+    toAssignment (e) {
+      e.preventDefault();
+      const classes = e.target.getAttribute("class").split(" ");
+      if (_.contains(classes, "prev")) {
+        EG.prev();
+      } else if (_.contains(classes, "next")) {
+        EG.next();
+      }
+    },
+
+    keyboardShortcutInfoModal () {
+      var questionMarkKeyDown = $.Event('keydown', { keyCode: 191 });
+      $(document).trigger(questionMarkKeyDown);
+    },
+
+    submitSettingsForm (e) {
+      e.preventDefault();
+
+      userSettings.set('eg_sort_by', $('#eg_sort_by').val());
+      if (!ENV.force_anonymous_grading) {
+        userSettings.set('eg_hide_student_names', $("#hide_student_names").prop('checked'));
+      }
+
+      $(e.target).find(".submit_button").attr('disabled', true).text(I18n.t('buttons.saving_settings', "Saving Settings..."));
+      const gradeByQuestion = $("#enable_speedgrader_grade_by_question").prop('checked');
+      $.post(ENV.settings_url, {
+        enable_speedgrader_grade_by_question: gradeByQuestion
+      }).then(function() {
+        window.location.reload();
+      });
+    },
+
+    showSettingsModal (event) {
+      if (event) {
+        event.preventDefault()
+      }
+      this.elements.settings.form.dialog('open')
+    },
+
+    onMuteClick (e) {
+      e.preventDefault();
+      if (this.muted) {
+        this.elements.unmute.modal.dialog('open');
+      } else {
+        this.elements.mute.modal.dialog('open');
+      }
+    },
+
+    muteUrl () {
+      return '/courses/' + this.courseId + '/assignments/' + this.assignmentId + '/mute';
+    },
+
+    toggleMute () {
+      this.muted = !this.muted;
+      const label = this.muted ? I18n.t('unmute_assignment', 'Unmute Assignment') : I18n.t('mute_assignment', 'Mute Assignment'),
+        action = this.muted ? 'mute' : 'unmute',
+        actions = {
+          /* Mute action */
+          mute () {
+            this.elements.mute.icon.removeClass("icon-unmuted").addClass("icon-muted");
+            $.ajaxJSON(this.muteUrl(), 'put', { status: true }, $.proxy(function() {
+              this.elements.mute.label.text(label);
+            }, this));
+          },
+
+          /* Unmute action */
+          unmute () {
+            this.elements.mute.icon.removeClass("icon-muted").addClass("icon-unmuted");
+            $.ajaxJSON(this.muteUrl(), 'put', { status: false }, $.proxy(function() {
+              this.elements.mute.label.text(label);
+            }, this));
+          }
+        };
+
+      actions[action].apply(this);
+    }
+  };
+}
+
+function unmountCommentTextArea () {
+  const node = document.getElementById(SPEEDGRADER_COMMENT_TEXTAREA_MOUNT_POINT);
+  ReactDOM.unmountComponentAtNode(node);
+}
+
+function renderCommentTextArea () {
+  // unmounting is a temporary workaround for INSTUI-870 to allow
+  // for textarea minheight to be reset
+  unmountCommentTextArea();
+  function textareaRef (textarea) {
+    $add_a_comment_textarea = $(textarea);
   }
-};
+
+  const textAreaProps = {
+    autoGrow: true,
+    id: 'speedgrader_comment_textarea',
+    label: React.createElement(ScreenReaderContent, null, I18n.t('Add a Comment')),
+    placeholder: I18n.t('Add a Comment'),
+    resize: 'vertical',
+    textareaRef
+  };
+
+  ReactDOM.render(
+    React.createElement(TextArea, textAreaProps),
+    document.getElementById(SPEEDGRADER_COMMENT_TEXTAREA_MOUNT_POINT)
+  );
+}
 
 function initCommentBox(){
-  //initialize the auto height resizing on the textarea
-  $('#add_a_comment textarea').elastic();
+  renderCommentTextArea();
 
   $(".media_comment_link").click(function(event) {
     event.preventDefault();
@@ -646,9 +815,11 @@ function isAssessmentEditableByMe(assessment){
 }
 
 function getSelectedAssessment(){
-  return $.grep(EG.currentStudent.rubric_assessments, function(n,i){
-    return n.id == $rubric_assessments_select.val();
-  })[0];
+  const selectMenu = selectors.get('#rubric_assessments_select');
+
+  return $.grep(EG.currentStudent.rubric_assessments, (n) => (
+    n.id == selectMenu.val()
+  ))[0];
 }
 
 function initRubricStuff(){
@@ -660,9 +831,14 @@ function initRubricStuff(){
     EG.toggleFullRubric();
   });
 
-  $rubric_assessments_select.change(function(){
+  selectors.get('#rubric_assessments_select').change(() => {
+    const editingData = rubricAssessment.assessmentData($("#rubric_full"))
     var selectedAssessment = getSelectedAssessment();
-    rubricAssessment.populateRubricSummary($("#rubric_summary_holder .rubric_summary"), selectedAssessment, isAssessmentEditableByMe(selectedAssessment));
+    rubricAssessment.populateRubricSummary(
+      $("#rubric_summary_holder .rubric_summary"),
+      selectedAssessment,
+      editingData
+    );
   });
 
   $rubric_full_resizer_handle.draggable({
@@ -681,7 +857,7 @@ function initRubricStuff(){
     drag: function(event, ui) {
       var offset = ui.offset,
       windowWidth = $window.width();
-      $rubric_full.width(windowWidth - offset.left);
+      selectors.get('#rubric_full').width(windowWidth - offset.left);
       $rubric_full_resizer_handle.css("left","0");
     },
     stop: function(event, ui) {
@@ -701,9 +877,9 @@ function initRubricStuff(){
     data['graded_anonymously'] = utils.shouldHideStudentNames();
     var url = $(".update_rubric_assessment_url").attr('href');
     var method = "POST";
-    EG.toggleFullRubric();
-    $(".rubric_summary").loadingImage();
-    $.ajaxJSON(url, method, data, function(response) {
+    EG.toggleFullRubric('close');
+
+    var promise = $.ajaxJSON(url, method, data, function(response) {
       var found = false;
       if(response && response.rubric_association) {
         rubricAssessment.updateRubricAssociation($rubric, response.rubric_association);
@@ -727,43 +903,45 @@ function initRubricStuff(){
       $.each(response.related_group_submissions_and_assessments, function(i,submissionAndAssessment){
         //setOrUpdateSubmission returns the student. so we can set student.rubric_assesments
         // submissionAndAssessment comes back with :include_root => true, so we have to get rid of the root
-        var student = EG.setOrUpdateSubmission(response.artifact);
+        const student = EG.setOrUpdateSubmission(response.artifact);
         student.rubric_assessments = $.map(submissionAndAssessment.rubric_assessments, function(ra){return ra.rubric_assessment;});
+        EG.updateSelectMenuStatus(student);
       });
 
-      $(".rubric_summary").loadingImage('remove');
       EG.showGrade();
       EG.showDiscussion();
       EG.showRubric();
       EG.updateStatsInHeader();
     });
+
+    $rubric_holder.disableWhileLoading(promise, {
+      buttons: {
+        '.save_rubric_button': 'Saving...'
+      }
+    });
   });
 }
 
-function initKeyCodes(){
-  $window.keycodes({keyCodes: "j k p n c r g", ignore: 'input, textarea, embed, object'}, function(event) {
+function initKeyCodes () {
+  const keycodeOptions = {
+    keyCodes: 'j k p n c r g',
+    ignore: 'input, textarea, embed, object'
+  };
+  $window.keycodes(keycodeOptions, (event) => {
     event.preventDefault();
     event.stopPropagation();
+    const { keyString } = event;
 
-    //Prev()
-    if(event.keyString == "k" || event.keyString == "p") {
-      EG.prev();
-    }
-    //next()
-    else if(event.keyString == "j" || event.keyString == "n") {
-      EG.next();
-    }
-    //comment
-    else if(event.keyString == "f" || event.keyString == "c") {
-      $add_a_comment_textarea.focus();
-    }
-    // focus on grade
-    else if(event.keyString == "g") {
-      $grade.focus();
-    }
-    // focus on rubric
-    else if(event.keyString == "r") {
-      EG.toggleFullRubric();
+    if (keyString === "k" || keyString === "p") {
+      EG.prev(); // goto Previous Student
+    } else if(keyString === "j" || keyString === "n") {
+      EG.next(); // goto Next Student
+    } else if(keyString === "c") {
+      $add_a_comment_textarea.focus(); // add comment
+    } else if(keyString === "g") {
+      $grade.focus(); // focus on grade
+    } else if(keyString === "r") {
+      EG.toggleFullRubric(); // focus rubric
     }
   });
 }
@@ -771,25 +949,21 @@ function initKeyCodes(){
 function initGroupAssignmentMode() {
   if (jsonData.GROUP_GRADING_MODE) {
     gradeeLabel = groupLabel;
-    disableGroupCommentCheckbox();
   }
-}
-
-function disableGroupCommentCheckbox() {
-  $("#submission_group_comment").prop({checked: true, disabled: true});
 }
 
 function refreshGrades (cb) {
   const courseId = ENV.course_id;
   const assignmentId = EG.currentStudent.submission.assignment_id;
-  const studentId = EG.currentStudent.submission.user_id;
+  const studentId = EG.currentStudent.submission[anonymizableUserId];
   const url = `/api/v1/courses/${courseId}/assignments/${assignmentId}/submissions/${studentId}.json?include[]=submission_history`
-  const currentStudentIDAsOfAjaxCall = EG.currentStudent.id;
+  const currentStudentIDAsOfAjaxCall = EG.currentStudent[anonymizableId];
   $.getJSON(url, (submission) => {
-    if (currentStudentIDAsOfAjaxCall === EG.currentStudent.id) {
+    if (currentStudentIDAsOfAjaxCall === EG.currentStudent[anonymizableId]) {
       EG.currentStudent.submission = submission;
       EG.currentStudent.submission_state = SpeedgraderHelpers.submissionState(EG.currentStudent, ENV.grading_role);
       EG.showGrade();
+      EG.updateSelectMenuStatus(EG.currentStudent);
       if (cb) {
         cb(submission)
       }
@@ -813,44 +987,21 @@ $.extend(INST, {
   }
 });
 
-function beforeLeavingSpeedgrader(e) {
-  // Submit any draft comments that need submitting
-  EG.addSubmissionComment(true);
+function rubricAssessmentToPopulate () {
+  const assessment = getSelectedAssessment();
+  const userIsNotAssessor = !!assessment && assessment.assessor_id !== ENV.current_user_id;
+  const userCanAssess = isAssessmentEditableByMe(assessment);
 
-  window.opener && window.opener.updateGrades && $.isFunction(window.opener.updateGrades) && window.opener.updateGrades();
-
-  var userNamesWithPendingQuizSubmission = $.map(snapshotCache, function(snapshot) {
-    return snapshot && $.map(jsonData.context.students, function(student) {
-      return (snapshot == student) && student.name;
-    })[0];
-  })
-
-  var hasPendingQuizSubmissions = (function(){
-    var ret = false;
-    if (userNamesWithPendingQuizSubmission.length){
-      for (var i = 0, max = userNamesWithPendingQuizSubmission.length; i < max; i++){
-        if (userNamesWithPendingQuizSubmission[i] !== false) { ret = true; }
-      }
-    }
-    return ret;
-  })();
-
-  var hasUnsubmittedComments = $.trim($add_a_comment_textarea.val()) !== "";
-  if (hasPendingQuizSubmissions) {
-    e.returnValue = I18n.t('confirms.unsaved_changes', "The following students have unsaved changes to their quiz submissions: \n\n %{users}\nContinue anyway?", {'users': userNamesWithPendingQuizSubmission.join('\n ')});
-    return e.returnValue;
-  } else if (hasUnsubmittedComments) {
-    e.returnValue = I18n.t("If you would like to keep your unsubmitted comments, please save them before navigating away from this page.");
-    return e.returnValue;
+  if (userIsNotAssessor && !userCanAssess) {
+    return { ...assessment, data: [] };
   }
+
+  return assessment;
 }
 
 // Public Variables and Methods
 EG = {
-  options: {},
-  publicVariable: [],
   currentStudent: null,
-
   refreshGrades,
 
   domReady: function(){
@@ -950,18 +1101,21 @@ EG = {
     });
 
     initRubricStuff();
-    initCommentBox();
+
+    if (ENV.can_comment_on_submission) {
+      initCommentBox()
+    }
+
     EG.initComments();
     header.init();
     initKeyCodes();
-
 
     $('.dismiss_alert').click(function(e){
       e.preventDefault();
       $(this).closest(".alert").hide();
     });
 
-    $window.bind('hashchange', EG.handleFragmentChange);
+    setupHandleFragmentChanged()
     $('#eg_sort_by').val(userSettings.get('eg_sort_by'));
     $('#submit_same_score').click(function(e) {
       // By passing true as the second argument, we're telling
@@ -971,11 +1125,14 @@ EG = {
       e.preventDefault();
     });
 
-    window.addEventListener('beforeunload', beforeLeavingSpeedgrader);
+    setupBeforeLeavingSpeedgrader()
   },
 
   jsonReady: function(){
-    //this runs after the request to get the jsonData comes back
+    isAnonymous = setupIsAnonymous(jsonData)
+    anonymizableId = setupAnonymizableId(isAnonymous)
+    anonymizableUserId = setupAnonymizableUserId(isAnonymous)
+    anonymizableStudentId = setupAnonymizableStudentId(isAnonymous)
 
     mergeStudentsAndSubmission();
     if (jsonData.GROUP_GRADING_MODE && !jsonData.studentsWithSubmissions.length) {
@@ -996,13 +1153,15 @@ EG = {
       $("#gradebook_header, #full_width_container").show();
       initDropdown();
       initGroupAssignmentMode();
-      EG.handleFragmentChange();
+      EG.handleFragmentChanged();
     }
   },
 
   skipRelativeToCurrentIndex: function(offset){
-    var newIndex = (this.currentIndex() + offset + jsonData.studentsWithSubmissions.length) % jsonData.studentsWithSubmissions.length;
-    this.goToStudent(jsonData.studentsWithSubmissions[newIndex].id);
+    const {length: students} = jsonData.studentsWithSubmissions
+    const newIndex = (this.currentIndex() + offset + students) % students;
+
+    this.goToStudent(jsonData.studentsWithSubmissions[newIndex][anonymizableId])
   },
 
   next: function(){
@@ -1017,62 +1176,77 @@ EG = {
     $("#aria_name_alert").text(studentInfo);
   },
 
-  getStudentNameAndGrade: function(){
-    var hideStudentNames = utils.shouldHideStudentNames();
-    var studentName = hideStudentNames ? I18n.t('student_index', "Student %{index}", { index: EG.currentIndex() + 1 }) : EG.currentStudent.name;
-    var submissionStatus = SpeedgraderHelpers.classNameBasedOnStudent(EG.currentStudent);
-    return studentName + " - " + submissionStatus.formatted;
+  getStudentNameAndGrade: (student = EG.currentStudent) => {
+    let studentName;
+    if (utils.shouldHideStudentNames()) {
+      studentName = I18n.t('student_index', "Student %{index}", { index: student.index + 1 });
+    } else {
+      studentName = student.name;
+    }
+
+    const submissionStatus = SpeedgraderHelpers.classNameBasedOnStudent(student);
+    return `${studentName} - ${submissionStatus.formatted}`;
   },
 
   toggleFullRubric: function(force){
+    const rubricFull = selectors.get('#rubric_full');
     // if there is no rubric associated with this assignment, then the edit
     // rubric thing should never be shown.  the view should make sure that
     // the edit rubric html is not even there but we also want to make sure
     // that pressing "r" wont make it appear either
     if (!jsonData.rubric_association){ return false; }
 
-    if ($rubric_full.filter(":visible").length || force === "close") {
+    if (rubricFull.filter(":visible").length || force === "close") {
       $("#grading").show().height("auto");
-      $rubric_full.fadeOut();
+      rubricFull.fadeOut();
       $(".toggle_full_rubric").focus()
     } else {
-      $rubric_full.fadeIn();
+      rubricFull.fadeIn();
       $("#grading").hide();
       this.refreshFullRubric();
-      $rubric_full.find('.rubric_title .title').focus()
+      rubricFull.find('.rubric_title .title').focus()
     }
   },
 
   refreshFullRubric: function() {
+    const rubricFull = selectors.get('#rubric_full');
     if (!jsonData.rubric_association) { return; }
-    if (!$rubric_full.filter(":visible").length) { return; }
+    if (!rubricFull.filter(":visible").length) { return; }
 
-    rubricAssessment.populateRubric($rubric_full.find(".rubric"), getSelectedAssessment() );
-    $("#grading").height($rubric_full.height());
+    rubricAssessment.populateRubric(
+      rubricFull.find(".rubric"),
+      rubricAssessmentToPopulate()
+    );
+
+    $("#grading").height(rubricFull.height());
   },
 
-  handleFragmentChange: function(){
+  handleFragmentChanged () {
     var hash;
     try {
-      hash = JSON.parse(decodeURIComponent(document.location.hash.substr(1))); //get rid of the first charicter "#" of the hash
+      // get rid of the first character "#" of the hash
+      hash = JSON.parse(decodeURIComponent(document.location.hash.substr(1)));
     } catch(e) {}
     if (!hash) {
       hash = {};
     }
 
-    // use the group representative if possible
-    var studentId = jsonData.context.rep_for_student[hash.student_id] ||
-        hash.student_id;
+    // if anonymous, don't bother with rep_for_student because group assignments are disabled with anonymous
+    // moderated marking, otherwise use the group representative if possible
+    let representativeOrStudentId = {
+      true: hash[anonymizableStudentId],
+      false: jsonData.context.rep_for_student[hash[anonymizableStudentId]] || hash[anonymizableStudentId]
+    }[isAnonymous]
 
     // choose the first ungraded student if the requested one doesn't exist
-    if (!jsonData.studentMap[studentId]) {
+    if (!jsonData.studentMap[representativeOrStudentId]) {
       var ungradedStudent = _(jsonData.studentsWithSubmissions)
         .find(function(s) {
           return s.submission &&
             s.submission.workflow_state != 'graded' &&
             s.submission.submission_type;
         });
-      studentId = (ungradedStudent || jsonData.studentsWithSubmissions[0]).id;
+      representativeOrStudentId = (ungradedStudent || jsonData.studentsWithSubmissions[0])[anonymizableId];
     }
 
     if (hash.provisional_grade_id) {
@@ -1080,27 +1254,28 @@ EG = {
     } else if (hash.add_review) {
       EG.add_review = true;
     }
-    EG.goToStudent(studentId);
+    EG.goToStudent(representativeOrStudentId);
   },
 
-  goToStudent: function(student_id){
-    var hideStudentNames = utils.shouldHideStudentNames();
-    var student = jsonData.studentMap[student_id];
+  goToStudent (studentIdentifier) {
+    const hideStudentNames = utils.shouldHideStudentNames();
+    const student = jsonData.studentMap[studentIdentifier]
 
     if (student) {
-      $selectmenu.jquerySelectMenu().selectmenu("value", student.id);
-      // manually tell $selectmenu to fire the change event
-      if (!this.currentStudent || (this.currentStudent.id != student.id)) {
-        $selectmenu.jquerySelectMenu().change();
+      $selectmenu.selectmenu("value", student[anonymizableId]);
+      if (!this.currentStudent || this.currentStudent[anonymizableId] !== student[anonymizableId]) {
+        // manually tell $selectmenu to fire the change event
+        $selectmenu.change();
       }
-      if (student.avatar_path && !hideStudentNames) {
+
+      if (hideStudentNames || isAnonymous || !student.avatar_path) {
+        $avatar_image.hide()
+      } else {
         // If there's any kind of delay in loading the user's avatar, it's
         // better to show a blank image than the previous student's image.
-        var $new_image = $avatar_image.clone().show();
+        const $new_image = $avatar_image.clone().show();
         $avatar_image.after($new_image.attr('src', student.avatar_path)).remove();
         $avatar_image = $new_image;
-      } else {
-        $avatar_image.hide();
       }
     }
   },
@@ -1117,11 +1292,12 @@ EG = {
       EG.addSubmissionComment(true);
     }
 
-    var id = $selectmenu.jquerySelectMenu().val();
-    this.currentStudent = jsonData.studentMap[id] || _.values(jsonData.studentsWithSubmissions)[0];
-    document.location.hash = "#" + encodeURIComponent(JSON.stringify({
-      "student_id": this.currentStudent.id
-    }));
+    const selectMenuValue = $selectmenu.val();
+    // calling _.values on a large collection could be slow, that's why we're fetching from studentMap first
+    this.currentStudent = jsonData.studentMap[selectMenuValue] || _.values(jsonData.studentsWithSubmissions)[0];
+
+    const hash = {[anonymizableStudentId]: this.currentStudent[anonymizableId]}
+    document.location.hash = `#${encodeURIComponent(JSON.stringify(hash))}`
 
     // On the switch to a new student, clear the state of the last
     // question touched on the previous student.
@@ -1136,14 +1312,14 @@ EG = {
       $full_width_container.removeClass("with_enrollment_notice");
       $enrollment_inactive_notice.hide();
       $enrollment_concluded_notice.hide();
-      $closed_gp_notice.hide();
+      selectors.get('#closed_gp_notice').hide()
 
       EG.setGradeReadOnly(true); // disabling now will keep it from getting undisabled unintentionally by disableWhileLoading
       if (ENV.grading_role == 'moderator' && this.currentStudent.submission_state == 'not_graded') {
         this.currentStudent.submission.grade = null; // otherwise it may be tricked into showing the wrong submission_state
       }
 
-      var status_url = ENV.provisional_status_url + "?student_id=" + this.currentStudent.id;
+      let status_url = `${ENV.provisional_status_url}?student_id=${this.currentStudent[anonymizableId]}`
       if (ENV.grading_role == 'moderator') {
         status_url += "&last_updated_at="
         if (this.currentStudent.submission) status_url += this.currentStudent.submission.updated_at;
@@ -1430,6 +1606,7 @@ EG = {
 
   populateTurnitin: function(submission, assetString, turnitinAsset, $turnitinScoreContainer, $turnitinInfoContainer, isMostRecent) {
     var $turnitinSimilarityScore = null;
+    const showLegacyResubmit = isMostRecent && !submission.has_plagiarism_tool;
 
     // build up new values based on this asset
     if (turnitinAsset.status == 'scored' || (turnitinAsset.status == null && turnitinAsset.similarity_score != null)) {
@@ -1466,21 +1643,13 @@ EG = {
       var $turnitinInfo = $(turnitinInfoTemplate({
         assetString: assetString,
         message: (turnitinAsset.status == 'error' ? (turnitinAsset.public_error_message || defaultErrorMessage) : defaultInfoMessage),
-        showResubmit: turnitinAsset.status == 'error' && isMostRecent
+        showResubmit: showLegacyResubmit
       }));
       $turnitinInfoContainer.append($turnitinInfo);
 
-      if (turnitinAsset.status == 'error' && isMostRecent) {
-        var resubmitUrl = $.replaceTags($assignment_submission_resubmit_to_turnitin_url.attr('href'), { user_id: submission.user_id });
-        $turnitinInfo.find('.turnitin_resubmit_button').click(function(event) {
-          event.preventDefault();
-          $(this).attr('disabled', true)
-            .text(I18n.t('turnitin.resubmitting', 'Resubmitting...'));
-
-          $.ajaxJSON(resubmitUrl, "POST", {}, function() {
-            window.location.reload();
-          });
-        });
+      if (showLegacyResubmit) {
+        const resubmitUrl = SpeedgraderHelpers.plagiarismResubmitUrl(submission, anonymizableUserId)
+        $('.turnitin_resubmit_button').on('click', (e) => { SpeedgraderHelpers.plagiarismResubmitHandler(e, resubmitUrl) });
       }
     }
   },
@@ -1523,7 +1692,10 @@ EG = {
       $vericiteInfoContainer.append($vericiteInfo);
 
       if (vericiteAsset.status == 'error' && isMostRecent) {
-        var resubmitUrl = $.replaceTags($assignment_submission_resubmit_to_vericite_url.attr('href'), { user_id: submission.user_id });
+        const resubmitUrl = $.replaceTags(
+          $assignment_submission_resubmit_to_vericite_url.attr('href'),
+          { user_id: submission[anonymizableUserId] }
+        )
         $vericiteInfo.find('.vericite_resubmit_button').click(function(event) {
           event.preventDefault();
           $(this).attr('disabled', true)
@@ -1536,6 +1708,7 @@ EG = {
       }
     }
   },
+
   handleSubmissionSelectionChange: function(){
     clearInterval(sessionTimer);
 
@@ -1553,23 +1726,30 @@ EG = {
       return result;
     };
 
-    var $submission_to_view = $("#submission_to_view"),
-        submissionToViewVal = $submission_to_view.val(),
-        currentSelectedIndex = currentIndex(this, submissionToViewVal),
-    submissionHolder = this.currentStudent &&
-      this.currentStudent.submission,
-    submissionHistory = submissionHolder && submissionHolder.submission_history,
-    isMostRecent = submissionHistory &&
-      submissionHistory.length - 1 === currentSelectedIndex,
-    submission = (submissionHistory && submissionHistory[currentSelectedIndex] && (
-      submissionHistory[currentSelectedIndex].submission || submissionHistory[currentSelectedIndex]
-    ))
-      || {},
-    inlineableAttachments = [],
-    browserableAttachments = [];
+    const $submission_to_view = $("#submission_to_view")
+    const submissionToViewVal = $submission_to_view.val()
+    const currentSelectedIndex = currentIndex(this, submissionToViewVal)
+    const submissionHolder = this.currentStudent && this.currentStudent.submission
+    const submissionHistory = submissionHolder && submissionHolder.submission_history
+    const isMostRecent = submissionHistory && submissionHistory.length - 1 === currentSelectedIndex
+    const inlineableAttachments = []
+    const browserableAttachments = []
+
+    let submission = {}
+    if (submissionHistory && submissionHistory[currentSelectedIndex]) {
+      submission = submissionHistory[currentSelectedIndex].submission || submissionHistory[currentSelectedIndex]
+    }
 
     var turnitinEnabled = submission.turnitin_data && (typeof submission.turnitin_data.provider === 'undefined');
     var vericiteEnabled = submission.turnitin_data && submission.turnitin_data.provider === 'vericite';
+
+    if (submission.has_originality_score) {
+      $('#plagiarism_platform_info_container').hide();
+    } else {
+      const resubmitUrl = SpeedgraderHelpers.plagiarismResubmitUrl(submission, anonymizableUserId)
+      $('#plagiarism_resubmit_button').on('click', (e) => { SpeedgraderHelpers.plagiarismResubmitHandler(e, resubmitUrl) })
+    }
+
     if(vericiteEnabled){
       var $vericiteScoreContainer = $grade_container.find(".turnitin_score_container").empty(),
       $vericiteInfoContainer = $grade_container.find(".turnitin_info_container").empty(),
@@ -1677,37 +1857,40 @@ EG = {
     $submission_late_notice.showIf(submission['late']);
     $full_width_container.removeClass("with_enrollment_notice");
     $enrollment_inactive_notice.showIf(
-      _.any(jsonData.studentMap[this.currentStudent.id].enrollments, function(enrollment) {
+      _.any(jsonData.studentMap[this.currentStudent[anonymizableId]].enrollments, (enrollment) => {
         if(enrollment.workflow_state === 'inactive') {
           $full_width_container.addClass("with_enrollment_notice");
           return true;
         }
+        return false;
       })
     );
 
-    var isConcluded = EG.isStudentConcluded(this.currentStudent.id);
-    var isClosedForStudent = MGP.assignmentClosedForStudent(this.currentStudent, jsonData);
+    const isConcluded = EG.isStudentConcluded(this.currentStudent[anonymizableId]);
     $enrollment_concluded_notice.showIf(isConcluded);
-    $closed_gp_notice.showIf(isClosedForStudent);
+
+    const gradingPeriod = jsonData.gradingPeriods[(submissionHolder || {}).grading_period_id]
+    const isClosedForSubmission = !!gradingPeriod && gradingPeriod.is_closed
+    selectors.get('#closed_gp_notice').showIf(isClosedForSubmission)
     SpeedgraderHelpers.setRightBarDisabled(isConcluded);
     EG.setGradeReadOnly((typeof submissionHolder != "undefined" &&
                          submissionHolder.submission_type === "online_quiz") ||
                         isConcluded ||
-                        (isClosedForStudent && !isAdmin));
+                        (isClosedForSubmission && !isAdmin));
 
-    if (isConcluded || isClosedForStudent) {
+    if (isConcluded || isClosedForSubmission) {
       $full_width_container.addClass("with_enrollment_notice");
     }
   },
 
-  isStudentConcluded: function(student_id){
+  isStudentConcluded (student) {
     if (!jsonData.studentMap) {
       return false;
     }
 
-    return _.any(jsonData.studentMap[student_id].enrollments, function(enrollment) {
-      return enrollment.workflow_state === 'completed';
-    });
+    return _.any(jsonData.studentMap[student].enrollments, (enrollment) =>
+      enrollment.workflow_state === 'completed'
+    );
   },
 
   refreshSubmissionsToView: function(){
@@ -1777,7 +1960,7 @@ EG = {
         submissions: templateSubmissions,
         linkToQuizHistory: jsonData.too_many_quiz_submissions,
         quizHistoryHref: $.replaceTags(ENV.quiz_history_url,
-                                       {user_id: this.currentStudent.id})
+                                       {user_id: this.currentStudent[anonymizableId]})
       });
     }
     $multiple_submissions.html($.raw(innerHTML));
@@ -1785,15 +1968,14 @@ EG = {
   },
 
   showSubmissionDetails: function(){
-    //if there is a submission
+    // if there is a submission
     var currentSubmission = this.currentStudent.submission;
-    if (currentSubmission) {
+    if (currentSubmission && currentSubmission.workflow_state !== 'unsubmitted') {
       this.refreshSubmissionsToView();
       var lastIndex = currentSubmission.submission_history.length - 1;
       $("#submission_to_view option:eq(" + lastIndex + ")").attr("selected", "selected");
       $submission_details.show();
-    }
-    else { //there's no submission
+    } else { // there's no submission
       $submission_details.hide();
     }
     this.handleSubmissionSelectionChange();
@@ -1887,36 +2069,22 @@ EG = {
   },
 
   //load in the iframe preview.  if we are viewing a past version of the file pass the version to preview in the url
-  renderSubmissionPreview: function() {
+  renderSubmissionPreview (domElement = 'iframe') {
     if (!this.currentStudent.submission) {
       $this_student_does_not_have_a_submission.show();
       return
     }
     this.emptyIframeHolder()
-    var src = htmlEscape('/courses/' + jsonData.context_id  +
-                         '/assignments/' + this.currentStudent.submission.assignment_id +
-                         '/submissions/' + this.currentStudent.submission.user_id +
-                         '?preview=true' + (SpeedgraderHelpers.iframePreviewVersion(this.currentStudent.submission)) + (
-                           utils.shouldHideStudentNames() ? "&hide_student_name=1" : ""
-                         ));
-    var iframe = SpeedgraderHelpers.buildIframe(src, {
-      frameborder: 0,
-      allowfullscreen: true
-    });
+    const {context_id: courseId} = jsonData
+    const {assignment_id: assignmentId} = this.currentStudent.submission
+    const submissionId = this.currentStudent.submission[anonymizableUserId]
+    const iframePreviewVersion = SpeedgraderHelpers.iframePreviewVersion(this.currentStudent.submission)
+    const hideStudentNames = utils.shouldHideStudentNames() ? "&hide_student_name=1" : ""
+    const queryParams = `${iframePreviewVersion}${hideStudentNames}`
+    const src =
+      `/courses/${courseId}/assignments/${assignmentId}/submissions/${submissionId}?preview=true${queryParams}`
+    const iframe = SpeedgraderHelpers.buildIframe(htmlEscape(src), {frameborder: 0, allowfullscreen: true}, domElement)
     $iframe_holder.html($.raw(iframe)).show();
-    this.fitImgToIframe();
-  },
-
-  // if the iframe is only an img, set its max-width and height to 100%
-  fitImgToIframe: function () {
-    $iframe_holder.find('iframe').load(this.resizeImg);
-  },
-
-  resizeImg: function () {
-    var iframeContent = $(this).contents().find('body').children();
-    if (iframeContent.length === 1 && iframeContent.first().is('img')) {
-      iframeContent.attr('style', 'max-width: 100vw; max-height: 100vh;');
-    }
   },
 
   renderLtiLaunch: function($div, urlBase, externalToolUrl) {
@@ -2002,31 +2170,41 @@ EG = {
     } else if ($.isPreviewable(attachment.content_type, 'google')) {
       if (!INST.disableCrocodocPreviews) $no_annotation_warning.show();
 
-      var currentStudentIDAsOfAjaxCall = this.currentStudent.id;
+      const currentStudentIDAsOfAjaxCall = this.currentStudent[anonymizableId]
       previewOptions = $.extend(previewOptions, {
         ajax_valid: _.bind(function() {
-          return(currentStudentIDAsOfAjaxCall == this.currentStudent.id);
-        },this)});
+          return currentStudentIDAsOfAjaxCall === this.currentStudent[anonymizableId];
+        }, this)});
       $iframe_holder.show().loadDocPreview(previewOptions);
     } else if (browserableCssClasses.test(attachment.mime_class)) {
-      var src = unescape($submission_file_hidden.find('.display_name').attr('href'))
-        .replace("{{submissionId}}", this.currentStudent.submission.user_id)
-        .replace("{{attachmentId}}", attachment.id);
-      var iframe = SpeedgraderHelpers.buildIframe(htmlEscape(src), {
-        frameborder: 0,
-        allowfullscreen: true
-      });
-      $iframe_holder.html(
-        $.raw(iframe)
-      ).show();
-      this.fitImgToIframe();
+      // xsslint safeString.identifier iframeHolderContents
+      const iframeHolderContents = this.attachmentIframeContents(attachment);
+      $iframe_holder.html(iframeHolderContents).show();
     }
   },
 
+  attachmentIframeContents (attachment, domElement = 'iframe') {
+    let contents;
+    const genericSrc = unescape($submission_file_hidden.find('.display_name').attr('href'));
+
+    const src = genericSrc
+      .replace('{{submissionId}}', this.currentStudent.submission[anonymizableUserId])
+      .replace('{{attachmentId}}', attachment.id);
+
+    if (attachment.mime_class === 'image') {
+      contents = `<img src="${htmlEscape(src)}" style="max-width:100%;max-height:100%;">`;
+    } else {
+      contents = SpeedgraderHelpers.buildIframe(htmlEscape(src), { frameborder: 0, allowfullscreen: true }, domElement);
+    }
+
+    return $.raw(contents);
+  },
+
   showRubric: function(){
+    const selectMenu = selectors.get('#rubric_assessments_select');
     //if this has some rubric_assessments
     if (jsonData.rubric_association) {
-      ENV.RUBRIC_ASSESSMENT.assessment_user_id = this.currentStudent.id;
+      ENV.RUBRIC_ASSESSMENT.assessment_user_id = this.currentStudent[anonymizableId];
 
       var assessmentsByMe = $.grep(EG.currentStudent.rubric_assessments, function(n,i){
         return n.assessor_id === ENV.RUBRIC_ASSESSMENT.assessor_id;
@@ -2035,9 +2213,9 @@ EG = {
         return n.assessment_type == 'grading';
       });
 
-      $rubric_assessments_select.find("option").remove();
+      selectMenu.find("option").remove();
       $.each(this.currentStudent.rubric_assessments, function(){
-        $rubric_assessments_select.append('<option value="' + htmlEscape(this.id) + '">' + htmlEscape(this.assessor_name) + '</option>');
+        selectMenu.append(`<option value="${htmlEscape(this.id)}">${htmlEscape(this.assessor_name)}</option>`);
       });
 
       //select the assessment that meets these rules:
@@ -2051,12 +2229,12 @@ EG = {
         idToSelect = assessmentsByMe[0].id;
       }
       if (idToSelect) {
-        $rubric_assessments_select.val(idToSelect);
+        selectMenu.val(idToSelect);
       }
 
       // hide the select box if there is not >1 option
-      $("#rubric_assessments_list").showIf($rubric_assessments_select.find("option").length > 1);
-      $rubric_assessments_select.change();
+      $("#rubric_assessments_list").showIf(selectMenu.find("option").length > 1);
+      selectMenu.change();
     }
   },
 
@@ -2069,7 +2247,7 @@ EG = {
     var attachmentElement = opts.commentAttachmentBlank.clone(true);
 
     attachment.comment_id = comment.id;
-    attachment.submitter_id = EG.currentStudent.id;
+    attachment.submitter_id = EG.currentStudent[anonymizableId];
 
     attachmentElement = attachmentElement.fillTemplateData({
       data: attachment,
@@ -2088,7 +2266,7 @@ EG = {
     // set.  what this is saying is: if I am able to grade this
     // assignment (I am administrator in the course) or if I wrote
     // this comment... and if the student isn't concluded
-    var isConcluded = EG.isStudentConcluded(EG.currentStudent.id);
+    const isConcluded = EG.isStudentConcluded(EG.currentStudent[anonymizableId]);
     var commentIsDeleteableByMe = (ENV.RUBRIC_ASSESSMENT.assessment_type === 'grading' ||
                                    ENV.RUBRIC_ASSESSMENT.assessor_id === comment.author_id) && !isConcluded;
 
@@ -2129,7 +2307,7 @@ EG = {
     // set.  what this is saying is: if I am able to grade this
     // assignment (I am administrator in the course) or if I wrote
     // this comment... and if the student isn't concluded
-    var isConcluded = EG.isStudentConcluded(EG.currentStudent.id);
+    const isConcluded = EG.isStudentConcluded(EG.currentStudent[anonymizableId]);
     var commentIsPublishableByMe = comment.draft &&
         (comment.author_id.toString() === ENV.current_user_id) && !isConcluded;
 
@@ -2268,16 +2446,8 @@ EG = {
     }
 
     EG.showDiscussion();
-    $add_a_comment_textarea.val("");
-    // this is really weird but in webkit if you do $add_a_comment_textarea.val("").trigger('keyup') it will not let you
-    // type it the textarea after you do that.  but I put it in a setTimeout it works.  so this is a hack for webkit,
-    // but it still works in all other browsers.
-    setTimeout(function(){ $add_a_comment_textarea.trigger('keyup'); }, 0);
-
+    renderCommentTextArea();
     $add_a_comment.find(":input").prop("disabled", false);
-    if (jsonData.GROUP_GRADING_MODE) {
-      disableGroupCommentCheckbox();
-    }
 
     if (draftComment) {
       // Show a different message when auto-saving a draft comment
@@ -2306,14 +2476,14 @@ EG = {
       // that means that they did not type a comment, attach a file or record any media. so dont do anything.
       return false;
     }
-    var url = assignmentUrl + "/submissions/" + EG.currentStudent.id;
+    const url = `${assignmentUrl}/submissions/${EG.currentStudent[anonymizableId]}`
     var method = "PUT";
     var formData = {
       'submission[assignment_id]': jsonData.id,
-      'submission[user_id]': EG.currentStudent.id,
       'submission[group_comment]': ($("#submission_group_comment").attr('checked') ? "1" : "0"),
       'submission[comment]': $add_a_comment_textarea.val(),
-      'submission[draft_comment]': draftComment
+      'submission[draft_comment]': draftComment,
+      [`submission[${anonymizableId}]`]: EG.currentStudent[anonymizableId]
     };
     if ($("#media_media_recording").data('comment_id')) {
       $.extend(formData, {
@@ -2393,21 +2563,22 @@ EG = {
 
     return student;
   },
+
   // If the second argument is passed as true, the grade used will
   // be the existing score from the previous submission.  This
   // should only be called from the anonymous function attached so
   // #submit_same_score.
   handleGradeSubmit: function(e, use_existing_score){
-    if (EG.isStudentConcluded(EG.currentStudent.id)) {
+    if (EG.isStudentConcluded(EG.currentStudent[anonymizableId])) {
       EG.showGrade();
       return;
     }
 
-    var url    = $(".update_submission_grade_url").attr('href'),
-    method = $(".update_submission_grade_url").attr('title'),
-    formData = {
-      'submission[assignment_id]':      jsonData.id,
-      'submission[user_id]':            EG.currentStudent.id,
+    const url = $(".update_submission_grade_url").attr('href')
+    const method = $(".update_submission_grade_url").attr('title')
+    const formData = {
+      'submission[assignment_id]': jsonData.id,
+      [`submission[${anonymizableUserId}]`]: EG.currentStudent[anonymizableId],
       'submission[graded_anonymously]': utils.shouldHideStudentNames()
     };
 
@@ -2419,6 +2590,8 @@ EG = {
 
     if (grade.toUpperCase() === "EX") {
       formData["submission[excuse]"] = true;
+    } else if (unexcuseSubmission(grade, EG.currentStudent.submission, jsonData)) {
+      formData["submission[excuse]"] = false;
     } else if (use_existing_score) {
       // If we're resubmitting a score, pass it as a raw score not grade.
       // This allows percentage grading types to be handled correctly.
@@ -2446,7 +2619,11 @@ EG = {
       }
 
       $.each(submissions, function(){
-        EG.setOrUpdateSubmission(this.submission);
+        // setOrUpdateSubmission returns the student it just updated.
+        // This is only operating on a subset of people, so it should
+        // be fairly fast to call updateSelectMenuStatus for each one.
+        const student = EG.setOrUpdateSubmission(this.submission);
+        EG.updateSelectMenuStatus(student);
       });
       EG.refreshSubmissionsToView();
       $multiple_submissions.change();
@@ -2455,12 +2632,13 @@ EG = {
   },
 
   showGrade: function() {
-    const submission = EG.currentStudent.submission;
-    const grade = EG.getGradeToShow(submission, ENV.grading_role);
+    const submission = EG.currentStudent.submission || {};
+    let grade
 
     if (submission.grading_type === 'pass_fail' || ['complete', 'incomplete', 'pass', 'fail'].indexOf(submission.grade) > -1) {
       $grade.val(submission.grade);
     } else {
+      grade = EG.getGradeToShow(submission, ENV.grading_role);
       $grade.val(grade.entered);
     }
 
@@ -2487,53 +2665,13 @@ EG = {
     }
 
     EG.updateStatsInHeader();
+  },
 
-    // go through all the students and change the class of for each person in the selectmenu to reflect it has / has not been graded.
-    // for the current student, you have to do it for both the li as well as the one that shows which was selected (AKA $selectmenu.data('selectmenu').newelement ).
-    // this might be the wrong spot for this, it could be refactored into its own method and you could tell pass only certain students that you want to update
-    // (ie the current student or all of the students in the group that just got graded)
-    $.each(jsonData.studentsWithSubmissions, function(index, val) {
-      var $query = $selectmenu.jquerySelectMenu().data('selectmenu').list.find("li:eq("+ index +")"),
-      className = SpeedgraderHelpers.classNameBasedOnStudent(this),
-      submissionStates = 'not_graded not_submitted graded resubmitted';
-
-      if (this == EG.currentStudent) {
-        $query = $query.add($selectmenu.jquerySelectMenu().data('selectmenu').newelement);
-      }
-      $query
-        .removeClass(submissionStates)
-        .addClass(className.raw)
-
-      var $status = $(".ui-selectmenu-status");
-      var $statusIcon = $status.find(".speedgrader-selectmenu-icon");
-      var $queryIcon = $query.find(".speedgrader-selectmenu-icon");
-
-      if(this == EG.currentStudent && (className.raw == "graded" || className.raw == "not_gradeable")){
-        var studentInfo = EG.getStudentNameAndGrade()
-        $("#students_selectmenu > option[value=" + this.id + "]").text(studentInfo);
-        $queryIcon.text("").append("<i class='icon-check'></i>");
-        $status.addClass("graded");
-        $statusIcon.text("").append("<i class='icon-check'></i>");
-      }else if(className.raw == "not_graded" && this == EG.currentStudent){
-        var studentInfo = EG.getStudentNameAndGrade();
-        $("#students_selectmenu > option[value=" + this.id + "]").text(studentInfo);
-        $queryIcon.text("").append("&#9679;");
-        $status.removeClass("graded");
-        $statusIcon.text("").append("&#9679;");
-      }else{
-        $status.removeClass("graded");
-      }
-
-      // this is because selectmenu.js uses .data('optionClasses' on the li to keep track
-      // of what class to put on the selected option ( aka: $selectmenu.data('selectmenu').newelement )
-      // when this li is selected.  so even though we set the class of the li and the
-      // $selectmenu.data('selectmenu').newelement when it is graded, we need to also set the data()
-      // so that if you skip back to this student it doesnt show the old checkbox status.
-      $.each(submissionStates.split(' '), function(){
-        $query.data('optionClasses', $query.data('optionClasses').replace(this, ''));
-      });
-    });
-
+  updateSelectMenuStatus: function(student) {
+    if (!student) return;
+    const isCurrentStudent = student === EG.currentStudent;
+    const newStudentInfo = EG.getStudentNameAndGrade(student)
+    $selectmenu.updateSelectMenuStatus({student, isCurrentStudent, newStudentInfo, anonymizableId});
   },
 
   isGradingTypePercent: function () {
@@ -2644,12 +2782,55 @@ EG = {
 
       return -1;
     };
-  }
-};
+  },
 
-function getAssignmentOverrides() {
-  return $.getJSON("/api/v1/courses/" + ENV.course_id +
-                   "/assignments/" + ENV.assignment_id + "/overrides");
+  beforeLeavingSpeedgrader (e) {
+    // Submit any draft comments that need submitting
+    EG.addSubmissionComment(true)
+
+    if (window.opener && window.opener.updateGrades && $.isFunction(window.opener.updateGrades)) {
+      window.opener.updateGrades()
+    }
+
+    function userNamesWithPendingQuizSubmission () {
+      return $.map(snapshotCache, snapshot =>
+        snapshot && $.map(jsonData.context.students, student =>
+          (snapshot === student) && student.name
+        )[0]
+      )
+    }
+
+    function hasPendingQuizSubmissions () {
+      let ret = false
+      const submissions = userNamesWithPendingQuizSubmission()
+      if (submissions.length) {
+        for (let i = 0, max = submissions.length; i < max; i++){
+          if (submissions[i] !== false) { ret = true }
+        }
+      }
+      return ret
+    }
+
+    function hasUnsubmittedComments () {
+      return $.trim($add_a_comment_textarea.val()) !== ""
+    }
+
+    if (hasPendingQuizSubmissions()) {
+      e.returnValue = I18n.t(
+        "The following students have unsaved changes to their quiz submissions:\n\n" +
+        "%{users}\nContinue anyway?", {users: userNamesWithPendingQuizSubmission().join('\n ')}
+      )
+      return e.returnValue;
+    } else if (hasUnsubmittedComments()) {
+      e.returnValue = I18n.t(
+        "If you would like to keep your unsubmitted comments, please save them before navigating away from this page."
+      )
+      return e.returnValue;
+    }
+    teardownHandleFragmentChanged()
+    teardownBeforeLeavingSpeedgrader()
+    return undefined
+  }
 }
 
 function getGradingPeriods() {
@@ -2666,13 +2847,9 @@ function getGradingPeriods() {
   return dfd;
 }
 
-function gotData(assignmentOverridesResponse, gradingPeriods, speedGraderJsonResponse) {
+function setupSpeedGrader(gradingPeriods, speedGraderJsonResponse) {
   var speedGraderJSON = speedGraderJsonResponse[0];
-  var assignmentOverrides = assignmentOverridesResponse[0];
-
-  speedGraderJSON.gradingPeriods = gradingPeriods;
-  speedGraderJSON.assignmentOverrides = assignmentOverrides;
-
+  speedGraderJSON.gradingPeriods = _.indexBy(gradingPeriods, 'id')
   window.jsonData = speedGraderJSON;
   EG.jsonReady();
 }
@@ -2694,8 +2871,121 @@ function speedGraderJSONErrorFn (data, _xhr, _textStatus, _errorThrown) {
   }
 }
 
+function setupSelectors() {
+  // PRIVATE VARIABLES AND FUNCTIONS
+  // all of the $ variables here are to speed up access to dom nodes,
+  // so that the jquery selector does not have to be run every time.
+  $add_a_comment = $('#add_a_comment')
+  $add_a_comment_submit_button = $add_a_comment.find('button:submit')
+  $add_a_comment_textarea = $(`#${SPEEDGRADER_COMMENT_TEXTAREA_MOUNT_POINT}`)
+  $add_attachment = $('#add_attachment')
+  $assignment_submission_originality_report_url = $('#assignment_submission_originality_report_url')
+  $assignment_submission_resubmit_to_vericite_url = $('#assignment_submission_resubmit_to_vericite_url')
+  $assignment_submission_turnitin_report_url = $('#assignment_submission_turnitin_report_url')
+  $assignment_submission_vericite_report_url = $('#assignment_submission_vericite_report_url')
+  $avatar_image = $('#avatar_image')
+  $average_score = $('#average_score')
+  $average_score_wrapper = $('#average-score-wrapper')
+  $comment_attachment_blank = $('#comment_attachment_blank').removeAttr('id').detach()
+  $comment_attachment_input_blank = $('#comment_attachment_input_blank').detach()
+  $comment_blank = $('#comment_blank').removeAttr('id').detach()
+  $comment_saved = $('#comment_saved')
+  $comment_saved_message = $('#comment_saved_message')
+  $comment_submitted = $('#comment_submitted')
+  $comment_submitted_message = $('#comment_submitted_message')
+  $comments = $('#comments')
+  $deduction_box = $('#deduction-box')
+  $enrollment_concluded_notice = $('#enrollment_concluded_notice')
+  $enrollment_inactive_notice = $('#enrollment_inactive_notice')
+  $final_grade = $('#final-grade')
+  $full_width_container = $('#full_width_container')
+  $grade_container = $('#grade_container')
+  $grade = $grade_container.find('input, select')
+  $gradebook_header = $('#gradebook_header')
+  $grded_so_far = $('#x_of_x_graded')
+  $iframe_holder = $('#iframe_holder')
+  $left_side = $('#left_side')
+  $moderation_bar = $('#moderation_bar')
+  $moderation_tabs = $('#moderation_tabs > ul > li')
+  $moderation_tab_2nd = $moderation_tabs.eq(1)
+  $moderation_tab_final = $moderation_tabs.eq(2)
+  $moderation_tabs_div = $('#moderation_tabs')
+  $multiple_submissions = $('#multiple_submissions')
+  $new_mark_container = $('#new_mark_container')
+  $new_mark_copy_link1 = $('#new_mark_copy_link1')
+  $new_mark_copy_link2 = $('#new_mark_copy_link2')
+  $new_mark_copy_link2_menu_item = $new_mark_copy_link2.parent()
+  $new_mark_final_link = $('#new_mark_final_link')
+  $new_mark_final_link_menu_item = $new_mark_final_link.parent()
+  $new_mark_link = $('#new_mark_link')
+  $new_mark_link_menu_item = $new_mark_link.parent()
+  $no_annotation_warning = $('#no_annotation_warning')
+  $not_gradeable_message = $('#not_gradeable_message')
+  $points_deducted = $('#points-deducted')
+  $resize_overlay = $('#resize_overlay')
+  $right_side = $('#right_side')
+  $rightside_inner = $('#rightside_inner')
+  $rubric_full_resizer_handle = $('#rubric_full_resizer_handle')
+  $rubric_holder = $('#rubric_holder')
+  $score = $grade_container.find('.score')
+  $selectmenu = null
+  $submission_attachment_viewed_at = $('#submission_attachment_viewed_at_container')
+  $submission_details = $('#submission_details')
+  $submission_file_hidden = $('#submission_file_hidden').removeAttr('id').detach()
+  $submission_files_container = $('#submission_files_container')
+  $submission_files_list = $('#submission_files_list')
+  $submission_late_notice = $('#submission_late_notice')
+  $submission_not_newest_notice = $('#submission_not_newest_notice')
+  $submissions_container = $('#submissions_container')
+  $this_student_does_not_have_a_submission = $('#this_student_does_not_have_a_submission').hide()
+  $this_student_has_a_submission = $('#this_student_has_a_submission').hide()
+  $width_resizer = $('#width_resizer')
+  $window = $(window)
+  $x_of_x_students = $('#x_of_x_students_frd')
+  assignmentUrl = $('#assignment_url').attr('href')
+  browserableCssClasses = /^(image|html|code)$/
+  fileIndex = 1
+  gradeeLabel = studentLabel
+  groupLabel = I18n.t('group', 'Group')
+  isAdmin = _.include(ENV.current_user_roles, 'admin');
+  snapshotCache = {}
+  studentLabel = I18n.t('student', 'Student')
+  header = setupHeader()
+}
+
+function renderSettingsMenu () {
+  function showKeyboardShortcutsModal () {
+    // need to place at end of execution queue to make focus work properly
+    setTimeout(header.keyboardShortcutInfoModal.bind(header), 0)
+  }
+
+  function showOptionsModal () {
+    // need to place at end of execution queue to make focus work properly
+    setTimeout(header.showSettingsModal.bind(header), 0)
+  }
+
+  const props =  {
+    assignmentID: ENV.assignment_id,
+    courseID: ENV.course_id,
+    helpURL: ENV.help_url,
+    openOptionsModal: showOptionsModal,
+    openKeyboardShortcutsModal: showKeyboardShortcutsModal,
+    showModerationMenuItem: ENV.grading_role === 'moderator',
+    showHelpMenuItem: ENV.show_help_menu_item
+  }
+
+  const settingsMenu = <SpeedGraderSettingsMenu {...props} />
+  ReactDOM.render(settingsMenu, document.getElementById('speedgrader-settings'))
+}
+
 export default {
-  setup: function() {
+  setup () {
+    setupSelectors()
+
+    if (isAnonymousModeratedMarkingEnabled()) {
+      renderSettingsMenu()
+    }
+
     function registerQuizzesNext (overriddenShowSubmission) {
       showSubmissionOverride = overriddenShowSubmission;
     }
@@ -2706,12 +2996,13 @@ export default {
     const speedGraderJSONUrl = `${window.location.pathname}.json${window.location.search}`;
     const speedGraderJsonDfd = $.ajaxJSON(speedGraderJSONUrl, 'GET', null, null, speedGraderJSONErrorFn);
 
-    $.when(getAssignmentOverrides(), getGradingPeriods(), speedGraderJsonDfd).then(gotData);
+    $.when(getGradingPeriods(), speedGraderJsonDfd).then(setupSpeedGrader);
 
     //run the stuff that just attaches event handlers and dom stuff, but does not need the jsonData
     $(document).ready(function() {
       EG.domReady();
     });
   },
-  EG: EG
+
+  EG
 };

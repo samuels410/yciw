@@ -38,39 +38,70 @@
 .rubric_container {
   margin-top: 20px;
   tr.criterion .links {
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    display: none;
+    float: direction(right);
+    text-align: direction(right);
   }
+  .small_description {
+    font-style: italic;
+    margin-top: .5rem;
+  }
+
   &.editing {
     tr.criterion .links {
       display: inline-block;
-      i {
-        visibility: hidden;
-      }
     }
-    td.rating:hover, td.criterion_description:hover, .links a:focus {
-      i {
-        visibility: visible;
-      }
+    tr.criterion .description {
+      clear: both;
     }
     label[for=rubric-title] {
       font-weight: bold;
+    }
+    tr.criterion .container .add_rating_link {
+      position: absolute;
+      float: direction(right);
+      top: 50%;
+      #{direction(right)}: -.5%;
+      transform: translateY(-50%);
+      line-height: 0;
+      width: 0;
+      display: block;
+    }
+    .add_rating_link_after {
+      border-radius: 1rem;
+      background-color: var(--ic-link-color);
+      text-align: center;
+      vertical-align: middle;
+      display: table-cell;
+    }
+    .add_rating_link i::before {
+      font-size: .75rem;
+      padding: .1875rem;
+    }
+    .add_rating_link i {
+      color: $ic-color-light;
+    }
+    tr.criterion td.criterion_description .description_content {
+      float: direction(left);
+      clear: both;
     }
   }
   .rubric_table {
     border-collapse: collapse;
     //for some reason, chrome puts a scrollbar on the table in the extended gradebook if it is 100%
     width: 99.9%;
+    height: 100%;
     page-break-inside: avoid;
+
+    .find_outcome_link {
+      margin-#{direction(left)}: 10px;
+    }
   }
   thead th {
     background-color: $ic-color-medium-light;
   }
   td, th {
     border: 1px solid $ic-border-color;
-    padding: 2px 5px;
+    padding: 7px 10px;
   }
   .rubric_title {
     background-color: $ic-color-medium-light;
@@ -78,7 +109,6 @@
     border-left: 1px solid $ic-border-color;
     border-right: 1px solid $ic-border-color;
     padding: 5px;
-    margin-right: 1px;
     font-weight: bold;
   }
   .has-assessments-warning {
@@ -86,11 +116,18 @@
     font-weight: normal;
   }
   tr.criterion td.criterion_description {
-    // :max-width 150px
+    height: 100%;
+    vertical-align: top;
     .container {
       @include revert_bootstrap_container;
       position: relative;
       font-size: 0.9em;
+      display: table;
+      width: 100%;
+    }
+    .description_content {
+      display: table-cell;
+      vertical-align: middle;
     }
     .learning_outcome_flag, .threshold {
       display: none;
@@ -132,25 +169,30 @@
   table.ratings {
     border-collapse: collapse;
     width: 100%;
-    margin-left: -1px;
+    height: 100%;
+    margin-#{direction(left)}: -1px;
     td {
       border: 1px solid #aaa;
       padding: 2px 5px;
       border-bottom-width: 0;
-      border-right-width: 0;
+      border-#{direction(right)}-width: 0;
       border-top-width: 0;
       font-size: 0.8em;
       vertical-align: top;
-      padding: 2px 8px;
+      padding: 2px 10px;
       .container {
         @include revert_bootstrap_container;
         padding: 5px 0;
         position: relative;
+        height: 100%;
       }
       &.edge_rating .delete_rating_link {
         display: none;
       }
       &:last-child .add_rating_link_after {
+        display: none;
+      }
+      &.infinitesimal .range_rating {
         display: none;
       }
     }
@@ -220,7 +262,20 @@
     td.editing, th.editing {
       display: table-cell;
     }
+    table.ratings td {
+      border-left: 1px dashed $ic-border-dark;
+      border-right: 1px dashed $ic-border-dark;
+    }
+    table.ratings td:nth-of-type(1) {
+      border-#{direction(left)}: 0;
+    }
+    table.ratings td:nth-last-of-type(1) {
+      border-#{direction(right)}: 0;
+    }
     tr.criterion td.criterion_description {
+      .container {
+        height: 100%;
+      }
       .long_description_holder {
         font-size: 0.8em;
         font-weight: bold;
@@ -237,11 +292,11 @@
     }
     table.ratings {
       td.add_right {
-        border-right-color: #000;
+        border-#{direction(right)}-color: #000;
         background: url(/images/add_right.png) no-repeat center right;
       }
       td.add_left {
-        border-left-color: #000;
+        border-#{direction(left)}-color: #000;
         background: url(/images/add_left.png) no-repeat center left;
       }
       td.add_column {
@@ -252,7 +307,7 @@
   .has-assessments-warning {
     font-size: 0.8em;
     font-weight: normal;
-    text-align: left;
+    text-align: direction(left);
   }
 }
 
@@ -264,7 +319,7 @@
   .rating {
     color: #777;
     font-style: italic;
-    text-align: left;
+    text-align: direction(left);
   }
   .rating_comments_dialog_link {
     font-size: 0.8em;
@@ -273,7 +328,7 @@
     overflow: hidden;
   }
   .x_out_of_x {
-    float: right;
+    float: direction(right);
   }
   &.free_form {
     .rating.description {
@@ -289,12 +344,12 @@
 
 .edit-rubric-form .button-container {
   margin: 8px 0;
-  text-align: right;
+  text-align: direction(right);
 }
 
 #rubric_holder {
   .rubric_title {
-    margin-right: 0;
+    margin-#{direction(right)}: 0;
   }
   .hide_rubric_link {
     color: #333;
@@ -305,4 +360,25 @@
 .ic-Action-header--half-margin {
   margin-top: $ic-sp/2;
   margin-bottom: $ic-sp/2;
+}
+
+#edit_rating_form div, #edit_criterion_form div{
+  margin-top: 30px;
+  width: 100%;
+}
+.rating_form_label {
+  font-size: 1rem;
+}
+.popover_menu_width {
+  max-width: 15em;
+}
+#edit_criterion_form {
+  label {
+    width: 100%;
+    margin-bottom: 0px;
+  }
+  textarea {
+    margin-top: 5px;
+    width: 90%;
+  }
 }

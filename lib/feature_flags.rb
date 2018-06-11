@@ -84,10 +84,12 @@ module FeatureFlags
     return [Account.site_admin.global_id] if is_a?(User)
 
     RequestCache.cache('feature_flag_account_ids', self) do
-      Rails.cache.fetch(['feature_flag_account_ids', self].cache_key) do
-        chain = account_chain(include_site_admin: true)
-        chain.shift if is_a?(Account)
-        chain.reverse.map(&:global_id)
+      shard.activate do
+        Rails.cache.fetch(['feature_flag_account_ids', self].cache_key) do
+          chain = account_chain(include_site_admin: true)
+          chain.shift if is_a?(Account)
+          chain.reverse.map(&:global_id)
+        end
       end
     end
   end
@@ -99,6 +101,8 @@ module FeatureFlags
     feature_def = Feature.definitions[feature]
     return nil unless feature_def
     return nil unless feature_def.applies_to_object(self)
+
+    return nil if feature_def.visible_on.is_a?(Proc) && !feature_def.visible_on.call(self)
     return feature_def unless feature_def.allowed? || feature_def.hidden?
 
     is_root_account = self.is_a?(Account) && self.root_account?

@@ -98,12 +98,12 @@ class AssignmentGroupsController < ApplicationController
 
   # @API List assignment groups
   #
-  # Returns the list of assignment groups for the current context. The returned
-  # groups are sorted by their position field.
+  # Returns the paginated list of assignment groups for the current context.
+  # The returned groups are sorted by their position field.
   #
   # @argument include[] [String, "assignments"|"discussion_topic"|"all_dates"|"assignment_visibility"|"overrides"|"submission"]
   #  Associations to include with the group. "discussion_topic", "all_dates"
-  #  "assignment_visibility" & "submission" are only valid are only valid if "assignments" is also included.
+  #  "assignment_visibility" & "submission" are only valid if "assignments" is also included.
   #  The "assignment_visibility" option additionally requires that the Differentiated Assignments course feature be turned on.
   #
   # @argument exclude_assignment_submission_types[] [String, "online_quiz"|"discussion_topic"|"wiki_page"|"external_tool"]
@@ -163,9 +163,10 @@ class AssignmentGroupsController < ApplicationController
       group_ids = ([@group.id] + (order.empty? ? [] : @context.assignments.where(id: order).distinct.except(:order).pluck(:assignment_group_id)))
       assignments = @context.active_assignments.where(id: order)
 
-      return render_unauthorized_action unless can_reorder_assignments?(assignments, @group)
+      return render json: { message: t("Cannot move assignments due to closed grading periods") }, status: :unauthorized unless can_reorder_assignments?(assignments, @group)
 
-      assignments.update_all(assignment_group_id: @group.id)
+      assignments.update_all(assignment_group_id: @group.id, updated_at: Time.now.utc)
+      @context.active_quizzes.where(assignment_id: order).update_all(assignment_group_id: @group.id, updated_at: Time.now.utc)
       @group.assignments.first.update_order(order) unless @group.assignments.empty?
       groups = AssignmentGroup.where(id: group_ids)
       groups.touch_all

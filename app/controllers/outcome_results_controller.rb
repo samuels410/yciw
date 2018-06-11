@@ -17,7 +17,6 @@
 #
 
 # @API Outcome Results
-# @beta
 #
 # API for accessing learning outcome results
 #
@@ -198,7 +197,6 @@ class OutcomeResultsController < ApplicationController
   before_action :require_users
 
   # @API Get outcome results
-  # @beta
   #
   # Gets the outcome results for users and outcomes in the specified context.
   #
@@ -233,7 +231,6 @@ class OutcomeResultsController < ApplicationController
   end
 
   # @API Get outcome result rollups
-  # @beta
   #
   # Gets the outcome rollups for the users and outcomes in the specified
   # context.
@@ -430,9 +427,9 @@ class OutcomeResultsController < ApplicationController
         # context and outcome id in order to ensure we get the correct result
         # from the query without rendering the reject! check moot
 
-        @outcomes = ContentTag.learning_outcome_links.active.joins(:learning_outcome_content)
-          .where(content_id: outcome_ids, context_type: @context.class_name, context_id: @context.id)
-          .to_a.uniq{|tag| [tag.context, tag.content_id]}.map(&:learning_outcome_content)
+        @outcomes = ContentTag.learning_outcome_links.active.joins(:learning_outcome_content).
+          where(content_id: outcome_ids, context_type: @context.class_name, context_id: @context.id).
+          to_a.uniq{|tag| [tag.context, tag.content_id]}.map(&:learning_outcome_content)
         reject! "can only include id's of outcomes in the outcome context" if @outcomes.count != outcome_ids.count
       else
         @outcome_links = []

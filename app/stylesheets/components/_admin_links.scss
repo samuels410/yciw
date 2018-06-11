@@ -89,18 +89,18 @@ For admin dropdowns that appear in main content areas, such as item groups, plea
 
 @keyframes al-slide-down {
   from {
-    transform: translate3d(-1px,-25%,0);
+    transform: rotateX(-90deg);
     opacity: 0.2;
   }
 
   to {
-    transform: translate3d(-1px,0,0);
+    transform: rotateX(0);
     opacity: 1;
   }
 }
 
 .admin-links {
-  float: right;
+  float: direction(right);
 }
 
 .al-dropdown__container {
@@ -123,7 +123,7 @@ For admin dropdowns that appear in main content areas, such as item groups, plea
   position: absolute;
   padding: 8px 0;
   border-color: $ic-border-light;
-  text-align: left;
+  text-align: direction(left);
 
   * { box-sizing: border-box; }
 
@@ -132,6 +132,7 @@ For admin dropdowns that appear in main content areas, such as item groups, plea
     animation-name: al-slide-down;
     animation-fill-mode: forwards;
     animation-timing-function: cubic-bezier(0,1,0.5,1);
+    transform-origin: top
   }
 
   .ui-menu-item {
@@ -143,7 +144,7 @@ For admin dropdowns that appear in main content areas, such as item groups, plea
       padding: $ic-sp/2 $ic-sp;
 
       & i[class*=icon-]:before,
-      & i[class^=icon-]:before { margin-right: 8px; }
+      & i[class^=icon-]:before { margin-#{direction(right)}: 8px; }
     }
 
     a.disabled.ui-state-focus {

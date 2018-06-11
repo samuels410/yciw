@@ -42,7 +42,7 @@ describe Message do
     end
 
     it 'should sanitize html' do
-      expect_any_instance_of(Message).to receive(:load_html_template).and_return <<-ZOMGXSS
+      expect_any_instance_of(Message).to receive(:load_html_template).and_return [<<-ZOMGXSS, 'template.html.erb']
         <b>Your content</b>: <%= "<script>alert()</script>" %>
       ZOMGXSS
       user         = user_factory(active_all: true)
@@ -67,7 +67,7 @@ describe Message do
       @au = AccountUser.create(:account => account_model)
       msg = generate_message(:account_user_notification, :email, @au)
       expect(msg.html_body.scan(/<html>/).length).to eq 1
-      expect(msg.html_body.index('<html>')).to eq 0
+      expect(msg.html_body.index('<!DOCTYPE')).to eq 0
     end
 
     it "should not html escape the subject" do
@@ -478,6 +478,24 @@ describe Message do
           message = message_model(:context => assign, notification: notification, user: user)
           expect(message.from_name).to eq 'nickname'
         end
+
+        it 'uses a course appointment group if exists' do
+          @account = Account.create!
+          @account.settings[:allow_invitation_previews] = false
+          @account.save!
+          course_with_student(:account => @account, :active_all => true, :name => 'Unnamed Course')
+          cat = @course.group_categories.create(:name => 'teh category')
+          ag = appointment_group_model(:contexts => [@course], :sub_context => cat)
+          assign = assignment_model
+          @course.offer!
+          user = user_model(preferences: { course_nicknames: { assign.context.id => 'test_course' }})
+          user.register!
+          enroll = @course.enroll_user(user)
+          enroll.accept!
+          notification = Notification.create(:name => 'Assignment Group Published')
+          message = message_model(:context => ag, notification: notification, user: user)
+          expect(message.from_name).to eq "Unnamed Course"
+        end
       end
     end
 
@@ -513,7 +531,7 @@ describe Message do
       message = Message.create!(context: submission)
       expect(message.author_short_name).to eq user.short_name
       expect(message.author_email_address).to eq user.email
-      expect(message.author_avatar_url).to match /secure.gravatar.com/
+      expect(message.author_avatar_url).to match 'http://localhost/images/messages/avatar-50.png'
     end
 
     it 'loads attributes from an author owned asset' do
@@ -523,7 +541,7 @@ describe Message do
       message = Message.create!(context: convo_message)
       expect(message.author_short_name).to eq user.short_name
       expect(message.author_email_address).to eq user.email
-      expect(message.author_avatar_url).to match /secure.gravatar.com/
+      expect(message.author_avatar_url).to match 'http://localhost/images/messages/avatar-50.png'
     end
 
     it "doesn't reveal the author's email address when the account setting is not set" do
@@ -533,7 +551,7 @@ describe Message do
       message = Message.create!(context: convo_message)
       expect(message.author_short_name).to eq user.short_name
       expect(message.author_email_address).to eq nil
-      expect(message.author_avatar_url).to match /secure.gravatar.com/
+      expect(message.author_avatar_url).to match 'http://localhost/images/messages/avatar-50.png'
     end
 
     it 'doesnt break when there is no author' do

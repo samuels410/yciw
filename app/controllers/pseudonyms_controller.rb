@@ -27,7 +27,7 @@ class PseudonymsController < ApplicationController
   include Api::V1::Pseudonym
 
   # @API List user logins
-  # Given a user ID, return that user's logins for the given account.
+  # Given a user ID, return a paginated list of that user's logins for the given account.
   #
   # @response_field account_id The ID of the login's account.
   # @response_field id The unique, numeric ID for the login.
@@ -63,7 +63,7 @@ class PseudonymsController < ApplicationController
         self, api_v1_account_pseudonyms_url)
     else
       bookmark = BookmarkedCollection::SimpleBookmarker.new(Pseudonym, :id)
-      @pseudonyms = ShardedBookmarkedCollection.build(bookmark, @user.pseudonyms) { |scope| scope.active }
+      @pseudonyms = ShardedBookmarkedCollection.build(bookmark, @user.pseudonyms.shard(@user).active.order(:id))
       @pseudonyms = Api.paginate(@pseudonyms, self, api_v1_user_pseudonyms_url)
     end
 

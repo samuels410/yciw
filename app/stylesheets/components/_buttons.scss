@@ -224,7 +224,7 @@ listen to the "click" and "keyclick" events and add `tabindex="0"` and `role="bu
   width: 100%;
   padding-left: 0;
   padding-right: 0;
-  @include box-sizing(border-box);
+  box-sizing: border-box;
 }
 
 // Vertically space out stacked block buttons
@@ -244,7 +244,7 @@ input[type="button"] {
 .btn-primary, // <-- deprecated- do not use
 .Button--primary {
   @if $use_high_contrast {
-    @include canvas-button($ic-brand-primary, $ic-color-light);
+    @include canvas-button(#0770A3, $ic-color-light);
   } @else {
     @include canvas-button(
       var(--ic-brand-button--primary-bgd),
@@ -285,9 +285,6 @@ input[type="button"] {
     );
   }
 }
-
-// Inverse appears as dark gray <-- deprecated- do not use
-.btn-inverse { @include buttonBackground($btnInverseBackground, $btnInverseBackgroundHighlight); }
 
 
 // Link buttons
@@ -346,13 +343,13 @@ input[type="button"] {
   }
 
   i[class*=icon-], i[class^=icon-] {
-    margin-right: 3px;
+    margin-#{direction(right)}: 3px;
   }
 }
 
 .Button--link--has-divider {
   display: block;
-  text-align: left;
+  text-align: direction(left);
   border-bottom: 1px solid $ic-border-color;
   color: $ic-color-dark;
   padding: $ic-sp;
@@ -423,7 +420,7 @@ input[type="button"] {
     background-size: auto 80%;
   }
   @include beta-tag;
-  padding-right: 20px;
+  padding-#{direction(right)}: 20px;
 
   // Prevent the beta background image from disappearing on hover
   &:hover {

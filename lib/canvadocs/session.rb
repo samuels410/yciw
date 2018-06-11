@@ -1,3 +1,21 @@
+#
+# Copyright (C) 2017 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+#
+
 
 module Canvadocs
   module Session
@@ -7,7 +25,7 @@ module Canvadocs
       enable_annotations = opts.delete(:enable_annotations)
       moderated_grading_whitelist = opts.delete(:moderated_grading_whitelist)
       opts.merge! canvadoc_permissions_for_user(user, enable_annotations, moderated_grading_whitelist)
-      opts[:url] = attachment.authenticated_s3_url(expires_in: 7.days)
+      opts[:url] = attachment.public_url(expires_in: 7.days)
       opts[:locale] = I18n.locale || I18n.default_locale
 
       Canvas.timeout_protection("canvadocs", raise_on_timeout: true) do
@@ -23,7 +41,6 @@ module Canvadocs
 
     def canvadoc_permissions_for_user(user, enable_annotations, moderated_grading_whitelist=nil)
       return {} unless enable_annotations && canvadocs_can_annotate?(user)
-
       opts = canvadocs_default_options_for_user(user)
       return opts if submissions.empty?
 
@@ -40,6 +57,23 @@ module Canvadocs
       opts
     end
     private :canvadoc_permissions_for_user
+
+    def submission_context_ids
+      @submission_context_ids ||= submissions.map { |s| s.assignment.context_id }.uniq
+    end
+
+    def observing?(user)
+      user.observer_enrollments.active.where(course_id: submission_context_ids,
+        associated_user_id: submissions.map(&:user_id)).exists?
+    end
+
+    def managing?(user)
+      is_teacher = user.teacher_enrollments.active.where(course_id: submission_context_ids).exists?
+      return true if is_teacher
+      course = submissions.first.assignment.course
+      course.account_membership_allows(user)
+    end
+    private :managing?
 
     def canvadocs_can_annotate?(user)
       user.present?
@@ -69,13 +103,20 @@ module Canvadocs
     end
     private :canvadocs_annotation_context
 
+    def canvadocs_permissions(user)
+      return 'readwrite' if submissions.empty?
+      return 'readwritemanage' if managing?(user)
+      return 'read' if observing?(user)
+      'readwrite'
+    end
+    private :canvadocs_permissions
+
     def canvadocs_default_options_for_user(user)
       opts = {
         annotation_context: canvadocs_annotation_context,
-        permissions: "readwrite",
+        permissions: canvadocs_permissions(user),
         user_id: user.global_id.to_s,
         user_name: user.short_name.delete(","),
-        user_role: "",
         user_filter: user.global_id.to_s,
       }
       opts[:user_crocodoc_id] = user.crocodoc_id if user.crocodoc_id

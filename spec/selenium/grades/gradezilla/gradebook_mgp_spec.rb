@@ -17,8 +17,8 @@
 #
 
 require_relative '../../common'
-require_relative '../page_objects/gradezilla_page'
-require_relative '../page_objects/gradezilla_cells_page'
+require_relative '../pages/gradezilla_page'
+require_relative '../pages/gradezilla_cells_page'
 require_relative '../setup/gradebook_setup'
 
 describe "Gradezilla with grading periods" do
@@ -47,13 +47,12 @@ describe "Gradezilla with grading periods" do
 
         Gradezilla.select_grading_period("All Grading Periods")
         Gradezilla::Cells.edit_grade(@student, assign, "10")
-        expect(Gradezilla::Cells.get_grade(@student, assign)).to eq "10"
+        expect { Gradezilla::Cells.get_grade(@student, assign) }.to become "10"
 
 
         Gradezilla.select_grading_period(@gp_ended.title)
         Gradezilla::Cells.edit_grade(@student, assign, "8")
-        expect(Gradezilla::Cells.get_grade(@student, assign)).to eq "8"
-
+        expect { Gradezilla::Cells.get_grade(@student, assign) }.to become "8"
       end
     end
 
@@ -70,7 +69,7 @@ describe "Gradezilla with grading periods" do
 
         Gradezilla.select_grading_period(@gp_closed.title)
         Gradezilla::Cells.edit_grade(@student, assignment, "10")
-        expect(Gradezilla::Cells.get_grade(@student, assignment)).to eq "10"
+        expect { Gradezilla::Cells.get_grade(@student, assignment) }.to become "10"
         expect(Submission.where(assignment_id: assignment.id, user_id: @student.id).first.grade).to eq "10"
       end
     end

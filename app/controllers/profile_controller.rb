@@ -64,11 +64,6 @@
 #           "example": "sis1",
 #           "type": "string"
 #         },
-#         "sis_login_id": {
-#           "description": "sis1-login",
-#           "example": "sis1-login",
-#           "type": "string"
-#         },
 #         "lti_user_id": {
 #           "type": "string"
 #         },
@@ -174,6 +169,7 @@ class ProfileController < ApplicationController
     )
 
     if @user_data[:known_user] # if you can message them, you can see the profile
+      js_env :enable_gravatar => @domain_root_account&.enable_gravatar?
       add_crumb(t('crumbs.settings_frd', "%{user}'s Profile", :user => @user.short_name), user_profile_path(@user))
       render
     else
@@ -208,6 +204,7 @@ class ProfileController < ApplicationController
     @password_pseudonyms = @pseudonyms.select{|p| !p.managed_password? }
     @context = @user.profile
     @active_tab = "profile_settings"
+    js_env :enable_gravatar => @domain_root_account&.enable_gravatar?
     respond_to do |format|
       format.html do
         show_tutorial_ff_to_user = @domain_root_account&.feature_enabled?(:new_user_tutorial) &&
@@ -257,7 +254,7 @@ class ProfileController < ApplicationController
   end
 
   # @API List avatar options
-  # Retrieve the possible user avatar options that can be set with the user update endpoint. The response will be an array of avatar records. If the 'type' field is 'attachment', the record will include all the normal attachment json fields; otherwise it will include only the 'url' and 'display_name' fields. Additionally, all records will include a 'type' field and a 'token' field. The following explains each field in more detail
+  # A paginated list of the possible user avatar options that can be set with the user update endpoint. The response will be an array of avatar records. If the 'type' field is 'attachment', the record will include all the normal attachment json fields; otherwise it will include only the 'url' and 'display_name' fields. Additionally, all records will include a 'type' field and a 'token' field. The following explains each field in more detail
   # type:: ["gravatar"|"attachment"|"no_pic"] The type of avatar record, for categorization purposes.
   # url:: The url of the avatar
   # token:: A unique representation of the avatar record which can be used to set the avatar with the user update endpoint. Note: this is an internal representation and is subject to change without notice. It should be consumed with this api endpoint and used in the user update endpoint, and should not be constructed by the client.
@@ -283,7 +280,7 @@ class ProfileController < ApplicationController
   #     },
   #     {
   #       "type":"attachment",
-  #       "url":"https://<canvas>/images/thumbnails/12/gpLWJ...",
+  #       "url":<url to fetch thumbnail of attachment>,
   #       "token":<opaque_token>,
   #       "display_name":"profile.jpg",
   #       "id":12,
@@ -347,7 +344,7 @@ class ProfileController < ApplicationController
       if @user.update_attributes(user_params)
         pseudonymed = false
         if params[:default_email_id].present?
-          @email_channel = @user.communication_channels.email.where(id: params[:default_email_id]).first
+          @email_channel = @user.communication_channels.email.active.where(id: params[:default_email_id]).first
           if @email_channel
             @email_channel.move_to_top
             @user.clear_email_cache!

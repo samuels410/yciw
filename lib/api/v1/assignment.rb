@@ -35,6 +35,8 @@ module Api::V1::Assignment
       created_at
       updated_at
       due_at
+      final_grader_id
+      grader_count
       lock_at
       unlock_at
       assignment_group_id
@@ -48,6 +50,8 @@ module Api::V1::Assignment
       grading_standard_id
       moderated_grading
       omit_from_final_grade
+      anonymous_instructor_annotations
+      anonymous_grading
     )
   }.freeze
 
@@ -128,6 +132,8 @@ module Api::V1::Assignment
       hash['in_closed_grading_period'] = assignment.in_closed_grading_period?
     end
 
+    hash['grades_published'] = assignment.grades_published? if opts[:include_grades_published]
+
     if !opts[:overrides].blank?
       hash['overrides'] = assignment_overrides_json(opts[:overrides], user)
     elsif opts[:include_overrides]
@@ -157,6 +163,10 @@ module Api::V1::Assignment
     end
 
     hash['is_quiz_assignment'] = assignment.quiz? && assignment.quiz.assignment?
+    hash['can_duplicate'] = assignment.can_duplicate?
+    hash['original_assignment_id'] = assignment.duplicate_of&.id
+    hash['original_assignment_name'] = assignment.duplicate_of&.name
+    hash['workflow_state'] = assignment.workflow_state
 
     if assignment.quiz_lti?
       hash['is_quiz_lti_assignment'] = true
@@ -191,7 +201,7 @@ module Api::V1::Assignment
       hash['external_tool_tag_attributes'] = {
         'url' => external_tool_tag.url,
         'new_tab' => external_tool_tag.new_tab,
-        'resource_link_id' => ContextExternalTool.opaque_identifier_for(external_tool_tag, assignment.shard)
+        'resource_link_id' => assignment.lti_resource_link_id
       }
       hash['url'] = sessionless_launch_url(@context,
                                            :launch_type => 'assessment',
@@ -242,8 +252,11 @@ module Api::V1::Assignment
         rubric = assignment.rubric
         hash['rubric'] = rubric.data.map do |row|
           row_hash = row.slice(:id, :points, :description, :long_description)
+          row_hash["criterion_use_range"] = row[:criterion_use_range] || false
           row_hash["ratings"] = row[:ratings].map do |c|
-            c.slice(:id, :points, :description)
+            rating_hash = c.slice(:id, :points, :description, :long_description)
+            rating_hash["long_description"] = c[:long_description] || ""
+            rating_hash
           end
           if row[:learning_outcome_id] && outcome = LearningOutcome.where(id: row[:learning_outcome_id]).first
             row_hash["outcome_id"] = outcome.id
@@ -293,7 +306,7 @@ module Api::V1::Assignment
       end
     end
 
-    hash['published'] = !assignment.unpublished?
+    hash['published'] = assignment.published?
     if can_manage
       hash['unpublishable'] = assignment.can_unpublish?
     end
@@ -306,9 +319,10 @@ module Api::V1::Assignment
 
     if submission = opts[:submission]
       if submission.is_a?(Array)
-        hash['submission'] = submission.map { |s| submission_json(s, assignment, user, session) }
+        ActiveRecord::Associations::Preloader.new.preload(submission, :quiz_submission) if assignment.quiz?
+        hash['submission'] = submission.map { |s| submission_json(s, assignment, user, session, params) }
       else
-        hash['submission'] = submission_json(submission, assignment, user, session)
+        hash['submission'] = submission_json(submission, assignment, user, session, params)
       end
     end
 
@@ -330,6 +344,8 @@ module Api::V1::Assignment
       override = assignment.planner_override_for(user)
       hash['planner_override'] = planner_override_json(override, user, session)
     end
+
+    hash['anonymous_grading'] = value_to_boolean(assignment.anonymous_grading)
 
     hash
   end
@@ -367,6 +383,7 @@ module Api::V1::Assignment
     description
     position
     points_possible
+    grader_count
     grading_type
     allowed_extensions
     due_at
@@ -388,7 +405,8 @@ module Api::V1::Assignment
     notify_of_update
     integration_id
     omit_from_final_grade
-  )
+    anonymous_instructor_annotations
+  ).freeze
 
   API_ALLOWED_TURNITIN_SETTINGS = %w(
     originality_report_visibility
@@ -400,14 +418,14 @@ module Api::V1::Assignment
     exclude_small_matches_type
     exclude_small_matches_value
     submit_papers_to
-  )
+  ).freeze
 
   API_ALLOWED_VERICITE_SETTINGS = %w(
     originality_report_visibility
     exclude_quoted
     exclude_self_plag
     store_in_index
-  )
+  ).freeze
 
   def create_api_assignment(assignment, assignment_params, user, context = assignment.context)
     return :forbidden unless grading_periods_allow_submittable_create?(assignment, assignment_params)
@@ -415,13 +433,21 @@ module Api::V1::Assignment
     prepared_create = prepare_assignment_create_or_update(assignment, assignment_params, user, context)
     return false unless prepared_create[:valid]
 
-    assignment.quiz_lti! if assignment_params.key?(:quiz_lti)
-    if prepared_create[:overrides].present?
-      create_api_assignment_with_overrides(prepared_create, user)
-    else
-      prepared_create[:assignment].save!
-      return :created
+    response = :created
+
+    Assignment.suspend_due_date_caching do
+      assignment.quiz_lti! if assignment_params.key?(:quiz_lti)
+
+      response = if prepared_create[:overrides].present?
+        create_api_assignment_with_overrides(prepared_create, user)
+      else
+        prepared_create[:assignment].save!
+        :created
+      end
     end
+
+    DueDateCacher.recompute(prepared_create[:assignment], update_grades: true)
+    response
   rescue ActiveRecord::RecordInvalid
     false
   rescue Lti::AssignmentSubscriptionsHelper::AssignmentSubscriptionError => e
@@ -435,12 +461,23 @@ module Api::V1::Assignment
     prepared_update = prepare_assignment_create_or_update(assignment, assignment_params, user, context)
     return false unless prepared_update[:valid]
 
-    if prepared_update[:overrides]
-      update_api_assignment_with_overrides(prepared_update, user)
-    else
-      prepared_update[:assignment].save!
-      :ok
+    cached_due_dates_changed = prepared_update[:assignment].update_cached_due_dates?
+    response = :ok
+
+    Assignment.suspend_due_date_caching do
+      response = if prepared_update[:overrides]
+        update_api_assignment_with_overrides(prepared_update, user)
+      else
+        prepared_update[:assignment].save!
+        :ok
+      end
     end
+
+    if @overrides_affected.to_i > 0 || cached_due_dates_changed
+      DueDateCacher.recompute(prepared_update[:assignment], update_grades: true)
+    end
+
+    response
   rescue ActiveRecord::RecordInvalid
     false
   rescue Lti::AssignmentSubscriptionsHelper::AssignmentSubscriptionError => e
@@ -499,6 +536,21 @@ module Api::V1::Assignment
     # if ag_id is a non-numeric string, ag_id.to_i will == 0
     if ag_id and ag_id.to_i <= 0
       assignment.errors.add('assignment[assignment_group_id]', I18n.t(:not_a_number, "must be a positive number"))
+      false
+    else
+      true
+    end
+  end
+
+  def assignment_final_grader_valid?(assignment, course)
+    return true unless assignment.final_grader_id && assignment.final_grader_id_changed?
+
+    final_grader = course.participating_instructors.find_by(id: assignment.final_grader_id)
+    if final_grader.nil?
+      assignment.errors.add('final_grader_id', I18n.t('course has no active instructors with this ID'))
+      false
+    elsif !course.grants_right?(final_grader, :select_final_grade)
+      assignment.errors.add('final_grader_id', I18n.t('user does not have permission to select final grade'))
       false
     else
       true
@@ -630,6 +682,23 @@ module Api::V1::Assignment
       assignment.moderated_grading = value_to_boolean(assignment_params['moderated_grading'])
     end
 
+    grader_changes = final_grader_changes(assignment, context, assignment_params)
+    assignment.final_grader_id = grader_changes.grader_id if grader_changes.grader_changed?
+
+    if assignment_params.key?('anonymous_grading') && assignment.course.feature_enabled?(:anonymous_marking)
+      assignment.anonymous_grading = value_to_boolean(assignment_params['anonymous_grading'])
+    end
+
+    if assignment_params.key?('duplicated_successfully')
+      if value_to_boolean(assignment_params[:duplicated_successfully])
+        assignment.finish_duplicating
+      else
+        assignment.fail_to_duplicate
+      end
+    end
+
+    apply_report_visibility_options!(assignment_params, assignment)
+
     assignment.updating_user = user
     assignment.attributes = update_params
     assignment.infer_times
@@ -696,6 +765,26 @@ module Api::V1::Assignment
 
   private
 
+  def final_grader_changes(assignment, course, assignment_params)
+    no_changes = OpenStruct.new(grader_changed?: false)
+    return no_changes unless assignment.moderated_grading && assignment_params.key?('final_grader_id')
+    return no_changes unless course.root_account.feature_enabled?(:anonymous_moderated_marking)
+
+    final_grader_id = assignment_params.fetch("final_grader_id")
+    return OpenStruct.new(grader_changed?: true, grader_id: nil) if final_grader_id.blank?
+
+    OpenStruct.new(grader_changed?: true, grader_id: final_grader_id)
+  end
+
+  def apply_report_visibility_options!(assignment_params, assignment)
+    if assignment_params[:report_visibility].present?
+      settings = assignment.turnitin_settings
+      settings[:originality_report_visibility] = assignment_params[:report_visibility]
+      assignment.turnitin_settings = settings
+    end
+  end
+
+
   def prepare_assignment_create_or_update(assignment, assignment_params, user, context = assignment.context)
     raise "needs strong params" unless assignment_params.is_a?(ActionController::Parameters)
 
@@ -716,6 +805,7 @@ module Api::V1::Assignment
 
     updated_assignment = update_from_params(assignment, assignment_params, user, context)
     return invalid unless assignment_editable_fields_valid?(updated_assignment, user)
+    return invalid unless assignment_final_grader_valid?(updated_assignment, context)
 
     {
       assignment: assignment,
@@ -792,7 +882,7 @@ module Api::V1::Assignment
     elsif assignment_params['configuration_tool_type'] == 'Lti::MessageHandler'
       mh = Lti::MessageHandler.find(tool_id)
       mh_context = mh.resource_handler.tool_proxy.context
-      tool = mh if mh_context == @context || mh_context == @context.account || mh_context == @context.root_account
+      tool = mh if mh_context == @context || @context.account_chain.include?(mh_context)
     end
     tool
   end
@@ -800,7 +890,8 @@ module Api::V1::Assignment
   def plagiarism_capable?(assignment_params)
     assignment_params['submission_type'] == 'online' &&
       assignment_params['submission_types'].present? &&
-      assignment_params['submission_types'].include?('online_upload')
+      (assignment_params['submission_types'].include?('online_upload') ||
+      assignment_params['submission_types'].include?('online_text_entry'))
   end
 
   def submissions_download_url(context, assignment)

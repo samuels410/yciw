@@ -255,7 +255,7 @@ describe AssignmentGroupsController do
         @submission = bare_submission_model(@assignment, @student, {
           score: '25',
           grade: '25',
-          grader: @teacher,
+          grader_id: @teacher.id,
           submitted_at: Time.zone.now
         })
       end
@@ -350,6 +350,16 @@ describe AssignmentGroupsController do
       expect(@assignment3.assignment_group_id).to eq(@group1.id)
       expect(@group2.assignments.count).to eq(0)
       expect(@group1.assignments.count).to eq(3)
+    end
+
+    it 'moves an associated Quiz to the correct assignment group along with the assignment' do
+      @quiz = @course.quizzes.create!(title: 'teh quiz', quiz_type: 'assignment', assignment_group_id: @group2)
+      user_session(@teacher)
+      post :reorder_assignments, params: {course_id: @course.id, assignment_group_id: @group1.id,
+                                          order: @order + ",#{@quiz.assignment.id}" }
+      @quiz.reload
+      expect(@quiz.assignment.assignment_group_id).to eq(@group1.id)
+      expect(@quiz.assignment_group_id).to eq(@group1.id)
     end
 
     context 'with grading periods' do

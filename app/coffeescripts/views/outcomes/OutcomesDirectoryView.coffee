@@ -20,16 +20,16 @@ define [
   'i18n!outcomes'
   'jquery'
   'underscore'
-  'compiled/views/PaginatedView'
-  'compiled/models/OutcomeGroup'
-  'compiled/collections/OutcomeCollection'
-  'compiled/collections/OutcomeGroupCollection'
-  'compiled/views/outcomes/OutcomeGroupIconView'
-  'compiled/views/outcomes/OutcomeIconView'
+  '../PaginatedView'
+  '../../models/OutcomeGroup'
+  '../../collections/OutcomeCollection'
+  '../../collections/OutcomeGroupCollection'
+  './OutcomeGroupIconView'
+  './OutcomeIconView'
   'str/htmlEscape'
   'jquery.disableWhileLoading'
   'jqueryui/droppable'
-  'compiled/jquery.rails_flash_notifications'
+  '../../jquery.rails_flash_notifications'
 ], (I18n, $, _, PaginatedView, OutcomeGroup, OutcomeCollection, OutcomeGroupCollection, OutcomeGroupIconView, OutcomeIconView, htmlEscape) ->
 
   # The outcome group "directory" browser.
@@ -75,7 +75,6 @@ define [
 
       if @outcomeGroup
         @$el.disableWhileLoading(dfd = @groups.fetch())
-        dfd.done(@focusFirstOutcome)
 
       @loadDfd.done(@selectFirstOutcome) if opts.selectFirstItem
 
@@ -116,21 +115,15 @@ define [
         $.flashError I18n.t 'flash.error', "An error occurred. Please refresh the page and try again."
 
       # create new link
-      outcome.setUrlTo 'delete'
-      unlinkUrl = outcome.url
+      oldGroup = outcome.outcomeGroup
       outcome.outcomeGroup = newGroup
       outcome.setUrlTo 'add'
-      $.ajaxJSON(outcome.url, 'POST', outcome_id: outcome.get 'id')
+      $.ajaxJSON(outcome.url, 'POST', {outcome_id: outcome.get('id'), move_from: oldGroup.id})
         .done( (modelData) ->
           # reset urls etc.
           outcome.set outcome.parse(modelData)
-          # new link created, now remove old link
-          $.ajaxJSON(unlinkUrl, 'DELETE')
-            .done( ->
-              # old link removed
-              $.flashMessage I18n.t 'flash.updateSuccess', 'Update successful'
-              disablingDfd.resolve())
-            .fail onFail)
+          $.flashMessage I18n.t 'flash.updateSuccess', 'Update successful'
+          disablingDfd.resolve())
         .fail onFail
 
       disablingDfd
@@ -160,20 +153,13 @@ define [
       if (@views().length > 0)
         @views()[0].makeFocusable()
 
-    focusFirstOutcome: =>
-      $li = @$el.find('[tabindex=0]')
-      if $li.length > 0
-        $li.focus()
-      else
-        @$el.prev().find('[tabindex=0]').focus()
-
     selectFirstOutcome: =>
       $('ul.outcome-level li:first').click()
 
     # Overriding
     paginationLoaderTemplate: ->
-      "<li><a href='#' class='loading-more'>
-        #{htmlEscape I18n.t("loading_more_results", "Loading more results")}</a></li>"
+      "<li><span class='loading-more'>
+        #{htmlEscape I18n.t("Loading more results")}</span></li>"
 
     # Overriding to insert into the ul.
     showPaginationLoader: ->
@@ -237,6 +223,7 @@ define [
       _.each @views(), (v) => @$el.append v.render().el
       @handleWarning() if @inFindDialog
       @initDroppable() unless @readOnly
+      @startPaginationListener()
       # Make the first <li /> tabbable for accessibility purposes.
       @$('li:first').attr('tabindex', 0)
       @$el.data 'view', this

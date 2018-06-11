@@ -46,6 +46,7 @@ describe "gradebook - concluded courses and enrollments" do
         .to({
           "show_inactive_enrollments" => "true",
           "show_concluded_enrollments" => "false",
+          "enter_grades_as" => nil
         })
     end
 
@@ -61,6 +62,7 @@ describe "gradebook - concluded courses and enrollments" do
         .to({
           "show_inactive_enrollments" => "false",
           "show_concluded_enrollments" => "true",
+          "enter_grades_as" => nil
         })
     end
 
@@ -124,7 +126,7 @@ describe "gradebook - concluded courses and enrollments" do
     it "does not allow editing grades", priority: "1", test_id: 210027 do
       @course.complete!
       get "/courses/#{@course.id}/gradebook"
-      cell = f('#gradebook_grid .container_1 .slick-row:nth-child(1) .l2')
+      cell = f('#gradebook_grid .container_1 .slick-row:nth-child(1) .b2')
       expect(cell).to include_text '10'
       cell.click
       expect(cell).not_to contain_css('.grade') # no input box for entry

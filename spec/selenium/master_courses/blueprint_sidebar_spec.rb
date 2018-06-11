@@ -29,7 +29,7 @@ shared_context "blueprint sidebar context" do
   end
 
   def blueprint_open_sidebar_button
-    f('.blueprint__root .bcs__wrapper .bcs__trigger')
+    f('.blueprint__root .bcs__wrapper .bcs__trigger button')
   end
 
   def sync_modal_send_notification_checkbox
@@ -136,7 +136,7 @@ describe "master courses sidebar" do
       get "/courses/#{@master.id}"
       blueprint_open_sidebar_button.click
       f('button#mcSyncHistoryBtn').click
-      expect(f('div[aria-label="Sync History"]')).to be_displayed
+      expect(f('span[aria-label="Sync History"]')).to be_displayed
       expect(f('#application')).to have_attribute('aria-hidden', 'true')
     end
 
@@ -146,7 +146,7 @@ describe "master courses sidebar" do
       wait_for_ajaximations
       f('button#mcUnsyncedChangesBtn').click
       wait_for_ajaximations
-      expect(f('div[aria-label="Unsynced Changes"]')).to be_displayed
+      expect(f('span[aria-label="Unsynced Changes"]')).to be_displayed
       expect(f('#application')).to have_attribute('aria-hidden', 'true')
     end
 
@@ -177,7 +177,24 @@ describe "master courses sidebar" do
       get "/courses/#{@master.id}"
       blueprint_open_sidebar_button.click
       f('button#mcSidebarAsscBtn').click
-      expect(f('div[aria-label="Associations"]')).to be_displayed
+      expect(f('span[aria-label="Associations"]')).to be_displayed
+    end
+
+    it "should open and close Associations modal from course settings page" do
+      # see jira ticket ADMIN-5
+      get "/courses/#{@master.id}/settings"
+      blueprint_open_sidebar_button.click
+      f('button#mcSidebarAsscBtn').click
+      expect(f('span[aria-label="Associations"]')).to be_displayed
+      f('body').find_element(:xpath, '//*[@aria-label="Associations"]//button[contains(., "Close")]').click
+      expect(f('body')).not_to contain_css('[aria-label="Associations"]')
+      # try again from the sections tab, just to be sure
+      f('#sections_tab>a').click
+      expect(f('#tab-sections')).to be_displayed
+      f('button#mcSidebarAsscBtn').click
+      expect(f('span[aria-label="Associations"]')).to be_displayed
+      f('body').find_element(:xpath, '//*[@aria-label="Associations"]//button[contains(., "Close")]').click
+      expect(f('body')).not_to contain_css('[aria-label="Associations"]')
     end
 
     it "limits notification message to 140 characters", priority: "2", test_id: 3186725 do
@@ -190,6 +207,33 @@ describe "master courses sidebar" do
       expect(notification_message_text_box).not_to have_value('A')
     end
 
+    it "updates screenreader character usage message with character count" do
+      skip('This needs to be skipped until ADMIN-793 is resolved')
+      inmsg = '1234567890123456789012345678901234567890'
+      open_blueprint_sidebar
+      # if the default ever changes in MigrationOptions, make sure our spec still works
+      driver.execute_script('ENV.MIGRATION_OPTIONS_SR_ALERT_TIMEOUT = 15')
+      send_notification_checkbox.click
+      add_message_checkbox.click
+      # we don't start adding the message until 90% full
+      notification_message_text_box.send_keys(inmsg + inmsg + inmsg + 'abcdefg')
+      alert_text = '127 of 140 maximum characters'
+      # the screenreader message is displayed after a 600ms delay
+      # not waiting leads to a flakey spec
+      wait = Selenium::WebDriver::Wait.new(:timeout => 0.7)
+      wait.until {expect(fj("#flash_screenreader_holder:contains(#{alert_text})")).to be_present}
+    end
+
+    it "issues screenreader alert when message is full" do
+      msg = '1234567890123456789012345678901234567890123456789012345678901234567890'
+      open_blueprint_sidebar
+      send_notification_checkbox.click
+      add_message_checkbox.click
+      notification_message_text_box.send_keys(msg+msg+'12')
+      alert_text = 'You have reached the limit of 140 characters in the notification message'
+
+      expect(fj("#flash_screenreader_holder:contains(#{alert_text})")).to be_present
+    end
 
     context "before sync" do
 

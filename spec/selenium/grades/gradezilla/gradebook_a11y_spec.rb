@@ -17,8 +17,8 @@
 
 require_relative '../../helpers/gradezilla_common'
 require_relative '../../helpers/color_common'
-require_relative '../page_objects/gradezilla_page'
-require_relative '../page_objects/gradezilla_cells_page'
+require_relative '../pages/gradezilla_page'
+require_relative '../pages/gradezilla_cells_page'
 
 describe "Gradezilla" do
   include_context "in-process server selenium tests"
@@ -178,14 +178,6 @@ describe "Gradezilla" do
       expect(Gradezilla.body).not_to contain_css(Gradezilla.expanded_popover_menu_selector)
     end
 
-    it 'pressing "m" closes the assignment header menu if it is open' do
-      Gradezilla::Cells.send_keyboard_shortcut(@student_1, @first_assignment, 'm')
-      expect(Gradezilla.expanded_popover_menu).to be_displayed
-      driver.action.send_keys('m').perform
-
-      expect(Gradezilla.body).not_to contain_css(Gradezilla.expanded_popover_menu_selector)
-    end
-
     it 'opens the assignment group header menu when a cell has focus and is not in edit mode' do
       Gradezilla::Cells.send_keyboard_shortcut_to_assignment_group(@student_1, @group, 'm')
 
@@ -201,15 +193,6 @@ describe "Gradezilla" do
       expect(Gradezilla.body).not_to contain_css(Gradezilla.expanded_popover_menu_selector)
     end
 
-    it 'pressing "m" closes the assignment group header menu if it is open' do
-      Gradezilla::Cells.send_keyboard_shortcut_to_assignment_group(@student_1, @group, 'm')
-      expect(Gradezilla.expanded_popover_menu).to be_displayed
-
-      driver.action.send_keys('m').perform
-
-      expect(Gradezilla.body).not_to contain_css(Gradezilla.expanded_popover_menu_selector)
-    end
-
     it 'opens the total header menu when a cell has focus and is not in edit mode' do
       Gradezilla::Cells.send_keyboard_shortcut_to_total(@student_1, 'm')
 
@@ -221,15 +204,6 @@ describe "Gradezilla" do
       expect(Gradezilla.expanded_popover_menu).to be_displayed
 
       driver.action.send_keys(:escape).perform
-
-      expect(Gradezilla.body).not_to contain_css(Gradezilla.expanded_popover_menu_selector)
-    end
-
-    it 'pressing "m" closes the total header menu if it is open' do
-      Gradezilla.select_total_column_option
-      expect(Gradezilla.expanded_popover_menu).to be_displayed
-
-      driver.action.send_keys('m').perform
 
       expect(Gradezilla.body).not_to contain_css(Gradezilla.expanded_popover_menu_selector)
     end
@@ -380,8 +354,7 @@ describe "Gradezilla" do
 
     %w[message-students-who curve-grades set-default-grade assignment-muter download-submissions].each do |dialog|
       it "is placed on assignment header trigger upon #{dialog} dialog close" do
-        Gradezilla.click_assignment_header_menu(assignment.id)
-        Gradezilla.click_assignment_header_menu_element(dialog)
+        Gradezilla.click_assignment_header_menu_element(assignment.id,dialog)
         Gradezilla.close_open_dialog
 
         check_element_has_focus Gradezilla.assignment_header_menu_trigger_element(assignment.title)

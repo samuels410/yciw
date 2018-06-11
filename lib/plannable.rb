@@ -40,45 +40,11 @@ module Plannable
     @associated_planner_items_need_updating = false
     return if self.new_record?
     return if self.respond_to?(:context_type) && !PlannerOverride::CONTENT_TYPES.include?(self.context_type)
-    @associated_planner_items_need_updating = true if self.respond_to?(:workflow_state_changed?) && self.workflow_state_changed? || self.workflow_state == 'deleted'
-  end
-
-  def visible_in_planner_for?(user)
-    return true unless planner_enabled?
-    self.planner_overrides.where(user_id: user, marked_complete: true, workflow_state: 'active').blank?
-  end
-
-  def planner_date
-    return nil unless planner_enabled?
-    date_to_use = [:todo_date, :due_at, :posted_at, :created_at].
-                  detect { |field| valid_planner_date?(field) }
-    self.send(date_to_use)
+    @associated_planner_items_need_updating = true if self.try(:workflow_state_changed?) || self.workflow_state == 'deleted'
   end
 
   def planner_override_for(user)
-    return nil unless planner_enabled?
-    self.planner_overrides.where(user_id: user).take
-  end
-  private
-
-  def valid_planner_date?(field)
-    self.respond_to?(field.to_sym) && self.send(field.to_sym).present?
-  end
-
-  def planner_enabled?
-    unless defined?(@planner_enabled)
-      @planner_enabled = root_account_for_model(self).feature_enabled?(:student_planner)
-    end
-    @planner_enabled
-  end
-
-  def root_account_for_model(base)
-    case base
-    when PlannerNote
-      base.user.account
-    else
-      base.context.root_account
-    end
+    self.planner_overrides.where(user_id: user).where.not(workflow_state: 'deleted').take
   end
 
   class Bookmarker
@@ -129,9 +95,14 @@ module Plannable
         @columns.each.with_index.all? do |columns, i|
           columns = [columns] unless columns.is_a?(Array)
           columns.all? do |col|
-            type = TYPE_MAP[@model.columns_hash[col].type]
-            nullable = @model.columns_hash[col].null
-            type && (nullable && bookmark[i].nil? || type.(bookmark[i]))
+            col = @model.columns_hash[col]
+            if col
+              type = TYPE_MAP[col.type]
+              nullable = col.null
+              type && (nullable && bookmark[i].nil? || type.call(bookmark[i]))
+            else
+              true
+            end
           end
         end
     end
@@ -144,7 +115,7 @@ module Plannable
     end
 
     def order_by
-      @order_by ||= @columns.map { |col| column_order(col) }.join(', ')
+      @order_by ||= Arel.sql(@columns.map { |col| column_order(col) }.join(', '))
     end
 
     def column_order(col_name)
@@ -194,7 +165,7 @@ module Plannable
 
     def type_for_column(col)
       col = col.first if col.is_a?(Array)
-      @model.columns_hash[col].type
+      @model.columns_hash[col]&.type
     end
 
     # Generate a sql comparison like so:

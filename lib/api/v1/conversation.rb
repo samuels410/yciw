@@ -42,7 +42,11 @@ module Api::V1::Conversation
     explicit_participants = conversation.participants
     audience = conversation.other_participants(explicit_participants)
     result[:messages] = options[:messages].map{ |m| conversation_message_json(m, current_user, session) } if options[:messages]
-    result[:submissions] = options[:submissions].map { |s| submission_json(s, s.assignment, current_user, session, nil, ['assignment', 'submission_comments']) } if options[:submissions]
+    if options[:submissions]
+      result[:submissions] = options[:submissions].map do |s|
+        submission_json(s, s.assignment, current_user, session, nil, ['assignment', 'submission_comments'], params)
+      end
+    end
     result[:audience] = audience.map(&:id)
     result[:audience].map!(&:to_s) if stringify_json_ids?
     result[:audience_contexts] = contexts_for(audience, conversation.local_context_tags)
@@ -66,7 +70,12 @@ module Api::V1::Conversation
     result['media_comment'] = media_comment_json(result['media_comment']) if result['media_comment']
     result['attachments'] = result['attachments'].map{ |attachment| attachment_json(attachment, current_user) }
     result['forwarded_messages'] = result['forwarded_messages'].map{ |m| conversation_message_json(m, current_user, session) }
-    result['submission'] = submission_json(message.submission, message.submission.assignment, current_user, session, nil, ['assignment', 'submission_comments']) if message.submission
+    if message.submission
+      submission = message.submission
+      assignment = submission.assignment
+      includes = %w|assignment submission_comments|
+      result['submission'] = submission_json(submission, assignment, current_user, session, nil, includes, params)
+    end
     result
   end
 
@@ -78,15 +87,20 @@ module Api::V1::Conversation
     address_book.preload_users(users)
   end
 
+  def should_include_participant_avatars?(user_count)
+    user_count <= Setting.get('max_conversation_participant_count_for_avatars', '100').to_i
+  end
+
   def conversation_recipients_json(recipients, current_user, session)
     ActiveRecord::Associations::Preloader.new.preload(recipients.select{|r| r.is_a?(User)},
       {:pseudonym => :account}) # for avatar_url
 
     preload_common_contexts(current_user, recipients)
+    include_avatars = should_include_participant_avatars?(recipients.count)
     recipients.map do |recipient|
       if recipient.is_a?(User)
         conversation_user_json(recipient, current_user, session,
-          :include_participant_avatars => true,
+          :include_participant_avatars => include_avatars,
           :include_participant_contexts => true)
       else
         # contexts are already json
@@ -100,6 +114,8 @@ module Api::V1::Conversation
       :include_participant_avatars => true,
       :include_participant_contexts => true
     }.merge(options)
+    options[:include_participant_avatars] = false unless should_include_participant_avatars?(users.count)
+
     if options[:include_participant_avatars]
       ActiveRecord::Associations::Preloader.new.preload(users, {:pseudonym => :account}) # for avatar_url
     end

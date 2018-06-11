@@ -104,6 +104,23 @@ describe CourseLinkValidator do
     expect(issues).to be_empty
   end
 
+  it "should not run on deleted quiz questions" do
+    allow_any_instance_of(CourseLinkValidator).to receive(:reachable_url?).and_return(false) # don't actually ping the links for the specs
+    html = %{<a href='http://www.notarealsitebutitdoesntmattercauseimstubbingitanwyay.com'>linky</a>}
+
+    course_factory
+    quiz = @course.quizzes.create!(:title => 'quiz1', :description => "desc")
+    qq = quiz.quiz_questions.create!(:question_data => {'name' => 'test question',
+      'question_text' => html, 'answers' => [{'id' => 1}, {'id' => 2}]})
+    qq.destroy!
+
+    CourseLinkValidator.queue_course(@course)
+    run_jobs
+
+    issues = CourseLinkValidator.current_progress(@course).results[:issues]
+    expect(issues.count).to eq 0
+  end
+
   it "should not care if it can reach it" do
     allow_any_instance_of(CourseLinkValidator).to receive(:reachable_url?).and_return(true)
 
@@ -115,6 +132,31 @@ describe CourseLinkValidator do
 
     issues = CourseLinkValidator.current_progress(@course).results[:issues]
     expect(issues).to be_empty
+  end
+
+  describe "insecure hosts" do
+    def test_url(url)
+      course_factory
+      topic = @course.discussion_topics.create!(:message => %{<a href="#{url}">kekeke</a>}, :title => "title")
+
+      expect(CanvasHttp).to_not receive(:connection_for_uri) # don't try to continue after failing validation
+      CourseLinkValidator.queue_course(@course)
+      run_jobs
+
+      issues = CourseLinkValidator.current_progress(@course).results[:issues]
+      expect(issues.first[:invalid_links].first[:reason]).to eq :unreachable
+    end
+
+    it "should not try to access local ips" do
+      test_url("http://localhost:3000/haxxed")
+      test_url("http://127.0.0.1/haxxedagain")
+    end
+
+    it "should be able to set the ip filter" do
+      Setting.set('http_blocked_ip_ranges', '42.42.42.42/8,24.24.24.24')
+      test_url("http://42.42.0.1/haxxedtheplanet")
+      test_url("http://24.24.24.24/haxxedforever")
+    end
   end
 
   it "should check for deleted/unpublished objects" do

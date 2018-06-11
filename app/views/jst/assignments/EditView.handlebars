@@ -28,7 +28,8 @@
           {{#if inClosedGradingPeriod}}
             readonly
           {{/if}}
-          {{disabledIfIncludes frozenAttributes "title"}}/>
+          {{disabledIfIncludes frozenAttributes "title"}}
+          autofocus/>
       </div>
     {{/if}}
   </div>
@@ -160,19 +161,55 @@
     {{/if}}
 
     {{#unless isQuizLTIAssignment}}
+      {{#if anonymousModeratedMarkingEnabled}}
+        <span data-component="ModeratedGradingFormFieldGroup"></span>
+      {{else}}
+        <fieldset>
+          <div class="form-column-left">{{#t}}Moderated Grading{{/t}}</div>
+          <div class="form-column-right" style="margin-top: 14px;">
+            <label class="checkbox">
+              {{checkbox "moderatedGrading"
+                id="assignment_moderated_grading"
+                name="moderated_grading"
+              }}
+              {{#t}}Allow a moderator to review multiple independent grades for selected submissions{{/t}}
+            </label>
+          </div>
+        </fieldset>
+      {{/if}}
+    {{/unless}}
+
+    {{#if anonymousGradingEnabled}}
       <fieldset>
-        <div class="form-column-left">{{#t}}Moderated Grading{{/t}}</div>
+        <div class="form-column-left">{{#t}}Anonymous Grading{{/t}}</div>
+        <div id="enable-anonymous-grading" class="form-column-right">
+          <div class="border border-trbl border-round">
+            <label class="checkbox">
+              {{checkbox "anonymousGrading"
+                class="GradeAnonymously__Checkbox"
+                id="assignment_anonymous_grading"
+                name="anonymous_grading"
+              }}
+              <strong class="GradeAnonymously__CheckboxLabelText">{{#t}}Grade Anonymously{{/t}}</strong>
+
+              <p>{{#t}}Graders cannot see student names{{/t}}</p>
+            </label>
+          </div>
+        </div>
+      </fieldset>
+    {{/if}}
+
+    {{#if anonymousInstructorAnnotationsEnabled}}
+      <fieldset>
+        <div class="form-column-left">{{#t}}Anonymous Instructor Annotations{{/t}}</div>
         <div class="form-column-right" style="margin-top: 14px;">
           <label class="checkbox">
-            {{checkbox "moderatedGrading"
-              id="assignment_moderated_grading"
-              name="moderated_grading"
-            }}
-            {{#t}}Allow a moderator to review multiple independent grades for selected submissions{{/t}}
+            {{checkbox "anonymousInstructorAnnotations" id="assignment_anonymous_instructor_annotations" name="anonymous_instructor_annotations"}}
+            {{#t}}Anonymize all annotations made by instructors on submissions for this assignment in SpeedGrader{{/t}}
           </label>
         </div>
       </fieldset>
-    {{/unless}}
+    {{/if}}
 
   </div>
 
@@ -212,7 +249,7 @@
 <input type='hidden' id="secure_params" name="secure_params" value="{{secureParams}}" />
 
 <div class="form-actions" style="padding-left: 10px;">
-  <div style="float: left; min-width: 300px;">
+  <div class="pull-left" style="min-width: 300px;">
     <label class="checkbox" style="text-align:left;" for="assignment_notify_of_update">
       {{checkbox "notifyOfUpdate"
         id="assignment_notify_of_update"

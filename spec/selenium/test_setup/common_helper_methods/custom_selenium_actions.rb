@@ -29,6 +29,15 @@ module CustomSeleniumActions
     skip("skipping test, fails in Chrome: #{additional_error_text}") if driver.browser == :chrome
   end
 
+  def skip_if_safari(additional_error_text)
+    return unless driver.browser == :safari
+    case additional_error_text
+    when :alert
+      additional_error_text = "SafariDriver doesn't support alerts"
+    end
+    skip("skipping test, fails in Safari: #{additional_error_text}")
+  end
+
   def find_radio_button_by_value(value, scope = nil)
     fj("input[type=radio][value=#{value}]", scope)
   end
@@ -78,6 +87,13 @@ module CustomSeleniumActions
     end
   end
 
+  # Find an element via xpath
+  def fxpath(xpath, scope = nil)
+    stale_element_protection do
+      (scope || driver).find_element :xpath, xpath
+    end
+  end
+
   # same as `f`, but returns all matching elements
   #
   # like other selenium methods, this will wait until it finds elements on
@@ -104,6 +120,13 @@ module CustomSeleniumActions
     end
   end
 
+  # Find a collection of elements via xpath
+  def ffxpath(xpath, scope = nil)
+    reloadable_collection do
+      (scope || driver).find_elements(:xpath, xpath)
+    end
+  end
+
   def find_with_jquery(selector, scope = nil)
     driver.execute_script("return $(arguments[0], arguments[1] && $(arguments[1]))[0];", selector, scope)
   end
@@ -118,15 +141,86 @@ module CustomSeleniumActions
     f("#{selector} [#{attrib}='#{value}']")
   end
 
-  def in_frame(id)
-    f("[id=\"#{id}\"],[name=\"#{id}\"]") # ensure frame is loaded
+  def in_frame(id, loading_locator = nil)
+    f("[id=\"#{id}\"],[name=\"#{id}\"]") # ensure frame is
     saved_window_handle = driver.window_handle
-    driver.switch_to.frame(id)
+    if loading_locator.nil?
+      driver.switch_to.frame(id)
+    else
+      disable_implicit_wait do
+        keep_trying_until(3) do
+          # when it does switch frame but loading element did not exist we need to switch back then switch to iframe again
+          driver.switch_to.window saved_window_handle
+          driver.switch_to.frame(id)
+          expect(f(loading_locator)).to be_displayed
+        end
+      end
+    end
     begin
       yield
     ensure
       driver.switch_to.window saved_window_handle
     end
+  end
+
+  # Find the parent of an element via xpath
+  def parent_fxpath(element)
+    stale_element_protection do
+      element.find_element(:xpath,"..")
+    end
+  rescue Selenium::WebDriver::Error::NoSuchElementError
+    raise "Parent node for given element was not found"
+  end
+
+  # Find the parent of an element via JS
+  def parent_fjs(element)
+    stale_element_protection do
+      driver.execute_script("return arguments[0].parentNode;", element)
+    end
+  rescue Selenium::WebDriver::Error::NoSuchElementError
+    raise "Parent node for given element was not found"
+  end
+
+  # Find the grandparent of an element via xpath
+  def grandparent_fxpath(element)
+    stale_element_protection do
+      element.find_element(:xpath,"../..")
+    end
+  rescue Selenium::WebDriver::Error::NoSuchElementError
+    raise "Grandparent node for given element was not found, please check if parent nodes are present"
+  end
+
+  # Find an element with reference to another element, via xpath
+  def find_from_element_fxpath(element, xpath)
+    stale_element_protection do
+      element.find_element(:xpath, xpath)
+    end
+  rescue Selenium::WebDriver::Error::NoSuchElementError
+    raise "No element with reference to given element was found. Please recheck the xpath : #{xpath}"
+  end
+
+  # This helps us get runtime element values for an attribute
+  # usage example : expect(element_value_for_attr(element, attribute)).to eq('true')
+  def element_value_for_attr(element, attr)
+    element.attribute(attr)
+  rescue Selenium::WebDriver::Error::UnknownError
+    raise "Attribute may not be passed correctly. Please recheck attribute passed, and its format : #{attr}"
+  end
+
+  # find button with fj, and the text it contains
+  # usage example: find_button ("Save")
+  def find_button(label = "", scope = nil)
+    fj("button:contains('#{label}')", scope)
+  end
+
+  # find table with fj, and the caption it contains
+  # usage example: find_table ("Grade Changes")
+  def find_table(caption = "", scope = nil)
+    fj("table:contains('#{caption}')", scope)
+  end
+
+  def fxpath_table_cell(caption, row_index, col_index)
+    fxpath("//table[caption= '#{caption}']/tbody/tr[#{row_index}]/td[#{col_index}]")
   end
 
   def is_checked(css_selector)
@@ -276,7 +370,7 @@ module CustomSeleniumActions
   #
   # 3.) This function will likely have trouble clicking links. Use fln instead.
   def force_click(element_jquery_finder)
-    fj(element_jquery_finder) 
+    fj(element_jquery_finder)
     driver.execute_script(%{$(#{element_jquery_finder.to_s.to_json}).click()})
   end
 
@@ -334,17 +428,15 @@ module CustomSeleniumActions
 
   MODIFIER_KEY = RUBY_PLATFORM =~ /darwin/ ? :command : :control
   def replace_content(el, value, options = {})
-    # We are treating the chrome browser different because currently Selenium cannot send :command key to the chrome.
+    # We don't use selenium el.clear because it doesn't work with textboxes that have a pattern attribute.
+    # We are treating the chrome browser different because Selenium cannot send :command key to chrome on Mac.
     # This is a known issue and hasn't been solved yet. https://bugs.chromium.org/p/chromedriver/issues/detail?id=30
     case driver.browser
-    when :firefox
+    when :firefox, :safari, :internet_explorer
       keys = [[MODIFIER_KEY, "a"], :backspace]
     when :chrome
       driver.execute_script("arguments[0].select()", el)
       keys = [:backspace]
-    when :safari
-      el.clear()
-      keys = []
     end
     keys << value
     keys << :tab if options[:tab_out]
@@ -460,6 +552,10 @@ module CustomSeleniumActions
     driver.action.move_to(el).click.perform
   end
 
+  def move_to_click_element(element)
+    driver.action.move_to(element).click.perform
+  end
+
   def scroll_to(element)
     element_location = "#{element.location['y']}"
     driver.execute_script('window.scrollTo(0, ' + element_location + ');')
@@ -474,7 +570,9 @@ module CustomSeleniumActions
   end
 
   def dismiss_flash_messages_if_present
-    find_all_with_jquery(flash_message_selector).each(&:click)
+    unless (find_all_with_jquery(flash_message_selector).length) == 0
+      find_all_with_jquery(flash_message_selector).each(&:click)
+    end
   end
 
   def scroll_into_view(selector)

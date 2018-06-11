@@ -21,13 +21,14 @@ define [
   'underscore'
   'Backbone'
   'jsx/shared/conditional_release/CyoeHelper'
+  'jsx/move_item'
   'jst/DiscussionTopics/discussion'
-  'compiled/views/PublishIconView'
-  'compiled/views/LockIconView'
-  'compiled/views/ToggleableSubscriptionIconView'
-  'compiled/views/assignments/DateDueColumnView'
-  'compiled/views/MoveDialogView'
-], (I18n, $, _, {View}, CyoeHelper, template, PublishIconView, LockIconView, ToggleableSubscriptionIconView, DateDueColumnView, MoveDialogView) ->
+  '../../models/DiscussionTopic'
+  '../PublishIconView'
+  '../LockIconView'
+  '../ToggleableSubscriptionIconView'
+  '../assignments/DateDueColumnView'
+], (I18n, $, _, {View}, CyoeHelper, MoveItem, template, DiscussionTopic, PublishIconView, LockIconView, ToggleableSubscriptionIconView, DateDueColumnView) ->
 
   class DiscussionView extends View
     # Public: View template (discussion).
@@ -49,10 +50,12 @@ define [
       deleteFail: I18n.t('flash.fail', 'Discussion Topic deletion failed.')
 
     events:
-      'click .icon-lock':  'toggleLocked'
-      'click .icon-pin':   'togglePinned'
-      'click .icon-trash': 'onDelete'
-      'click':             'onClick'
+      'click .icon-lock':            'toggleLocked'
+      'click .icon-pin':             'togglePinned'
+      'click .icon-trash':           'onDelete'
+      'click .icon-updown':          'onMove'
+      'click .duplicate-discussion': 'onDuplicate'
+      'click':                       'onClick'
 
     # Public: Option defaults.
     defaults:
@@ -70,7 +73,7 @@ define [
     # Public: Topic is able to be pinned/unpinned.
     @optionProperty 'pinnable'
 
-    @child 'publishIcon', '[data-view=publishIcon]' if ENV.permissions.publish
+    @child 'publishIcon', '[data-view=publishIcon]' if ENV.permissions?.publish
 
     @child 'lockIconView', '[data-view=lock-icon]'
 
@@ -90,21 +93,32 @@ define [
           content_id: @model.get('id'),
           content_type: 'discussion_topic'
         })
-      options.publishIcon = new PublishIconView(model: @model) if ENV.permissions.publish
+      if ENV.permissions.publish
+        options.publishIcon = new PublishIconView({
+          model: @model,
+          title: @model.get('title')
+        })
       options.toggleableSubscriptionIcon = new ToggleableSubscriptionIconView(model: @model)
       if @model.get('assignment')
         options.dateDueColumnView = new DateDueColumnView(model: @model.get('assignment'))
-      @moveItemView = new MoveDialogView
-        model: @model
-        nested: true
-        closeTarget: @$el.find('a[id=manage_link]')
-        saveURL: -> @model.collection.reorderURL()
+
+      @moveTrayProps =
+        title: I18n.t('Move Discussion')
+        items: [
+          id: @model.get('id')
+          title: @model.get('title')
+        ]
+        moveOptions:
+          siblings: MoveItem.backbone.collectionToItems(@model.collection)
+        focusOnExit: (item) => document.querySelector(".discussion[data-id=\"#{item.id}\"] .al-trigger")
+        onMoveSuccess: (res) =>
+          MoveItem.backbone.reorderInCollection(res.data.order, @model)
+        formatSaveUrl: => @model.collection.reorderURL()
       super
 
     render: ->
       super
       @$el.attr('data-id', @model.get('id'))
-      @moveItemView.setTrigger @$moveItemButton
       this
 
     # Public: Lock or unlock the model and update it on the server.
@@ -133,6 +147,28 @@ define [
       else
         @$el.find('a[id=manage_link]').focus()
 
+    # Public: Called when move menu item is selected
+    #
+    # Returns nothing.
+    onMove: () =>
+      MoveItem.renderTray(@moveTrayProps, document.getElementById('not_right_side'))
+
+    insertDuplicatedDiscussion: (response) =>
+      index = @model.collection.indexOf(@model) + 1
+      # TODO: Figure out how to get rid of this hack.  Don't understand why
+      # the Backbone models aren't reading the JSON properly.
+      topic = new DiscussionTopic(response.data)
+      fixedJSON = topic.parse(response.data)
+      topic = new DiscussionTopic(fixedJSON)
+
+      @model.collection.add(topic, { at: index })
+      @focusOnModel(@model.collection.at(index))
+
+    onDuplicate: (e) =>
+      e.preventDefault()
+      assets = ENV.context_asset_string.split("_")
+      @model.duplicate(assets[0], assets[1], @insertDuplicatedDiscussion)
+
     # Public: Delete the model and update the server.
     #
     # Returns nothing.
@@ -145,7 +181,7 @@ define [
 
     goToPrevItem: =>
       if @previousDiscussionInGroup()?
-        $('#' + @previousDiscussionInGroup().id + '_discussion_content').attr("tabindex",-1).focus()
+        @focusOnModel(@previousDiscussionInGroup())
       else if @model.get('pinned')
         $('.pinned&.discussion-list').attr("tabindex",-1).focus()
       else if @model.get('locked')
@@ -156,6 +192,9 @@ define [
     previousDiscussionInGroup: =>
       current_index = @model.collection.models.indexOf(@model)
       @model.collection.models[current_index - 1]
+
+    focusOnModel: (discussionTopic) =>
+      $("##{discussionTopic.id}_discussion_content .discussion-title-link").focus()
 
     # Public: Pin or unpin the model and update it on the server.
     #
@@ -193,7 +232,7 @@ define [
       if @model.get('locked') and !_.intersection(ENV.current_user_roles, ['teacher', 'ta', 'admin']).length
         base.permissions.delete = false
 
-      if base.last_reply_at
+      if base.last_reply_at and base.discussion_subentry_count > 0
         base.display_last_reply_at = I18n.l "#date.formats.medium", base.last_reply_at
       base.ENV = ENV
       base.discussion_topic_menu_tools = ENV.discussion_topic_menu_tools

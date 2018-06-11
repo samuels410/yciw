@@ -125,7 +125,7 @@ module ConditionalRelease
     end
 
     def self.enabled_in_context?(context)
-      !!(configured? && context.feature_enabled?(:conditional_release))
+      !!(configured? && context&.feature_enabled?(:conditional_release))
     end
 
     def self.protocol
@@ -291,13 +291,13 @@ module ConditionalRelease
         return [] unless student.present?
         Rails.cache.fetch(submissions_cache_key(student), force: force) do
           keys = [:id, :assignment_id, :score, "assignments.points_possible"]
-          context.submissions
-                  .for_user(student)
-                  .in_workflow_state(:graded)
-                  .where(assignments: { muted: false })
-                  .eager_load(:assignment)
-                  .pluck(*keys)
-                  .map do |values|
+          context.submissions.
+            for_user(student).
+            in_workflow_state(:graded).
+            where(assignments: {muted: false}).
+            eager_load(:assignment).
+            pluck(*keys).
+            map do |values|
             submission = Hash[keys.zip(values)]
             submission[:points_possible] = submission.delete("assignments.points_possible")
             submission

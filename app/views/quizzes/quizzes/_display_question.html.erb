@@ -43,9 +43,10 @@
     right_answers = hash_get(question, :answers, {})
     right_answers = (hash_get(question, :matches) || hash_get(question, :answers).sort_by{|a| rand }) if question_type.entry_type == "matching" rescue {}
   end
-  content_is_locked = !!js_env.dig(:MASTER_COURSE_DATA, "is_master_course_child_content") &&
-                      !!js_env.dig(:MASTER_COURSE_DATA, "restricted_by_master_course") &&
-                        js_env.dig(:MASTER_COURSE_DATA, "master_course_restrictions", :content)
+  object_is_locked = !!js_env.dig(:MASTER_COURSE_DATA, "is_master_course_child_content") &&
+                     !!js_env.dig(:MASTER_COURSE_DATA, "restricted_by_master_course")
+  content_is_locked = object_is_locked && js_env.dig(:MASTER_COURSE_DATA, "master_course_restrictions", :content)
+  points_are_locked = object_is_locked && js_env.dig(:MASTER_COURSE_DATA, "master_course_restrictions", :points)
 %>
 <div role="region" aria-label="<%= t("Question") %>" class="quiz_sortable question_holder <%= "group" if in_group %>" id="<%= "question_template" unless question %>" style="<%= hidden unless question %>" data-group-id="<%= group_id %>">
   <div style="display: block; height: 1px; overflow: hidden;">&nbsp;</div>
@@ -65,11 +66,11 @@
       <% if user_answer %>
         <div class="user_points" <%= hidden(true) if (assessing || assessment_results) && question_type && question_type.entry_type == "none" %>>
           <% if editable %>
-            <input type="number" step="any" class="question_input"
+            <input class="question_input"
               name="question_score_<%= hash_get(question, :id) %>" placeholder="--"
               value="<%= point_value_for_input(user_answer, question).is_a?(Float) &&
                 !point_value_for_input(user_answer, question).nan? &&
-                n(point_value_for_input(user_answer, question).round(2)) || ''
+                n(round_if_whole(point_value_for_input(user_answer, question).round(2))) || ''
               %>"
               autocomplete='off'/>
           <% else %>
@@ -99,12 +100,14 @@
       <% end %>
     </span>
     </div>
-    <% if !content_is_locked  %>
+    <% unless content_is_locked  %>
       <div class="links" style="<%= hidden if user_answer || assessing %>">
         <% edit_question_title = t('links.edit_question', 'Edit this Question') %>
-        <% delete_question_title = t('links.delete_question', 'Delete this Question') %>
         <a href="#" class="edit_question_link no-hover" title="<%= edit_question_title %>"><i class="icon-edit standalone-icon"><span class="screenreader-only"><%= edit_question_title %></span></i></a>
-        <a href="#" class="delete_question_link no-hover" title="<%= delete_question_title %>"><i class="icon-end standalone-icon"><span class="screenreader-only"><%= delete_question_title %></span></i></a>
+        <% unless points_are_locked %>
+          <% delete_question_title = t('links.delete_question', 'Delete this Question') %>
+          <a href="#" class="delete_question_link no-hover" title="<%= delete_question_title %>"><i class="icon-end standalone-icon"><span class="screenreader-only"><%= delete_question_title %></span></i></a>
+        <% end %>
       </div>
     <% end %>
     <div style="display: none;">
@@ -401,7 +404,7 @@
         <div class="quiz_comment">
           <% if editable %>
             <span style="font-size: 0.8em;"><%= before_label(:additional_comments, "Additional Comments") %></span>
-            <textarea name="question_comment_<%= hash_get(question, :id) %>" style="display: block; width: auto; margin-left: 5px; margin-right: 5px; height: 50px;"><%= comment_get(user_answer, :more_comments) || "" %></textarea>
+            <textarea name="question_comment_<%= hash_get(question, :id) %>" style="display: block; width: auto; margin-<%= direction('left') %>: 5px; margin-<%= direction('right') %>: 5px; height: 50px;"><%= comment_get(user_answer, :more_comments) || "" %></textarea>
           <% else %>
             <%= comment_get(user_answer, :more_comments) %>
           <% end %>

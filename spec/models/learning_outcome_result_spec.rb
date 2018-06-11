@@ -41,55 +41,6 @@ describe LearningOutcomeResult do
       end
   end
 
-  describe '.association_type' do
-    it 'returns the correct representation of a quiz' do
-      expect(learning_outcome_result.association_type).to eq 'Quizzes::Quiz'
-
-      learning_outcome_result.association_type = 'Quiz'
-      learning_outcome_result.send(:save_without_callbacks)
-
-      expect(LearningOutcomeResult.first.association_type).to eq 'Quizzes::Quiz'
-    end
-
-    it 'returns the association type attribute if not a quiz' do
-      learning_outcome_result.association_object = assignment_model
-      learning_outcome_result.send(:save_without_callbacks)
-      expect(learning_outcome_result.association_type).to eq 'Assignment'
-    end
-  end
-
-  describe '.artifact_type' do
-    it 'returns the correct representation of a quiz submission' do
-      sub = learning_outcome_result.association_object.quiz_submissions.create!
-
-      learning_outcome_result.artifact = sub
-      learning_outcome_result.save
-      expect(learning_outcome_result.artifact_type).to eq 'Quizzes::QuizSubmission'
-
-      LearningOutcomeResult.where(id: learning_outcome_result).update_all(association_type: 'QuizSubmission')
-
-      expect(LearningOutcomeResult.find(learning_outcome_result.id).artifact_type).to eq 'Quizzes::QuizSubmission'
-    end
-  end
-
-  describe '.associated_asset_type' do
-    it 'returns the correct representation of a quiz' do
-      expect(learning_outcome_result.associated_asset_type).to eq 'Quizzes::Quiz'
-
-      learning_outcome_result.associated_asset_type = 'Quiz'
-      learning_outcome_result.send(:save_without_callbacks)
-
-      expect(LearningOutcomeResult.first.associated_asset_type).to eq 'Quizzes::Quiz'
-    end
-
-    it 'returns the associated asset type attribute if not a quiz' do
-      learning_outcome_result.associated_asset = assignment_model
-      learning_outcome_result.send(:save_without_callbacks)
-
-      expect(learning_outcome_result.associated_asset_type).to eq 'Assignment'
-    end
-  end
-
   describe '#submitted_or_assessed_at' do
     before(:once) do
       @submitted_at = 1.month.ago
@@ -97,7 +48,7 @@ describe LearningOutcomeResult do
     end
 
     it 'returns #submitted_at when present' do
-      learning_outcome_result.update_attribute(:submitted_at, @submitted_at)
+      learning_outcome_result.update_attributes(submitted_at: @submitted_at)
       expect(learning_outcome_result.submitted_or_assessed_at).to eq(@submitted_at)
     end
 
@@ -122,8 +73,8 @@ describe LearningOutcomeResult do
 
   describe "#calculate percent!" do
     it "properly calculates percent" do
-      learning_outcome_result.update_attribute(:score, 6)
-      learning_outcome_result.update_attribute(:possible, 10)
+      learning_outcome_result.update_attributes(score: 6)
+      learning_outcome_result.update_attributes(possible: 10)
       learning_outcome_result.calculate_percent!
 
       expect(learning_outcome_result.percent).to eq 0.60
@@ -135,8 +86,8 @@ describe LearningOutcomeResult do
         points_possible: points_possible, mastery_points: 3.5
       })
       allow(learning_outcome_result.alignment).to receive_messages(mastery_score: 0.6)
-      learning_outcome_result.update_attribute(:score, 6)
-      learning_outcome_result.update_attribute(:possible, 10)
+      learning_outcome_result.update_attributes(score: 6)
+      learning_outcome_result.update_attributes(possible: 10)
       learning_outcome_result.calculate_percent!
       mastery_score = (learning_outcome_result.percent * points_possible).round(2)
       expect(mastery_score).to eq 3.5
@@ -147,11 +98,35 @@ describe LearningOutcomeResult do
         points_possible: 5.0, mastery_points: 3.0
       })
       allow(learning_outcome_result.alignment).to receive_messages(mastery_score: 0.7)
-      learning_outcome_result.update_attribute(:score, 6)
-      learning_outcome_result.update_attribute(:possible, 10)
+      learning_outcome_result.update_attributes(score: 6)
+      learning_outcome_result.update_attributes(possible: 10)
       learning_outcome_result.calculate_percent!
 
       expect(learning_outcome_result.percent).to eq 0.5143
+    end
+
+    it "properly scales score to parent outcome's mastery level with extra credit" do
+      allow(learning_outcome_result.learning_outcome).to receive_messages({
+        points_possible: 5.0, mastery_points: 3.0
+      })
+      allow(learning_outcome_result.alignment).to receive_messages(mastery_score: 1.0)
+      learning_outcome_result.update_attributes(score: 5)
+      learning_outcome_result.update_attributes(possible: 0.5)
+      learning_outcome_result.calculate_percent!
+
+      expect(learning_outcome_result.percent).to eq 6.0
+    end
+
+    it "properly scales score to parent outcome's mastery level with extra credit and points possible is 0" do
+      allow(learning_outcome_result.learning_outcome).to receive_messages({
+        points_possible: 0.0, mastery_points: 3.0
+      })
+      allow(learning_outcome_result.alignment).to receive_messages(mastery_score: 1.0)
+      learning_outcome_result.update_attributes(score: 5)
+      learning_outcome_result.update_attributes(possible: 0.5)
+      learning_outcome_result.calculate_percent!
+
+      expect(learning_outcome_result.percent).to eq 10.0
     end
 
     it "does not fail if parent outcome has integers instead of floats" do
@@ -159,11 +134,35 @@ describe LearningOutcomeResult do
         points_possible: 5, mastery_points: 3
       })
       allow(learning_outcome_result.alignment).to receive_messages(mastery_score: 0.7)
-      learning_outcome_result.update_attribute(:score, 6)
-      learning_outcome_result.update_attribute(:possible, 10)
+      learning_outcome_result.update_attributes(score: 6)
+      learning_outcome_result.update_attributes(possible: 10)
       learning_outcome_result.calculate_percent!
 
       expect(learning_outcome_result.percent).to eq 0.5143
+    end
+
+    it "does not use a scale if outcome has 0 mastery points" do
+      allow(learning_outcome_result.learning_outcome).to receive_messages({
+        points_possible: 5, mastery_points: 0
+      })
+      allow(learning_outcome_result.alignment).to receive_messages(mastery_score: 0.7)
+      learning_outcome_result.update_attributes(score: 6)
+      learning_outcome_result.update_attributes(possible: 10)
+      learning_outcome_result.calculate_percent!
+
+      expect(learning_outcome_result.percent).to eq 0.60
+    end
+
+    it "does not use a scale if outcome has 0 points possible" do
+      allow(learning_outcome_result.learning_outcome).to receive_messages({
+        points_possible: 0, mastery_points: 3
+      })
+      allow(learning_outcome_result.alignment).to receive_messages(mastery_score: 0.7)
+      learning_outcome_result.update_attributes(score: 6)
+      learning_outcome_result.update_attributes(possible: 10)
+      learning_outcome_result.calculate_percent!
+
+      expect(learning_outcome_result.percent).to eq 0.60
     end
   end
 
@@ -178,8 +177,7 @@ describe LearningOutcomeResult do
     it 'returns the Assignment from the artifact if one doesnt explicitly exist' do
       lor = create_and_associate_lor(nil)
       lor.artifact = rubric_assessment_model(user: @user, context: @course)
-
-      expect(lor.assignment).to eq(lor.artifact.assignment)
+      expect(lor.assignment).to eq(lor.artifact.submission.assignment)
     end
 
     it 'returns nil if no explicit assignment or artifact exists' do

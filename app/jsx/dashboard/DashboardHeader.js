@@ -17,12 +17,15 @@
  */
 
 import React from 'react';
-import I18n from 'i18n!dashboard'
-import DashboardOptionsMenu from 'jsx/dashboard_card/DashboardOptionsMenu';
-import { bool } from 'prop-types';
+import I18n from 'i18n!dashboard';
+import axios from 'axios';
+import { bool, func, string } from 'prop-types';
+import { showFlashError } from '../shared/FlashAlert'
+import DashboardOptionsMenu from '../dashboard_card/DashboardOptionsMenu';
+import loadCardDashboard from '../bundles/dashboard_card'
 
 /**
- * This component renders the header for the user dashboard.
+ * This component renders the header for the user dashboard and loads the current dashboard.
  */
 class DashboardHeader extends React.Component {
 
@@ -30,16 +33,110 @@ class DashboardHeader extends React.Component {
     super(props);
 
     let currentDashboard;
+    const enabledViews = ['cards', 'activity']
 
-    if (props.show_planner) {
-      currentDashboard = 'planner';
-    } else if (props.show_recent_activity) {
-      currentDashboard = 'activity';
+    if (props.planner_enabled) enabledViews.push('planner')
+
+    if (enabledViews.includes(props.dashboard_view)) {
+      currentDashboard = props.dashboard_view
     } else {
-      currentDashboard = 'cards';
+      currentDashboard = 'cards'
     }
 
-    this.state = { currentDashboard };
+    this.state = { currentDashboard, loadedViews: ['activity'] }
+  }
+
+  componentDidMount () {
+    this.showDashboard(this.state.currentDashboard)
+  }
+
+  getActiveApp = () => this.state.currentDashboard
+
+  resetClasses (newDashboard) {
+    if (newDashboard === 'planner') {
+      document.body.classList.add('dashboard-is-planner')
+    } else {
+      document.body.classList.remove('dashboard-is-planner')
+    }
+  }
+
+  loadPlannerComponent () {
+    require.ensure([], (require) => {
+      const Planner = require('canvas-planner')
+      const props = {
+        changeToCardView: () => this.changeDashboard('cards'),
+        getActiveApp: this.getActiveApp,
+        flashError: this.props.flashError,
+        flashMessage: this.props.flashMessage,
+        srFlashMessage: this.props.screenReaderFlashMessage,
+        externalFallbackFocusable: this.menuButtonFocusable,
+        env: this.props.env,
+      }
+      Planner.default(props)
+    })
+  }
+
+  loadCardDashboard () {
+    // I put this in so I can spy on the imported function in a spec :'(
+    loadCardDashboard()
+  }
+
+  loadDashboard (newView) {
+    if (this.state.loadedViews.includes(newView)) return
+    if (newView === 'planner' && this.props.planner_enabled) {
+      this.loadPlannerComponent()
+    } else if (newView === 'cards') {
+      this.loadCardDashboard()
+    }
+    this.setState({loadedViews: this.state.loadedViews.concat(newView) })
+  }
+
+  saveDashboardView (newView) {
+    axios.put('/dashboard/view', {
+      dashboard_view: newView
+    }).catch(() => {
+      showFlashError(I18n.t('Failed to save dashboard selection'))()
+    })
+  }
+
+  changeDashboard = (newView) => {
+    this.saveDashboardView(newView)
+    this.showDashboard(newView)
+    this.setState({ currentDashboard: newView })
+  }
+
+  showDashboard = (newView) => {
+    this.resetClasses(newView)
+    const fakeObj = {
+      style: {}
+    }
+    const dashboardPlanner = document.getElementById('dashboard-planner') || fakeObj
+    const dashboardPlannerHeader = document.getElementById('dashboard-planner-header') || fakeObj
+    const dashboardActivity = document.getElementById('dashboard-activity')
+    const dashboardCards = document.getElementById('DashboardCard_Container')
+    const rightSideContent = document.getElementById('right-side-wrapper') || fakeObj
+
+    this.loadDashboard(newView)
+
+    if (newView === 'planner') {
+      dashboardPlanner.style.display = 'block'
+      dashboardPlannerHeader.style.display = 'block'
+      dashboardActivity.style.display = 'none'
+      dashboardCards.style.display = 'none'
+      rightSideContent.style.display = 'none'
+    } else if (newView === 'activity') {
+      dashboardPlanner.style.display = 'none'
+      dashboardPlannerHeader.style.display = 'none'
+      dashboardActivity.style.display = 'block'
+      dashboardCards.style.display = 'none'
+      rightSideContent.style.display = 'block'
+    } else {
+      dashboardPlanner.style.display = 'none'
+      dashboardPlannerHeader.style.display = 'none'
+      dashboardActivity.style.display = 'none'
+      dashboardCards.style.display = 'block'
+      rightSideContent.style.display = 'block'
+    }
   }
 
   render () {
@@ -51,24 +148,16 @@ class DashboardHeader extends React.Component {
             <div
               id="dashboard-planner-header"
               className="CanvasPlanner__HeaderContainer"
-              style={{ display: (this.props.planner_selected) ? 'block' : 'none' }}
+              style={{ display: (this.state.currentDashboard === 'planner') ? 'block' : 'none' }}
             />
           )}
           <div id="DashboardOptionsMenu_Container">
             <DashboardOptionsMenu
-              recent_activity_dashboard={this.props.recent_activity_dashboard}
+              view={this.state.currentDashboard}
               hide_dashcard_color_overlays={this.props.hide_dashcard_color_overlays}
               planner_enabled={this.props.planner_enabled}
-              planner_selected={this.props.planner_selected}
-              onDashboardChange={(newDashboard) => {
-                this.setState({ currentDashboard: newDashboard }, function afterDashboardChange () {
-                  if (this.state.currentDashboard === 'planner') {
-                    document.body.classList.add('dashboard-is-planner');
-                  } else if (document.body.classList.contains('dashboard-is-planner')) {
-                    document.body.classList.remove('dashboard-is-planner');
-                  }
-                });
-              }}
+              onDashboardChange={this.changeDashboard}
+              menuButtonRef={(ref) => {this.menuButtonFocusable = ref}}
             />
           </div>
         </div>
@@ -78,15 +167,20 @@ class DashboardHeader extends React.Component {
 }
 
 DashboardHeader.propTypes = {
-  recent_activity_dashboard: bool,
+  dashboard_view: string,
   hide_dashcard_color_overlays: bool,
   planner_enabled: bool.isRequired,
-  planner_selected: bool.isRequired
+  flashError: func,
+  flashMessage: func,
+  screenReaderFlashMessage: func,
 }
 
 DashboardHeader.defaultProps = {
-  recent_activity_dashboard: false,
-  hide_dashcard_color_overlays: false
+  dashboard_view: 'cards',
+  hide_dashcard_color_overlays: false,
+  flashError: () => {},
+  flashMessage: () => {},
+  screenReaderFlashMessage: () => {},
 }
 
 export default DashboardHeader;

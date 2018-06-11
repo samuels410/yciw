@@ -69,8 +69,9 @@ module SIS
         raise ImportError, "No course_id given for a course" if course_id.blank?
         raise ImportError, "No short_name given for course #{course_id}" if short_name.blank? && abstract_course_id.blank?
         raise ImportError, "No long_name given for course #{course_id}" if long_name.blank? && abstract_course_id.blank?
-        raise ImportError, "Improper status \"#{status}\" for course #{course_id}" unless status =~ /\A(active|deleted|completed)/i
-        raise ImportError, "Invalid course_format \"#{course_format}\" for course #{course_id}" unless course_format.blank? || course_format =~ /\A(online|on_campus|blended)/i
+        raise ImportError, "Improper status \"#{status}\" for course #{course_id}" unless status =~ /\A(active|deleted|completed|unpublished)/i
+        raise ImportError, "Invalid course_format \"#{course_format}\" for course #{course_id}" unless course_format.blank? || course_format =~ /\A(online|on_campus|blended|not_set)/i
+        return if @batch.skip_deletes? && status =~ /deleted/i
 
         course = @root_account.all_courses.where(sis_source_id: course_id).take
         if course.nil?
@@ -89,7 +90,10 @@ module SIS
         account = nil
         account = @root_account.all_accounts.where(sis_source_id: account_id).take if account_id.present?
         account ||= @root_account.all_accounts.where(sis_source_id: fallback_account_id).take if fallback_account_id.present?
-        course.account = account if account
+        course_account_stuck = course.stuck_sis_fields.include?(:account_id)
+        unless course_account_stuck
+          course.account = account if account
+        end
         course.account ||= @root_account
 
         update_account_associations = course.account_id_changed? || course.root_account_id_changed?
@@ -97,7 +101,7 @@ module SIS
         course.integration_id = integration_id
         course.sis_source_id = course_id
         if !course.stuck_sis_fields.include?(:workflow_state)
-          if status =~ /active/i
+          if status =~ /active/i || status == 'unpublished'
             case course.workflow_state
             when 'completed'
               course.workflow_state = 'available'
@@ -165,15 +169,18 @@ module SIS
 
         update_enrollments = !course.new_record? && !(course.changes.keys & ['workflow_state', 'name', 'course_code']).empty?
 
-        if course_format != course.course_format
-          course.settings_will_change!
-          course.course_format = course_format
+        if course_format
+          course_format = nil if course_format == 'not_set'
+          if course_format != course.course_format
+            course.settings_will_change!
+            course.course_format = course_format
+          end
         end
 
         if course.changed?
           course.templated_courses.each do |templated_course|
             templated_course.root_account = @root_account
-            templated_course.account = course.account
+            templated_course.account = course.account if !templated_course.stuck_sis_fields.include?(:account_id) && !course_account_stuck
             templated_course.name = course.name if !templated_course.stuck_sis_fields.include?(:name) && !course_name_stuck
             templated_course.course_code = course.course_code if !templated_course.stuck_sis_fields.include?(:course_code) && !course_course_code_stuck
             templated_course.enrollment_term = course.enrollment_term if !templated_course.stuck_sis_fields.include?(:enrollment_term_id) && !course_enrollment_term_id_stuck
@@ -212,8 +219,13 @@ module SIS
         end
 
         if blueprint_course_id && !course.deleted?
-          @blueprint_associations[blueprint_course_id] ||= []
-          @blueprint_associations[blueprint_course_id] << course_id
+          case blueprint_course_id
+          when 'dissociate'
+            MasterCourses::ChildSubscription.active.where(child_course_id: course.id).take&.destroy
+          else
+            @blueprint_associations[blueprint_course_id] ||= []
+            @blueprint_associations[blueprint_course_id] << course_id
+          end
         end
 
         course.update_enrolled_users if update_enrollments

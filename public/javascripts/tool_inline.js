@@ -17,8 +17,10 @@
  */
 
 import $ from 'jquery'
+import htmlEscape from 'str/htmlEscape'
 import './jquery.google-analytics'
 import 'compiled/jquery/ModuleSequenceFooter'
+import MarkAsDone from 'compiled/util/markAsDone'
 import ToolLaunchResizer from './lti/tool_launch_resizer'
 
 var $toolForm = $("#tool_form")
@@ -130,6 +132,9 @@ $(function() {
     });
   }
 
+  $('#content').on('click', '#mark-as-done-checkbox', function () {
+    MarkAsDone.toggle(this)
+  })
 });
 
 window.addEventListener('message', function(e) {
@@ -158,7 +163,7 @@ window.addEventListener('message', function(e) {
         break;
 
       case 'lti.setUnloadMessage':
-        setUnloadMessage(message.message);
+        setUnloadMessage(htmlEscape(message.message));
         break;
 
       case 'lti.removeUnloadMessage':
@@ -166,7 +171,7 @@ window.addEventListener('message', function(e) {
         break;
 
       case 'lti.screenReaderAlert':
-        $.screenReaderFlashMessageExclusive(message.body)
+        $.screenReaderFlashMessageExclusive(message.body.html || message.body)
         break;
     }
   } catch(err) {

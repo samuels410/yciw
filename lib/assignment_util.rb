@@ -20,6 +20,14 @@ module AssignmentUtil
     assignment.post_to_sis.present? && due_date_required_for_account?(assignment.context)
   end
 
+  def self.in_date_range?(date, start_date, end_date)
+    # due dates are considered equal if they're the same up to the minute
+    date = Assignment.due_date_compare_value date
+    start_date = Assignment.due_date_compare_value start_date
+    end_date = Assignment.due_date_compare_value end_date
+    date >= start_date && date <= end_date
+  end
+
   def self.due_date_ok?(assignment)
     !due_date_required?(assignment) ||
     assignment.due_at.present? ||

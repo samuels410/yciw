@@ -19,9 +19,9 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import I18n from 'i18n!new_user_tutorial'
-import Button from 'instructure-ui/lib/components/Button'
-import Heading from 'instructure-ui/lib/components/Heading'
-import Modal, { ModalHeader, ModalBody, ModalFooter } from 'instructure-ui/lib/components/Modal'
+import Button from '@instructure/ui-core/lib/components/Button'
+import Heading from '@instructure/ui-core/lib/components/Heading'
+import Modal, { ModalHeader, ModalBody, ModalFooter } from '@instructure/ui-core/lib/components/Modal'
 import axios from 'axios'
 
   class ConfirmEndTutorialDialog extends React.Component {
@@ -35,40 +35,30 @@ import axios from 'axios'
       isOpen: false
     }
 
-    constructor (props) {
-      super(props);
-      this.appElement = document.getElementById('application');
-    }
-
-    handleModalReady = () => {
-      this.appElement.setAttribute('aria-hidden', 'true');
-    }
-
-    handleModalClose = () => {
-      this.appElement.removeAttribute('aria-hidden');
-    }
-
-    handleOkayButtonClick = (e, onSuccessFunc = window.location.reload) => {
+    handleOkayButtonClick = (e, onSuccessFunc) => {
       const API_URL = '/api/v1/users/self/features/flags/new_user_tutorial_on_off';
       axios.put(API_URL, {
         state: 'off'
       }).then(() => {
         // Done this way such that onSuccessFunc (reload) gets the proper thisArg
         // while still allowing us to easily provide a replacement for tests.
-        onSuccessFunc.call(window.location);
+        if (onSuccessFunc) {
+          onSuccessFunc()
+        } else {
+          window.location.reload();
+        }
       });
     }
 
     render () {
       return (
         <Modal
-          isOpen={this.props.isOpen}
+          open={this.props.isOpen}
           size="small"
-          onReady={this.handleModalReady}
-          onClose={this.handleModalClose}
-          onRequestClose={this.props.handleRequestClose}
+          onDismiss={this.props.handleRequestClose}
           label={I18n.t('End Course Set-up Tutorial Dialog')}
           closeButtonLabel={I18n.t('Close')}
+          applicationElement={() => document.getElementById('application')}
         >
           <ModalHeader>
             <Heading>{I18n.t('End Course Set-up Tutorial')}</Heading>

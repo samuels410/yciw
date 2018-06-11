@@ -52,6 +52,7 @@ module Lti
     COURSE_GUARD = -> { @context.is_a? Course }
     TERM_START_DATE_GUARD = -> { @context.is_a?(Course) && @context.enrollment_term &&
                                  @context.enrollment_term.start_at }
+    TERM_NAME_GUARD = -> { @context.is_a?(Course) && @context.enrollment_term&.name }
     USER_GUARD = -> { @current_user }
     SIS_USER_GUARD = -> { @current_user && @current_user.pseudonym && @current_user.pseudonym.sis_user_id }
     PSEUDONYM_GUARD = -> { sis_pseudonym }
@@ -65,9 +66,12 @@ module Lti
     MEDIA_OBJECT_ID_GUARD = -> {@attachment && (@attachment.media_object || @attachment.media_entry_id )}
     LTI1_GUARD = -> { @tool.is_a?(ContextExternalTool) }
     MASQUERADING_GUARD = -> { !!@controller && @controller.logged_in_user != @current_user }
-    ATTACHMENT_ASSOCIATION_GUARD = -> { @tool_setting&.context&.is_a?(AttachmentAssociation) }
-    LTI_ASSIGN_ID = -> { @assignment.present? || @tool_setting&.context&.is_a?(AttachmentAssociation) || @secure_params.present? }
     MESSAGE_TOKEN_GUARD = -> { @post_message_token.present? || @launch&.instance_of?(Lti::Launch) }
+    ORIGINALITY_REPORT_GUARD = -> { @originality_report.present? }
+    ORIGINALITY_REPORT_ATTACHMENT_GUARD = -> { @originality_report&.attachment.present? }
+    LTI_ASSIGN_ID = -> { @assignment.present? || @originality_report.present? || @secure_params.present? }
+    EDITOR_CONTENTS_GAURD = -> { @editor_contents.present? }
+    EDITOR_SELECTION_GAURD = -> { @editor_contents.present? }
 
     def initialize(root_account, context, controller, opts = {})
       @root_account = root_account
@@ -124,6 +128,29 @@ module Lti
                        -> { @context.name },
                        default_name: 'context_title'
 
+    # The contents of the text editor associated with the content item launch.
+    # @launch_parameter com_instructure_editor_contents
+    # @example
+    #   ```
+    #   "This text was in the editor"
+    #   ```
+    register_expansion 'com.instructure.Editor.contents', [],
+                      -> { @editor_contents},
+                      EDITOR_CONTENTS_GAURD,
+                      default_name: 'com_instructure_editor_contents'
+
+    # The contents the user has selected in the text editor associated
+    # with the content item launch.
+    # @launch_parameter com_instructure_editor_selection
+    # @example
+    #   ```
+    #   "this text was selected by the user"
+    #   ```
+    register_expansion 'com.instructure.Editor.selection', [],
+                      -> { @editor_selection },
+                      EDITOR_SELECTION_GAURD,
+                      default_name: 'com_instructure_editor_selection'
+
     # A token that can be used for frontend communication between an LTI tool
     # and Canvas via the Window.postMessage API
     # @launch_parameter com_instructure_post_message_token
@@ -147,8 +174,8 @@ module Lti
                        -> do
                         if @assignment
                           @assignment.lti_context_id
-                        elsif @tool_setting&.context&.is_a?(AttachmentAssociation)
-                          @tool_setting.context.context.assignment.lti_context_id
+                        elsif @originality_report
+                          @originality_report.submission.assignment.lti_context_id
                         elsif @secure_params.present?
                           Lti::Security.decoded_lti_assignment_id(@secure_params)
                         end
@@ -165,11 +192,9 @@ module Lti
     #   ```
     register_expansion 'com.instructure.OriginalityReport.id', [],
                        -> do
-                        @tool_setting.context.context.originality_reports.find do |r|
-                          r.attachment_id == @tool_setting.context.attachment_id
-                        end.id
+                        @originality_report.id
                        end,
-                       ATTACHMENT_ASSOCIATION_GUARD,
+                       ORIGINALITY_REPORT_GUARD,
                        default_name: 'com_instructure_originality_report_id'
 
     # The Canvas id of the submission associated with the
@@ -180,8 +205,8 @@ module Lti
     #   23
     #   ```
     register_expansion 'com.instructure.Submission.id', [],
-                      -> { @tool_setting.context.context_id },
-                      ATTACHMENT_ASSOCIATION_GUARD,
+                      -> { @originality_report.submission.id },
+                      ORIGINALITY_REPORT_GUARD,
                       default_name: 'com_instructure_submission_id'
 
     # The Canvas id of the file associated with the submission
@@ -192,8 +217,8 @@ module Lti
     #   23
     #   ```
     register_expansion 'com.instructure.File.id', [],
-                     -> { @tool_setting.context.attachment_id },
-                     ATTACHMENT_ASSOCIATION_GUARD,
+                     -> { @originality_report.attachment.id },
+                     ORIGINALITY_REPORT_ATTACHMENT_GUARD,
                      default_name: 'com_instructure_file_id'
 
     # the LIS identifier for the course offering
@@ -345,14 +370,44 @@ module Lti
                        CONTROLLER_GUARD,
                        LTI1_GUARD
 
+    # returns the URL to retrieve the brand config JSON for the launching context.
+    # @example
+    #   ```
+    #   http://example.url/path.json
+    #   ```
+    register_expansion 'com.instructure.brandConfigJSON.url', [],
+                       -> { @controller.active_brand_config_url('json') },
+                       CONTROLLER_GUARD
+
+    # returns the brand config JSON itself for the launching context.
+    # @example
+    #   ```
+    #   {"ic-brand-primary-darkened-5":"#0087D7"}
+    #   ```
+    register_expansion 'com.instructure.brandConfigJSON', [],
+                       -> { @controller.active_brand_config.try(:to_json) },
+                       CONTROLLER_GUARD
+
+    # returns the URL to retrieve the brand config javascript for the launching context.
+    # This URL should be used as the src attribute for a script tag on the external tool
+    # provider's web page. It is configured to be used with the [instructure-ui node module](https://github.com/instructure/instructure-ui).
+    # More information on on how to use instructure ui react components can be found [here](http://instructure.github.io/instructure-ui/).
+    # @example
+    #   ```
+    #   http://example.url/path.js
+    #   ```
+    register_expansion 'com.instructure.brandConfigJS.url', [],
+                       -> { @controller.active_brand_config_url('js') },
+                       CONTROLLER_GUARD
+
     # returns the URL for the common css file.
     # @example
     #   ```
     #   http://example.url/path.css
     #   ```
     register_expansion 'Canvas.css.common', [],
-                       -> { URI.parse(@request.url)
-                               .merge(@controller.view_context.stylesheet_path(@controller.css_url_for(:common))).to_s },
+                       -> { URI.parse(@request.url).
+                         merge(@controller.view_context.stylesheet_path(@controller.css_url_for(:common))).to_s },
                        CONTROLLER_GUARD
 
     # returns the shard id for the current context.
@@ -463,6 +518,16 @@ module Lti
                        -> { @context.enrollment_term.start_at },
                        TERM_START_DATE_GUARD
 
+    # returns the current course's term name.
+    # @example
+    #   ```
+    #   W1 2017
+    #   ```
+    register_expansion 'Canvas.term.name', [],
+                        -> { @context.enrollment_term.name },
+                        TERM_NAME_GUARD,
+                        default_name: 'canvas_term_name'
+
     # returns the current course sis source id
     # to return the section source id use Canvas.course.sectionIds
     # @launch_parameter lis_course_section_sourcedid
@@ -491,7 +556,8 @@ module Lti
     #   ```
     register_expansion 'Canvas.membership.roles', [],
                        -> { lti_helper.current_canvas_roles },
-                       ROLES_GUARD
+                       ROLES_GUARD,
+                       default_name: 'canvas_membership_roles'
 
     # This is a list of IMS LIS roles should have a different key
     # @example
@@ -502,17 +568,27 @@ module Lti
                        -> { lti_helper.concluded_lis_roles },
                        COURSE_GUARD
 
-    # Returns the context ids from the course that the current course was copied from (excludes cartridge imports).
+    # With respect to the current course, returns the context ids of the courses from which content has been copied (excludes cartridge imports).
     #
     # @example
     #   ```
-    #   1234
+    #   1234,4567
     #   ```
     register_expansion 'Canvas.course.previousContextIds', [],
                        -> { lti_helper.previous_lti_context_ids },
                        COURSE_GUARD
 
-    # Returns the course ids of the course that the current course was copied from (excludes cartridge imports).
+    # With respect to the current course, recursively returns the context ids of the courses from which content has been copied (excludes cartridge imports).
+    #
+    # @example
+    #   ```
+    #   1234,4567
+    #   ```
+    register_expansion 'Canvas.course.previousContextIds.recursive', [],
+                       -> { lti_helper.recursively_fetch_previous_lti_context_ids },
+                       COURSE_GUARD
+
+    # With respect to the current course, returns the course ids of the courses from which content has been copied (excludes cartridge imports).
     #
     # @example
     #   ```
@@ -532,6 +608,17 @@ module Lti
                        -> { @current_user.name },
                        USER_GUARD,
                        default_name: 'lis_person_name_full'
+
+    # Returns the display name of the launching user.
+    # @launch_parameter lis_person_name_full
+    # @example
+    #   ```
+    #   John Doe
+    #   ```
+    register_expansion 'Person.name.display', [],
+                       -> { @current_user.short_name },
+                       USER_GUARD,
+                       default_name: 'person_name_display'
 
     # Returns the last name of the launching user.
     # @launch_parameter lis_person_name_family
@@ -636,6 +723,17 @@ module Lti
                        -> { @current_user.prefers_high_contrast? ? 'true' : 'false' },
                        USER_GUARD
 
+    # returns the Canvas ids of all active groups in the current course.
+    # @example
+    #   ```
+    #   23,24,...
+    #   ```
+    register_expansion 'com.instructure.Course.groupIds', [],
+                       -> { @context.groups.active.pluck(:id).join(',') },
+                       COURSE_GUARD,
+                       default_name: 'com_instructure_course_groupids'
+
+
     # returns the context ids for the groups the user belongs to in the course.
     # @example
     #   ```
@@ -659,6 +757,13 @@ module Lti
                        default_name: 'roles'
 
     # Returns list of [LIS role full URNs](https://www.imsglobal.org/specs/ltiv1p0/implementation-guide#toc-16).
+    # Note that this will include all roles the user has.
+    # There are 3 different levels of roles defined: Context, Institution, System.
+    # Context role urns start with "urn:lti:ims" and include roles for the context where the launch occurred.
+    # Institution role urns start with "urn:lti:instrole" and include roles the user has in the institution. This
+    # will include roles they have in other courses or at the account level. Note that there is not a TA role at the
+    # Institution level. Instead Users with a TA enrollment will have an institution role of Instructor.
+    # System role urns start with "urn:lti:sysrole" and include roles for the entire system.
     # @duplicates ext_roles which is sent by default
     # @example
     #   ```
@@ -861,6 +966,32 @@ module Lti
                        -> { @assignment.id },
                        ASSIGNMENT_GUARD
 
+    # Returns the Canvas id of the group the current user is in if launching
+    # from a group assignment.
+    #
+    # @example
+    #   ```
+    #   481
+    #   ```
+    register_expansion 'com.instructure.Group.id', [],
+                       -> { (@assignment.group_category&.groups & @current_user.groups).first&.id },
+                       USER_GUARD,
+                       ASSIGNMENT_GUARD,
+                       default_name: 'vnd_canvas_group_id'
+
+    # Returns the name of the group the current user is in if launching
+    # from a group assignment.
+    #
+    # @example
+    #   ```
+    #   Group One
+    #   ```
+    register_expansion 'com.instructure.Group.name', [],
+                       -> { (@assignment.group_category&.groups & @current_user.groups).first&.name },
+                       USER_GUARD,
+                       ASSIGNMENT_GUARD,
+                       default_name: 'vnd_canvas_group_name'
+
     # Returns the title of the assignment that was launched.
     #
     # @example
@@ -1004,7 +1135,7 @@ module Lti
     #   ```
     register_expansion 'vnd.Canvas.submission.url', [],
                         -> do
-                          SubmissionsApiController::SERVICE_DEFINITIONS.find do |s|
+                          Lti::SubmissionsApiController::SERVICE_DEFINITIONS.find do |s|
                             s[:id] == 'vnd.Canvas.submission'
                           end[:endpoint]
                         end,
@@ -1018,7 +1149,7 @@ module Lti
     #   ```
     register_expansion 'vnd.Canvas.submission.history.url', [],
                         -> do
-                          SubmissionsApiController::SERVICE_DEFINITIONS.find do |s|
+                          Lti::SubmissionsApiController::SERVICE_DEFINITIONS.find do |s|
                             s[:id] == 'vnd.Canvas.submission.history'
                           end[:endpoint]
                         end,

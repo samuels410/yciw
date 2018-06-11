@@ -18,19 +18,18 @@
 
 import $ from 'jquery';
 import fakeENV from 'helpers/fakeENV';
+import DataLoader from 'jsx/gradezilla/DataLoader'
 import {
   createGradebook,
   setFixtureHtml
-} from 'spec/jsx/gradezilla/default_gradebook/GradebookSpecHelper';
-import SlickGridSpecHelper from 'spec/jsx/gradezilla/default_gradebook/slick-grid/SlickGridSpecHelper';
-import DataLoader from 'jsx/gradezilla/DataLoader';
+} from '../../gradezilla/default_gradebook/GradebookSpecHelper'
+import SlickGridSpecHelper from '../../gradezilla/default_gradebook/GradebookGrid/GridSupport/SlickGridSpecHelper'
 
 QUnit.module('Gradebook Grid Columns', function (suiteHooks) {
   let $fixture;
   let gridSpecHelper;
   let gradebook;
   let dataLoader;
-  let server;
 
   let assignmentGroups;
   let assignments;
@@ -112,6 +111,9 @@ QUnit.module('Gradebook Grid Columns', function (suiteHooks) {
 
   function createGradebookAndAddData (options) {
     gradebook = createGradebook(options);
+    sinon.stub(gradebook, 'saveSettings').callsFake((settings, onSuccess = () => {}) => {
+      onSuccess(settings)
+    })
     gradebook.initialize();
     addGridData();
   }
@@ -124,7 +126,6 @@ QUnit.module('Gradebook Grid Columns', function (suiteHooks) {
     fakeENV.setup({
       current_user_id: '1101'
     });
-    server = sinon.fakeServer.create();
 
     dataLoader = {
       gotAssignmentGroups: $.Deferred(),
@@ -145,11 +146,9 @@ QUnit.module('Gradebook Grid Columns', function (suiteHooks) {
   });
 
   suiteHooks.afterEach(function () {
-    gradebook.gridSupport.destroy();
-    gradebook.grid.destroy();
+    gradebook.destroy();
     DataLoader.loadGradebookData.restore();
     DataLoader.getDataForColumn.restore();
-    server.restore();
     fakeENV.teardown();
     $fixture.remove();
   });
@@ -157,7 +156,7 @@ QUnit.module('Gradebook Grid Columns', function (suiteHooks) {
   QUnit.module('when initializing the grid', function (hooks) {
     hooks.beforeEach(function () {
       createGradebookAndAddData();
-      gridSpecHelper = new SlickGridSpecHelper(gradebook.grid);
+      gridSpecHelper = new SlickGridSpecHelper(gradebook.gradebookGrid);
     });
 
     test('adds the student column to the grid as a frozen column', function () {
@@ -196,13 +195,18 @@ QUnit.module('Gradebook Grid Columns', function (suiteHooks) {
 
   QUnit.module('when reordering columns with drag and drop', function (hooks) {
     let reorderApiResponse;
+    let reorderEventData;
 
     hooks.beforeEach(function () {
       createGradebookAndAddData();
-      gridSpecHelper = new SlickGridSpecHelper(gradebook.grid);
+      gridSpecHelper = new SlickGridSpecHelper(gradebook.gradebookGrid);
       reorderApiResponse = $.Deferred();
       sinon.stub(gradebook, 'reorderCustomColumns').returns(reorderApiResponse);
-      sinon.stub(gradebook, 'storeCustomColumnOrder');
+      sinon.stub(gradebook, 'saveCustomColumnOrder');
+      gradebook.gradebookGrid.events.onColumnsReordered.subscribe((_event, columns) => {
+        reorderEventData = columns;
+      });
+      reorderEventData = null;
     });
 
     test('updates the stored custom column order when custom columns were reordered', function () {
@@ -219,7 +223,7 @@ QUnit.module('Gradebook Grid Columns', function (suiteHooks) {
         'student', 'custom_col_2401', 'custom_col_2402', 'assignment_2302', 'assignment_2301',
         'assignment_group_2201', 'assignment_group_2202', 'total_grade'
       ]);
-      strictEqual(gradebook.storeCustomColumnOrder.callCount, 1);
+      strictEqual(gradebook.saveCustomColumnOrder.callCount, 1);
     });
 
     test('stores "custom" column order when assignment group columns were reordered', function () {
@@ -227,14 +231,43 @@ QUnit.module('Gradebook Grid Columns', function (suiteHooks) {
         'student', 'custom_col_2401', 'custom_col_2402', 'assignment_2301', 'assignment_2302',
         'assignment_group_2202', 'assignment_group_2201', 'total_grade'
       ]);
-      strictEqual(gradebook.storeCustomColumnOrder.callCount, 1);
+      strictEqual(gradebook.saveCustomColumnOrder.callCount, 1);
+    });
+
+    test('triggers the "onColumnsReordered" event with updated frozen columns', function () {
+      gridSpecHelper.updateColumnOrder([
+        'student', 'custom_col_2402', 'custom_col_2401', 'assignment_2301', 'assignment_2302',
+        'assignment_group_2201', 'assignment_group_2202', 'total_grade'
+      ]);
+      deepEqual(reorderEventData.frozen.map(column => column.id), ['student', 'custom_col_2402', 'custom_col_2401']);
+    });
+
+    test('triggers the "onColumnsReordered" event with updated scrollable columns', function () {
+      gridSpecHelper.updateColumnOrder([
+        'student', 'custom_col_2401', 'custom_col_2402', 'assignment_2302', 'assignment_2301',
+        'assignment_group_2201', 'assignment_group_2202', 'total_grade'
+      ]);
+      const expectedOrder = [
+        'assignment_2302', 'assignment_2301', 'assignment_group_2201', 'assignment_group_2202', 'total_grade'
+      ];
+      deepEqual(reorderEventData.scrollable.map(column => column.id), expectedOrder);
+    });
+
+    test('does not trigger the "onColumnsReordered" event when column order did not change', function () {
+      const spy = sinon.spy();
+      gradebook.gradebookGrid.events.onColumnsReordered.subscribe(spy);
+      gridSpecHelper.updateColumnOrder([
+        'student', 'custom_col_2401', 'custom_col_2402', 'assignment_2301', 'assignment_2302',
+        'assignment_group_2201', 'assignment_group_2202', 'total_grade'
+      ]);
+      strictEqual(spy.callCount, 0);
     });
   });
 
   QUnit.module('when rearranging scrollable columns', function (hooks) {
     hooks.beforeEach(function () {
       createGradebookAndAddData();
-      gridSpecHelper = new SlickGridSpecHelper(gradebook.grid);
+      gridSpecHelper = new SlickGridSpecHelper(gradebook.gradebookGrid);
     });
 
     test('reorders sortable grid columns to match intended ascending sort order', function () {
@@ -266,7 +299,7 @@ QUnit.module('Gradebook Grid Columns', function (suiteHooks) {
   QUnit.module('when freezing the total grade column', function (hooks) {
     hooks.beforeEach(function () {
       createGradebookAndAddData();
-      gridSpecHelper = new SlickGridSpecHelper(gradebook.grid);
+      gridSpecHelper = new SlickGridSpecHelper(gradebook.gradebookGrid);
     });
 
     test('places the total grade column after the student column', function () {
@@ -303,7 +336,7 @@ QUnit.module('Gradebook Grid Columns', function (suiteHooks) {
   QUnit.module('when moving the frozen total grade column to the end of the scrollable columns', function (hooks) {
     hooks.beforeEach(function () {
       createGradebookAndAddData();
-      gridSpecHelper = new SlickGridSpecHelper(gradebook.grid);
+      gridSpecHelper = new SlickGridSpecHelper(gradebook.gradebookGrid);
       gradebook.freezeTotalGradeColumn();
     });
 
@@ -345,7 +378,7 @@ QUnit.module('Gradebook Grid Columns', function (suiteHooks) {
   QUnit.module('when moving the scrollable total grade column to the end of scrollable columns', function (hooks) {
     hooks.beforeEach(function () {
       createGradebookAndAddData();
-      gridSpecHelper = new SlickGridSpecHelper(gradebook.grid);
+      gridSpecHelper = new SlickGridSpecHelper(gradebook.gradebookGrid);
     });
 
     test('places the total grade column after all scrollable columns', function () {
@@ -386,7 +419,7 @@ QUnit.module('Gradebook Grid Columns', function (suiteHooks) {
     function initializeAndAddData () {
       gradebook.initialize();
       addGridData();
-      gridSpecHelper = new SlickGridSpecHelper(gradebook.grid);
+      gridSpecHelper = new SlickGridSpecHelper(gradebook.gradebookGrid);
     }
 
     hooks.beforeEach(function () {
@@ -400,6 +433,9 @@ QUnit.module('Gradebook Grid Columns', function (suiteHooks) {
           ]
         }
       });
+      sinon.stub(gradebook, 'saveSettings').callsFake((settings, onSuccess = () => {}) => {
+        onSuccess(settings)
+      })
     });
 
     test('excludes assignment group columns when setting is disabled', function () {
@@ -439,11 +475,13 @@ QUnit.module('Gradebook Grid Columns', function (suiteHooks) {
             { id: '1401', title: 'Grading Period 1' },
             { id: '1402', title: 'Grading Period 2' }
           ]
+        },
+        settings: {
+          selected_view_options_filters: ['assignmentGroups', 'modules', 'gradingPeriods', 'sections']
         }
       });
-      gridSpecHelper = new SlickGridSpecHelper(gradebook.grid);
+      gridSpecHelper = new SlickGridSpecHelper(gradebook.gradebookGrid);
       gradebook.getAssignment('2302').published = false;
-      sinon.stub(gradebook, 'saveSettings');
     });
 
     test('removes unpublished assignment columns when filtered', function () {
@@ -469,13 +507,20 @@ QUnit.module('Gradebook Grid Columns', function (suiteHooks) {
       ];
       deepEqual(gridSpecHelper.listScrollableColumnIds(), expectedOrder);
     });
+
+    test('does not duplicate the total column when filtering by grading period', function () {
+      gradebook.freezeTotalGradeColumn();
+      gradebook.updateCurrentGradingPeriod('1401');
+      const totalGradeColumns = gridSpecHelper.listFrozenColumnIds().filter(id => id === 'total_grade');
+      strictEqual(totalGradeColumns.length, 1);
+    });
   });
 
   QUnit.module('when teacher notes are hidden', function (hooks) {
     hooks.beforeEach(function () {
       customColumns[0].hidden = true;
       createGradebookAndAddData({ teacher_notes: { id: '2401', title: 'Notes', teacher_notes: true, hidden: true } });
-      gridSpecHelper = new SlickGridSpecHelper(gradebook.grid);
+      gridSpecHelper = new SlickGridSpecHelper(gradebook.gradebookGrid);
     });
 
     test('does not include the column in the grid', function () {
@@ -492,7 +537,7 @@ QUnit.module('Gradebook Grid Columns', function (suiteHooks) {
   QUnit.module('when hiding the teacher notes column', function (hooks) {
     hooks.beforeEach(function () {
       createGradebookAndAddData();
-      gridSpecHelper = new SlickGridSpecHelper(gradebook.grid);
+      gridSpecHelper = new SlickGridSpecHelper(gradebook.gradebookGrid);
     });
 
     test('removes the column from the frozen columns', function () {

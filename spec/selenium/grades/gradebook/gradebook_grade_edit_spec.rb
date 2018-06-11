@@ -16,8 +16,8 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 require_relative '../../helpers/gradebook_common'
-require_relative '../page_objects/gradebook_page'
-require_relative '../page_objects/grading_curve_page'
+require_relative '../pages/gradebook_page'
+require_relative '../pages/grading_curve_page'
 
 describe "editing grades" do
   include_context "in-process server selenium tests"
@@ -60,7 +60,7 @@ describe "editing grades" do
     q.reload
 
     grade_page.visit_gradebook(@course)
-    edit_grade('#gradebook_grid .container_1 .slick-row:nth-child(1) .l5', points.to_s)
+    edit_grade('#gradebook_grid .container_1 .slick-row:nth-child(1) .b5', points.to_s)
 
     get "/courses/#{@course.id}/quizzes/#{q.id}/history?quiz_submission_id=#{qs.id}"
     expect(f('.score_value')).to include_text points.to_s
@@ -113,10 +113,10 @@ describe "editing grades" do
     grade_page.visit_gradebook(@course)
 
     #editing grade for first row, first cell
-    edit_grade('#gradebook_grid .container_1 .slick-row:nth-child(1) .l2', 0)
+    edit_grade('#gradebook_grid .container_1 .slick-row:nth-child(1) .b2', 0)
 
     #editing grade for second row, first cell
-    edit_grade('#gradebook_grid .container_1 .slick-row:nth-child(2) .l2', 0)
+    edit_grade('#gradebook_grid .container_1 .slick-row:nth-child(2) .b2', 0)
 
     #refresh page and make sure the grade sticks
     grade_page.visit_gradebook(@course)
@@ -128,8 +128,8 @@ describe "editing grades" do
     assignment_model(:course => @course, :grading_type => 'letter_grade', :points_possible => nil, :title => 'no-points')
     grade_page.visit_gradebook(@course)
 
-    edit_grade('#gradebook_grid .container_1 .slick-row:nth-child(1) .l5', 'A-')
-    expect(f('#gradebook_grid .container_1 .slick-row:nth-child(1) .l5')).to include_text('A-')
+    edit_grade('#gradebook_grid .container_1 .slick-row:nth-child(1) .b5', 'A-')
+    expect(f('#gradebook_grid .container_1 .slick-row:nth-child(1) .b5')).to include_text('A-')
     submissions = @assignment.submissions.where('grade is not null')
     expect(submissions.count).to eq 1
     sub = submissions.first
@@ -151,20 +151,20 @@ describe "editing grades" do
   it "should edit a grade, move to the next cell and validate focus is not lost", priority: "1", test_id: 220318 do
     grade_page.visit_gradebook(@course)
 
-    first_cell = f('#gradebook_grid .container_1 .slick-row:nth-child(1) .l2')
+    first_cell = f('#gradebook_grid .container_1 .slick-row:nth-child(1) .b2')
     first_cell.click
     grade_input = first_cell.find_element(:css, '.grade')
     set_value(grade_input, 3)
     grade_input.send_keys(:tab)
-    expect(f('#gradebook_grid .container_1 .slick-row:nth-child(1) .l3')).to have_class('editable')
+    expect(f('#gradebook_grid .container_1 .slick-row:nth-child(1) .b3')).to have_class('editable')
   end
 
   it "should display dropped grades correctly after editing a grade", priority: "1", test_id: 220316 do
     @course.assignment_groups.first.update_attribute :rules, 'drop_lowest:1'
     grade_page.visit_gradebook(@course)
 
-    assignment_1_sel = '#gradebook_grid .container_1 .slick-row:nth-child(1) .l3'
-    assignment_2_sel= '#gradebook_grid .container_1 .slick-row:nth-child(1) .l4'
+    assignment_1_sel = '#gradebook_grid .container_1 .slick-row:nth-child(1) .b3'
+    assignment_2_sel= '#gradebook_grid .container_1 .slick-row:nth-child(1) .b4'
     a1 = f(assignment_1_sel)
     a2 = f(assignment_2_sel)
     expect(a1).to have_class 'dropped'
@@ -181,7 +181,7 @@ describe "editing grades" do
   it "should update a grade when clicking outside of slickgrid", priority: "1", test_id: 220319 do
     grade_page.visit_gradebook(@course)
 
-    first_cell = f('#gradebook_grid .container_1 .slick-row:nth-child(1) .l2')
+    first_cell = f('#gradebook_grid .container_1 .slick-row:nth-child(1) .b2')
     first_cell.click
     grade_input = first_cell.find_element(:css, '.grade')
     set_value(grade_input, 3)
@@ -204,9 +204,10 @@ describe "editing grades" do
   end
 
   it "should optionally assign zeroes to unsubmitted assignments during curving", priority: "1", test_id: 220321 do
+    skip_if_safari(:alert)
     grade_page.visit_gradebook(@course)
 
-    edit_grade('#gradebook_grid .container_1 .slick-row:nth-child(2) .l2', '')
+    edit_grade('#gradebook_grid .container_1 .slick-row:nth-child(2) .b2', '')
 
     open_assignment_options(0)
     f('[data-action="curveGrades"]').click
@@ -243,7 +244,7 @@ describe "editing grades" do
     # forces a 400
     expect_any_instance_of(SubmissionsApiController).to receive(:get_user_considering_section).and_return(nil)
     grade_page.visit_gradebook(@course)
-    edit_grade('#gradebook_grid .container_1 .slick-row:nth-child(1) .l2', 0)
+    edit_grade('#gradebook_grid .container_1 .slick-row:nth-child(1) .b2', 0)
     expect_flash_message :error, "refresh"
   end
 

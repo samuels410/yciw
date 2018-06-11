@@ -17,7 +17,6 @@
 #
 
 # @API ePub Exports
-# @beta
 #
 # API for exporting courses as an ePub
 #
@@ -113,8 +112,8 @@ class EpubExportsController < ApplicationController
 
   # @API List courses with their latest ePub export
   #
-  # Lists all courses a user is actively participating in,
-  # and the latest ePub export associated with the user & course.
+  # A paginated list of all courses a user is actively participating in, and
+  # the latest ePub export associated with the user & course.
   #
   # @returns [CourseEpubExport]
   def index

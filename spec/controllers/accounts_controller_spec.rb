@@ -29,20 +29,6 @@ describe AccountsController do
     account_admin_user(account: @account)
   end
 
-  def cross_listed_course
-    account_with_admin_logged_in
-    @account1 = Account.create!
-    @account1.account_users.create!(user: @user)
-    @course1 = @course
-    @course1.account = @account1
-    @course1.save!
-    @account2 = Account.create!
-    @course2 = course
-    @course2.account = @account2
-    @course2.save!
-    @course2.course_sections.first.crosslist_to_course(@course1)
-  end
-
   context "confirm_delete_user" do
     before(:once) {account_with_admin}
     before(:each) {user_session(@admin)}
@@ -219,6 +205,53 @@ describe AccountsController do
 
       expect(assigns[:associated_courses_count]).to eq 1
     end
+
+    it "should redirect for admins without course read rights when course_user_search is enabled" do
+      Account.default.enable_feature!(:course_user_search)
+      account_admin_user_with_role_changes(:role_changes => {:read_course_list => false, :read_roster => false} )
+      user_session(@admin)
+
+      get 'show', params: {:id => Account.default.id}, :format => 'html'
+
+      expect(response).to redirect_to(account_settings_url(Account.default))
+    end
+
+    describe "check crosslisting" do
+      before :once do
+        @root_account = Account.create!
+        @account1 = Account.create!({ :root_account => @root_account })
+        @account2 = Account.create!({ :root_account => @root_account })
+        @course1 = course_factory({ :account => @account1, :course_name => "course1" })
+        @course2 = course_factory({ :account => @account2, :course_name => "course2" })
+        @course2.course_sections.create!
+        @course2.course_sections.first.crosslist_to_course(@course1)
+      end
+
+      it "if crosslisted a section to another account's course, don't show that other course" do
+        account_with_admin_logged_in(account: @account2)
+        get 'show', params: {:id => @account2.id }, :format => 'html'
+        expect(assigns[:associated_courses_count]).to eq 1
+      end
+
+      it "if crosslisted a section to this account, do *not* show other account's course" do
+        account_with_admin_logged_in(account: @account1)
+        get 'show', params: {:id => @account1.id }, :format => 'html'
+        expect(assigns[:associated_courses_count]).to eq 1
+      end
+
+      it "if crosslisted a section to another account, do show other if that param is not set" do
+        account_with_admin_logged_in(account: @account2)
+        get 'show', params: {:id => @account2.id, :include_crosslisted_courses => true}, :format => 'html'
+        expect(assigns[:associated_courses_count]).to eq 2
+      end
+
+      it "if crosslisted a section to this account, do *not* show other account's course even if param is not set" do
+        account_with_admin_logged_in(account: @account1)
+        get 'show', params: {:id => @account1.id, :include_crosslisted_courses => true}, :format => 'html'
+        expect(assigns[:associated_courses_count]).to eq 1
+      end
+    end
+
     # Check that both published and un-published courses have the correct count
     it "should count course's student enrollments" do
       account_with_admin_logged_in
@@ -242,6 +275,7 @@ describe AccountsController do
       expect(assigns[:courses].find {|c| c.id == c1.id}.student_count).to eq c1.student_enrollments.count
       expect(assigns[:courses].find {|c| c.id == c2.id}.student_count).to eq c2.student_enrollments.count
     end
+
 
     it "should list student counts in unclaimed courses" do
       account_with_admin_logged_in
@@ -314,6 +348,20 @@ describe AccountsController do
   end
 
   describe "update" do
+    it "should update 'app_center_access_token'" do
+      account_with_admin_logged_in
+      @account = @account.sub_accounts.create!
+      access_token = SecureRandom.uuid
+      post 'update', params: { id: @account.id,
+                               account: {
+                                settings: {
+                                  app_center_access_token: access_token
+                                }
+                              }}
+      @account.reload
+      expect(@account.settings[:app_center_access_token]).to eq access_token
+    end
+
     it "should update account with sis_assignment_name_length_input with value less than 255" do
       account_with_admin_logged_in
       @account = @account.sub_accounts.create!
@@ -415,6 +463,58 @@ describe AccountsController do
       expect(@account.admins_can_view_notifications?).to be_truthy
     end
 
+    it 'does not allow anyone to set unexpected settings' do
+      user_factory
+      user_session(@user)
+      @account = Account.create!
+      Account.site_admin.account_users.create!(user: @user)
+      post 'update', params: {:id => @account.id, :account => {:settings => {
+        :product_name => 'blah'
+      }}}
+      @account.reload
+      expect(@account.settings[:product_name]).to be_nil
+    end
+
+    it "doesn't break I18n by setting the help_link_name unnecessarily" do
+      account_with_admin_logged_in
+
+      post 'update', params: {:id => @account.id, :account => {:settings => {
+        :help_link_name  => 'Help'
+      }}}
+      @account.reload
+      expect(@account.settings[:help_link_name]).to be_nil
+
+      post 'update', params: {:id => @account.id, :account => {:settings => {
+        :help_link_name => 'Halp'
+      }}}
+      @account.reload
+      expect(@account.settings[:help_link_name]).to eq 'Halp'
+    end
+
+    it "doesn't break I18n by setting customized text for default help links unnecessarily" do
+      account_with_admin_logged_in
+      post 'update', params: {:id => @account.id, :account => { :custom_help_links => { '0' =>
+        { :id => 'instructor_question', :text => 'Ask Your Instructor a Question',
+          :subtext => 'Questions are submitted to your instructor', :type => 'default',
+          :url => '#teacher_feedback', :available_to => ['student'] }
+      }}}
+      @account.reload
+      link = @account.settings[:custom_help_links].detect { |link| link['id'] == 'instructor_question' }
+      expect(link).not_to have_key('text')
+      expect(link).not_to have_key('subtext')
+      expect(link).not_to have_key('url')
+
+      post 'update', params: {:id => @account.id, :account => { :custom_help_links => { '0' =>
+        { :id => 'instructor_question', :text => 'yo', :subtext => 'wiggity', :type => 'default',
+          :url => '#dawg', :available_to => ['student'] }
+      }}}
+      @account.reload
+      link = @account.settings[:custom_help_links].detect { |link| link['id'] == 'instructor_question' }
+      expect(link['text']).to eq 'yo'
+      expect(link['subtext']).to eq 'wiggity'
+      expect(link['url']).to eq '#dawg'
+    end
+
     it "should allow updating services that appear in the ui for the current user" do
       AccountServices.register_service(:test1,
                                        {name: 'test1', description: '', expose_to_ui: :setting, default: false})
@@ -436,6 +536,22 @@ describe AccountsController do
       expect(@account.allowed_services).to match(%r{\+test1})
       expect(@account.allowed_services).not_to match(%r{\+test2})
       expect(@account.allowed_services).to match(%r{\+test3})
+    end
+
+    it "should update 'default_dashboard_view'" do
+      account_with_admin_logged_in
+      @account = @account.sub_accounts.create!
+      expect(@account.default_dashboard_view).to be_nil
+
+      post 'update', params: { id: @account.id,
+                               account: {
+                                  settings: {
+                                    default_dashboard_view: "cards"
+                                  }
+                                }
+                             }
+      @account.reload
+      expect(@account.default_dashboard_view).to eq "cards"
     end
 
     describe "quotas" do
@@ -578,6 +694,27 @@ describe AccountsController do
         expect(response).not_to be_success
       end
     end
+
+    context "terms of service settings" do
+      before(:once) {account_with_admin}
+      before(:each) {user_session(@admin)}
+
+      it "should be able to set and update a custom terms of service" do
+        post 'update', params: {:id => @account.id, :account => {
+          :terms_of_service => {:terms_type => "custom", :content => "stuff"}
+        }}
+        tos = @account.reload.terms_of_service
+        expect(tos.terms_type).to eq 'custom'
+        expect(tos.terms_of_service_content.content).to eq "stuff"
+      end
+
+      it "should be able to configure the 'passive' setting" do
+        post 'update', params: {:id => @account.id, :account => {:terms_of_service => {:passive => "0"}}}
+        expect(@account.reload.terms_of_service.passive).to eq false
+        post 'update', params: {:id => @account.id, :account => {:terms_of_service => {:passive => "1"}}}
+        expect(@account.reload.terms_of_service.passive).to eq true
+      end
+    end
   end
 
   describe "#settings" do
@@ -590,6 +727,18 @@ describe AccountsController do
       expect(response).to be_success
 
       expect(assigns[:last_reports].first.last).to eq report
+    end
+
+    it "puts up-to-date help link stuff in the env" do
+      account_with_admin_logged_in
+      @account.settings[:help_link_name] = 'Clippy'
+      @account.settings[:help_link_icon] = 'paperclip'
+      @account.save!
+      allow_any_instance_of(ApplicationHelper).to receive(:help_link_name).and_return('old_cached_nonsense')
+      allow_any_instance_of(ApplicationHelper).to receive(:help_link_icon).and_return('old_cached_nonsense')
+      get 'settings', params: {account_id: @account}
+      expect(assigns[:js_env][:help_link_name]).to eq 'Clippy'
+      expect(assigns[:js_env][:help_link_icon]).to eq 'paperclip'
     end
 
     context "sharding" do
@@ -679,6 +828,48 @@ describe AccountsController do
     user_session(user_factory)
     Account.site_admin.account_users.create!(user: @user)
     account_with_admin_logged_in(account: account)
+  end
+
+  describe "terms of service" do
+    before do
+      @account = Account.create!
+      course_with_teacher(:account => @account)
+      c1 = @course
+      course_with_teacher(:course => c1)
+      @student = User.create
+      c1.enroll_user(@student, "StudentEnrollment", :enrollment_state => 'active')
+      c1.save
+    end
+
+    it "should return the terms of service content" do
+      @account.update_terms_of_service(terms_type: "custom", content: "custom content")
+
+      admin_logged_in(@account)
+      get 'terms_of_service', params: {account_id: @account.id}
+
+      expect(response).to be_success
+      expect(response.body).to match(/\"content\":\"custom content\"/)
+    end
+
+    it "should return the terms of service content as student" do
+      @account.update_terms_of_service(terms_type: "custom", content: "custom content")
+
+      user_session(@teacher)
+      get 'terms_of_service', params: {account_id: @account.id}
+
+      expect(response).to be_success
+      expect(response.body).to match(/\"content\":\"custom content\"/)
+    end
+
+    it "should return the terms of service content as teacher" do
+      @account.update_terms_of_service(terms_type: "custom", content: "custom content")
+
+      user_session(@student)
+      get 'terms_of_service', params: {account_id: @account.id}
+
+      expect(response).to be_success
+      expect(response.body).to match(/\"content\":\"custom content\"/)
+    end
   end
 
   describe "#account_courses" do
@@ -869,60 +1060,31 @@ describe AccountsController do
       expect(response.body).to match(/\"sis_course_id\":\"30\".+\"sis_course_id\":\"31\".+\"sis_course_id\":\"42\".+\"sis_course_id\":\"52\"/)
     end
 
-    it "should be able to sort courses by enrollments ascending" do
-      @c3 = course_factory(account: @account, course_name: "apple", sis_source_id: 30)
+    context "sorting by term" do
+      let(:letters_in_random_order) { 'daqwds'.split('') }
+      before do
+        @account = Account.create!
+        create_courses(letters_in_random_order.map { |i|
+          {enrollment_term_id: @account.enrollment_terms.create!(name: i).id}
+        }, account: @account)
+        admin_logged_in(@account)
+      end
 
-      user = @c3.shard.activate {user_factory()}
-      enrollment = @c3.enroll_user(user, 'StudentEnrollment')
-      user.save!
-      enrollment.course = @c3
-      enrollment.workflow_state = 'active'
-      enrollment.save!
-      @c3.reload
+      it "should be able to sort courses by term ascending" do
+        get 'courses_api', params: {account_id: @account.id, sort: "term", order: "asc", include: ['term']}
 
-      user2 = @c3.shard.activate {user_factory()}
-      enrollment2 = @c3.enroll_user(user2, 'StudentEnrollment')
-      user2.save!
-      enrollment2.course = @c3
-      enrollment2.workflow_state = 'active'
-      enrollment2.save!
-      @c3.reload
+        expect(response).to be_success
+        term_names = json_parse(response.body).map{|c| c['term']['name']}
+        expect(term_names).to eq(letters_in_random_order.sort)
+      end
 
-      @c4 = course_with_student(course: course_factory(account: @account, course_name: "xylophone", sis_source_id: 52))
+      it "should be able to sort courses by term descending" do
+        get 'courses_api', params: {account_id: @account.id, sort: "term", order: "desc", include: ['term']}
 
-      admin_logged_in(@account)
-      get 'courses_api', params: {account_id: @account.id, sort: "enrollments", order: "asc"}
-
-      expect(response).to be_success
-      expect(response.body).to match(/\"name\":\"foo\".+\"name\":\"bar\".+\"name\":\"xylophone\".+\"name\":\"apple\"/)
-    end
-
-    it "should be able to sort courses by enrollments descending" do
-      @c3 = course_factory(account: @account, course_name: "apple", sis_source_id: 30)
-
-      user = @c3.shard.activate {user_factory()}
-      enrollment = @c3.enroll_user(user, 'StudentEnrollment')
-      user.save!
-      enrollment.course = @c3
-      enrollment.workflow_state = 'active'
-      enrollment.save!
-      @c3.reload
-
-      user2 = @c3.shard.activate {user_factory()}
-      enrollment2 = @c3.enroll_user(user2, 'StudentEnrollment')
-      user2.save!
-      enrollment2.course = @c3
-      enrollment2.workflow_state = 'active'
-      enrollment2.save!
-      @c3.reload
-
-      @c4 = course_with_student(course: course_factory(account: @account, course_name: "xylophone", sis_source_id: 52))
-
-      admin_logged_in(@account)
-      get 'courses_api', params: {account_id: @account.id, sort: "enrollments", order: "desc"}
-
-      expect(response).to be_success
-      expect(response.body).to match(/\"name\":\"apple\".+\"name\":\"xylophone\".+\"name\":\"bar\".+\"name\":\"foo\"/)
+        expect(response).to be_success
+        term_names = json_parse(response.body).map{|c| c['term']['name']}
+        expect(term_names).to eq(letters_in_random_order.sort.reverse)
+      end
     end
 
     it "should be able to search by teacher" do

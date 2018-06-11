@@ -15,24 +15,31 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
+# NOTE: depending on 'i18nObj' gets the extended I18n object with all the extra functions (interpolate, strftime, ...),
+# while 'i18n!handlebars_helpers' sets the scope for the I18n.t calls.
+# 'i18nObj!handlebars_helpers' does not compile
+# and leaving out 'i18n!handlebars_helpers' trips errors in the translation extract process
+# This is why the former is bound to a name, and the latter is not.
+
 define [
   'timezone'
-  'compiled/util/enrollmentName'
+  './util/enrollmentName'
   'handlebars/runtime'
   'i18nObj'
   'jquery'
   'underscore'
   'str/htmlEscape'
-  'compiled/util/semanticDateRange'
-  'compiled/util/dateSelect'
-  'compiled/util/mimeClass'
-  'compiled/str/apiUserContent'
-  'compiled/str/TextHelper'
+  './util/semanticDateRange'
+  './util/dateSelect'
+  './util/mimeClass'
+  './str/apiUserContent'
+  './str/TextHelper'
   'jsx/shared/helpers/numberFormat'
   'jquery.instructure_date_and_time'
   'jquery.instructure_misc_helpers'
   'jquery.instructure_misc_plugins'
   'translations/_core_en'
+  'i18n!handlebars_helpers'
 ], (tz, enrollmentName, {default: Handlebars}, I18n, $, _, htmlEscape, semanticDateRange, dateSelect, mimeClass, apiUserContent, textHelper, numberFormat) ->
 
   Handlebars.registerHelper name, fn for name, fn of {
@@ -143,6 +150,30 @@ define [
       real_min_str = (if real_minutes < 10 then "0" + real_minutes else real_minutes)
       "#{hours}:#{real_min_str}"
 
+    ###*
+     * Convert the total amount of minutes into a readable duration.
+     * @param {number}  Duration in minutes elapsed
+     * @return {string} String containing a formatted duration including hours and minutes
+     * Example:
+     *     ...
+     *     duration = 97
+     *     durationToString(duration)
+     *     ...
+     *     Returns
+     *       "Duration: 1 hour and 37 minutes"
+    ###
+    durationToString : (duration) ->
+      # stores the hours in the duration
+      hours = Math.floor(duration / 60)
+      # stores the remaining minutes after substracting the hours
+      minutes = duration % 60
+      if hours > 0
+        return I18n.t("Duration: %{hours} hours and %{minutes} minutes", {hours: hours, minutes: minutes})
+      else if minutes > 1
+        return I18n.t("Duration: %{minutes} minutes", {minutes: minutes})
+      else
+        return I18n.t("Duration: 1 minute")
+
     # helper for easily creating icon font markup
     addIcon : (icontype) ->
       new Handlebars.SafeString "<i class='icon-#{htmlEscape icontype}'></i>"
@@ -154,12 +185,16 @@ define [
     # convert a date to a string, using the given i18n format in the date.formats namespace
     tDateToString : (date = '', i18n_format) ->
       return '' unless date
-      I18n.l "date.formats.#{i18n_format}", date
+      date = tz.parse(date) unless _.isDate date
+      fudged = $.fudgeDateForProfileTimezone(tz.parse(date))
+      I18n.l "date.formats.#{i18n_format}", fudged
 
     # convert a date to a time string, using the given i18n format in the time.formats namespace
     tTimeToString : (date = '', i18n_format) ->
       return '' unless date
-      I18n.l "time.formats.#{i18n_format}", date
+      date = tz.parse(date) unless _.isDate date
+      fudged = $.fudgeDateForProfileTimezone(tz.parse(date))
+      I18n.l "time.formats.#{i18n_format}", fudged
 
     tTimeHours : (date = '') ->
       if date.getMinutes() == 0 and date.getSeconds() == 0
@@ -584,6 +619,11 @@ define [
 
     nf:(number, {hash: {format}}) ->
       numberFormat[format](number)
+
+    # Public: look up an element of a hash or array
+    #
+    lookup: (obj, key) ->
+      obj && obj[key]
   }
 
   return Handlebars

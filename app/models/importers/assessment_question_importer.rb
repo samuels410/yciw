@@ -56,6 +56,19 @@ module Importers
       bank_map = migration.context.assessment_question_banks.reload.index_by(&:migration_id)
       bank_map[CC::CCHelper.create_key(default_title, 'assessment_question_bank')] = default_bank if default_bank
 
+      if migration.for_master_course_import? && data['assessment_question_banks']
+        data['assessment_question_banks'].each do |aqb_hash|
+          mig_id = aqb_hash["migration_id"]
+          bank = bank_map[mig_id]
+          next unless bank # only include pre-existing banks
+          bank.mark_as_importing!(migration)
+          next if bank.edit_types_locked_for_overwrite_on_import.include?(:content)
+
+          aq_ids = questions.select{|aq| aq["question_bank_migration_id"] == mig_id}.map{|aq| aq["assessment_question_id"]}.compact
+          bank.assessment_questions.active.where.not(:migration_id => aq_ids).update_all(:workflow_state => 'deleted')
+        end
+      end
+
       questions.each do |question|
         question_data[:aq_data][question['migration_id']] = question
 
@@ -85,6 +98,7 @@ module Importers
         end
 
         if question_bank.workflow_state == 'deleted'
+          question_bank.assessment_questions.destroy_all
           question_bank.workflow_state = 'active'
         end
 
@@ -107,6 +121,13 @@ module Importers
           question_data[:aq_data][question['migration_id']] = question
         rescue
           migration.add_import_warning(t('#migration.quiz_question_type', "Quiz Question"), question[:question_name], $!)
+        end
+      end
+
+      if migration.context.is_a?(Course)
+        imported_aq_ids = question_data[:aq_data].values.map{|aq| aq['assessment_question_id']}.compact
+        imported_aq_ids.each_slice(100) do |sliced_aq_ids|
+          migration.context.quiz_questions.generated.where(:assessment_question_id => sliced_aq_ids).update_all(:assessment_question_version => nil)
         end
       end
 
@@ -161,18 +182,18 @@ module Importers
           t("This package includes the question type, Pattern Match, which is not compatible with Canvas. We have converted the question type to Fill in the Blank"))
       end
 
-      if hash[:question_text] && hash[:question_text].length > 16.kilobytes
-        hash[:question_text] = t("The imported question text for this question was too long.")
-        migration.add_warning(t("The question text for the question \"%{question_name}\" was too long.",
-          :question_name => hash[:question_name]))
-      end
-
       [:question_text, :correct_comments_html, :incorrect_comments_html, :neutral_comments_html, :more_comments_html].each do |field|
         if hash[field].present?
           hash[field] = migration.convert_html(
             hash[field], item_type, hash[:migration_id], field, {:remove_outer_nodes_if_one_child => true}
           )
         end
+      end
+
+      if hash[:question_text]&.length&.> 16.kilobytes
+        hash[:question_text] = t("The imported question text for this question was too long.")
+        migration.add_warning(t("The question text for the question \"%{question_name}\" was too long.",
+          :question_name => hash[:question_name]))
       end
 
       [:correct_comments, :incorrect_comments, :neutral_comments, :more_comments].each do |field|

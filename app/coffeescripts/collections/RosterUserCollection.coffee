@@ -16,8 +16,8 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 define [
-  'compiled/collections/PaginatedCollection'
-  'compiled/models/RosterUser'
+  '../collections/PaginatedCollection'
+  '../models/RosterUser'
 ], (PaginatedCollection, RosterUser) ->
 
   class RosterUserCollection extends PaginatedCollection
@@ -35,5 +35,5 @@ define [
     @optionProperty 'sections'
 
     url: ->
-      "/api/v1/courses/#{@options.course_id}/users"
+      "/api/v1/courses/#{@options.course_id}/users?include_inactive=true"
 

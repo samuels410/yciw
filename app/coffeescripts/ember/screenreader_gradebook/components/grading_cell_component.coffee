@@ -17,8 +17,8 @@
 
 define [
   'i18n!grading_cell'
-  'compiled/gradebook/GradebookTranslations'
-  'compiled/gradebook/GradebookHelpers'
+  '../../../gradebook/GradebookTranslations'
+  '../../../gradebook/GradebookHelpers'
   'jsx/gradebook/shared/helpers/GradeFormatHelper'
   'jsx/grading/helpers/OutlierScoreHelper'
   'jsx/shared/helpers/numberHelper'
@@ -26,7 +26,8 @@ define [
   'ember'
   'jquery'
   'jquery.ajaxJSON'
-], (I18n, GRADEBOOK_TRANSLATIONS, GradebookHelpers, GradeFormatHelper, OutlierScoreHelper, numberHelper, _, Ember, $) ->
+], (I18n, GRADEBOOK_TRANSLATIONS, GradebookHelpers, GradeFormatHelper,
+  { default:  OutlierScoreHelper }, numberHelper, _, Ember, $) ->
 
   GradingCellComponent = Ember.Component.extend
 

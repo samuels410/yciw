@@ -134,10 +134,18 @@ module Importers
       Importers::GradingStandardImporter.process_migration(data, migration); migration.update_import_progress(58)
       Importers::ContextExternalToolImporter.process_migration(data, migration); migration.update_import_progress(60)
       Importers::ToolProfileImporter.process_migration(data, migration); migration.update_import_progress(61)
-      Importers::QuizImporter.process_migration(data, migration, question_data); migration.update_import_progress(65)
+
+      Assignment.suspend_due_date_caching do
+        Importers::QuizImporter.process_migration(data, migration, question_data); migration.update_import_progress(65)
+      end
+
       Importers::DiscussionTopicImporter.process_migration(data, migration); migration.update_import_progress(70)
       Importers::WikiPageImporter.process_migration(data, migration); migration.update_import_progress(75)
-      Importers::AssignmentImporter.process_migration(data, migration); migration.update_import_progress(80)
+
+      Assignment.suspend_due_date_caching do
+        Importers::AssignmentImporter.process_migration(data, migration); migration.update_import_progress(80)
+      end
+
       Importers::ContextModuleImporter.process_migration(data, migration); migration.update_import_progress(85)
       Importers::WikiPageImporter.process_migration_course_outline(data, migration)
       Importers::CalendarEventImporter.process_migration(data, migration)
@@ -180,13 +188,15 @@ module Importers
         if shift_options = migration.date_shift_options
           shift_options = self.shift_date_options(course, shift_options)
 
-          migration.imported_migration_items_by_class(Assignment).each do |event|
-            event.reload # just in case
-            event.due_at = shift_date(event.due_at, shift_options)
-            event.lock_at = shift_date(event.lock_at, shift_options)
-            event.unlock_at = shift_date(event.unlock_at, shift_options)
-            event.peer_reviews_due_at = shift_date(event.peer_reviews_due_at, shift_options)
-            event.save_without_broadcasting
+          Assignment.suspend_due_date_caching do
+            migration.imported_migration_items_by_class(Assignment).each do |event|
+              event.reload # just in case
+              event.due_at = shift_date(event.due_at, shift_options)
+              event.lock_at = shift_date(event.lock_at, shift_options)
+              event.unlock_at = shift_date(event.unlock_at, shift_options)
+              event.peer_reviews_due_at = shift_date(event.peer_reviews_due_at, shift_options)
+              event.save_without_broadcasting
+            end
           end
 
           migration.imported_migration_items_by_class(Attachment).each do |event|
@@ -209,28 +219,33 @@ module Importers
             event.reload
             event.start_at = shift_date(event.start_at, shift_options)
             event.end_at = shift_date(event.end_at, shift_options)
-            event.all_day_date = shift_date(event.all_day_date.to_datetime, shift_options).try(:to_date) if event.all_day_date
-            event.save_without_broadcasting
-          end
-
-          migration.imported_migration_items_by_class(Quizzes::Quiz).each do |event|
-            event.reload # have to reload the quiz_data to keep link resolution - the others are just in case
-            event.due_at = shift_date(event.due_at, shift_options)
-            event.lock_at = shift_date(event.lock_at, shift_options)
-            event.unlock_at = shift_date(event.unlock_at, shift_options)
-            event.show_correct_answers_at = shift_date(event.show_correct_answers_at, shift_options)
-            event.hide_correct_answers_at = shift_date(event.hide_correct_answers_at, shift_options)
-            event.saved_by = :migration
-            event.save
-          end
-
-          migration.imported_migration_items_by_class(AssignmentOverride).each do |event|
-            AssignmentOverride.overridden_dates.each do |field|
-              date = event.send(field)
-              next unless date
-              event.send("#{field}=", shift_date(date, shift_options))
+            if event.all_day_date
+              ad_time = event.all_day_date.in_time_zone(shift_options[:time_zone] || Time.zone)
+              event.all_day_date = shift_date(ad_time, shift_options).try(:to_date)
             end
             event.save_without_broadcasting
+          end
+
+          Assignment.suspend_due_date_caching do
+            migration.imported_migration_items_by_class(Quizzes::Quiz).each do |event|
+              event.reload # have to reload the quiz_data to keep link resolution - the others are just in case
+              event.due_at = shift_date(event.due_at, shift_options)
+              event.lock_at = shift_date(event.lock_at, shift_options)
+              event.unlock_at = shift_date(event.unlock_at, shift_options)
+              event.show_correct_answers_at = shift_date(event.show_correct_answers_at, shift_options)
+              event.hide_correct_answers_at = shift_date(event.hide_correct_answers_at, shift_options)
+              event.saved_by = :migration
+              event.save
+            end
+
+            migration.imported_migration_items_by_class(AssignmentOverride).each do |event|
+              AssignmentOverride.overridden_dates.each do |field|
+                date = event.send(field)
+                next unless date
+                event.send("#{field}=", shift_date(date, shift_options))
+              end
+              event.save_without_broadcasting
+            end
           end
 
           migration.imported_migration_items_by_class(ContextModule).each do |event|
@@ -271,6 +286,8 @@ module Importers
         course.touch
       end
 
+      DueDateCacher.recompute_course(course)
+
       Auditors::Course.record_copied(migration.source_course, course, migration.user, source: migration.initiated_source)
       migration.imported_migration_items
     end
@@ -306,15 +323,16 @@ module Importers
         end
         course.tab_configuration = tab_config
       end
-      if settings[:storage_quota] && ( migration.for_course_copy? || course.account.grants_right?(migration.user, :manage_courses))
+      if settings[:storage_quota] && course.account.grants_right?(migration.user, :manage_storage_quotas)
         course.storage_quota = settings[:storage_quota]
       end
       atts = Course.clonable_attributes
       atts -= Canvas::Migration::MigratorHelper::COURSE_NO_COPY_ATTS
       course.settings_will_change! unless atts.empty?
 
-      # superhax to force new wiki front page if home view changed
-      if settings['default_view'] && settings['default_view'] != course.default_view && data[:wikis]
+      # superhax to force new wiki front page if home view changed (or is master course sync)
+      if settings['default_view'] && data[:wikis] && (migration.for_master_course_import? || (settings['default_view'] != course.default_view))
+        course.wiki # ensure that it exists already
         if page_hash = data[:wikis].detect{|h| h[:front_page]}
           if page = migration.find_imported_migration_item(WikiPage, page_hash[:migration_id])
             page.set_as_front_page!

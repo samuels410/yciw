@@ -17,17 +17,15 @@
 
 import $ from 'jquery'
 import _ from 'underscore'
-import rgb2hex from 'compiled/util/rgb2hex'
+import rgb2hex from './util/rgb2hex'
 
 export default {
   persistContextColors (colorsByContext, userId) {
     _.each(colorsByContext, (color, contextCode) => {
-      if (contextCode.match(/course/)) {
-        const hexcode = color.match(/rgb/) ? rgb2hex(color) : color
+      const hexcode = color.match(/rgb/) ? rgb2hex(color) : color
 
-        const url = `/api/v1/users/${userId}/colors/${contextCode}`
-        $.ajax({url, type: 'PUT', data: {hexcode}})
-      }
+      const url = `/api/v1/users/${userId}/colors/${contextCode}`
+      $.ajax({url, type: 'PUT', data: {hexcode}})
     })
   }
 }

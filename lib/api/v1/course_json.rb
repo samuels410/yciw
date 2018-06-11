@@ -85,6 +85,9 @@ module Api::V1
       if course.grants_any_right?(user, :read_sis, :manage_sis)
         hash['sis_course_id'] = course.sis_source_id
       end
+      if course.root_account.grants_right?(user, :manage_sis)
+        hash['sis_import_id'] = course.sis_batch_id
+      end
     end
 
     def set_integration_id(hash, course, user)
@@ -114,7 +117,7 @@ module Api::V1
 
     INCLUDE_CHECKERS.each do |key, val|
       define_method("include_#{key}".to_sym) do
-        @includes.include?( val.to_sym )
+        @includes.include?(val.to_sym)
       end
     end
 
@@ -149,6 +152,14 @@ module Api::V1
         :computed_current_grade => student_enrollment.computed_current_grade,
         :computed_final_grade => student_enrollment.computed_final_grade
       }
+
+      if @course.grants_any_right?(@user, :manage_grades, :view_all_grades)
+        scores[:unposted_current_score] = student_enrollment.unposted_current_score
+        scores[:unposted_final_score] = student_enrollment.unposted_final_score
+        scores[:unposted_current_grade] = student_enrollment.unposted_current_grade
+        scores[:unposted_final_grade] = student_enrollment.unposted_final_grade
+      end
+
       if include_current_grading_period_scores?
         scores.merge!(current_grading_period_scores(student_enrollment))
       end
@@ -156,7 +167,7 @@ module Api::V1
     end
 
     def current_grading_period_scores(student_enrollment)
-      {
+      scores = {
         has_grading_periods: @course.grading_periods?,
         multiple_grading_periods_enabled: @course.grading_periods?, # for backwards compatibility
         totals_for_all_grading_periods_option: @course.display_totals_for_all_grading_periods?,
@@ -167,24 +178,43 @@ module Api::V1
         current_period_computed_current_grade: grading_period_grade(student_enrollment, :current),
         current_period_computed_final_grade: grading_period_grade(student_enrollment, :final)
       }
+
+      if @course.grants_any_right?(@user, :manage_grades, :view_all_grades)
+        scores[:current_period_unposted_current_score] =
+          grading_period_score(student_enrollment, :current, unposted: true)
+        scores[:current_period_unposted_final_score] =
+          grading_period_score(student_enrollment, :final, unposted: true)
+        scores[:current_period_unposted_current_grade] =
+          grading_period_grade(student_enrollment, :current, unposted: true)
+        scores[:current_period_unposted_final_grade] =
+          grading_period_grade(student_enrollment, :final, unposted: true)
+      end
+      scores
     end
 
-    def grading_period_score(enrollment, current_or_final)
-      grading_period_score_or_grade(enrollment, current_or_final, :score)
+    def grading_period_score(enrollment, current_or_final, unposted: false)
+      grading_period_score_or_grade(enrollment, current_or_final, :score, unposted)
     end
 
-    def grading_period_grade(enrollment, current_or_final)
-      grading_period_score_or_grade(enrollment, current_or_final, :grade)
+    def grading_period_grade(enrollment, current_or_final, unposted: false)
+      grading_period_score_or_grade(enrollment, current_or_final, :grade, unposted)
     end
 
-    def grading_period_score_or_grade(enrollment, current_or_final, score_or_grade)
+    def grading_period_score_or_grade(enrollment, current_or_final, score_or_grade, unposted)
       return nil unless current_grading_period
-      enrollment.send("computed_#{current_or_final}_#{score_or_grade}", grading_period_id: current_grading_period.id)
+
+      prefix = unposted ? "unposted" : "computed"
+      enrollment.send(
+        "#{prefix}_#{current_or_final}_#{score_or_grade}",
+        grading_period_id: current_grading_period.id
+      )
     end
 
     def current_grading_period
       return @current_grading_period if defined?(@current_grading_period)
-      @current_grading_period = GradingPeriod.current_period_for(@course)
+
+      group = @course.relevant_grading_period_group
+      @current_grading_period = group && group.grading_periods.active.detect(&:current?)
     end
 
     def include_current_grading_period_scores?

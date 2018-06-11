@@ -67,16 +67,18 @@
 }
 
 html {
-  font-family: $ic-font-family-fallback;
-  &.lato-font-loaded {
-    font-family: $ic-font-family;
+  font-size: 100%;
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  &.lato-font-not-loaded-yet {
+    font-family: $ic-font-family-fallback;
   }
+  font-family: $ic-font-family;
 }
 
 body {
   @include fontSize($ic-font-size);
   font-weight: normal;
-  margin: 0;
   line-height: $ic-line-height;
   color: $ic-font-color-dark;
   -webkit-font-smoothing: antialiased; // needed to help render the iconFont clearer
@@ -200,7 +202,7 @@ a {
 /// Underline All Links Feature Flag
 ////////=============
 .Underline-All-Links__enabled {
-  a:not(.Button, .btn, .ui-button) {
+  a:not(.Button, .btn, .ui-button, .ui-tabs-anchor) {
     text-decoration: underline;
     &:focus, &:hover { text-decoration: none; }
     @include ic-focus-base;
@@ -221,7 +223,7 @@ a {
 // Unordered and Ordered lists
 ul, ol {
   padding: 0;
-  margin: 0 0 6px 25px;
+  margin: direction-sides(0 0 6px 25px);
 }
 ul ul,
 ul ol,
@@ -231,7 +233,7 @@ ol ul {
 }
 ul.unstyled,
 ol.unstyled {
-  margin-left: 0;
+  margin-#{direction(left)}: 0;
   list-style: none;
 }
 
@@ -247,21 +249,41 @@ dt {
   font-weight: bold;
 }
 dd {
-  margin-left: 10px;
+  margin-#{direction(left)}: 10px;
 }
 // Horizontal layout (like forms)
 .dl-horizontal {
   @include clearfix(); // Ensure dl clears floats if empty dd elements present
   dt {
-    float: left;
+    float: direction(left);
     width: $horizontalComponentOffset - 20;
-    clear: left;
-    text-align: right;
-    @include text-overflow();
+    clear: direction(left);
+    text-align: direction(right);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   dd {
-    margin-left: $horizontalComponentOffset;
+    margin-#{direction(left)}: $horizontalComponentOffset;
   }
+}
+
+///////==============
+/// Prevents sub and sup affecting line-height in all browsers
+///////==============
+
+sub,
+sup {
+  position: relative;
+  font-size: 75%;
+  line-height: 0;
+  vertical-align: baseline;
+}
+sup {
+  top: -0.5em;
+}
+sub {
+  bottom: -0.25em;
 }
 
 ///////==============
@@ -304,7 +326,7 @@ select.un-bootrstrapify {
 }
 
 .form-actions {
-  text-align: right;
+  text-align: direction(right);
   padding: 10px 10px 11px;
 
   // when .form-actions is in a modal box, make it look different per Kyle mockup
@@ -443,10 +465,12 @@ abbr.initialism {
 blockquote {
   padding: 0 0 0 15px;
   margin: 0 0 20px;
-  border-left: 5px solid $ic-border-color;
+  border-#{direction(left)}: 5px solid $ic-border-color;
   p {
     margin-bottom: 0;
-    @include font-shorthand(16px,300, 25px);
+    @include fontSize(16px);
+    font-weight: 300;
+    line-height: 25px;
   }
   small {
     display: block;
@@ -459,14 +483,14 @@ blockquote {
 
   // Float right with text-align: right
   &.pull-right {
-    float: right;
-    padding-right: 15px;
-    padding-left: 0;
-    border-right: 5px solid $ic-border-color;
-    border-left: 0;
+    float: direction(right);
+    padding-#{direction(right)}: 15px;
+    padding-#{direction(left)}: 0;
+    border-#{direction(right)}: 5px solid $ic-border-color;
+    border-#{direction(left)}: 0;
     p,
     small {
-      text-align: right;
+      text-align: direction(right);
     }
     small {
       &:before {
@@ -526,7 +550,7 @@ Here's an accessible way to do it for popovers without a header.
   max-width: 236px;
   width: 236px;
   color: $gray;
-  text-align: left;
+  text-align: direction(left);
   text-decoration: none;
   background-color: $popoverBackground;
   opacity: 1;

@@ -20,10 +20,11 @@ define [
   'jquery'
   'i18n!user_date_range_search'
   'jst/accounts/admin_tools/userDateRangeSearchForm'
-  'compiled/views/ValidatedMixin'
+  '../../ValidatedMixin'
   'jquery.ajaxJSON'
   'jquery.instructure_date_and_time'
-  'compiled/jquery.rails_flash_notifications'
+  'jqueryui/dialog'
+  '../../../jquery.rails_flash_notifications'
 ], (Backbone, $, I18n, template, ValidatedMixin) ->
   class UserDateRangeSearchFormView extends Backbone.View
     @mixin ValidatedMixin
@@ -40,6 +41,8 @@ define [
 
     els:
       '.userIdField':          '$userIdField'
+      '.hiddenDateStart':      '$hiddenDateStart'
+      '.hiddenDateEnd':        '$hiddenDateEnd'
       '.dateStartSearchField': '$dateStartSearchField'
       '.dateEndSearchField':   '$dateEndSearchField'
       '.search-controls':      '$searchControls'
@@ -66,7 +69,9 @@ define [
       @collection.on 'sync', @notificationsFound
 
     resultsFound: =>
-      $.screenReaderFlashMessage(I18n.t('results_found', "%{length} results found", { length: @usersView.collection.length }))
+      setTimeout(() =>
+        $.screenReaderFlashMessageExclusive(I18n.t('%{length} results found', { length: @usersView.collection.length }))
+      , 500)
 
     notificationsFound: =>
       $.screenReaderFlashMessage(I18n.t('%{length} notifications found', { length: @collection.length }))
@@ -80,45 +85,74 @@ define [
       @usersView.$el.find('tr').each () -> $(this).removeClass('selected')
       if e
         @model.set e.attributes
-        @$userIdField.val(e.get 'id')
-        @$searchControls.show()
+        id = e.get 'id'
+        @$userIdField.val(id)
+        self = this
+        @$searchControls.show().dialog
+          title:  I18n.t('Generate Activity for %{user}', user: e.get 'name')
+          resizable: false
+          height: 'auto'
+          width: 400
+          modal: true
+          dialogClass: 'userDateRangeSearchModal'
+          close: ->
+            self.$el.find('.roster_user_name[data-user-id=' +id + ']').focus()
+          buttons: [
+            {
+              text: I18n.t('Cancel')
+              click: ->
+                $(this).dialog('close')
+            }
+            {
+              text: I18n.t('Find')
+              'class': 'btn btn-primary userDateRangeSearchBtn'
+              'id': "#{self.formName}-find-button"
+              click: ->
+                errors = self.datesValidation()
+                if Object.keys(errors).length != 0
+                  self.showErrors(errors, true)
+                  return
+
+                self.$hiddenDateStart.val(self.$dateStartSearchField.val())
+                self.$hiddenDateEnd.val(self.$dateEndSearchField.val())
+                self.$el.submit()
+                $(this).dialog('close')
+            }
+          ]
       else
         @$userIdField.val('')
-        @$searchControls.hide()
 
-    validityCheck: ->
-      json = @$el.toJSON()
+    dateIsValid: (dateField) ->
+      if dateField.val() == ''
+        return true
+      date = dateField.data('unfudged-date')
+      return (date instanceof Date && !isNaN(date.valueOf()))
 
-      valid = true
+    datesValidation: ->
       errors = {}
-      if !json.user_id
-        valid = false
-        errors['user_id'] =
-          [
-            {
-            type: 'required'
-            message: I18n.t('cant_be_blank', "Canvas User ID can't be blank")
-            }
-          ]
-      # If have both start and end, check for values to make sense together.
-      if json.start_time && json.end_time && (json.start_time > json.end_time)
-        valid = false
-        errors['end_time'] =
-          [
-            {
-            type: 'invalid'
-            message: I18n.t('cant_come_before_from', "'To Date' can't come before 'From Date'")
-            }
-          ]
-      # Show any errors
-      @showErrors errors
-      # Return false if there are any errors
-      valid
+      startDateField = @$dateStartSearchField
+      endDateField = @$dateEndSearchField
+      startDate = startDateField.data('unfudged-date')
+      endDate = endDateField.data('unfudged-date')
+
+      if startDate && endDate && (startDate > endDate)
+        errors["#{@formName}_end_time"] = [{
+          message: I18n.t('To Date cannot come before From Date')
+        }]
+      else
+        if !@dateIsValid(startDateField)
+          errors["#{@formName}_start_time"] = [{
+            message: I18n.t('Not a valid date')
+          }]
+        if !@dateIsValid(endDateField)
+          errors["#{@formName}_end_time"] = [{
+            message: I18n.t('Not a valid date')
+          }]
+      return errors
 
     submit: (event) ->
       event.preventDefault()
-      if @validityCheck()
-        @updateCollection()
+      @updateCollection()
 
     updateCollection: ->
       # Update the params (which fetches the collection)

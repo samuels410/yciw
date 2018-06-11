@@ -244,15 +244,26 @@ module ApplicationHelper
     Rails.env.test? && ENV.fetch("DISABLE_CSS_TRANSITIONS", "1") == "1"
   end
 
-  def css_variant
-    use_high_contrast = @current_user && @current_user.prefers_high_contrast?
-    'new_styles' + (use_high_contrast ? '_high_contrast' : '_normal_contrast')
+  def use_rtl?
+    @current_user.try(:feature_enabled?, :force_rtl) || (@domain_root_account.try(:feature_enabled?, :allow_rtl) && I18n.rtl?)
   end
 
-  def css_url_for(bundle_name, plugin=false)
+  # this is exactly the same as our sass helper with the same name
+  # see: https://www.npmjs.com/package/sass-direction
+  def direction(left_or_right)
+    use_rtl? ? {'left' => 'right', 'right' => 'left'}[left_or_right] : left_or_right
+  end
+
+  def css_variant(opts = {})
+    variant = use_responsive_layout? ? 'responsive_layout' : 'new_styles'
+    use_high_contrast = @current_user && @current_user.prefers_high_contrast? || opts[:force_high_contrast]
+    variant + (use_high_contrast ? '_high_contrast' : '_normal_contrast') + (use_rtl? ? '_rtl' : '')
+  end
+
+  def css_url_for(bundle_name, plugin=false, opts = {})
     bundle_path = "#{plugin ? "plugins/#{plugin}" : 'bundles'}/#{bundle_name}"
-    cache = BrandableCSS.cache_for(bundle_path, css_variant)
-    base_dir = cache[:includesNoVariables] ? 'no_variables' : File.join(active_brand_config.try(:md5).to_s, css_variant)
+    cache = BrandableCSS.cache_for(bundle_path, css_variant(opts))
+    base_dir = cache[:includesNoVariables] ? 'no_variables' : css_variant(opts)
     File.join('/dist', 'brandable_css', base_dir, "#{bundle_path}-#{cache[:combinedChecksum]}.css")
   end
 
@@ -427,9 +438,7 @@ module ApplicationHelper
       :http_status              => @status,
       :error_id                 => @error && @error.id,
       :disableGooglePreviews    => !service_enabled?(:google_docs_previews),
-      :disableScribdPreviews    => !feature_enabled?(:scribd),
       :disableCrocodocPreviews  => !feature_enabled?(:crocodoc),
-      :enableScribdHtml5        => feature_enabled?(:scribd_html5),
       :logPageViews             => !@body_class_no_headers,
       :maxVisibleEditorButtons  => 3,
       :editorButtons            => editor_buttons,
@@ -556,6 +565,20 @@ module ApplicationHelper
     mapped
   end
 
+  # return enough group data for the planner to display items associated with groups
+  def map_groups_for_planner(groups)
+    mapped = groups.map do |g|
+      {
+        id: g.id,
+        assetString: g.asset_string,
+        name: g.name,
+        url: "/groups/#{g.id}"
+      }
+    end
+
+    mapped
+  end
+
   def show_feedback_link?
     Setting.get("show_feedback_link", "false") == "true"
   end
@@ -585,8 +608,12 @@ module ApplicationHelper
     (@domain_root_account && @domain_root_account.settings[:help_link_icon]) || 'help'
   end
 
+  def default_help_link_name
+    I18n.t('Help')
+  end
+
   def help_link_name
-    (@domain_root_account && @domain_root_account.settings[:help_link_name]) || I18n.t('Help')
+    (@domain_root_account && @domain_root_account.settings[:help_link_name]) || default_help_link_name
   end
 
   def help_link_data
@@ -612,7 +639,7 @@ module ApplicationHelper
   def active_brand_config(opts={})
     return active_brand_config_cache[opts] if active_brand_config_cache.key?(opts)
 
-    ignore_branding = (@current_user.try(:prefers_high_contrast?) && !opts[:ignore_high_contrast_preference])
+    ignore_branding = (@current_user.try(:prefers_high_contrast?) && !opts[:ignore_high_contrast_preference]) || opts[:force_high_contrast]
     active_brand_config_cache[opts] = if ignore_branding
       nil
     else
@@ -633,21 +660,9 @@ module ApplicationHelper
     end
   end
 
-  def active_brand_config_json_url(opts={})
-    path = active_brand_config(opts).try(:public_json_path)
-    path ||= BrandableCSS.public_default_json_path
-    "#{Canvas::Cdn.config.host}/#{path}"
-  end
-
-  def active_brand_config_js_url(opts={})
-    path = active_brand_config(opts).try(:public_js_path)
-    path ||= BrandableCSS.public_default_js_path
-    "#{Canvas::Cdn.config.host}/#{path}"
-  end
-
-  def active_brand_config_css_url(opts={})
-    path = active_brand_config(opts).try(:public_css_path)
-    path ||= BrandableCSS.public_default_css_path
+  def active_brand_config_url(type, opts={})
+    path = active_brand_config(opts).try("public_#{type}_path")
+    path ||= BrandableCSS.public_default_path(type, @current_user&.prefers_high_contrast? || opts[:force_high_contrast])
     "#{Canvas::Cdn.config.host}/#{path}"
   end
 
@@ -819,12 +834,10 @@ module ApplicationHelper
   def agree_to_terms
     # may be overridden by a plugin
     @agree_to_terms ||
-    t("I agree to the *terms of use* and **privacy policy**.",
+    t("I agree to the *terms of use*.",
       wrapper: {
-        '*' => link_to('\1', terms_of_use_url, target: '_blank'),
-        '**' => link_to('\1', privacy_policy_url, target: '_blank')
-      }
-    )
+        '*' => link_to('\1', "#", class: 'terms_of_service_link'),
+      })
   end
 
   def dashboard_url(opts={})
@@ -900,4 +913,61 @@ module ApplicationHelper
     @domain_root_account&.feature_enabled?(:student_planner) && @current_user.has_student_enrollment?
   end
 
+  def file_access_user
+    if !@files_domain
+      @current_user
+    elsif session['file_access_user_id'].present?
+      @file_access_user ||= User.where(id: session['file_access_user_id']).first
+    else
+      nil
+    end
+  end
+
+  def file_access_real_user
+    if !@files_domain
+      logged_in_user
+    elsif session['file_access_real_user_id'].present?
+      # NOTE: this will never be set yet. a follow-on commit will take to
+      # setting it based on logged_in_user.
+      #
+      # as such, for now, file_access_real_user will always equal the
+      # file_access_user (corresponds to @current_user) on the files domain,
+      # instead of corresponding to the logged_in_user. this will break inst-fs
+      # if redirecting through the files domain while masquerading.
+      @file_access_real_user ||= User.where(id: session['file_access_real_user_id']).first
+    else
+      file_access_user
+    end
+  end
+
+  def file_access_oauth_host
+    if logged_in_user && !@files_domain
+      request.host_with_port
+    else
+      nil
+    end
+  end
+
+  def file_authenticator
+    FileAuthenticator.new(file_access_real_user, file_access_user, file_access_oauth_host)
+  end
+
+  def authenticated_download_url(attachment)
+    file_authenticator.download_url(attachment)
+  end
+
+  def authenticated_inline_url(attachment)
+    file_authenticator.inline_url(attachment)
+  end
+
+  def authenticated_thumbnail_url(attachment, options={})
+    file_authenticator.thumbnail_url(attachment, options)
+  end
+
+  def thumbnail_image_url(attachment, uuid=nil, url_options={})
+    # this thumbnail url is a route that redirects to local/s3 appropriately.
+    # deferred redirect through route because it may be saved for later use
+    # after a direct link to attachment.thumbnail_url would have expired
+    super(attachment, uuid || attachment.uuid, url_options)
+  end
 end

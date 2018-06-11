@@ -26,7 +26,8 @@ module DatesOverridable
   def self.included(base)
     base.has_many :assignment_overrides, :dependent => :destroy
     base.has_many :active_assignment_overrides, -> { where(workflow_state: 'active') }, class_name: 'AssignmentOverride'
-    base.has_many :assignment_override_students, :dependent => :destroy
+    base.has_many :assignment_override_students, -> { where(workflow_state: 'active') }, :dependent => :destroy
+    base.has_many :all_assignment_override_students, class_name: 'AssignmentOverrideStudent', :dependent => :destroy
 
     base.validates_associated :active_assignment_overrides
 
@@ -60,7 +61,12 @@ module DatesOverridable
   end
 
   def has_overrides?
-    assignment_overrides.loaded? ? assignment_overrides.any? : assignment_overrides.exists?
+    if current_version?
+      assignment_overrides.loaded? ? assignment_overrides.any?(&:active?) : assignment_overrides.active.exists?
+    else
+      # the old version's overrides might have be deleted too but it's probably more trouble than it's worth to check here
+      assignment_overrides.loaded? ? assignment_overrides.any? : assignment_overrides.exists?
+    end
   end
 
   def has_active_overrides?
@@ -201,11 +207,11 @@ module DatesOverridable
 
   def teacher_due_date_for_display(user)
     ao = overridden_for user
-    due_at || ao.due_at || all_due_dates.first[:due_at]
+    due_at || ao.due_at || all_due_dates.dig(0, :due_at)
   end
 
   def formatted_dates_hash(dates)
-    return [] unless dates.present?
+    return [] if dates.blank?
 
     dates = dates.sort_by do |date|
       due_at = date[:due_at]

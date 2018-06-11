@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
-require_relative '../page_objects/student_grades_page'
+require_relative '../pages/student_grades_page'
 require_relative './weighting_setup'
 require_relative './a_gradebook_shared_example'
 
@@ -30,7 +30,9 @@ describe 'gradezilla' do
     student_grades.visit_as_teacher(@course, @student)
 
     if @grading_period_index
-      student_grades.select_period_by_name(grading_period_titles[@grading_period_index])
+      title = grading_period_titles[@grading_period_index]
+      student_grades.select_period_by_name(title)
+      student_grades.click_apply_button unless title == "All Grading Periods"
     end
     student_grades.final_grade.text
   end

@@ -32,7 +32,6 @@ describe "submissions" do
 
     it "should allow media comments", priority: "1", test_id: 237032 do
       stub_kaltura
-      #pending("failing because it is dependant on an external kaltura system")
 
       student_in_course
       assignment = create_assignment
@@ -83,7 +82,7 @@ describe "submissions" do
       expect_new_page_load { submit_form(assignment_form) }
 
       expect(@course.student_view_student.submissions.count).to eq 1
-      expect(f('#sidebar_content .details')).to include_text "Turned In!"
+      expect(f('#sidebar_content .details')).to include_text "Submitted!"
     end
 
     it "should allow a student view student to submit file upload assignments", priority: "1", test_id: 237035 do
@@ -100,9 +99,10 @@ describe "submissions" do
 
       filename, fullpath, data = get_file("testfile1.txt")
       f('.submission_attachment input').send_keys(fullpath)
+      scroll_to(f('#submit_file_button'))
       expect_new_page_load { f('#submit_file_button').click }
 
-      expect(f('.details .header')).to include_text "Turned In!"
+      expect(f('.details .header')).to include_text "Submitted!"
       expect(f('.details')).to include_text "testfile1"
     end
   end

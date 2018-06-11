@@ -18,7 +18,7 @@
 define [
   'underscore'
   'i18n!groups'
-  'compiled/views/DialogFormView'
+  '../../DialogFormView'
   'jst/EmptyDialogFormWrapper'
   'jst/groups/manage/groupCategoryEdit'
   'str/htmlEscape'
@@ -59,8 +59,6 @@ define [
       super
       # reset the form contents
       @render()
-      # auto-focus the first input
-      @$('input:first').focus()
 
     setAutoLeadershipFormState: ->
       if @model.get('auto_leader')?

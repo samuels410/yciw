@@ -18,14 +18,14 @@
 define [
   'i18n!quizzes'
   'jquery'
-  'compiled/views/DialogFormView'
+  './DialogFormView'
   'jst/messageStudentsDialog'
   'jst/EmptyDialogFormWrapper'
-  'compiled/models/Conversation'
+  '../models/ConversationCreator'
   'jst/_messageStudentsWhoRecipientList'
   'underscore'
-  'compiled/jquery/serializeForm'
-], (I18n, $, DialogFormView, template, wrapperTemplate, Conversation, recipientListTemplate, _) ->
+  '../jquery/serializeForm'
+], (I18n, $, DialogFormView, template, wrapperTemplate, ConversationCreator, recipientListTemplate, _) ->
 
   class MessageStudentsDialog extends DialogFormView
 
@@ -68,7 +68,7 @@ define [
         I18n.t('message_students', 'Message students')
 
       @recipients = @recipientGroups[0].recipients
-      @model or= new Conversation
+      @model or= new ConversationCreator(chunkSize: ENV.MAX_GROUP_CONVERSATION_SIZE)
 
     toJSON: =>
       json = {}

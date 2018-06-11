@@ -48,6 +48,15 @@ The change_threshold can be set to any integer between 1 and 100.
 
 change_threshold also impacts diffing mode.
 
+Multi Term Batch Mode
+---------------------
+
+Multi term batch mode is just like batch mode except against multiple terms.
+Multi term batch mode is run against all terms included in the same import for
+the batch. To use multi term batch mode you must also set a change_threshold. If
+you intend to remove all items with multi term batch mode, you can set the
+change_threshold to 100.
+
 Diffing Mode
 ------------
 
@@ -97,6 +106,10 @@ as source system, data type, and term id. Some examples of good identifiers:
 
  * users:fall-2015
  * source-system-1:all-data:spring-2016
+
+Diffing mode by default marks objects as "deleted" when they are not included
+for an import, but enrollments can be marked as 'completed' or 'inactive' if the
+`diffing_drop_status` is passed.
 
 If changes are made to SIS-managed objects outside of the normal import
 process, as in the example given above, it may be necessary to process a SIS
@@ -264,11 +277,13 @@ still be provided.</td>
 </tr>
 </table>
 
-<p>The user's name (either first_name and last_name, or full_name) should always
-be provided. Otherwise, the name will be blanked out.</p>
+<p>At least one form of name should be supplied. If a user is being created and no name is given,
+the login_id will be used as the name.</p>
 
-<p>When a student is 'deleted' all of its enrollments will also be deleted and
-they won't be able to log in to the school's account. If you still want the
+
+<p>When a user is 'deleted' it will delete the login tied to the sis_id.
+If the login is the last one, all of the users enrollments will also be deleted
+and they won't be able to log in to the school's account. If you still want the
 student to be able to log in but just not participate, leave the student
 'active' but set the enrollments to 'completed'.</p>
 
@@ -304,7 +319,7 @@ interface, this is called the SIS ID.</td>
 <td>parent_account_id</td>
 <td>text</td>
 <td>✓</td>
-<td></td>
+<td>✓</td>
 <td>The account identifier of the parent account.
 If this is blank the parent account will be the root account. Note that even if
 all values are blank, the column must be included to differentiate the file
@@ -323,6 +338,13 @@ from a group import.</td>
 <td>✓</td>
 <td></td>
 <td>active, deleted</td>
+</tr>
+<tr>
+<td>integration_id</td>
+<td>text</td>
+<td></td>
+<td></td>
+<td>Sets the integration_id of the account</td>
 </tr>
 </table>
 
@@ -370,6 +392,26 @@ interface, this is called the SIS ID.</td>
 <td>✓</td>
 <td></td>
 <td>active, deleted</td>
+</tr>
+<tr>
+<td>integration_id</td>
+<td>text</td>
+<td></td>
+<td></td>
+<td>Sets the integration_id of the term</td>
+</tr>
+<tr>
+<td>date_override_enrollment_type</td>
+<td>text</td>
+<td></td>
+<td></td>
+<td>
+When set, all columns except term_id, status, start_date, and end_date will be ignored for this row.
+ Can only be used for an existing term.
+ If status is active, the term dates will be set to apply only to enrollments of the given type.
+ If status is deleted, the currently set dates for the given enrollment type will be removed.
+ Must be one of StudentEnrollment, TeacherEnrollment, TaEnrollment, or DesignerEnrollment.
+</td>
 </tr>
 <tr>
 <td>start_date</td>
@@ -437,7 +479,7 @@ a better user experience to provide both.)</td>
 <td>account_id</td>
 <td>text</td>
 <td></td>
-<td></td>
+<td>✓</td>
 <td>The account identifier from accounts.csv, if none is specified the course will be attached to
 the root account</td>
 </tr>
@@ -455,6 +497,13 @@ specified the default term for the account will be used</td>
 <td>✓</td>
 <td>✓</td>
 <td>active, deleted, completed</td>
+</tr>
+<tr>
+<td>integration_id</td>
+<td>text</td>
+<td></td>
+<td></td>
+<td>Sets the integration_id of the course</td>
 </tr>
 <tr>
 <td>start_date</td>
@@ -487,6 +536,7 @@ YYYY-MM-DDTHH:MM:SSZ</td>
 <td>The SIS id of a pre-existing Blueprint course. When provided, 
 the current course will be set up to receive updates from the blueprint course.
 Requires Blueprint Courses feature.
+To remove the Blueprint Course link you can pass 'dissociate' in place of the id.
 </td>
 </tr>
 </table>
@@ -544,6 +594,13 @@ interface, this is called the SIS ID.</td>
 <td>active, deleted</td>
 </tr>
 <tr>
+<td>integration_id</td>
+<td>text</td>
+<td></td>
+<td></td>
+<td>Sets the integration_id of the section</td>
+</tr>
+<tr>
 <td>start_date</td>
 <td>date</td>
 <td></td>
@@ -596,11 +653,34 @@ enrollments.csv
 <td>The domain of the account to search for the user.</td>
 </tr>
 <tr>
+<td>start_date</td>
+<td>date</td>
+<td></td>
+<td>✓</td>
+<td>The enrollment start date. For start_date to take effect the end_date also needs to be populated. The format should be in ISO 8601: YYYY-MM-DDTHH:MM:SSZ</td>
+</tr>
+<tr>
+<td>end_date</td>
+<td>date</td>
+<td></td>
+<td>✓</td>
+<td>The enrollment end date. For end_date to take effect the start_date also needs to be populated. The format should be in ISO 8601: YYYY-MM-DDTHH:MM:SSZ</td>
+</tr>
+<tr>
 <td>user_id</td>
 <td>text</td>
-<td>✓</td>
+<td>✓&#42;</td>
 <td></td>
-<td>The User identifier from users.csv</td>
+<td>The User identifier from users.csv, required to identify user.
+ If the user_integration_id is present, this field will be ignored.</td>
+</tr>
+<tr>
+<td>user_integration_id</td>
+<td>text</td>
+<td>✓&#42;</td>
+<td></td>
+<td>The integration_id of the user from users.csv required to identify user if
+ the user_id is not present.</td>
 </tr>
 <tr>
 <td>role</td>
@@ -651,7 +731,8 @@ Ignored for any role other than observer</td>
 </tr>
 </table>
 
-&#42; course_id or section_id is required, and role or role_id is required.
+&#42; course_id or section_id is required, role or role_id is required, and
+ user_id or user_integration_id is required.
 
 When an enrollment is in a 'completed' state the student is limited to read-only access to the
 course.
@@ -665,6 +746,65 @@ Sample:
 E411208,01103,student,1B,active
 E411208,13834,student,2A,active
 E411208,13aa3,teacher,2A,active
+</pre>
+
+group_categories.csv
+------------
+
+<table class="sis_csv">
+<tr>
+<th>Field Name</th>
+<th>Data Type</th>
+<th>Required</th>
+<th>Sticky</th>
+<th>Description</th>
+</tr>
+<tr>
+<td>group_category_id</td>
+<td>text</td>
+<td>✓</td>
+<td></td>
+<td>A unique identifier used to reference a group category.
+This identifier must not change for the group category, and must be globally unique.</td>
+</tr>
+<tr>
+<td>account_id</td>
+<td>text</td>
+<td></td>
+<td></td>
+<td>The account identifier from accounts.csv, if no account or course is
+specified the group will be attached to the root account.</td>
+</tr>
+<tr>
+<td>course_id</td>
+<td>text</td>
+<td></td>
+<td></td>
+<td>The course identifier from courses.csv, if no course or account is specified
+the group will be attached to the root account.</td>
+</tr>
+<tr>
+<td>category_name</td>
+<td>text</td>
+<td>✓</td>
+<td></td>
+<td>The name of the group category.</td>
+</tr>
+<tr>
+<td>status</td>
+<td>enum</td>
+<td>✓</td>
+<td></td>
+<td>active, deleted</td>
+</tr>
+</table>
+
+Sample:
+
+<pre>group_category_id,account_id,course_id,category_name,status
+GC08,A001,,First Group Category,active
+GC07,,,GC7,active
+GC10,,,GC10,deleted
 </pre>
 
 groups.csv
@@ -687,11 +827,29 @@ groups.csv
 This identifier must not change for the group, and must be globally unique.</td>
 </tr>
 <tr>
+<td>group_category_id</td>
+<td>text</td>
+<td></td>
+<td></td>
+<td>The group category identifier from group_categories.csv, if none is
+specified the group will be put in the default group category for the account
+or course or root_account if there is no course_id or account_id.
+</td>
+</tr>
+<tr>
 <td>account_id</td>
 <td>text</td>
 <td></td>
 <td></td>
 <td>The account identifier from accounts.csv, if none is specified the group will be attached to
+the root account.</td>
+</tr>
+<tr>
+<td>course_id</td>
+<td>text</td>
+<td></td>
+<td></td>
+<td>The course identifier from courses.csv, if none is specified the group will be attached to
 the root account.</td>
 </tr>
 <tr>
@@ -943,35 +1101,59 @@ change_sis_id.csv
 <tr>
 <td>old_id</td>
 <td>text</td>
-<td>✓</td>
+<td>✓&#42;</td>
 <td></td>
 <td>The current sis_id of the object that should be changed.</td>
 </tr>
 <tr>
 <td>new_id</td>
 <td>text</td>
-<td>✓</td>
+<td>✓&#42;</td>
 <td></td>
 <td>The desired sis_id of the object. This id must be currently unique to the
-object type and the root_account</td>
+object type and the root_account.</td>
+</tr>
+<tr>
+<td>old_integration_id</td>
+<td>text</td>
+<td>✓&#42;</td>
+<td></td>
+<td>The current integration_id of the object that should be changed. This
+column is not supported for group categories.</td>
+</tr>
+<tr>
+<td>new_integration_id</td>
+<td>text</td>
+<td>✓&#42;</td>
+<td></td>
+<td>The desired integration_id of the object. This id must be currently unique
+to the object type and the root_account. This column is not supported for group
+categories. Can pass "&lt;delete>" to remove the integration_id from the
+object.</td>
 </tr>
 <tr>
 <td>type</td>
 <td>text</td>
 <td>✓</td>
 <td></td>
-<td>account, term, course, section, group, user</td>
+<td>account, term, course, section, group, group_category, user</td>
 </tr>
 </table>
 
+&#42; old_id or old_integration_id is required, new_id or new_integration_id is
+required.
+
 change_sis_id.csv is optional. The goal of change_sis_id.csv is to provide a
-way to change sis_ids of existing objects. If included in a zip file this file
-will process first. All other files should include the new ids.
+way to change sis_ids or integration_ids of existing objects. If included in a
+zip file this file will process first. All other files should include the new
+ids.
 
 Sample:
 
-<pre>old_id,new_id,type
+<pre>old_id,new_id,old_integration_id,new_integration_id,type
 u001,u001a,user
 couse1,old_course1,course
 term1,fall17,term
+u001,,,<delete>,user
+,,integration01,int01,section
 </pre>

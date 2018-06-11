@@ -36,11 +36,10 @@ class ExternalFeedAggregator
 
         feeds.each do |feed|
           Shackles.activate(:master) do
-            if !feed.context || feed.context.root_account.deleted? || feed.context.deleted?
-              feed.update_attribute(:refresh_at, success_wait_seconds.seconds.from_now)
+            if feed.inactive?
+              feed.update_attribute(:refresh_at, inactive_wait_seconds.seconds.from_now)
               next
             end
-
             process_feed(feed)
           end
         end
@@ -93,7 +92,13 @@ class ExternalFeedAggregator
         @logger.info("request failed #{response.class}")
         handle_failure(feed)
       end
-    rescue CanvasHttp::Error, CanvasHttp::RelativeUriError, Timeout::Error, SocketError, SystemCallError => e
+    rescue CanvasHttp::Error,
+      CanvasHttp::RelativeUriError,
+      CanvasHttp::InsecureUriError,
+      Timeout::Error,
+      SocketError,
+      SystemCallError => e
+
       @logger.info("request error: #{e}")
       handle_failure(feed)
     end
@@ -103,6 +108,10 @@ class ExternalFeedAggregator
     feed.increment(:failures)
     feed.increment(:consecutive_failures)
     feed.update_attribute(:refresh_at, failure_wait_seconds.seconds.from_now)
+  end
+
+  def inactive_wait_seconds
+    Setting.get('external_feed_success_wait_seconds', 48.hours.to_s).to_f
   end
 
   def success_wait_seconds

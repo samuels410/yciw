@@ -19,7 +19,7 @@ define [
   'Backbone'
   'jquery'
   'underscore'
-  'compiled/fn/preventDefault'
+  '../fn/preventDefault'
   'str/htmlEscape'
   'jquery.toJSON'
   'jquery.disableWhileLoading'
@@ -58,9 +58,13 @@ define [
     findSiblingTinymce: ($el)->
       $el.siblings('.mce-tinymce').find(".mce-edit-area")
 
-    findField: (field) ->
+    findField: (field, useGlobalSelector=false) ->
       selector = @fieldSelectors?[field] or "[name='#{field}']"
-      $el = @$(selector)
+      if useGlobalSelector
+        $el = $(selector)
+      else
+        $el = @$(selector)
+
       if $el.data('rich_text')
         $el = @findSiblingTinymce($el)
       $el
@@ -87,27 +91,39 @@ define [
     #       }
     #     ]
     #   }
-    showErrors: (errors) ->
+    #
+    # If globalSelector is true, it will look for this element everywhere
+    # in the DOM instead of only `this` children elements. This is particularly
+    # useful for some modals
+    showErrors: (errors, useGlobalSelector=false) ->
       for fieldName, field of errors
-        $input = @findField fieldName
-        # check for a translations option first, fall back to just displaying otherwise
-        html = (htmlEscape(@translations?[message] or message) for {message} in field).join('</p><p>')
-        errorDescription = @findOrCreateDescription($input)
-        errorDescription.text($.raw("#{html}"))
-        $input.attr('aria-describedby', errorDescription.attr('id'))
-        $input.errorBox $.raw("<div>#{html}</div>")
+        $input = field.element || @findField(fieldName, useGlobalSelector)
+        html = field.message || (htmlEscape(@translations?[message] or message) for {message} in field).join('</p><p>')
+        $input.errorBox($.raw("#{html}"))?.css("z-index", "1100")?.attr('role', 'alert')
+        @attachErrorDescription($input, html)
         field.$input = $input
         field.$errorBox = $input.data 'associated_error_box'
 
-    findOrCreateDescription: ($input) ->
+    attachErrorDescription: ($input, message) ->
+      errorDescriptionField = @findOrCreateDescriptionField($input)
+      errorDescriptionField["description"].text($.raw("#{message}"))
+      $input.attr('aria-describedby',
+        errorDescriptionField["description"].attr('id') + " " +
+        errorDescriptionField["originalDescriptionIds"]
+      )
+
+    findOrCreateDescriptionField: ($input) ->
       id = $input.attr('id')
-      existingDescription = $("##{id}_sr_description")
-      if existingDescription.length > 0
-        return existingDescription
-      else
-        newDescripton = $('<div>').attr({
-          id: "##{id}_sr_description"
+      unless $("##{id}_sr_description").length > 0
+        $('<div>').attr({
+          id: "#{id}_sr_description"
           class: "screenreader-only"
-        })
-        newDescripton.insertBefore($input)
-        newDescripton
+        }).insertBefore($input)
+      description = $("##{id}_sr_description")
+      originalDescriptionIds = @getExistingDescriptionIds($input, id)
+      {description: description, originalDescriptionIds: originalDescriptionIds}
+
+    getExistingDescriptionIds: ($input, id) ->
+      descriptionIds = $input.attr('aria-describedby')
+      idArray = if descriptionIds then descriptionIds.split(" ") else []
+      _.without(idArray,"#{id}_sr_description")

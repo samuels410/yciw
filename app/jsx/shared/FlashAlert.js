@@ -19,7 +19,7 @@
 /**
 * Flash alerts, especially for ajax error messages
 * Typical usage:
-* import {showFlashError} from 'jsx/shared/FlashAlert'
+* import {showFlashError} from './FlashAlert'
 * ...
 * axios.put(url, data).then((response) => {
 *     // do something with response
@@ -41,19 +41,19 @@
 *        default is 'info' unless an error object is passed in, else is 'error'
 */
 
-import $ from 'jquery'
 import React from 'react'
 import PropTypes from 'prop-types'
 import ReactDOM from 'react-dom'
 import I18n from 'i18n!ajaxflashalert'
-import Alert from 'instructure-ui/lib/components/Alert'
-import Button from 'instructure-ui/lib/components/Button'
-import Typography from 'instructure-ui/lib/components/Typography'
-import Transition from 'instructure-ui/lib/components/Transition'
-import 'compiled/jquery.rails_flash_notifications'
+import Alert from '@instructure/ui-core/lib/components/Alert'
+import Button from '@instructure/ui-core/lib/components/Button'
+import Text from '@instructure/ui-core/lib/components/Text'
+import PresentationContent from '@instructure/ui-core/lib/components/PresentationContent'
+import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent'
+import Transition from '@instructure/ui-core/lib/components/Transition'
 
-// const liveRegionId = 'flash_screenreader_holder'  // same ids that jquery flash message uses
-const messageHolderId = 'flash_message_holder'
+const messageHolderId = 'flashalert_message_holder' // specs fail if I reuse jquery's elements
+const screenreaderMessageHolderId = 'flashalert_screenreader_holder'
 const timeout = 10000
 
 // An Alert with a message and "Details" button which surfaces
@@ -65,11 +65,13 @@ export default class FlashAlert extends React.Component {
     message: PropTypes.string.isRequired,
     error: PropTypes.instanceOf(Error),
     variant: PropTypes.oneOf(['info', 'success', 'warning', 'error']),
+    timeout: PropTypes.number
   }
 
   static defaultProps = {
     error: null,
     variant: 'info',
+    timeout
   }
 
   constructor (props) {
@@ -82,31 +84,22 @@ export default class FlashAlert extends React.Component {
     this.timerId = 0;
   }
 
-  componentDidMount () {
-    this.timerId = setTimeout(() => this.closeAlert(), timeout)
-    let dets = ''
-    if (this.props.error) {
-      const {a, b} = this.findDetailMessage()
-      dets = `${a} ${b || ''}`
-    }
-    $.screenReaderFlashMessage(`${this.props.message}. ${dets}`)
-  }
-
   getLiveRegion () {
-    // not until Alert is updated to take a live region
-    // let liveRegion = document.getElementById(liveRegionId)
-    // if (!liveRegion) {
-    //   liveRegion = document.createElement('div')
-    //   liveRegion.id = liveRegionId
-    //   document.body.appendChild(liveRegion)
-    // }
-    // return liveRegion
+    // return element where flash screenreader messages go.
+    // create if necessary
+    let liveRegion = document.getElementById(screenreaderMessageHolderId)
+    if (!liveRegion) {
+      liveRegion = document.createElement('div')
+      liveRegion.id = screenreaderMessageHolderId
+      document.body.appendChild(liveRegion)
+    }
+    return liveRegion
   }
 
   showDetails = () => {
     this.setState({ showDetails: true })
     clearTimeout(this.timerId)
-    this.timerId = setTimeout(() => this.closeAlert(), timeout)
+    this.timerId = setTimeout(() => this.closeAlert(), this.props.timeout)
   }
 
   closeAlert = () => {
@@ -145,11 +138,11 @@ export default class FlashAlert extends React.Component {
   renderDetailMessage () {
     const {a, b} = this.findDetailMessage()
     return (
-      <Typography as="p" fontStyle="italic">
-        <Typography>{a}</Typography>
+      <Text as="p" fontStyle="italic">
+        <Text>{a}</Text>
         {b ? <br /> : null}
-        {b ? <Typography>{b}</Typography> : null}
-      </Typography>
+        {b ? <Text>{b}</Text> : null}
+      </Text>
     )
   }
 
@@ -159,21 +152,27 @@ export default class FlashAlert extends React.Component {
       if (this.state.showDetails) {
         details = this.renderDetailMessage()
       } else {
-        details = <Button variant="link" onClick={this.showDetails}>Details</Button>
+        details = (
+          <span>
+            <PresentationContent>
+              <Button variant="link" onClick={this.showDetails}>{I18n.t('Details')}</Button>
+            </PresentationContent>
+            <ScreenReaderContent>{this.renderDetailMessage()}</ScreenReaderContent>
+          </span>
+        )
       }
     }
 
     return (
-      <Transition transitionOnMount in={this.state.isOpen} type="slide-down">
+      <Transition transitionOnMount in={this.state.isOpen} type='fade'>
         <Alert
           variant={this.props.variant}
           closeButtonLabel={I18n.t('Close')}
-          onClose={this.closeAlert}
-          dismissable
+          onDismiss={this.closeAlert}
           margin="small auto"
-          timeout={timeout}
+          timeout={this.props.timeout}
           liveRegion={this.getLiveRegion}
-          transitionType="fade"
+          transition="fade"
         >
           <div>
             <p style={{margin: '0 -5px'}}>
@@ -183,7 +182,7 @@ export default class FlashAlert extends React.Component {
           </div>
         </Alert>
       </Transition>
-    )
+    );
   }
 }
 
@@ -197,6 +196,7 @@ export function showFlashAlert ({ message, err, type = err ? 'error' : 'info' })
     let alertContainer = document.getElementById(messageHolderId)
     if (!alertContainer) {
       alertContainer = document.createElement('div')
+      alertContainer.classList.add('clickthrough-container')
       alertContainer.id = messageHolderId
       alertContainer.setAttribute('style', 'position: fixed; top: 0; left: 0; width: 100%; z-index: 100000;')
       document.body.appendChild(alertContainer)
@@ -208,6 +208,7 @@ export function showFlashAlert ({ message, err, type = err ? 'error' : 'info' })
     ReactDOM.render(
       <FlashAlert
         message={message}
+        timeout={isNaN(ENV.flashAlertTimeout) ? timeout : ENV.flashAlertTimeout}
         error={err}
         variant={type}
         onClose={closeAlert.bind(null, parent)} // eslint-disable-line react/jsx-no-bind
@@ -218,6 +219,7 @@ export function showFlashAlert ({ message, err, type = err ? 'error' : 'info' })
   const div = document.createElement('div')
   // div.setAttribute('class', styles.flashMessage)
   div.setAttribute('style', 'max-width:50em;margin:1rem auto;')
+  div.setAttribute('class', 'flashalert-message')
   getAlertContainer().appendChild(div)
   renderAlert(div)
 }
@@ -229,4 +231,8 @@ export function destroyContainer () {
 
 export function showFlashError (message = I18n.t('An error occurred making a network request')) {
   return err => showFlashAlert({ message, err, type: 'error' })
+}
+
+export function showFlashSuccess (message) {
+  return () => showFlashAlert({ message, type: 'success' })
 }

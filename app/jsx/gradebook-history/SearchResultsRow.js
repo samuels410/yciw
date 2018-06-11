@@ -20,20 +20,23 @@ import React from 'react';
 import { bool, shape, string } from 'prop-types';
 import $ from 'jquery';
 import 'jquery.instructure_date_and_time'
-import environment from 'jsx/gradebook-history/environment';
-import GradeFormatHelper from 'jsx/gradebook/shared/helpers/GradeFormatHelper';
+import environment from '../gradebook-history/environment';
+import GradeFormatHelper from '../gradebook/shared/helpers/GradeFormatHelper';
+import NumberHelper from '../shared/helpers/numberHelper';
 import I18n from 'i18n!gradebook_history';
 import IconOffLine from 'instructure-icons/lib/Line/IconOffLine';
-import ScreenReaderContent from 'instructure-ui/lib/components/ScreenReaderContent';
-import Tooltip from 'instructure-ui/lib/components/Tooltip';
+import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent';
+import Tooltip from '@instructure/ui-core/lib/components/Tooltip';
 
 function anonymouslyGraded (anonymous) {
   return anonymous ? (
     <div>
-      <Tooltip tip={I18n.t('Anonymously graded')}>
-        <IconOffLine />
+      <Tooltip tip={I18n.t('Anonymously graded')} on={['focus', 'hover']}>
+        <span role="presentation" tabIndex="0">
+          <IconOffLine />
+          <ScreenReaderContent>{I18n.t('Anonymously graded')}</ScreenReaderContent>
+        </span>
       </Tooltip>
-      <ScreenReaderContent>{I18n.t('Anonymously graded')}</ScreenReaderContent>
     </div>
   ) : (
     <ScreenReaderContent>{I18n.t('Not anonymously graded')}</ScreenReaderContent>
@@ -41,11 +44,13 @@ function anonymouslyGraded (anonymous) {
 }
 
 function displayGrade (grade, possible, displayAsPoints) {
-  if (displayAsPoints) {
-    return `${GradeFormatHelper.formatGrade(grade, { defaultValue: '-' })}/${GradeFormatHelper.formatGrade(possible)}`;
+  // show the points possible if the assignment is set to display grades as
+  // "points" and the grade can be parsed as a number
+  if (displayAsPoints && NumberHelper.validate(grade)) {
+    return `${GradeFormatHelper.formatGrade(grade, { defaultValue: '–' })}/${GradeFormatHelper.formatGrade(possible)}`;
   }
 
-  return GradeFormatHelper.formatGrade(grade, { defaultValue: '-' });
+  return GradeFormatHelper.formatGrade(grade, { defaultValue: '–' });
 }
 
 function SearchResultsRow (props) {
@@ -59,6 +64,7 @@ function SearchResultsRow (props) {
       <td>{item.assignment || I18n.t('Not available')}</td>
       <td>{displayGrade(item.gradeBefore, item.pointsPossibleBefore, item.displayAsPoints)}</td>
       <td>{displayGrade(item.gradeAfter, item.pointsPossibleAfter, item.displayAsPoints)}</td>
+      <td>{displayGrade(item.gradeCurrent, item.pointsPossibleCurrent, item.displayAsPoints)}</td>
     </tr>
   );
 }
@@ -72,8 +78,10 @@ SearchResultsRow.propTypes = {
     grader: string.isRequired,
     gradeAfter: string.isRequired,
     gradeBefore: string.isRequired,
+    gradeCurrent: string.isRequired,
     pointsPossibleAfter: string.isRequired,
     pointsPossibleBefore: string.isRequired,
+    pointsPossibleCurrent: string.isRequired,
     student: string.isRequired
   }).isRequired
 };

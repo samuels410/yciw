@@ -50,7 +50,7 @@ describe "calendar2" do
         expect(fj('.event-details-content:visible')).to include_text('location title')
       end
 
-      it 'should create an event with location name and address' do
+      it 'should create an event with name and address' do
         get "/calendar2"
         event_title = 'event title'
         location_name = 'my house'
@@ -68,13 +68,33 @@ describe "calendar2" do
         expect(f('#editCalendarEventFull .btn-primary').text).to eq "Create Event"
         replace_content(f('#calendar_event_location_name'), location_name)
         replace_content(f('#calendar_event_location_address'), location_address)
-        expect_new_page_load { submit_form(f('#editCalendarEventFull')) }
-        wait = Selenium::WebDriver::Wait.new(timeout: 5)
-        wait.until { !fj('.fc-event:visible').nil? }
-        fj('.fc-event:visible').click
-        event_content = fj('.event-details-content:visible')
-        expect(event_content).to include_text(location_name)
-        expect(event_content).to include_text(location_address)
+        # submit_form makes the spec fragile
+        f('#editCalendarEventFull').submit
+        expect(CalendarEvent.last.location_name).to eq location_name
+        expect(CalendarEvent.last.location_address).to eq location_address
+      end
+
+      it 'should cosistently format date <input> value to what datepicker would set it as, even in langs that have funky formatting' do
+        skip('USE_OPTIMIZED_JS=true') unless ENV['USE_OPTIMIZED_JS']
+        skip('RAILS_LOAD_ALL_LOCALES=true') unless ENV['RAILS_LOAD_ALL_LOCALES']
+        @user.locale = 'fr'
+        @user.save!
+
+        get "/calendar2#view_name=month&view_start=2018-02-01"
+        f('.fc-day[data-date="2018-03-02"]').click
+
+        # verify it shows up right from the start
+        expect(f('.ui-dialog #calendar_event_date').attribute(:value)).to eq('02/03/2018')
+        expect(fj('.date_field_container:has(#calendar_event_date) .datetime_suggest').text).to eq 'ven. 2 Mar 2018'
+
+        # verify it shows up right when set from the datepicker
+        f('#calendar_event_date + .ui-datepicker-trigger').click
+        fj('.ui-datepicker-current-day a:contains(2)').click()
+        expect(f('.ui-dialog #calendar_event_date').attribute(:value)).to eq('ven 2 Mars 2018')
+        expect(fj('.date_field_container:has(#calendar_event_date) .datetime_suggest').text).to eq 'ven. 2 Mar 2018'
+
+        f('#edit_calendar_event_form button[type="submit"]').click
+        expect(CalendarEvent.last.start_at).to eq Time.utc(2018, 3, 2)
       end
 
       it "should go to calendar event modal when a syllabus link is clicked", priority: "1", test_id: 186581 do
@@ -102,12 +122,13 @@ describe "calendar2" do
         expect(event.title).to eq event_name
       end
 
-      it "should create a recurring event", priority: "1", test_id: 223510 do
+      it "should create an event that is recurring", priority: "1", test_id: 223510 do
         Account.default.enable_feature!(:recurring_calendar_events)
+        make_full_screen
         get '/calendar2'
         expect(f('#context-list li:nth-of-type(1)').text).to include(@teacher.name)
         expect(f('#context-list li:nth-of-type(2)').text).to include(@course.name)
-        fj('.calendar .fc-week .fc-today').click
+        f('.calendar .fc-week .fc-today').click
         edit_event_dialog = f('#edit_event_tabs')
         expect(edit_event_dialog).to be_displayed
         edit_event_form = edit_event_dialog.find('#edit_calendar_event_form')
@@ -117,10 +138,11 @@ describe "calendar2" do
         replace_content(f("input[type=text][name= 'end_time']"), "6:00pm")
         click_option(f('.context_id'), @course.name)
         expect_new_page_load { f('.more_options_link').click }
+        wait_for_tiny(f(".mce-edit-area"))
         expect(f('.title')).to have_value "Test Event"
-        f('#duplicate_event').click
+        move_to_click('#duplicate_event')
         replace_content(f("input[type=number][name='duplicate_count']"), 2)
-        expect_new_page_load{f('button[type="submit"]').click}
+        expect_new_page_load { f('#editCalendarEventFull').submit }
         expect(CalendarEvent.count).to eq(3)
         repeat_event = CalendarEvent.where(title: "Test Event")
         first_start_date = repeat_event[0].start_at.to_date
@@ -145,6 +167,9 @@ describe "calendar2" do
         click_option(f('.context_id'), @course.name)
         expect_new_page_load { f('.more_options_link').click }
 
+        # tiny can steal focus from one of the date inputs when it initializes
+        wait_for_tiny(f('#calendar-description'))
+
         f('#use_section_dates').click
 
         f("#section_#{section1.id}_start_date").send_keys(day1.to_s)
@@ -160,13 +185,16 @@ describe "calendar2" do
         f('#duplicate_event').click
         replace_content(f("input[type=number][name='duplicate_count']"), 1)
 
-        expect_new_page_load{f('button[type="submit"]').click}
+        form = f('#editCalendarEventFull')
+        expect_new_page_load{form.submit}
 
         expect(CalendarEvent.count).to eq(6) # 2 parent events each with 2 child events
-        s1_events = CalendarEvent.where(:context_code => section1.asset_string).where.not(:parent_calendar_event_id => nil).order(:start_at).to_a
+        s1_events = CalendarEvent.where(:context_code => section1.asset_string).
+          where.not(:parent_calendar_event_id => nil).order(:start_at).to_a
         expect(s1_events[1].start_at.to_date).to eq (s1_events[0].start_at.to_date + 1.week)
 
-        s2_events = CalendarEvent.where(:context_code => section2.asset_string).where.not(:parent_calendar_event_id => nil).order(:start_at).to_a
+        s2_events = CalendarEvent.where(:context_code => section2.asset_string).
+          where.not(:parent_calendar_event_id => nil).order(:start_at).to_a
         expect(s2_events[1].start_at.to_date).to eq (s2_events[0].start_at.to_date + 1.week)
       end
 
@@ -177,10 +205,132 @@ describe "calendar2" do
 
         get "/courses/#{@course.id}/calendar_events/new"
         wait_for_ajaximations
+        wait_for_tiny(f(".mce-edit-area"))
         f('#use_section_dates').click
 
         num_rows = ff(".show_if_using_sections .row_header").length
         expect(num_rows).to be_equal(num_sections)
+      end
+    end
+  end
+
+  context "to-do dates" do
+    before :once do
+      Account.default.enable_feature!(:student_planner)
+      @course = Course.create!(name: "Course 1")
+      @course.offer!
+      @student1 = User.create!(name: 'Student 1')
+      @course.enroll_student(@student1).accept!
+    end
+
+    before(:each) do
+      user_session(@student1)
+    end
+
+    context "student to-do event" do
+      before :once do
+        @todo_date = Time.zone.now
+        @student_to_do = @student1.planner_notes.create!(todo_date: @todo_date, title: "Student to do")
+      end
+
+      it "shows student to-do events in the calendar", priority: "1", test_id: 3357313 do
+        get "/calendar2"
+        expect(f('.fc-content .fc-title')).to include_text(@student_to_do.title)
+      end
+
+      it "shows the correct date and context for student to-do item in calendar", priority: "1", test_id: 3357315 do
+        get "/calendar2"
+        f('.fc-content .fc-title').click
+        event_content = fj('.event-details-content:visible')
+        expect(event_content.find_element(:css, '.event-details-timestring').text).
+          to eq format_time_for_view(@todo_date, :short)
+        expect(event_content).to contain_link('Student 1')
+      end
+    end
+
+    context "course to-do event" do
+      before :once do
+        @todo_date = Time.zone.now
+        @course_to_do = @student1.planner_notes.create!(todo_date: @todo_date, title: "Course to do",
+                                                        course_id: @course.id)
+      end
+
+      it "shows course to do events in the calendar", priority: "1", test_id: 3357314 do
+        get "/calendar2"
+        expect(f('.fc-content .fc-title')).to include_text(@course_to_do.title)
+      end
+
+      it "shows the correct date and context for courseto-do item in calendar", priority: "1", test_id: 3357316 do
+        get "/calendar2"
+        f('.fc-content .fc-title').click
+        event_content = fj('.event-details-content:visible')
+        expect(event_content.find_element(:css, '.event-details-timestring').text).
+          to eq format_time_for_view(@todo_date, :short)
+        expect(event_content).to contain_link('Course 1')
+      end
+    end
+
+    context "edit to-do event" do
+      before :once do
+        @todo_date = Time.zone.now
+        @to_do = @student1.planner_notes.create!(todo_date: @todo_date, title: "A new to do")
+      end
+
+      it "respects the calendars checkboxes" do
+        make_full_screen
+        get "/calendar2"
+        expect(ff('.fc-view-container .fc-content .fc-title').length).to equal(1)
+
+        # turn it off
+        f("span.group_user_#{@student1.id}").click
+        expect(f('.fc-view-container')).not_to contain_css('.fc-content .fc-title')
+        # turn it back on
+        f("span.group_user_#{@student1.id}").click
+        expect(ff('.fc-view-container .fc-content .fc-title').length).to equal(1)
+
+
+        # click to edit
+        f(".fc-event-container a.group_user_#{@student1.id}").click
+        # detial popup is displayed
+        expect(f('.event-details .event-details-header h3')).to include_text(@to_do.title)
+        # click edit button
+        f("button.event_button.edit_event_link").click
+        expect(f('#planner_note_context')).to be_displayed
+        # change the calendar
+        click_option('#planner_note_context', @course.name)
+        # save
+        f('#edit_planner_note_form_holder button[type="submit"]').click
+        wait_for_ajaximations
+        expect(ff('.fc-view-container .fc-content .fc-title').length).to equal(1)
+
+        # turn it off
+        f("span.group_course_#{@course.id}").click
+        expect(f('.fc-view-container')).not_to contain_css('.fc-content .fc-title')
+        # turn it back on
+        f("span.group_course_#{@course.id}").click
+        expect(ff('.fc-view-container .fc-content .fc-title').length).to equal(1)
+      end
+
+      it "edits the event in calendar", priority: "1", test_id: 3415211 do
+        get "/calendar2"
+        f('.fc-content .fc-title').click
+        f('.edit_event_link').click
+        replace_content(f('input[name=title]'), 'new to-do edited')
+        datetime = @todo_date
+        datetime = if datetime.to_date().mday() == '15'
+                      datetime.change({day: 20})
+                   else
+                      datetime.change({day: 15})
+                   end
+        replace_content(f('input[name=date]'), format_date_for_view(datetime, :short))
+        f('.validated-form-view').submit
+        refresh_page
+        f('.fc-content .fc-title').click
+        event_content = fj('.event-details-content:visible')
+        expect(event_content.find_element(:css, '.event-details-timestring').text).
+          to eq format_time_for_view(datetime, :short)
+        @to_do.reload
+        expect(format_time_for_view(@to_do.todo_date, :short)).to eq(format_time_for_view(datetime, :short))
       end
     end
   end

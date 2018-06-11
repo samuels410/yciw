@@ -20,12 +20,12 @@ define [
   'i18n!outcomes'
   'jquery'
   'underscore'
-  'compiled/views/outcomes/OutcomesDirectoryView'
-  'compiled/views/outcomes/AccountDirectoryView'
-  'compiled/views/outcomes/StateStandardsDirectoryView'
-  'compiled/models/OutcomeGroup'
-  'compiled/collections/OutcomeCollection'
-  'compiled/collections/OutcomeGroupCollection'
+  './OutcomesDirectoryView'
+  './AccountDirectoryView'
+  './StateStandardsDirectoryView'
+  '../../models/OutcomeGroup'
+  '../../collections/OutcomeCollection'
+  '../../collections/OutcomeGroupCollection'
   'jquery.disableWhileLoading'
 ], (I18n, $, _, OutcomesDirectoryView, AccountDirectoryView, StateStandardsDirectoryView, OutcomeGroup, OutcomeCollection, OutcomeGroupCollection) ->
 
@@ -58,6 +58,9 @@ define [
 
       @outcomes = new OutcomeCollection # empty - not needed
       @groups = new OutcomeGroupCollection _.compact([account, state, core, course])
+      # for PaginatedView
+      # @collection starts as @groups but can later change to @outcomes
+      @collection = @groups
 
       dfds = for g in _.compact([state, core])
         g.on 'change', @revertTitle

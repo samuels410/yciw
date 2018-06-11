@@ -450,7 +450,7 @@ describe "admin settings tab" do
         hl_indifferent = HashWithIndifferentAccess.new(hl)
         hl_indifferent['url'] == 'https://url.example.com'
       end
-      expect(cl).to include({"text"=>"text", "subtext"=>"subtext", "url"=>"https://url.example.com", "type"=>"custom", "available_to"=>["user", "student", "teacher", "admin"]})
+      expect(cl).to include({"text"=>"text", "subtext"=>"subtext", "url"=>"https://url.example.com", "type"=>"custom", "available_to"=>["user", "student", "teacher", "admin", "observer", "unenrolled"]})
     end
 
     it "edits a custom link" do
@@ -550,14 +550,17 @@ describe "admin settings tab" do
     end
   end
 
-  it "should show all the feature flags" do
+  it "shows all feature flags that are expected to be visible" do
     course_with_admin_logged_in(:account => Account.site_admin)
     enable_all_rcs @course.account
+    provision_quizzes_next @course
+
     get "/accounts/#{Account.site_admin.id}/settings"
     f("#tab-features-link").click
     wait_for_ajaximations
 
     Feature.applicable_features(Account.site_admin).each do |feature|
+      next if feature.visible_on && !feature.visible_on.call(Account.site_admin)
       expect(f(".feature.#{feature.feature}")).to be_displayed
     end
   end

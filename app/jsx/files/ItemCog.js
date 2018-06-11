@@ -25,9 +25,9 @@ import customPropTypes from 'compiled/react_files/modules/customPropTypes'
 import filesEnv from 'compiled/react_files/modules/filesEnv'
 import File from 'compiled/models/File'
 import Folder from 'compiled/models/Folder'
-import UsageRightsDialog from 'jsx/files/UsageRightsDialog'
-import RestrictedDialogForm from 'jsx/files/RestrictedDialogForm'
-import openMoveDialog from 'jsx/files/utils/openMoveDialog'
+import UsageRightsDialog from '../files/UsageRightsDialog'
+import RestrictedDialogForm from '../files/RestrictedDialogForm'
+import openMoveDialog from '../files/utils/openMoveDialog'
 import downloadStuffAsAZip from 'compiled/react_files/utils/downloadStuffAsAZip'
 import deleteStuff from 'compiled/react_files/utils/deleteStuff'
 import $ from 'jquery'
@@ -163,8 +163,7 @@ import $ from 'jquery'
             data-popup-within='#application'
             data-append-to-body={true}
           >
-            <i className='icon-settings' />
-            <i className='icon-mini-arrow-down' />
+            <i className='icon-more' />
           </button>
           <ul className='al-options' role='menu' aria-hidden='true' aria-expanded='false' tabIndex='0'>
             {menuItems.concat(externalToolMenuItems)}

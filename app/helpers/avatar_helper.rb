@@ -27,8 +27,8 @@ module AvatarHelper
       ["/images/messages/avatar-50.png", '']
     else
       avatar_settings = @domain_root_account && @domain_root_account.settings[:avatars] || 'enabled'
-      user_id, user_shard = Shard.local_id_for(user_id)
-      user_shard ||= Shard.current
+      user_id = Shard.global_id_for(user_id)
+      user_shard = Shard.shard_for(user_id)
       image_url, alt_tag = user_shard.activate do
         Rails.cache.fetch(Cacher.inline_avatar_cache_key(user_id, avatar_settings)) do
           if !user && user_id.to_i > 0
@@ -67,14 +67,10 @@ module AvatarHelper
     link_opts[:style] += ";width: #{opts[:size]}px;height: #{opts[:size]}px" if opts[:size]
     link_opts[:href] = url if url
     link_opts[:title] = opts[:title] if opts[:title]
-    content = content_tag(
-      :span,
-      I18n.t('Click to change profile picture for %{display_name}', :display_name => display_name),
-      class: 'screenreader-only'
-    )
+    content = content_tag(:span, opts[:sr_content] || display_name, class: 'screenreader-only')
     content += (opts[:edit] ? content_tag(:i, nil, class: 'icon-edit') : '')
     content += (opts[:show_flag] ? content_tag(:i, nil, class: 'icon-flag') : '')
-    content_tag(:a, content, link_opts)
+    content_tag(url ? :a : :span, content, link_opts)
   end
 
   def avatar_url_for(conversation, participants = conversation.participants)

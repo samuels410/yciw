@@ -16,7 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 require_relative '../../helpers/gradezilla_common'
-require_relative '../page_objects/gradezilla_page'
+require_relative '../pages/gradezilla_page'
 
 describe "Gradezilla - group weights" do
   include_context "in-process server selenium tests"
@@ -114,11 +114,6 @@ describe "Gradezilla - group weights" do
       @course.reload
     end
 
-    it 'should display a warning icon for assignments with 0 points possible', priority: '1', test_id: 164013 do
-      Gradezilla.visit(@course)
-      expect(Gradezilla.select_assignment_header_warning_icon.size).to eq(1)
-    end
-
     it 'should display a warning icon in the total column', priority: '1', test_id: 164013 do
       Gradezilla.visit(@course)
       expect(Gradezilla.total_cell_warning_icon_select.size).to eq(1)
@@ -132,15 +127,14 @@ describe "Gradezilla - group weights" do
       expect(f("body")).not_to contain_css('.icon-warning')
     end
 
-    it 'should display mute icon if an assignment is muted in both header and total column' do
+    it 'should display mute icon in total column if an assignment is muted' do
       Gradezilla.visit(@course)
       Gradezilla.toggle_assignment_muting(@assignment2.id)
 
       expect(Gradezilla.content_selector).to contain_jqcss('.total-cell .icon-muted')
-      expect(Gradezilla.content_selector).to contain_jqcss(Gradezilla.assignment_header_mute_icon_selector(@assignment2.id))
     end
 
-    it 'should not display mute icon if an assignment is unmuted in both header and total column' do
+    it 'should not display mute icon in total column if an assignment is unmuted' do
       @assignment2.muted = true
       @assignment2.save!
 
@@ -148,7 +142,6 @@ describe "Gradezilla - group weights" do
       Gradezilla.toggle_assignment_muting(@assignment2.id)
 
       expect(Gradezilla.content_selector).not_to contain_jqcss('.total-cell .icon-muted')
-      expect(Gradezilla.content_selector).not_to contain_jqcss('.svg[name=IconWarningSolid]')
     end
   end
 end

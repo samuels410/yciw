@@ -18,22 +18,27 @@
     maxlength="255"
   >
 
+  <input
+    type="hidden"
+    class="hiddenDateStart"
+    name="start_time"
+  />
+
+  <input
+    type="hidden"
+    class="hiddenDateEnd"
+    name="end_time"
+  />
+
   <input type="submit" class="btn btn-primary span2" value="{{#t}}Find{{/t}}">
 </div>
 
 <div class="v-gutter">
-  <div data-view="users"></div>
+  <h2 class="screenreader-only">{{#t}}Users{{/t}}</h2>
+  <div data-view="users" class="users-container"></div>
 </div>
 
 <div class="pad-box border border-trbl search-controls">
-  <h4>
-    {{#t "generate_activity_username"}}Generate Activity for <span data-bind="name">{{user}}</span>{{/t}}
-  </h4>
-  <h5>
-    {{#t "generate_activity_userid"}}User ID: <span data-bind="id">{{user_id}}</span>{{/t}}
-  </h5>
-  <hr>
-
   <div class="control-group">
     <label class="control-label" for="{{formName}}-dateStartSearchField">
       {{#t "message_date_from"}}From Date{{/t}}
@@ -46,7 +51,7 @@
       <input type="text"
              id="{{formName}}-dateStartSearchField"
              class="dateStartSearchField"
-             name="start_time"
+             name="{{formName}}_start_time"
              placeholder="{{#t "message_date_from"}}From Date{{/t}}"
              maxlength="50"
              aria-labelledby="search_start_date_label"
@@ -66,20 +71,12 @@
       <input type="text"
              id="{{formName}}-dateEndSearchField"
              class="dateEndSearchField"
-             name="end_time"
+             name="{{formName}}_end_time"
              placeholder="{{#t "message_date_to"}}To Date{{/t}}"
              maxlength="50"
              aria-labelledby="search_end_date_label"
              data-tooltip='{"position":"top","force_position":"true"}'
              title="{{accessibleDateFormat}}" />
-    </div>
-  </div>
-
-  <div class="control-group">
-    <div class="controls">
-      <button type="submit" class="btn btn-primary userDateRangeSearchBtn">
-        {{#t "find"}}Find{{/t}}
-      </button>
     </div>
   </div>
 </div>

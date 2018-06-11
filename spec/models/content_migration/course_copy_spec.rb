@@ -400,6 +400,7 @@ describe ContentMigration do
 
     it "should copy course attributes" do
       Account.default.allow_self_enrollment!
+      account_admin_user(:user => @cm.user, :account => @copy_to.account)
       #set all the possible values to non-default values
       @copy_from.start_at = 5.minutes.ago
       @copy_from.conclude_at = 1.month.from_now
@@ -431,6 +432,11 @@ describe ContentMigration do
       @copy_from.public_syllabus_to_auth = true
       @copy_from.lock_all_announcements = true
       @copy_from.allow_student_discussion_editing = false
+      @copy_from.restrict_student_future_view = true
+      @copy_from.restrict_student_past_view = true
+      @copy_from.show_total_grade_as_points = true
+      @copy_from.organize_epub_by_content_type = true
+      @copy_from.enable_offline_web_export = true
       @copy_from.save!
 
       run_course_copy
@@ -450,7 +456,7 @@ describe ContentMigration do
       atts = Course.clonable_attributes
       atts -= Canvas::Migration::MigratorHelper::COURSE_NO_COPY_ATTS
       atts.each do |att|
-        expect(@copy_to.send(att)).to eq @copy_from.send(att)
+        expect(@copy_to.send(att)).to eq(@copy_from.send(att)), "@copy_to.#{att}: expected #{@copy_from.send(att)}, got #{@copy_to.send(att)}"
       end
       expect(@copy_to.tab_configuration).to eq @copy_from.tab_configuration
     end
@@ -524,6 +530,10 @@ describe ContentMigration do
 
       expect(mod2_to.prerequisites.count).to eq 1
       expect(mod2_to.prerequisites.first[:id]).to eq mod1_to.id
+
+      mod1.update_attribute(:require_sequential_progress, false)
+      run_course_copy
+      expect(mod1_to.reload.require_sequential_progress).to be_falsey
     end
 
     it "should sync module items (even when removed) on re-copy" do
@@ -566,6 +576,18 @@ describe ContentMigration do
       run_course_copy
 
       expect(@copy_to.syllabus_body).to eq @copy_from.syllabus_body.gsub("/courses/#{@copy_from.id}/file_contents/course%20files",'')
+    end
+
+    it "should copy weird object links" do
+      att = Attachment.create!(:filename => 'test.txt', :uploaded_data => StringIO.new('pixels and frames and stuff'),
+        :folder => Folder.root_folders(@copy_from).first, :context => @copy_from)
+      @copy_from.syllabus_body = "<object><param value=\"/courses/#{@copy_from.id}/files/#{att.id}/download\"></object>"
+      @copy_from.save!
+
+      run_course_copy
+
+      att2 = @copy_to.attachments.where(:migration_id => mig_id(att)).first
+      expect(@copy_to.reload.syllabus_body).to include "/courses/#{@copy_to.id}/files/#{att2.id}/download"
     end
 
     it "should re-use kaltura media objects" do
@@ -727,6 +749,26 @@ describe ContentMigration do
       new_tag2 = @copy_to.context_module_tags.where(:migration_id => mig_id(tag2)).first
       expect(new_tag1).to be_published
       expect(new_tag2).to be_unpublished
+    end
+
+    it "shouldn't try to translate links to similarishly looking urls" do
+      body = %{<p>link to external thing <a href="https://someotherexampledomain.com/users/what">sad</a></p>
+        <p>another link to external thing <a href="https://someotherexampledomain2.com/files">so sad</a></p>}
+      page = @copy_from.wiki_pages.create!(:title => "some page", :body => body)
+
+      run_course_copy
+
+      page_to = @copy_to.wiki_pages.where(:migration_id => mig_id(page)).first
+      expect(page_to.body).to eq body
+    end
+
+    it "should still translate links to /course/X/files" do
+      body = %{<p>link to course files <a href="/courses/%s/files">files</a></p>}
+      page = @copy_from.wiki_pages.create!(:title => "some page", :body => body % @copy_from.id.to_s)
+      run_course_copy
+
+      page_to = @copy_to.wiki_pages.where(:migration_id => mig_id(page)).first
+      expect(page_to.body).to eq (body % @copy_to.id.to_s)
     end
   end
 end

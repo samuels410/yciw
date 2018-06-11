@@ -16,22 +16,22 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 define [
-  'compiled/views/groups/manage/PopoverMenuView'
-  'compiled/views/groups/manage/GroupCategoryCloneView'
-  'compiled/models/GroupUser'
+  './PopoverMenuView'
+  './GroupCategoryCloneView'
+  '../../../models/GroupUser'
   'jst/groups/manage/assignToGroupMenu'
   'jquery'
-  'underscore'
-  'compiled/jquery/outerclick'
-], (PopoverMenuView, GroupCategoryCloneView, GroupUser, template, $, _) ->
+  '../../../util/groupHasSubmissions'
+  '../../../jquery/outerclick'
+], (PopoverMenuView, GroupCategoryCloneView, GroupUser, template, $, groupHasSubmissions) ->
 
   class AssignToGroupMenu extends PopoverMenuView
 
-    defaults: _.extend {},
+    defaults: Object.assign {},
       PopoverMenuView::defaults,
       zIndex: 10
 
-    events: _.extend {},
+    events: Object.assign {},
       PopoverMenuView::events,
       'click .set-group': 'setGroup'
       'focusin .focus-bound': "boundFocused"
@@ -51,7 +51,7 @@ define [
       newGroupId = $(e.currentTarget).data('group-id')
       userId = @model.id
 
-      if @collection.get(newGroupId).get("has_submission")
+      if groupHasSubmissions @collection.get(newGroupId)
         @cloneCategoryView = new GroupCategoryCloneView
             model: @model.collection.category
             openedFromCaution: true

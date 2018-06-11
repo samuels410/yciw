@@ -16,12 +16,11 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 define [
-  'i18n!calendar',
   'jquery'
   'Backbone',
   'jst/calendar/calendarHeader'
-  'compiled/views/calendar/CalendarNavigator'
-], (I18n, $, Backbone, template, CalendarNavigator) ->
+  '../calendar/CalendarNavigator'
+], ($, Backbone, template, CalendarNavigator) ->
 
   class CalendarHeader extends Backbone.View
     template: template

@@ -17,17 +17,17 @@
 
 define [
   'underscore'
-  'compiled/models/Assignment'
-  'compiled/views/DialogFormView'
-  'compiled/util/DateValidator'
+  '../../models/Assignment'
+  '../DialogFormView'
+  '../../util/DateValidator'
   'jst/assignments/CreateAssignment'
   'jst/EmptyDialogFormWrapper'
   'jsx/shared/helpers/numberHelper'
   'i18n!assignments'
-  'compiled/util/round'
+  '../../util/round'
   'jquery'
-  'compiled/api/gradingPeriodsApi'
-  'compiled/util/SisValidationHelper'
+  '../../api/gradingPeriodsApi'
+  '../../util/SisValidationHelper'
   'jquery.instructure_date_and_time'
 ], (_, Assignment, DialogFormView, DateValidator, template, wrapper,
   numberHelper, I18n, round, $, GradingPeriodsAPI, SisValidationHelper) ->
@@ -57,6 +57,7 @@ define [
       @on "close", -> @$el[0].reset()
 
     onSaveSuccess: =>
+      @shouldPublish = false
       super
       if @assignmentGroup
         @assignmentGroup.get('assignments').add(@model)
@@ -90,9 +91,16 @@ define [
       _.each data, (value, key) ->
         if _.contains(valid, key)
           dataParams[key] = value
-      url = if @assignmentGroup then @newAssignmentUrl() else @model.htmlEditUrl()
 
-      @redirectTo("#{url}?#{$.param(dataParams)}")
+      if dataParams.submission_types == 'online_quiz'
+        button = @$('.more_options')
+        button.prop('disabled', true)
+        $.post(@newQuizUrl(), dataParams)
+          .done((response) => @redirectTo(response.url))
+          .always(-> button.prop('disabled', false))
+      else
+        url = if @assignmentGroup then @newAssignmentUrl() else @model.htmlEditUrl()
+        @redirectTo("#{url}?#{$.param(dataParams)}")
 
     redirectTo: (url) ->
       window.location.href = url
@@ -134,6 +142,7 @@ define [
 
     openAgain: ->
       super
+      this.hideErrors()
 
       timeField = @$el.find(".datetime_field")
       if @model.multipleDueDates() || @model.isOnlyVisibleToOverrides() || @model.nonBaseDates() || @disableDueAt()
@@ -146,6 +155,9 @@ define [
 
     newAssignmentUrl: ->
       ENV.URLS.new_assignment_url
+
+    newQuizUrl: ->
+      ENV.URLS.new_quiz_url
 
     validateBeforeSave: (data, errors) ->
       errors = @_validateTitle data, errors

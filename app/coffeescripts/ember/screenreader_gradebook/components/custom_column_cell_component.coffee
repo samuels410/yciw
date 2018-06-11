@@ -18,7 +18,7 @@
 define [
   'ember'
   'underscore'
-  'compiled/gradebook/GradebookHelpers'
+  '../../../gradebook/GradebookHelpers'
   'jsx/gradebook/shared/constants'
 ], (Ember, _, GradebookHelpers, GradebookConstants) ->
 
@@ -47,6 +47,10 @@ define [
 
     customColURL: ->
       ENV.GRADEBOOK_OPTIONS.custom_column_datum_url
+
+    disabled:(->
+      @get('column.isLoading') || @get('column.read_only')
+    ).property('column', 'column.isLoading', 'column.read_only')
 
     saveURL: (->
        @customColURL()

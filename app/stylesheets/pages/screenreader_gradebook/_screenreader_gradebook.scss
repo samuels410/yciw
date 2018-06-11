@@ -19,7 +19,7 @@
 @import "base/variables";
 @import "base/mixins/typography";
 @import "vendor/bootstrap/variables";
-@import "vendor/bootstrap/mixins";
+@import "deprecated/bootstrap/mixins";
 @import "vendor/bootstrap/grid";
 @import "vendor/bootstrap/forms";
 @import "vendor/bootstrap/tables";
@@ -63,7 +63,7 @@ table.table {
   // left align the first column for student info tables
   &.left-first {
     th:first-child, td:first-child {
-      text-align: left;
+      text-align: direction(left);
     }
   }
 }
@@ -77,9 +77,9 @@ table.table {
 
 // Force labels for dropdowns to align left on small screens
 .text-right-responsive {
-  text-align: right;
+  text-align: direction(right);
   @media screen and (max-width: 1143px) {
-    text-align: left;
+    text-align: direction(left);
   }
 }
 
@@ -120,7 +120,7 @@ select.grading_box.pass_fail {
 }
 
 span.late-pill, span.missing-pill {
-  padding-left: 12px;
+  padding-#{direction(left)}: 12px;
   text-transform: uppercase;
 }
 
@@ -131,11 +131,11 @@ span.late-pill, span.missing-pill {
 
 .submission_late_penalty {
   color: $ic-color-danger;
-  padding-left: 12px;
+  padding-#{direction(left)}: 12px;
 }
 
 .submission_final_grade {
-  padding-left: 12px;
+  padding-#{direction(left)}: 12px;
 }
 
 // short-term hack until this version of srgb rides into the sunset
@@ -146,7 +146,7 @@ span.late-pill, span.missing-pill {
 .deduction-box {
   display: flex;
   .deduction-box-labels {
-    margin-right: .5em;
+    margin-#{direction(right)}: .5em;
   }
   .deduction-box-values {
     flex: 1

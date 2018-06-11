@@ -24,30 +24,25 @@ describe GraphQLController do
     student_in_course
   end
 
-  context "feature flag is disabled" do
-    before { user_session(@student) }
-
-    it "404s for all endpoints" do
-      %w[graphiql execute].each do |endpoint|
-        get endpoint
-        expect(response.status).to eq 404
-      end
-    end
-  end
-
   context "graphiql" do
-    before { Account.default.enable_feature!("graphql") }
-
     it "requires a user" do
       get :graphiql
       expect(response.location).to match /\/login$/
     end
 
-    it "doesn't work in production" do
+    it "doesn't work in production for normal users" do
       allow(Rails.env).to receive(:production?).and_return(true)
       user_session(@student)
       get :graphiql
       expect(response.status).to eq 401
+    end
+
+    it "works in production for site admins" do
+      allow(Rails.env).to receive(:production?).and_return(true)
+      site_admin_user(active_all: true)
+      user_session(@user)
+      get :graphiql
+      expect(response.status).to eq 200
     end
 
     it "works" do
@@ -59,11 +54,38 @@ describe GraphQLController do
   end
 
   context "graphql" do
-    before { Account.default.enable_feature!("graphql") }
-
     it "works" do
       post :execute, params: {query: "{}"}
       expect(JSON.parse(response.body)["errors"]).not_to be_blank
+    end
+
+    context "data dog metrics" do
+      it "reports data dog metrics if requested" do
+        expect_any_instance_of(Tracers::DatadogTracer).to receive :trace
+        request.headers["GraphQL-Metrics"] = "true"
+        post :execute, params: {query: '{legacyNode(User, 1) { id }'}
+      end
+
+      it "doesn't report normally" do
+        expect_any_instance_of(Tracers::DatadogTracer).not_to receive :trace
+        post :execute, params: {query: '{legacyNode(User, 1) { id }'}
+      end
+    end
+  end
+
+  context "datadog rest metrics" do
+    require 'datadog/statsd'
+
+    # this is the dumbest place to put this test except every where else i
+    # could think of
+    it "records datadog metrics if requested" do
+      expect_any_instance_of(Datadog::Statsd).to receive :increment
+      get :graphiql, params: {datadog_metric: "this_is_a_test"}
+    end
+
+    it "doesn't normally datadog" do
+      get :graphiql
+      expect_any_instance_of(Datadog::Statsd).not_to receive :increment
     end
   end
 end

@@ -40,7 +40,7 @@ gulp.task('rev', () => {
   const timezonesStream = gulp
     .src(timezoneFileGlobs, {base: './node_modules'})
     .pipe(gulpTimezonePlugin())
-  
+
   const customTimezoneStream = gulp
     .src('./public/javascripts/custom_timezone_locales/*.js')
     .pipe(rename(path => path.dirname = '/timezone'))
@@ -49,11 +49,21 @@ gulp.task('rev', () => {
   const fontfaceObserverStream = gulp
     .src('node_modules/fontfaceobserver/fontfaceobserver.standalone.js')
     .pipe(gulpPlugins.rename('lato-fontfaceobserver.js'))
-    .pipe(gulpPlugins.insert.append(`
-      new FontFaceObserver('LatoWeb').load().then(function () {
-        document.documentElement.classList.add('lato-font-loaded');
-      }, console.log.bind(console, 'Failed to load Lato font'));
-    `))
+    .pipe(gulpPlugins.insert.wrap(`
+      // Optimization for Repeat Views
+      if (sessionStorage.latoFontLoaded) {
+        document.documentElement.classList.remove('lato-font-not-loaded-yet')
+      } else {
+      `
+      ,
+      `
+        new FontFaceObserver('LatoWeb').load().then(function () {
+          sessionStorage.latoFontLoaded = true;
+          document.documentElement.classList.remove('lato-font-not-loaded-yet')
+        }, console.log.bind(console, 'Failed to load Lato font'));
+      }
+      `
+    ))
 
   return makeIE11Polyfill().then((IE11PolyfillCode) => {
 
@@ -67,8 +77,11 @@ gulp.task('rev', () => {
         follow: true // follow symlinks, so it picks up on images inside plugins and stuff
       }),
       gulp.src([
-        // this is used by the include_account_js call in mobile_auth.html.erb to make sure '$' is there for accounts' custom js files
+        // on the mobile login screen, we don't load any of our webpack js bundles. but if they
+        // have a custom js file, we do load a raw copy of jquery for their custom js to use.
+        // See `include_account_js` in mobile_auth.html.erb
         'node_modules/jquery/jquery.js',
+
         'node_modules/tinymce/skins/lightgray/**/*',
       ], {
         base: '.'

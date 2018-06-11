@@ -8,6 +8,9 @@
   </h1>
 {{/if}}
 
+<div tabindex="0" class="drag_and_drop_warning screenreader-only">
+  {{#t}}Warning: for improved accessibility of reordering assignments and groups, please use the Move To Dialog option found in the menu.{{/t}}
+</div>
 <div class="header-bar">
   <div class="header-bar-left ic-Form-control assignment-search">
     <div class="ic-Multi-input">
@@ -19,7 +22,7 @@
           {{/each}}
         </select>
       {{/if}}
-      <label class="screenreader-only">
+      <label for="search_term" class="screenreader-only">
         {{#t "search_for_assignment"}}Search for Assignment{{/t}}
       </label>
       <input
@@ -35,7 +38,7 @@
   </div>
 
   <div class="header-bar-right">
-    {{#if ENV.PERMISSIONS.manage_course}}
+    {{#if ENV.PERMISSIONS.manage_assignments}}
       {{#if ENV.QUIZ_LTI_ENABLED}}
         <span class="new_quiz_lti_wrapper">
           <a
@@ -74,7 +77,7 @@
 
 <div data-view="assignmentGroups" class="item-group-container" id="ag-list"></div>
 
-{{#if ENV.PERMISSIONS.manage_course}}
+{{#if ENV.PERMISSIONS.manage_assignments}}
   <form data-view="createGroup" class="form-dialog"></form>
   <form data-view="assignmentSettings" class="form-dialog"></form>
   <form data-view="assignmentSyncSettings" class="form-dialog"></form>

@@ -162,8 +162,12 @@ CanvasRails::Application.routes.draw do
 
   concern :conferences do
     resources :conferences do
+      # rubocop:disable SymbolArray
       match :join, via: [:get, :post]
       match :close, via: [:get, :post]
+      match :recording, via: [:get]
+      match :recording, via: [:delete], to: 'conferences#delete_recording', as: :delete_recording
+      # rubocop:enable SymbolArray
       get :settings
     end
   end
@@ -181,8 +185,6 @@ CanvasRails::Application.routes.draw do
     # DEPRECATED
     get 'self_enrollment/:self_enrollment' => 'courses#self_enrollment', as: :self_enrollment
     post 'self_unenrollment/:self_unenrollment' => 'courses#self_unenrollment', as: :self_unenrollment
-    post :restore
-    post :backup
     post :unconclude
     get :students
     post :enrollment_invitation
@@ -242,7 +244,7 @@ CanvasRails::Application.routes.draw do
     get 'grades/:id' => 'gradebooks#grade_summary', as: :student_grades
     post 'save_assignment_order' => 'gradebooks#save_assignment_order', as: :save_assignment_order
     concerns :announcements
-    get 'calendar' => 'calendars#show2', as: :old_calendar
+    get 'calendar' => 'calendars#show'
     get :locks
     concerns :discussions
     resources :assignments do
@@ -297,7 +299,7 @@ CanvasRails::Application.routes.draw do
 
     get 'external_tools/sessionless_launch' => 'external_tools#sessionless_launch'
     resources :external_tools do
-      get :resource_selection
+      match :resource_selection, via: [:get, :post]
       get :homework_submission
       get :finished
       collection do
@@ -310,7 +312,7 @@ CanvasRails::Application.routes.draw do
         action: 'resource', as: :resource_link_id
     get 'lti/basic_lti_launch_request/:message_handler_id', controller: 'lti/message',
         action: 'basic_lti_launch_request', as: :basic_lti_launch_request
-    get 'lti/tool_proxy_registration', controller: 'lti/message', action: 'registration', as: :tool_proxy_registration
+    post 'lti/tool_proxy_registration', controller: 'lti/message', action: 'registration', as: :tool_proxy_registration
     get 'lti/tool_proxy_reregistration/:tool_proxy_id', controller: 'lti/message', action: 'reregistration',
         as: :tool_proxy_reregistration
     get 'lti/registration_return', controller: 'lti/message', action: 'registration_return',
@@ -329,7 +331,8 @@ CanvasRails::Application.routes.draw do
     post 'quizzes/unpublish' => 'quizzes/quizzes#unpublish'
     post 'quizzes/:id/toggle_post_to_sis' => "quizzes/quizzes#toggle_post_to_sis"
 
-    resources :quizzes, controller: 'quizzes/quizzes' do
+    post 'quizzes/new' => 'quizzes/quizzes#new' # use POST instead of GET (not idempotent)
+    resources :quizzes, controller: 'quizzes/quizzes', except: :new do
       get :managed_quiz_data
       get :submission_versions
       get :history
@@ -440,7 +443,6 @@ CanvasRails::Application.routes.draw do
 
   resources :page_views, only: :update
   post 'media_objects' => 'context#create_media_object', as: :create_media_object
-  get 'media_objects/kaltura_notifications' => 'context#kaltura_notifications', as: :kaltura_notifications
   get 'media_objects/:id' => 'context#media_object_inline', as: :media_object
   get 'media_objects/:id/redirect' => 'context#media_object_redirect', as: :media_object_redirect
   get 'media_objects/:id/thumbnail' => 'context#media_object_thumbnail', as: :media_object_thumbnail
@@ -534,11 +536,11 @@ CanvasRails::Application.routes.draw do
     resources :collaborations
     get 'lti_collaborations' => 'collaborations#lti_index'
     get 'lti_collaborations/*all' => 'collaborations#lti_index'
-    get 'calendar' => 'calendars#show2', as: :old_calendar
+    get 'calendar' => 'calendars#show'
 
     resources :external_tools do
       get :finished
-      get :resource_selection
+      match :resource_selection, via: [:get, :post]
       collection do
         get :retrieve
       end
@@ -597,22 +599,22 @@ CanvasRails::Application.routes.draw do
     resources :account_notifications, only: [:create, :update, :destroy]
     concerns :announcements
     resources :submissions
-    delete 'authentication_providers' => 'account_authorization_configs#destroy_all', as: :remove_all_authentication_providers
-    put 'sso_settings' => 'account_authorization_configs#update_sso_settings',
+    delete 'authentication_providers' => 'authentication_providers#destroy_all', as: :remove_all_authentication_providers
+    put 'sso_settings' => 'authentication_providers#update_sso_settings',
         as: :update_sso_settings
 
-    resources :authentication_providers, controller: :account_authorization_configs, only: [:index, :create, :update, :destroy]
-    get 'test_ldap_connections' => 'account_authorization_configs#test_ldap_connection'
-    get 'test_ldap_binds' => 'account_authorization_configs#test_ldap_bind'
-    get 'test_ldap_searches' => 'account_authorization_configs#test_ldap_search'
-    match 'test_ldap_logins' => 'account_authorization_configs#test_ldap_login', via: [:get, :post]
-    get 'saml_testing' => 'account_authorization_configs#saml_testing'
-    get 'saml_testing_stop' => 'account_authorization_configs#saml_testing_stop'
+    resources :authentication_providers, only: [:index, :create, :update, :destroy]
+    get 'test_ldap_connections' => 'authentication_providers#test_ldap_connection'
+    get 'test_ldap_binds' => 'authentication_providers#test_ldap_bind'
+    get 'test_ldap_searches' => 'authentication_providers#test_ldap_search'
+    match 'test_ldap_logins' => 'authentication_providers#test_ldap_login', via: [:get, :post]
+    get 'saml_testing' => 'authentication_providers#saml_testing'
+    get 'saml_testing_stop' => 'authentication_providers#saml_testing_stop'
 
     get 'external_tools/sessionless_launch' => 'external_tools#sessionless_launch'
     resources :external_tools do
       get :finished
-      get :resource_selection
+      match :resource_selection, via: [:get, :post]
       collection do
         get :retrieve
       end
@@ -622,7 +624,7 @@ CanvasRails::Application.routes.draw do
         action: 'resource', as: :resource_link_id
     get 'lti/basic_lti_launch_request/:message_handler_id', controller: 'lti/message',
         action: 'basic_lti_launch_request', as: :basic_lti_launch_request
-    get 'lti/tool_proxy_registration', controller: 'lti/message', action: 'registration', as: :tool_proxy_registration
+    post 'lti/tool_proxy_registration', controller: 'lti/message', action: 'registration', as: :tool_proxy_registration
     get 'lti/tool_proxy_reregistration/:tool_proxy_id', controller: 'lti/message', action: 'reregistration',
         as: :tool_proxy_reregistration
     get 'lti/registration_return', controller: 'lti/message', action: 'registration_return',
@@ -689,8 +691,6 @@ CanvasRails::Application.routes.draw do
 
   get 'login/YCIW-Classroom' => 'login/canvas#new', as: :canvas_login
   post 'login/YCIW-Classroom' => 'login/canvas#create'
-  # deprecated alias
-  post 'login' => 'login/canvas#create'
 
   get 'login/ldap' => 'login/ldap#new'
   post 'login/ldap' => 'login/ldap#create'
@@ -753,7 +753,7 @@ CanvasRails::Application.routes.draw do
   get 'search/bookmarks' => 'users#bookmark_search', as: :bookmark_search
   get 'search/rubrics' => 'search#rubrics'
   get 'search/all_courses' => 'search#all_courses'
-  resources :users, except: :destroy do
+  resources :users, except: [:destroy, :index] do
     match 'masquerade', via: [:get, :post]
     concerns :files, :file_images
 
@@ -813,11 +813,9 @@ CanvasRails::Application.routes.draw do
 
   get '' => 'users#user_dashboard', as: 'dashboard'
   get 'dashboard-sidebar' => 'users#dashboard_sidebar', as: :dashboard_sidebar
-  post 'users/toggle_recent_activity_dashboard' => 'users#toggle_recent_activity_dashboard'
   post 'users/toggle_hide_dashcard_color_overlays' => 'users#toggle_hide_dashcard_color_overlays'
   get 'styleguide' => 'info#styleguide'
   get 'accounts/:account_id/theme-preview' => 'brand_configs#show'
-  get 'old_styleguide' => 'info#old_styleguide'
   root to: 'users#user_dashboard', as: 'root', via: :get
   # backwards compatibility with the old /dashboard url
   get 'dashboard' => 'users#user_dashboard', as: :dashboard_redirect
@@ -838,13 +836,12 @@ CanvasRails::Application.routes.draw do
 
   resources :plugins, only: [:index, :show, :update]
 
-  get 'calendar' => 'calendars#show2'
-  get 'calendar2' => 'calendars#show2'
+  get 'calendar' => 'calendars#show'
+  get 'calendar2' => 'calendars#show'
   get 'course_sections/:course_section_id/calendar_events/:id' => 'calendar_events#show', as: :course_section_calendar_event
   get 'files' => 'files#index'
   get "files/folder#{full_path_glob}", controller: 'files', action: 'react_files', format: false
   get "files/search", controller: 'files', action: 'react_files', format: false
-  get 'files/s3_success/:id' => 'files#s3_success', as: :s3_success
   get 'files/:id/public_url' => 'files#public_url', as: :public_url
   post 'files/pending' => 'files#create_pending', as: :file_create_pending
   resources :assignments, only: :index do
@@ -929,7 +926,7 @@ CanvasRails::Application.routes.draw do
       get 'courses/:course_id/users/:id', action: :user, as: 'course_user'
       get 'courses/:course_id/activity_stream', action: :activity_stream, as: 'course_activity_stream'
       get 'courses/:course_id/activity_stream/summary', action: :activity_stream_summary, as: 'course_activity_stream_summary'
-      get 'courses/:course_id/todo', action: :todo_items
+      get 'courses/:course_id/todo', action: :todo_items, as: 'course_todo_list_items'
       post 'courses/:course_id/preview_html', action: :preview_html
       post 'courses/:course_id/course_copy', controller: :content_imports, action: :copy_course_content
       get 'courses/:course_id/course_copy/:id', controller: :content_imports, action: :copy_course_status, as: :course_copy_status
@@ -955,9 +952,12 @@ CanvasRails::Application.routes.draw do
     scope(controller: :account_notifications) do
       post 'accounts/:account_id/account_notifications', action: :create, as: 'account_notification'
       put 'accounts/:account_id/account_notifications/:id', action: :update, as: 'account_notification_update'
-      get 'accounts/:account_id/users/:user_id/account_notifications', action: :user_index, as: 'user_account_notifications'
-      get 'accounts/:account_id/users/:user_id/account_notifications/:id', action: :show, as: 'user_account_notification_show'
-      delete 'accounts/:account_id/users/:user_id/account_notifications/:id', action: :user_close_notification, as: 'user_account_notification'
+      get 'accounts/:account_id/account_notifications', action: :user_index, as: 'user_account_notifications' # to change the api docs
+      get 'accounts/:account_id/users/:user_id/account_notifications', action: :user_index_deprecated # for back compat
+      get 'accounts/:account_id/account_notifications/:id', action: :show, as: 'user_account_notification_show'
+      get 'accounts/:account_id/users/:user_id/account_notifications/:id', action: :show_deprecated
+      delete 'accounts/:account_id/account_notifications/:id', action: :user_close_notification, as: 'user_account_notification'
+      delete 'accounts/:account_id/users/:user_id/account_notifications/:id', action: :user_close_notification_deprecated
     end
 
     scope(controller: :brand_configs_api) do
@@ -968,6 +968,10 @@ CanvasRails::Application.routes.draw do
       get "courses/:course_id/tabs", action: :index, as: 'course_tabs'
       get "groups/:group_id/tabs", action: :index, as: 'group_tabs'
       put "courses/:course_id/tabs/:tab_id", action: :update
+    end
+
+    scope(controller: :scopes_api) do
+      get "accounts/:account_id/scopes", action: :index
     end
 
     scope(controller: :sections) do
@@ -989,10 +993,13 @@ CanvasRails::Application.routes.draw do
 
       post 'courses/:course_id/enrollments', action: :create
       post 'sections/:section_id/enrollments', action: :create
+      post 'courses/:course_id/enrollments/:id/accept', action: :accept
+      post 'courses/:course_id/enrollments/:id/reject', action: :reject
 
+      put 'courses/:course_id/users/:user_id/last_attended', :action => :last_attended
       put 'courses/:course_id/enrollments/:id/reactivate', :action => :reactivate, :as => 'reactivate_enrollment'
 
-      delete 'courses/:course_id/enrollments/:id', action: :destroy
+      delete 'courses/:course_id/enrollments/:id', action: :destroy, :as => "destroy_enrollment"
     end
 
     scope(controller: :terms_api) do
@@ -1150,7 +1157,7 @@ CanvasRails::Application.routes.draw do
         delete "#{context.pluralize}/:#{context}_id/discussion_topics/:topic_id", controller: :discussion_topics, action: :destroy
 
         get "#{context.pluralize}/:#{context}_id/discussion_topics/:topic_id/view", action: :view, as: "#{context}_discussion_topic_view"
-
+        post "#{context.pluralize}/:#{context}_id/discussion_topics/:topic_id/duplicate", action: :duplicate
         get "#{context.pluralize}/:#{context}_id/discussion_topics/:topic_id/entry_list", action: :entry_list, as: "#{context}_discussion_topic_entry_list"
         post "#{context.pluralize}/:#{context}_id/discussion_topics/:topic_id/entries", action: :add_entry, as: "#{context}_discussion_add_entry"
         get "#{context.pluralize}/:#{context}_id/discussion_topics/:topic_id/entries", action: :entries, as: "#{context}_discussion_entries"
@@ -1229,6 +1236,18 @@ CanvasRails::Application.routes.draw do
       put 'accounts/:account_id/sis_imports/:id/abort', action: :abort
     end
 
+    scope(controller: :sis_import_errors_api) do
+      get 'accounts/:account_id/sis_imports/:id/errors', action: :index, as: :sis_batch_import_errors
+      get 'accounts/:account_id/sis_import_errors', action: :index, as: :account_sis_import_errors
+    end
+
+    scope(controller: :outcome_imports_api) do
+      %w(account course).each do |context|
+        post "#{context}s/:#{context}_id/outcome_imports", action: :create
+        get "#{context}s/:#{context}_id/outcome_imports/:id", action: :show
+      end
+    end
+
     scope(controller: :users) do
       get 'users/self/activity_stream', action: :activity_stream, as: 'user_activity_stream'
       get 'users/activity_stream', action: :activity_stream # deprecated
@@ -1239,7 +1258,8 @@ CanvasRails::Application.routes.draw do
       put "users/:user_id/followers/self", action: :follow
       delete "users/:user_id/followers/self", action: :unfollow
 
-      get 'users/self/todo', action: :todo_items
+      get 'users/self/todo', action: :todo_items, as: 'user_todo_list_items'
+      get 'users/self/todo_item_count', action: :todo_item_count
       get 'users/self/upcoming_events', action: :upcoming_events
       get 'users/:user_id/missing_submissions', action: :missing_submissions, as: 'user_missing_submissions'
 
@@ -1276,12 +1296,22 @@ CanvasRails::Application.routes.draw do
       put 'users/:id/merge_into/accounts/:destination_account_id/users/:destination_user_id', controller: 'users', action: 'merge_into'
       post 'users/:id/split', controller: 'users', action: 'split'
 
+      post 'users/:id/pandata_token', controller: 'users', action: 'pandata_token'
+
       scope(controller: :user_observees) do
         get    'users/:user_id/observees', action: :index, as: 'user_observees'
         post   'users/:user_id/observees', action: :create
         get    'users/:user_id/observees/:observee_id', action: :show, as: 'user_observee'
         put    'users/:user_id/observees/:observee_id', action: :update
         delete 'users/:user_id/observees/:observee_id', action: :destroy
+      end
+
+      scope(controller: :observer_alert_thresholds_api) do
+        get 'users/:user_id/observer_alert_thresholds', action: :index
+        post 'users/:user_id/observer_alert_thresholds', action: :create
+        get 'users/:user_id/observer_alert_thresholds/:observer_alert_threshold_id', action: :show
+        put 'users/:user_id/observer_alert_thresholds/:observer_alert_threshold_id', action: :update
+        delete 'users/:user_id/observer_alert_thresholds/:observer_alert_threshold_id', action: :destroy
       end
     end
 
@@ -1305,14 +1335,17 @@ CanvasRails::Application.routes.draw do
       get 'course_accounts', :action => :course_accounts, :as => :course_accounts
       get 'accounts/:id', action: :show, as: :account
       put 'accounts/:id', action: :update
+      get 'accounts/:account_id/terms_of_service', action: :terms_of_service
       get 'accounts/:account_id/courses', action: :courses_api, as: 'account_courses'
       get 'accounts/:account_id/sub_accounts', action: :sub_accounts, as: 'sub_accounts'
       get 'accounts/:account_id/courses/:id', controller: :courses, action: :show, as: 'account_course_show'
+      get 'accounts/:account_id/permissions', action: :permissions
       delete 'accounts/:account_id/users/:user_id', action: :remove_user
     end
 
     scope(controller: :sub_accounts) do
       post 'accounts/:account_id/sub_accounts', action: :create
+      delete 'accounts/:account_id/sub_accounts/:id', action: :destroy
     end
 
     scope(controller: :role_overrides) do
@@ -1339,7 +1372,7 @@ CanvasRails::Application.routes.draw do
       get 'accounts/:account_id/admins', action: :index, as: 'account_admins'
     end
 
-    scope(controller: :account_authorization_configs) do
+    scope(controller: :authentication_providers) do
       get 'accounts/:account_id/sso_settings', action: :show_sso_settings, as: 'account_show_sso_settings_url'
       put 'accounts/:account_id/sso_settings', action: :update_sso_settings, as: 'account_update_sso_settings_url'
 
@@ -1380,10 +1413,11 @@ CanvasRails::Application.routes.draw do
       get 'users/:user_id/communication_channels', action: :index, as: 'communication_channels'
       post 'users/:user_id/communication_channels', action: :create
       post 'users/:user_id/communication_channels/:id', action: :reset_bounce_count, as: 'reset_bounce_count'
-      get 'accounts/:account_id/bouncing_communication_channels.csv', action: :bouncing_channel_report
-      post 'accounts/:account_id/bouncing_communication_channels/reset', action: :bulk_reset_bounce_counts
+      get 'accounts/:account_id/bounced_communication_channels.csv', action: :bouncing_channel_report
+      post 'accounts/:account_id/bounced_communication_channels/reset', action: :bulk_reset_bounce_counts
       get 'accounts/:account_id/unconfirmed_communication_channels.csv', action: :unconfirmed_channel_report
       post 'accounts/:account_id/unconfirmed_communication_channels/confirm', action: :bulk_confirm
+      delete 'users/self/communication_channels/push', action: :delete_push_token
       delete 'users/:user_id/communication_channels/:id', action: :destroy
       delete 'users/:user_id/communication_channels/:type/:address', action: :destroy, constraints: { address: %r{[^/?]+} }
     end
@@ -1469,6 +1503,11 @@ CanvasRails::Application.routes.draw do
       get 'groups/:group_id/folders/:id', controller: :folders, action: :show, as: 'group_folder'
     end
 
+    scope(controller: :developer_key_account_bindings) do
+      post 'accounts/:account_id/developer_keys/:developer_key_id/developer_key_account_bindings', action: :create_or_update
+      get 'accounts/:account_id/developer_key_account_bindings', action: :index
+    end
+
     scope(controller: :developer_keys) do
       get 'developer_keys/:id', action: :show
       delete 'developer_keys/:id', action: :destroy
@@ -1491,7 +1530,7 @@ CanvasRails::Application.routes.draw do
       post 'files/:id/create_success', action: :api_create_success
       get 'files/:id/create_success', action: :api_create_success
       match '/api/v1/files/:id/create_success', via: [:options], action: :api_create_success_cors
-      post 'files/capture', action: :api_capture
+      post 'files/capture', action: :api_capture, as: 'files_capture'
 
 
       # 'attachment' (rather than 'file') is used below so modules API can use polymorphic_url to generate an item API link
@@ -1560,6 +1599,7 @@ CanvasRails::Application.routes.draw do
       get "courses/:course_id/modules", action: :index, as: 'course_context_modules'
       get "courses/:course_id/modules/:id", action: :show, as: 'course_context_module'
       put "courses/:course_id/modules", action: :batch_update
+      post "courses/:course_id/modules/:module_id/duplicate", action: :duplicate
       post "courses/:course_id/modules", action: :create, as: 'course_context_module_create'
       put "courses/:course_id/modules/:id", action: :update, as: 'course_context_module_update'
       delete "courses/:course_id/modules/:id", action: :destroy
@@ -1578,6 +1618,7 @@ CanvasRails::Application.routes.draw do
       delete "courses/:course_id/modules/:module_id/items/:id", action: :destroy
       post "courses/:course_id/modules/:module_id/items/:id/mark_read", action: :mark_item_read
       post "courses/:course_id/modules/:module_id/items/:id/select_mastery_path", action: :select_mastery_path
+      post "courses/:course_id/modules/items/:id/duplicate", action: :duplicate, as: :course_context_module_item_duplicate
     end
 
     scope(controller: 'quizzes/quiz_assignment_overrides') do
@@ -1727,6 +1768,10 @@ CanvasRails::Application.routes.draw do
     scope(controller: 'support_helpers/crocodoc') do
       get "support_helpers/crocodoc/shard", action: :shard
       get "support_helpers/crocodoc/submission", action: :submission
+    end
+
+    scope(controller: 'support_helpers/due_date_cache') do
+      get "support_helpers/due_date_cache/course", action: :course
     end
 
     scope(controller: :outcome_groups_api) do
@@ -1978,8 +2023,11 @@ CanvasRails::Application.routes.draw do
       patch 'courses/:id/late_policy', action: :update
     end
 
+    scope(controller: :planner) do
+      get 'planner/items', action: :index, as: :planner_items
+    end
+
     scope(controller: :planner_overrides) do
-      get 'planner/items', action: :items_index, as: :planner_items
       get 'planner/overrides', action: :index, as: :planner_overrides
       get 'planner/overrides/:id', action: :show
       put 'planner/overrides/:id', action: :update
@@ -2040,6 +2088,15 @@ CanvasRails::Application.routes.draw do
       get "subscriptions", action: :index
     end
 
+    scope(controller: 'lti/users_api') do
+      get 'users/:id', action: :show
+      get 'groups/:group_id/users', action: :group_index, as: 'lti_user_group_index'
+    end
+
+    scope(controller: 'lti/assignments_api') do
+      get 'assignments/:assignment_id', action: :show
+    end
+
     %w(course account).each do |context|
       prefix = "#{context}s/:#{context}_id"
       post "#{prefix}/authorize", controller: 'lti/ims/authorization', action: :authorize, as: "#{context}_lti_oauth2_authorize"
@@ -2050,10 +2107,16 @@ CanvasRails::Application.routes.draw do
       post "#{prefix}/tool_proxy", controller: 'lti/ims/tool_proxy', action: :create,
            as: "create_#{context}_lti_tool_proxy"
       get "#{prefix}/jwt_token", controller: 'external_tools', action: :jwt_token
+      get "tool_proxy/:tool_proxy_guid/#{prefix}/tool_setting", controller: 'lti/ims/tool_setting', action: :show, as: "show_#{context}_tool_setting"
+      get "tool_proxy/:tool_proxy_guid/#{prefix}/resource_link_id/:resource_link_id/tool_setting", controller: 'lti/ims/tool_setting', action: :show, as: "show_#{context}_resource_link_id_tool_setting"
+      put "tool_proxy/:tool_proxy_guid/#{prefix}/tool_setting", controller: 'lti/ims/tool_setting', action: :update, as: "update_#{context}_tool_setting"
+      put "tool_proxy/:tool_proxy_guid/#{prefix}/resource_link_id/:resource_link_id/tool_setting", controller: 'lti/ims/tool_setting', action: :update, as: "update_#{context}_update_resource_link_id_tool_setting"
     end
     #Tool Setting Services
-    get "tool_settings/:tool_setting_id",  controller: 'lti/ims/tool_setting', action: :show, as: 'show_lti_tool_settings'
-    put "tool_settings/:tool_setting_id",  controller: 'lti/ims/tool_setting', action: :update, as: 'update_lti_tool_settings'
+    get "tool_settings/:tool_setting_id",  controller: 'lti/ims/tool_setting', action: :show, as: :show_lti_tool_settings
+    get "tool_proxy/:tool_proxy_guid/tool_setting", controller: 'lti/ims/tool_setting', action: :show, as: :show_tool_proxy_lti_tool_settings
+    put "tool_settings/:tool_setting_id",  controller: 'lti/ims/tool_setting', action: :update, as: :update_lti_tool_settings
+    put "tool_proxy/:tool_proxy_guid/tool_setting", controller: 'lti/ims/tool_setting', action: :update, as: :update_tool_proxy_lti_tool_settings
 
     #Tool Proxy Services
     get  "tool_proxy/:tool_proxy_guid", controller: 'lti/ims/tool_proxy', action: :show, as: "show_lti_tool_proxy"
@@ -2078,6 +2141,25 @@ CanvasRails::Application.routes.draw do
       get "assignments/:assignment_id/files/:file_id/originality_report", action: :show
     end
 
+    # Line Item Service
+    scope(controller: 'lti/ims/line_items') do
+      post "courses/:course_id/line_items", action: :create, as: :lti_line_item_create
+      get "courses/:course_id/line_items/:id", action: :show, as: :lti_line_item_show
+      get "courses/:course_id/line_items", action: :index, as: :lti_line_item_index
+      put "courses/:course_id/line_items/:id", action: :update, as: :lti_line_item_edit
+      delete "courses/:course_id/line_items/:id", action: :destroy, as: :lti_line_item_delete
+    end
+
+    # Scores Service
+    scope(controller: 'lti/ims/scores') do
+      post "courses/:course_id/line_items/:line_item_id/scores", action: :create, as: :lti_result_create
+    end
+
+    # Result Service
+    scope(controller: 'lti/ims/results') do
+      get "courses/:course_id/line_items/:line_item_id/results/:id", action: :show, as: :lti_result_show
+      get "courses/:course_id/line_items/:line_item_id/results", action: :index
+    end
   end
 
   ApiRouteSet.draw(self, '/api/sis') do

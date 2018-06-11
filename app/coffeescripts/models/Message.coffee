@@ -16,11 +16,11 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 define [
-  'i18n!messages'
+  'i18nObj'
   'jquery'
   'underscore'
   'Backbone'
-  'compiled/str/TextHelper'
+  '../str/TextHelper'
 ], (I18n, $, _, {Model, Collection}, TextHelper) ->
 
   class Message extends Model

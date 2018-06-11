@@ -70,7 +70,7 @@ $(document).ready(function(event) {
     output += "</ul>";
     return output;
   }
-  
+
   function createCountsHtml(batch){
     if(!(batch.data && batch.data.counts)){
       return '';
@@ -83,10 +83,14 @@ $(document).ready(function(event) {
     output += "<li>" + htmlEscape(I18n.t('import_counts.users', "Users: %{user_count}", {user_count: batch.data.counts.users})) + "</li>";
     output += "<li>" + htmlEscape(I18n.t('import_counts.enrollments', "Enrollments: %{enrollment_count}", {enrollment_count: batch.data.counts.enrollments})) + "</li>";
     output += "<li>" + htmlEscape(I18n.t('import_counts.crosslists', "Crosslists: %{crosslist_count}", {crosslist_count: batch.data.counts.xlists})) + "</li>";
+    output += "<li>" + htmlEscape(I18n.t('import_counts.admins', "Admins: %{admin_count}", {admin_count: batch.data.counts.admins})) + "</li>";
+    output += "<li>" + htmlEscape(I18n.t('import_counts.group_categories', "Group Categories: %{group_categories_count}", {group_categories_count: batch.data.counts.group_categories})) + "</li>";
     output += "<li>" + htmlEscape(I18n.t('import_counts.groups', "Groups: %{group_count}", {group_count: batch.data.counts.groups})) + "</li>";
     output += "<li>" + htmlEscape(I18n.t('import_counts.group_enrollments', "Group Enrollments: %{group_enrollments_count}", {group_enrollments_count: batch.data.counts.group_memberships})) + "</li>";
+    output += "<li>" + htmlEscape(I18n.t('import_counts.user_observers', "User Observers: %{user_observers_count}", {user_observers_count: batch.data.counts.user_observers})) + "</li>";
+    output += "<li>" + htmlEscape(I18n.t('import_counts.change_sis_ids', "Change SIS IDs: %{change_sis_ids_count}", {change_sis_ids_count: batch.data.counts.change_sis_ids})) + "</li>";
     output += "</ul></li></ul>";
-    
+
     return output
   }
 
@@ -132,13 +136,13 @@ $(document).ready(function(event) {
           var code = "sis_batch_" + sis_batch.id;
           $(".progress_bar_holder").hide();
           $("#sis_importer").hide();
-          var message = I18n.t('errors.import_failed_code', "There was an error importing your SIS data. No records were imported.  Please notify your system administrator and give them the following code: \"%{code}\"", {code: code});
+          var message = I18n.t('errors.import_failed_code', "There was an error importing your SIS data. Please notify your system administrator and give them the following code: \"%{code}\"", {code: code});
           $(".sis_messages .sis_error_message").text(message);
           $(".sis_messages").show();
         } else if(sis_batch.workflow_state == 'failed_with_messages') {
           $(".progress_bar_holder").hide();
           $("#sis_importer").hide();
-          var message = htmlEscape(I18n.t('errors.import_failed_messages', "No SIS records were imported. The import failed with these messages:"));
+          var message = htmlEscape(I18n.t('errors.import_failed_messages', "The import failed with these messages:"));
           message += createMessageHtml(sis_batch);
           $(".sis_messages .sis_error_message").html($.raw(message));
           $(".sis_messages").show();

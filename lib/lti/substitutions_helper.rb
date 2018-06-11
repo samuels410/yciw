@@ -117,7 +117,7 @@ module Lti
       unless @current_account_enrollments
         @current_account_enrollments = []
         if @user && @context.respond_to?(:account_chain) && !@context.account_chain.empty?
-          @current_account_enrollments = AccountUser.where(user_id: @user, account_id: @context.account_chain).shard(@context.shard)
+          @current_account_enrollments = AccountUser.active.where(user_id: @user, account_id: @context.account_chain).shard(@context.shard)
         end
       end
       @current_account_enrollments
@@ -151,6 +151,10 @@ module Lti
 
     def previous_lti_context_ids
       previous_course_ids_and_context_ids.map(&:lti_context_id).compact.join(',')
+    end
+
+    def recursively_fetch_previous_lti_context_ids
+      recursively_fetch_previous_course_ids_and_context_ids.map(&:lti_context_id).compact.join(',')
     end
 
     def previous_course_ids
@@ -195,5 +199,20 @@ module Lti
       ).select("id, lti_context_id")
     end
 
+    def recursively_fetch_previous_course_ids_and_context_ids
+      return [] unless @context.is_a?(Course)
+
+      # now find all parents for locked folders
+      Course.where(
+        "EXISTS (?)", ContentMigration.where(workflow_state: :imported).where("context_id = ? OR context_id IN (
+            WITH RECURSIVE t AS (
+              SELECT context_id, source_course_id FROM #{ContentMigration.quoted_table_name} WHERE context_id = ?
+              UNION
+              SELECT content_migrations.context_id, content_migrations.source_course_id FROM #{ContentMigration.quoted_table_name} INNER JOIN t ON content_migrations.context_id=t.source_course_id
+            )
+            SELECT DISTINCT context_id FROM t
+          )", @context.id, @context.id).where("content_migrations.source_course_id = courses.id")
+      ).select("id, lti_context_id")
+    end
   end
 end

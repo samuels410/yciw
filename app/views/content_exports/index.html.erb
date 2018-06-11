@@ -33,7 +33,7 @@
   <% end %>
 
   <div class="export_messages" style="<%= hidden %>">
-    <div class="ui-state-error error_message"></div>
+    <div class="alert-error error_message"></div>
   </div>
 
   <hr />
@@ -48,13 +48,13 @@
             <% if export.expired? %>
               <%= t "Course Export from %{date} (file not available)", :date => date %>
             <% elsif export.export_type == ContentExport::COMMON_CARTRIDGE %>
-              <%= t 'links.download', "Course Export from %{date}: *Click here to download*", :date => date, :wrapper => wrapper %>
+              <%= t "*Course Export from %{date}*", :date => date, :wrapper => wrapper %>
             <% elsif export.export_type == ContentExport::QTI %>
-              <%= t 'links.download_qti', "QTI Export from %{date}: *Click here to download*", :date => date, :wrapper => wrapper %>
+              <%= t "*QTI Export from %{date}*", :date => date, :wrapper => wrapper %>
             <% elsif export.export_type == ContentExport::USER_DATA %>
-              <%= t 'links.download_user_export', "User Data Export from %{date}: *Click here to download*", :date => date, :wrapper => wrapper %>
+              <%= t "*User Data Export from %{date}*", :date => date, :wrapper => wrapper %>
             <% elsif export.export_type == ContentExport::ZIP %>
-                <%= t 'links.download_file_export', "File Export from %{date}: *Click here to download*", :date => date, :wrapper => wrapper %>
+              <%= t "*File Export from %{date}*", :date => date, :wrapper => wrapper %>
             <% end %>
           </p>
         <% end %>
@@ -72,7 +72,7 @@
     <% if @context.is_a?(Course) %>
       <%= form_tag course_content_exports_path(@context.id), :id => "exporter_form" do %>
         <fieldset>
-          <legend><%= t :export_type, "Export Type" %></legend>
+          <h2><%= t :export_type, "Export Type" %></h2>
           <div>
             <input type="radio" name="export_type" value="common_cartridge" id="cc_export_radio" checked>
             <label for="cc_export_radio"><%= t 'labels.course', 'Course' %></label>

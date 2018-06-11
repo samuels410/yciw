@@ -53,12 +53,12 @@ module Api
           @domain_root_account.default_enrollment_term
         when 'current'
           if !current_term
-            current_terms = @domain_root_account
-             .enrollment_terms
-             .active
-             .where("(start_at<=? OR start_at IS NULL) AND (end_at >=? OR end_at IS NULL) AND NOT (start_at IS NULL AND end_at IS NULL)", Time.now.utc, Time.now.utc)
-              .limit(2)
-              .to_a
+            current_terms = @domain_root_account.
+              enrollment_terms.
+              active.
+              where("(start_at<=? OR start_at IS NULL) AND (end_at >=? OR end_at IS NULL) AND NOT (start_at IS NULL AND end_at IS NULL)", Time.now.utc, Time.now.utc).
+              limit(2).
+              to_a
             current_term = current_terms.length == 1 ? current_terms.first : :nil
           end
           current_term == :nil ? nil : current_term
@@ -132,6 +132,11 @@ module Api
         :scope => 'root_account_id' }.freeze,
     'groups' =>
         { :lookups => { 'sis_group_id' => 'sis_source_id',
+                        'id' => 'id' }.freeze,
+          :is_not_scoped_to_account => ['id'].freeze,
+          :scope => 'root_account_id' }.freeze,
+    'group_categories' =>
+        { :lookups => { 'sis_group_category_id' => 'sis_source_id',
                         'id' => 'id' }.freeze,
           :is_not_scoped_to_account => ['id'].freeze,
           :scope => 'root_account_id' }.freeze,
@@ -479,6 +484,7 @@ module Api
     # otherwise let HostUrl figure out what host is appropriate
     if self.respond_to?(:request)
       host, protocol = get_host_and_protocol_from_request
+      target_shard = Shard.current
     elsif self.respond_to?(:use_placeholder_host?) && use_placeholder_host?
       host = PLACEHOLDER_HOST
       protocol = PLACEHOLDER_PROTOCOL
@@ -500,7 +506,11 @@ module Api
     end
     html = rewriter.translate_content(html)
 
-    url_helper = Html::UrlProxy.new(self, context, host, protocol)
+    url_helper = Html::UrlProxy.new(self,
+                                    context,
+                                    host,
+                                    protocol,
+                                    target_shard: target_shard)
     account = Context.get_account(context) || @domain_root_account
     include_mobile = !(respond_to?(:in_app?, true) && in_app?)
     Html::Content.rewrite_outgoing(html, account, url_helper, include_mobile: include_mobile)

@@ -59,6 +59,7 @@ describe 'Theme Editor' do
   end
 
   it 'should close theme editor on cancel and redirect to /accounts/x', priority: "1", test_id: 239981 do
+    skip_if_safari(:alert)
     open_theme_editor(Account.default.id)
 
     # verifies theme editor is open
@@ -73,9 +74,7 @@ describe 'Theme Editor' do
   end
 
   it 'should close after preview (no changes saved)', priority: "1", test_id: 239984 do
-    # since npm modules arent installed in worker nodes this needs to get installed to not fail on
-    # those nodes
-    allow_any_instance_of(BrandConfig).to receive(:compile_css!).and_return(true)
+    skip_if_safari(:alert)
     open_theme_editor(Account.default.id)
 
     # verifies theme editor is open
@@ -182,5 +181,23 @@ describe 'Theme Editor' do
 
     # expect all 15 text fields to have working validation
     expect(all_warning_messages.length).to eq 15
+  end
+
+  it 'should allow fields to be changed after colors are unlinked', priority: 3, test_id: 3470985 do
+    bc = BrandConfig.create(variables: {
+                              'ic-brand-primary' => '#999',
+                              'ic-brand-button--primary-bgd' => '#888'
+                            })
+    Account.default.brand_config = bc
+    Account.default.save!
+    open_theme_editor(Account.default.id)
+    ff('.Theme__editor-color-block_input-text')[1].send_keys('#000') # main text color
+    expect_new_page_load do
+      preview_your_changes
+      run_jobs
+    end
+    color_labels = ff('.Theme__editor-color-label')
+    expect(color_labels[0].attribute('style')).to include('background-color: rgb(153, 153, 153)')
+    expect(color_labels[1].attribute('style')).to include('background-color: rgb(0, 0, 0)')
   end
 end

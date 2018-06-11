@@ -20,7 +20,7 @@ require_relative '../../helpers/gradebook_common'
 
 describe GradeSummaryPresenter do
   include_context 'in-process server selenium tests'
-  include_context 'reusable_course'
+  include_context 'reusable_gradebook_course'
 
   describe 'deleted submissions', priority: "2" do
     it 'should navigate to grade summary page' do
@@ -64,7 +64,7 @@ describe GradeSummaryPresenter do
       user_session(observer)
       get "/courses/#{observed_courses.first.id}/grades"
 
-      expect(f('.course_selector')).to be_displayed
+      expect(f('#course_select_menu')).to be_displayed
     end
 
     it 'maintains focus on show what-if/revert to original buttons', priority: 2, test_id: 229660 do

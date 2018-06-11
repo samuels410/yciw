@@ -124,11 +124,25 @@ describe GroupMembership do
         expect(membership.messages_sent).to be_empty
       end
 
-      it "should dispatch a message if the course is available" do
+      it "should dispatch a message if the course is available and has started" do
         membership = @group1.group_memberships.build(user: @student1)
         Notification.create!(name: 'New Context Group Membership', category: 'TestImmediately')
         membership.save!
         expect(membership.messages_sent['New Context Group Membership']).not_to be_empty
+      end
+
+      it "should not dispatch a message if the course is available and has not started yet" do
+        course = course_factory(active_all: true)
+        course.start_at = 1.day.from_now
+        course.restrict_enrollments_to_course_dates = true
+        course.save!
+        student_in_course(active_all: true, course: course)
+        group1 = course.groups.create(group_category: GroupCategory.student_organized_for(course))
+        membership = group1.group_memberships.build(user: @student)
+        Notification.create!(name: 'New Context Group Membership', category: 'TestImmediately')
+        Notification.create!(name: 'New Context Group Membership Invitation', category: 'TestImmediately')
+        membership.save!
+        expect(membership.messages_sent).to be_empty
       end
     end
 
@@ -326,14 +340,25 @@ describe GroupMembership do
     end
 
     it "triggers a batch when membership is created" do
+      new_user = user_factory
+
       expect(DueDateCacher).to receive(:recompute).never
-      expect(DueDateCacher).to receive(:recompute_course).with(@course.id, match_array(@assignments[0..1].map(&:id)))
-      @group.group_memberships.create(:user => user_factory)
+      expect(DueDateCacher).to receive(:recompute_users_for_course).with(
+        new_user.id,
+        @course.id,
+        match_array(@assignments[0..1].map(&:id))
+      )
+
+      @group.group_memberships.create(:user => new_user)
     end
 
     it "triggers a batch when membership is deleted" do
       expect(DueDateCacher).to receive(:recompute).never
-      expect(DueDateCacher).to receive(:recompute_course).with(@course.id, match_array(@assignments[0..1].map(&:id)))
+      expect(DueDateCacher).to receive(:recompute_users_for_course).with(
+        @membership.user.id,
+        @course.id,
+        match_array(@assignments[0..1].map(&:id))
+      )
       @membership.destroy
     end
 

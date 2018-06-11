@@ -44,15 +44,15 @@
                 <i class="icon-unpublish"></i><%= t('#buttons.unpublished', %{Unpublished}) %>
               </button>
               <button type='submit' class="ui-button btn-publish">
-                <i class="icon-publish"></i><%= t('#buttons.publish', %{Publish}) %>
+                <i class="icon-publish icon-Solid"></i><%= t('#buttons.publish', %{Publish}) %>
               </button>
               <input type='hidden' name='course[event]' value='offer' />
             <% else %>
               <button type='submit' class="ui-button">
-                <i class="icon-unpublish"></i><%= t('#buttons.unpublish', %{Unpublish}) %>
+                <i class="icon-unpublish"></i>&nbsp;<%= t('#buttons.unpublish', %{Unpublish}) %>
               </button>
               <button type="button" class="ui-button disabled btn-published" disabled>
-                <i class="icon-publish"></i><%= t('#buttons.published', %{Published}) %>
+                <i class="icon-publish icon-Solid"></i><%= t('#buttons.published', %{Published}) %>
               </button>
               <input type='hidden' name='course[event]' value='claim' />
             <% end %>
@@ -90,6 +90,12 @@
           </a>
         <% end %>
 
+        <% if can_do(@context, @current_user, :use_student_view) %>
+          <%= link_to course_student_view_path(@context), :method => :post, :class => 'btn button-sidebar-wide' do %>
+            <i class="icon-student-view"></i> <%= t('links.student_view', 'Student View') %>
+          <% end %>
+        <% end %>
+
         <% course_custom_links.each do |link| %>
           <a class="btn button-sidebar-wide" href="<%= link[:url] %>"><i class="<%= link[:icon_class] %>" role="presentation"></i> <%= link[:text] %></a>
         <% end %>
@@ -97,7 +103,7 @@
     <% end %>
 
     <% if @context.available? && @context.self_enrollment_enabled? && @context.open_enrollment && (!@context_enrollment || !@context_enrollment.active?) %>
-      <a href="<%= enroll_url(@context.self_enrollment_code) %>" class="btn button-sidebar-wide self_enrollment_link" data-open-as-dialog>
+      <a href="<%= enroll_url(@context.self_enrollment_code) %>" class="btn button-sidebar-wide self_enrollment_link">
         <i class="icon-user-add"></i>
         <%= t('links.join_course', %{Join this Course}) %>
       </a>
@@ -126,7 +132,7 @@
   <% else %>
     <% locals = {:title => t("Coming Up"), :contexts_to_link_to => @context, :upcoming => true, :period => :one_week} %>
     <% if @current_user %>
-      <% cache(safe_cache_key([@current_user, @contexts, 'course_upcoming_events' ])) do %>
+      <% cache([@current_user, safe_cache_key(@contexts), 'course_upcoming_events' ].cache_key) do %>
         <%= render :partial => "shared/event_list", :object => @current_user.upcoming_events(:contexts => @contexts), :locals => locals %>
       <% end %>
     <% else %>

@@ -54,58 +54,61 @@
   </div>
 <% end %>
   <div class="submission-details-header submission_details">
-    <div class="submission-details-header__grade-summary">
-      <% if @assignment.muted? %>
-        <p style="width: 200px"><%= t(:student_mute_notification, "Grades are unavailable because the instructor is working on them.") %></p>
-      <% elsif @submission.user_can_read_grade?(@current_user, session) %>
-      <table class="grade-values">
-        <tbody>
-          <tr>
-            <th><%= I18n.t('Grade:') %></td>
-            <td class="bold">
-              <% if can_do(@assignment, @current_user, :grade) %>
-                <%= render :partial => "gradebooks/grading_box", :object => @assignment, :locals => {:submission => @submission} %>
-              <% elsif @submission.user_can_read_grade?(@current_user, session) %>
-                <span class="entered_grade">
-                  <% if @submission.excused? %>
-                    <%= t "Excused" %>
-                  <% else %>
-                    <%= i18n_grade(round_if_whole @submission.entered_grade) %>
-                  <% end %>
-                </span>
+    <div class="submission-details-header__heading-and-grades">
+      <h2 class="submission-details-header__heading submission_header">
+        <%= @assessment_request ? t('peer_review', "Peer Review") : t('submission_details', "Submission Details") %>
+      </h2>
+      <div class="submission-details-header__grade-summary">
+        <% if @assignment.muted? %>
+          <p style="width: 200px"><%= t(:student_mute_notification, "Grades are unavailable because the instructor is working on them.") %></p>
+        <% elsif @submission.user_can_read_grade?(@current_user, session) %>
+        <table class="grade-values">
+          <tbody>
+            <tr>
+              <th><%= I18n.t('Grade:') %></td>
+              <td class="bold">
+                <% if can_do(@assignment, @current_user, :grade) %>
+                  <%= render :partial => "gradebooks/grading_box", :object => @assignment, :locals => {:submission => @submission} %>
+                <% else %>
+                  <span class="entered_grade">
+                    <% if @submission.excused? %>
+                      <%= t "Excused" %>
+                    <% else %>
+                      <%= i18n_grade(round_if_whole @submission.entered_grade) %>
+                    <% end %>
+                  </span>
+                <% end %>
                 <% if !@submission.excused? &&  @assignment.grading_type == 'points' && @assignment.points_possible %>
                   <%= t('/ %{points_possible}', points_possible: I18n.n(round_if_whole @assignment.points_possible))%>
                 <% end %>
-              <% end %>
-            </td>
-          </tr>
-          <% if can_do(@assignment, @current_user, :grade) || @submission.user_can_read_grade?(@current_user, session)
-              points_deducted = I18n.n(-@submission.points_deducted) if @submission.points_deducted&.> 0
-              points_possible = I18n.n(round_if_whole(@assignment.points_possible))
-              grade_breakdown_style = hidden unless points_deducted && !@submission.excused?
-          %>
-            <tr class="error late-penalty-display" style="<%= grade_breakdown_style %>">
-              <th><%= I18n.t('Late penalty:') %></td>
-              <td class="late_penalty bold"><%= points_deducted %></td>
-            </tr>
-            <tr class="late-penalty-display" style="<%= grade_breakdown_style %>">
-              <th><%= I18n.t('Final grade:') %></td>
-              <td class="bold">
-                <% if can_do(@assignment, @current_user, :grade) %>
-                  <span class="published_grade"><%= i18n_grade(round_if_whole @submission.grade) %></span>
-                <% elsif @submission.user_can_read_grade?(@current_user, session) %>
-                  <span class="grade"><%= i18n_grade(round_if_whole @submission.published_grade) %></span>
-                <% end %>
-
-                <% if @assignment.grading_type == 'points' %>
-                  / <%= points_possible %>
-                <% end %>
               </td>
             </tr>
-          <% end %>
-        </tbody>
-      </table>
+            <% if can_do(@assignment, @current_user, :grade) || @submission.user_can_read_grade?(@current_user, session)
+                points_deducted = I18n.n(-@submission.points_deducted) if @submission.points_deducted&.> 0
+                points_possible = I18n.n(round_if_whole(@assignment.points_possible))
+                grade_breakdown_style = hidden unless points_deducted && !@submission.excused?
+            %>
+              <tr class="error late-penalty-display" style="<%= grade_breakdown_style %>">
+                <th><%= I18n.t('Late penalty:') %></td>
+                <td class="late_penalty bold"><%= points_deducted %></td>
+              </tr>
+              <tr class="late-penalty-display" style="<%= grade_breakdown_style %>">
+                <th><%= I18n.t('Final grade:') %></td>
+                <td class="bold">
+                  <% if can_do(@assignment, @current_user, :grade) %>
+                    <span class="published_grade"><%= i18n_grade(round_if_whole @submission.grade) %></span>
+                  <% elsif @submission.user_can_read_grade?(@current_user, session) %>
+                    <span class="grade"><%= i18n_grade(round_if_whole @submission.published_grade) %></span>
+                  <% end %>
 
+                  <% if @assignment.grading_type == 'points' %>
+                    / <%= points_possible %>
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
         <% if can_do(@submission, @current_user, :view_turnitin_report) %>
           <% if (turnitin_score = @submission.turnitin_data[@submission.asset_string]) &&
             @submission.turnitin_data[:provider] == nil && turnitin_score[:similarity_score] %>
@@ -115,49 +118,63 @@
             </span>
           <% end %>
         <% end %>
-      <% elsif @submission.can_view_plagiarism_report('vericite', @current_user, session) && !@assignment.muted? %>
-        <% if (vericite_score = @submission.vericite_data(true)[@submission.asset_string]) && @submission.turnitin_data[:provider] == :vericite && vericite_score[:similarity_score] %>
-          <span class="turnitin_score_container">
-            <span class="vericite_score_container_caret <%= vericite_score[:state] %>_score"></span>
-            <a href="<%= context_url(@context, :context_assignment_submission_vericite_report_url, @submission.assignment_id, @submission.user_id, @submission.asset_string) %>" target="_blank" title="Similarity score -- more information" class="tooltip not_external turnitin_similarity_score <%= vericite_score[:state] %>_score">
-              <%= vericite_score[:similarity_score] %>%
-              <span class="tooltip_wrap right">
-                <span class="tooltip_text"><%= t(:see_vericite_results, "See VeriCite results") %></span>
-              </span>
-            </a>
-          </span>
+        <% elsif @submission.can_view_plagiarism_report('vericite', @current_user, session) && !@assignment.muted? %>
+          <% if (vericite_score = @submission.vericite_data(true)[@submission.asset_string]) && @submission.turnitin_data[:provider] == :vericite && vericite_score[:similarity_score] %>
+            <span class="turnitin_score_container">
+              <span class="vericite_score_container_caret <%= vericite_score[:state] %>_score"></span>
+              <a href="<%= context_url(@context, :context_assignment_submission_vericite_report_url, @submission.assignment_id, @submission.user_id, @submission.asset_string) %>" target="_blank" title="Similarity score -- more information" class="tooltip not_external turnitin_similarity_score <%= vericite_score[:state] %>_score">
+                <%= vericite_score[:similarity_score] %>%
+                <span class="tooltip_wrap right">
+                  <span class="tooltip_text"><%= t(:see_vericite_results, "See VeriCite results") %></span>
+                </span>
+              </a>
+            </span>
+          <% end %>
         <% end %>
-      <% end %>
-      <% if @rubric_association && (
-           @submission.user_can_read_grade?(@current_user, session) ||
-           can_do(@rubric_association, @current_user, :assess) ||
-           can_do(@assignment.rubric, @current_user, :read)
-         )
-      %>
-        <a href="#" class="assess_submission_link Submission__Link--has-icon" style="font-size: 0.8em;" tabindex='0'>
-          <i class="icon-rubric" aria-hidden="true"></i>
-          <%= t('show_rubric', 'Show Rubric') %>
-        </a>
-      <% end %>
+        <% if @assignment.rubric_association && (
+             @submission.user_can_read_grade?(@current_user, session) ||
+             @assignment.rubric_association.user_can_assess_for?(assessor: @current_user, assessee: @submission.user) ||
+             can_do(@assignment.rubric, @current_user, :read)
+           )
+        %>
+          <div class="submission-details-header__rubric <% if can_do(@assignment, @current_user, :grade) %>submission-details-header__rubric--can-grade<% end %>">
+            <a href="#" class="assess_submission_link Button Button--small Button--link" tabindex='0'>
+              <i class="icon-rubric" aria-hidden="true"></i><%= t('show_rubric', 'Show Rubric') %>
+            </a>
+          </div>
+        <% end %>
+      </div>
     </div>
-    <h2 class="submission_header" style="margin-bottom: 0;"><%= @assessment_request ? t('peer_review', "Peer Review") : t('submission_details', "Submission Details") %></h2>
-    <span class="SubmissionDetails__Text"><%= @assignment.title %>, <%= submission_author_name_for @assessment_request %></span>
-    <span class="SubmissionDetails__Text <%='late' if @submission.late? %> <%= 'hidden' unless @submission.submitted_at %>">
-      <%= t('submitted_at', 'submitted %{submit_date}', :submit_date => datetime_string(@submission.submitted_at)) %>
-    </span>
-    <% if @submission.late? %>
-      <span class="submission-late-pill"></span>
-    <% elsif @submission.missing? %>
-      <span class="submission-missing-pill"></span>
-    <% end %>
-    <% if can_do(@context, @current_user, :grade) %>
-      <a class="forward" href="<%= context_url(@context, :speed_grader_context_gradebook_url, :assignment_id => @assignment.id) + "#" + CGI::escape({:student_id => @submission.user_id }.to_json) %>" style="float: right; padding-right: 10px;"><%= t('speedgrader', 'SpeedGrader™') %></a>
-    <% end %>
-    <% if @assignment.expects_submission? && can_do(@assignment, @current_user, :submit) && @current_user == @submission.user %>
-      <span><a href="<%= context_url(@context, :context_assignment_url, @assignment.id) %>#submit" class="Button Button--primary" >
-        <%= @submission.has_submission? ? t('links.resubmit', "Re-submit Assignment") : t('links.submit', "Submit Assignment") %>
-      </a></span>
-    <% end %>
+    <div class="ic-Action-header">
+      <div class="ic-Action-header__Primary">
+        <h3 class="submission-details-header__heading"><%= @assignment.title %></h3>
+        <div class="submission-details-header__info">
+          <span class="submission-details-header__time <%='late' if @submission.late? %> <%= 'hidden' unless @submission.submitted_at %>">
+            <%= submission_author_name_for @assessment_request %> <%= t('submitted_at', 'submitted %{submit_date}', :submit_date => datetime_string(@submission.submitted_at)) %>
+          </span>
+          <% if @context.feature_enabled?(:new_gradebook) %>
+            <% if @submission.late? %>
+              <span class="submission-late-pill"></span>
+            <% elsif @submission.missing? %>
+              <span class="submission-missing-pill"></span>
+            <% end %>
+          <% end %>
+        </div>
+      </div>
+      <div class="ic-Action-header__Secondary ic-Action-header__Secondary--auto">
+        <% if can_do(@context, @current_user, :grade) %>
+          <a class="Button" href="<%= context_url(@context, :speed_grader_context_gradebook_url, :assignment_id => @assignment.id) + "#" + CGI::escape({:student_id => @submission.user_id }.to_json) %>">
+            <i class="icon-speed-grader" aria-hidden="true"></i>
+            <%= t('speedgrader', 'SpeedGrader™') %>
+          </a>
+        <% end %>
+        <% if @assignment.expects_submission? && can_do(@assignment, @current_user, :submit) && @current_user == @submission.user %>
+          <a href="<%= context_url(@context, :context_assignment_url, @assignment.id) %>#submit" class="Button Button--primary" >
+            <%= @submission.has_submission? ? t('links.resubmit', "Re-submit Assignment") : t('links.submit', "Submit Assignment") %>
+          </a>
+        <% end %>
+      </div>
+    </div>
     <% if @assessment_request %>
       <div class="assessment_request_completed_message" style="<%= hidden unless @assessment_request.completed? %>">
         <%= t('peer_review_steps_complete', 'You have finished the required steps for this peer review.') %>
@@ -174,33 +191,32 @@
     <div>
     </div>
     <% end %>
-    <div class="clear"></div>
   </div>
 
   <% if @assignment.rubric_association %>
     <% @visible_rubric_assessments ||= [] %>
-  <div id="rubric_holder" style="position: absolute; right: 0px; padding: 5px; background-color: #fff; border: 1px solid #aaa; border-right-width: 0; display: none;">
+  <div id="rubric_holder" style="position: absolute; <%= direction('right') %>: 0px; padding: 5px; background-color: #fff; border: 1px solid #aaa; border-<%= direction('right') %>-width: 0; display: none;">
     <a
       class="hide_rubric_link"
-      style="float: right; margin-right:0 !important;"
+      style="float: <%= direction('right') %>; margin-<%= direction('right') %>:0 !important;"
       title="<%= t('hide_rubric_button', 'Hide Rubric') %>"
       role="button"
       aria-label="<%= t('hide_rubric_button', 'Hide Rubric') %>"
       tabindex='0'
     ><i class="icon-x standalone-icon"></i></a>
-    <div id="rubric_assessments_list" style="text-align: right; margin-bottom: 5px; <%= hidden if @visible_rubric_assessments.empty? %>">
+    <div id="rubric_assessments_list" style="text-align: <%= direction('right') %>; margin-bottom: 5px; <%= hidden if @assessment_request || @visible_rubric_assessments.empty? %>">
       <%= before_label('show_assessment_by', 'Show Assessment By') %>
       <select id="rubric_assessments_select">
         <% @visible_rubric_assessments.each do |assessment| %>
           <option id="rubric_assessment_option_<%= assessment.id %>" value="<%= assessment.id %>">
-            <% if can_do(assessment, @current_user, :read_assessor) -%>
+            <% if can_do(assessment, @current_user, :read_assessor) %>
               <%= assessment.assessor_name %>
-            <% else -%>
+            <% else %>
               <%= t(:anonymous_user, "Anonymous User") %>
-            <% end -%>
+            <% end %>
           </option>
         <% end %>
-        <% if can_do(@assignment.rubric_association, @current_user, :assess) && @submission.user != @current_user %>
+        <% if can_do(@context, @current_user, :manage_grades) && @submission.user != @current_user %>
         <% unless @visible_rubric_assessments.map{|a| a.assessor_id}.include?(@current_user.id) %>
           <option value="new" id="new_rubric_assessment_option"><%= t('options.new_assessment', '[New Assessment]') %></option>
         <% end %>
@@ -212,12 +228,13 @@
         partial: 'shared/rubric',
         object: @assignment.rubric,
         locals: {
+          rubric_association: @assignment.rubric_association,
           assessing: @submission.grants_right?(@current_user, :grade) || currently_peer_reviewing
         }}) %>
-    <% end -%>
+    <% end %>
     <%= render :partial => "shared/rubric_criterion_dialog" %>
     <div class="button-container">
-      <% if @assignment.rubric_association && can_do(@assignment.rubric_association, @current_user, :assess) %>
+      <% if @assignment.rubric_association.user_can_assess_for?(assessor: @current_user, assessee: @submission.user) %>
         <button type="button" class="save_rubric_button btn btn-small"><%= t('buttons.save_comment', 'Save Comment') %></button>
       <% end %>
     </div>
@@ -237,11 +254,11 @@
     <div class="submission-details-frame">
       <iframe id="preview_frame" src="<%= context_url(@context, :context_assignment_submission_url, @assignment.id, @submission.user_id, :preview => 1, :rand => rand(999999)) %>" allowfullscreen="true" frameborder="0" style="border: 0; width: 100%; height: 300px; display: block;" title="<%= t('Preview') %>"></iframe>
     </div>
-    <div class="submission-details-comments">
+    <div class="submission-details-comments" style="word-wrap: break-word; min-width: 1%;">
       <div style="background-color: #fff;">
         <a href="#" class="comments_link" style="display: none; <%= 'font-weight: bold;' unless @submission.submission_comments.empty? %>">Comments <% unless @submission.submission_comments.empty? %>(<%= @submission.submission_comments.length %>)<% end %></a>
         <div class="comments">
-          <button type="button" class="btn button-secondary cancel_comment_button" style="display: none; float: right; margin-right:0 !important;"><%= image_tag("delete_circle.png", :alt => t('Delete')) %></button>
+          <button type="button" class="btn button-secondary cancel_comment_button" style="display: none; float: <%= direction('right') %>; margin-<%= direction('right') %>:0 !important;"><%= image_tag("delete_circle.png", :alt => t('Delete')) %></button>
           <div class="comment_list" aria-live="polite" style="padding: 10px; clear:right;">
             <% unless @submission.user_can_read_grade?(@current_user, session) %>
               <% if @assignment.muted? %>
@@ -266,14 +283,14 @@
                     <span style="white-space: pre-wrap;"><%= comment.comment %></span>
                   <% end %>
                 </div>
-                <div class="comment_attachments" style="text-align: right; margin-right: 10px;">
+                <div class="comment_attachments" style="text-align: <%= direction('right') %>; margin-<%= direction('right') %>: 10px;">
                   <% comment.attachments.each do |attachment| %>
                     <div class="comment_attachment">
                       <a href="<%= context_url(@context, :context_assignment_submission_url, @assignment.id, @submission.user_id, :comment_id => comment.id, :download => attachment.id) %>" class="comment_attachment_link <%= attachment.mime_class %>"><%= attachment.display_name %></a>
                     </div>
                   <% end %>
                 </div>
-                <div style="text-align: right; font-size: 0.8em; color: #888;">
+                <div style="text-align: <%= direction('right') %>; font-size: 0.8em; color: #888;">
                   <span class="author_name">
                     <%= comment_author_name_for(comment) %>
                   </span>,
@@ -294,8 +311,8 @@
           </div>
           <div class="comment" id="comment_blank" style="display: none; margin-bottom: 10px;">
             <span class="comment" style="color: #444; white-space: pre-wrap;"></span>
-            <div class="comment_attachments" style="text-align: right; margin-right: 10px;"></div>
-            <div style="text-align: right; font-size: 0.8em; color: #888;">
+            <div class="comment_attachments" style="text-align: <%= direction('right') %>; margin-<%= direction('right') %>: 10px;"></div>
+            <div style="text-align: <%= direction('right') %>; font-size: 0.8em; color: #888;">
               <span class="author_name">&nbsp;</span>,
               <span class="posted_at">&nbsp;</span>
             </div>
@@ -310,22 +327,42 @@
           </div>
           <div style="padding: 10px; <%= hidden unless can_do(@submission, @current_user, :comment) %>" id="add_comment_form">
             <strong><%= before_label('add_a_comment', 'Add a Comment') %></strong>
-            <span><br/><%= t('teachers_notified_of_comments', 'Teachers and submitter will be notified of all comments.') %></span>
             <textarea class="ic-Input grading_comment"></textarea>
             <div class="comment_attachments">
             </div>
-            <div class="clearfix" style="text-align: right;">
+            <div class="clearfix" style="text-align: <%= direction('right') %>;">
               <% if feature_enabled?(:kaltura) %>
-                <a href="#" style="float: left;" class="media_comment_link media-comment"><%= t('media_comment', 'Media Comment') %></a>
+                <a href="#" class="media_comment_link media-comment pull-left"><%= t('media_comment', 'Media Comment') %></a>
               <% end %>
-              <a href="#" style="float: right;" class="attach_comment_file_link"><%= t('attach_file', 'Attach File') %></a>
+              <a href="#" style="float: <%= direction('right') %>;" class="attach_comment_file_link"><%= t('attach_file', 'Attach File') %></a>
               <div class="clear"></div>
             </div>
             <% if @assignment.has_group_category? && can_do(@submission, @current_user, :make_group_comment) %>
-              <label class="checkbox" for="submission_group_comment">
-                <input type="checkbox" name="group_comment" id="submission_group_comment"/>
-                <%= t('sent_to_whole_group', 'Send Comment to the Whole Group') %>
-              </label>
+              <% if @assignment.grade_as_group? %>
+                <span><%= t("All comments are sent to the whole group.") %></span>
+                <input type="checkbox" name="submission[group_comment]" id="submission_group_comment" style="display:none" checked />
+              <% else %>
+                <fieldset class="ic-Fieldset ic-Fieldset--radio-checkbox">
+                  <div class="ic-Form-control ic-Form-control--radio">
+                    <div class="ic-Radio">
+                      <input type="radio" name="submission[group_comment]" id="not_submission_group_comment" value="0" checked />
+                      <label class="ic-Label" for="not_submission_group_comment">
+                        <% if can_do(@submission, @current_user, :grade) %>
+                          <%= t('Send comment to this student only') %>
+                        <% else %>
+                          <%= t('Send comment to instructor only') %>
+                        <% end %>
+                      </label>
+                    </div>
+                    <div class="ic-Radio">
+                      <input type="radio" name="submission[group_comment]" id="submission_group_comment" value="1" />
+                      <label class="ic-Label" for="submission_group_comment">
+                        <%= t('sent_to_whole_group', 'Send comment to the whole group') %>
+                      </label>
+                    </div>
+                  </div>
+                </fieldset>
+              <% end %>
             <% end %>
             <div class="button-container">
               <button type="button" class="Button Button--primary save_comment_button"><%= t('buttons.save', 'Save') %></button>

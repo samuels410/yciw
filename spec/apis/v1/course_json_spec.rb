@@ -1,3 +1,21 @@
+#
+# Copyright (C) 2012 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+#
+
 require_relative '../../spec_helper'
 require_dependency "api/v1/course_json"
 
@@ -185,11 +203,13 @@ module Api
       end
 
       describe '#set_sis_course_id' do
-        let(:sis_course) { double(:grants_any_right? => @has_right, :sis_source_id => @sis_id ) }
+        let(:sis_course) { double(grants_any_right?: @has_right, sis_source_id: @sis_id, sis_batch_id: @batch, root_account: root_account) }
+        let(:root_account) { double(grants_right?: @has_right ) }
         let(:hash) { Hash.new }
 
         before do
           @sis_id = 1357
+          @batch = 991357
           @has_right = false
         end
 
@@ -204,6 +224,7 @@ module Api
           describe 'with a nil sis_id' do
             before do
               @sis_id = nil
+              @batch = nil
               course_json.set_sis_course_id( hash, sis_course, user )
             end
 
@@ -212,7 +233,7 @@ module Api
             end
 
             it 'does not get cleared out before translation to json' do
-              expect(course_json.clear_unneeded_fields( hash )).to eq({ 'sis_course_id' => nil })
+              expect(course_json.clear_unneeded_fields( hash )).to eq({ 'sis_course_id' => nil, 'sis_import_id' => nil})
             end
           end
         end

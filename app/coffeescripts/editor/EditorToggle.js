@@ -19,8 +19,8 @@ import _ from 'underscore'
 import I18n from 'i18n!editor'
 import $ from 'jquery'
 import Backbone from 'Backbone'
-import preventDefault from 'compiled/fn/preventDefault'
-import KeyboardShortcuts from 'compiled/views/editor/KeyboardShortcuts'
+import preventDefault from '../fn/preventDefault'
+import KeyboardShortcuts from '../views/editor/KeyboardShortcuts'
 import React from 'react'
 import ReactDOM from 'react-dom'
 import SwitchEditorControl from 'jsx/editor/SwitchEditorControl'
@@ -119,13 +119,12 @@ class EditorToggle {
   replaceTextArea () {
     this.el.insertBefore(this.textAreaContainer)
     RichContentEditor.destroyRCE(this.textArea)
+    if (this.textArea) {
+      this.textArea.remove()
+    }
     this.textArea = this.createTextArea()
     this.textAreaContainer.append(this.textArea)
     return this.textAreaContainer.detach()
-  }
-
-  renewTextAreaID () {
-    return this.textArea.attr('id', nextID())
   }
 
   // #

@@ -20,14 +20,16 @@ import I18n from 'i18n!external_tools'
 import $ from 'jquery'
 import React from 'react'
 import PropTypes from 'prop-types'
+import iframeAllowances from '../lib/iframeAllowances'
 
 export default React.createClass({
   displayName: 'Lti2Iframe',
 
   propTypes: {
     reregistration: PropTypes.bool,
-    registrationUrl: PropTypes.string.isRequired,
-    handleInstall: PropTypes.func.isRequired
+    registrationUrl: PropTypes.string,
+    handleInstall: PropTypes.func.isRequired,
+    hideComponent: PropTypes.bool
   },
 
   getInitialState () {
@@ -48,15 +50,17 @@ export default React.createClass({
         this.props.handleInstall(message, e);
       }
     }.bind(this), false);
+
+    if (this.iframe) {
+      this.iframe.setAttribute('allow', iframeAllowances());
+    }
   },
 
   getLaunchUrl () {
     if (this.props.reregistration) {
       return this.props.registrationUrl
     }
-    else {
-      return ENV.LTI_LAUNCH_URL + '?display=borderless&tool_consumer_url=' + this.props.registrationUrl;
-    }
+    return 'about:blank';
   },
 
   handleAlertFocus (event) {
@@ -88,7 +92,7 @@ export default React.createClass({
     const afterAlertStyles = `after_external_content_info_alert ${this.state.afterExternalContentAlertClass}`
 
     return (
-      <div>
+      <div id='lti2-iframe-container' style={this.props.hideComponent ? {display: 'none'} : {}}>
         <div className="ReactModal__Body" style={{padding: '0px !important', overflow: 'auto'}}>
           <div
             onFocus={this.handleAlertFocus}
@@ -105,6 +109,7 @@ export default React.createClass({
           </div>
           <iframe
             src={this.getLaunchUrl()}
+            name="lti2_registration_frame"
             className="tool_launch"
             title={I18n.t('Tool Content')}
             style={this.state.iframeStyle}

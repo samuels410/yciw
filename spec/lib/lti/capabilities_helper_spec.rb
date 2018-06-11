@@ -74,12 +74,14 @@ module Lti
     let(:valid_enabled_caps){ %w(ToolConsumerInstance.guid Membership.role CourseSection.sourcedId) }
     let(:supported_capabilities){
       %w(ToolConsumerInstance.guid
+         Canvas.term.name
          CourseSection.sourcedId
          Membership.role
          Person.email.primary
          Person.name.given
          Person.name.family
          Person.name.full
+         Person.name.display
          Person.sourcedId
          User.id
          User.image
@@ -97,7 +99,13 @@ module Lti
          vnd.Canvas.submission.url
          Context.title
          com.instructure.Assignment.lti.id
-         com.instructure.PostMessageToken)
+         com.instructure.PostMessageToken
+         com.instructure.Editor.contents
+         com.instructure.Editor.selection
+         com.instructure.Group.id
+         com.instructure.Group.name
+         Canvas.membership.roles
+         com.instructure.Course.groupIds)
     }
 
     describe '#supported_capabilities' do

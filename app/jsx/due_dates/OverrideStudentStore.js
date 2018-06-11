@@ -18,7 +18,7 @@
 
 import React from 'react'
 import _ from 'underscore'
-import createStore from 'jsx/shared/helpers/createStore'
+import createStore from '../shared/helpers/createStore'
 import $ from 'jquery'
 import DefaultUrlMixin from 'compiled/backbone-ext/DefaultUrlMixin'
 import parseLinkHeader from 'compiled/fn/parseLinkHeader'
@@ -64,7 +64,7 @@ import parseLinkHeader from 'compiled/fn/parseLinkHeader'
 
     var getUsersPath = this.getContextPath() + "/users"
     $.getJSON(getUsersPath,
-      {user_ids: givenIds, enrollment_type: "student", include: ["enrollments", "group_ids"]},
+      {user_ids: givenIds.join(","), enrollment_type: "student", include: ["enrollments", "group_ids"]},
       this._fetchStudentsByIDSuccessHandler.bind(this, {})
     )
   }

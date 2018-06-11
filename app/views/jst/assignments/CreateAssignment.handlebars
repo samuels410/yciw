@@ -52,6 +52,7 @@
               data-tooltip-selector="#vdd_tooltip_{{uniqLabel}}"
               aria-labelledby="vdd_tooltip_{{uniqLabel}}">
             <input
+              id="{{uniqLabel}}_assignment_due_at"
               class="input-medium"
               type="text"
               {{#if multipleDueDates}}
@@ -67,7 +68,7 @@
             {{#each allDates}}
               <div class="clearfix">
                 <dt>{{dueFor}}</dt>
-                <dd>{{#if dueAt}} {{tDateToString (fudge dueAt) 'short'}} {{else}} - {{/if}}</dd>
+                <dd>{{#if dueAt}} {{tDateToString dueAt 'short'}} {{else}} - {{/if}}</dd>
               </div>
             {{/each}}
           </dl>

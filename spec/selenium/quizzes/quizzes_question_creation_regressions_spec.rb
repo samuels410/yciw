@@ -86,7 +86,7 @@ describe 'quizzes question creation' do
       wait_for_ajax_requests
 
       # check to see if the questions displays correctly
-      dismiss_flash_messages
+      dismiss_flash_messages_if_present
       move_to_click('label[for=show_question_details]')
       quiz.reload
       finished_question = f("#question_#{quiz.quiz_questions[0].id}")
@@ -98,6 +98,7 @@ describe 'quizzes question creation' do
     end
 
     it 'respects character limits on short answer questions', priority: "2", test_id: 197493 do
+      skip_if_safari(:alert)
       question = fj('.question_form:visible')
       click_option('.question_form:visible .question_type', 'Fill In the Blank')
 

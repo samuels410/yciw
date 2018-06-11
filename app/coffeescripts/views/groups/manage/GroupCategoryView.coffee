@@ -19,12 +19,12 @@ define [
   'i18n!groups'
   'Backbone'
   'underscore'
-  'compiled/views/groups/manage/GroupCategoryDetailView'
-  'compiled/views/groups/manage/GroupsView'
-  'compiled/views/groups/manage/UnassignedUsersView'
-  'compiled/views/groups/manage/AddUnassignedMenu'
+  './GroupCategoryDetailView'
+  './GroupsView'
+  './UnassignedUsersView'
+  './AddUnassignedMenu'
   'jst/groups/manage/groupCategory'
-  'compiled/jquery.rails_flash_notifications'
+  '../../../jquery.rails_flash_notifications'
   'jquery.disableWhileLoading'
 ], (I18n, {View}, _, GroupCategoryDetailView, GroupsView, UnassignedUsersView, AddUnassignedMenu, template) ->
 
@@ -142,4 +142,3 @@ define [
       json.groupsAreSearchable = ENV.IS_LARGE_ROSTER and
                                  not json.randomlyAssignStudentsInProgress
       json
-

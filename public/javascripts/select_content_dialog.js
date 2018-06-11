@@ -24,6 +24,8 @@ import ReactDOM from 'react-dom'
 import FileSelectBox from 'jsx/context_modules/FileSelectBox'
 import _ from 'underscore'
 import htmlEscape from 'str/htmlEscape'
+import { uploadFile } from 'jsx/shared/upload_file'
+import iframeAllowances from 'jsx/external_apps/lib/iframeAllowances'
 import './jquery.instructure_date_and_time' /* datetime_field */
 import './jquery.ajaxJSON'
 import './jquery.instructure_forms' /* formSubmit, ajaxJSONFiles, getFormData, errorBox */
@@ -85,7 +87,8 @@ import './jquery.templateData'
             style: 'width: 800px; height: ' + frameHeight + 'px; border: 0;',
             src: '/images/ajax-loader-medium-444.gif',
             borderstyle: '0',
-            tabindex: '0'
+            tabindex: '0',
+            allow: iframeAllowances()
           }));
           $dialog.append(`<div class="after_external_content_info_alert screenreader-only" tabindex="0">
             <div class="ic-flash-info">
@@ -352,10 +355,13 @@ import './jquery.templateData'
             var url = $("#select_context_content_dialog .module_item_option:visible:first .new .add_item_url").attr('href');
             var data = $("#select_context_content_dialog .module_item_option:visible:first").getFormData();
             var callback = function(data) {
+
               var obj;
 
               // discussion_topics will come from real api v1 and so wont be nested behind a `discussion_topic` or 'wiki_page' root object
-              if (item_data['item[type]'] === 'discussion_topic' || item_data['item[type]'] === 'wiki_page') {
+              if (item_data['item[type]'] === 'discussion_topic' ||
+                item_data['item[type]'] === 'wiki_page' ||
+                item_data['item[type]'] === 'attachment') {
                 obj = data;
               } else {
                 obj = data[item_data['item[type]']]; // e.g. data['wiki_page'] for wiki pages
@@ -386,10 +392,19 @@ import './jquery.templateData'
               data['assignment[post_to_sis]'] = false
             }
             if(item_data['item[type]'] == 'attachment') {
-              data['duplicate_handling'] = 'rename';
-              $.ajaxJSONFiles(url, 'POST', data, $("#module_attachment_uploaded_data"), function(data) {
-                callback(data);
-              }, function(data) {
+              var file = $("#module_attachment_uploaded_data")[0].files[0];
+              var url = `/api/v1/folders/${data["attachment[folder_id]"]}/files`;
+              data = {
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                parent_folder_id: data["attachment[folder_id]"],
+                on_duplicate: 'rename',
+                no_redirect: true
+              };
+              uploadFile(url, data, file).then(function(attachment) {
+                callback(attachment)
+              }).catch(function(response) {
                 $("#select_context_content_dialog").loadingImage('remove');
                 $("#select_context_content_dialog").errorBox(I18n.t('errors.failed_to_create_item', 'Failed to Create new Item'));
               });

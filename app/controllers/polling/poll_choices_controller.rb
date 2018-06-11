@@ -17,7 +17,6 @@
 
 module Polling
   # @API PollChoices
-  # @beta
   # Manage choices for polls
   #
   # @model PollChoice
@@ -60,9 +59,8 @@ module Polling
     before_action :require_poll
 
     # @API List poll choices in a poll
-    # @beta
     #
-    # Returns the list of PollChoices in this poll.
+    # Returns the paginated list of PollChoices in this poll.
     #
     # @example_response
     #   {
@@ -79,7 +77,6 @@ module Polling
     end
 
     # @API Get a single poll choice
-    # @beta
     #
     # Returns the poll choice with the given id
     #
@@ -96,7 +93,6 @@ module Polling
     end
 
     # @API Create a single poll choice
-    # @beta
     #
     # Create a new poll choice for this poll
     #
@@ -129,7 +125,6 @@ module Polling
     end
 
     # @API Update a single poll choice
-    # @beta
     #
     # Update an existing poll choice for this poll
     #
@@ -165,7 +160,6 @@ module Polling
     end
 
     # @API Delete a poll choice
-    # @beta
     #
     # <b>204 No Content</b> response code is returned if the deletion was successful.
     def destroy

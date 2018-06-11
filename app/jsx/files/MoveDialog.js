@@ -19,27 +19,11 @@
 import I18n from 'i18n!react_files'
 import React from 'react'
 import MoveDialog from 'compiled/react_files/components/MoveDialog'
-import Modal from 'jsx/shared/modal'
-import ModalContent from 'jsx/shared/modal-content'
-import ModalButtons from 'jsx/shared/modal-buttons'
-import BBTreeBrowser from 'jsx/files/BBTreeBrowser'
+import Modal from '../shared/modal'
+import ModalContent from '../shared/modal-content'
+import ModalButtons from '../shared/modal-buttons'
+import BBTreeBrowser from '../files/BBTreeBrowser'
 import classnames from 'classnames'
-
-  const modalOverrides = {
-    overlay : {
-      backgroundColor: 'rgba(0,0,0,0.5)'
-    },  
-    content : {
-      position: 'static',
-      top: '0',
-      left: '0',
-      right: 'auto',
-      bottom: 'auto',
-      borderRadius: '0',
-      border: 'none',
-      padding: '0'
-    }
-  };
 
   MoveDialog.renderMoveButton = function () {
     const buttonClassNames = classnames({
@@ -77,7 +61,6 @@ import classnames from 'classnames'
       <Modal
         className='ReactModal__Content--canvas ReactModal__Content--mini-modal'
         overlayClassName='ReactModal__Overlay--canvas'
-        style={modalOverrides}
         ref='canvasModal'
         isOpen={this.state.isOpen}
         title={this.getTitle()}

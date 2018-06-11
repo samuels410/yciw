@@ -20,9 +20,9 @@ import I18n from 'i18n!roster'
 import React from 'react'
 import PropTypes from 'prop-types'
 import {personReadyToEnrollShape} from './shapes'
-import Alert from 'instructure-ui/lib/components/Alert'
-import Table from 'instructure-ui/lib/components/Table'
-import ScreenReaderContent from 'instructure-ui/lib/components/ScreenReaderContent'
+import Alert from '@instructure/ui-core/lib/components/Alert'
+import Table from '@instructure/ui-core/lib/components/Table'
+import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent'
 
   class PeopleReadyList extends React.Component {
     static propTypes = {
@@ -39,8 +39,8 @@ import ScreenReaderContent from 'instructure-ui/lib/components/ScreenReaderConte
     renderNotice () {
       return (
         this.props.nameList.length > 0
-          ? <Alert variant="success" dismissable={false}>{I18n.t('The following users are ready to be added to the course.')}</Alert>
-          : <Alert variant="info" dismissable={false}>{I18n.t('No users were selected to add to the course')}</Alert>
+          ? <Alert variant="success">{I18n.t('The following users are ready to be added to the course.')}</Alert>
+          : <Alert variant="info">{I18n.t('No users were selected to add to the course')}</Alert>
       );
     }
     renderUserTable () {
@@ -60,7 +60,7 @@ import ScreenReaderContent from 'instructure-ui/lib/components/ScreenReaderConte
             <tbody>
               {this.props.nameList.map((n, i) => (
                 <tr key={`${n.address}_${i}`}>
-                  <td>{n.user_name}</td>
+                  <th scope="row">{n.user_name}</th>
                   <td>{n.email}</td>
                   <td>{n.login_id || ''}</td>
                   {this.props.canReadSIS ? <td>{n.sis_user_id || ''}</td> : null}

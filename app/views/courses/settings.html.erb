@@ -32,10 +32,12 @@
   can_see_users = can_do(@context, @current_user, :read_roster, :manage_students, :manage_admin_users)
 
   is_master_course = MasterCourses::MasterTemplate.is_master_course?(@context)
+  blueprint_subscription = @context.master_course_subscriptions.active.first
+  master_course = blueprint_subscription&.master_template&.course
 %>
 
 <% content_for :right_side do %>
-  <%= render :partial => 'settings_sidebar' %>
+  <%= render :partial => 'settings_sidebar', :locals => { :blueprint_subscription => blueprint_subscription } %>
 <% end %>
 
 <h1 class="screenreader-only"><%= t 'course_settings_title', "Course Settings" %></h1>
@@ -71,13 +73,13 @@
         <% if @context.unpublishable? %>
           <span data-tooltip title="" id='course-status' class='published-status published pull-right'>
             <%= t('labels.course_status_published', %{Course is Published}) %>
-            <i class="icon-publish"></i>
+            <i class="icon-publish icon-Solid"></i>
           </span>
         <% else %>
           <% unpublish_tooltip = t('tooltips.cannot_unpublish_course', %{You cannot unpublish this course if there are graded student submissions}) %>
           <span data-tooltip title="<%= unpublish_tooltip %>" id='course-status' class='published-status published pull-right'>
             <%= t('labels.course_status_published', %{Course is Published}) %>
-            <i class="icon-publish"></i>
+            <i class="icon-publish icon-Solid"></i>
           </span>
         <% end %>
       <% end %>
@@ -122,10 +124,19 @@
       <tr>
         <td class="form-label nobr"><%= f.blabel :blueprint_course, :en => "Blueprint Course" %></td>
         <td class="nobr">
-          <% if can_manage_master_courses %>
-            <div id="blueprint_menu"></div>
+          <% if master_course %>
+            <% if master_course.grants_right? @current_user, session, :read %>
+              <a href="<%= course_url(master_course) %>"><%= master_course.nickname_for(@current_user) %></a>
+            <% else %>
+              <%= master_course.nickname_for(@current_user) %>
+            <% end %>
+            (courses/<%= master_course.id %>)
           <% else %>
-            <span id="course_blueprint"><%= is_master_course ? t("Yes") : t("No") %></span>
+            <% if can_manage_master_courses %>
+              <div id="blueprint_menu"></div>
+            <% else %>
+              <span id="course_blueprint"><%= is_master_course ? t("Yes") : t("No") %></span>
+            <% end %>
           <% end %>
         </td>
       </tr>
@@ -143,11 +154,11 @@
             <% end %>
           <% end %>
         </td>
-      <% if @context.sis_source_id && can_do(@context, @current_user, :read_sis) || can_do(@context, @current_user, :manage_sis) %>
+      <% if @context.sis_source_id && can_do(@context, @current_user, :read_sis) || can_do(@context.root_account, @current_user, :manage_sis) %>
         </tr><tr>
           <td class="form-label"><%= f.blabel :sis_source_id, :en => "SIS ID" %></td>
           <td>
-            <% if can_manage && can_do(@context, @current_user, :manage_sis) %>
+            <% if can_manage && can_do(@context.root_account, @current_user, :manage_sis) %>
               <%= f.text_field :sis_source_id, :style => "width: 202px;", :title => t('sis_source_id', "SIS ID"), :value => @context.sis_source_id %>
             <% else %>
               <span id="course_sis_source_id">
@@ -169,8 +180,8 @@
             <% account_chain = @context.account.account_chain.reverse %>
             <% account_chain.each do |account| %>
               <% if can_do(account, @current_user, :manage_courses) %>
-                <% if account.root_account? && account.all_accounts.count > 500 %>
-                  <a href="<%= context_url(account, :context_sub_accounts_url, :format => :json) %>" id="course_account_id_url" style="display: none;">&nbsp;</a>
+                <% if account.root_account? && account.all_accounts.active.count > Setting.get('course_settings_sub_account_dropdown_limit', '500').to_i %>
+                  <a href="<%= context_url(account, :context_sub_accounts_url, :format => :json, :include_self => "1") %>" id="course_account_id_url" style="display: none;">&nbsp;</a>
                   <input type="hidden" name="course[account_id]" id="course_account_id" value="<%= @context.account_id %>"/>
                   <input type="text" name="account[name]" id="course_account_id_lookup" value="<%= @context.account.name %>" style="width: 150px;"/>
                 <% else %>
@@ -197,7 +208,7 @@
       </tr><tr>
         <td class="form-label"><%= f.blabel :enrollment_term_id, :en => "Term" %></td>
         <td>
-          <% if can_manage && can_do(@context.root_account, @current_user, :manage_courses) %>
+          <% if can_manage && can_do(@context.account, @current_user, :manage_courses) %>
             <select name="course[enrollment_term_id]" id="course_enrollment_term_id">
               <% @context.root_account.enrollment_terms.active.sort_by{|t| t.start_at || CanvasSort::First}.each do |term| %>
                 <option value="<%= term.id %>" <%= 'selected' if term.id == @context.enrollment_term_id %>><%= term.name %></option>
@@ -260,11 +271,6 @@
                            [[no_language, nil]] + available_locales.invert.sort_by { |desc, _| Canvas::ICU.collation_key(desc) },
                            {:selected => @context.locale}, {:class => 'locale'} %>
               <%= render :partial => 'shared/locale_warning' %>
-              <p> <%= mt :transifex_message, <<-TEXT, :transifex_url => "https://www.transifex.com/instructure/canvas-crowdsource/"
-  Join the [Canvas Translation Community](%{transifex_url})
-  TEXT
-              %>
-              </p>
             </div>
             <div class="aside palign">
               <%= t('language_overrides_preferences', "This will override any user/system language preferences. This is only recommended for foreign language courses") %>
@@ -301,7 +307,7 @@
         <td id="course_grading_scheme">
           <%= f.check_box :grading_standard_enabled, :class => "grading_standard_checkbox", :disabled => !can_manage %>
           <%= f.label :grading_standard_enabled, :en => "Enable course grading scheme" %>
-          <div class="grading_standard_link" style="margin-left: 20px;">
+          <div class="grading_standard_link" style="margin-<%= direction('left') %>: 20px;">
             <a href="#" class="edit_letter_grades_link"><%= @context.grading_standard_enabled? ? t('view_grading_scheme', "view grading scheme") : t('set_grading_scheme', "set grading scheme") %></a>
           </div>
         </td>
@@ -416,8 +422,8 @@
               %>
             <% end %>
           </span>
-          <a href="#" role="button" class="course_form course_form_more_options_link" style="padding-left: 20px;"><%= t('links.more_options', %{more options}) %></a>
-          <div class="course_form_more_options" style="display: none; padding-left: 20px;">
+          <a href="#" role="button" class="course_form course_form_more_options_link" style="padding-<%= direction('left') %>: 20px;"><%= t('links.more_options', %{more options}) %></a>
+          <div class="course_form_more_options" style="display: none; padding-<%= direction('left') %>: 20px;">
             <% if @context.self_enrollment_allowed? %>
               <%= f.check_box :self_enrollment, :class => 'self_enrollment_checkbox', :disabled => !can_manage %>
               <label for="course_self_enrollment">
@@ -457,7 +463,7 @@
             <label for="course_default_wiki_editing_roles">
               <%= t(%{can create, rename, and edit course pages by default}) %>
             </label><br/>
-            <div class="changed_default_wiki_editing_roles" style="display: none; padding-left: 20px; font-size: 0.8em;">
+            <div class="changed_default_wiki_editing_roles" style="display: none; padding-<%= direction('left') %>: 20px; font-size: 0.8em;">
               <input type="checkbox" name="update_default_pages" id="update_default_pages"/>
               <label for="update_default_pages"><%= t 'wiki_editing_roles_change_existing', %{Change pages currently editable by "%{current_setting}" to "%{new_setting}".}, :current_setting => content_tag('span', @context.readable_default_wiki_editing_roles), :new_setting => content_tag('span', nbsp, :class => 'default_wiki_editing_roles_change') %></label>
             </div>
@@ -609,12 +615,9 @@
             <%= tab[:label] %>
             <div class="admin-links">
               <a class="al-trigger al-trigger-gray" role="button" href="#">
-                <i class="icon-settings"></i>
-                <i class="icon-mini-arrow-down"></i>
+                <i class="icon-more" aria-hidden="true"></i>
                 <span class="screenreader-only">
-                  <span class="screenreader-only">
-                    <%= t('Settings for %{tab_label}', { tab_label: tab[:label]}) %>
-                  </span>
+                  <%= t('Settings for %{tab_label}', { tab_label: tab[:label]}) %>
                 </span>
               </a>
 
@@ -650,9 +653,9 @@
             <%= tab[:label] %>
             <div class="admin-links">
                 <a class="al-trigger al-trigger-gray" role="button" href="#">
-                  <i class="icon-settings"></i>
-                  <i class="icon-mini-arrow-down"></i>
-                  <span class="screenreader-only"><%= t('Settings for %{tab_label}', { tab_label: tab[:label]}) %></span>
+                  <i class="icon-more" aria-hidden="true"></i>
+                  <span class="screenreader-only"><%= t('Settings for %{tab_label}', { tab_label: tab[:label]}) %>
+                  </span>
                 </a>
 
                 <ul id="content-2" class="al-options" role="menu" tabindex="0" aria-hidden="true" aria-expanded="false" aria-activedescendant="content-3">
@@ -674,25 +677,6 @@
         <button type="submit" class="btn btn-primary"><%= t('#buttons.save', %{Save}) %></button>
       </p>
     <% end %>
-    <form id="move_nav_item_form" style="display:none" class="form-dialog" title="Move Navigation Item" aria-hidden='true'>
-      <div class="form-dialog-content">
-        <h2><%= t('move_module.place', "Place ") %> <span id="move_nav_item_name"> </span></h2>
-        <div class="move-nav-item-before-after-container">
-          <input type="radio" name="move_location" value="before" id="move_location_before" class="move-nav-item-label-spacer" /><label class="move-nav-item-label-width" for="move_location_before"><%= t('move_nav_item.before', "Before") %></label>
-            <strong class="move-nav-item-or"><%= t('move_nav_item.or', "OR") %></strong>
-          <input type="radio" name="move_location" value="after" id="move_location_after" class="move-nav-item-label-spacer" /><label class="move-nav-item-label-width" for="move_location_after"><%= t('move_nav_item.after', "After") %></label>
-        </div>
-        <div class="move-nav-item-select-spacer">
-          <label class="move-nav-item-label-width" for="move_nav_item_select"><%= t("Move Item") %></label>
-          <select name="move_nav_item_select" aria-label="<%= t("Move Item") %>" id="move_nav_item_select"></select>
-        </div>
-
-      </div>
-      <div class="form-controls">
-        <button type="button" id="move_nav_item_cancel_btn" class="btn cancel_move_dialog">Cancel</button>
-        <button type="submit" class="btn btn-primary">Move</button>
-      </div>
-    </form>
   </div>
 
   <% end %>

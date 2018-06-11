@@ -1,6 +1,6 @@
 module Consts
   APP_COFFEE_PATH = "app/coffeescripts/calendar/CalendarEvent.coffee".freeze
-  APP_COFFEE_BUNDLE_PATH = "app/coffeescripts/bundles/account_authorization_configs.coffee".freeze
+  APP_COFFEE_BUNDLE_PATH = "app/coffeescripts/bundles/authentication_providers.coffee".freeze
   COFFEE_SPEC_PATH = "spec/coffeescripts/calendar/CalendarSpec.coffee".freeze
 
   APP_JSX_PATH = "app/jsx/dashboard_card/DashboardCardAction.js".freeze
@@ -16,8 +16,6 @@ module Consts
   PUBLIC_JS_PATH = "public/javascripts/account_statistics.js".freeze
   PUBLIC_JS_SPEC_PATH = "spec/javascripts/jsx/eportfolios/eportfolioSectionSpec.jsx".freeze
 
-  PUBLIC_BOWER_JS_PATH = "public/javascripts/bower/axios/dist/axios.amd.js".freeze
-  PUBLIC_ME_JS_PATH = "public/javascripts/mediaelement/mep-feature-speed-instructure.js".freeze
   PUBLIC_VENDOR_JS_PATH = "public/javascripts/vendor/bootstrap/bootstrap-dropdown.js".freeze
   SELENIUM_SPEC_PATH = "spec/selenium/announcements/announcements_student_spec.rb".freeze
 end

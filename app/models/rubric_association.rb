@@ -30,7 +30,7 @@ class RubricAssociation < ActiveRecord::Base
 
   belongs_to :context, polymorphic: [:course, :account]
   has_many :rubric_assessments, :dependent => :nullify
-  has_many :assessment_requests, :dependent => :destroy
+  has_many :assessment_requests, :dependent => :nullify
 
   has_a_broadcast_policy
 
@@ -139,17 +139,14 @@ class RubricAssociation < ActiveRecord::Base
   end
   protected :update_values
 
-  attr_accessor :assessing_user_id
+  def user_can_assess_for?(assessor: nil, assessee: nil)
+    raise "assessor and assessee required" unless assessor && assessee
+    self.context.grants_right?(assessor, :manage_grades) || self.assessment_requests.incomplete.for_assessee(assessee).pluck(:assessor_id).include?(assessor.id)
+  end
 
   set_policy do
     given {|user, session| self.context.grants_right?(user, session, :manage_rubrics) }
     can :update and can :delete and can :manage
-
-    given {|user, session| self.context.grants_right?(user, session, :manage_grades) }
-    can :assess
-
-    given {|user| user && @assessing_user_id && self.assessment_requests.for_assessee(@assessing_user_id).map{|r| r.assessor_id}.include?(user.id) }
-    can :assess
 
     given {|user, session| self.context.grants_right?(user, session, :participate_as_student) }
     can :submit
@@ -193,11 +190,10 @@ class RubricAssociation < ActiveRecord::Base
   def link_to_assessments
     # Go up to the assignment and loop through all submissions.
     # Update each submission's assessment_requests with a link to this rubric association
-    # but only if not already associated and the assessment is incomplete.
+    # but only if not already associated
     if self.association_id && self.association_type == 'Assignment'
       self.association_object.submissions.each do |sub|
-        sub.assessment_requests.incomplete.where(:rubric_association_id => nil).
-            update_all(:rubric_association_id => id)
+        sub.assessment_requests.where(:rubric_association_id => nil).update_all(:rubric_association_id => id, :workflow_state => 'assigned')
       end
     end
   end
@@ -229,6 +225,15 @@ class RubricAssociation < ActiveRecord::Base
   def assessments_unique_per_asset?(assessment_type)
     self.association_object.is_a?(Assignment) && self.purpose == "grading" && assessment_type == "grading"
   end
+
+  def assessment_points(criterion, data)
+    if criterion.learning_outcome_id && !self.context.feature_enabled?(:outcome_extra_credit)
+      [criterion.points, data[:points].to_f].min
+    else
+      data[:points].to_f
+    end
+  end
+  protected :assessment_points
 
   def assess(opts={})
     # TODO: what if this is for a group assignment?  Seems like it should
@@ -269,7 +274,7 @@ class RubricAssociation < ActiveRecord::Base
       if data
         replace_ratings = true
         has_score = (data[:points]).present?
-        rating[:points] = [criterion.points, data[:points].to_f].min if has_score
+        rating[:points] = assessment_points(criterion, data) if has_score
         rating[:criterion_id] = criterion.id
         rating[:learning_outcome_id] = criterion.learning_outcome_id
         if criterion.ignore_for_scoring
@@ -311,6 +316,8 @@ class RubricAssociation < ActiveRecord::Base
       if assessments_unique_per_asset?(params[:assessment_type])
         # Unless it's for grading, in which case assessments are unique per artifact (the assessor can change, depending on if the teacher/TA updates it)
         assessment = association.rubric_assessments.where(artifact_id: artifact, artifact_type: artifact.class.to_s, assessment_type: params[:assessment_type]).first
+        # Update the assessor in case it did change
+        assessment&.assessor = opts[:assessor]
       else
         # Assessments are unique per artifact/assessor/assessment_type.
         assessment = association.rubric_assessments.where(artifact_id: artifact, artifact_type: artifact.class.to_s, assessor_id: opts[:assessor], assessment_type: params[:assessment_type]).first
@@ -320,6 +327,7 @@ class RubricAssociation < ActiveRecord::Base
       assessment.data = ratings if replace_ratings
 
       assessment.set_graded_anonymously if opts[:graded_anonymously]
+      assessment.hide_points = association.hide_points
       assessment.save
       if artifact.is_a?(ModeratedGrading::ProvisionalGrade)
         artifact.submission.touch

@@ -20,8 +20,8 @@ define [
   'jquery'
   'underscore'
   'Backbone'
-  'compiled/models/Message'
-  'compiled/views/conversations/MessageItemView'
+  '../../models/Message'
+  '../conversations/MessageItemView'
   'jst/conversations/messageDetail'
   'jst/conversations/noMessage'
 ], (I18n, $, _, {View}, Message, MessageItemView, template, noMessage) ->
@@ -63,7 +63,6 @@ define [
       else
         $template = noMessage(options)
       @$el.html($template)
-      @$el.find('.subject').focus()
 
       @$archiveToggle = @$el.find('.archive-btn')
       @$starToggle = @$el.find('.star-toggle-btn')

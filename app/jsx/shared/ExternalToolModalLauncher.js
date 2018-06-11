@@ -20,9 +20,10 @@ import _ from 'underscore'
 import $ from 'jquery'
 import React from 'react'
 import PropTypes from 'prop-types'
-import Modal from 'jsx/shared/modal'
-import ModalContent from 'jsx/shared/modal-content'
+import Modal from './modal'
+import ModalContent from './modal-content'
 import I18n from 'i18n!external_tools'
+import iframeAllowances from '../external_apps/lib/iframeAllowances'
 
 export default React.createClass({
   displayName: 'ExternalToolModalLauncher',
@@ -37,11 +38,17 @@ export default React.createClass({
   },
 
   getInitialState () {
-    const dimensions = this.getLaunchDimensions();
-
     return {
       beforeExternalContentAlertClass: 'screenreader-only',
       afterExternalContentAlertClass: 'screenreader-only',
+      modalLaunchStyle: {}
+    }
+  },
+
+  getDimensions() {
+    const dimensions = this.getLaunchDimensions();
+
+    return {
       modalStyle: this.getModalStyle(dimensions),
       modalBodyStyle: this.getModalBodyStyle(dimensions),
       modalLaunchStyle: this.getModalLaunchStyle(dimensions),
@@ -87,6 +94,7 @@ export default React.createClass({
       this.props.tool['placements'] &&
       this.props.tool['placements'][this.props.launchType]) {
 
+
       const placement = this.props.tool['placements'][this.props.launchType];
 
       if (placement.launch_width) {
@@ -124,10 +132,8 @@ export default React.createClass({
   },
 
   handleAlertBlur (event) {
-    const dimensions = this.getLaunchDimensions();
     const newState = {
       modalLaunchStyle: {
-        ...this.getModalLaunchStyle(dimensions),
         border: 'none',
       }
     }
@@ -142,7 +148,6 @@ export default React.createClass({
   handleAlertFocus (event) {
     const newState = {
       modalLaunchStyle: {
-        ...this.state.modalLaunchStyle,
         width: this.iframe.offsetWidth - 4,
         border: '2px solid #008EE2'
       }
@@ -155,19 +160,30 @@ export default React.createClass({
     this.setState(newState)
   },
 
+  onAfterOpen () {
+    if (this.iframe) {
+      this.iframe.setAttribute('allow', iframeAllowances());
+    }
+  },
+
   render () {
     const beforeAlertStyles = `before_external_content_info_alert ${this.state.beforeExternalContentAlertClass}`
     const afterAlertStyles = `after_external_content_info_alert ${this.state.afterExternalContentAlertClass}`
+    const styles = this.getDimensions()
+
+    styles.modalLaunchStyle = { ...styles.modalLaunchStyle, ...this.state.modalLaunchStyle }
 
     return (
       <Modal className="ReactModal__Content--canvas"
+        contentLabel={I18n.t('Launch External Tool')}
         overlayClassName="ReactModal__Overlay--canvas"
-        style={this.state.modalStyle}
+        style={styles.modalStyle}
         isOpen={this.props.isOpen}
         onRequestClose={this.props.onRequestClose}
+        onAfterOpen={this.onAfterOpen}
         title={this.props.title}
       >
-        <ModalContent style={this.state.modalBodyStyle}>
+        <ModalContent style={styles.modalBodyStyle}>
           <div
             onFocus={this.handleAlertFocus}
             onBlur={this.handleAlertBlur}
@@ -184,7 +200,7 @@ export default React.createClass({
           </div>
           <iframe
             src={this.getIframeSrc()}
-            style={this.state.modalLaunchStyle}
+            style={styles.modalLaunchStyle}
             tabIndex={0}
             ref={(e) => { this.iframe = e; }}
           />

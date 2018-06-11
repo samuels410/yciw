@@ -71,6 +71,11 @@ module LoginAndSessionMethods
     course_with_teacher({:user => @user, :active_course => true, :active_enrollment => true}.merge(opts))
   end
 
+  def provision_quizzes_next(account)
+    account.root_account.settings[:provision] = { 'lti' => 'lti url'}
+    account.root_account.save!
+  end
+
   def admin_logged_in(opts={})
     account_admin_user({:active_user => true}.merge(opts))
     user_logged_in({:user => @user}.merge(opts))
@@ -86,6 +91,10 @@ module LoginAndSessionMethods
     get "/courses/#{@course.id}/settings"
     driver.execute_script("$('.student_view_button').click()")
     wait_for_ajaximations
+  end
+
+  def leave_student_view
+    expect_new_page_load { f('.leave_student_view').click }
   end
 
   def fill_in_login_form(username, password)
@@ -116,14 +125,15 @@ module LoginAndSessionMethods
   end
 
   def displayed_username
-    f('[aria-label="Main Navigation"] a[href="/profile"]').click
-    f('#global_nav_profile_display_name').text
+    f('[aria-label="Global Navigation"] a[href="/profile"]').click
+    f('[aria-label="Global navigation tray"] h2').text
   end
 
 
   def expect_logout_link_present
     logout_element = begin
-      f('[aria-label="Main Navigation"] a[href="/profile"]').click
+      f('[aria-label="Global Navigation"] a[href="/profile"]').click
+      wait_for_animations
       fj('form[action="/logout"] button:contains("Logout")')
     end
     expect(logout_element).to be_present

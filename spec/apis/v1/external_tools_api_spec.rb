@@ -32,6 +32,16 @@ describe ExternalToolsController, type: :request do
       show_call(@course)
     end
 
+    it "should include allow_membership_service_access if feature flag enabled" do
+      allow_any_instance_of(Account).to receive(:feature_enabled?).and_return(false)
+      allow_any_instance_of(Account).to receive(:feature_enabled?).with(:membership_service_for_lti_tools).and_return(true)
+      et = tool_with_everything(@course, allow_membership_service_access: true)
+      json = api_call(:get, "/api/v1/courses/#{@course.id}/external_tools/#{et.id}.json",
+                    {:controller => 'external_tools', :action => 'show', :format => 'json',
+                     :course_id => @course.id.to_s, :external_tool_id => et.id.to_s})
+      expect(json['allow_membership_service_access']).to eq true
+    end
+
     it "should return 404 for not found tool" do
       not_found_call(@course)
     end
@@ -118,6 +128,11 @@ describe ExternalToolsController, type: :request do
         end
 
         context 'assessment launch' do
+          before do
+            allow(BasicLTI::Sourcedid).to receive(:encryption_secret) {'encryption-secret-5T14NjaTbcYjc4'}
+            allow(BasicLTI::Sourcedid).to receive(:signing_secret) {'signing-secret-vp04BNqApwdwUYPUI'}
+          end
+
           it 'returns a bad request response if there is no assignment_id' do
             params = {id: tool.id.to_s, launch_type: 'assessment'}
             code = get_raw_sessionless_launch_url(@course, 'course', params)
@@ -126,12 +141,12 @@ describe ExternalToolsController, type: :request do
             expect(json["errors"]["assignment_id"].first["message"]).to eq 'An assignment id must be provided for assessment LTI launch'
           end
 
-          it 'returns a bad request response if the assignment is not found in the class' do
+          it 'returns a not found response if the assignment is not found in the class' do
             params = {id: tool.id.to_s, launch_type: 'assessment', assignment_id: -1}
             code = get_raw_sessionless_launch_url(@course, 'course', params)
-            expect(code).to eq 400
+            expect(code).to eq 404
             json = JSON.parse(response.body)
-            expect(json["errors"]["assignment_id"].first["message"]).to eq 'The assignment was not found in this course'
+            expect(json['errors'].first['message']).to eq 'The specified resource does not exist.'
           end
 
           it "returns an unauthorized response if the user can't read the assignment" do
@@ -172,7 +187,20 @@ describe ExternalToolsController, type: :request do
             # request/verify the lti launch page
             get json['url']
             expect(response.code).to eq '200'
+          end
 
+          it "returns sessionless launch URL when default URL is not set and placement URL is" do
+            tool.update_attributes!(url: nil)
+            params = { id: tool.id.to_s, launch_type: 'course_navigation' }
+            json = get_sessionless_launch_url(@course, 'course', params)
+            expect(json).to include('url')
+
+            # remove the user session (it's supposed to be sessionless, after all), and make the request
+            remove_user_session
+
+            # request/verify the lti launch page
+            get json['url']
+            expect(response.code).to eq '200'
           end
 
         end
@@ -198,7 +226,12 @@ describe ExternalToolsController, type: :request do
           expect(code).to eq 302
         end
 
-
+        it 'redirects if there is no launch url associated with the tool' do
+          no_url_tool = tool.dup
+          no_url_tool.update_attributes!(url: nil)
+          get_raw_sessionless_launch_url(@course, 'course', {id: no_url_tool.id})
+          expect(response).to be_redirect
+        end
       end
     end
 
@@ -507,6 +540,7 @@ describe ExternalToolsController, type: :request do
       et.course_assignments_menu = { url: 'http://www.example.com/ims/lti/resource', text: 'course assignments menu' }
     end
     et.context_external_tool_placements.new(:placement_type => opts[:placement]) if opts[:placement]
+    et.allow_membership_service_access = opts[:allow_membership_service_access] if opts[:allow_membership_service_access]
     et.save!
     et
   end

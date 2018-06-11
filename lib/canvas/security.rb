@@ -28,8 +28,8 @@ module Canvas::Security
   def self.encryption_key
     @encryption_key ||= begin
       res = config && config['encryption_key']
-      abort('encryption key required, see security.yml.example') unless res
-      abort('encryption key is too short, see security.yml.example') unless res.to_s.length >= 20
+      raise('encryption key required, see config/security.yml') unless res
+      raise('encryption key is too short, see config/security.yml') unless res.to_s.length >= 20
       res.to_s
     end
   end
@@ -39,7 +39,11 @@ module Canvas::Security
   end
 
   def self.config
-    @config ||= YAML.safe_load(ERB.new(File.read(Rails.root + 'config/security.yml')).result)[Rails.env]
+    @config ||= begin
+      path = Rails.root + 'config/security.yml'
+      raise('config/security.yml missing, see security.yml.example') unless File.exist?(path)
+      YAML.safe_load(ERB.new(File.read(path)).result)[Rails.env]
+    end
   end
 
   def self.encrypt_password(secret, key)
@@ -207,26 +211,29 @@ module Canvas::Security
   def self.re_encrypt_data(encryption_key)
     {
         Account =>  {
-            :encrypted_column => :turnitin_crypted_secret,
-            :salt_column => :turnitin_salt,
-            :key => 'instructure_turnitin_secret_shared' },
-        AccountAuthorizationConfig => {
-            :encrypted_column => :auth_crypted_password,
-            :salt_column => :auth_password_salt,
-            :key => 'instructure_auth' },
+          :encrypted_column => :turnitin_crypted_secret,
+          :salt_column => :turnitin_salt,
+          :key => 'instructure_turnitin_secret_shared'
+        },
+        AuthenticationProvider => {
+          :encrypted_column => :auth_crypted_password,
+          :salt_column => :auth_password_salt,
+          :key => 'instructure_auth'
+        },
         UserService => {
-            :encrypted_column => :crypted_password,
-            :salt_column => :password_salt,
-            :key => 'instructure_user_service' },
+          :encrypted_column => :crypted_password,
+          :salt_column => :password_salt,
+          :key => 'instructure_user_service'
+        },
         User => {
-            :encrypted_column => :otp_secret_key_enc,
-            :salt_column => :otp_secret_key_salt,
-            :key => 'otp_secret_key'
+          :encrypted_column => :otp_secret_key_enc,
+          :salt_column => :otp_secret_key_salt,
+          :key => 'otp_secret_key'
         }
     }.each do |(model, definition)|
       model.where("#{definition[:encrypted_column]} IS NOT NULL").
-          select([:id, definition[:encrypted_column], definition[:salt_column]]).
-          find_each do |instance|
+        select([:id, definition[:encrypted_column], definition[:salt_column]]).
+        find_each do |instance|
         cleartext = Canvas::Security.decrypt_password(instance.read_attribute(definition[:encrypted_column]),
                                                       instance.read_attribute(definition[:salt_column]),
                                                       definition[:key],

@@ -353,6 +353,9 @@ describe "Wiki pages and Tiny WYSIWYG editor features" do
     it "should delete a table from toolbar", priority: "1", test_id: 588945 do
       table = "<table><tbody><tr><td></td><td></td></tr><tr><td></td><td></td></tr></tbody></table>"
       wysiwyg_state_setup(table, html: true)
+      in_frame wiki_page_body_ifr_id do
+        f('.mce-item-table tr td').click
+      end
       f('.mce-i-table').click
       driver.find_element(:xpath, "//span[text()[contains(.,'Delete table')]]").click
       in_frame wiki_page_body_ifr_id do
@@ -468,6 +471,35 @@ describe "Wiki pages and Tiny WYSIWYG editor features" do
       expect(scroll_location).not_to be 0
     end
 
+    it "should not load mathjax if no mathml" do
+      text = '<p>o mathml here</p>'
+      wysiwyg_state_setup(text, html: true)
+      f('button.submit').click
+      wait_for_ajaximations
+      mathjax_defined = driver.execute_script('return (window.MathJax !== undefined)')
+      expect(mathjax_defined).to eq false
+    end
+
+    it "should load mathjax if mathml" do
+      text = '<p><math> <mi>&pi;</mi> <mo>⁢</mo> <msup> <mi>r</mi> <mn>2</mn> </msup> </math></p>'
+      wysiwyg_state_setup(text, html: true)
+      f('button.submit').click
+      wait_for_ajaximations
+      mathjax_defined = driver.execute_script('return (window.MathJax !== undefined)')
+      expect(mathjax_defined).to eq true
+    end
+
+    it "should not load mathjax if displaying an equation editor image and mathml" do
+      text = '<p><math> <mi>&pi;</mi> <mo>⁢</mo> <msup> <mi>r</mi> <mn>2</mn> </msup> </math></p>'
+      mathmanImg = '<p><img class="equation_image" title="\infty" src="/equation_images/%255Cinfty" alt="LaTeX: \infty" data-equation-content="\infty" /></p>'
+      get "/courses/#{@course.id}/pages/front-page/edit"
+      add_html_to_tiny(text+mathmanImg)
+      f('button.btn-primary').click
+      wait_for_ajaximations
+      mathjax_defined = driver.execute_script('return (window.MathJax !== undefined)')
+      expect(mathjax_defined).to be false
+    end
+
     it "should display record video dialog" do
       stub_kaltura
 
@@ -479,6 +511,39 @@ describe "Wiki pages and Tiny WYSIWYG editor features" do
       expect(f('#media_comment_dialog #audio_upload')).to be_displayed
       close_visible_dialog
       expect(f('#media_comment_dialog')).not_to be_displayed
+    end
+
+    it "should save with an iframe in a list" do
+      text = "<ul><li><iframe src=\"about:blank\"></iframe></li></ul>"
+      wysiwyg_state_setup(text, html: true)
+      f('form.edit-form button.submit').click
+      wait_for_ajax_requests
+      expect(f("#wiki_page_show")).to contain_css('ul iframe')
+    end
+
+    it "should save with an iframe in a table" do
+      text = "<table><tr><td><iframe src=\"about:blank\"></iframe></td></tr></table>"
+      wysiwyg_state_setup(text, html: true)
+      f('form.edit-form button.submit').click
+      wait_for_ajax_requests
+      expect(f("#wiki_page_show")).to contain_css('table iframe')
+    end
+
+    describe "a11y checker plugin" do
+      it "applys a fix" do
+        text = "Some long string of text that probably shouldn't be a header, but rather should be paragraph text. I need to be shorter please"
+        heading_html = "<h2>#{text}</h2>"
+        wysiwyg_state_setup(heading_html, html: true)
+        f('div[aria-label="Check Accessibility"] button').click
+        wait_for_ajaximations
+        fj('label:contains("Change heading tag to paragraph")').click
+        fj('.tinymce-a11y-checker-container button:contains("Apply")').click
+        expect(fj('.tinymce-a11y-checker-container p:contains("No accessibility issues were detected.")')).to be_displayed
+        f('form.edit-form button.submit').click
+        wait_for_ajaximations
+        expect(f("#wiki_page_show")).not_to contain_css('h2')
+        expect(f("#wiki_page_show p").text).to eq(text)
+      end
     end
   end
 end

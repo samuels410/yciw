@@ -574,6 +574,7 @@ describe AssignmentOverridesController, type: :request do
       assignment_override_model(:assignment => @assignment)
       @student = student_in_course(:course => @course).user
       @override_student = @override.assignment_override_students.build
+      @override_student.workflow_state = "active"
       @override_student.user = @student
       @override_student.save!
       @user = @teacher
@@ -805,6 +806,20 @@ describe AssignmentOverridesController, type: :request do
 
       end
 
+      it "runs DueDateCacher after changing overrides" do
+        always_override_student = @student
+        remove_override_student = student_in_course(:course => @course).user
+        @override.assignment_override_students.create!(user: remove_override_student)
+        @override.reload
+
+        expect(DueDateCacher).to receive(:recompute).with(@assignment, hash_including(update_grades: false))
+        api_update_override(@course, @assignment, @override,
+          :assignment_override => { :student_ids => [always_override_student.id] })
+
+        @override.reload
+        expect(@override.assignment_override_students.map(&:user_id)).to eq([always_override_student.id])
+      end
+
       it "should allow changing the title" do
         @new_title = "new #{@title}"
         api_update_override(@course, @assignment, @override, :assignment_override => { :title => @new_title })
@@ -818,6 +833,7 @@ describe AssignmentOverridesController, type: :request do
         assignment_override_model(:assignment => @assignment)
         @student = student_in_course(:course => @course).user
         @override_student = @override.assignment_override_students.build
+        @override_student.workflow_state = "active"
         @override_student.user = @student
         @override_student.save!
         @user = @teacher

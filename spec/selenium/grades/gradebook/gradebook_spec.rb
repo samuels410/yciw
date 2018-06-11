@@ -17,7 +17,7 @@
 
 require_relative '../../helpers/gradebook_common'
 require_relative '../../helpers/groups_common'
-require_relative '../page_objects/gradebook_page'
+require_relative '../pages/gradebook_page'
 
 describe "gradebook" do
   include_context "in-process server selenium tests"
@@ -36,7 +36,7 @@ describe "gradebook" do
     @gradebook_page.visit_gradebook(@course)
     page_load_finish_time = Time.now
     page_load_time = page_load_finish_time - page_load_start_time
-    puts "The page loaded in #{page_load_time} seconds"
+    Rails.logger.debug "The gradebook page /courses/#{@course}/gradebook loaded in #{page_load_time} seconds"
     expect(page_load_time).to be > 0.0
   end
 
@@ -127,7 +127,7 @@ describe "gradebook" do
     end
 
     it "should allow editing grades", priority: "1", test_id: 210026 do
-      cell = f('#gradebook_grid .container_1 .slick-row:nth-child(1) .l2')
+      cell = f('#gradebook_grid .container_1 .slick-row:nth-child(1) .b2')
       expect(f('.gradebook-cell', cell)).to include_text '10'
       cell.click
       expect(ff('.grade', cell)).to_not be_blank
@@ -141,11 +141,11 @@ describe "gradebook" do
     expect(f('.gradebook_dropdown')).to be_displayed
   end
 
-  it "View Grading History menu item redirects to grading history page", priority: "2", test_id: 164218 do
+  it "View Gradebook History menu item redirects to grading history page", priority: "2", test_id: 164218 do
     @gradebook_page.visit_gradebook(@course)
 
     f('#gradebook_settings').click
-    fj('.ui-menu-item a:contains("View Grading History")').click
+    fj('.ui-menu-item a:contains("View Gradebook History")').click
     expect(driver.current_url).to include("/courses/#{@course.id}/gradebook/history")
   end
 

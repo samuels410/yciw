@@ -3,8 +3,8 @@ import submissionDetailsDialog from 'jst/SubmissionDetailsDialog'
 import I18n from 'i18n!submission_details_dialog'
 import numberHelper from 'jsx/shared/helpers/numberHelper'
 import GradeFormatHelper from 'jsx/gradebook/shared/helpers/GradeFormatHelper'
-import GradebookHelpers from 'compiled/gradebook/GradebookHelpers'
-import {extractDataForTurnitin} from 'compiled/gradebook/Turnitin'
+import GradebookHelpers from './gradebook/GradebookHelpers'
+import {extractDataForTurnitin} from './gradebook/Turnitin'
 import OutlierScoreHelper from 'jsx/grading/helpers/OutlierScoreHelper'
 import 'jst/_submission_detail' // a partial needed by the SubmissionDetailsDialog template
 import 'jst/_turnitinScore' // a partial needed by the submission_detail partial
@@ -23,7 +23,7 @@ export default class SubmissionDetailsDialog {
     this.student = student
     this.options = options
     const speedGraderUrl = this.options.speed_grader_enabled
-      ? `${this.options.context_url}/gradebook/speed_grader?assignment_id=${this.assignment.id}#%7B%22student_id%22%3A${this.student.id}%7D`
+      ? this.buildSpeedGraderUrl()
       : null
 
     this.url = this.options.change_grade_url.replace(':assignment', this.assignment.id).replace(':submission', this.student.id)
@@ -53,6 +53,10 @@ export default class SubmissionDetailsDialog {
     })
 
     this.dialog.on('dialogclose', this.options.onClose)
+    this.dialog.on('dialogclose', () => {
+      this.dialog.dialog('destroy')
+      this.$el.remove()
+    })
     this.dialog
       .delegate('select[id="submission_to_view"]', 'change', event => this.dialog.find('.submission_detail').each(function (index) {
         $(this).showIf(index === event.currentTarget.selectedIndex)
@@ -95,6 +99,14 @@ export default class SubmissionDetailsDialog {
     this.dialog.find('.submission_details_comments').disableWhileLoading(deferred)
   }
 
+  buildSpeedGraderUrl = () => {
+    const assignmentParam = `assignment_id=${this.assignment.id}`
+    const speedGraderUrlParams = this.options.anonymous_moderated_marking_enabled && this.assignment.anonymous_grading
+      ? assignmentParam
+      : `${assignmentParam}#{"student_id":"${this.student.id}"}`
+    return encodeURI(`${this.options.context_url}/gradebook/speed_grader?${speedGraderUrlParams}`)
+  }
+
   open = () => {
     this.dialog.dialog('open')
     this.scrollCommentsToBottom()
@@ -121,6 +133,14 @@ export default class SubmissionDetailsDialog {
       })
     })
 
+    if (this.options.anonymous) {
+      this.submission.submission_comments.forEach((comment) => {
+        if(comment.author.id !== ENV.current_user_id) {
+          comment.anonymous = comment.author.anonymous = true;
+          comment.author_name = I18n.t('Student');
+        }
+      });
+    }
 
     if (this.submission.excused) {
       this.submission.grade = 'EX'
@@ -133,6 +153,6 @@ export default class SubmissionDetailsDialog {
   }
 
   static open (assignment, student, options) {
-    return new SubmissionDetailsDialog(assignment, student, options, ENV).open()
+    return new SubmissionDetailsDialog(assignment, student, options).open()
   }
 }

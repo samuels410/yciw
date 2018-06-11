@@ -16,9 +16,9 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 define [
-  'i18n!messages'
-  'compiled/views/PaginatedCollectionView'
-  'compiled/views/conversations/MessageView'
+  'i18nObj'
+  '../PaginatedCollectionView'
+  '../conversations/MessageView'
   'jst/conversations/messageList'
 ], (I18n, PaginatedCollectionView, MessageView, template) ->
 

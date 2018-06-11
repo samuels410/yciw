@@ -61,6 +61,7 @@ module CC
 
         Quizzes::ScopedToUser.new(@course, @user, @course.quizzes.active).scope.each do |quiz|
           next unless export_object?(quiz) || export_object?(quiz.assignment)
+          next if @user && !@course.grants_right?(@user, :read_as_admin) && quiz.locked_for?(@user, check_policies: true)
 
           title = if quiz
                     quiz.title
@@ -187,7 +188,7 @@ module CC
           q_node.due_at ims_datetime(quiz.due_at, nil) if quiz.due_at
           q_node.shuffle_answers quiz.shuffle_answers unless quiz.shuffle_answers.nil?
           q_node.scoring_policy quiz.scoring_policy
-          q_node.hide_results quiz.hide_results unless quiz.hide_results.nil?
+          q_node.hide_results quiz.hide_results.to_s
           q_node.quiz_type quiz.quiz_type
           q_node.points_possible quiz.points_possible
           q_node.require_lockdown_browser quiz.require_lockdown_browser unless quiz.require_lockdown_browser.nil?

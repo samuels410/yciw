@@ -1,3 +1,21 @@
+#
+# Copyright (C) 2017 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+#
+
 require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
 require File.expand_path(File.dirname(__FILE__) + '/../../helpers/graphql_type_tester')
 
@@ -31,6 +49,21 @@ describe Types::EnrollmentType do
       })
       expect(grades.enrollment).to eq enrollment
       expect(grades.grading_period).to eq @gp2
+    end
+
+    it "works for courses with no grading periods" do
+      @course.enrollment_term.update_attribute :grading_period_group, nil
+      grades = enrollment_type.grades(current_user: @teacher)
+      expect(grades.enrollment).to eq enrollment
+      expect(grades.grading_period).to eq nil
+    end
+
+    it "returns a dummy object when scores don't exist" do
+      ScoreMetadata.delete_all
+      Score.delete_all
+
+      grades = enrollment_type.grades(current_user: @teacher)
+      expect(grades.id).to be_nil
     end
   end
 end

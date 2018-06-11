@@ -17,7 +17,7 @@
  */
 
 import axios from 'axios';
-import Fixtures from 'spec/jsx/gradebook-history/Fixtures';
+import Fixtures from '../../gradebook-history/Fixtures';
 import HistoryApi from 'jsx/gradebook-history/api/HistoryApi';
 
 QUnit.module('HistoryApi', {
@@ -32,76 +32,76 @@ QUnit.module('HistoryApi', {
   }
 });
 
-test('getGradeHistory sends a request to the grade change audit url', function () {
+test('getGradebookHistory sends a request to the grade change audit url', function () {
   const url = `/api/v1/audit/grade_change/courses/${this.courseId}`;
-  HistoryApi.getGradeHistory(this.courseId, {});
+  HistoryApi.getGradebookHistory(this.courseId, {});
   strictEqual(this.getStub.callCount, 1);
   strictEqual(this.getStub.getCall(0).args[0], url);
 });
 
-test('getGradeHistory requests with course and assignment', function () {
+test('getGradebookHistory requests with course and assignment', function () {
   const assignment = '21';
   const url = `/api/v1/audit/grade_change/courses/${this.courseId}/assignments/${assignment}`;
-  HistoryApi.getGradeHistory(this.courseId, { assignment });
+  HistoryApi.getGradebookHistory(this.courseId, { assignment });
   strictEqual(this.getStub.callCount, 1);
   strictEqual(this.getStub.getCall(0).args[0], url);
 });
 
-test('getGradeHistory requests with course and grader', function () {
+test('getGradebookHistory requests with course and grader', function () {
   const grader = '22';
   const url = `/api/v1/audit/grade_change/courses/${this.courseId}/graders/${grader}`;
-  HistoryApi.getGradeHistory(this.courseId, { grader });
+  HistoryApi.getGradebookHistory(this.courseId, { grader });
   strictEqual(this.getStub.callCount, 1);
   strictEqual(this.getStub.getCall(0).args[0], url);
 });
 
-test('getGradeHistory requests with course and student', function () {
+test('getGradebookHistory requests with course and student', function () {
   const student = '23';
   const url = `/api/v1/audit/grade_change/courses/${this.courseId}/students/${student}`;
-  HistoryApi.getGradeHistory(this.courseId, { student });
+  HistoryApi.getGradebookHistory(this.courseId, { student });
   strictEqual(this.getStub.callCount, 1);
   strictEqual(this.getStub.getCall(0).args[0], url);
 });
 
-test('getGradeHistory requests with course, assignment, and grader', function () {
+test('getGradebookHistory requests with course, assignment, and grader', function () {
   const grader = '22';
   const assignment = '210';
   const url = `/api/v1/audit/grade_change/courses/${this.courseId}/assignments/${assignment}/graders/${grader}`;
-  HistoryApi.getGradeHistory(this.courseId, { assignment, grader });
+  HistoryApi.getGradebookHistory(this.courseId, { assignment, grader });
   strictEqual(this.getStub.callCount, 1);
   strictEqual(this.getStub.getCall(0).args[0], url);
 });
 
-test('getGradeHistory requests with course, assignment, and student', function () {
+test('getGradebookHistory requests with course, assignment, and student', function () {
   const student = '23';
   const assignment = '210';
   const url = `/api/v1/audit/grade_change/courses/${this.courseId}/assignments/${assignment}/students/${student}`;
-  HistoryApi.getGradeHistory(this.courseId, { assignment, student });
+  HistoryApi.getGradebookHistory(this.courseId, { assignment, student });
   strictEqual(this.getStub.callCount, 1);
   strictEqual(this.getStub.getCall(0).args[0], url);
 });
 
-test('getGradeHistory requests with course, grader, and student', function () {
+test('getGradebookHistory requests with course, grader, and student', function () {
   const grader = '23';
   const student = '230';
   const url = `/api/v1/audit/grade_change/courses/${this.courseId}/graders/${grader}/students/${student}`;
-  HistoryApi.getGradeHistory(this.courseId, { grader, student });
+  HistoryApi.getGradebookHistory(this.courseId, { grader, student });
   strictEqual(this.getStub.callCount, 1);
   strictEqual(this.getStub.getCall(0).args[0], url);
 });
 
-test('getGradeHistory requests with course, assignment, grader, and student', function () {
+test('getGradebookHistory requests with course, assignment, grader, and student', function () {
   const grader = '22';
   const assignment = '220';
   const student = '2200'
   const url = `/api/v1/audit/grade_change/courses/${this.courseId}/assignments/${assignment}/graders/${grader}/students/${student}`;
-  HistoryApi.getGradeHistory(this.courseId, { assignment, grader, student });
+  HistoryApi.getGradebookHistory(this.courseId, { assignment, grader, student });
   strictEqual(this.getStub.callCount, 1);
   strictEqual(this.getStub.getCall(0).args[0], url);
 });
 
 test('getNextPage makes an axios get request', function () {
-  const url = encodeURI('http://example.com/grades?page=42&per_page=100000000');
+  const url = encodeURI('http://example.com/grades?include[]=current_grade&page=42&per_page=100000000');
   HistoryApi.getNextPage(url);
   strictEqual(this.getStub.callCount, 1);
   strictEqual(this.getStub.getCall(0).args[0], url);

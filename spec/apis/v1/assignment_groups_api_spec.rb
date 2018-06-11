@@ -200,6 +200,32 @@ describe AssignmentGroupsController, type: :request do
     expect(json).to eq expected
   end
 
+  it "optionally includes 'grades_published' for moderated assignments" do
+    group = @course.assignment_groups.create!(name: "Homework")
+    group.update_attribute(:position, 10)
+
+    @course.assignments.create!({
+      assignment_group: group,
+      description: "First Math Assignment",
+      points_possible: 10,
+      title: "Math 1.1"
+    })
+
+    json = api_call(
+      :get,
+      "/api/v1/courses/#{@course.id}/assignment_groups.json",
+      {
+        action: "index",
+        controller: "assignment_groups",
+        course_id: @course.id.to_s,
+        format: "json",
+        include: ["assignments", "grades_published"]
+      }
+    )
+
+    expect(json.first["assignments"].first["grades_published"]).to eq(true)
+  end
+
   context "exclude response fields" do
     before(:once) do
       setup_groups
@@ -611,7 +637,7 @@ describe AssignmentGroupsApiController, type: :request do
         @submission = bare_submission_model(@assignment, @student, {
           score: '25',
           grade: '25',
-          grader: @teacher,
+          grader_id: @teacher.id,
           submitted_at: Time.zone.now
         })
 

@@ -365,6 +365,23 @@ describe ContentMigration do
       expect(bank2.assessment_questions.size).to eq 2
     end
 
+    it "should not restore deleted questions when restoring a bank" do
+      bank = @copy_from.assessment_question_banks.create!(:title => 'bank')
+      q1 = bank.assessment_questions.create!(:question_data => {'question_name' => 'test question', 'question_type' => 'essay_question'})
+      q2 = bank.assessment_questions.create!(:question_data => {'question_name' => 'test question 2', 'question_type' => 'essay_question'})
+
+      run_course_copy
+
+      bank_to = @copy_to.assessment_question_banks.where(:migration_id => mig_id(bank)).first
+      bank_to.destroy
+      q2.destroy
+
+      run_course_copy
+
+      expect(bank_to.reload).to be_active
+      expect(bank_to.assessment_questions.active.count).to eq 1
+    end
+
     it "should not copy plain text question comments as html" do
       bank1 = @copy_from.assessment_question_banks.create!(:title => 'bank')
       q = bank1.assessment_questions.create!(:question_data => {
@@ -443,6 +460,17 @@ describe ContentMigration do
 
     end
 
+    it "should copy nil values for hide_results" do
+      q = @copy_from.quizzes.create!(:hide_results => "always")
+      run_course_copy
+      q_to = @copy_to.quizzes.where(:migration_id => mig_id(q)).first
+      expect(q_to.hide_results).to eq "always"
+
+      q.update_attribute(:hide_results, nil)
+      run_course_copy
+      expect(q_to.reload.hide_results).to be_nil
+    end
+
     it "should leave file references in AQ context as-is on copy" do
       @bank = @copy_from.assessment_question_banks.create!(:title => 'Test Bank')
       @attachment = attachment_with_context(@copy_from)
@@ -475,6 +503,7 @@ describe ContentMigration do
       att3 = Attachment.create!(:filename => 'testing.jpg', :display_name => "testing.jpg", :uploaded_data => StringIO.new('test this'), :folder => root, :context => @copy_from)
       att4 = Attachment.create!(:filename => 'sub_test.jpg', :display_name => "sub_test.jpg", :uploaded_data => StringIO.new('sub_folder'), :folder => folder, :context => @copy_from)
       qtext = <<-HTML.strip
+sad file ref: <img src="%s">
 File ref:<img src="/courses/%s/files/%s/download">
 different file ref: <img src="/courses/%s/%s">
 subfolder file ref: <img src="/courses/%s/%s">
@@ -487,7 +516,7 @@ equation: <img class="equation_image" title="Log_216" src="/equation_images/Log_
                     :question_name => "test fun",
                     :name => "test fun",
                     :points_possible => 10,
-                    :question_text => qtext % [@copy_from.id, att.id, @copy_from.id, "file_contents/course%20files/test.jpg", @copy_from.id, "file_contents/course%20files/folder%201/sub_test.jpg"],
+                    :question_text => qtext % ["/files/#{att.id}", @copy_from.id, att.id, @copy_from.id, "file_contents/course%20files/test.jpg", @copy_from.id, "file_contents/course%20files/folder%201/sub_test.jpg"],
                     :answers =>
                             [{:migration_id => "QUE_1016_A1", :html => %{File ref:<img src="/courses/#{@copy_from.id}/files/#{att3.id}/download">}, :comments_html =>'<i>comment</i>', :text => "", :weight => 100, :id => 8080},
                              {:migration_id => "QUE_1017_A2", :html => "<strong>html answer 2</strong>", :comments_html =>'<i>comment</i>', :text => "", :weight => 0, :id => 2279}]}.with_indifferent_access
@@ -505,8 +534,28 @@ equation: <img class="equation_image" title="Log_216" src="/equation_images/Log_
 
       q_to = @copy_to.quizzes.first
       qq_to = q_to.active_quiz_questions.first
-      expect(qq_to.question_data[:question_text]).to match_ignoring_whitespace(qtext % [@copy_to.id, att_2.id, @copy_to.id, "files/#{att2_2.id}/preview", @copy_to.id, "files/#{att4_2.id}/preview"])
+      expect(qq_to.question_data[:question_text]).to match_ignoring_whitespace(qtext % ["/courses/#{@copy_to.id}/files/#{att_2.id}/preview", @copy_to.id, att_2.id, @copy_to.id, "files/#{att2_2.id}/preview", @copy_to.id, "files/#{att4_2.id}/preview"])
       expect(qq_to.question_data[:answers][0][:html]).to match_ignoring_whitespace(%{File ref:<img src="/courses/#{@copy_to.id}/files/#{att3_2.id}/download">})
+    end
+
+    it "should correctly copy quiz question mathml equation image references" do
+      qtext = <<-HTML.strip
+        equation: <p>
+          <img class="equation_image" title="\\sum" src="/equation_images/%255Csum"
+            alt="LaTeX: \\sum" data-equation-content="\\sum" data-mathml="&lt;math xmlns=&quot;http://www.w3.org/1998/Math/MathML&quot;&gt;
+              &lt;mo&gt;&amp;#x2211;&lt;!-- &sum; --&gt;&lt;/mo&gt;&lt;/math&gt;" />
+        </p>
+      HTML
+      data = {'question_name' => 'test question 1', 'question_type' => 'essay_question', 'question_text' => qtext}
+
+      q1 = @copy_from.quizzes.create!(:title => 'quiz1')
+      qq = q1.quiz_questions.create!(:question_data => data)
+
+      run_course_copy
+
+      q_to = @copy_to.quizzes.where(:migration_id => mig_id(q1)).first
+      qq_to = q_to.active_quiz_questions.first
+      expect(qq_to.question_data[:question_text]).to match_ignoring_whitespace(qq.question_data[:question_text])
     end
 
     it "should copy all html fields in assessment questions" do
@@ -1050,9 +1099,23 @@ equation: <img class="equation_image" title="Log_216" src="/equation_images/Log_
       run_course_copy
 
       run_course_copy # run it twice
-      
+
       aq_to = @copy_to.assessment_questions.where(:migration_id => mig_id(aq)).first
       expect(aq_to.data['question_type']).to eq "multiple_choice_question"
+    end
+
+    it "should not remove outer tags with style tags from questions" do
+      html = "<p style=\"text-align: center;\">This is aligned to the center</p>"
+      q = @copy_from.quizzes.create!(:title => "q")
+      data = {'question_name' => 'test question', 'question_type' => 'essay_question',
+        'question_text' => html}
+      qq = q.quiz_questions.create!(:question_data => data)
+
+      run_course_copy
+
+      q_to = @copy_to.quizzes.where(:migration_id => mig_id(q)).first
+      qq_to = q_to.quiz_questions.first
+      expect(qq_to.question_data[:question_text]).to eq html
     end
   end
 end

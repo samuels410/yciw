@@ -16,14 +16,19 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-@import "base/environment";
-@import "vendor/bootstrap/reset";
-@import "components/ic-typography";
+@import 'base/environment';
+@import 'components/ic-reset';
+@import 'components/ic-typography';
 
 // the first line of public/javascripts/tinymce/jscripts/tiny_mce/themes/advanced/skins/default/content.css
 // sets these to undesireable values, rather than modify that vendor file, we just override them here
 // to match the rest of the content in canvas
-body, td {
+body {
+  margin: 0;
+  font-family: inherit;
+}
+
+td {
   margin: 0;
 }
 
@@ -35,11 +40,15 @@ body, td {
   }
 }
 
-.mce-item-table, .mce-item-table td, .mce-item-table th, .mce-item-table caption, .mce-item-visual-aid {
+.mce-item-table,
+.mce-item-table td,
+.mce-item-table th,
+.mce-item-table caption,
+.mce-item-visual-aid {
   border: 1px dashed #888;
 }
 
-.mce-item-table tr{
+.mce-item-table tr {
   height: 20px;
 }
 
@@ -48,8 +57,19 @@ body, td {
   min-width: 20px;
 }
 
-body#tinymce, body#tinyrce{
+// ic-reset makes these images have a max-width that causes them to shrink when displayed. This
+// makes it so that they don't do that.
+.mce-item-table td img {
+  max-width: none;
+}
+
+table td[data-mce-selected] {
+  background-color: $electric;
+}
+
+body#tinymce,
+body#tinyrce {
   height: 100vh;
 }
 
-@import "our_custom_tiny_mce_stuff/_tinymce.editor_box.scss";
+@import 'our_custom_tiny_mce_stuff/_tinymce.editor_box.scss';

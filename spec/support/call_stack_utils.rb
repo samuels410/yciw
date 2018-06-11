@@ -17,9 +17,9 @@
 
 module CallStackUtils
   def self.best_line_for(call_stack)
-    line = CallStackUtils.prune_backtrace!(call_stack).first
+    lines = CallStackUtils.prune_backtrace!(call_stack)
     root = Rails.root.to_s + "/"
-    line.sub(root, '').sub(/:in .*/, '')
+    lines.map { |line| line.sub(root, '').sub(/:in .*/, '') }
   end
 
   # (re-)raise the exception while preserving its backtrace
@@ -31,7 +31,9 @@ module CallStackUtils
   def self.prune_backtrace!(bt)
     line_regex = RSpec.configuration.in_project_source_dir_regex
     # remove things until we get to the frd error cause
-    bt.shift while bt.first !~ line_regex || bt.first =~ APP_IGNORE_REGEX
+    if bt.any? { |line| line =~ line_regex && line !~ APP_IGNORE_REGEX  }
+      bt.shift while bt.first !~ line_regex || bt.first =~ APP_IGNORE_REGEX
+    end
     bt
   end
 

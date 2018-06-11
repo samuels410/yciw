@@ -261,7 +261,6 @@ class ContextExternalTool < ActiveRecord::Base
 
     @config_errors = []
     error_field = config_type == 'by_xml' ? 'config_xml' : 'config_url'
-
     converter = CC::Importer::BLTIConverter.new
     tool_hash = if config_type == 'by_url'
                   uri = Addressable::URI.parse(config_url)
@@ -489,8 +488,10 @@ class ContextExternalTool < ActiveRecord::Base
       res.normalize!
       return true if res.to_s == standard_url
     end
-    host = Addressable::URI.parse(url).host rescue nil
-    !!(host && ('.' + host).match(/\.#{domain}\z/))
+    if domain.present?
+      host = Addressable::URI.parse(url).normalize.host rescue nil
+      !!(host && ('.' + host).match(/\.#{domain}\z/))
+    end
   end
 
   def matches_domain?(url)
@@ -502,6 +503,15 @@ class ContextExternalTool < ActiveRecord::Base
       Addressable::URI.parse(standard_url).host == host
     else
       false
+    end
+  end
+
+  def duplicated_in_context?
+    self.class.all_tools_for(context).where.not(id: id).any? do |other_tool|
+      settings_equal = other_tool.settings == settings
+      launch_urls_equal = other_tool.url == url && settings.values.all?(&:blank?)
+
+      other_tool.settings.values.any?(&:present?) ? settings_equal : launch_urls_equal
     end
   end
 
@@ -544,8 +554,12 @@ class ContextExternalTool < ActiveRecord::Base
       scope = ContextExternalTool.shard(context.shard).polymorphic_where(context: contexts).active
       scope = scope.placements(*placements)
       scope = scope.selectable if Canvas::Plugin.value_to_boolean(options[:selectable])
-      scope.order("#{ContextExternalTool.best_unicode_collation_key('context_external_tools.name')}, context_external_tools.id")
+      scope.order(ContextExternalTool.best_unicode_collation_key('context_external_tools.name') + Arel.sql(", context_external_tools.id"))
     end
+  end
+
+  def self.find_active_external_tool_by_consumer_key(consumer_key, context)
+    self.active.where(:consumer_key => consumer_key).polymorphic_where(:context => contexts_to_search(context)).first
   end
 
   def self.find_external_tool_by_id(id, context)
@@ -624,8 +638,8 @@ class ContextExternalTool < ActiveRecord::Base
 
     context = context.context if context.is_a?(Group)
 
-    tool = context.context_external_tools.having_setting(type).where(id: id).first
-    tool ||= ContextExternalTool.having_setting(type).where(context_type: 'Account', context_id: context.account_chain_ids, id: id).first
+    tool = context.context_external_tools.having_setting(type).active.where(id: id).first
+    tool ||= ContextExternalTool.having_setting(type).active.where(context_type: 'Account', context_id: context.account_chain_ids, id: id).first
     raise ActiveRecord::RecordNotFound if !tool && raise_error
 
     tool

@@ -21,25 +21,25 @@ define [
   'react'
   'react-dom'
   'ic-ajax'
-  'compiled/util/round'
-  'compiled/userSettings'
+  '../../../util/round'
+  '../../../userSettings'
   '../../shared/xhr/fetch_all_pages'
   '../../shared/xhr/parse_link_header'
   'i18n!sr_gradebook'
   'ember'
   'underscore'
   'timezone'
-  'compiled/AssignmentDetailsDialog'
-  'compiled/AssignmentMuter'
+  '../../../AssignmentDetailsDialog'
+  '../../../AssignmentMuter'
   'jsx/gradebook/CourseGradeCalculator'
   'jsx/gradebook/EffectiveDueDates'
-  'compiled/gradebook/OutcomeGradebookGrid'
+  '../../../gradebook/OutcomeGradebookGrid'
   '../../shared/components/ic_submission_download_dialog_component'
   'str/htmlEscape'
-  'compiled/models/grade_summary/CalculationMethodContent'
+  '../../../models/grade_summary/CalculationMethodContent'
   'jsx/gradebook/SubmissionStateMap'
-  'compiled/api/gradingPeriodsApi'
-  'compiled/api/gradingPeriodSetsApi'
+  '../../../api/gradingPeriodsApi'
+  '../../../api/gradingPeriodSetsApi'
   'jsx/gradezilla/individual-gradebook/components/GradebookSelector'
   'jquery.instructure_date_and_time'
 ], (
@@ -582,10 +582,6 @@ define [
             order: customColumns.mapBy('id')
         )
 
-    displayPointTotals: (->
-      @get('showTotalAsPoints') and not @get('gradesAreWeighted')
-    ).property('gradesAreWeighted', 'showTotalAsPoints')
-
     groupsAreWeighted: (->
       @get("weightingScheme") == "percent"
     ).property("weightingScheme")
@@ -594,17 +590,21 @@ define [
       !!@getGradingPeriodSet()?.weighted
 
     gradesAreWeighted: (->
-      @get('groupsAreWeighted') or !!@getGradingPeriodSet()?.weighted
+      @get('groupsAreWeighted') or @periodsAreWeighted()
     ).property('weightingScheme')
 
+    hidePointsPossibleForFinalGrade: (->
+      !!(@get('groupsAreWeighted') or @subtotalByGradingPeriod())
+    ).property("weightingScheme", "selectedGradingPeriod")
+
     updateShowTotalAs: (->
-      @set "showTotalAsPoints", @get("displayPointTotals")
+      @set "showTotalAsPoints", @get("showTotalAsPoints")
       ajax.request(
         dataType: "json"
         type: "PUT"
         url: ENV.GRADEBOOK_OPTIONS.setting_update_url
         data:
-          show_total_grade_as_points: @get("displayPointTotals"))
+          show_total_grade_as_points: @get("showTotalAsPoints"))
     ).observes('showTotalAsPoints', 'gradesAreWeighted')
 
     studentColumnData: {}
@@ -666,7 +666,7 @@ define [
       ,{})
 
     submissionsLoaded: (->
-      assignments = @get("assignments")
+      assignments = @get("assignmentsFromGroups")
       assignmentsByID = @groupById assignments
       studentsByID = @groupById @get("students")
       submissions = @get('submissions')

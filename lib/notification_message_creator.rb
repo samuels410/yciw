@@ -64,8 +64,11 @@ class NotificationMessageCreator
     # the to_list (which currently never happens, I think), duplicate messages could be sent.
     to_user_channels.each do |user, channels|
       next unless asset_filtered_by_user(user)
-      user_locale = infer_locale(:user => user,
-                                 :context => user_asset_context(asset_filtered_by_user(user)))
+      user_locale = infer_locale(
+        :user => user,
+        :context => user_asset_context(asset_filtered_by_user(user)),
+        :ignore_browser_locale => true
+      )
       I18n.with_locale(user_locale) do
         channels.each do |default_channel|
           if @notification.registration?
@@ -83,7 +86,7 @@ class NotificationMessageCreator
         end
 
         unless @notification.registration?
-          if @notification.summarizable? && too_many_messages_for?(user) && no_daily_messages_in(delayed_messages)
+          if @notification.summarizable? && no_daily_messages_in(delayed_messages) && too_many_messages_for?(user)
             fallback = build_fallback_for(user)
             delayed_messages << fallback if fallback
           end
@@ -149,7 +152,7 @@ class NotificationMessageCreator
     return [] unless asset_filtered_by_user(user)
     messages = []
     message_options = message_options_for(user)
-    channels.reject!{ |channel| ['email', 'sms'].include?(channel.path_type) } if too_many_messages_for?(user) && @notification.summarizable?
+    channels.reject!{ |channel| ['email', 'sms'].include?(channel.path_type) } if @notification.summarizable? && too_many_messages_for?(user)
     channels.reject!(&:bouncing?)
     channels.each do |channel|
       messages << user.messages.build(message_options.merge(:communication_channel => channel,
@@ -196,7 +199,7 @@ class NotificationMessageCreator
     # This condition is weird. Why would not throttling stop sending notifications?
     # Why could an inactive email channel stop us here? We handle that later! And could still send
     # notifications without it!
-    return [] if !too_many_messages_for?(user) && channel && !channel.active?
+    return [] if channel && !channel.active? && !too_many_messages_for?(user)
 
     # If any channel has a policy, even policy-less channels don't get the notification based on the
     # notification default frequency. Is that right?

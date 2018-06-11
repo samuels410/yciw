@@ -16,11 +16,9 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import I18n from 'i18n!external_tools'
-import $ from 'jquery'
 import React from 'react'
 import PropTypes from 'prop-types'
-import InputMixin from 'jsx/external_apps/mixins/InputMixin'
+import InputMixin from '../../external_apps/mixins/InputMixin'
 
 export default React.createClass({
     displayName: 'TextInput',
@@ -34,7 +32,8 @@ export default React.createClass({
       required:     PropTypes.bool,
       hintText:     PropTypes.string,
       placeholder:  PropTypes.string,
-      errors:       PropTypes.object
+      errors:       PropTypes.object,
+      name:         PropTypes.string
     },
 
     render() {
@@ -47,7 +46,8 @@ export default React.createClass({
               placeholder={this.props.placeholder || this.props.label}
               required={this.props.required ? "required" : null}
               onChange={this.handleChange}
-              aria-invalid={!!this.getErrorMessage()} />
+              aria-invalid={!!this.getErrorMessage()}
+              name={this.props.name || null}/>
             {this.renderHint()}
           </label>
         </div>

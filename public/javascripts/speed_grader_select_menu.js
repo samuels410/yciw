@@ -18,13 +18,79 @@
 
 import $ from 'jquery';
 import 'vendor/ui.selectmenu';
+import SpeedgraderHelpers from 'speed_grader_helpers';
 import htmlEscape from './str/htmlEscape';
 
+function optionsToHtml (optionDefinitions) {
+  return optionDefinitions.map((definition) => {
+    let html = '';
 
-export default function speedgraderSelectMenu (optionsHtml, delimiter){
-  this.html = `<select id='students_selectmenu'>${optionsHtml}</select>`;
+    if (definition.options) {
+      const childrenHtml = optionsToHtml(definition.options);
+      html = `
+        <optgroup label="${htmlEscape(definition.name)}">
+          ${childrenHtml}
+        </optgroup>
+      `;
+    } else {
+      if (definition.anonymizableId == null) {
+        throw Error('`anonymizableId` required in optionDefinition objects')
+      }
+      const labels = [definition.name]
 
+      if (definition.className && definition.className.formatted) {
+        labels.push(definition.className.formatted);
+      }
+
+      html = `
+        <option
+          value="${htmlEscape(definition[definition.anonymizableId])}"
+          class="${htmlEscape(definition.className.raw)} ui-selectmenu-hasIcon"
+        >
+          ${htmlEscape(labels.join(' – '))}
+        </option>
+      `;
+    }
+
+    return html;
+  }).join('');
+}
+
+function buildStudentIdMap (optionDefinitions) {
+  const studentMap =  {};
+  let adjust = 0;
+  optionDefinitions.forEach((optionDefinition, index) => {
+    if (optionDefinition.options) {
+      // There should only ever be one, but just in case
+      adjust += 1;
+    }
+    else {
+      studentMap[optionDefinition[optionDefinition.anonymizableId]] = index - adjust;
+    }
+  });
+  return studentMap;
+};
+
+export default function speedgraderSelectMenu (optionsArray) {
+  // Array of the initial data needed to build the select menu
+  this.options_array = optionsArray;
+
+  // Index used by text formatting function
   this.option_index = 0;
+  this.opt_group_found = false;
+  this.option_sub_index = 0;
+
+  // Array for the generated option tags
+  this.option_tag_array = null;
+
+  // Map of student id to index position
+  this.student_id_map = null;
+
+  this.buildHtml = function (options) {
+    const optionHtml = optionsToHtml(options);
+
+    return `<select id='students_selectmenu'>${optionHtml}</select>`;
+  };
 
   this.selectMenuAccessibilityFixes = function (container) {
     const $select_menu = $(container).find('select#students_selectmenu');
@@ -76,7 +142,7 @@ export default function speedgraderSelectMenu (optionsHtml, delimiter){
     $select_menu.bind('keyup', (e) => {
       const code = e.keyCode || e.which;
       if (code === 37 || code === 38 || code === 39 || code === 40) { // left, up, right, down arrow
-        self.jquerySelectMenu().change();
+        self.$el.change();
       }
     });
   };
@@ -89,7 +155,8 @@ export default function speedgraderSelectMenu (optionsHtml, delimiter){
 
   this.appendTo = function (selector, onChange) {
     const self = this;
-    this.$el = $(this.html).appendTo(selector).selectmenu({
+    this.student_id_map = buildStudentIdMap(this.options_array);
+    this.$el = $(this.buildHtml(this.options_array)).appendTo(selector).selectmenu({
       style: 'dropdown',
       format: text => (
         self.formatSelectText(text)
@@ -98,6 +165,12 @@ export default function speedgraderSelectMenu (optionsHtml, delimiter){
         self.our_open(event);
       }
     });
+    // Remove the section change optgroup since it'll be replaced by a popout menu
+    $('ul#students_selectmenu-menu li.ui-selectmenu-group').remove();
+
+    // Create indexes into what we've created because we'll want them later
+    this.option_tag_array = $('#students_selectmenu > option');
+
     this.$el.change(onChange);
     this.accessibilityFixes(this.$el.parent());
     this.replaceDropdownIcon(this.$el.parent());
@@ -109,11 +182,13 @@ export default function speedgraderSelectMenu (optionsHtml, delimiter){
     $("<i class='icon-mini-arrow-down'></i>").appendTo($span);
   };
 
-  this.jquerySelectMenu = function () {
-    return this.$el;
-  };
+  // The following 4 functions just delegate to the contained component.
+  this.val = (...args) => (this.$el.val(...args));
+  this.data = (...args) => (this.$el.data(...args));
+  this.selectmenu = (...args) => (this.$el.selectmenu(...args));
+  this.change = (...args) => (this.$el.change(...args));
 
-  this.our_open = function (_event) {
+  this.our_open = (_event) => {
     this.accessibilityFixes(this.$el.parent());
   };
 
@@ -130,18 +205,103 @@ export default function speedgraderSelectMenu (optionsHtml, delimiter){
     return icon.concat('</span>');
   };
 
-  this.formatSelectText = function (text) {
-    const parts = text.split(delimiter);
+  this.formatSelectText = function (_text) {
+    let option = this.options_array[this.option_index];
+    let optgroup;
+    let html = '';
 
-    $($('#students_selectmenu > option')[this.option_index])
-      .text(htmlEscape(parts[0]) + ' - ' + htmlEscape(parts[1]));
+    if (option.options) {
+      optgroup = option;
 
-    this.option_index++;
+      if (!this.opt_group_found) {
+        // We encountered this optgroup but haven't start traversing it yet
+        this.opt_group_found = true;
+        this.option_sub_index = 0;
+        option = optgroup.options[this.option_sub_index];
+      }
 
-    return this.getIconHtml(htmlEscape(parts[2])) +
-      '<span class="ui-selectmenu-item-header">' +
-      htmlEscape(parts[0]) +
-      '</span>';
+      if (this.opt_group_found && this.option_sub_index < optgroup.options.length) {
+        // We're still traversing this optgroup, carry on
+        option = optgroup.options[this.option_sub_index];
+
+        this.option_sub_index++;
+      } else {
+        this.opt_group_found = false;
+        this.option_sub_index = 0;
+        this.option_index++;
+
+        option = this.options_array[this.option_index]
+        this.option_index++;
+      }
+    } else {
+      this.opt_group_found = false;
+      this.option_sub_index = 0;
+      this.option_index++;
+    }
+
+    if (option.options) {
+      html = htmlEscape(option.name);
+    }
+
+    return `
+        ${html}
+        ${this.getIconHtml(htmlEscape(option.className.raw))}
+        <span class="ui-selectmenu-item-header">
+          ${htmlEscape(option.name)}
+        </span>
+    `;
+  };
+
+  this.updateSelectMenuStatus = function ({student, isCurrentStudent, newStudentInfo, anonymizableId}) {
+    if (!student) return;
+    const optionIndex = this.student_id_map[student[anonymizableId]];
+    let $query = this.$el.data('selectmenu').list.find(`li:eq(${optionIndex})`);
+    const className = SpeedgraderHelpers.classNameBasedOnStudent(student);
+    const submissionStates = 'not_graded not_submitted graded resubmitted';
+
+    if (isCurrentStudent) {
+      $query = $query.add(this.$el.data('selectmenu').newelement);
+    }
+    $query
+      .removeClass(submissionStates)
+      .addClass(className.raw);
+
+    const $status = $('.ui-selectmenu-status');
+    const $statusIcon = $status.find('.speedgrader-selectmenu-icon');
+    const $queryIcon = $query.find('.speedgrader-selectmenu-icon');
+
+    const option = $(this.option_tag_array[optionIndex]);
+    option.text(newStudentInfo).removeClass(submissionStates).addClass(className.raw);
+
+    if(className.raw === "graded" || className.raw === "not_gradeable"){
+      $queryIcon.text("").append("<i class='icon-check'></i>");
+      if (isCurrentStudent) {
+        $status.addClass("graded");
+        $statusIcon.text("").append("<i class='icon-check'></i>");
+      }
+    }else if(className.raw === "not_graded"){
+      $queryIcon.text("").append("&#9679;");
+      if (isCurrentStudent) {
+        $status.removeClass("graded");
+        $statusIcon.text("").append("&#9679;");
+      }
+    }else{
+      $queryIcon.text("");
+      if (isCurrentStudent) {
+        $status.removeClass("graded");
+        $statusIcon.text("");
+      }
+    }
+
+    // this is because selectmenu.js uses .data('optionClasses' on the
+    // li to keep track of what class to put on the selected option (
+    // aka: $selectmenu.data('selectmenu').newelement ) when this li
+    // is selected.  so even though we set the class of the li and the
+    // $selectmenu.data('selectmenu').newelement when it is graded, we
+    // need to also set the data() so that if you skip back to this
+    // student it doesnt show the old checkbox status.
+    $.each(submissionStates.split(' '), function(){
+      $query.data('optionClasses', $query.data('optionClasses').replace(this, ''));
+    });
   };
 }
-

@@ -72,9 +72,60 @@ describe SubmissionsController do
       expect(assigns[:submission][:submission_type]).to eql("online_upload")
     end
 
+    shared_examples "accepts 'eula_agreement_timestamp' params and persists it in the 'turnitin_data'" do
+      let(:submission_type) { raise 'set in example' }
+      let(:extra_params) { raise 'set in example' }
+      let(:timestamp) { Time.now.to_i }
+
+      it "accepts 'eula_agreement_timestamp' params and persists it in the 'turnitin_data'" do
+        course_with_student_logged_in(:active_all => true)
+        @assignment = @course.assignments.create!(:title => "some assignment", :submission_types => submission_type)
+        a1 = attachment_model(:context => @user)
+        post 'create',
+          params: {
+            :course_id => @course.id,
+            :assignment_id => @assignment.id,
+            :submission => {
+              :submission_type => submission_type,
+              :attachment_ids => a1.id,
+              :eula_agreement_timestamp => timestamp
+            }
+          }.merge(extra_params)
+        expect(assigns[:submission].turnitin_data[:eula_agreement_timestamp]).to eq timestamp.to_s
+      end
+    end
+
+    context 'online upload' do
+      it_behaves_like "accepts 'eula_agreement_timestamp' params and persists it in the 'turnitin_data'" do
+        let(:submission_type) { 'online_upload' }
+        let(:extra_params) do
+          {
+            :attachments => {
+              "0" => { :uploaded_data => "" },
+              "-1" => { :uploaded_data => "" }
+            }
+          }
+        end
+      end
+    end
+
+    context 'online text entry' do
+      it_behaves_like "accepts 'eula_agreement_timestamp' params and persists it in the 'turnitin_data'" do
+        let(:submission_type) { 'online_text_entry' }
+        let(:extra_params) do
+          {
+            :submission => {
+              submission_type: submission_type,
+              eula_agreement_timestamp: timestamp,
+              body: 'body text'
+            }
+          }
+        end
+      end
+    end
+
     it "should copy attachments to the submissions folder if that feature is enabled" do
       course_with_student_logged_in(:active_all => true)
-      @course.root_account.enable_feature! :submissions_folder
       @assignment = @course.assignments.create!(:title => "some assignment", :submission_types => "online_upload")
       att = attachment_model(:context => @user, :uploaded_data => stub_file_data('test.txt', 'asdf', 'text/plain'))
       post 'create', params: {:course_id => @course.id, :assignment_id => @assignment.id, :submission => {:submission_type => "online_upload", :attachment_ids => att.id}, :attachments => { "0" => { :uploaded_data => "" }, "-1" => { :uploaded_data => "" } }}
@@ -126,8 +177,8 @@ describe SubmissionsController do
     it "should allow attaching multiple files to the submission" do
       course_with_student_logged_in(:active_all => true)
       @assignment = @course.assignments.create!(:title => "some assignment", :submission_types => "online_url,online_upload")
-      att1 = attachment_model(:context => @user, :uploaded_data => fixture_file_upload("scribd_docs/doc.doc", "application/msword", true))
-      att2 = attachment_model(:context => @user, :uploaded_data => fixture_file_upload("scribd_docs/txt.txt", "application/vnd.ms-excel", true))
+      att1 = attachment_model(:context => @user, :uploaded_data => fixture_file_upload("docs/doc.doc", "application/msword", true))
+      att2 = attachment_model(:context => @user, :uploaded_data => fixture_file_upload("docs/txt.txt", "application/vnd.ms-excel", true))
       post 'create', params: {:course_id => @course.id, :assignment_id => @assignment.id,
            :submission => {:submission_type => "online_upload", :attachment_ids => [att1.id, att2.id].join(',')},
            :attachments => {"0" => {:uploaded_data => "doc.doc"}, "1" => {:uploaded_data => "txt.txt"}}}
@@ -169,6 +220,25 @@ describe SubmissionsController do
       expect(assigns[:submission]).not_to be_nil
       expect(assigns[:submission].submission_type).to eq 'basic_lti_launch'
       expect(assigns[:submission].url).to eq 'http://www.google.com'
+    end
+
+    it 'accepts eula agreement timestamp when api submission' do
+      timestamp = Time.zone.now.to_i.to_s
+      course_with_student_logged_in(:active_all => true)
+      attachment = attachment_model(context: @student)
+      @assignment = @course.assignments.create!(:title => 'some assignment', :submission_types => 'online_upload')
+      request.path = "/api/v1/courses/#{@course.id}/assignments/#{@assignment.id}/submissions"
+      params = {
+        course_id: @course.id,
+        assignment_id: @assignment.id,
+        submission: {
+          submission_type: 'online_upload',
+          file_ids: [attachment.id],
+          eula_agreement_timestamp: timestamp
+        }
+      }
+      post 'create', params: params
+      expect(assigns[:submission].turnitin_data[:eula_agreement_timestamp]).to eq timestamp
     end
 
     it "should redirect to the assignment when locked in submit-at-deadline situation" do
@@ -279,6 +349,24 @@ describe SubmissionsController do
             :submission_type => 'online_text_entry',
             :body => 'blah',
             :comment => "some comment"
+          }
+        })
+
+        subs = @assignment.submissions
+        expect(subs.size).to eq 2
+        expect(subs.to_a.sum{ |s| s.submission_comments.size }).to eql 1
+      end
+
+      it "should not send a comment to the entire group when false" do
+        post(
+          'create',
+          params: {:course_id => @course.id,
+          :assignment_id => @assignment.id,
+          :submission => {
+            :submission_type => 'online_text_entry',
+            :body => 'blah',
+            :comment => "some comment",
+            :group_comment => '0'
           }
         })
 
@@ -420,8 +508,8 @@ describe SubmissionsController do
       course_with_student_logged_in(:active_all => true)
       @assignment = @course.assignments.create!(:title => "some assignment", :submission_types => "online_url,online_upload")
       @submission = @assignment.submit_homework(@user)
-      data1 = fixture_file_upload("scribd_docs/doc.doc", "application/msword", true)
-      data2 = fixture_file_upload("scribd_docs/txt.txt", "text/plain", true)
+      data1 = fixture_file_upload("docs/doc.doc", "application/msword", true)
+      data2 = fixture_file_upload("docs/txt.txt", "text/plain", true)
       put 'update', params: {:course_id => @course.id, :assignment_id => @assignment.id, :id => @user.id, :submission => {:comment => "some comment"}, :attachments => {"0" => {:uploaded_data => data1}, "1" => {:uploaded_data => data2}}}
       expect(response).to be_redirect
       expect(assigns[:submission]).to eql(@submission)
@@ -694,6 +782,30 @@ describe SubmissionsController do
       expect(body['published_score']).to eq 10
     end
 
+    it "mark read if reading one's own submission" do
+      user_session(@student)
+      request.accept = Mime[:json].to_s
+      @submission.mark_unread(@student)
+      @submission.save!
+      get :show, params: {course_id: @context.id, assignment_id: @assignment.id, id: @student.id}, format: :json
+      expect(response).to be_success
+      submission = Submission.find(@submission.id)
+      expect(submission.read?(@student)).to be_truthy
+    end
+
+    it "don't mark read if reading someone else's submission" do
+      user_session(@teacher)
+      request.accept = Mime[:json].to_s
+      @submission.mark_unread(@student)
+      @submission.mark_unread(@teacher)
+      @submission.save!
+      get :show, params: {course_id: @context.id, assignment_id: @assignment.id, id: @student.id}, format: :json
+      expect(response).to be_success
+      submission = Submission.find(@submission.id)
+      expect(submission.read?(@student)).to be_falsey
+      expect(submission.read?(@teacher)).to be_falsey
+    end
+
     it "renders json with scores for teachers on muted assignments" do
       @assignment.update!(muted: true)
       request.accept = Mime[:json].to_s
@@ -738,6 +850,8 @@ describe SubmissionsController do
       @assessor = @student
       outcome_with_rubric
       @association = @rubric.associate_with @assignment, @context, :purpose => 'grading'
+      @assignment.peer_reviews = true
+      @assignment.save!
       @assignment.assign_peer_review(@assessor, @submission.user)
       @assessment = @association.assess(:assessor => @assessor, :user => @submission.user, :artifact => @submission, :assessment => { :assessment_type => 'grading'})
       user_session(@assessor)
@@ -781,7 +895,6 @@ describe SubmissionsController do
       get 'originality_report', params: {course_id: assignment.context_id, assignment_id: assignment.id, submission_id: test_student.id, asset_string: attachment.asset_string}
       expect(response).to redirect_to originality_report.originality_report_url
     end
-
 
     it 'returns 400 if submission_id is not integer' do
       get 'originality_report', params: {:course_id => assignment.context_id, :assignment_id => assignment.id, :submission_id => '{ user_id }', :asset_string => attachment.asset_string}

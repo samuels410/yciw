@@ -57,25 +57,16 @@
     display: none;
 }
 #right-side table.channel_list tr.channel.unconfirmed > td a {
-  color: $ic-font-color-dark;
-  font-style: italic;
 }
 .email_meta {
-  text-align: left;
+  text-align: direction(left);
   width: 32px;
   box-sizing: border-box;
 }
 .email_actions {
-  text-align: right;
+  text-align: direction(right);
   white-space: nowrap;
   width: 100%;
-}
-.email_channel {
-  max-width: 140px;
-  font-size: 0.8em;
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 #right-side p.email_channel {
   margin: 0;
@@ -83,4 +74,10 @@
 }
 .intl_rates_may_apply {
   font-size: 0.8em
+}
+.contact_channel_path {
+  @include breakpoint(desktop) {
+    max-width: 8.75rem;
+    display: block;
+  }
 }

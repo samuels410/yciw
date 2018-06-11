@@ -18,7 +18,7 @@
 
 # @API Communication Channels
 #
-# API for accessing users' email addresses, SMS phone numbers, Twitter, and Yo
+# API for accessing users' email addresses, SMS phone numbers, and Twitter
 # communication channels.
 #
 # In this API, the `:user_id` parameter can always be replaced with `self` if
@@ -40,7 +40,7 @@
 #           "type": "string"
 #         },
 #         "type": {
-#           "description": "The type of communcation channel being described. Possible values are: 'email', 'push', 'sms', 'twitter' or 'yo'. This field determines the type of value seen in 'address'.",
+#           "description": "The type of communcation channel being described. Possible values are: 'email', 'push', 'sms', or 'twitter'. This field determines the type of value seen in 'address'.",
 #           "example": "email",
 #           "type": "string",
 #           "allowableValues": {
@@ -48,8 +48,7 @@
 #               "email",
 #               "push",
 #               "sms",
-#               "twitter",
-#               "yo"
+#               "twitter"
 #             ]
 #           }
 #         },
@@ -78,15 +77,15 @@
 #     }
 #
 class CommunicationChannelsController < ApplicationController
-  before_action :require_user, :only => [:create, :destroy]
+  before_action :require_user, :only => [:create, :destroy, :re_send_confirmation, :delete_push_token]
   before_action :reject_student_view_student
 
   include Api::V1::CommunicationChannel
 
   # @API List user communication channels
   #
-  # Returns a list of communication channels for the specified user, sorted by
-  # position.
+  # Returns a paginated list of communication channels for the specified user,
+  # sorted by position.
   #
   # @example_request
   #     curl https://<canvas>/api/v1/users/12345/communication_channels \
@@ -256,8 +255,8 @@ class CommunicationChannelsController < ApplicationController
       # load merge opportunities
       merge_users = cc.merge_candidates
       merge_users << @current_user if @current_user && !@user.registered? && !merge_users.include?(@current_user)
-      user_observers = UserObserver.active.where("user_id = ? OR observer_id = ?", @user.id, @user.id)
-      merge_users = merge_users.reject { |u| user_observers.any?{|uo| uo.user == u || uo.observer == u} }
+      observer_links = UserObservationLink.active.where("user_id = ? OR observer_id = ?", @user.id, @user.id)
+      merge_users = merge_users.reject { |u| observer_links.any?{|uo| uo.user == u || uo.observer == u} }
       # remove users that don't have a pseudonym for this account, or one can't be created
       merge_users = merge_users.select { |u| u.find_or_initialize_pseudonym_for_account(@root_account, @domain_root_account) }
       @merge_opportunities = []
@@ -331,7 +330,7 @@ class CommunicationChannelsController < ApplicationController
         @pseudonym ||= @root_account.pseudonyms.build(:user => @user, :unique_id => cc.path) if @user.creation_pending?
         # We create the pseudonym with unique_id = cc.path, but if that unique_id is taken, just nil it out and make the user come
         # up with something new
-        @pseudonym.unique_id = '' if @pseudonym && @pseudonym.new_record? && @root_account.pseudonyms.active.by_unique_id(@pseudonym.unique_id).first
+        @pseudonym.unique_id = '' if @pseudonym && @pseudonym.new_record? && @root_account.pseudonyms.active.by_unique_id(@pseudonym.unique_id).exists?
 
         # Have to either have a pseudonym to register with, or be looking at merge opportunities
         return render :confirm_failed, status: :bad_request if !@pseudonym && @merge_opportunities.empty?
@@ -358,10 +357,12 @@ class CommunicationChannelsController < ApplicationController
           valid = @pseudonym.valid?
           valid = @user.valid? && valid # don't want to short-circuit, since we are interested in the errors
           unless valid
+            ps_errors = @pseudonym.errors.as_json[:errors]
+            ps_errors.delete(:password_confirmation) unless params[:pseudonym][:password_confirmation]
             return render :json => {
                             :errors => {
                               :user => @user.errors.as_json[:errors],
-                              :pseudonym => @pseudonym.errors.as_json[:errors]
+                              :pseudonym => ps_errors
                             }
                           }, :status => :bad_request
           end
@@ -418,6 +419,13 @@ class CommunicationChannelsController < ApplicationController
     @user = User.find(params[:user_id])
     # the active shard needs to be searched for the enrollment (not the user's shard)
     @enrollment = params[:enrollment_id] && Enrollment.where(id: params[:enrollment_id], user_id: @user).first!
+
+    if @enrollment
+      return render_unauthorized_action unless @current_user.can_create_enrollment_for?(@enrollment.course, session, @enrollment.type)
+    else
+      return render_unauthorized_action unless @user.grants_any_right?(@current_user, session, :manage, :manage_user_details)
+    end
+
     if @enrollment && (@enrollment.invited? || @enrollment.active?)
       @enrollment.re_send_confirmation!
     else
@@ -479,6 +487,28 @@ class CommunicationChannelsController < ApplicationController
       end
     else
       render :json => @cc.errors, :status => :bad_request
+    end
+  end
+
+  # @API Delete a push notification endpoint
+  #
+  # @example_request
+  #     curl https://<canvas>/api/v1/users/self/communication_channels/push
+  #          -H 'Authorization: Bearer <token>
+  #          -X DELETE
+  #          -d 'push_token=<push_token>'
+  #
+  # @returns {success: true}
+  def delete_push_token
+    @cc = @current_user.communication_channels.unretired.of_type(CommunicationChannel::TYPE_PUSH).take
+    raise ActiveRecord::RecordNotFound unless @cc
+
+    endpoints = @current_user.notification_endpoints.where("lower(token) = ?", params[:push_token].downcase)
+    if endpoints&.destroy_all
+      @current_user.touch
+      return render json: {success: true}
+    else
+      return render json: endpoints.errors, status: :bad_request
     end
   end
 

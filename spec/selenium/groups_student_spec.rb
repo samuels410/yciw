@@ -27,7 +27,6 @@ describe "student groups" do
 
   describe "as a student" do
 
-
     before(:each) do
       course_with_student_logged_in(:active_all => true)
     end
@@ -71,7 +70,7 @@ describe "student groups" do
 
     describe "new student group" do
       before(:each) do
-        seed_students(5)
+        seed_students(2)
         get "/courses/#{@course.id}/groups"
         f(".icon-plus").click
         wait_for_ajaximations
@@ -84,15 +83,13 @@ describe "student groups" do
       end
 
       it "should show students in the course", priority: "1", test_id: 180675 do
-        expected_student_list = ["Test Student 1", "Test Student 2", "Test Student 3",
-                                 "Test Student 4", "Test Student 5"]
+        expected_student_list = ["Test Student 1", "Test Student 2"]
         student_list = ff(".checkbox")
         expect(student_list).to have_size(expected_student_list.size) # there should be no teachers in the list
 
         # check the list of students for expected names
-        student_list.each_with_index do |student, index|
-          expect(student).to include_text(expected_student_list[index].to_s)
-        end
+        expect(student_list[0].text).to eq "Test Student 1"
+        expect(student_list[1].text).to eq "Test Student 2"
       end
 
       it "should be titled what the user types in", priority: "1", test_id: 180676 do
@@ -171,7 +168,7 @@ describe "student groups" do
         expect(f('.unassigned-students')).to include_text("#{@students[0].name}")
         # Fourth student should remain group leader
         expect(fj(".group[data-id=\"#{@testgroup[0].id}\"] ." \
-      "group-user:contains(\"#{@students[3].name}\") .group-leader")).to be_displayed
+      ".group-leader:contains(\"#{@students[3].name}\")")).to be_displayed
       end
     end
 
@@ -187,11 +184,6 @@ describe "student groups" do
         f(".student-group-join a").click
 
         expect(f(".student-group-students")).to include_text("0 students")
-      end
-
-      it "leaving the group should change the dialog to join", priority:"2", test_id: 180683 do
-        f(".student-group-join a").click
-
         expect(f(".student-group-join a")).to include_text("JOIN")
       end
 

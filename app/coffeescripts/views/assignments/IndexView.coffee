@@ -17,7 +17,7 @@
 
 define [
   'i18n!assignments'
-  'compiled/views/KeyboardNavDialog'
+  '../KeyboardNavDialog'
   'jst/KeyboardNavDialog'
   'jquery'
   'underscore'
@@ -26,12 +26,12 @@ define [
   'react-dom'
   'jst/assignments/IndexView'
   'jst/assignments/NoAssignmentsSearch'
-  'compiled/views/assignments/AssignmentKeyBindingsMixin'
-  'compiled/userSettings'
-  'compiled/api/gradingPeriodsApi'
+  './AssignmentKeyBindingsMixin'
+  '../../userSettings'
+  '../../api/gradingPeriodsApi'
   'jsx/assignments/IndexMenu'
   'jsx/assignments/store/indexMenuStore'
-  'compiled/jquery.rails_flash_notifications'
+  '../../jquery.rails_flash_notifications'
 ], (I18n, KeyboardNavDialog, keyboardNavTemplate, $, _, Backbone, React, ReactDOM, template, NoAssignments, AssignmentKeyBindingsMixin, userSettings, GradingPeriodsAPI, IndexMenu, configureIndexMenuStore) ->
 
   class IndexView extends Backbone.View
@@ -49,6 +49,8 @@ define [
     events:
       'keyup #search_term': 'search'
       'change #grading_period_selector': 'filterResults'
+      'focus .drag_and_drop_warning': 'show_dnd_warning'
+      'blur .drag_and_drop_warning': 'hide_dnd_warning'
 
     els:
       '#addGroup': '$addGroupButton'
@@ -124,6 +126,12 @@ define [
     , 200
 
     gradingPeriods: GradingPeriodsAPI.deserializePeriods(ENV.active_grading_periods)
+
+    show_dnd_warning: (event) =>
+      @$(event.currentTarget).removeClass('screenreader-only')
+
+    hide_dnd_warning: (event) =>
+      @$(event.currentTarget).addClass('screenreader-only')
 
     filterResults: =>
       term = $('#search_term').val()

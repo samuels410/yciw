@@ -89,7 +89,7 @@ import natcompare from 'compiled/util/natcompare'
       var hasUsers = this.props.group.users.length > 0;
       var shouldSwitch = this.props.group.group_category.is_member && this.props.group.group_category.role !== 'student_organized';
 
-      var visitLink = isMember ? <a href={`/groups/${this.props.group.id}`}
+      var visitLink = (ENV.CAN_VIEW_PAGES || isMember) ? <a href={`/groups/${this.props.group.id}`}
                                     aria-label={I18n.t('Visit group %{group_name}', {group_name: groupName})}
                                     onClick={(e) => e.stopPropagation()}>{I18n.t('Visit')}</a> : null;
 
@@ -136,8 +136,8 @@ import natcompare from 'compiled/util/natcompare'
           toolTip = I18n.t('Group is full');
           ariaLabel = I18n.t('Group %{group_name} is full', {group_name: groupName} );
         } else if (canSelfSignup && !isAllowedToJoin) {
-          toolTip = I18n.t('Group is for a different section');
-          ariaLabel = I18n.t('Group %{group_name} is for a different section', {group_name: groupName});
+          toolTip = I18n.t('Group is not available at this time');
+          ariaLabel = I18n.t('Group %{group_name} is not available at this time', {group_name: groupName});
         } else {
           toolTip = I18n.t('Group is joined by invitation only');
           ariaLabel = I18n.t('Group %{group_name} is joined by invitation only', {group_name: groupName});

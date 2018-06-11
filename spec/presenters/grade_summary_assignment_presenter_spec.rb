@@ -43,14 +43,33 @@ describe GradeSummaryAssignmentPresenter do
                                         @submission)
   }
 
-  describe '#is_plagiarism_attachment?' do
-    it 'returns true if the attachment has an OriginalityReport' do
+  describe '#plagiarism_attachment?' do
+    it 'returns true if the submission has an OriginalityReport' do
+      OriginalityReport.create(originality_score: 0.8,
+                               attachment: @attachment,
+                               submission: @submission,
+                               workflow_state: 'scored')
+
+      expect(presenter.plagiarism_attachment?(@attachment)).to eq true
+    end
+
+    it 'returns true when the attachment has a pending originality report' do
+      OriginalityReport.create(attachment: @attachment,
+                               submission: @submission)
+
+      expect(presenter.plagiarism_attachment?(@attachment)).to eq true
+    end
+
+    it 'returns when submission was automatically created by group assignment submission' do
+      submission_two = @submission.dup
+      submission_two.update_attributes!(user: User.create!(name: 'second student'))
+      AttachmentAssociation.create!(context: @submission, attachment_id: @attachment)
+      AttachmentAssociation.create!(context: submission_two, attachment_id: @attachment)
       OriginalityReport.create(originality_score: 0.8,
                                attachment: @attachment,
                                submission: @submission,
                                workflow_state: 'pending')
-
-      expect(presenter.is_plagiarism_attachment?(@attachment)).to be_truthy
+      expect(presenter.plagiarism_attachment?(submission_two.attachments.first)).to eq true
     end
   end
 
@@ -58,6 +77,13 @@ describe GradeSummaryAssignmentPresenter do
     it 'returns true when an originality report exists' do
       OriginalityReport.create(originality_score: 0.8,
                                attachment: @attachment,
+                               submission: @submission,
+                               workflow_state: 'pending')
+      expect(presenter.originality_report?).to be_truthy
+    end
+
+    it 'returns true when an originality report exists with no attachment' do
+      OriginalityReport.create(originality_score: 0.8,
                                submission: @submission,
                                workflow_state: 'pending')
       expect(presenter.originality_report?).to be_truthy

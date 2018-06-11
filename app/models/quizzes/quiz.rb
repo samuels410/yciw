@@ -89,10 +89,11 @@ class Quizzes::Quiz < ActiveRecord::Base
     :quiz_type, :assignment_group_id, :shuffle_answers, :time_limit,
     :anonymous_submissions, :scoring_policy, :allowed_attempts, :hide_results,
     :one_time_results, :show_correct_answers, :show_correct_answers_last_attempt,
-    :hide_correct_answers_at, :one_question_at_a_time, :cant_go_back, :access_code,
-    :ip_filter, :require_lockdown_browser, :require_lockdown_browser_for_results
+    :show_correct_answers_at, :hide_correct_answers_at, :one_question_at_a_time,
+    :cant_go_back, :access_code, :ip_filter, :require_lockdown_browser, :require_lockdown_browser_for_results
   ]
   restrict_assignment_columns
+  restrict_columns :state, [:workflow_state]
 
   # override has_one relationship provided by simply_versioned
   def current_version_unidirectional
@@ -301,14 +302,28 @@ class Quizzes::Quiz < ActiveRecord::Base
     write_attribute(:assignment_id, val)
   end
 
+  def lock_at=(val)
+    val = val.in_time_zone.end_of_day if val.is_a?(Date)
+    if val.is_a?(String)
+      super(Time.zone.parse(val))
+      self.lock_at = CanvasTime.fancy_midnight(self.lock_at) unless val =~ /:/
+    else
+      super(val)
+    end
+  end
+
   def due_at=(val)
     val = val.in_time_zone.end_of_day if val.is_a?(Date)
     if val.is_a?(String)
       super(Time.zone.parse(val))
-      infer_times unless val.match(/:/)
+      infer_times unless val =~ /:/
     else
       super(val)
     end
+  end
+
+  def update_cached_due_dates?
+    due_at_changed? || workflow_state_changed? || only_visible_to_overrides_changed?
   end
 
   def assignment?
@@ -402,6 +417,7 @@ class Quizzes::Quiz < ActiveRecord::Base
         id: [@old_assignment_id, self.last_assignment_id].compact,
         submission_types: 'online_quiz'
       ).update_all(:workflow_state => 'deleted', :updated_at => Time.now.utc)
+      self.course.recompute_student_scores
       send_later_if_production_enqueue_args(:destroy_related_submissions, priority: Delayed::HIGH_PRIORITY)
       ::ContentTag.delete_for(::Assignment.find(@old_assignment_id)) if @old_assignment_id
       ::ContentTag.delete_for(::Assignment.find(self.last_assignment_id)) if self.last_assignment_id
@@ -811,6 +827,8 @@ class Quizzes::Quiz < ActiveRecord::Base
       else
         val = nil
       end
+    elsif val == ""
+      val = nil
     end
     write_attribute(:hide_results, val)
   end
@@ -1072,6 +1090,46 @@ class Quizzes::Quiz < ActiveRecord::Base
           assignment_overrides.due_at BETWEEN ? AND ?', start, ending, start, ending)
   }
 
+  scope :ungraded_with_user_due_date, -> (user) do
+    from("(WITH overrides AS (
+          SELECT DISTINCT ON (o.quiz_id, o.user_id) *
+          FROM (
+            SELECT ao.quiz_id, aos.user_id, ao.due_at, ao.due_at_overridden, 1 AS priority, ao.id AS override_id
+            FROM #{AssignmentOverride.quoted_table_name} ao
+            INNER JOIN #{AssignmentOverrideStudent.quoted_table_name} aos ON ao.id = aos.assignment_override_id AND ao.set_type = 'ADHOC'
+            WHERE aos.user_id = #{User.connection.quote(user)}
+              AND ao.workflow_state = 'active'
+              AND aos.workflow_state <> 'deleted'
+            UNION
+            SELECT ao.quiz_id, e.user_id, ao.due_at, ao.due_at_overridden, 1 AS priority, ao.id AS override_id
+            FROM #{AssignmentOverride.quoted_table_name} ao
+            INNER JOIN #{Enrollment.quoted_table_name} e ON e.course_section_id = ao.set_id AND ao.set_type = 'CourseSection'
+            WHERE e.user_id = #{User.connection.quote(user)}
+              AND e.workflow_state NOT IN ('rejected', 'deleted')
+              AND ao.workflow_state = 'active'
+            UNION
+            SELECT q.id, e.user_id, q.due_at, FALSE as due_at_overridden, 2 AS priority, NULL as override_id
+            FROM #{Quizzes::Quiz.quoted_table_name} q
+            INNER JOIN #{Enrollment.quoted_table_name} e ON e.course_id = q.context_id
+            WHERE e.workflow_state NOT IN ('rejected', 'deleted')
+              AND e.type in ('StudentEnrollment', 'StudentViewEnrollment')
+              AND e.user_id = #{User.connection.quote(user)}
+              AND q.assignment_id IS NULL
+              AND NOT q.only_visible_to_overrides
+          ) o
+          ORDER BY o.user_id ASC, o.quiz_id ASC, priority ASC, o.due_at_overridden DESC, o.due_at DESC NULLS FIRST
+        )
+        SELECT CASE WHEN overrides.due_at_overridden THEN overrides.due_at ELSE q.due_at END as user_due_date, q.*
+        FROM #{Quizzes::Quiz.quoted_table_name} q
+        INNER JOIN overrides ON overrides.quiz_id = q.id) as quizzes").
+      not_for_assignment
+  end
+
+  scope :ungraded_due_between_for_user, -> (start, ending, user) do
+    ungraded_with_user_due_date(user).
+      where(user_due_date: start..ending)
+  end
+
   # Return quizzes (up to limit) that do not have any submissions
   scope :need_submitting_info, lambda { |user_id, limit|
     where("(SELECT COUNT(id) FROM #{Quizzes::QuizSubmission.quoted_table_name}
@@ -1226,7 +1284,8 @@ class Quizzes::Quiz < ActiveRecord::Base
 
   # marks a quiz as having unpublished changes
   def self.mark_quiz_edited(id)
-    where(:id => id).update_all(:last_edited_at => Time.now.utc)
+    now = Time.now.utc
+    where(:id => id).update_all(:last_edited_at => now, :updated_at => now)
   end
 
   def mark_edited!
@@ -1265,7 +1324,11 @@ class Quizzes::Quiz < ActiveRecord::Base
         version_number: self.version_number
       }
       if current_quiz_question_regrades.present?
-        Quizzes::QuizRegrader::Regrader.send_later(:regrade!, options)
+        Quizzes::QuizRegrader::Regrader.send_later_enqueue_args(
+          :regrade!,
+          { strand: "quiz:#{self.global_id}:regrading"},
+          options
+        )
       end
     end
     true
@@ -1284,8 +1347,8 @@ class Quizzes::Quiz < ActiveRecord::Base
 
   def questions_regraded_since(created_at)
     question_regrades = Set.new
-    quiz_regrades.where("quiz_regrades.created_at > ? AND quiz_question_regrades.regrade_option != 'disabled'", created_at)
-                 .eager_load(:quiz_question_regrades).each do |regrade|
+    quiz_regrades.where("quiz_regrades.created_at > ? AND quiz_question_regrades.regrade_option != 'disabled'", created_at).
+      eager_load(:quiz_question_regrades).each do |regrade|
       ids = regrade.quiz_question_regrades.map { |qqr| qqr.quiz_question_id }
       question_regrades.merge(ids)
     end

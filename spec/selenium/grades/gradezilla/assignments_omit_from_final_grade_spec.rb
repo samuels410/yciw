@@ -17,7 +17,7 @@
 
 require_relative '../../common'
 require_relative '../../helpers/assignments_common'
-require_relative '../page_objects/gradezilla_page'
+require_relative '../pages/gradezilla_page'
 
 describe 'Gradezilla omit from final grade assignments' do
   include_context "in-process server selenium tests"
@@ -74,25 +74,6 @@ describe 'Gradezilla omit from final grade assignments' do
       submit_assignment_form
 
       expect(f('.omit-from-final-warning')).to include_text('This assignment does not count toward the final grade.')
-    end
-  end
-
-  context 'in gradebook' do
-    before(:each) do
-      enroll_teacher_and_students
-      assignment_1.grade_student(student, grade: 10, grader: teacher)
-      assignment_3.grade_student(student, grade: 5, grader: teacher)
-      user_session(teacher)
-      Gradezilla.visit(test_course)
-    end
-
-    it 'displays triangle warning' do
-      expect(Gradezilla.select_assignment_header_warning_icon.size).to eq(1)
-    end
-
-    it 'does not include omitted assignment in final' do
-      total_grade = f('#gradebook_grid .container_1 .slick-row:nth-child(1) .total-cell .percentage')
-      expect(total_grade).to include_text('10')
     end
   end
 

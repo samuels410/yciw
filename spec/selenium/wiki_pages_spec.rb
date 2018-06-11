@@ -112,7 +112,7 @@ describe "Wiki Pages" do
       @course.wiki_pages.create!(title: 'Garfield and Odie Food Preparation',
         body: '<a href="http://example.com/poc/" target="_blank" id="click_here_now">click_here</a>')
       get "/courses/#{@course.id}/pages/garfield-and-odie-food-preparation"
-      expect(f('#click_here_now').attribute("rel")).to eq "noreferrer"
+      expect(f('#click_here_now').attribute("rel")).to eq "noreferrer noopener"
     end
 
     it "does not mark valid links as invalid", priority: "2", test_id: 927788 do
@@ -202,7 +202,7 @@ describe "Wiki Pages" do
       check_header_focus('updated_at')
     end
 
-    describe "Add Course Button" do
+    describe "Add Page Button" do
       before :each do
         get "/courses/#{@course.id}/pages"
 
@@ -210,13 +210,15 @@ describe "Wiki Pages" do
         @active_element = driver.execute_script('return document.activeElement')
       end
 
-      it "navigates to the add course view when enter is pressed" do
+      it "navigates to the add page view when enter is pressed" do
+        skip('see CNVS-39931')
         @active_element.send_keys(:enter)
         wait_for_ajaximations
         check_element_has_focus(f('.edit-header #title'))
       end
 
-      it "navigates to the add course view when spacebar is pressed" do
+      it "navigates to the add page view when spacebar is pressed" do
+        skip('see CNVS-39931')
         @active_element.send_keys(:space)
         wait_for_ajaximations
         check_element_has_focus(f('.edit-header #title'))
@@ -271,13 +273,14 @@ describe "Wiki Pages" do
         check_element_has_focus(f('.al-trigger'))
       end
 
-      it "returns focus to the previous item cog if it was deleted" do
+      it "returns focus to the previous item title if it was deleted" do
         triggers = ff('.al-trigger')
+        titles = ff('.wiki-page-link')
         triggers.last.click
         ff('.delete-menu-item').last.click
         f('.ui-dialog-buttonset .btn-danger').click
         wait_for_ajaximations
-        check_element_has_focus(triggers[-2])
+        check_element_has_focus(titles[-2])
       end
 
       it "returns focus to the + Page button if there are no previous item cogs" do
@@ -390,7 +393,7 @@ describe "Wiki Pages" do
 
       it "should validate that revision restored is displayed", priority: "1", test_id: 126832 do
         get "/courses/#{@course.id}/pages/#{@vpage.url}"
-        f('.icon-settings').click
+        f('.al-trigger').click
         expect(f('.icon-clock')).to be_present
         f('.view_page_history').click
         wait_for_ajaximations
@@ -423,34 +426,37 @@ describe "Wiki Pages" do
       it "should alert user if navigating away from page with unsaved RCE changes", priority: "1", test_id: 267612 do
         add_text_to_tiny("derp")
         fln('Home').click
-        expect(driver.switch_to.alert.text).to be_present
+        expect(driver.switch_to.alert).to be_present
         driver.switch_to.alert.accept
       end
 
       it "should alert user if navigating away from page with unsaved html changes", priority: "1", test_id: 126838 do
+        skip_if_safari(:alert)
         switch_editor_views(wiki_page_body)
         wiki_page_body.send_keys("derp")
         fln('Home').click
-        expect(driver.switch_to.alert.text).to be_present
+        expect(driver.switch_to.alert).to be_present
         driver.switch_to.alert.accept
       end
 
       it "should not save changes when navigating away and not saving", priority: "1", test_id: 267613 do
+        skip_if_safari(:alert)
         switch_editor_views(wiki_page_body)
         wiki_page_body.send_keys('derp')
         fln('Home').click
-        expect(driver.switch_to.alert.text).to be_present
+        expect(driver.switch_to.alert).to be_present
         driver.switch_to.alert.accept
         get "/courses/#{@course.id}/pages/bar/edit"
         expect(f('textarea')).not_to include_text('derp')
       end
 
       it "should alert user if navigating away from page after title change", priority: "1", test_id: 267832 do
+        skip_if_safari(:alert)
         switch_editor_views(wiki_page_body)
         f('.title').clear()
         f('.title').send_keys("derpy-title")
         fln('Home').click
-        expect(driver.switch_to.alert.text).to be_present
+        expect(driver.switch_to.alert).to be_present
         driver.switch_to.alert.accept
       end
 

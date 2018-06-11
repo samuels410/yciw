@@ -42,32 +42,28 @@ module Api::V1::User
     end
   end
 
-  def user_json(user, current_user, session, includes = [], context = @context, enrollments = nil, excludes = [])
+  def user_json(user, current_user, session, includes = [], context = @context, enrollments = nil, excludes = [], enrollment=nil)
     includes ||= []
     excludes ||= []
     api_json(user, current_user, session, API_USER_JSON_OPTS).tap do |json|
       enrollment_json_opts = { current_grading_period_scores: includes.include?('current_grading_period_scores') }
       if !excludes.include?('pseudonym') && user_json_is_admin?(context, current_user)
         include_root_account = @domain_root_account.trust_exists?
-        pseudonym = SisPseudonym.for(user, @domain_root_account, type: :implicit, require_sis: false)
-        sis_pseudonym = pseudonym if pseudonym&.sis_user_id
-        enrollment_json_opts[:sis_pseudonym] = sis_pseudonym
-        if sis_pseudonym
-          # the sis fields on pseudonym are poorly named -- sis_user_id is
-          # the id in the SIS import data, where on every other table
-          # that's called sis_source_id.
+        sis_context = enrollment || @domain_root_account
+        pseudonym = SisPseudonym.for(user, sis_context, type: :implicit, require_sis: false)
+        enrollment_json_opts[:sis_pseudonym] = pseudonym if pseudonym&.sis_user_id
+        # the sis fields on pseudonym are poorly named -- sis_user_id is
+        # the id in the SIS import data, where on every other table
+        # that's called sis_source_id.
 
-          if user_can_read_sis_data?(current_user, context)
-            json.merge! :sis_user_id => sis_pseudonym.sis_user_id,
-                        :integration_id => sis_pseudonym.integration_id,
-                        # TODO: don't send sis_login_id; it's garbage data
-                        :sis_login_id => sis_pseudonym.unique_id
-          end
-          json[:sis_import_id] = sis_pseudonym.sis_batch_id if @domain_root_account.grants_right?(current_user, session, :manage_sis)
-          json[:root_account] = HostUrl.context_host(sis_pseudonym.account) if include_root_account
+        if user_can_read_sis_data?(current_user, context)
+          json.merge! :sis_user_id => pseudonym&.sis_user_id,
+                      :integration_id => pseudonym&.integration_id
         end
+        json[:sis_import_id] = pseudonym&.sis_batch_id if @domain_root_account.grants_right?(current_user, session, :manage_sis)
+        json[:root_account] = HostUrl.context_host(pseudonym&.account) if include_root_account
 
-        if pseudonym
+        if pseudonym && context.grants_right?(current_user, session, :view_user_logins)
           json[:login_id] = pseudonym.unique_id
         end
       end
@@ -82,7 +78,7 @@ module Api::V1::User
       end
       # include a permissions check here to only allow teachers and admins
       # to see user email addresses.
-      if includes.include?('email') && !excludes.include?('personal_info') && context.grants_right?(current_user, session, :read_roster)
+      if includes.include?('email') && !excludes.include?('personal_info') && context.grants_right?(current_user, session, :read_email_addresses)
         json[:email] = user.email
       end
 
@@ -132,6 +128,10 @@ module Api::V1::User
       if includes.include?('time_zone')
         zone = user.time_zone || @domain_root_account.try(:default_time_zone) || Time.zone
         json[:time_zone] = zone.name
+      end
+
+      if includes.include?('lti_id')
+        json[:lti_id] = user.lti_context_id
       end
     end
   end
@@ -214,7 +214,8 @@ module Api::V1::User
                               :created_at,
                               :start_at,
                               :end_at,
-                              :type]
+                              :type
+                            ]
 
   def enrollment_json(enrollment, user, session, includes = [], opts = {})
     api_json(enrollment, user, session, :only => API_ENROLLMENT_JSON_OPTS).tap do |json|
@@ -225,6 +226,7 @@ module Api::V1::User
       json[:role] = enrollment.role.name
       json[:role_id] = enrollment.role_id
       json[:last_activity_at] = enrollment.last_activity_at
+      json[:last_attended_at] = enrollment.last_attended_at
       json[:total_activity_time] = enrollment.total_activity_time
       if enrollment.root_account.grants_right?(user, session, :manage_sis)
         json[:sis_import_id] = enrollment.sis_batch_id
@@ -238,7 +240,7 @@ module Api::V1::User
         json[:course_integration_id] = enrollment.course.integration_id
         json[:sis_section_id] = enrollment.course_section.sis_source_id
         json[:section_integration_id] = enrollment.course_section.integration_id
-        pseudonym = opts.key?(:sis_pseudonym) ? opts[:sis_pseudonym] : sis_pseudonym_for(enrollment.user)
+        pseudonym = opts.key?(:sis_pseudonym) ? opts[:sis_pseudonym] : sis_pseudonym_for(enrollment.user, enrollment)
         json[:sis_user_id] = pseudonym.try(:sis_user_id)
       end
       json[:html_url] = course_user_url(enrollment.course_id, enrollment.user_id)
@@ -267,14 +269,24 @@ module Api::V1::User
       html_url: course_student_grades_url(enrollment.course_id, enrollment.user_id)
     }
 
-    if grade_permissions?(user, enrollment)
-      gpid = grading_period(enrollment.course, opts)&.id
+    course = enrollment.course
 
-      grades[:current_score] = enrollment.computed_current_score(grading_period_id: gpid)
-      grades[:current_grade] = enrollment.computed_current_grade(grading_period_id: gpid)
-      grades[:final_score]   = enrollment.computed_final_score(grading_period_id: gpid)
-      grades[:final_grade]   = enrollment.computed_final_grade(grading_period_id: gpid)
-      grades[:grading_period_id] = gpid if opts[:current_grading_period_scores]
+    if grade_permissions?(user, enrollment)
+      period = grading_period(enrollment.course, opts)
+      score_opts = period ? { grading_period_id: period.id } : Score.params_for_course
+
+      grades[:current_score] = enrollment.computed_current_score(score_opts)
+      grades[:current_grade] = enrollment.computed_current_grade(score_opts)
+      grades[:final_score]   = enrollment.computed_final_score(score_opts)
+      grades[:final_grade]   = enrollment.computed_final_grade(score_opts)
+      grades[:grading_period_id] = period&.id if opts[:current_grading_period_scores]
+
+      if course.grants_any_right?(user, :manage_grades, :view_all_grades)
+        grades[:unposted_current_score] = enrollment.unposted_current_score(score_opts)
+        grades[:unposted_current_grade] = enrollment.unposted_current_grade(score_opts)
+        grades[:unposted_final_score]   = enrollment.unposted_final_score(score_opts)
+        grades[:unposted_final_grade]   = enrollment.unposted_final_grade(score_opts)
+      end
     end
     grades
   end
@@ -316,8 +328,8 @@ module Api::V1::User
     sis_id_context(context).grants_right?(user, :read_sis) || @domain_root_account.grants_right?(user, :manage_sis)
   end
 
-  def sis_pseudonym_for(user)
-    SisPseudonym.for(user, @domain_root_account, type: :trusted)
+  def sis_pseudonym_for(user, context=@domain_root_account)
+    SisPseudonym.for(user, context, type: :trusted)
   end
 
   def group_ids(user)

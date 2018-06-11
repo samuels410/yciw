@@ -54,12 +54,12 @@
 #           "type": "string"
 #         },
 #         "unlock_at": {
-#           "description": "(Optional) Time at which this was/will be unlocked.",
+#           "description": "(Optional) Time at which this was/will be unlocked. Must be before the due date.",
 #           "example": "2013-01-01T00:00:00-06:00",
 #           "type": "datetime"
 #         },
 #         "lock_at": {
-#           "description": "(Optional) Time at which this was/will be locked.",
+#           "description": "(Optional) Time at which this was/will be locked. Must be after the due date.",
 #           "example": "2013-02-01T00:00:00-06:00",
 #           "type": "datetime"
 #         },
@@ -90,6 +90,10 @@
 #         },
 #         "description": {
 #           "example": "Full marks",
+#           "type": "string"
+#         },
+#        "long_description": {
+#           "example": "Student completed the assignment flawlessly.",
 #           "type": "string"
 #         }
 #       }
@@ -127,6 +131,10 @@
 #           "example": "Criterion 1 more details",
 #           "type": "string"
 #         },
+#         "criterion_use_range": {
+#           "example": true,
+#           "type": "boolean"
+#         },
 #         "ratings": {
 #           "type": "array",
 #           "items": { "$ref": "RubricRating" }
@@ -154,14 +162,17 @@
 #           "type": "string"
 #         },
 #         "due_at": {
+#          "description": "The due date for the assignment. Must be between the unlock date and the lock date if there are lock dates",
 #           "example": "2013-08-28T23:59:00-06:00",
 #           "type": "datetime"
 #         },
 #         "unlock_at": {
+#           "description": "The unlock date for the assignment. Must be before the due date if there is a due date.",
 #           "example": "2013-08-01T00:00:00-06:00",
 #           "type": "datetime"
 #         },
 #         "lock_at": {
+#           "description": "The lock date for the assignment. Must be after the due date if there is a due date.",
 #           "example": "2013-08-31T23:59:00-06:00",
 #           "type": "datetime"
 #         }
@@ -433,6 +444,11 @@
 #             ]
 #           }
 #         },
+#         "has_submitted_submissions": {
+#           "description": "If true, the assignment has been submitted to by at least one student",
+#           "example": true,
+#           "type": "boolean"
+#         },
 #         "grading_type": {
 #           "description": "The type of grading the assignment receives; one of 'pass_fail', 'percent', 'letter_grade', 'gpa_scale', 'points'",
 #           "example": "points",
@@ -541,7 +557,12 @@
 #           "items": { "$ref": "AssignmentOverride" }
 #         },
 #         "omit_from_final_grade": {
-#           "description": "(Optional) If true, the assignment will be ommitted from the student's final grade",
+#           "description": "(Optional) If true, the assignment will be omitted from the student's final grade",
+#           "example": true,
+#           "type": "boolean"
+#         },
+#         "moderated_grading": {
+#           "description": "Boolean indicating if the assignment is moderated.",
 #           "example": true,
 #           "type": "boolean"
 #         }
@@ -555,7 +576,7 @@ class AssignmentsApiController < ApplicationController
   include Api::V1::AssignmentOverride
 
   # @API List assignments
-  # Returns the list of assignments for the current context.
+  # Returns the paginated list of assignments for the current context.
   # @argument include[] [String, "submission"|"assignment_visibility"|"all_dates"|"overrides"|"observed_users"]
   #   Associations to include with the assignment. The "assignment_visibility" option
   #   requires that the Differentiated Assignments course feature be turned on. If
@@ -569,6 +590,8 @@ class AssignmentsApiController < ApplicationController
   # @argument bucket [String, "past"|"overdue"|"undated"|"ungraded"|"unsubmitted"|"upcoming"|"future"]
   #   If included, only return certain assignments depending on due date and submission status.
   # @argument assignment_ids[] if set, return only assignments specified
+  # @argument order_by [String, "position"|"name"]
+  #   Determines the order of the assignments. Defaults to "position".
   # @returns [Assignment]
   def index
     error_or_array= get_assignments(@current_user)
@@ -576,7 +599,7 @@ class AssignmentsApiController < ApplicationController
   end
 
   # @API List assignments for user
-  # Returns the list of assignments for the specified user if the current user has rights to view.
+  # Returns the paginated list of assignments for the specified user if the current user has rights to view.
   # See {api:AssignmentsApiController#index List assignments} for valid arguments.
   def user_index
     @user.shard.activate do
@@ -590,28 +613,37 @@ class AssignmentsApiController < ApplicationController
     old_assignment = @context.active_assignments.find_by({ id: assignment_id })
 
     if !old_assignment || old_assignment.workflow_state == "deleted"
-      return render json: { error: 'assignment does not exist' }, status: :bad_request
+      return render json: { error: t('assignment does not exist') }, status: :bad_request
     end
 
     if old_assignment.quiz
-      return render json: { error: 'quiz duplication not implemented' }, status: :bad_request
-    end
-
-    if old_assignment.discussion_topic
-      return render json: { error: 'discussion topic duplication not implemented' }, status: :bad_request
+      return render json: { error: t('quiz duplication not implemented') }, status: :bad_request
     end
 
     return unless authorized_action(old_assignment, @current_user, :create)
 
-    new_assignment = old_assignment.duplicate
-    # insert_at seems to do the right thing only on already saved entities, so
-    # save than insert into the proper position.
-    new_assignment.save!
+    new_assignment = old_assignment.duplicate({ :user => @current_user })
+
     new_assignment.insert_at(old_assignment.position + 1)
+    new_assignment.save!
+    positions_in_group = Assignment.active.where(assignment_group_id: old_assignment.assignment_group_id).
+      pluck("id", "position")
+    positions_hash = {}
+    positions_in_group.each do |id_pos_pair|
+      positions_hash[id_pos_pair[0]] = id_pos_pair[1]
+    end
     if new_assignment
-      render :json => assignment_json(new_assignment, @current_user, session)
+      assignment_topic = old_assignment.discussion_topic
+      if assignment_topic&.pinned && !assignment_topic&.position.nil?
+        new_assignment.discussion_topic.insert_at(assignment_topic.position + 1)
+      end
+      # Include the updated positions in the response so the frontend can
+      # update them appropriately
+      result_json = assignment_json(new_assignment, @current_user, session)
+      result_json['new_positions'] = positions_hash
+      render :json => result_json
     else
-      render json: { error: 'cannot save new assignment' }, status: :bad_request
+      render json: { error: t('cannot save new assignment') }, status: :bad_request
     end
   end
 
@@ -639,6 +671,7 @@ class AssignmentsApiController < ApplicationController
         end
         scope = scope.where(id: params[:assignment_ids])
       end
+      scope = scope.reorder("#{Assignment.best_unicode_collation_key('assignments.title')}, assignment_groups.position, assignments.position, assignments.id") if params[:order_by] == 'name'
 
       assignments = Api.paginate(scope, self, api_v1_course_assignments_url(@context))
 
@@ -721,8 +754,8 @@ class AssignmentsApiController < ApplicationController
   #   All dates associated with the assignment, if applicable
   # @returns Assignment
   def show
-    @assignment = @context.active_assignments.preload(:assignment_group, :rubric_association, :rubric)
-                    .api_id(params[:id])
+    @assignment = @context.active_assignments.preload(:assignment_group, :rubric_association, :rubric).
+      api_id(params[:id])
     if authorized_action(@assignment, @current_user, :read)
       return render_unauthorized_action unless @assignment.visible_to_user?(@current_user)
 
@@ -766,7 +799,7 @@ class AssignmentsApiController < ApplicationController
   #   The position of this assignment in the group when displaying
   #   assignment lists.
   #
-  # @argument assignment[submission_types][] [String, "online_quiz"|"none"|"on_paper"|"online_quiz"|"discussion_topic"|"external_tool"|"online_upload"|"online_text_entry"|"online_url"|"media_recording"]
+  # @argument assignment[submission_types][] [String, "online_quiz"|"none"|"on_paper"|"discussion_topic"|"external_tool"|"online_upload"|"online_text_entry"|"online_url"|"media_recording"]
   #   List of supported submission types for the assignment.
   #   Unless the assignment is allowing online submissions, the array should
   #   only have one element.
@@ -775,7 +808,6 @@ class AssignmentsApiController < ApplicationController
   #     "online_quiz"
   #     "none"
   #     "on_paper"
-  #     "online_quiz"
   #     "discussion_topic"
   #     "external_tool"
   #
@@ -810,7 +842,7 @@ class AssignmentsApiController < ApplicationController
   #   format.
   #
   # @argument assignment[integration_data]
-  #   Data related to third party integrations, JSON string required.
+  #   Data used for SIS integrations. Requires admin-level token with the "Manage SIS" permission. JSON string required.
   #
   # @argument assignment[integration_id]
   #   Unique ID from third party integrations
@@ -851,15 +883,15 @@ class AssignmentsApiController < ApplicationController
   #  The assignment defaults to "points" if this field is omitted.
   #
   # @argument assignment[due_at] [DateTime]
-  #   The day/time the assignment is due.
+  #   The day/time the assignment is due. Must be between the lock dates if there are lock dates.
   #   Accepts times in ISO 8601 format, e.g. 2014-10-21T18:48:00Z.
   #
   # @argument assignment[lock_at] [DateTime]
-  #   The day/time the assignment is locked after.
+  #   The day/time the assignment is locked after. Must be after the due date if there is a due date.
   #   Accepts times in ISO 8601 format, e.g. 2014-10-21T18:48:00Z.
   #
   # @argument assignment[unlock_at] [DateTime]
-  #   The day/time the assignment is unlocked.
+  #   The day/time the assignment is unlocked. Must be before the due date if there is a due date.
   #   Accepts times in ISO 8601 format, e.g. 2014-10-21T18:48:00Z.
   #
   # @argument assignment[description] [String]
@@ -877,7 +909,6 @@ class AssignmentsApiController < ApplicationController
   #
   # @argument assignment[assignment_overrides][] [AssignmentOverride]
   #   List of overrides for the assignment.
-  #   NOTE: The assignment overrides feature is in beta.
   #
   # @argument assignment[only_visible_to_overrides] [Boolean]
   #   Whether this assignment is only visible to overrides
@@ -901,6 +932,9 @@ class AssignmentsApiController < ApplicationController
   #   attributes to use the Quizzes 2 LTI tool configured for this course.
   #   Has no effect if no Quizzes 2 LTI tool is configured.
   #
+  # @argument assignment[moderated_grading] [Boolean]
+  #   Whether this assignment is moderated.
+  #
   # @returns Assignment
   def create
     @assignment = @context.assignments.build
@@ -921,7 +955,7 @@ class AssignmentsApiController < ApplicationController
   #   The position of this assignment in the group when displaying
   #   assignment lists.
   #
-  # @argument assignment[submission_types][] [String, "online_quiz"|"none"|"on_paper"|"online_quiz"|"discussion_topic"|"external_tool"|"online_upload"|"online_text_entry"|"online_url"|"media_recording"]
+  # @argument assignment[submission_types][] [String, "online_quiz"|"none"|"on_paper"|"discussion_topic"|"external_tool"|"online_upload"|"online_text_entry"|"online_url"|"media_recording"]
   #   List of supported submission types for the assignment.
   #   Unless the assignment is allowing online submissions, the array should
   #   only have one element.
@@ -930,7 +964,6 @@ class AssignmentsApiController < ApplicationController
   #     "online_quiz"
   #     "none"
   #     "on_paper"
-  #     "online_quiz"
   #     "discussion_topic"
   #     "external_tool"
   #
@@ -965,7 +998,7 @@ class AssignmentsApiController < ApplicationController
   #   format.
   #
   # @argument assignment[integration_data]
-  #   Data related to third party integrations, JSON string required.
+  #   Data used for SIS integrations. Requires admin-level token with the "Manage SIS" permission. JSON string required.
   #
   # @argument assignment[integration_id]
   #   Unique ID from third party integrations
@@ -1010,11 +1043,11 @@ class AssignmentsApiController < ApplicationController
   #   Accepts times in ISO 8601 format, e.g. 2014-10-21T18:48:00Z.
   #
   # @argument assignment[lock_at] [DateTime]
-  #   The day/time the assignment is locked after.
+  #   The day/time the assignment is locked after. Must be after the due date if there is a due date.
   #   Accepts times in ISO 8601 format, e.g. 2014-10-21T18:48:00Z.
   #
   # @argument assignment[unlock_at] [DateTime]
-  #   The day/time the assignment is unlocked.
+  #   The day/time the assignment is unlocked. Must be before the due date if there is a due date.
   #   Accepts times in ISO 8601 format, e.g. 2014-10-21T18:48:00Z.
   #
   # @argument assignment[description] [String]
@@ -1032,7 +1065,6 @@ class AssignmentsApiController < ApplicationController
   #
   # @argument assignment[assignment_overrides][] [AssignmentOverride]
   #   List of overrides for the assignment.
-  #   NOTE: The assignment overrides feature is in beta.
   #
   # @argument assignment[only_visible_to_overrides] [Boolean]
   #   Whether this assignment is only visible to overrides
@@ -1052,16 +1084,18 @@ class AssignmentsApiController < ApplicationController
   # present, existing overrides are updated or deleted (and new ones created,
   # as necessary) to match the provided list.
   #
-  # NOTE: The assignment overrides feature is in beta.
-  #
   # @argument assignment[omit_from_final_grade] [Boolean]
   #   Whether this assignment is counted towards a student's final grade.
+  #
+  # @argument assignment[moderated_grading] [Boolean]
+  #   Whether this assignment is moderated.
   #
   # @returns Assignment
   def update
     @assignment = @context.active_assignments.api_id(params[:id])
     if authorized_action(@assignment, @current_user, :update)
       @assignment.content_being_saved_by(@current_user)
+      @assignment.updating_user = @current_user
       # update_api_assignment mutates params so this has to be done here
       opts = assignment_json_opts
       result = update_api_assignment(@assignment, params.require(:assignment), @current_user, @context)
@@ -1103,6 +1137,6 @@ class AssignmentsApiController < ApplicationController
       return if @context.students_visible_to(@current_user).include?(@user)
     end
     # self, observer
-    authorized_action(@user, @current_user, [:read_as_parent, :read])
+    authorized_action(@user, @current_user, %i(read_as_parent read))
   end
 end

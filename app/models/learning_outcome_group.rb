@@ -19,6 +19,9 @@
 class LearningOutcomeGroup < ActiveRecord::Base
   include Workflow
   include OutcomeAttributes
+  include MasterCourses::Restrictor
+  restrict_columns :state, [:workflow_state]
+
   belongs_to :learning_outcome_group
   has_many :child_outcome_groups, :class_name => 'LearningOutcomeGroup', :foreign_key => "learning_outcome_group_id"
   has_many :child_outcome_links, -> { where(tag_type: 'learning_outcome_association', content_type: 'LearningOutcome') }, class_name: 'ContentTag', as: :associated_asset
@@ -46,6 +49,12 @@ class LearningOutcomeGroup < ActiveRecord::Base
     [learning_outcome_group_id]
   end
 
+  def touch_parent_group
+    return if self.skip_parent_group_touch
+    self.touch
+    self.learning_outcome_group.touch_parent_group if self.learning_outcome_group
+  end
+
   # adds a new link to an outcome to this group. does nothing if a link already
   # exists (an outcome can be linked into a context multiple times by multiple
   # groups, but only once per group).
@@ -55,6 +64,7 @@ class LearningOutcomeGroup < ActiveRecord::Base
     return outcome_link if outcome_link
 
     # create new link and in this group
+    touch_parent_group
     child_outcome_links.create(
       :content => outcome,
       :context => self.context || self)
@@ -87,6 +97,7 @@ class LearningOutcomeGroup < ActiveRecord::Base
       copy.add_outcome(link.content)
     end
 
+    touch_parent_group
     # done
     copy
   end
@@ -101,6 +112,7 @@ class LearningOutcomeGroup < ActiveRecord::Base
     # change the parent
     outcome_link.associated_asset = self
     outcome_link.save!
+    touch_parent_group
     outcome_link
   end
 
@@ -120,7 +132,7 @@ class LearningOutcomeGroup < ActiveRecord::Base
     group
   end
 
-  attr_accessor :skip_tag_touch
+  attr_accessor :skip_tag_touch, :skip_parent_group_touch
   alias_method :destroy_permanently!, :destroy
   def destroy
     transaction do

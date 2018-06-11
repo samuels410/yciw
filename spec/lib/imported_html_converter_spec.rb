@@ -41,17 +41,17 @@ describe ImportedHtmlConverter do
     end
 
     it "should convert a wiki reference" do
-      test_string = %{<a href="%24WIKI_REFERENCE%24/wiki/test-wiki-page">Test Wiki Page</a>}
+      test_string = %{<a href="%24WIKI_REFERENCE%24/wiki/test-wiki-page?query=blah">Test Wiki Page</a>}
       @course.wiki_pages.create!(:title => "Test Wiki Page", :body => "stuff")
 
-      expect(convert_and_replace(test_string)).to eq %{<a href="#{@path}pages/test-wiki-page">Test Wiki Page</a>}
+      expect(convert_and_replace(test_string)).to eq %{<a href="#{@path}pages/test-wiki-page?query=blah">Test Wiki Page</a>}
     end
 
     it "should convert a wiki reference without $ escaped" do
-      test_string = %{<a href="$WIKI_REFERENCE$/wiki/test-wiki-page">Test Wiki Page</a>}
+      test_string = %{<a href="$WIKI_REFERENCE$/wiki/test-wiki-page?query=blah">Test Wiki Page</a>}
       @course.wiki_pages.create!(:title => "Test Wiki Page", :body => "stuff")
 
-      expect(convert_and_replace(test_string)).to eq %{<a href="#{@path}pages/test-wiki-page">Test Wiki Page</a>}
+      expect(convert_and_replace(test_string)).to eq %{<a href="#{@path}pages/test-wiki-page?query=blah">Test Wiki Page</a>}
     end
 
     it "should convert a wiki reference by migration id" do
@@ -203,6 +203,16 @@ describe ImportedHtmlConverter do
     it "should leave an anchor tag alone" do
       test_string = '<p><a href="#anchor_ref">ref</a></p>'
       expect(convert_and_replace(test_string)).to eq test_string
+    end
+
+    it "should convert base64 images to file links" do
+      base64 = "R0lGODlhCQAJAIAAAICAgP///yH5BAEAAAEALAAAAAAJAAkAAAIQTGCZgGrc\nFIxvSuhwpsuFAgA7\n"
+      test_string = "<p><img src=\"data:image/gif;base64,#{base64}\"></p>"
+      new_string = convert_and_replace(test_string)
+      attachment = Attachment.last
+      expect(attachment.content_type).to eq 'image/gif'
+      expect(attachment.name).to eq "1d1fde3d669ed5c4fc68a49d643f140d.gif"
+      expect(new_string).to eq "<p><img src=\"/courses/#{@course.id}/files/#{attachment.id}/preview\"></p>"
     end
 
   end

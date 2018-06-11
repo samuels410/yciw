@@ -34,9 +34,8 @@ describe SIS::CSV::CourseImporter do
     )
     expect(Course.count).to eq before_count + 1
 
-    expect(importer.errors).to eq []
-    warnings = importer.warnings.map { |r| r.last }
-    expect(warnings).to eq ["No course_id given for a course",
+    errors = importer.errors.map { |r| r.last }
+    expect(errors).to eq ["No course_id given for a course",
                         "Improper status \"inactive\" for course C003",
                         "No short_name given for course C004",
                         "No long_name given for course C005"]
@@ -62,8 +61,8 @@ describe SIS::CSV::CourseImporter do
       "T004,Fall14,active,,"
     )
     process_csv_data_cleanly(
-      "course_id,short_name,long_name,account_id,term_id,status",
-      "test_1,TC 101,Test Course 101,,T001,active"
+      "course_id,short_name,long_name,account_id,term_id,status,blueprint_course_id",
+      "test_1,TC 101,Test Course 101,,T001,active,\"\""
     )
     @account.courses.where(sis_source_id: "test_1").first.tap do |course|
       expect(course.enrollment_term).to eq EnrollmentTerm.where(sis_source_id: 'T001').first
@@ -83,6 +82,39 @@ describe SIS::CSV::CourseImporter do
     )
     @account.courses.where(sis_source_id: "test_1").first.tap do |course|
       expect(course.enrollment_term).to eq EnrollmentTerm.where(sis_source_id: 'T003').first
+    end
+  end
+
+  it "should support account stickiness" do
+    process_csv_data_cleanly(
+      "account_id,parent_account_id,name,status",
+      "A001,,Humanities,active",
+      "A002,,Humanities,active",
+      "A003,,Humanities,active",
+      "A004,,Humanities,active"
+    )
+    process_csv_data_cleanly(
+      "course_id,short_name,long_name,account_id,term_id,status",
+      "test_1,TC 101,Test Course 101,A001,,active"
+    )
+    @account.all_courses.where(sis_source_id: "test_1").first.tap do |course|
+      expect(course.account).to eq Account.where(sis_source_id: 'A001').take
+    end
+    process_csv_data_cleanly(
+      "course_id,short_name,long_name,account_id,term_id,status",
+      "test_1,TC 101,Test Course 101,A002,,active"
+    )
+    @account.all_courses.where(sis_source_id: "test_1").first.tap do |course|
+      expect(course.account).to eq Account.where(sis_source_id: 'A002').take
+      course.account = Account.where(sis_source_id: 'A003').first
+      course.save!
+    end
+    process_csv_data_cleanly(
+      "course_id,short_name,long_name,account_id,term_id,status",
+      "test_1,TC 101,Test Course 101,A004,,active"
+    )
+    @account.all_courses.where(sis_source_id: "test_1").first.tap do |course|
+      expect(course.account).to eq Account.where(sis_source_id: 'A003').take
     end
   end
 
@@ -354,7 +386,7 @@ describe SIS::CSV::CourseImporter do
       "c1,TC 104,Test Course 4,A004,T004,active,2011-04-16 00:00:00,2011-05-16 00:00:00"
     )
     Course.where(sis_source_id: 'c1').each do |c|
-      expect(c.account).to eq Account.where(sis_source_id: 'A004').first
+      expect(c.account).to eq Account.where(sis_source_id: 'A003').first
       expect(c.name).to eq 'Test Course 3'
       expect(c.course_code).to eq 'TC 103'
       expect(c.enrollment_term).to eq EnrollmentTerm.where(sis_source_id: 'T003').first
@@ -363,7 +395,7 @@ describe SIS::CSV::CourseImporter do
       expect(c.restrict_enrollments_to_course_dates).to be_truthy
     end
     Course.where(sis_source_id: ['c2', 'c3']).each do |c|
-      expect(c.account).to eq Account.where(sis_source_id: 'A004').first
+      expect(c.account).to eq Account.where(sis_source_id: 'A002').first
       expect(c.name).to eq 'Test Course 2'
       expect(c.course_code).to eq 'TC 102'
       expect(c.enrollment_term).to eq EnrollmentTerm.where(sis_source_id: 'T002').first
@@ -452,7 +484,7 @@ describe SIS::CSV::CourseImporter do
       "c1,TC 104,Test Course 4,A004,T004,active,2011-04-16 00:00:00,2011-05-16 00:00:00"
     )
     Course.where(sis_source_id: ['c2', 'c3']).each do |c|
-      expect(c.account).to eq Account.where(sis_source_id: 'A004').first
+      expect(c.account).to eq Account.where(sis_source_id: 'A003').first
       expect(c.name).to eq 'Test Course 3'
       expect(c.course_code).to eq 'TC 103'
       expect(c.enrollment_term).to eq EnrollmentTerm.where(sis_source_id: 'T003').first
@@ -561,6 +593,12 @@ describe SIS::CSV::CourseImporter do
     expect(Course.find_by_sis_source_id('test_1').course_format).not_to be_present
     expect(Course.find_by_sis_source_id('test_2').course_format).not_to be_present
     expect(Course.find_by_sis_source_id('test_3').course_format).to eq 'blended'
+
+    process_csv_data_cleanly(
+      "course_id,short_name,long_name,account_id,term_id,status",
+      "test_3,TC 103,Test Course 103,,,active"
+    )
+    expect(Course.find_by_sis_source_id('test_3').course_format).to eq 'blended'
   end
 
   it 'rejects invalid course_format' do
@@ -568,7 +606,15 @@ describe SIS::CSV::CourseImporter do
         "course_id,short_name,long_name,account_id,term_id,status,course_format",
         "test_1,TC 101,Test Course 101,,,active,FAT32"
     )
-    expect(importer.warnings.map(&:last)).to include "Invalid course_format \"FAT32\" for course test_1"
+    expect(importer.errors.map(&:last)).to include "Invalid course_format \"FAT32\" for course test_1"
+  end
+
+  it 'should allow unpublished to be passed for active' do
+    process_csv_data_cleanly(
+      "course_id,short_name,long_name,account_id,term_id,status",
+      "c1,TC 101,Test Course 1,A001,T001,unpublished"
+    )
+    expect(Course.active.find_by_sis_source_id('c1')).to be_present
   end
 
   context "blueprint courses" do
@@ -585,7 +631,7 @@ describe SIS::CSV::CourseImporter do
         "course_id,short_name,long_name,status,blueprint_course_id",
         "#{mc2.sis_source_id},shortname,long name,active,#{@mc.sis_source_id}"
       )
-      expect(importer.warnings.map(&:last)).to include("Cannot associate course \"#{mc2.sis_source_id}\" - is a blueprint course")
+      expect(importer.errors.map(&:last)).to include("Cannot associate course \"#{mc2.sis_source_id}\" - is a blueprint course")
     end
 
     it "should give a warning when trying to associate an already associated course" do
@@ -597,16 +643,26 @@ describe SIS::CSV::CourseImporter do
         "course_id,short_name,long_name,status,blueprint_course_id",
         "#{ac.sis_source_id},shortname,long name,active,#{@mc.sis_source_id}"
       )
-      expect(importer.warnings.map(&:last)).to include("Cannot associate course \"#{ac.sis_source_id}\" - is associated to another blueprint course")
+      expect(importer.errors.map(&:last)).to include("Cannot associate course \"#{ac.sis_source_id}\" - is associated to another blueprint course")
     end
 
     it "shouldn't fail if a course is already associated to the target" do
       ac = @account.courses.create!(:sis_source_id => "anassociatedcourse")
       @template.add_child_course!(ac)
-      process_csv_data_cleanly(
+      expect {process_csv_data_cleanly(
         "course_id,short_name,long_name,status,blueprint_course_id",
         "#{ac.sis_source_id},shortname,long name,active,#{@mc.sis_source_id}"
+      )}.not_to raise_error
+    end
+
+    it "should allow destroying" do
+      ac = @account.courses.create!(:sis_source_id => "anassociatedcourse")
+      child = @template.add_child_course!(ac)
+      process_csv_data_cleanly(
+        "course_id,short_name,long_name,status,blueprint_course_id",
+        "#{ac.sis_source_id},shortname,long name,active,dissociate"
       )
+      expect(child.reload.workflow_state).to eq 'deleted'
     end
 
     it "should be able to associate courses in bulk" do
@@ -634,7 +690,31 @@ describe SIS::CSV::CourseImporter do
         :batch => @account.sis_batches.create!(:user => @admin, :data => {})
       )
       mm = @template.master_migrations.last
-      expect(mm).to be_queued
+      expect(mm).to be_completed # jobs should have kept running now
+    end
+
+    it "should try to queue the migration in another job if one is already running" do
+      other_mm = @template.master_migrations.create!(:user => @admin)
+      @template.active_migration = other_mm
+      @template.save!
+
+      account_admin_user(:active_all => true)
+      c1 = @account.courses.create!(:sis_source_id => "acourse1")
+      process_csv_data_cleanly(
+        "course_id,short_name,long_name,status,blueprint_course_id",
+        "#{c1.sis_source_id},shortname,long name,active,#{@mc.sis_source_id}",
+        :batch => @account.sis_batches.create!(:user => @admin, :data => {})
+      )
+      # should wait to requeue
+      job = Delayed::Job.last
+      expect(job.tag).to eq "MasterCourses::MasterMigration.start_new_migration!"
+      expect(job.run_at > 5.minutes.from_now).to be_truthy
+      job.update_attribute(:run_at, Time.now.utc)
+      other_mm.update_attribute(:workflow_state, "completed")
+      run_jobs
+      mm = @template.reload.master_migrations.last
+      expect(mm).to_not eq other_mm
+      expect(mm).to be_completed
     end
   end
 end

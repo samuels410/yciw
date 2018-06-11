@@ -3,9 +3,7 @@
   <div class="ig-header" style="position:relative;">
     {{#if ENV.PERMISSIONS.manage}}
       <span class="sortable-handle">
-        <a href="#" class="icon-drag-handle">
-        <span class="screenreader-only accessibility-warning">{{#t}}Warning: for improved accessibility of reordering assignments and groups, please use the Move To Dialog option found in the menu.{{/t}}</span>
-        </a>
+        <i class="icon-drag-handle" aria-hidden="true"></i>
       </span>
     {{/if}}
     {{#if course_home}}
@@ -17,6 +15,7 @@
         aria-label="{{name}} {{toggleMessage}}"
         tabindex="0"
         href="#"
+        role="button"
         >
           <i class="icon-mini-arrow-down"></i>
           {{name}}
@@ -35,6 +34,7 @@
         aria-label="{{name}} {{toggleMessage}}"
         tabindex="0"
         href="#"
+        role="button"
         >
           <i class="icon-mini-arrow-down" aria-hidden="true"></i>
           {{name}}
@@ -84,7 +84,7 @@
         <div class="inline-block">
           <a id="ag_{{id}}_manage_link" class="al-trigger btn" href="#" tabindex="0" role="button">
             <span class="screenreader-only">{{#t}}Manage {{name}}{{/t}}</span>
-            <i class="icon-settings"></i><i class="icon-mini-arrow-down"></i>
+            <i class="icon-more" aria-hidden="true"></i>
           </a>
           <ul class="al-options">
             <li>
@@ -114,10 +114,17 @@
             {{#if canMove}}
             <li>
               <a
+                class="move_contents icon-move-down"
+                aria-label='{{#t}}Move Assignment Contents{{/t}}'
+                data-focus-returns-to="ag_{{id}}_manage_link"
+              >{{#t}}Move Contents…{{/t}}</a>
+            </li>
+            <li>
+              <a
                 class="move_group icon-updown"
                 aria-label='{{#t}}Move Assignment Group{{/t}}'
                 data-focus-returns-to="ag_{{id}}_manage_link"
-              >{{#t}}Move To…{{/t}}</a>
+              >{{#t}}Move Group…{{/t}}</a>
             </li>
             {{/if}}
           </ul>
@@ -136,6 +143,5 @@
     <form data-view="createAssignment" class="form-dialog"></form>
     <form data-view="editAssignmentGroup" class="form-dialog"></form>
     <form data-view="deleteAssignmentGroup" class="form-dialog"></form>
-    <form data-view="moveAssignmentGroup" class="form-dialog"></form>
   {{/if}}
 </div>

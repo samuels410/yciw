@@ -21,10 +21,10 @@ define [
   'jquery'
   'underscore'
   'Backbone'
-  'compiled/models/Outcome'
-  'compiled/models/OutcomeGroup'
-  'compiled/views/outcomes/OutcomesDirectoryView'
-  'compiled/views/outcomes/FindDirectoryView'
+  '../../models/Outcome'
+  '../../models/OutcomeGroup'
+  './OutcomesDirectoryView'
+  './FindDirectoryView'
 ], (I18n, $, _, Backbone, Outcome, OutcomeGroup, OutcomesDirectoryView, FindDirectoryView) ->
 
   findDialog = undefined
@@ -59,6 +59,12 @@ define [
       return unless clickedOutside
       dir = $(e.target).data 'view'
       @selectDir dir
+
+    resetSidebar: () =>
+      _.each @directories, (d) -> d.remove()
+      @directories = []
+      @cachedDirectories = {}
+      @addDirFor @rootOutcomeGroup
 
     # Adds a directory view for an outcome group.
     # Returns the directory view.

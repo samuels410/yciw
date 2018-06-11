@@ -1,4 +1,4 @@
-<%
+<%-
 # Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
@@ -14,32 +14,32 @@
 #
 # You should have received a copy of the GNU Affero General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
-%>
 
-<%-
   @locale = raw I18n.locale.to_json
   @body_classes ||= []
   @body_classes << "context-#{@context.asset_string}" if @context
   yield :pre_html
 
 -%><!DOCTYPE html>
-<html class="scripts-not-loaded" lang=<%= @locale %>>
+<html class="scripts-not-loaded" dir="<%= use_rtl? ? 'rtl' : 'ltr' %>"   lang=<%= @locale %>>
 <head>
   <meta charset="utf-8">
   <title><%= (yield :page_title).presence || @page_title || t('default_page_title', "Canvas LMS") %></title>
   <!--[if lte IE 9]> <meta http-equiv=refresh content="0; URL=/ie-9-is-not-supported.html" /> <![endif]-->
+  <link rel="preload" href="<%= font_path("lato/latin/LatoLatin-Regular.woff2") %>" as="font" type="font/woff2" crossorigin>
   <%= favicon_link_tag(favicon) %>
   <%= favicon_link_tag(brand_variable('ic-brand-apple-touch-icon'), rel: 'apple-touch-icon', type: nil) %>
   <%= yield :auto_discovery %>
-  <%= stylesheet_link_tag(active_brand_config_css_url, media: "all") %>
+  <%= stylesheet_link_tag(active_brand_config_url('css'), media: "all") %>
   <%= yield :head %>
   <%=
     # polyfill browsers that don't have a baseline of features we use like Promise or Object.assign
     polyfill_url = "/ie11-polyfill.js"
+    fetch_polyfill_url = 'https://cdnjs.cloudflare.com/ajax/libs/fetch/2.0.4/fetch.min.js'
     if request.user_agent.to_s =~ /Trident\/7.0.*rv:11/i
       # If it looks like IE11, assume they are going to need the polyfill
       # and serve it to them in the more performant way
-      javascript_include_tag(polyfill_url)
+      javascript_include_tag(polyfill_url, fetch_polyfill_url)
     else
       # For other browsers, feature-detect for all the stuff we polyfill and
       # still provide a fallback if they don't have it.
@@ -47,10 +47,12 @@
       # into not preemptively downloading it anyway.
       javascript_tag(%(
 !function(){
+  function get(u){document.write('<scr'+'ipt src="'+ u +'"></sc'+'ript>')}
   var o,s,v;
   if (!(window.Promise && Object.assign && Object.values && [].find && [].includes && (o={},s=Symbol(),v={},o[s]=v,o[s]===v) && (function f(){}).bind().name==='bound f')) {
-    s = 's', document.write('<'+s+'cr'+'ipt src="#{javascript_path(polyfill_url)}"></'+s+'c'+'ript>');
+    get("#{javascript_path(polyfill_url)}");
   }
+  window.fetch || get("#{fetch_polyfill_url}");
 }();
       ))
     end
@@ -86,6 +88,6 @@
     }
     document.addEventListener('click', _earlyClick)
   </script>
-  <%= javascript_include_tag(active_brand_config_js_url, defer: true) %>
+  <%= javascript_include_tag(active_brand_config_url('js'), defer: true) %>
   <%= include_head_js %>
 </head>

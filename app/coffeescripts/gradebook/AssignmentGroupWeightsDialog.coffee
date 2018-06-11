@@ -16,8 +16,8 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 define [
-  'compiled/util/round'
-  'i18n!assignments'
+  '../util/round'
+  'i18nObj'
   'jquery'
   'jst/AssignmentGroupWeightsDialog'
   'jsx/shared/helpers/numberHelper'

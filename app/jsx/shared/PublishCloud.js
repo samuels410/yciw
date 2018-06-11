@@ -21,7 +21,7 @@ import ReactDOM from 'react-dom'
 import $ from 'jquery'
 import I18n from 'i18n!publish_cloud'
 import PublishCloud from 'compiled/react_files/components/PublishCloud'
-import RestrictedDialogForm from 'jsx/files/RestrictedDialogForm'
+import RestrictedDialogForm from '../files/RestrictedDialogForm'
 
   // Function Summary
   // Create a blank dialog window via jQuery, then dump the RestrictedDialogForm into that
@@ -91,7 +91,7 @@ import RestrictedDialogForm from 'jsx/files/RestrictedDialogForm'
             title={I18n.t('Published')}
             aria-label={I18n.t('%{fileName} is Published - Click to modify', {fileName})}
           >
-            <i className='icon-publish' />
+            <i className='icon-publish icon-Solid' />
           </button>
         );
       } else {

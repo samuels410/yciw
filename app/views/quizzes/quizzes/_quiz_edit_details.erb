@@ -30,7 +30,7 @@ content_is_locked = !!js_env.dig(:MASTER_COURSE_DATA, "is_master_course_child_co
           <input type="hidden" name="quiz[title]" value="<%=@quiz.title%>"/>
         <% else %>
           <label for="quiz_title" class="screenreader-only"><%= t('Quiz Title') %></label>
-          <%= text_field :quiz, :title, :placeholder => "Quiz Title", :maxlength => "254" %>
+          <%= text_field :quiz, :title, :placeholder => "Quiz Title", :maxlength => "254", :autofocus => true %>
         <% end %>
       </div>
 
@@ -42,11 +42,11 @@ content_is_locked = !!js_env.dig(:MASTER_COURSE_DATA, "is_master_course_child_co
           <input type="hidden" name="description" value="<%=@quiz.description%>"/>
         <% else %>
           <%= before_label(:quiz_instructions, "Quiz Instructions") %>
-          <div style="float: right; font-size: 0.8em; cursor: pointer;">
+          <div class="pull-right" style="font-size: 0.8em; cursor: pointer;">
             <a href="#" class="toggle_description_views_link"><%= t "HTML Editor" %></a>
             <a href="#" class="toggle_description_views_link" style="display:none;"><%= t "Rich Content Editor" %></a>
           </div>
-          <textarea id="quiz_description" style="display: block;width: 100%;margin: 0px auto;height: 125px"><%= @quiz.description %></textarea>
+          <textarea id="quiz_description" style="display: none;width: 100%;margin: 0px auto;height: 125px"><%= @quiz.description %></textarea>
         <% end %>
       </div>
 

@@ -14,7 +14,7 @@
       <span id='edit-assignment-header-cr-spacer'></span>
       {{#if published}}
         <span id='assignment-draft-state-cr' class='published-status published'>
-          <i class="icon-publish"></i>
+          <i class="icon-publish icon-Solid"></i>
           {{#t}}Published{{/t}}
         </span>
       {{else}}
@@ -27,8 +27,10 @@
       {{#unless is_locked}} <!-- delete is only thing in menu, remove the whole thing if locked -->
         <span id='assignment-gear-button-cr'>
           <a role="button" class="al-trigger btn" href="#">
-            <span class="screenreader-only">{{#t}}Manage Assignment{{/t}}</span>
-            <i class="icon-settings"></i><i class="icon-mini-arrow-down"></i>
+            <span class="screenreader-only">
+              {{#t}}Manage Assignment{{/t}}
+            </span>
+            <i class="icon-more" aria-hidden="true"></i>
           </a>
           <ul class="al-options">
             <li>
@@ -60,7 +62,7 @@
   <div class="header-group-left">
     {{#if published}}
       <span id='assignment-draft-state' class='published-status published'>
-        <i class="icon-publish"></i>
+        <i class="icon-publish icon-Solid"></i>
         {{#t}}Published{{/t}}
       </span>
     {{else}}
@@ -75,7 +77,7 @@
       <div class="admin-links">
         <a role="button" class="al-trigger btn" href="#">
           <span class="screenreader-only">{{#t}}Manage Assignment{{/t}}</span>
-          <i class="icon-settings"></i><i class="icon-mini-arrow-down"></i>
+          <i class="icon-more" aria-hidden="true"></i>
         </a>
         <ul class="al-options">
           <li>

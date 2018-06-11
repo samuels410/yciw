@@ -42,6 +42,7 @@ module CanvasRails
     require 'logging_filter'
     config.filter_parameters.concat LoggingFilter.filtered_parameters
     config.action_dispatch.rescue_responses['AuthenticationMethods::AccessTokenError'] = 401
+    config.action_dispatch.rescue_responses['AuthenticationMethods::AccessTokenScopeError'] = 401
     config.action_dispatch.rescue_responses['AuthenticationMethods::LoggedOutError'] = 401
     config.action_dispatch.default_headers['X-UA-Compatible'] = "IE=Edge,chrome=1"
     config.action_dispatch.default_headers.delete('X-Frame-Options')
@@ -148,7 +149,7 @@ module CanvasRails
             break
           rescue ::PG::Error => error
             if error.message.include?("does not exist")
-              raise ActiveRecord::NoDatabaseError.new(error.message, error)
+              raise ActiveRecord::NoDatabaseError.new(error.message)
             elsif index == hosts.length - 1
               raise
             end
@@ -158,8 +159,32 @@ module CanvasRails
       end
     end
 
+    module TypeMapInitializerExtensions
+      if CANVAS_RAILS5_1
+        def query_conditions_for_initial_load(type_map)
+          known_type_names = type_map.keys.map { |n| "'#{n}'" } + type_map.keys.map { |n| "'_#{n}'" }
+          <<-SQL % [known_type_names.join(", "),]
+            WHERE
+              t.typname IN (%s)
+          SQL
+        end
+      else
+        def query_conditions_for_initial_load
+          known_type_names = @store.keys.map { |n| "'#{n}'" } + @store.keys.map { |n| "'_#{n}'" }
+          <<-SQL % [known_type_names.join(", "),]
+            WHERE
+              t.typname IN (%s)
+          SQL
+        end
+      end
+    end
+
     Autoextend.hook(:"ActiveRecord::ConnectionAdapters::PostgreSQLAdapter",
                     PostgreSQLEarlyExtensions,
+                    method: :prepend)
+
+    Autoextend.hook(:"ActiveRecord::ConnectionAdapters::PostgreSQL::OID::TypeMapInitializer",
+                    TypeMapInitializerExtensions,
                     method: :prepend)
 
     SafeYAML.singleton_class.send(:attr_accessor, :safe_parsing)
@@ -173,16 +198,6 @@ module CanvasRails
     end
     SafeYAML.singleton_class.prepend(SafeYAMLWithFlag)
 
-    # safe_yaml can't whitelist specific instances of scalar values, so just override the loading
-    # here, and do a weird check
-    YAML.add_ruby_type("object:Class") do |_type, val|
-      if SafeYAML.safe_parsing && !Canvas::Migration.valid_converter_classes.include?(val)
-        raise "Cannot load class #{val} from YAML"
-      end
-      val.constantize
-    end
-
-    # TODO: Use this instead of the above block when we switch to Psych
     Psych.add_domain_type("ruby/object", "Class") do |_type, val|
       if SafeYAML.safe_parsing && !Canvas::Migration.valid_converter_classes.include?(val)
         raise "Cannot load class #{val} from YAML"

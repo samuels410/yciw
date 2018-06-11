@@ -36,14 +36,18 @@ describe "announcements" do
     create_session(teacher.primary_pseudonym)
 
     get "/courses/#{@course.id}/announcements"
-    expect_new_page_load { f('.btn-primary').click }
+    expect_new_page_load { f('#add_announcement').click }
+    wait_for_tiny(f('#discussion-edit-view textarea[name=message]'))
     replace_content(f('input[name=title]'), topic_title)
     type_in_tiny('textarea[name=message]', 'hi, first announcement')
+    f('#allow_user_comments').click
     f('#require_initial_post').click
     wait_for_ajaximations
     expect_new_page_load { submit_form('.form-actions') }
     announcement = Announcement.where(title: topic_title).first
     expect(announcement[:require_initial_post]).to eq true
+    announcement.locked = false
+    announcement.save!
     student_2 = student_in_course.user
     announcement.discussion_entries.create!(:user => student_2, :message => student_2_entry)
 
@@ -53,6 +57,7 @@ describe "announcements" do
     ff('.discussion_entry').each { |entry| expect(entry).not_to include_text(student_2_entry) }
     f('.discussion-reply-action').click
     wait_for_ajaximations
+    wait_for_tiny(f("#root_reply_message_for_#{announcement.id}"))
     type_in_tiny('textarea', 'reply')
     submit_form('#discussion_topic .discussion-reply-form')
     wait_for_ajaximations
@@ -69,27 +74,16 @@ describe "announcements" do
       expect(f("#content")).not_to contain_css(".announcements active")
     end
 
-    it "should not show JSON when loading more announcements via pageless", priority: "2", test_id: 220375 do
-      50.times { @course.announcements.create!(:title => 'Hi there!', :message => 'Announcement time!') }
-      get "/courses/#{@course.id}/announcements"
-
-      start = ff(".discussionTopicIndexList .discussion-topic").length
-      scroll_page_to_bottom
-      expect(ff(".discussionTopicIndexList .discussion-topic")).not_to have_size(start)
-
-      expect(f(".discussionTopicIndexList")).not_to include_text('discussion_topic')
-    end
-
     it "should validate that a student can not see an announcement with a delayed posting date", priority: "1", test_id: 220376 do
       announcement_title = 'Hi there!'
       announcement = @course.announcements.create!(:title => announcement_title, :message => 'Announcement time!', :delayed_post_at => Time.now + 1.day)
       get "/courses/#{@course.id}/announcements"
 
-      expect(f('#content')).to include_text('There are no announcements to show')
+      expect(f("#content")).not_to contain_css(".ic-announcement-row")
       announcement.update_attributes(:delayed_post_at => nil)
       announcement.reload
       refresh_page # in order to see the announcement
-      expect(f(".discussion-topic")).to include_text(announcement_title)
+      expect(f(".ic-announcement-row h3")).to include_text(announcement_title)
     end
 
     it "should not allow a student to close/open announcement for comments or delete an announcement", priority: "1", test_id: 220377 do
@@ -102,25 +96,13 @@ describe "announcements" do
       expect(f("#content")).not_to contain_css('.discussion_actions ul.al-options')
     end
 
-    it "should allow a group member to create an announcement", priority: "1", test_id: 220378 do
-      gc = group_category
-      group = gc.groups.create!(:context => @course)
-      group.add_user(@student, 'accepted')
-
-      get "/groups/#{group.id}/announcements"
-      expect {
-        create_announcement_option(nil)
-        expect_new_page_load { submit_form('.form-actions') }
-      }.to change(Announcement, :count).by 1
-    end
-
     it "should have deleted announcement removed from student account", priority: "1", test_id: 220379 do
       @announcement = @course.announcements.create!(:title => 'delete me', :message => 'Here is my message')
       get "/courses/#{@course.id}/announcements/"
-      expect(f(".discussion-title")).to include_text('delete me')
+      expect(f(".ic-announcement-row h3")).to include_text('delete me')
       @announcement.destroy
       get "/courses/#{@course.id}/announcements/"
-      expect(f("#content")).not_to contain_css(".discussion-title")
+      expect(f("#content")).not_to contain_css(".ic-announcement-row h3")
     end
 
     it "should remove notifications from unenrolled courses", priority: "1", test_id: 220380 do
@@ -140,15 +122,16 @@ describe "announcements" do
     it "allows rating when enabled", priority: "1", test_id: 603587 do
       announcement = @course.announcements.create!(title: 'stuff', message: 'things', allow_rating: true)
       get "/courses/#{@course.id}/discussion_topics/#{announcement.id}"
-
+      make_full_screen
       f('.discussion-reply-action').click
       wait_for_ajaximations
+      wait_for_tiny(f("#root_reply_message_for_#{announcement.id}"))
       type_in_tiny('textarea', 'stuff and things')
       submit_form('.discussion-reply-form')
       wait_for_ajaximations
 
       expect(f('.discussion-rate-action')).to be_displayed
-
+      scroll_to(f('.discussion-rate-action'))
       f('.discussion-rate-action').click
       wait_for_ajaximations
 
@@ -161,11 +144,42 @@ describe "announcements" do
 
       f('.discussion-reply-action').click
       wait_for_ajaximations
+      wait_for_tiny(f("#root_reply_message_for_#{announcement.id}"))
       type_in_tiny('textarea', 'stuff and things')
       submit_form('.discussion-reply-form')
       wait_for_ajaximations
 
       expect(f("#content")).not_to contain_css('.discussion-rate-action')
+    end
+
+    context "section specific announcements" do
+      before (:once) do
+        course_with_teacher(active_course: true)
+        @section = @course.course_sections.create!(name: 'test section')
+
+        @announcement = @course.announcements.create!(:user => @teacher, message: 'hello my favorite section!')
+        @announcement.is_section_specific = true
+        @announcement.course_sections = [@section]
+        @announcement.save!
+
+        @student1, @student2 = create_users(2, return_type: :record)
+        @course.enroll_student(@student1, :enrollment_state => 'active')
+        @course.enroll_student(@student2, :enrollment_state => 'active')
+        student_in_section(@section, user: @student1)
+      end
+
+      it "should be visible to students in the specific section" do
+        user_session(@student1)
+        get "/courses/#{@course.id}/discussion_topics/#{@announcement.id}"
+        expect(f(".discussion-title")).to include_text(@announcement.title)
+      end
+
+      it "should not be visible to students not in the specific section" do
+        user_session(@student2)
+        get "/courses/#{@course.id}/discussion_topics/#{@announcement.id}"
+        expect(driver.current_url).to eq course_announcements_url @course
+        expect_flash_message :error, 'You do not have access to the requested announcement.'
+      end
     end
   end
 end

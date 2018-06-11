@@ -18,8 +18,8 @@
 define [
   'i18n!GroupUserCollection'
   'jquery'
-  'compiled/collections/PaginatedCollection'
-  'compiled/models/GroupUser'
+  '../collections/PaginatedCollection'
+  '../models/GroupUser'
   'str/htmlEscape'
 ], (I18n, $, PaginatedCollection, GroupUser, h) ->
 
@@ -29,9 +29,20 @@ define [
 
     @optionProperty 'group'
     @optionProperty 'category'
+    @optionProperty 'markInactiveStudents'
 
     url: ->
-      @url = "/api/v1/groups/#{@group.id}/users?per_page=50&include[]=sections&exclude[]=pseudonym"
+      url_base = "/api/v1/groups/#{@group.id}/users?"
+      params = {
+        per_page: 50
+        include: ['sections', 'group_submissions']
+        exclude: ['pseudonym']
+      }
+
+      if @markInactiveStudents
+        params.include.push('active_status')
+
+      url_base + $.param(params)
 
     initialize: (models) ->
       super

@@ -25,21 +25,21 @@
   <%= render :partial => "ways_to_contact" %>
   <div>
     <hr />
-    <a href="#" class="edit_settings_link btn button-sidebar-wide"><i class="icon-edit"></i> <%= t('links.edit_settings', "Edit Settings") %></a>
+    <a href="#" class="edit_settings_link btn button-sidebar-wide"><i class="icon-edit" aria-hidden="true"></i> <%= t('links.edit_settings', "Edit Settings") %></a>
     <% mfa_settings = @user.mfa_settings(pseudonym_hint: @current_pseudonym) %>
     <% if mfa_settings != :disabled %>
-      <a href="<%= otp_login_path %>" class="btn button-sidebar-wide"><%= image_tag "lock.png", :alt => '' %> <%= @user.otp_secret_key ? t('links.reconfigure_mfa', "Reconfigure Multi-Factor Authentication") : t('links.configure_mfa', "Set Up Multi-Factor Authentication") %></a>
+      <a href="<%= otp_login_path %>" class="btn button-sidebar-wide"><i class="icon-lock" aria-hidden="true"></i> <%= @user.otp_secret_key ? t('links.reconfigure_mfa', "Reconfigure Multi-Factor Authentication") : t('links.configure_mfa', "Set Up Multi-Factor Authentication") %></a>
     <% end %>
     <% if mfa_settings == :optional && @user.otp_secret_key %>
-      <a href="<%= disable_mfa_path('self') %>" class="btn button-sidebar-wide" id="disable_mfa_link"><%= image_tag "unlock.png", :alt => '' %> <%= t('links.disable_mfa', "Disable Multi-Factor Authentication") %></a>
+      <a href="<%= disable_mfa_path('self') %>" class="btn button-sidebar-wide" id="disable_mfa_link"><i class="icon-unlock" aria-hidden="true"></i> <%= t('links.disable_mfa', "Disable Multi-Factor Authentication") %></a>
     <% end %>
     <% if @user.otp_secret_key %>
-        <a href="<%= one_time_passwords_path %>" class="btn button-sidebar-wide" id="otp_backup_codes_link" target="_blank"><%= image_tag "lock.png" %> <%= t('links.otp_backup_codes', "Multi-Factor Authentication Backup Codes") %></a>
+        <a href="<%= one_time_passwords_path %>" class="btn button-sidebar-wide" id="otp_backup_codes_link" target="_blank"><i class="icon-lock" aria-hidden="true"></i> <%= t('links.otp_backup_codes', "Multi-Factor Authentication Backup Codes") %></a>
     <% end %>
-    <a href="<%= dashboard_content_exports_path %>" class="btn button-sidebar-wide"><i class="icon-download"></i> <%= t("Download Submissions") %></a>
+    <a href="<%= dashboard_content_exports_path %>" class="btn button-sidebar-wide"><i class="icon-download" aria-hidden="true"></i> <%= t("Download Submissions") %></a>
     <% if @domain_root_account.feature_allowed?(:epub_export) && !@domain_root_account.enable_offline_web_export? %>
         <%= link_to  epub_exports_path, class: 'btn button-sidebar-wide' do %>
-          <i class="icon-download" aria-hidden='true'></i> <%= t("Download Course Content") %>
+          <i class="icon-download" aria-hidden="true"></i> <%= t("Download Course Content") %>
         <% end %>
     <% end %>
     <% if show_request_delete_account %>
@@ -59,7 +59,13 @@
 <% css_bundle :profile_edit %>
 
 <% if service_enabled?(:avatars) %>
-  <%= avatar(@user, url: '#', edit: true, class: "profile_pic_link #{@user.avatar_state}", title: t('titles.click_to_change_profile_pic', "Click to change profile pic")) %>
+  <% if @user_data[:can_edit_avatar] %>
+    <%= avatar(@user, url: '#', edit: true, class: "profile_pic_link #{@user.avatar_state}",
+        title: t('titles.click_to_change_profile_pic', "Click to change profile pic"),
+        sr_content: t('Click to change profile picture for %{display_name}', :display_name => @user.short_name)) %>
+  <% else %>
+    <%= avatar(@user, url: nil, edit: false) %>
+  <% end %>
 <% end %>
 <h1 style="padding-top: 0.3em;"><%= t("%{user}'s Settings", :user => @user.short_name) %></h1>
 <div class="clear"></div>
@@ -233,17 +239,17 @@ TEXT
 <input type="checkbox" id="show_user_services" <%= 'checked' if @user.show_user_services %>/> <label for="show_user_services"><%= t('labels.show_user_services', "Let fellow course/group members see which services I've linked to my profile") %></label>
 </p>
 <table role="presentation" style="width: 100%;"><tr>
-  <td style="vertical-align: top; width: 50%; padding-right: 20px;">
+  <td style="vertical-align: top; width: 50%; padding-<%= direction('right') %>: 20px;">
     <h3><%= t('headers.registered_services', "Registered Services") %></h3>
-    <div style="margin-left: 20px; margin-bottom: 20px;">
+    <div style="margin-<%= direction('left') %>: 20px; margin-bottom: 20px;">
     <ul id="registered_services" class="unstyled_list">
       <% @user.user_services.select{|s| !UserService.configured_service?(s.service) || feature_and_service_enabled?(s.service) }.each do |service| %>
         <li class="service clearfix" id="service_<%= service.service %>">
-          <a href="<%= profile_user_service_url(service.id) %>" class="delete_service_link no-hover" style="float: right; padding-top: 0.5em; padding-right: 10px;" title="<%= t('titles.unregister_service', "Unregister Service") %>"><%= image_tag "delete_circle.png", :alt => t('Unregister Service') %></a>
+          <a href="<%= profile_user_service_url(service.id) %>" class="delete_service_link no-hover" style="float: <%= direction('right') %>; padding-top: 0.5em; padding-<%= direction('right') %>: 10px;" title="<%= t('titles.unregister_service', "Unregister Service") %>"><%= image_tag "delete_circle.png", :alt => t('Unregister Service') %></a>
           <a href="<%= service.service_user_link %>">
-            <%= image_tag "#{service.service}.png", :style => "vertical-align: middle; float: left;", :alt => '' %>
+            <%= image_tag "#{service.service}.png", :style => "vertical-align: middle; float: #{ direction('left') };", :alt => '' %>
           </a>
-          <div style="float: left; padding-left: 5px;">
+          <div style="float: <%= direction('left') %>; padding-<%= direction('left') %>: 5px;">
             <%= service.service.titleize rescue t(:unknown_service, "Unknown") %>
             <div style="font-size: 0.6em; line-height: 0.5em;">
               <% if service.has_profile_link? %>
@@ -262,25 +268,25 @@ TEXT
         </li>
       <% end %>
       <li id="service_blank" class="service clearfix" style="display: none;">
-        <a href="<%= profile_user_service_url("{{ id }}") %>" class="delete_service_link no-hover" style="float: right;" title="<%= t('titles.unregister_service', "Unregister Service") %>"><%= image_tag "delete_circle.png", :alt => t('Unregister Service') %></a>
+        <a href="<%= profile_user_service_url("{{ id }}") %>" class="delete_service_link no-hover" style="float: <%= direction('right') %>;" title="<%= t('titles.unregister_service', "Unregister Service") %>"><%= image_tag "delete_circle.png", :alt => t('Unregister Service') %></a>
         <span class="service">&nbsp;</span>
       </li>
     </ul>
     <%= t(:no_registered_services, "No Registered Services") if @user.user_services.empty? %>
     </div>
   </td>
-  <td style="vertical-align: top; width: 50%; padding-left: 20px;">
+  <td style="vertical-align: top; width: 50%; padding-<%= direction('left') %>: 20px;">
     <h3><%= t('headers.other_services', "Other Services") %></h3>
-    <div style="margin-left: 20px;">
+    <div style="margin-<%= direction('left') %>: 20px;">
     <%= before_label(:other_services, "Click any service below to register") %>
     <% services = @user.user_services.map{|s| s.service} %>
     <ul id="unregistered_services" class="unstyled_list">
 
       <li id="unregistered_service_google_drive" class="service" style="<%= hidden if !feature_and_service_enabled?(:google_drive) || services.include?("google_drive") %>">
         <a href="#" class="btn btn-small"><%= image_tag "google_drive_icon.png", :alt => '' %> <%= t('links.google_drive', "Google Drive") %></a>
-        <div style="display: none; text-align: left;" class="content" title="<%= t('titles.authorize_google_drive', "Authorize Google Drive") %>" id="unregistered_service_google_drive_dialog">
+        <div style="display: none; text-align: <%= direction('left') %>;" class="content" title="<%= t('titles.authorize_google_drive', "Authorize Google Drive") %>" id="unregistered_service_google_drive_dialog">
           <div>
-            <%= image_tag "google_docs.png", :style => "float: left; padding-right: 5px;", :alt => '' %>
+            <%= image_tag "google_docs.png", :style => "float: #{direction('left')}; padding-#{ direction('right') }: 5px;", :alt => '' %>
             <div style="font-size: 1.2em; font-weight: bold;"><%= t('headers.google_drive_access', "Google Drive Access") %></div>
             <%= t(:google_drive_description, <<-TEXT)
                 Once you authorize us to see your Google Drive you'll be able to submit your assignments
@@ -297,9 +303,9 @@ TEXT
 
       <li id="unregistered_service_skype" class="service" style="<%= hidden if services.include?("skype") || !service_enabled?(:skype) %>">
         <a href="#" class="btn btn-small"><%= image_tag "skype_icon.png", :alt => '' %> <%= t('links.skype', "Skype") %></a>
-        <div style="display: none; text-align: left;" class="content" title="<%= t('titles.register_skype', "Register Skype") %>" id="unregistered_service_skype_dialog">
+        <div style="display: none; text-align: <%= direction('left') %>;" class="content" title="<%= t('titles.register_skype', "Register Skype") %>" id="unregistered_service_skype_dialog">
           <div>
-            <%= image_tag "skype.png", :style => "float: left; padding-right: 5px;", :alt => '' %>
+            <%= image_tag "skype.png", :style => "float: #{direction('left')}; padding-#{ direction('right') }: 5px;", :alt => '' %>
             <div style="font-size: 1.2em; font-weight: bold;"><%= t('headers.share_skype_id', "Share your Skype ID") %></div>
             <%= t(:skype_description, <<-TEXT)
             Skype offers free online voice and video calls.  Lots of students use
@@ -329,9 +335,9 @@ TEXT
       </li>
       <li id="unregistered_service_linked_in" class="service" style="<%= hidden if services.include?("linked_in") || !feature_and_service_enabled?(:linked_in) %>">
         <a href="#" class="btn btn-small"><%= image_tag "linked_in_icon.png", :alt => '' %> <%= t('links.linkedin', "LinkedIn") %></a>
-        <div style="display: none; text-align: left;" class="content" title="<%= t('titles.authorize_linkedin', "Authorize LinkedIn") %>" id="unregistered_service_linked_in_dialog">
+        <div style="display: none; text-align: <%= direction('left') %>;" class="content" title="<%= t('titles.authorize_linkedin', "Authorize LinkedIn") %>" id="unregistered_service_linked_in_dialog">
           <div>
-            <%= image_tag "linked_in.png", :style => "float: left; padding-right: 5px;", :alt => '' %>
+            <%= image_tag "linked_in.png", :style => "float: #{direction('left')}; padding-#{ direction('right') }: 5px;", :alt => '' %>
             <div style="font-size: 1.2em; font-weight: bold;"><%= t('headers.linkedin_access', "LinkedIn Access") %></div>
             <%= t(:linkedin_description, <<-TEXT)
             LinkedIn is a great resources for business networking, and can be
@@ -351,9 +357,9 @@ TEXT
       </li>
       <li id="unregistered_service_twitter" class="service" style="<%= hidden if services.include?("twitter") || !feature_and_service_enabled?(:twitter) %>">
         <a href="#" class="btn btn-small"><%= image_tag "twitter_icon.png", :alt => '' %> <%= t('links.twitter', "Twitter") %></a>
-        <div style="display: none; text-align: left;" class="content" title="<%= t('titles.authorize_twitter', "Authorize Twitter") %>" id="unregistered_service_twitter_dialog">
+        <div style="display: none; text-align: <%= direction('left') %>;" class="content" title="<%= t('titles.authorize_twitter', "Authorize Twitter") %>" id="unregistered_service_twitter_dialog">
           <div>
-            <%= image_tag "twitter.png", :style => "float: left; padding-right: 5px;", :alt => '' %>
+            <%= image_tag "twitter.png", :style => "float: #{direction('left')}; padding-#{ direction('right') }: 5px;", :alt => '' %>
             <div style="font-size: 1.2em; font-weight: bold;"><%= t('headers.twitter_access', "Twitter Access") %></div>
             <%= mt(:twitter_description, <<-TEXT)
 Twitter is a service for posting and subscribing to short messages.
@@ -373,45 +379,11 @@ TEXT
           </div>
         </div>
       </li>
-      <li id="unregistered_service_yo" class="service" style="<%= hidden if services.include?("yo") || !feature_and_service_enabled?(:yo) %>">
-        <a href="#" class="btn btn-small"><%= image_tag "yo_icon.png", :alt => '' %> <%= t('links.yo', "Yo") %></a>
-        <div style="display: none; text-align: left;" class="content" title="<%= t('titles.authorize_yo', "Yo Login") %>" id="unregistered_service_yo_dialog">
-          <div>
-            <%= image_tag "yo.png", :style => "float: left; padding-right: 5px;", :alt => '' %>
-            <div style="font-size: 1.2em; font-weight: bold;"><%= t('headers.yo_login', "Yo Login") %></div>
-            <%= mt(:yo_description, <<-TEXT)
-Yo is a single-tap zero character communication tool.
-If you have a Yo account, you can register it here. Then if you allow
-fellow course/group members to see your registered services, they can
-easily connect with your Yo account.
-
-You can also sign up to have notifications sent to your Yo account.
-TEXT
-            %>
-            <div class="clear"></div>
-          </div>
-          <div style="text-align: center; font-size: 1.2em; margin-top: 10px;">
-            <%= form_for :user_service, :url => profile_create_user_service_url, :html => {:class => "create_user_service_form"}, :namespace => "yo" do |f| %>
-            <%= f.hidden_field :service, :value => "yo" %>
-            <table class="formtable" role="presentation">
-              <tr>
-                <td><%= f.blabel :user_name, :yo_name, :en => "Yo Name" %></td>
-                <td><%= f.text_field :user_name, :style => "width: 150px;" %></td>
-              </tr><tr>
-                <td colspan="2">
-                  <button type="submit" class="btn btn-primary"><%= t('buttons.save_yo_name', "Save Yo Name") %></button>
-                </td>
-              </tr>
-            </table>
-            <% end %>
-          </div>
-        </div>
-      </li>
       <li id="unregistered_service_delicious" class="service" style="<%= hidden if services.include?("delicious") || !service_enabled?(:delicious) %>">
         <a href="#" class="btn btn-small"><%= image_tag "delicious_icon.png", :alt => '' %> <%= t('links.delicious', "Delicious") %></a>
-        <div style="display: none; text-align: left;" class="content" title="<%= t('titles.delicious_login', "Delicious Login") %>" id="unregistered_service_delicious_dialog">
+        <div style="display: none; text-align: <%= direction('left') %>;" class="content" title="<%= t('titles.delicious_login', "Delicious Login") %>" id="unregistered_service_delicious_dialog">
           <div>
-            <%= image_tag "delicious.png", :style => "float: left; padding-right: 5px;", :alt => '' %>
+            <%= image_tag "delicious.png", :style => "float: #{direction('left')}; padding-#{ direction('right') }: 5px;", :alt => '' %>
             <div style="font-size: 1.2em; font-weight: bold;"><%= t('headers.delicious_login', "Delicious Login") %></div>
             <%= t(:delicious_description, <<-TEXT)
             Delicious is a tool that lets you store and share your bookmarks with others.
@@ -443,9 +415,9 @@ TEXT
       </li>
       <li id="unregistered_service_diigo" class="service" style="<%= hidden if services.include?("diigo") || !feature_and_service_enabled?(:diigo) %>">
         <a href="#" class="btn btn-small"><%= image_tag "diigo_icon.png", :alt => '' %> <%= t('links.diigo', "Diigo") %></a>
-        <div style="display: none; text-align: left;" class="content" title="<%= t('titles.diigo_login', "Diigo Login") %>" id="unregistered_service_diigo_dialog">
+        <div style="display: none; text-align: <%= direction('left') %>;" class="content" title="<%= t('titles.diigo_login', "Diigo Login") %>" id="unregistered_service_diigo_dialog">
           <div>
-            <%= image_tag "diigo.png", :style => "float: left; padding-right: 5px;", :alt => '' %>
+            <%= image_tag "diigo.png", :style => "float: #{direction('left')}; padding-#{ direction('right') }: 5px;", :alt => '' %>
             <div style="font-size: 1.2em; font-weight: bold;"><%= t('headers.diigo_login', "Diigo Login") %></div>
             <%= t(:diigo_description, <<-TEXT)
             Diigo is a social bookmarking tool tailored specifically to research and
@@ -482,7 +454,7 @@ TEXT
 </tr></table>
 <% end %>
 <h2><%= before_label(:'headers.approved_integrations', "Approved Integrations") %></h2>
-<div style="margin-left: 20px;">
+<div style="margin-<%= direction('left') %>: 20px;">
   <% if @user.access_tokens.empty? %>
     <div id="no_approved_integrations"><%= t(:no_approved_integrations, <<-TEXT)
       Third-party applications can request permission to access
@@ -515,7 +487,7 @@ TEXT
   </div>
   <% unless @real_current_user %>
     <div style="margin-top: 10px;">
-      <a href="#" class="btn btn-primary add_access_token_link"><i class="icon-plus"></i> <%= t('buttons.new_access_token', "New Access Token") %></a>
+      <a href="#" class="btn btn-primary add_access_token_link"><i class="icon-plus" aria-hidden="true"></i> <%= t('buttons.new_access_token', "New Access Token") %></a>
     </div>
   <% end %>
   <div id="token_details_dialog" style="display: none;" title="<%= t('titles.access_token_details', "Access Token Details") %>">
@@ -624,7 +596,7 @@ TEXT
   <a href="<%= profile_pics_url %>" class="profile_pics_url" style="display: none;">&nbsp;</a>
   <%= t(:profile_pictures, "Select the image you'd like to use as your profile pic, or upload a new image:") %>
   <div class="profile_pic_list" style="background: #eee; padding: 5px; -moz-border-radius: 5px; margin: 5px 10px;">
-    <h3 style="padding-left: 10px; padding-top: 10px;"><%= t('headers.loading_images', "Loading Images...") %></h3>
+    <h3 style="padding-<%= direction('left') %>: 10px; padding-top: 10px;"><%= t('headers.loading_images', "Loading Images...") %></h3>
     <div class="clear"></div>
   </div>
   <a href="#" class="add_pic_link add"><%= t('links.upload_new_image', "Upload a new Image") %></a>

@@ -20,7 +20,29 @@ import $ from 'jquery'
 import _ from 'underscore'
 import I18n from 'i18n!gradebook'
 import './jquery.instructure_date_and_time'
-  var speedgraderHelpers = {
+import './jquery.instructure_misc_helpers'
+
+export function isAnonymousModeratedMarkingEnabled () {
+  return !!ENV.anonymous_moderated_marking_enabled
+}
+
+export function setupIsAnonymous ({anonymous_grading}) {
+  return isAnonymousModeratedMarkingEnabled() && anonymous_grading
+}
+
+export function setupAnonymizableId (isAnonymous) {
+  return isAnonymous ? 'anonymous_id' : 'id'
+}
+
+export function setupAnonymizableStudentId (isAnonymous) {
+  return isAnonymous ? 'anonymous_id' : 'student_id'
+}
+
+export function setupAnonymizableUserId (isAnonymous) {
+  return isAnonymous ? 'anonymous_id' : 'user_id'
+}
+
+  const speedgraderHelpers = {
     urlContainer: function(submission, defaultEl, originalityReportEl) {
       if (submission.has_originality_report) {
         return originalityReportEl
@@ -28,20 +50,20 @@ import './jquery.instructure_date_and_time'
       return defaultEl
     },
 
-    buildIframe: function(src, options){
-      options = options || {};
-      var parts = ['<iframe'];
-      parts.push(' id="speedgrader_iframe"');
-      parts.push(' src="' + src + '"');
-      Object.keys(options).forEach(function(key){
-        var value = options[key];
+    buildIframe (src, options = {}, domElement = 'iframe') {
+      const parts = [`<${domElement}`]
+      parts.push(' id="speedgrader_iframe"')
+      parts.push(` src="${src}"`)
+      Object.keys(options).forEach(option => {
+        let key = option
+        const value = options[key]
         if (key === 'className') {
-          key = 'class';
+          key = 'class'
         }
-        parts.push(' ' + key + '="' + value + '"');
+        parts.push(` ${key}="${value}"`)
       });
-      parts.push('></iframe>');
-      return parts.join('');
+      parts.push(`></${domElement}>`)
+      return parts.join('')
     },
 
     determineGradeToSubmit: function(use_existing_score, student, grade){
@@ -129,8 +151,25 @@ import './jquery.instructure_date_and_time'
       } else {
         return "not_submitted";
       }
-    }
+    },
+    plagiarismResubmitHandler: (event, resubmitUrl) => {
+      event.preventDefault();
+      $(event.target).attr('disabled', true).text(I18n.t('turnitin.resubmitting', 'Resubmitting...'));
 
+      $.ajaxJSON(resubmitUrl, "POST", {}, () => {
+        window.location.reload();
+      });
+    },
+
+    plagiarismResubmitUrl (submission, anonymizableUserId) {
+      return $.replaceTags($('#assignment_submission_resubmit_to_turnitin_url').attr('href'), { user_id: submission[anonymizableUserId] })
+    },
+
+    setupIsAnonymous,
+    setupAnonymizableId,
+    setupAnonymizableUserId,
+    setupAnonymizableStudentId,
+    isAnonymousModeratedMarkingEnabled
   }
 
-export default speedgraderHelpers;
+export default speedgraderHelpers

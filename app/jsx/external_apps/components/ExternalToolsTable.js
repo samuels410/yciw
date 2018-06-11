@@ -20,10 +20,10 @@ import _ from 'underscore'
 import I18n from 'i18n!external_tools'
 import React from 'react'
 import PropTypes from 'prop-types'
-import store from 'jsx/external_apps/lib/ExternalAppsStore'
-import ExternalToolsTableRow from 'jsx/external_apps/components/ExternalToolsTableRow'
-import InfiniteScroll from 'jsx/external_apps/components/InfiniteScroll'
-import ScreenReaderContent from 'instructure-ui/lib/components/ScreenReaderContent'
+import store from '../../external_apps/lib/ExternalAppsStore'
+import ExternalToolsTableRow from '../../external_apps/components/ExternalToolsTableRow'
+import InfiniteScroll from '../../external_apps/components/InfiniteScroll'
+import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent'
 
 export default React.createClass({
     displayName: 'ExternalToolsTable',
@@ -72,7 +72,7 @@ export default React.createClass({
       return (
         <div className="ExternalToolsTable">
           <InfiniteScroll pageStart={0} loadMore={this.loadMore} hasMore={store.getState().hasMore} loader={this.loader()}>
-            <table className="table table-striped" id="external-tools-table">
+            <table className="ic-Table ic-Table--striped ic-Table--condensed" id="external-tools-table">
               <caption className="screenreader-only">{I18n.t('External Apps')}</caption>
               <thead>
                 <tr>

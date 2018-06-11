@@ -109,7 +109,11 @@ test('renders out the due date in the proper format', () => {
     <ToDoItem {...getDefaultProps()} />
   );
   const info = wrapper.find('.ToDoSidebarItem__Info');
-  ok(info.text().match(/Jul 15 at {2}8:00pm/));
+  // The due date in was '2017-07-15T20:00:00-0600'
+  // since this test is not running in canvas,
+  // the user's profile TZ will default to UTC
+  // and the output will be 6 hours later
+  ok(info.text().indexOf('Jul 16 at  2:00am') > 0);
 });
 
 test('renders the title as a Link when given an href prop', () => {
@@ -121,13 +125,21 @@ test('renders the title as a Link when given an href prop', () => {
   equal(link.text(), 'Introduction to Board Games');
 });
 
-test('renders out the title as a Typography when not given an href prop', () => {
+test('renders out the title as a Text when not given an href prop', () => {
   const wrapper = mount(
     <ToDoItem {...getDefaultProps()} />
   );
-  const title = wrapper.find('.ToDoSidebarItem__Title').find('Typography').first();
+  const title = wrapper.find('.ToDoSidebarItem__Title').find('Text').first();
   ok(title.exists());
   equal(title.text(), 'Introduction to Board Games');
+});
+
+test('renders unique aria string for dismiss button', () => {
+  const wrapper = mount(
+    <ToDoItem {...getDefaultProps()} />
+  );
+  const dismissButton = wrapper.find('.ToDoSidebarItem__Close').find('Button');
+  equal(dismissButton.props()['aria-label'], 'Dismiss Introduction to Board Games');
 });
 
 test('calls the handleDismissClick prop when the dismiss X is clicked', () => {

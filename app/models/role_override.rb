@@ -208,6 +208,24 @@ class RoleOverride < ActiveRecord::Base
           'AccountAdmin'
         ]
       },
+      :import_outcomes => {
+        :label => lambda { t("Import learning outcomes") },
+        :available_to => [
+          'TaEnrollment',
+          'DesignerEnrollment',
+          'TeacherEnrollment',
+          'TeacherlessStudentEnrollment',
+          'ObserverEnrollment',
+          'AccountAdmin',
+          'AccountMembership'
+        ],
+        :true_for => [
+          'DesignerEnrollment',
+          'TeacherEnrollment',
+          'TeacherlessStudentEnrollment',
+          'AccountAdmin'
+        ]
+      },
       :manage_outcomes => {
         :label => lambda { t('permissions.manage_outcomes', "Manage learning outcomes") },
         :available_to => [
@@ -287,6 +305,25 @@ class RoleOverride < ActiveRecord::Base
           'AccountAdmin'
         ],
         :applies_to_concluded => ['TeacherEnrollment', 'TaEnrollment', 'DesignerEnrollment']
+      },
+      :read_email_addresses => {
+        :label => lambda { t("See other users' primary email address") },
+        :available_to => [
+          'StudentEnrollment',
+          'TaEnrollment',
+          'DesignerEnrollment',
+          'TeacherEnrollment',
+          'TeacherlessStudentEnrollment',
+          'ObserverEnrollment',
+          'AccountAdmin',
+          'AccountMembership'
+        ],
+        :true_for => [
+          'TaEnrollment',
+          'TeacherEnrollment',
+          'AccountAdmin'
+        ],
+        :applies_to_concluded => ['TeacherEnrollment', 'TaEnrollment']
       },
       :view_all_grades => {
         :label => lambda { t('permissions.view_all_grades', "View all grades") },
@@ -423,7 +460,8 @@ class RoleOverride < ActiveRecord::Base
           'DesignerEnrollment',
           'TeacherEnrollment',
           'AccountAdmin'
-        ]
+        ],
+        :acts_as_access_token_scope => true
       },
       :view_group_pages => {
         :label => lambda { t('permissions.view_group_pages', "View the group pages of all student groups") },
@@ -460,7 +498,8 @@ class RoleOverride < ActiveRecord::Base
           'DesignerEnrollment',
           'TeacherEnrollment',
           'AccountAdmin'
-        ]
+        ],
+        :acts_as_access_token_scope => true
       },
       :manage_assignments => {
         :label => lambda { t('permissions.manage_assignments', "Manage (add / edit / delete) assignments and quizzes") },
@@ -478,7 +517,8 @@ class RoleOverride < ActiveRecord::Base
           'DesignerEnrollment',
           'TeacherEnrollment',
           'AccountAdmin'
-        ]
+        ],
+        :acts_as_access_token_scope => true
       },
       :undelete_courses => {
         :label => lambda { t('permissions.undelete_courses', "Undelete courses") },
@@ -596,7 +636,7 @@ class RoleOverride < ActiveRecord::Base
         :true_for => [
           'AccountAdmin'
         ],
-        :account_allows => lambda {|a| a.feature_allowed?(:master_courses)}
+        :account_allows => lambda {|a| a.root_account.feature_allowed?(:master_courses)}
       },
       :manage_user_logins => {
         :label => lambda { t('permissions.manage_user_logins', "Modify login details for users") },
@@ -604,14 +644,19 @@ class RoleOverride < ActiveRecord::Base
           'AccountAdmin',
           'AccountMembership'
         ],
-        :account_only => true,
+        :account_only => :root,
         :true_for => [
           'AccountAdmin'
         ]
       },
+      :view_user_logins => {
+        :label => lambda { t("View login ids for users") },
+        :available_to => %w(AccountAdmin AccountMembership TeacherEnrollment TaEnrollment),
+        :true_for => %w(AccountAdmin TeacherEnrollment TaEnrollment)
+      },
       :manage_user_observers => {
         :label => lambda { t('permissions.manage_user_observers', "Manage observers for users") },
-        :account_only => true,
+        :account_only => :root,
         :true_for => %w(AccountAdmin),
         :available_to => %w(AccountAdmin AccountMembership),
       },
@@ -641,7 +686,7 @@ class RoleOverride < ActiveRecord::Base
       },
       :manage_developer_keys => {
         :label => lambda { t('permissions.manage_developer_keys', "Manage developer keys") },
-        :account_only => :root,
+        :account_only => true,
         :true_for => %w(AccountAdmin),
         :available_to => %w(AccountAdmin AccountMembership),
       },
@@ -797,8 +842,22 @@ class RoleOverride < ActiveRecord::Base
         :label => -> { t('LTI add and edit') },
         :true_for => %w(TeacherEnrollment TaEnrollment DesignerEnrollment AccountAdmin),
         :available_to => %w(TeacherEnrollment TaEnrollment DesignerEnrollment AccountAdmin AccountMembership)
+      },
+      :select_final_grade => {
+        :label => -> { t('Select final grade for moderation') },
+        :true_for => %w(AccountAdmin TeacherEnrollment TaEnrollment),
+        :available_to => %w(AccountAdmin AccountMembership TeacherEnrollment TaEnrollment),
+        :account_allows => lambda {|a| a.feature_enabled?(:anonymous_moderated_marking)}
+      },
+      :view_audit_trail => {
+        :label => -> { t('View audit trail') },
+        :true_for => %w(TeacherEnrollment AccountAdmin),
+        :available_to => %w(TeacherEnrollment AccountAdmin AccountMembership),
+        :account_allows => lambda {|a| a.feature_enabled?(:anonymous_moderated_marking)}
       }
     })
+
+  ACCESS_TOKEN_SCOPE_PREFIX = 'https://api.instructure.com/auth/canvas'.freeze
 
   def self.permissions
     Permissions.retrieve
@@ -818,6 +877,18 @@ class RoleOverride < ActiveRecord::Base
     permissions.reject!{ |k, p| p[:enabled_for_plugin] &&
       !((plugin = Canvas::Plugin.find(p[:enabled_for_plugin])) && plugin.enabled?)}
     permissions
+  end
+
+  def self.manageable_access_token_scopes(context)
+    permissions = manageable_permissions(context).dup
+    permissions.select! { |_, p| p[:acts_as_access_token_scope].present? }
+
+    permissions.map do |k, p|
+      {
+        name: "#{ACCESS_TOKEN_SCOPE_PREFIX}.#{k}",
+        label: p[:label].call
+      }
+    end
   end
 
   def self.css_class_for(context, permission, role, role_context=nil)
@@ -999,12 +1070,6 @@ class RoleOverride < ActiveRecord::Base
   # settings is a hash with recognized keys :override and :locked. each key
   # differentiates nil, false, and truthy as possible values
   def self.manage_role_override(context, role, permission, settings)
-    if role.is_a?(String)
-      # for plugin spec compatibility
-      # TODO: update the plugins and remove this
-      Rails.logger.warn("Old use of RoleOverride.manage_role_override, plz to fix")
-      role = context.get_role_by_name(role)
-    end
     context.shard.activate do
       role_override = context.role_overrides.where(:permission => permission, :role_id => role.id).first
       if !settings[:override].nil? || settings[:locked]

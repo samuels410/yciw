@@ -16,6 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 module Api::V1::ContextModule
+  include CyoeHelper
   include Api
   include Api::V1::Json
   include Api::V1::User
@@ -23,9 +24,18 @@ module Api::V1::ContextModule
   include Api::V1::Locked
   include Api::V1::Assignment
 
-  MODULE_JSON_ATTRS = %w(id position name unlock_at)
+  MODULE_JSON_ATTRS = %w(id position name unlock_at).freeze
 
-  MODULE_ITEM_JSON_ATTRS = %w(id position title indent)
+  MODULE_ITEM_JSON_ATTRS = %w(id position title indent).freeze
+
+  ITEM_TYPE = {
+    'Assignment': 'assignment',
+    'Attachment': 'file',
+    'DiscussionTopic': 'topic',
+    'Quiz': 'quiz',
+    'Quizzes::Quiz': 'quiz',
+    'WikiPage': 'page'
+  }.freeze
 
   # optionally pass progression to include 'state', 'completed_at'
   def module_json(context_module, current_user, session, progression = nil, includes = [], opts = {})
@@ -160,8 +170,7 @@ module Api::V1::ContextModule
     item = item.assignment if item.is_a?(DiscussionTopic) && item.assignment
     item = item.overridden_for(current_user) if item.respond_to?(:overridden_for)
 
-    attrs = [:usage_rights, :thumbnail_url, :locked, :hidden, :lock_explanation, :display_name, :due_at, :unlock_at, :lock_at, :points_possible]
-    attrs.delete(:thumbnail_url) if opts[:for_admin]
+    attrs = [:usage_rights, :locked, :hidden, :lock_explanation, :display_name, :due_at, :unlock_at, :lock_at, :points_possible]
 
     attrs.each do |attr|
       if item.respond_to?(attr) && val = item.try(attr)
@@ -170,48 +179,12 @@ module Api::V1::ContextModule
     end
 
     unless opts[:for_admin]
-      item_type = case content_tag.content_type
-                  when 'Quiz', 'Quizzes::Quiz'
-                    'quiz'
-                  when 'Assignment'
-                    'assignment'
-                  when 'DiscussionTopic'
-                    'topic'
-                  when 'Attachment'
-                    'file'
-                  when 'WikiPage'
-                    'page'
-                  else
-                    ''
-                end
+      details[:thumbnail_url] = authenticated_thumbnail_url(item) if item.is_a?(Attachment)
+      item_type = ITEM_TYPE[content_tag.content_type.to_sym] || ''
       lock_item = item && item.respond_to?(:locked_for?) ? item : content_tag
       locked_json(details, lock_item, current_user, item_type)
     end
 
     details
-  end
-
-  def conditional_release(content_tag, opts = {})
-    rules = opts[:conditional_release_rules]
-    assignment_id = content_tag.assignment.try(:id)
-    conditional_release_assignment_set(rules, assignment_id) if rules.present? && assignment_id.present?
-  end
-
-  def conditional_release_assignment_set(rules, id)
-    result = rules.find { |rule| rule[:trigger_assignment].to_s == id.to_s }
-    return unless result.present?
-    result.slice(:locked, :assignment_sets, :selected_set_id)
-  end
-
-  def conditional_release_json(content_tag, user, opts = {})
-    result = conditional_release(content_tag, opts)
-    return unless result.present?
-    result[:assignment_sets].each do |as|
-      next if as[:assignments].blank?
-      as[:assignments].each do |a|
-        a[:model] = assignment_json(a[:model], user, nil) if a[:model]
-      end
-    end
-    result
   end
 end

@@ -19,13 +19,17 @@
 require 'spec_helper'
 
 describe Plannable do
-  context 'root_account_for_model' do
-    it 'should return root account for non-course announcements' do
-      account_model
-      group_category = @account.group_categories.create(name: 'Project Group')
-      group = group_model(name: 'Project Group 1', group_category: group_category, context: @account)
-      announcement = announcement_model(context: group)
-      expect(announcement.send(:root_account_for_model, announcement)).to eq @account
+  context 'planner_override_for' do
+    before :once do
+      course_with_student(active_all: true)
+    end
+
+    it 'should not return deleted overrides' do
+      assignment = assignment_model
+      override = assignment.planner_overrides.create!(user: @student)
+      override.destroy!
+      expect(override.workflow_state).to eq 'deleted'
+      expect(assignment.planner_override_for(@student)).to be_nil
     end
   end
 end

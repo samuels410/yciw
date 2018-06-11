@@ -48,14 +48,21 @@ define [
       @loadedAll = false
       exclusionFlag = "fetching#{capitalize options.page}Page"
       @[exclusionFlag] = true
+
       if options.page?
-        options.url = @urls[options.page] if @urls?[options.page]
         options.remove = false unless options.remove?
-        # API keeps params intact, kill data here to avoid appending in super
-        options.data = ''
+        if @urls?[options.page]
+          options.url = @urls[options.page]
+          # API keeps params intact, kill data if we're using a
+          # pagination url to avoid appending in super
+          options.data = ''
       else
         # we want the first fetch to reset (since a lot of existing code wants a reset event)
         options.reset = true unless options.reset?
+
+      if options.fetchOptions?
+        options.data = options.fetchOptions
+
       @trigger 'beforeFetch', this, options
       @trigger "beforeFetch:#{options.page}", this, options if options.page?
 
@@ -73,7 +80,6 @@ define [
         @trigger "fetch:#{options.page}", this, response, options if options.page?
         unless @urls?.next
           @trigger 'fetched:last', arguments...
-          @loadedAll = true
         if @loadAll and @urls.next?
           setTimeout =>
             @fetch page: 'next', dfd: dfd # next tick so we can show loading indicator, etc.
@@ -118,6 +124,9 @@ define [
 
       if @urls.last and match = @urls.last.match(@pageRegex)
         @totalPages = parseInt(match[1], 10)
+
+      unless @urls?.next
+        @loadedAll = true
 
       @atLeastOnePageFetched = true
 

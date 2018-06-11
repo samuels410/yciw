@@ -22,13 +22,13 @@ import { arrayOf, bool, func, node, shape, string } from 'prop-types';
 import $ from 'jquery';
 import 'jquery.instructure_date_and_time'
 import I18n from 'i18n!gradebook_history';
-import Container from 'instructure-ui/lib/components/Container';
-import ScreenReaderContent from 'instructure-ui/lib/components/ScreenReaderContent';
-import Spinner from 'instructure-ui/lib/components/Spinner';
-import Table from 'instructure-ui/lib/components/Table';
-import Typography from 'instructure-ui/lib/components/Typography';
-import { getHistoryNextPage } from 'jsx/gradebook-history/actions/SearchResultsActions';
-import SearchResultsRow from 'jsx/gradebook-history/SearchResultsRow';
+import Container from '@instructure/ui-core/lib/components/Container';
+import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent';
+import Spinner from '@instructure/ui-core/lib/components/Spinner';
+import Table from '@instructure/ui-core/lib/components/Table';
+import Text from '@instructure/ui-core/lib/components/Text';
+import { getHistoryNextPage } from '../gradebook-history/actions/SearchResultsActions';
+import SearchResultsRow from '../gradebook-history/SearchResultsRow';
 
 const colHeaders = [
   I18n.t('Date'),
@@ -37,7 +37,8 @@ const colHeaders = [
   I18n.t('Grader'),
   I18n.t('Assignment'),
   I18n.t('Before'),
-  I18n.t('After')
+  I18n.t('After'),
+  I18n.t('Current')
 ];
 
 const nearPageBottom = () => (
@@ -57,9 +58,11 @@ class SearchResultsComponent extends Component {
       grader: string.isRequired,
       gradeAfter: string.isRequired,
       gradeBefore: string.isRequired,
+      gradeCurrent: string.isRequired,
       id: string.isRequired,
       pointsPossibleAfter: string.isRequired,
       pointsPossibleBefore: string.isRequired,
+      pointsPossibleCurrent: string.isRequired,
       student: string.isRequired
     })).isRequired,
     nextPage: string.isRequired,
@@ -142,7 +145,7 @@ class SearchResultsComponent extends Component {
 
   showStatus = () => {
     if (this.props.requestingResults) {
-      $.screenReaderFlashMessage(I18n.t('Loading more grade history results.'));
+      $.screenReaderFlashMessage(I18n.t('Loading more gradebook history results.'));
 
       return (
         <Spinner size="small" title={I18n.t('Loading Results')} />
@@ -150,11 +153,11 @@ class SearchResultsComponent extends Component {
     }
 
     if (this.noResultsFound()) {
-      return (<Typography fontStyle="italic">{I18n.t('No results found.')}</Typography>);
+      return (<Text fontStyle="italic">{I18n.t('No results found.')}</Text>);
     }
 
     if (!this.props.requestingResults && !this.props.nextPage && this.hasHistory()) {
-      return (<Typography fontStyle="italic">{I18n.t('No more results to load.')}</Typography>);
+      return (<Text fontStyle="italic">{I18n.t('No more results to load.')}</Text>);
     }
 
     return null;

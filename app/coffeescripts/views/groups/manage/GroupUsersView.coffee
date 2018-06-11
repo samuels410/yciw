@@ -18,25 +18,26 @@
 define [
   'i18n!GroupUsersView'
   'jquery'
-  'underscore'
-  'compiled/collections/GroupCollection'
-  'compiled/views/PaginatedCollectionView'
-  'compiled/views/groups/manage/GroupUserView'
-  'compiled/views/groups/manage/EditGroupAssignmentView'
-  'compiled/views/groups/manage/GroupCategoryCloneView'
+  'jsx/move_item'
+  '../../../collections/GroupCollection'
+  '../../PaginatedCollectionView'
+  './GroupUserView'
+  './GroupCategoryCloneView'
   'jst/groups/manage/groupUsers'
+  '../../../util/groupHasSubmissions'
   'jqueryui/draggable'
   'jqueryui/droppable'
-], (I18n, $, _, GroupCollection, PaginatedCollectionView, GroupUserView, EditGroupAssignmentView, GroupCategoryCloneView, template) ->
+], (I18n, $, MoveItem, GroupCollection, PaginatedCollectionView, GroupUserView, GroupCategoryCloneView, template, groupHasSubmissions) ->
 
   class GroupUsersView extends PaginatedCollectionView
 
-    defaults: _.extend {},
+    defaults: Object.assign {},
       PaginatedCollectionView::defaults,
       itemView: GroupUserView
       itemViewOptions:
         canAssignToGroup: false
         canEditGroupAssignment: true
+        markInactiveStudents: false
 
     dragOptions:
       appendTo: 'body'
@@ -79,7 +80,7 @@ define [
       $target = $(e.currentTarget)
       user = @collection.getUser($target.data('user-id'))
 
-      if @model.get("has_submission")
+      if groupHasSubmissions @model
         @cloneCategoryView = new GroupCategoryCloneView
           model: @model.collection.category,
           openedFromCaution: true
@@ -88,14 +89,13 @@ define [
           if @cloneCategoryView.cloneSuccess
             window.location.reload()
           else if @cloneCategoryView.changeGroups
-            @moveUser(e, $target)
+            @removeUser(e, $target)
           else
             $("#group-#{@model.id}-user-#{user.id}-actions").focus()
       else
-        @moveUser(e, $target)
+        @removeUser(e, $target)
 
-    moveUser: (e, $target) ->
-      $target.prev().focus()
+    removeUser: (e, $target) ->
       @collection.getUser($target.data('user-id')).save 'group', null
 
     removeLeader: (e) ->
@@ -120,16 +120,45 @@ define [
     editGroupAssignment: (e) ->
       e.preventDefault()
       e.stopPropagation()
-      # configure the dialog view with our group data
-      @editGroupAssignmentView ?= new EditGroupAssignmentView
-        group: @model
-      # configure the dialog view with user specific model data
+
       $target = $(e.currentTarget)
       user = @collection.getUser($target.data('user-id'))
-      @editGroupAssignmentView.model = user
-      selector = "[data-focus-returns-to='group-#{@model.id}-user-#{user.id}-actions']"
-      @editGroupAssignmentView.setTrigger selector
-      @editGroupAssignmentView.open()
+
+      @moveTrayProps =
+        title: I18n.t('Move Student')
+        items: [
+          id: user.get('id')
+          title: user.get('name')
+          groupId: @model.get('id')
+        ]
+        moveOptions:
+          groupsLabel: I18n.t('Groups')
+          groups: MoveItem.backbone.collectionToGroups(@model.collection, (col) => models: [])
+          excludeCurrent: true
+        onMoveSuccess: (res) =>
+          groupsHaveSubs = groupHasSubmissions(@model) || groupHasSubmissions(@model.collection.get(res.groupId))
+          userHasSubs = user.get('group_submissions')?.length > 0
+          newGroupNotEmpty = @model.collection.get(res.groupId).usersCount() > 0
+          if groupsHaveSubs || (userHasSubs && newGroupNotEmpty)
+            @cloneCategoryView = new GroupCategoryCloneView
+              model: user.collection.category
+              openedFromCaution: true
+            @cloneCategoryView.open()
+            @cloneCategoryView.on 'close', =>
+              if @cloneCategoryView.cloneSuccess
+                window.location.reload()
+              else if @cloneCategoryView.changeGroups
+                @moveUser(user, res.groupId)
+          else
+            @moveUser(user, res.groupId)
+
+        focusOnExit: (item) =>
+          document.querySelector(".group[data-id=\"#{item.groupId}\"] .group-heading")
+
+      MoveItem.renderTray(@moveTrayProps, document.getElementById('not_right_side'))
+
+    moveUser: (user, groupId) ->
+      @model.collection.category.reassignUser(user, @model.collection.get(groupId))
 
     toJSON: ->
       count: @model.usersCount()
@@ -140,10 +169,9 @@ define [
       super
       @_initDrag(model.view) unless @model?.isLocked()
 
-    ##
     # enable draggable on the child GroupUserView (view)
     _initDrag: (view) =>
-      view.$el.draggable(_.extend({}, @dragOptions))
+      view.$el.draggable(Object.assign({}, @dragOptions))
       view.$el.on 'dragstart', (event, ui) ->
         ui.helper.css 'width', view.$el.width()
         $(event.target).draggable 'option', 'containment', 'document'

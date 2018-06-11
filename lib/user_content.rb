@@ -151,13 +151,13 @@ module UserContent
     }
     DefaultAllowedTypes = AssetTypes.keys
 
-    def initialize(context, user)
+    def initialize(context, user, contextless_types: [])
       raise(ArgumentError, "context required") unless context
       @context = context
       @user = user
-      # capture group 1 is the object type, group 2 is the object id, if it's
-      # there, and group 3 is the rest of the url, including any beginning '/'
-      @toplevel_regex = %r{/#{context.class.name.tableize}/#{context.id}/(\w+)(?:/([^\s"<'\?\/]*)([^\s"<']*))?}
+      @contextless_types = contextless_types
+      @context_prefix = "/#{context.class.name.tableize}/#{context.id}"
+      @toplevel_regex = %r{(#{@context_prefix})?/(\w+)(?:/([^\s"<'\?\/]*)([^\s"<']*))?}
       @handlers = {}
       @default_handler = nil
       @unknown_handler = nil
@@ -166,7 +166,10 @@ module UserContent
 
     attr_reader :user, :context
 
-    class UriMatch < Struct.new(:url, :type, :obj_class, :obj_id, :rest)
+    class UriMatch < Struct.new(:url, :type, :obj_class, :obj_id, :rest, :prefix)
+      def query
+        rest && rest[/\?.*/]
+      end
     end
 
     # specify a url type like "assignments" or "file_contents"
@@ -192,7 +195,9 @@ module UserContent
       asset_types = AssetTypes.reject { |k,v| !@allowed_types.include?(k) }
 
       html.gsub(@toplevel_regex) do |relative_url|
-        type, obj_id, rest = [$1, $2, $3]
+        prefix, type, obj_id, rest = [$1, $2, $3, $4]
+        next relative_url if !@contextless_types.include?(type) && prefix != @context_prefix
+
         if type != "wiki" && type != "pages"
           if obj_id.to_i > 0
             obj_id = obj_id.to_i
@@ -210,7 +215,7 @@ module UserContent
         if asset_types.key?(type)
           klass = asset_types[type]
           klass = klass.to_s.constantize if klass
-          match = UriMatch.new(relative_url, type, klass, obj_id, rest)
+          match = UriMatch.new(relative_url, type, klass, obj_id, rest, prefix)
           handler = @handlers[type] || @default_handler
           (handler && handler.call(match)) || relative_url
         else

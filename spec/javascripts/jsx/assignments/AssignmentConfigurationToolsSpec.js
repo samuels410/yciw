@@ -100,7 +100,11 @@ define([
           }
         }
       ]
-      this.stub($, 'ajax', () => ({status: 200, data: toolDefinitions}));
+      this.stub($, 'ajax').returns({status: 200, data: toolDefinitions});
+      ENV.LTI_LAUNCH_FRAME_ALLOWANCES = ['midi', 'media']
+    },
+    teardown () {
+      ENV.LTI_LAUNCH_FRAME_ALLOWANCES = undefined
     }
   });
 
@@ -135,10 +139,10 @@ define([
     );
     wrapper.setState({tools: toolDefinitions})
 
-    ok(wrapper.find('option[data-launch="none"]').exists());
+    ok(wrapper.find('option[data-launch="about:blank"]').exists());
   });
 
-  test('it renders empty string for tool type when no tool is selected', () => {
+  test('it renders "none" for tool type when no tool is selected', () => {
     const wrapper = mount(
       <AssignmentConfigurationTools.configTools
         courseId={1}
@@ -147,7 +151,7 @@ define([
     );
     wrapper.setState({tools: toolDefinitions})
     const toolType = wrapper.find('#configuration-tool-type').get(0);
-    equal(toolType.value, '');
+    equal(toolType.value, 'none');
   });
 
   test('it renders each tool', () => {
@@ -158,7 +162,7 @@ define([
       />
     );
     wrapper.setState({tools: toolDefinitions})
-    equal(wrapper.find('option').length, toolDefinitions.length + 1)
+    equal(wrapper.find('#similarity_detection_tool option').length, toolDefinitions.length + 1)
   });
 
   test('it builds the correct Launch URL for LTI 1 tools', () => {
@@ -299,4 +303,42 @@ define([
     equal(wrapper.state().afterExternalContentAlertClass, 'screenreader-only')
     deepEqual(wrapper.state().iframeStyle, {})
   })
+
+  test('renders visibility options', () => {
+    const wrapper = mount(
+      <AssignmentConfigurationTools.configTools
+        courseId={1}
+        secureParams={secureParams}
+        selectedTool={5}
+        selectedToolType="ContextExternalTool"
+      />
+    );
+    wrapper.setState({tools: toolDefinitions})
+    ok(wrapper.find('#report_visibility_picker'))
+  });
+
+  test('enables the visibility picker when a tool is selected', () => {
+    const wrapper = mount(
+      <AssignmentConfigurationTools.configTools
+        courseId={1}
+        secureParams={secureParams}
+        selectedTool={5}
+        selectedToolType="ContextExternalTool"
+      />
+    );
+    wrapper.setState({tools: toolDefinitions})
+    ok(!wrapper.find('#report_visibility_picker').node.disabled)
+  });
+
+  test('sets the iframe allowances', () => {
+    const wrapper = mount(
+      <AssignmentConfigurationTools.configTools
+        courseId={1}
+        secureParams={secureParams}
+        selectedTool={5}
+        selectedToolType="ContextExternalTool"
+      />
+    );
+    ok(wrapper.find('.tool_launch').node.getAttribute('allow'), ENV.LTI_LAUNCH_FRAME_ALLOWANCES.join('; '))
+  });
 });

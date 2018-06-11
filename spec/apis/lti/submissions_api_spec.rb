@@ -1,3 +1,21 @@
+#
+# Copyright (C) 2017 - present Instructure, Inc.
+#
+# This file is part of Canvas.
+#
+# Canvas is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3 of the License.
+#
+# Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License along
+# with this program. If not, see <http://www.gnu.org/licenses/>.
+#
+
 require File.expand_path(File.dirname(__FILE__) + '/lti2_api_spec_helper')
 require File.expand_path(File.dirname(__FILE__) + '/../api_spec_helper')
 require File.expand_path(File.dirname(__FILE__) + '/../../sharding_spec_helper')
@@ -139,6 +157,13 @@ module Lti
           assignment.global_id.to_s,
           submission.global_id.to_s
         )
+      end
+
+      it 'includes the eula agreement timestamp if present' do
+        submission.turnitin_data[:eula_agreement_timestamp] = Time.now.to_i
+        submission.save!
+        get endpoint, headers: request_headers
+        expect(JSON.parse(response.body)['eula_agreement_timestamp']).to eq submission.turnitin_data[:eula_agreement_timestamp]
       end
     end
 

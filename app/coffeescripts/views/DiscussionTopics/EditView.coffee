@@ -17,28 +17,28 @@
 
 define [
   'i18n!discussion_topics'
-  'compiled/views/ValidatedFormView'
-  'compiled/views/assignments/AssignmentGroupSelector'
-  'compiled/views/assignments/GradingTypeSelector'
-  'compiled/views/assignments/GroupCategorySelector'
-  'compiled/views/assignments/PeerReviewsSelector'
-  'compiled/views/assignments/PostToSisSelector'
+  '../ValidatedFormView'
+  '../assignments/AssignmentGroupSelector'
+  '../assignments/GradingTypeSelector'
+  '../assignments/GroupCategorySelector'
+  '../assignments/PeerReviewsSelector'
+  '../assignments/PostToSisSelector'
   'underscore'
   'jst/DiscussionTopics/EditView'
   'jsx/shared/rce/RichContentEditor'
   'str/htmlEscape'
-  'compiled/models/DiscussionTopic'
-  'compiled/models/Announcement'
-  'compiled/models/Assignment'
+  '../../models/DiscussionTopic'
+  '../../models/Announcement'
+  '../../models/Assignment'
   'jquery'
-  'compiled/fn/preventDefault'
-  'compiled/views/calendar/MissingDateDialogView'
-  'compiled/views/editor/KeyboardShortcuts'
+  '../../fn/preventDefault'
+  '../calendar/MissingDateDialogView'
+  '../editor/KeyboardShortcuts'
   'jsx/shared/conditional_release/ConditionalRelease'
-  'compiled/util/deparam'
-  'compiled/jquery.rails_flash_notifications' #flashMessage
+  '../../util/deparam'
+  '../../jquery.rails_flash_notifications' #flashMessage
   'jsx/shared/helpers/numberHelper'
-  'compiled/util/SisValidationHelper'
+  '../../util/SisValidationHelper'
 ], (
     I18n,
     ValidatedFormView,
@@ -87,6 +87,8 @@ define [
       '#todo_options': '$todoOptions'
       '#todo_date_input': '$todoDateInput'
       '#allow_todo_date': '$allowTodoDate'
+      '#allow_user_comments': '$allowUserComments'
+      '#require_initial_post' : '$requireInitialPost'
 
     events: _.extend(@::events,
       'click .removeAttachment' : 'removeAttachment'
@@ -97,6 +99,7 @@ define [
       'change' : 'onChange'
       'tabsbeforeactivate #discussion-edit-view' : 'onTabChange'
       'change #allow_todo_date' : 'toggleTodoDateInput'
+      'change #allow_user_comments' : 'updateAllowComments'
     )
 
     messages:
@@ -116,6 +119,10 @@ define [
       super
 
       @lockedItems = options.lockedItems || {}
+      @announcementsLocked = options.announcementsLocked
+
+    setRenderSectionsAutocomplete: (func) =>
+      @renderSectionsAutocomplete = func
 
     redirectAfterSave: ->
       window.location = @locationAfterSave(deparam())
@@ -158,6 +165,8 @@ define [
         inClosedGradingPeriod: @assignment.inClosedGradingPeriod()
         lockedItems: @lockedItems
         allow_todo_date: data.todo_date?
+        unlocked: if data.locked == undefined then !@isAnnouncement() else !data.locked
+        announcementsLocked: @announcementsLocked
       json.assignment = json.assignment.toView()
       json
 
@@ -181,7 +190,7 @@ define [
 
     render: =>
       super
-      $textarea = @$('textarea[name=message]').attr('id', _.uniqueId('discussion-topic-message'))
+      $textarea = @$('textarea[name=message]').attr('id', _.uniqueId('discussion-topic-message')).css('display', 'none')
 
       unless @lockedItems.content
         RichContentEditor.initSidebar()
@@ -207,6 +216,8 @@ define [
       _.defer(@loadConditionalRelease) if @showConditionalRelease()
 
       @$(".datetime_field").datetime_field()
+
+      @updateAllowComments()
 
       this
 
@@ -241,6 +252,7 @@ define [
         fieldLabel: @messages.group_category_field_label
         lockedMessage: @messages.group_locked_message
         inClosedGradingPeriod: @assignment.inClosedGradingPeriod()
+        renderSectionsAutocomplete: @renderSectionsAutocomplete
 
       @groupCategorySelector.render()
 
@@ -355,7 +367,7 @@ define [
     submit: (event) =>
       event.preventDefault()
       event.stopPropagation()
-      if @dueDateOverrideView.containsSectionsWithoutOverrides()
+      if @gradedChecked() && @dueDateOverrideView.containsSectionsWithoutOverrides()
         sections = @dueDateOverrideView.sectionsWithoutOverrides()
         missingDateDialog = new MissingDateDialog
           validationFn: -> sections
@@ -386,6 +398,14 @@ define [
       @disableWhileLoadingOpts = {}
       super(xhr)
 
+    sectionsAreRequired: ->
+      if !ENV.context_asset_string.startsWith("course")
+        return false
+      isAnnouncement = ENV.DISCUSSION_TOPIC.ATTRIBUTES.is_announcement
+      announcementsFlag = ENV.SECTION_SPECIFIC_ANNOUNCEMENTS_ENABLED
+      discussionsFlag = ENV.SECTION_SPECIFIC_DISCUSSIONS_ENABLED
+      if isAnnouncement then announcementsFlag else discussionsFlag
+
     validateBeforeSave: (data, errors) =>
       if data.delay_posting == "0"
         data.delayed_post_at = null
@@ -406,14 +426,17 @@ define [
       if data.allow_todo_date == '1' && data.todo_date == null
         errors['todo_date'] = [{type: 'date_required_error', message: I18n.t('You must enter a date')}]
 
+      if @sectionsAreRequired() && !data.specific_sections
+        errors['specific_sections'] = [{type: 'specific_sections_required_error', message: I18n.t('You must input a section')}]
+
       if @isAnnouncement()
         unless data.message?.length > 0
           unless @lockedItems.content
             errors['message'] = [{type: 'message_required_error', message: I18n.t("A message is required")}]
+
       if @showConditionalRelease()
         crErrors = @conditionalReleaseEditor.validateBeforeSave()
         errors['conditional_release'] = crErrors if crErrors
-
       errors
 
     _validateTitle: (data, errors) =>
@@ -456,15 +479,28 @@ define [
           @conditionalReleaseEditor.focusOnError()
         else
           @$discussionEditView.tabs("option", "active", 0)
+
       super(errors)
 
     toggleGradingDependentOptions: ->
       @toggleAvailabilityOptions()
       @toggleConditionalReleaseTab()
       @toggleTodoDateBox()
+      @renderSectionsAutocomplete() if @renderSectionsAutocomplete?
+
+    gradedChecked: ->
+      @$useForGrading.is(':checked')
+
+    # Graded discussions and section specific discussions are mutually exclusive
+    disableGradedCheckBox: =>
+      @$useForGrading.prop('disabled', true)
+
+    # Graded discussions and section specific discussions are mutually exclusive
+    enableGradedCheckBox: =>
+      @$useForGrading.prop('disabled', false)
 
     toggleAvailabilityOptions: ->
-      if @$useForGrading.is(':checked')
+      if @gradedChecked()
         @$availabilityOptions.hide()
       else
         @$availabilityOptions.show()
@@ -474,14 +510,14 @@ define [
 
     toggleConditionalReleaseTab: ->
       if @showConditionalRelease()
-        if @$useForGrading.is(':checked')
+        if @gradedChecked()
           @$discussionEditView.tabs("option", "disabled", false)
         else
           @$discussionEditView.tabs("option", "disabled", [1])
           @$discussionEditView.tabs("option", "active", 0)
 
     toggleTodoDateBox: ->
-      if @$useForGrading.is(':checked')
+      if @gradedChecked()
         @$todoOptions.hide()
       else
         @$todoOptions.show()
@@ -491,6 +527,11 @@ define [
         @$todoDateInput.show()
       else
         @$todoDateInput.hide()
+
+    updateAllowComments: ->
+      allowsComments = @$allowUserComments.is(':checked') || !@model.get('is_announcement')
+      @$requireInitialPost.prop('disabled', !allowsComments)
+      @model.set('locked', !allowsComments)
 
     onChange: ->
       if @showConditionalRelease() && @assignmentUpToDate

@@ -18,67 +18,6 @@
 require File.expand_path(File.dirname(__FILE__) + '/../common')
 
 module GradezillaCommon
-
-  shared_context 'reusable_course' do
-    let(:test_course)       { course_factory(active_course: true) }
-    let(:teacher)           { user_factory(active_all: true) }
-    let(:student)           { user_factory(active_all: true) }
-    let(:concluded_student) { user_factory(name: 'Concluded Student', active_all: true) }
-    let(:observer)          { user_factory(active_all: true) }
-    let(:enroll_teacher_and_students) do
-      test_course.enroll_user(teacher, 'TeacherEnrollment', enrollment_state: 'active')
-      test_course.enroll_user(student, 'StudentEnrollment', enrollment_state: 'active')
-      test_course.enroll_user(concluded_student, 'StudentEnrollment', enrollment_state: 'completed')
-    end
-    let(:assignment_group_1) { test_course.assignment_groups.create! name: 'Group 1' }
-    let(:assignment_group_2) { test_course.assignment_groups.create! name: 'Group 2' }
-    let(:assignment_1) do
-      test_course.assignments.create!(
-        title: 'Points Assignment',
-        grading_type: 'points',
-        points_possible: 10,
-        submission_types: 'online_text_entry',
-        due_at: 2.days.ago,
-        assignment_group: assignment_group_1
-      )
-    end
-    let(:assignment_2) do
-      test_course.assignments.create!(
-        title: 'Percent Assignment',
-        grading_type: 'percent',
-        points_possible: 10,
-      )
-    end
-    let(:assignment_3) do
-      test_course.assignments.create!(
-        title: 'Complete/Incomplete Assignment',
-        grading_type: 'pass_fail',
-        points_possible: 10
-      )
-    end
-    let(:assignment_4) do
-      test_course.assignments.create!(
-        title: 'Letter Grade Assignment',
-        grading_type: 'letter_grade',
-        points_possible: 10
-      )
-    end
-    let(:assignment_5) do
-      test_course.assignments.create!(
-        title: 'Zero Points Possible',
-        grading_type: 'points',
-        points_possible: 0,
-        assignment_group: assignment_group_2
-      )
-    end
-    let(:student_submission) do
-      assignment_1.submit_homework(
-        student,
-        submission_type: 'online_text_entry',
-        body: 'Hello!'
-      )
-    end
-  end
   def init_course_with_students(num = 1)
     course_with_teacher(active_all: true)
 
@@ -112,7 +51,7 @@ module GradezillaCommon
 
   def edit_grade(cell, grade)
     fj(cell).click
-    grade_input = fj("#{cell} .grade")
+    grade_input = fj("#{cell} input[type='text']")
     set_value(grade_input, grade)
     grade_input.send_keys(:return)
     wait_for_ajaximations
@@ -271,4 +210,75 @@ module GradezillaCommon
       :assignment_group => @group
     )
   end
+
+  shared_context 'late_policy_course_setup' do
+    let(:now) { Time.zone.now }
+
+    def create_course_late_policy
+      # create late/missing policies on backend
+      @course.create_late_policy!(
+        missing_submission_deduction_enabled: true,
+        missing_submission_deduction: 50.0,
+        late_submission_deduction_enabled: true,
+        late_submission_deduction: 10.0,
+        late_submission_interval: 'day',
+        late_submission_minimum_percent_enabled: true,
+        late_submission_minimum_percent: 50.0,
+      )
+    end
+
+    def create_assignments
+      # create 2 assignments due in the past
+      @a1 = @course.assignments.create!(
+        title: 'assignment one',
+        grading_type: 'points',
+        points_possible: 100,
+        due_at: 1.day.ago(now),
+        submission_types: 'online_text_entry'
+      )
+
+      @a2 = @course.assignments.create!(
+        title: 'assignment two',
+        grading_type: 'points',
+        points_possible: 100,
+        due_at: 1.day.ago(now),
+        submission_types: 'online_text_entry'
+      )
+
+      # create 1 assignment due in the future
+      @a3 = @course.assignments.create!(
+        title: 'assignment three',
+        grading_type: 'points',
+        points_possible: 10,
+        due_at: 2.days.from_now,
+        submission_types: 'online_text_entry'
+      )
+
+      # create 1 assignment that will be Excused for Student1
+      @a4 = @course.assignments.create!(
+        title: 'assignment four',
+        grading_type: 'points',
+        points_possible: 10,
+        due_at: 2.days.from_now,
+        submission_types: 'online_text_entry'
+      )
+    end
+
+    def make_submissions
+      # submit a1(late) and a3(on-time) so a2(missing)
+      Timecop.freeze(now) do
+        @a1.submit_homework(@course.students.first, body: 'submitting my homework')
+        @a3.submit_homework(@course.students.first, body: 'submitting my homework')
+      end
+    end
+
+    def grade_assignments
+      # as a teacher grade the assignments
+      @a1.grade_student(@course.students.first, grade: 90, grader: @teacher)
+      @a2.grade_student(@course.students.first, grade: 90, grader: @teacher)
+      @a3.grade_student(@course.students.first, grade: 9, grader: @teacher)
+      @a4.grade_student(@course.students.first, excuse: true, grader: @teacher)
+    end
+  end
 end
+

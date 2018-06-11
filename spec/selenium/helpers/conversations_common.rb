@@ -52,7 +52,18 @@ module ConversationsCommon
   end
 
   def view_filter
-    f('.type-filter.bootstrap-select')
+    driver.find_element(:id, 'conversation_filter_select')
+  end
+
+  def selected_view_filter
+    select = view_filter
+    options = select.find_elements(tag_name: 'option')
+    selected = options.select(&:selected?)
+
+    # should be one filter applied i every situation
+    expect(selected.size).to eq 1
+    value = selected[0].attribute('value')
+    value
   end
 
   def course_filter
@@ -90,7 +101,7 @@ module ConversationsCommon
   end
 
   def select_view(new_view)
-    set_bootstrap_select_value(view_filter, new_view)
+    view_filter.find_element(:css, "option[value='#{new_view}']").click
     wait_for_ajaximations
   end
 
@@ -196,17 +207,17 @@ module ConversationsCommon
 
   def select_conversations(to_select = -1)
     driver.action.key_down(modifier).perform
-    messages = ff('.messages li')
+    messages = ff('.messages > li')
     message_count = messages.length
 
     # default of -1 will select all messages. If you enter in too large of number, it defaults to selecting all
-    to_select = message_count if (to_select == -1) || (to_select > ff('.messages li').length)
+    to_select = message_count if (to_select == -1) || (to_select > message_count)
 
     index = 0
     messages.each do |message|
       message.click
-      break if index > to_select
       index += 1
+      break if index >= to_select
     end
 
     driver.action.key_up(modifier).perform

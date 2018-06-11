@@ -158,6 +158,32 @@ module CC
       end
     end
 
+    def self.create_tool_setting_node(tool_setting, node)
+      node.tool_setting do |ts_node|
+        ts_node.tool_proxy({
+          product_code: tool_setting.product_code,
+          vendor_code: tool_setting.vendor_code,
+          tool_proxy_guid: tool_setting.tool_proxy&.guid
+        })
+
+        if tool_setting.custom.present?
+          ts_node.custom do |custom_node|
+            tool_setting.custom.each do |k, v|
+              custom_node.property({name: k}, v)
+            end
+          end
+        end
+
+        if tool_setting.custom_parameters.present?
+          ts_node.custom_parameters do |custom_params_node|
+            tool_setting.custom_parameters.each do |k, v|
+              custom_params_node.property({name: k}, v)
+            end
+          end
+        end
+      end
+    end
+
     def self.create_canvas_assignment(node, assignment, manifest = nil)
       key_generator = manifest || CCHelper
       node.title assignment.title
@@ -185,7 +211,9 @@ module CC
           node.rubric_external_identifier assignment.rubric.id
         end
         node.rubric_use_for_grading assoc.use_for_grading
-        node.rubric_hide_score_total assoc.hide_score_total
+        node.rubric_hide_points !!assoc.hide_points
+        node.rubric_hide_outcome_results !!assoc.hide_outcome_results
+        node.rubric_hide_score_total !!assoc.hide_score_total
         if assoc.summary_data && assoc.summary_data[:saved_comments]
           node.saved_rubric_comments do |sc_node|
             assoc.summary_data[:saved_comments].each_pair do |key, vals|
@@ -215,7 +243,7 @@ module CC
               :all_day, :submission_types, :position, :turnitin_enabled, :vericite_enabled, :peer_review_count,
               :peer_reviews, :automatic_peer_reviews, :moderated_grading,
               :anonymous_peer_reviews, :grade_group_students_individually, :freeze_on_copy, :muted,
-              :omit_from_final_grade, :intra_group_peer_reviews, :only_visible_to_overrides]
+              :omit_from_final_grade, :intra_group_peer_reviews, :only_visible_to_overrides, :post_to_sis]
       atts.each do |att|
         node.tag!(att, assignment.send(att)) if assignment.send(att) == false || !assignment.send(att).blank?
       end
@@ -230,7 +258,25 @@ module CC
         node.external_tool_url assignment.external_tool_tag.url
         node.external_tool_new_tab assignment.external_tool_tag.new_tab
       end
+
       node.tag!(:turnitin_settings, (assignment.send(:turnitin_settings).to_json)) if assignment.turnitin_enabled || assignment.vericite_enabled
+      if assignment.assignment_configuration_tool_lookup_ids.present?
+        resource_codes = assignment.tool_settings_tool.try(:resource_codes) || {}
+        node.similarity_detection_tool({
+          resource_type_code: resource_codes[:resource_type_code],
+          vendor_code: resource_codes[:vendor_code],
+          product_code: resource_codes[:product_code],
+          visibility: assignment.turnitin_settings.with_indifferent_access[:originality_report_visibility]
+        })
+
+        tool_setting = Lti::ToolSetting.find_by(
+          resource_link_id: assignment.lti_context_id
+        )
+
+        if tool_setting.present?
+          AssignmentResources.create_tool_setting_node(tool_setting, node)
+        end
+      end
     end
 
   end

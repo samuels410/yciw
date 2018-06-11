@@ -17,11 +17,11 @@
  */
 
 import React from 'react';
-import Button from 'instructure-ui/lib/components/Button';
-import Link from 'instructure-ui/lib/components/Link';
-import Typography from 'instructure-ui/lib/components/Typography';
-import List from 'instructure-ui/lib/components/List';
-import ListItem from 'instructure-ui/lib/components/List/ListItem';
+import Button from '@instructure/ui-core/lib/components/Button';
+import Link from '@instructure/ui-core/lib/components/Link';
+import Text from '@instructure/ui-core/lib/components/Text';
+import List from '@instructure/ui-core/lib/components/List';
+import ListItem from '@instructure/ui-core/lib/components/List/ListItem';
 import AssignmentIcon from 'instructure-icons/lib/Line/IconAssignmentLine';
 import QuizIcon from 'instructure-icons/lib/Line/IconQuizLine';
 import AnnouncementIcon from 'instructure-icons/lib/Line/IconAnnouncementLine';
@@ -32,6 +32,7 @@ import PageIcon from 'instructure-icons/lib/Line/IconMsWordLine';
 import XIcon from 'instructure-icons/lib/Line/IconDiscussionXLine';
 import I18n from 'i18n!todo_sidebar';
 import { func, object, arrayOf, number, string } from 'prop-types';
+import tz from 'timezone_core';
 
 const getIconComponent = (itemType) => {
   switch (itemType) {
@@ -66,56 +67,67 @@ const getInformationRow = (dueAt, points) => {
       </ListItem>
     );
   }
+
+  const dueAtObj = new Date(dueAt);
+  const date = tz.format(dueAtObj, I18n.lookup('date.formats.short'), ENV.TIMEZONE);
+  const time = tz.format(dueAtObj, I18n.lookup('time.formats.tiny'), ENV.TIMEZONE);
+
   toDisplay.push(
     <ListItem key="date">
       {
-        I18n.t('%{date} at %{time}', {
-          date: I18n.l('#date.formats.short', dueAt),
-          time: I18n.l('#time.formats.tiny', dueAt)
-        })
+        I18n.t('%{date} at %{time}', {date, time})
       }
     </ListItem>
   );
   return toDisplay;
 }
 
-export default function ToDoItem (props) {
-  const title = <Typography size="small" lineHeight="fit">{props.title}</Typography>
-  const titleComponent = props.href ? (
-    <Link href={props.href}>{title}</Link>
-  ) : (
-    <Typography>{title}</Typography>
-  );
-
-  const handleClick = () => {
-    props.handleDismissClick(props.itemType, props.itemId);
+export default class ToDoItem extends React.Component {
+  focus () {
+    const focusable = this.linkRef || this.buttonRef;
+    if (focusable) focusable.focus();
   }
 
-  return (
-    <div className="ToDoSidebarItem">
-      {getIconComponent(props.itemType)}
-      <div className="ToDoSidebarItem__Info">
-        <div className="ToDoSidebarItem__Title">
-          {titleComponent}
+  handleClick = () => {
+    this.props.handleDismissClick(this.props.itemType, this.props.itemId);
+  }
+
+  render () {
+    const title = <Text size="small" lineHeight="fit">{this.props.title}</Text>
+    const titleComponent = this.props.href ? (
+      <Link linkRef={(elt) => {this.linkRef = elt}} href={this.props.href}>{title}</Link>
+    ) : (
+      <Text>{title}</Text>
+    );
+
+    return (
+      <div className="ToDoSidebarItem">
+        {getIconComponent(this.props.itemType)}
+        <div className="ToDoSidebarItem__Info">
+          <div className="ToDoSidebarItem__Title">
+            {titleComponent}
+          </div>
+          <Text color="secondary" size="small" weight="bold" lineHeight="fit">
+            {getContextShortName(this.props.courses, this.props.courseId)}
+          </Text>
+          <List variant="inline" delimeter="pipe" size="small">
+            {getInformationRow(this.props.dueAt, this.props.points)}
+          </List>
         </div>
-        <Typography color="secondary" size="small" weight="bold" lineHeight="fit">
-          {getContextShortName(props.courses, props.courseId)}
-        </Typography>
-        <List variant="pipe">
-          {getInformationRow(props.dueAt, props.points)}
-        </List>
+        <div className="ToDoSidebarItem__Close">
+          <Button
+            variant="icon"
+            size="small"
+            onClick={this.handleClick}
+            buttonRef={(elt) => {this.buttonRef = elt}}
+            aria-label={I18n.t('Dismiss %{itemTitle}', {itemTitle: this.props.title})}
+          >
+            <XIcon className="ToDoSidebarItem__CloseIcon" />
+          </Button>
+        </div>
       </div>
-      <div className="ToDoSidebarItem__Close">
-        <Button
-          variant="icon"
-          size="small"
-          onClick={handleClick}
-        >
-          <XIcon title={I18n.t('Dismiss This')} className="ToDoSidebarItem__CloseIcon" />
-        </Button>
-      </div>
-    </div>
-  )
+    )
+  }
 }
 
 ToDoItem.propTypes = {

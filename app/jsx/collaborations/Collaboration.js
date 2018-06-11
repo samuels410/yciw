@@ -19,11 +19,11 @@
 import React from 'react'
 import ReactDOM from 'react-dom'
 import PropTypes from 'prop-types'
-import DatetimeDisplay from 'jsx/shared/DatetimeDisplay'
+import DatetimeDisplay from '../shared/DatetimeDisplay'
 import DeleteConfirmation from './DeleteConfirmation'
-import i18n from 'i18n!react_collaborations'
+import I18n from 'i18n!react_collaborations'
 import splitAssetString from 'compiled/str/splitAssetString'
-import store from 'jsx/collaborations/store/store'
+import store from '../collaborations/store/store'
   class Collaboration extends React.Component {
     constructor (props) {
       super(props);
@@ -74,12 +74,12 @@ import store from 'jsx/collaborations/store/store'
           </div>
           <div className='Collaboration-actions'>
             {collaboration.permissions.update && (<a className='icon-edit' href={editUrl}>
-              <span className='screenreader-only'>{i18n.t('Edit Collaboration')}</span>
+              <span className='screenreader-only'>{I18n.t('Edit Collaboration')}</span>
             </a>)}
 
             {collaboration.permissions.delete && (<button ref='deleteButton' className='btn btn-link' onClick={this.openConfirmation}>
                 <i className='icon-trash'></i>
-                <span className='screenreader-only'>{i18n.t('Delete Collaboration')}</span>
+                <span className='screenreader-only'>{I18n.t('Delete Collaboration')}</span>
               </button>
             )}
           </div>

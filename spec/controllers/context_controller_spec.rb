@@ -178,12 +178,14 @@ describe ContextController do
         expect(flash[:error]).to be_present
       end
 
-      it 'limits enrollments by visibility' do
+      it 'limits enrollments by visibility for course default section' do
         user_session(@student)
         get 'roster_user', params: {:course_id => @course.id, :id => @teacher.id}
         expect(response).to be_success
         expect(assigns[:enrollments].map(&:course_section_id)).to match_array([@course.default_section.id, @other_section.id])
+      end
 
+      it 'limits enrollments by visibility for other section' do
         user_session(@other_student)
         get 'roster_user', params: {:course_id => @course.id, :id => @teacher.id}
         expect(response).to be_success
@@ -356,14 +358,13 @@ describe ContextController do
     end
 
     it 'allows undeleting wiki pages' do
-      # wiki pages are special because they have to go through context.wiki
       user_session(@teacher)
-      page = @course.wiki_pages.create(:title => "some page")
-      page.workflow_state = 'deleted'
-      page.save!
+      page = @course.wiki_pages.create!(:title => "some page")
+      page.destroy
 
       post :undelete_item, params: {course_id: @course.id, asset_string: page.asset_string}
       expect(page.reload).not_to be_deleted
+      expect(page.current_version).not_to be_nil
     end
 
     it 'allows undeleting attachments' do
@@ -403,7 +404,7 @@ describe ContextController do
       get :roster_user_usage, params: {course_id: @course.id, user_id: @student.id}, format: :json
 
       expect(response).to be_success
-      expect(JSON.parse(response.body.gsub("while(1);", "")).length).to eq 1
+      expect(json_parse(response.body).length).to eq 1
     end
   end
 end

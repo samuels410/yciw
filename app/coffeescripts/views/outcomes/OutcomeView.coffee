@@ -21,14 +21,15 @@ define [
   'jsx/shared/helpers/numberHelper'
   'jquery'
   'underscore'
-  'compiled/views/outcomes/OutcomeContentBase'
-  'compiled/views/outcomes/CalculationMethodFormView'
+  './OutcomeContentBase'
+  './CalculationMethodFormView'
   'jst/outcomes/outcome'
   'jst/outcomes/outcomeForm'
   'jst/outcomes/_criterion' # for outcomeForm
+  'jsx/outcomes/ConfirmOutcomeEditModal'
   'jqueryui/dialog'
 ], (I18n, numberHelper, $, _, OutcomeContentBase, CalculationMethodFormView,
-  outcomeTemplate, outcomeFormTemplate, criterionTemplate) ->
+  outcomeTemplate, outcomeFormTemplate, criterionTemplate, confirmOutcomeEditModal) ->
 
   # For outcomes in the main content view.
   class OutcomeView extends OutcomeContentBase
@@ -58,6 +59,37 @@ define [
       @calculationMethodFormView = new CalculationMethodFormView({
         model: @model
       })
+      @originalConfirmableValues = @getFormData()
+
+    submit: (event) ->
+      event?.preventDefault()
+      newData = @getFormData()
+      confirmOutcomeEditModal.showConfirmOutcomeEdit(
+        changed: !_.isEqual(newData, @originalConfirmableValues)
+        assessed: @model.get('assessed')
+        hasUpdateableRubrics: @model.get('has_updateable_rubrics'),
+        modifiedFields: @getModifiedFields(newData)
+        onConfirm: (_confirmEvent) =>
+          super event # super == submit
+      )
+
+    getModifiedFields: (data) ->
+      return
+        masteryPoints: data.mastery_points != numberHelper.parse(@originalConfirmableValues.mastery_points)
+        scoringMethod: !@scoringMethodsEqual(data, @originalConfirmableValues)
+
+    scoringMethodsEqual: (lhs, rhs) ->
+      return false unless lhs.calculation_method == rhs.calculation_method
+      return true if lhs.calculation_method in ['highest', 'latest']
+      numberHelper.parse(lhs.calculation_int) == numberHelper.parse(rhs.calculation_int)
+
+    edit: (event) ->
+      super(event)
+      @originalConfirmableValues = @getFormData()
+      setTimeout (=>
+        # account for text editor possibly updating description
+        @originalConfirmableValues = @getFormData()
+      ), 50
 
     # overriding superclass
     getFormData: ->

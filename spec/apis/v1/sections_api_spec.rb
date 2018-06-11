@@ -184,6 +184,15 @@ describe SectionsController, type: :request do
         expect(json['total_students']).to eq 1
       end
 
+      it "should not include test students" do
+        @course.student_view_student
+        expect(@course.default_section.students.count).to eq 1
+        expect(@course.default_section.students.not_fake_student.count).to eq 0
+        json = api_call(:get, "#{@path_prefix}/#{@course.default_section.id}",
+          @path_params.merge({ :id => @course.default_section.to_param, :include => ['total_students'] }))
+        expect(json["total_students"]).to eq 0
+      end
+
       it "should be accessible from the course context via sis id" do
         @section.update_attribute(:sis_source_id, 'my_section')
         json = api_call(:get, "#{@path_prefix}/sis_section_id:my_section", @path_params.merge({ :id => 'sis_section_id:my_section' }))
@@ -365,14 +374,24 @@ describe SectionsController, type: :request do
         site_admin_user
       end
 
-      it "should set the sis source id" do
-        json = api_call(:post, @path_prefix, @path_params, { :course_section =>
-          { :name => 'Name', :start_at => '2011-01-01T01:00Z', :end_at => '2011-07-01T01:00Z', :sis_section_id => 'fail' }})
+      it "should set the sis source id and integration_id" do
+        section_params = {name: 'Name', sis_section_id: 'fail', integration_id: 'int1'}
+        json = api_call(:post, @path_prefix, @path_params, {course_section: section_params})
         @course.reload
         section = @course.active_course_sections.find(json['id'].to_i)
         expect(section.name).to eq 'Name'
         expect(section.sis_source_id).to eq 'fail'
+        expect(section.integration_id).to eq 'int1'
         expect(section.sis_batch_id).to eq nil
+      end
+
+      it "should set the integration_id by itself" do
+        section_params = {name: 'Name', integration_id: 'int1'}
+        json = api_call(:post, @path_prefix, @path_params, {course_section: section_params})
+        @course.reload
+        section = @course.active_course_sections.find(json['id'].to_i)
+        expect(section.name).to eq 'Name'
+        expect(section.integration_id).to eq 'int1'
       end
 
       it "should allow reactivating deleting sections using sis_section_id" do
@@ -469,13 +488,11 @@ describe SectionsController, type: :request do
                  { :course_section => { :name => 'New Name' } }, {}, :expected_status => 404)
       end
 
-      it "should ignore the sis id parameter" do
-        json = api_call(:put, "#{@path_prefix}/#{@section.id}", @path_params.merge(:id => @section.to_param), { :course_section =>
-          { :name => 'New Name', :start_at => '2012-01-01T01:00Z', :end_at => '2012-07-01T01:00Z', :sis_section_id => 'NEWSIS' }})
-        expect(json['id']).to eq @section.id
-        @section.reload
-        expect(@section.name).to eq 'New Name'
-        expect(@section.sis_source_id).to eq 'SISsy'
+      it 'should return unauthorized when changing sis attributes' do
+        json = api_call(:put, "#{@path_prefix}/#{@section.id}", @path_params.merge(id: @section.to_param),
+                        {course_section: {name: 'New Name', sis_section_id: 'NEWSIS'}}, {}, expected_status: 401)
+        expect(json['message']).to eq 'You must have manage_sis permission to update sis attributes'
+        expect(@section.reload.sis_source_id).to eq 'SISsy'
       end
     end
 
@@ -493,6 +510,27 @@ describe SectionsController, type: :request do
     context "as admin" do
       before do
         site_admin_user
+      end
+
+      it 'should set integration_id' do
+        json = api_call(:put, "#{@path_prefix}/#{@section.id}", @path_params.merge(id: @section.to_param),
+                        {course_section: {name: 'New Name', sis_section_id: 'NEWSIS', integration_id: 'int_id1'}})
+        expect(json['id']).to eq @section.id
+        @section.reload
+        expect(@section.name).to eq 'New Name'
+        expect(@section.integration_id).to eq 'int_id1'
+        expect(@section.sis_source_id).to eq 'NEWSIS'
+      end
+
+      it 'should not change sis attributes when not passed' do
+        CourseSection.where(id: @section).update_all(integration_id: 'int_id_OG')
+        json = api_call(:put, "#{@path_prefix}/#{@section.id}", @path_params.merge(id: @section.to_param),
+                        {course_section: {name: 'New Name', integration_id: 'int1'}})
+        expect(json['id']).to eq @section.id
+        @section.reload
+        expect(@section.name).to eq 'New Name'
+        expect(@section.integration_id).to eq 'int1'
+        expect(@section.sis_source_id).to eq 'SISsy'
       end
 
       it "should set the sis id" do

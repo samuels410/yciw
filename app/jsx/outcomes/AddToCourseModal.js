@@ -19,10 +19,10 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import I18n from 'i18n!outcomes'
-import Button from 'instructure-ui/lib/components/Button'
-import Modal, { ModalHeader, ModalBody, ModalFooter } from 'instructure-ui/lib/components/Modal'
-import Heading from 'instructure-ui/lib/components/Heading'
-import Typography from 'instructure-ui/lib/components/Typography'
+import Button from '@instructure/ui-core/lib/components/Button'
+import Modal, { ModalHeader, ModalBody, ModalFooter } from '@instructure/ui-core/lib/components/Modal'
+import Heading from '@instructure/ui-core/lib/components/Heading'
+import Text from '@instructure/ui-core/lib/components/Text'
 
 export default React.createClass({
     proptypes: {
@@ -37,23 +37,24 @@ export default React.createClass({
     render: function () {
       return (
         <Modal
-          isOpen={this.state.isOpen}
+          open={this.state.isOpen}
           shouldCloseOnOverlayClick={true}
-          onRequestClose={this.close}
+          onDismiss={this.close}
           transition="fade"
           size="auto"
           label={I18n.t("Modal Dialog: Add to course")}
           closeButtonLabel={I18n.t("Close")}
+          applicationElement={() => document.getElementById('application')}
           ref={this._saveModal}
           onEntering={this._fixFocus}
           onClose={this.props.onClose}
-          onReady={this.props.onReady}
+          onOpen={this.props.onReady}
         >
           <ModalHeader>
             <Heading>{I18n.t("Add to course...")}</Heading>
           </ModalHeader>
           <ModalBody>
-            <Typography lineHeight="double">Add to course functionality goes here...</Typography>
+            <Text lineHeight="double">Add to course functionality goes here...</Text>
           </ModalBody>
           <ModalFooter>
             <Button onClick={this.close} variant="primary">{I18n.t("Close")}</Button>

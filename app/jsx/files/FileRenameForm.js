@@ -18,9 +18,9 @@
 
 import React from 'react'
 import FileRenameForm from 'compiled/react_files/components/FileRenameForm'
-import Modal from 'jsx/shared/modal'
-import ModalContent from 'jsx/shared/modal-content'
-import ModalButtons from 'jsx/shared/modal-buttons'
+import Modal from '../shared/modal'
+import ModalContent from '../shared/modal-content'
+import ModalButtons from '../shared/modal-buttons'
 import I18n from 'i18n!file_rename_form'
 
   FileRenameForm.buildContent = function () {
@@ -140,21 +140,6 @@ import I18n from 'i18n!file_rename_form'
           title={I18n.t('Copy')}
           onRequestClose={this.props.onClose}
           closeWithX={this.props.closeWithX}
-          style={{
-            overlay : {
-              backgroundColor: 'rgba(0,0,0,0.5)'
-            },
-            content : {
-              position: 'static',
-              top: '0',
-              left: '0',
-              right: 'auto',
-              bottom: 'auto',
-              borderRadius: '0',
-              border: 'none',
-              padding: '0'
-            }
-          }}
         >
           <ModalContent>
             {this.buildContent()}

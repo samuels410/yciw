@@ -15,12 +15,17 @@
 // You should have received a copy of the GNU Affero General Public License along
 // with this program. If not, see <http://www.gnu.org/licenses/>.
 
+import {isRTL} from 'jsx/shared/helpers/rtlHelper'
+
 const loadedStylesheets = {}
 
 const brandableCss = {
+
   getCssVariant () {
-    const contrast = window.ENV.use_high_contrast ? '_high_contrast' : '_normal_contrast'
-    return `new_styles${contrast}`
+    const variant = window.ENV.use_responsive_layout ? 'responsive_layout' : 'new_styles'
+    const contrast = window.ENV.use_high_contrast ? 'high_contrast' : 'normal_contrast'
+    const rtl = isRTL() ? '_rtl' : ''
+    return `${variant}_${contrast}${rtl}`
   },
 
   // combinedChecksum should be like '09f833ef7a'
@@ -29,7 +34,7 @@ const brandableCss = {
   urlFor (bundleName, {combinedChecksum, includesNoVariables}) {
     const brandAndVariant = includesNoVariables
       ? 'no_variables'
-      : (window.ENV.active_brand_config ? `${window.ENV.active_brand_config}/` : '') + brandableCss.getCssVariant()
+      : brandableCss.getCssVariant()
 
     return [
       window.ENV.ASSET_HOST || '',

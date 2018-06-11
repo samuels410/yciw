@@ -33,7 +33,7 @@ module Lti
       all: [WEBHOOK_GRANT_ALL_CAPABILITY].freeze,
       quiz_submitted: %w(vnd.instructure.webhooks.root_account.quiz_submitted
                          vnd.instructure.webhooks.assignment.quiz_submitted).freeze,
-      grade_changed: %w(vnd.instructure.webhooks.root_account.grade_changed).freeze,
+      grade_change: %w(vnd.instructure.webhooks.root_account.grade_change).freeze,
       attachment_created: %w(vnd.instructure.webhooks.root_account.attachment_created
                              vnd.instructure.webhooks.assignment.attachment_created).freeze,
       submission_created: %w(vnd.instructure.webhooks.root_account.submission_created
@@ -74,7 +74,9 @@ module Lti
     RESTRICTED_SERVICES = [
       *Lti::OriginalityReportsApiController::SERVICE_DEFINITIONS,
       *Lti::SubscriptionsApiController::SERVICE_DEFINITIONS,
-      *Lti::SubmissionsApiController::SERVICE_DEFINITIONS
+      *Lti::SubmissionsApiController::SERVICE_DEFINITIONS,
+      *Lti::UsersApiController::SERVICE_DEFINITIONS,
+      *Lti::AssignmentsApiController::SERVICE_DEFINITIONS
     ].freeze
 
     class << self

@@ -36,7 +36,7 @@ class EnrollmentsFromUserList
   end
 
   def process(list)
-    raise ArgumentError, "Must provide a UserList or Array (of user ids)" unless list.is_a?(UserList) || list.is_a?(Array)
+    raise ArgumentError, "Must provide a UserList or Array (of user tokens)" unless list.is_a?(UserList) || list.is_a?(Array)
     @enrollments = []
     @user_ids_to_touch = []
 
@@ -46,23 +46,24 @@ class EnrollmentsFromUserList
         list.users
       else
         # list of user ids
-        User.where(:id => list).to_a
+        User.from_tokens(list)
       end
     users.each_slice(Setting.get('enrollments_from_user_list_batch_size', 50).to_i) do |users|
       @course.transaction do
-        Enrollment.suspend_callbacks(:update_cached_due_dates) do
+        Enrollment.suspend_callbacks(:set_update_cached_due_dates) do
           users.each { |user| enroll_user(user) }
         end
       end
     end
     if !@enrollments.empty?
       @course.transaction do
-        DueDateCacher.recompute_course(@course)
+        user_ids = @enrollments.map(&:user_id).uniq
+        DueDateCacher.recompute_users_for_course(user_ids, @course)
       end
     end
     @user_ids_to_touch.uniq.each_slice(100) do |user_ids|
       User.where(id: user_ids).touch_all
-      User.where(id: UserObserver.where(user_id: user_ids).select(:observer_id)).touch_all
+      User.where(id: UserObservationLink.where(user_id: user_ids).select(:observer_id)).touch_all
     end
 
     @enrollments

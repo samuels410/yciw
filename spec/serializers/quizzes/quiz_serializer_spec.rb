@@ -60,7 +60,7 @@ describe Quizzes::QuizSerializer do
     :allowed_attempts, :one_question_at_a_time, :question_count,
     :points_possible, :cant_go_back, :access_code, :ip_filter, :due_at,
     :lock_at, :unlock_at, :published, :show_correct_answers_at,
-    :hide_correct_answers_at, :show_correct_answers_last_attempt, :question_types,
+    :hide_correct_answers_at, :show_correct_answers_last_attempt,
     :has_access_code
   ].each do |attribute|
 
@@ -77,6 +77,7 @@ describe Quizzes::QuizSerializer do
     expect(json[:html_url]).to eq 'http://example.com/courses/1/quizzes/1'
   end
 
+
   describe "description" do
     it "serializes description with a formatter if given" do
       @serializer = quiz_serializer(
@@ -84,11 +85,29 @@ describe Quizzes::QuizSerializer do
           description_formatter: -> (_) {return "description from formatter"}
         }
       )
-      @json = @serializer.as_json[:quiz]
+      json = @serializer.as_json[:quiz]
 
       expect(json[:description]).to eq "description from formatter"
     end
+
     it "returns desctiption otherwise" do
+      expect(json[:description]).to eq quiz.description
+    end
+  end
+
+  describe "description for locked quiz" do
+    it "returns an empty string for students" do
+      serializer = quiz_serializer()
+      allow(serializer).to receive('quiz_locked_for_user?').and_return true
+      allow(serializer).to receive('user_is_student?').and_return true
+      json = serializer.as_json[:quiz]
+      expect(json[:description]).to eq ''
+    end
+
+    it "returns description for non-students" do
+      json = serializer.as_json[:quiz]
+      allow(serializer).to receive('quiz_locked_for_user?').and_return true
+      allow(serializer).to receive('user_is_student?').and_return false
       expect(json[:description]).to eq quiz.description
     end
   end
@@ -123,7 +142,7 @@ describe Quizzes::QuizSerializer do
 
   it "doesn't include the section count unless the user can grade" do
     result = true
-    allow(quiz).to receive(:grants_right?).with(@user, @session, :grade) { result }
+    allow(quiz).to receive(:grants_right?).with(@user, :grade) { result }
     expect(serializer.as_json[:quiz]).to have_key :section_count
 
     result = false
@@ -148,21 +167,21 @@ describe Quizzes::QuizSerializer do
 
   describe "access code" do
     it "is included if the user can grade" do
-      expect(quiz).to receive(:grants_right?).with(@user, @session, :grade).
+      expect(quiz).to receive(:grants_right?).with(@user, :grade).
         at_least(:once).and_return true
       expect(serializer.as_json[:quiz]).to have_key :access_code
     end
 
     it "is included if the user can manage" do
-      expect(quiz).to receive(:grants_right?).with(@user, @session, :manage).
+      expect(quiz).to receive(:grants_right?).with(@user, :manage).
         at_least(:once).and_return true
       expect(serializer.as_json[:quiz]).to have_key :access_code
     end
 
     it "is not included if the user can't grade or manage" do
-      expect(quiz).to receive(:grants_right?).with(@user, @session, :grade).
+      expect(quiz).to receive(:grants_right?).with(@user, :grade).
         at_least(:once).and_return false
-      expect(quiz).to receive(:grants_right?).with(@user, @session, :manage).
+      expect(quiz).to receive(:grants_right?).with(@user, :manage).
         at_least(:once).and_return false
       expect(serializer.as_json[:quiz]).not_to have_key :access_code
     end
@@ -204,7 +223,6 @@ describe Quizzes::QuizSerializer do
     end
 
     it "doesn't if skip_lock_tests is on" do
-      expect(quiz).to receive(:locked_for?).never
       json = quiz_serializer({
         serializer_options: {
           skip_lock_tests: true
@@ -221,12 +239,12 @@ describe Quizzes::QuizSerializer do
     it "is not present unless the user can manage the quiz's assignments" do
       manage_result = true
       allow(quiz).to receive(:grants_right?).with(any_args).and_call_original
-      allow(quiz).to receive(:grants_right?).with(@user, session, :manage) { manage_result }
+      allow(quiz).to receive(:grants_right?).with(@user, :manage) { manage_result }
       expect(serializer.filter(serializer.class._attributes)).to include :unpublishable
 
       manage_result = false
-      expect(quiz).to receive(:grants_right?).with(@user, session, :grade).at_least(:once).and_return false
-      quiz.grants_right?(@user, session, :manage)
+      expect(quiz).to receive(:grants_right?).with(@user, :grade).at_least(:once).and_return false
+      quiz.grants_right?(@user, :manage)
       expect(serializer.filter(serializer.class._attributes)).not_to include :unpublishable
     end
   end
@@ -600,4 +618,15 @@ describe Quizzes::QuizSerializer do
 
   end
 
+  it "includes anonymous_submisions if quiz is a survey quiz" do
+    expect(json.keys).to_not include(:anonymous_submissions)
+
+    quiz.update_attributes(:quiz_type => "survey", :anonymous_submissions => true)
+    new_json = quiz_serializer.as_json[:quiz]
+    expect(new_json[:anonymous_submissions]).to eq true
+  end
+
+  it "does not include question_types" do
+    expect(json.keys).not_to include(:question_types)
+  end
 end

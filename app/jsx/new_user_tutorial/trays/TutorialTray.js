@@ -19,9 +19,9 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import I18n from 'i18n!new_user_tutorial'
-import plainStoreShape from 'jsx/shared/proptypes/plainStoreShape'
-import Tray from 'instructure-ui/lib/components/Tray'
-import Button from 'instructure-ui/lib/components/Button'
+import plainStoreShape from '../../shared/proptypes/plainStoreShape'
+import Tray from '@instructure/ui-core/lib/components/Tray'
+import Button from '@instructure/ui-core/lib/components/Button'
 import NewUserTutorialToggleButton from '../NewUserTutorialToggleButton'
 import ConfirmEndTutorialDialog from '../ConfirmEndTutorialDialog'
 
@@ -91,14 +91,13 @@ class TutorialTray extends React.Component {
     return (
       <Tray
         label={this.props.label}
-        isDismissable={false}
-        isOpen={!this.state.isCollapsed}
+        open={!this.state.isCollapsed}
         placement="end"
         zIndex="100"
-        onEntering={this.handleEntering}
         onExiting={this.handleExiting}
         onEntered={this.handleEntering}
-        trapFocus
+        shouldContainFocus
+        applicationElement={() => document.getElementById('application')}
       >
         <div className="NewUserTutorialTray">
           <div className="NewUserTutorialTray__ButtonContainer">

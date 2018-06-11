@@ -20,11 +20,11 @@ import I18n from 'i18n!external_tools'
 import $ from 'jquery'
 import React from 'react'
 import PropTypes from 'prop-types'
-import ConfigurationFormManual from 'jsx/external_apps/components/ConfigurationFormManual'
-import ConfigurationFormUrl from 'jsx/external_apps/components/ConfigurationFormUrl'
-import ConfigurationFormXml from 'jsx/external_apps/components/ConfigurationFormXml'
-import ConfigurationFormLti2 from 'jsx/external_apps/components/ConfigurationFormLti2'
-import ConfigurationTypeSelector from 'jsx/external_apps/components/ConfigurationTypeSelector'
+import ConfigurationFormManual from '../../external_apps/components/ConfigurationFormManual'
+import ConfigurationFormUrl from '../../external_apps/components/ConfigurationFormUrl'
+import ConfigurationFormXml from '../../external_apps/components/ConfigurationFormXml'
+import ConfigurationFormLti2 from '../../external_apps/components/ConfigurationFormLti2'
+import ConfigurationTypeSelector from '../../external_apps/components/ConfigurationTypeSelector'
 
 export default React.createClass({
     displayName: 'ConfigurationForm',
@@ -33,7 +33,10 @@ export default React.createClass({
       configurationType: PropTypes.string,
       handleSubmit: PropTypes.func.isRequired,
       tool: PropTypes.object.isRequired,
-      showConfigurationSelector: PropTypes.bool
+      showConfigurationSelector: PropTypes.bool,
+      hideComponent: PropTypes.bool,
+      membershipServiceFeatureFlagEnabled: PropTypes.bool,
+      children: PropTypes.node
     },
 
     getDefaultProps : function() {
@@ -56,6 +59,7 @@ export default React.createClass({
         _state.configUrl = this.props.tool.config_url;
         _state.xml = this.props.tool.xml;
         _state.registrationUrl = this.props.tool.registration_url;
+        _state.allow_membership_service_access = this.props.tool.allow_membership_service_access;
       }
 
       return _state;
@@ -63,35 +67,37 @@ export default React.createClass({
 
     defaultState() {
       return {
-        configurationType         : this.props.configurationType,
-        showConfigurationSelector : this.props.showConfigurationSelector,
-        name                      : '',
-        consumerKey               : '',
-        sharedSecret              : '',
-        url                       : '',
-        domain                    : '',
-        privacy_level             : '',
-        customFields              : {},
-        description               : '',
-        configUrl                 : '',
-        registrationUrl           : '',
-        xml                       : ''
+        configurationType               : this.props.configurationType,
+        showConfigurationSelector       : this.props.showConfigurationSelector,
+        name                            : '',
+        consumerKey                     : '',
+        sharedSecret                    : '',
+        url                             : '',
+        domain                          : '',
+        privacy_level                   : '',
+        customFields                    : {},
+        description                     : '',
+        configUrl                       : '',
+        registrationUrl                 : '',
+        xml                             : '',
+        allow_membership_service_access : false
       };
     },
 
     reset() {
       this.setState({
-        name                      : '',
-        consumerKey               : '',
-        sharedSecret              : '',
-        url                       : '',
-        domain                    : '',
-        privacy_level             : '',
-        customFields              : {},
-        description               : '',
-        configUrl                 : '',
-        registrationUrl           : '',
-        xml                       : ''
+        name                            : '',
+        consumerKey                     : '',
+        sharedSecret                    : '',
+        url                             : '',
+        domain                          : '',
+        privacy_level                   : '',
+        customFields                    : {},
+        description                     : '',
+        configUrl                       : '',
+        registrationUrl                 : '',
+        xml                             : '',
+        allow_membership_service_access : false
       });
     },
 
@@ -124,7 +130,7 @@ export default React.createClass({
           const newObj = {};
 
           for (const prop in obj) {
-            if (obj[prop]) {
+            if (obj[prop] && typeof obj[prop] === 'string') {
               newObj[prop] = obj[prop].trim();
             } else {
               newObj[prop] = obj[prop];
@@ -134,10 +140,17 @@ export default React.createClass({
         };
         var formData = form.getFormData();
         formData = strip(formData);
-        this.props.handleSubmit(this.state.configurationType, formData);
+        this.props.handleSubmit(this.state.configurationType, formData, e);
       } else {
         $('.ReactModal__Overlay').animate({ scrollTop: 0 }, 'slow');
       }
+    },
+
+    iframeTarget() {
+      if (this.state.configurationType === 'lti2') {
+        return 'lti2_registration_frame';
+      }
+      return null;
     },
 
     form() {
@@ -152,7 +165,9 @@ export default React.createClass({
             domain={this.state.domain}
             privacyLevel={this.state.privacy_level}
             customFields={this.state.customFields}
-            description={this.state.description} />
+            description={this.state.description}
+            allowMembershipServiceAccess={this.state.allow_membership_service_access}
+            membershipServiceFeatureFlagEnabled={this.props.membershipServiceFeatureFlagEnabled} />
         );
       }
 
@@ -163,7 +178,9 @@ export default React.createClass({
             name={this.state.name}
             consumerKey={this.state.consumerKey}
             sharedSecret={this.state.sharedSecret}
-            configUrl={this.state.configUrl} />
+            configUrl={this.state.configUrl}
+            allowMembershipServiceAccess={this.state.allow_membership_service_access}
+            membershipServiceFeatureFlagEnabled={this.props.membershipServiceFeatureFlagEnabled} />
         );
       }
 
@@ -174,7 +191,9 @@ export default React.createClass({
             name={this.state.name}
             consumerKey={this.state.consumerKey}
             sharedSecret={this.state.sharedSecret}
-            xml={this.state.xml} />
+            xml={this.state.xml}
+            allowMembershipServiceAccess={this.state.allow_membership_service_access}
+            membershipServiceFeatureFlagEnabled={this.props.membershipServiceFeatureFlagEnabled} />
         );
       }
 
@@ -208,20 +227,27 @@ export default React.createClass({
 
     render() {
       return (
-        <form className="ConfigurationForm" onSubmit={this.handleSubmit}>
-          <div className="ReactModal__Body">
-            {this.configurationTypeSelector()}
-            <div className="formFields">
-              {this.form()}
+        <div style={this.props.hideComponent ? {display: 'none'} : {}}>
+          <form
+            className="ConfigurationForm"
+            onSubmit={this.handleSubmit}
+            target={this.iframeTarget()}
+            method="post"
+            action={ENV.LTI_LAUNCH_URL}>
+            <div className="ReactModal__Body">
+              {this.configurationTypeSelector()}
+              <div className="formFields">
+                {this.form()}
+              </div>
             </div>
-          </div>
-          <div className="ReactModal__Footer">
-            <div className="ReactModal__Footer-Actions">
-              {this.props.children}
-              {this.submitButton()}
+            <div className="ReactModal__Footer">
+              <div className="ReactModal__Footer-Actions">
+                {this.props.children}
+                {this.submitButton()}
+              </div>
             </div>
-          </div>
-        </form>
+          </form>
+        </div>
       )
     }
   });

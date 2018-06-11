@@ -47,6 +47,60 @@ describe "Files API", type: :request do
     course_with_teacher(:active_all => true, :user => user_with_pseudonym)
   end
 
+  describe 'create file' do
+    def call_course_create_file
+      api_call(:post, "/api/v1/courses/#{@course.id}/files", {
+        controller: 'courses',
+        action: 'create_file',
+        course_id: @course.id,
+        format: 'json',
+        name: 'test_file.png',
+        size: '12345',
+        content_type: 'image/png',
+        success_include: ['avatar'],
+        no_redirect: 'true'
+      })
+    end
+
+    it 'includes success_include param in file create url' do
+      local_storage!
+      json = call_course_create_file
+      query = Rack::Utils.parse_nested_query(URI(json['upload_url']).query)
+      expect(query['success_include']).to include('avatar')
+    end
+
+    it 'includes include param in create success url' do
+      s3_storage!
+      json = call_course_create_file
+      query = Rack::Utils.parse_nested_query(URI(json['upload_params']['success_url']).query)
+      expect(query['include']).to include('avatar')
+    end
+
+    it 'includes include capture param in inst_fs token' do
+      secret = 'secret'
+      allow(InstFS).to receive(:enabled?).and_return true
+      allow(InstFS).to receive(:jwt_secret).and_return(secret)
+      json = call_course_create_file
+      query = Rack::Utils.parse_nested_query(URI(json['upload_url']).query)
+      payload = Canvas::Security.decode_jwt(query['token'], [secret])
+      expect(payload['capture_params']['include']).to include('avatar')
+    end
+  end
+
+  describe 'api_create' do
+    it 'includes success_include as include when redirecting' do
+      local_storage!
+      a = attachment_model(workflow_state: :unattached)
+      params = a.ajax_upload_params(@pseudonym, '/url', '/s3')[:upload_params]
+      raw_api_call(:post, "/files_api", params.merge({
+        controller: 'files',
+        action: 'api_create',
+        success_include: ['avatar'],
+      }))
+      expect(redirect_params['include']).to include('avatar')
+    end
+  end
+
   describe "api_create_success" do
     before :once do
       @attachment = Attachment.new
@@ -70,9 +124,18 @@ describe "Files API", type: :request do
       @attachment.save!
     end
 
-    def call_create_success
-      api_call(:post, "/api/v1/files/#{@attachment.id}/create_success?uuid=#{@attachment.uuid}",
-               {:controller => "files", :action => "api_create_success", :format => "json", :id => @attachment.to_param, :uuid => @attachment.uuid})
+    def call_create_success(params = {})
+      api_call(
+        :post,
+        "/api/v1/files/#{@attachment.id}/create_success?uuid=#{@attachment.uuid}",
+        params.merge({
+          controller: "files",
+          action: "api_create_success",
+          format: "json",
+          id: @attachment.to_param,
+          uuid: @attachment.uuid
+        })
+      )
     end
 
     it "should set the attachment to available (local storage)" do
@@ -82,6 +145,7 @@ describe "Files API", type: :request do
       @attachment.reload
       expect(json).to eq({
         'id' => @attachment.id,
+        'uuid' => @attachment.uuid,
         'folder_id' => @attachment.folder_id,
         'url' => file_download_url(@attachment, :verifier => @attachment.uuid, :download => '1', :download_frd => '1'),
         'content-type' => 'text/plain',
@@ -100,7 +164,9 @@ describe "Files API", type: :request do
         'thumbnail_url' => nil,
         'modified_at' => @attachment.modified_at.as_json,
         'mime_class' => @attachment.mime_class,
-        'media_entry_id' => @attachment.media_entry_id
+        'media_entry_id' => @attachment.media_entry_id,
+        'canvadoc_session_url' => nil,
+        'crocodoc_session_url' => nil
       })
       expect(@attachment.file_state).to eq 'available'
     end
@@ -117,6 +183,7 @@ describe "Files API", type: :request do
       @attachment.reload
       expect(json).to eq({
         'id' => @attachment.id,
+        'uuid' => @attachment.uuid,
         'folder_id' => @attachment.folder_id,
         'url' => file_download_url(@attachment, :verifier => @attachment.uuid, :download => '1', :download_frd => '1'),
         'content-type' => 'text/plain',
@@ -135,7 +202,9 @@ describe "Files API", type: :request do
         'thumbnail_url' => nil,
         'modified_at' => @attachment.modified_at.as_json,
         'mime_class' => @attachment.mime_class,
-        'media_entry_id' => @attachment.media_entry_id
+        'media_entry_id' => @attachment.media_entry_id,
+        'canvadoc_session_url' => nil,
+        'crocodoc_session_url' => nil
       })
       expect(@attachment.reload.file_state).to eq 'available'
     end
@@ -192,6 +261,24 @@ describe "Files API", type: :request do
       assert_status(400)
     end
 
+    it "includes canvadoc preview url if requested and available" do
+      allow(Canvadocs).to receive(:enabled?).and_return(true)
+      allow(Canvadoc).to receive(:mime_types).and_return([@attachment.content_type])
+      local_storage!
+      upload_data
+      json = call_create_success(include: ['preview_url'])
+      expect(json['preview_url']).to include('/api/v1/canvadoc_session')
+    end
+
+    it "includes nil preview url if requested and not available" do
+      allow(Canvadocs).to receive(:enabled?).and_return(false)
+      allow(Canvadoc).to receive(:mime_types).and_return([])
+      local_storage!
+      upload_data
+      json = call_create_success(include: ['preview_url'])
+      expect(json['preview_url']).to be_nil
+    end
+
     context "upload success context callback" do
       before do
         allow_any_instance_of(Course).to receive(:file_upload_success_callback)
@@ -214,6 +301,116 @@ describe "Files API", type: :request do
       end
     end
 
+  end
+
+  describe "api_capture" do
+    let(:secret) { 'secret' }
+    let(:jwt) { Canvas::Security.create_jwt({}, nil, secret) }
+    let(:folder) { Folder.root_folders(@course).first }
+    let(:instfs_uuid) { 123 }
+
+    # default set of params; parts will be overridden per test
+    let(:base_params) do
+      {
+        user_id: @user.id,
+        context_type: Course,
+        context_id: @course.id,
+        size: 2.megabytes,
+        name: 'test.txt',
+        content_type: 'text/plain',
+        instfs_uuid: instfs_uuid,
+        quota_exempt: true,
+        folder_id: folder.id,
+        on_duplicate: 'overwrite',
+        token: jwt,
+      }
+    end
+
+    before do
+      allow(InstFS).to receive(:enabled?).and_return true
+      allow(InstFS).to receive(:jwt_secret).and_return(secret)
+    end
+
+    it "is not available without the InstFS feature" do
+      allow(InstFS).to receive(:enabled?).and_return false
+      raw_api_call(:post, "/api/v1/files/capture?#{base_params.to_query}",
+                   base_params.merge(controller: "files", action: "api_capture", format: "json"))
+      assert_status(404)
+    end
+
+    it "requires a service JWT to authorize" do
+      params = base_params.merge(token: nil)
+      raw_api_call(:post, "/api/v1/files/capture?#{params.to_query}",
+                   params.merge(controller: "files", action: "api_capture", format: "json"))
+      assert_status(403)
+    end
+
+    it "checks quota unless exempt" do
+      @course.storage_quota = base_params[:size] / 2
+      @course.save!
+      params = base_params.merge(quota_exempt: false)
+      json = api_call(:post, "/api/v1/files/capture?#{params.to_query}",
+                      params.merge(controller: "files", action: "api_capture", format: "json"),
+                      expected_status: 400)
+      expect(json['message']).to eq "file size exceeds quota limits"
+    end
+
+    it "bypasses quota when exempt" do
+      @course.storage_quota = base_params[:size] / 2
+      @course.save!
+      params = base_params.merge(quota_exempt: true)
+      raw_api_call(:post, "/api/v1/files/capture?#{params.to_query}",
+                   params.merge(controller: "files", action: "api_capture", format: "json"))
+      assert_status(201)
+    end
+
+    it "creates file locked when usage rights required" do
+      @course.enable_feature!(:usage_rights_required)
+      api_call(:post, "/api/v1/files/capture?#{base_params.to_query}",
+               base_params.merge(controller: "files", action: "api_capture", format: "json"))
+      attachment = Attachment.where(instfs_uuid: instfs_uuid).first
+      expect(attachment.locked).to be true
+    end
+
+    it "creates file unlocked when usage rights not required" do
+      @course.disable_feature!(:usage_rights_required)
+      api_call(:post, "/api/v1/files/capture?#{base_params.to_query}",
+               base_params.merge(controller: "files", action: "api_capture", format: "json"))
+      attachment = Attachment.where(instfs_uuid: instfs_uuid).first
+      expect(attachment.locked).to be false
+    end
+
+    it "handle duplicate paths according to on_duplicate" do
+      params = base_params.merge(on_duplicate: 'overwrite')
+      existing = Attachment.create!(
+        context: @course,
+        folder: folder,
+        uploaded_data: StringIO.new('existing'),
+        filename: params[:name],
+        display_name: params[:name],
+      )
+      api_call(:post, "/api/v1/files/capture?#{base_params.to_query}",
+               base_params.merge(controller: "files", action: "api_capture", format: "json"))
+      existing.reload
+      attachment = Attachment.where(instfs_uuid: instfs_uuid).first
+      expect(attachment.display_name).to eq params[:name]
+      expect(existing).to be_deleted
+      expect(existing.replacement_attachment).to eq attachment
+    end
+
+    it "redirect has preview_url include if requested" do
+      raw_api_call(
+        :post,
+        "/api/v1/files/capture?#{base_params.to_query}",
+        base_params.merge(
+          controller: "files",
+          action: "api_capture",
+          format: "json",
+          include: ["preview_url"]
+        )
+      )
+      expect(redirect_params['include']).to include('preview_url')
+    end
   end
 
   describe "#index" do
@@ -285,11 +482,13 @@ describe "Files API", type: :request do
       @f1.locked = true
       @f1.save!
       course_with_student_logged_in(:course => @course)
-      raw_api_call(:get, @files_path, @files_path_options, {}, {}, :expected_status => 401)
+      raw_api_call(:get, @files_path, @files_path_options, {}, {})
+      assert_status(401)
     end
 
     it "should 404 for no folder found" do
-      raw_api_call(:get, "/api/v1/folders/0/files", @files_path_options.merge(:id => "0"), {}, {}, :expected_status => 404)
+      raw_api_call(:get, "/api/v1/folders/0/files", @files_path_options.merge(:id => "0"), {}, {})
+      assert_status(404)
     end
 
     it "should paginate" do
@@ -404,6 +603,11 @@ describe "Files API", type: :request do
           "html_url" => "http://www.example.com/about/#{@user.id}"
         }
       ]
+    end
+
+    it "includes an instfs_uuid if ?include[]-ed" do
+      json = api_call(:get, @files_path, @files_path_options.merge(include: ['instfs_uuid']))
+      expect(json[0].key? "instfs_uuid").to be true
     end
 
   end
@@ -610,6 +814,7 @@ describe "Files API", type: :request do
       json = api_call(:get, @file_path, @file_path_options, {})
       expect(json).to eq({
               'id' => @att.id,
+              'uuid' => @att.uuid,
               'folder_id' => @att.folder_id,
               'url' => file_download_url(@att, :verifier => @att.uuid, :download => '1', :download_frd => '1'),
               'content-type' => "image/png",
@@ -624,7 +829,7 @@ describe "Files API", type: :request do
               'hidden_for_user' => false,
               'created_at' => @att.created_at.as_json,
               'updated_at' => @att.updated_at.as_json,
-              'thumbnail_url' => @att.thumbnail_url,
+              'thumbnail_url' => thumbnail_image_url(@att, @att.uuid, host: 'www.example.com'),
               'modified_at' => @att.modified_at.as_json,
               'mime_class' => @att.mime_class,
               'media_entry_id' => @att.media_entry_id

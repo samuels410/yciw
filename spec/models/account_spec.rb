@@ -19,6 +19,11 @@
 require File.expand_path(File.dirname(__FILE__) + '/../sharding_spec_helper.rb')
 
 describe Account do
+  include_examples "outcome import context examples"
+
+  describe 'relationships' do
+    it { is_expected.to have_many(:feature_flags) }
+  end
 
   it "should provide a list of courses" do
     expect{ Account.new.courses }.not_to raise_error
@@ -141,6 +146,27 @@ describe Account do
         expect(@account.fast_all_courses({:term => EnrollmentTerm.where(sis_source_id: "T003").first}).map(&:sis_source_id).sort).to eq ["C005", "C006", "C007", "C008", "C009", "C005S", "C006S", "C007S", "C008S", "C009S"].sort
       end
 
+      it "counting cross-listed courses only if requested" do
+        def check_account(account, include_crosslisted_courses, expected_length, expected_course_names)
+          actual_courses = account.fast_all_courses({ :include_crosslisted_courses => include_crosslisted_courses })
+          expect(actual_courses.length).to eq expected_length
+          actual_course_names = actual_courses.pluck("name").sort!
+          expect(actual_course_names).to eq(expected_course_names.sort!)
+        end
+
+        root_account = Account.create!
+        account_a = Account.create!({ :root_account => root_account })
+        account_b = Account.create!({ :root_account => root_account })
+        course_a = course_factory({ :account => account_a, :course_name => "course_a" })
+        course_b = course_factory({ :account => account_b, :course_name => "course_b" })
+        course_b.course_sections.create!({ :name => "section_b" })
+        course_b.course_sections.first.crosslist_to_course(course_a)
+        check_account(account_a, false, 1, ["course_a"])
+        check_account(account_a, true, 1, ["course_a"])
+        check_account(account_b, false, 1, ["course_b"])
+        check_account(account_b, true, 2, ["course_a", "course_b"])
+      end
+
       it "should list associated nonenrollmentless courses" do
         expect(@account.fast_all_courses({:hide_enrollmentless_courses => true}).map(&:sis_source_id).sort).to eq ["C001", "C005", "C007", "C001S", "C005S", "C007S"].sort #C007 probably shouldn't be here, cause the enrollment section is deleted, but we kinda want to minimize database traffic
       end
@@ -216,7 +242,7 @@ describe Account do
       expect(@a.service_enabled?(:twitter)).to be_truthy
     end
 
-    it "should use + and - by default when setting service availabilty" do
+    it "should use + and - by default when setting service availability" do
       @a.enable_service(:twitter)
       expect(@a.service_enabled?(:twitter)).to be_truthy
       expect(@a.allowed_services).to be_nil
@@ -420,6 +446,11 @@ describe Account do
       expect(root_account.closest_turnitin_pledge).not_to be_empty
       expect(sub_account.closest_turnitin_pledge).not_to be_empty
     end
+
+    it 'uses the default message if pledge is nil or empty' do
+      account = Account.create!(turnitin_pledge: '')
+      expect(account.closest_turnitin_pledge).to eq 'This assignment submission is my own, original work'
+    end
   end
 
   it "should make a default enrollment term if necessary" do
@@ -474,7 +505,7 @@ describe Account do
       hash[k][:user] = user
     end
 
-    limited_access = [ :read, :read_as_admin, :manage, :update, :delete, :read_outcomes ]
+    limited_access = [ :read, :read_as_admin, :manage, :update, :delete, :read_outcomes, :read_terms ]
     conditional_access = RoleOverride.permissions.select { |_, v| v[:account_allows] }.map(&:first)
     full_access = RoleOverride.permissions.keys +
                   limited_access - conditional_access +
@@ -505,8 +536,8 @@ describe Account do
     hash.each do |k, v|
       next unless k == :site_admin || k == :root
       account = v[:account]
-      expect(account.check_policy(hash[:sub][:admin])).to match_array(k == :site_admin ? [:read_global_outcomes] : [:read_outcomes])
-      expect(account.check_policy(hash[:sub][:user])).to match_array(k == :site_admin ? [:read_global_outcomes] : [:read_outcomes])
+      expect(account.check_policy(hash[:sub][:admin])).to match_array(k == :site_admin ? [:read_global_outcomes] : [:read_outcomes, :read_terms])
+      expect(account.check_policy(hash[:sub][:user])).to match_array(k == :site_admin ? [:read_global_outcomes] : [:read_outcomes, :read_terms])
     end
     hash.each do |k, v|
       next if k == :site_admin || k == :root
@@ -550,8 +581,8 @@ describe Account do
     hash.each do |k, v|
       next unless k == :site_admin || k == :root
       account = v[:account]
-      expect(account.check_policy(hash[:sub][:admin])).to match_array(k == :site_admin ? [:read_global_outcomes] : [:read_outcomes])
-      expect(account.check_policy(hash[:sub][:user])).to match_array(k == :site_admin ? [:read_global_outcomes] : [:read_outcomes])
+      expect(account.check_policy(hash[:sub][:admin])).to match_array(k == :site_admin ? [:read_global_outcomes] : [:read_outcomes, :read_terms])
+      expect(account.check_policy(hash[:sub][:user])).to match_array(k == :site_admin ? [:read_global_outcomes] : [:read_outcomes, :read_terms])
     end
     hash.each do |k, v|
       next if k == :site_admin || k == :root
@@ -586,6 +617,7 @@ describe Account do
   it "does not allow create_courses even to admins on site admin and children" do
     a = Account.site_admin
     a.settings = { :no_enrollments_can_create_courses => true }
+    a.save!
     manual = a.manually_created_courses_account
     user_factory
 
@@ -658,15 +690,17 @@ describe Account do
     expect(account.group_categories.to_a).to eq [category2]
   end
 
-  it "all_group_categories should include deleted categories" do
+  it "group_categories.active should not include deleted categories" do
     account = Account.default
-    expect(account.all_group_categories.count).to eq 0
-    category1 = account.group_categories.create(:name => 'category 1')
-    category2 = account.group_categories.create(:name => 'category 2')
-    expect(account.all_group_categories.count).to eq 2
+    expect(account.group_categories.active.count).to eq 0
+    category1 = account.group_categories.create(name: 'category 1')
+    category2 = account.group_categories.create(name: 'category 2')
+    expect(account.group_categories.active.count).to eq 2
     category1.destroy
     account.reload
+    expect(account.group_categories.active.count).to eq 1
     expect(account.all_group_categories.count).to eq 2
+    expect(account.group_categories.active.to_a).to eq [category2]
   end
 
   it "should return correct values for login_handle_name_with_inference" do
@@ -751,6 +785,15 @@ describe Account do
 
       tabs = account.tabs_available(nil)
       expect(tabs.map{|t| t[:id] }).not_to be_include(Account::TAB_DEVELOPER_KEYS)
+    end
+
+    it "should include 'Developer Keys' for the admin users of a sub account" do
+      account = Account.create!
+      account.enable_feature!(:developer_key_management)
+      sub_account = Account.create!(parent_account: account)
+      admin = account_admin_user(:account => sub_account)
+      tabs = sub_account.tabs_available(admin)
+      expect(tabs.map{|t| t[:id] }).to include(Account::TAB_DEVELOPER_KEYS)
     end
 
     it "should not include 'Developer Keys' for non-site_admin accounts" do
@@ -1264,8 +1307,15 @@ describe Account do
     end
   end
 
+  it 'should set allow_sis_import if root_account' do
+    account = Account.create!
+    expect(account.allow_sis_import).to eq true
+    sub = account.sub_accounts.create!
+    expect(sub.allow_sis_import).to eq false
+  end
+
   describe "#ensure_defaults" do
-    it "assigns an lti_guid postfixed by canvas-lms" do``
+    it "assigns an lti_guid postfixed by canvas-lms" do
       account = Account.new
       account.uuid = '12345'
       account.ensure_defaults
@@ -1497,6 +1547,11 @@ describe Account do
         expect(account_model.terms_required?).to eq true
       end
 
+      it "returns false by default for new accounts" do
+        TermsOfService.skip_automatic_terms_creation = false
+        expect(account_model.terms_required?).to eq false
+      end
+
       it "returns false if Setting is false" do
         Setting.set(:terms_required, "false")
         expect(account_model.terms_required?).to eq false
@@ -1575,20 +1630,13 @@ describe Account do
       @account = Account.create!
     end
 
-    it "is true if hijack_crocodoc_sessions is true and new annotations are enabled" do
+    it "is true if hijack_crocodoc_sessions is true" do
       allow(Canvadocs).to receive(:hijack_crocodoc_sessions?).and_return(true)
-      @account.enable_feature!(:new_annotations)
       expect(@account).to be_migrate_to_canvadocs
     end
 
-    it "is false if new annotations are enabled but hijack_crocodoc_sessions is false" do
+    it "is false if hijack_crocodoc_sessions is false" do
       allow(Canvadocs).to receive(:hijack_crocodoc_sessions?).and_return(false)
-      @account.enable_feature!(:new_annotations)
-      expect(@account).not_to be_migrate_to_canvadocs
-    end
-
-    it "is false if hijack_crocodoc_sessions is true but new annotations are disabled" do
-      allow(Canvadocs).to receive(:hijack_crocodoc_sessions?).and_return(true)
       expect(@account).not_to be_migrate_to_canvadocs
     end
   end
@@ -1601,5 +1649,55 @@ describe Account do
     non_cached.save!
 
     expect(Account.default.settings[:blah]).to eq true
+  end
+
+  it_behaves_like 'a learning outcome context'
+
+  describe "#default_dashboard_view" do
+    before(:once) do
+      @account = Account.create!
+    end
+
+    it "should be nil by default" do
+      expect(@account.default_dashboard_view).to be_nil
+    end
+
+    it "should update if view is valid" do
+      @account.default_dashboard_view = "activity"
+      @account.save!
+
+      expect(@account.default_dashboard_view).to eq "activity"
+    end
+
+    it "should not update if view is invalid" do
+      @account.default_dashboard_view = "junk"
+      expect { @account.save! }.not_to change { @account.default_dashboard_view }
+    end
+
+    it "should not contain planner if feature is disabled" do
+      @account.default_dashboard_view = "planner"
+      @account.save!
+      expect(@account.default_dashboard_view).not_to eq "planner"
+    end
+
+    it "should contain planner if feature is enabled" do
+      @account.enable_feature! :student_planner
+      @account.default_dashboard_view = "planner"
+      @account.save!
+      expect(@account.default_dashboard_view).to eq "planner"
+    end
+  end
+
+  it "should only send new account user notifications to active admins" do
+    active_admin = account_admin_user(:active_all => true)
+    deleted_admin = account_admin_user(:active_all => true)
+    deleted_admin.account_users.destroy_all
+    n = Notification.create(:name => "New Account User", :category => "TestImmediately")
+    [active_admin, deleted_admin].each do |u|
+      NotificationPolicy.create(:notification => n, :communication_channel => u.communication_channel, :frequency => "immediately")
+    end
+    user_factory(:active_all => true)
+    au = Account.default.account_users.create!(:user => @user)
+    expect(au.messages_sent[n.name].map(&:user)).to match_array [active_admin, @user]
   end
 end

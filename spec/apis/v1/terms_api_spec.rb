@@ -35,6 +35,15 @@ describe TermsApiController, type: :request do
       json['enrollment_terms']
     end
 
+    it "should show sis_batch_id" do
+      @term2.destroy
+      sis_batch = @term1.root_account.sis_batches.create
+      @term1.sis_batch_id = sis_batch.id
+      @term1.save!
+      json = get_terms
+      expect(json.first['sis_import_id']). to eq sis_batch.id
+    end
+
     describe "filtering by state" do
       before :once do
         @term2.destroy
@@ -144,10 +153,11 @@ describe TermsApiController, type: :request do
         expect_terms_index_401
       end
 
-      it "should require root domain auth" do
+      it "should allow sub-account admins to view" do
         subaccount = @account.sub_accounts.create!(name: 'subaccount')
         account_admin_user(account: subaccount)
-        expect_terms_index_401
+        res = get_terms.map{ |t| t['name'] }
+        expect(res).to match_array([@term1.name, @term2.name])
       end
 
       it "should require context to be root_account and error nicely" do
@@ -159,6 +169,13 @@ describe TermsApiController, type: :request do
                         {},
                         { expected_status: 400 })
         expect(json['message']).to eq 'Terms only belong to root_accounts.'
+      end
+
+      it "should allow account admins without manage_account_settings to view" do
+        role = custom_account_role("custom")
+        account_admin_user_with_role_changes(account: @account, role: role)
+        res = get_terms.map{ |t| t['name'] }
+        expect(res).to match_array([@term1.name, @term2.name])
       end
     end
   end

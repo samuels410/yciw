@@ -20,12 +20,14 @@ define [
   'Backbone'
   'jquery'
   'underscore'
-  'compiled/collections/ParticipantCollection'
-  'compiled/collections/DiscussionEntriesCollection'
-  'compiled/models/Assignment'
-  'compiled/models/DateGroup'
+  'jsx/shared/FlashAlert'
+  '../collections/ParticipantCollection'
+  '../collections/DiscussionEntriesCollection'
+  '../models/Assignment'
+  '../models/DateGroup'
   'str/stripTags'
-], (I18n, Backbone, $, _, ParticipantCollection, DiscussionEntriesCollection, Assignment, DateGroup, stripTags) ->
+  'axios'
+], (I18n, Backbone, $, _, { showFlashError } , ParticipantCollection, DiscussionEntriesCollection, Assignment, DateGroup, stripTags, axios) ->
 
   class DiscussionTopic extends Backbone.Model
     resourceName: 'discussion_topics'
@@ -105,6 +107,11 @@ define [
         isRootTopic: @isRootTopic()
       delete json.assignment.rubric if json.assignment
       json
+
+    duplicate: (context_type, context_id, callback) =>
+      axios.post("/api/v1/#{context_type}s/#{context_id}/discussion_topics/#{@id}/duplicate", {})
+        .then(callback)
+        .catch(showFlashError(I18n.t("Could not duplicate discussion")))
 
     toView: ->
       _.extend @toJSON(),

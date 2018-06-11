@@ -16,7 +16,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import GradeFormatHelper from 'jsx/gradebook/shared/helpers/GradeFormatHelper';
+import GradeFormatHelper from '../../../gradebook/shared/helpers/GradeFormatHelper';
 
 const DEFAULT_GRADE = '';
 
@@ -42,7 +42,7 @@ export default {
       }
       case 'pass_fail': {
         const grade = score ? 'complete' : 'incomplete';
-        return GradeFormatHelper.formatGrade(grade, { gradingType: 'completion' });
+        return GradeFormatHelper.formatGrade(grade, { gradingType });
       }
       case 'letter_grade': {
         if (!gradingScheme || !assignment.points_possible) {

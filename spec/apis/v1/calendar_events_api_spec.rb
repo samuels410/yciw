@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2011 - 2014 Instructure, Inc.
+# Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
 #
@@ -187,6 +187,21 @@ describe CalendarEventsApiController, type: :request do
         :context_codes => contexts, :start_date => '2012-01-01', :end_date => '2012-01-02', :per_page => '25'})
       slot = json.detect { |thing| thing['appointment_group_id'] == group1.id }
       expect(slot).not_to be_nil
+    end
+
+    it 'accepts a more compact comma-separated list of appointment group ids' do
+      ags = (0..2).map do |x|
+        ag = AppointmentGroup.create!(:title => "ag #{x}", :new_appointments => [["2012-01-01 12:00:00", "2012-01-01 13:00:00"]], :contexts => [@course])
+        ag.publish!
+        ag
+      end
+      ag_id_list = ags.map(&:id).join(',')
+      student_in_course :active_all => true
+      json = api_call(:get, "/api/v1/calendar_events?start_date=2012-01-01&end_date=2012-01-02&per_page=25&appointment_group_ids=" + ag_id_list, {
+        :controller => 'calendar_events_api', :action => 'index', :format => 'json',
+        :appointment_group_ids => ag_id_list, :start_date => '2012-01-01', :end_date => '2012-01-02', :per_page => '25'})
+      expect(json.map{|e| e['appointment_group_id']}).to match_array(ags.map(&:id))
+      expect(response.headers['Link']).to include 'appointment_group_ids='
     end
 
     it 'should fail with unauthorized if provided a context the user cannot access' do
@@ -535,23 +550,36 @@ describe CalendarEventsApiController, type: :request do
         end
       end
 
-      it "returns signups in multi-context appointment groups in the student's context" do
-        @course1 = course_with_teacher(:active_all => true).course
-        @course2 = course_with_teacher(:user => @teacher, :active_all => true).course
-        @student1 = student_in_course(:course => @course1, :active_all => true).user
-        @student2 = student_in_course(:course => @course2, :active_all => true).user
-        ag = AppointmentGroup.create!(:title => "something", :participants_per_appointment => 1,
-                                      :new_appointments => [["2012-01-01 12:00:00", "2012-01-01 13:00:00"],
-                                                            ["2012-01-01 13:00:00", "2012-01-01 14:00:00"]],
-                                      :contexts => [@course1, @course2])
-        ag.appointments.first.reserve_for(@student1, @teacher)
-        ag.appointments.last.reserve_for(@student2, @teacher)
-        json = api_call_as_user(@teacher, :get, "/api/v1/calendar_events?start_date=2012-01-01&end_date=2012-01-31&context_codes[]=#{@course1.asset_string}&context_codes[]=#{@course2.asset_string}", {
-          :controller => 'calendar_events_api', :action => 'index', :format => 'json',
-          :context_codes => [@course1.asset_string, @course2.asset_string], :start_date => '2012-01-01', :end_date => '2012-01-31'})
-        expect(json.map { |event| [event['context_code'], event['child_events'][0]['user']['id']] }).to match_array(
-          [[@course1.asset_string, @student1.id], [@course2.asset_string, @student2.id]]
-        )
+      context "multi-context appointment group with shared teacher" do
+        before :once do
+          @course1 = course_with_teacher(:active_all => true).course
+          @course2 = course_with_teacher(:user => @teacher, :active_all => true).course
+          @student1 = student_in_course(:course => @course1, :active_all => true).user
+          @student2 = student_in_course(:course => @course2, :active_all => true).user
+          @ag = AppointmentGroup.create!(:title => "something", :participants_per_appointment => 1,
+                                        :new_appointments => [["2012-01-01 12:00:00", "2012-01-01 13:00:00"],
+                                                              ["2012-01-01 13:00:00", "2012-01-01 14:00:00"]],
+                                        :contexts => [@course1, @course2])
+          @ag.publish
+          @ag.appointments.first.reserve_for(@student1, @teacher)
+          @ag.appointments.last.reserve_for(@student2, @teacher)
+        end
+
+        it "returns signups in multi-context appointment groups in the student's context" do
+          json = api_call_as_user(@teacher, :get, "/api/v1/calendar_events?start_date=2012-01-01&end_date=2012-01-31&context_codes[]=#{@course1.asset_string}&context_codes[]=#{@course2.asset_string}", {
+            :controller => 'calendar_events_api', :action => 'index', :format => 'json',
+            :context_codes => [@course1.asset_string, @course2.asset_string], :start_date => '2012-01-01', :end_date => '2012-01-31'})
+          expect(json.map { |event| [event['context_code'], event['child_events'][0]['user']['id']] }).to match_array(
+            [[@course1.asset_string, @student1.id], [@course2.asset_string, @student2.id]]
+          )
+        end
+
+        it "counts other contexts' signups when calculating available_slots for students" do
+          json = api_call_as_user(@student1, :get, "/api/v1/calendar_events?start_date=2012-01-01&end_date=2012-01-31&context_codes[]=#{@ag.asset_string}", {
+            :controller => 'calendar_events_api', :action => 'index', :format => 'json',
+            :context_codes => [@ag.asset_string], :start_date => '2012-01-01', :end_date => '2012-01-31'})
+          expect(json.map { |event| event['available_slots'] }).to eq([0, 0])
+        end
       end
 
       it "excludes signups in courses the teacher isn't enrolled in" do
@@ -942,6 +970,25 @@ describe CalendarEventsApiController, type: :request do
         expect(end_result).to eq(end_at + (i + 1).weeks)
       end
 
+    end
+
+    it 'should respect recurring event limit' do
+      start_at = Time.zone.now.utc.change(hour: 0, min: 1)
+      end_at = Time.zone.now.utc.change(hour: 23)
+      api_call(:post, "/api/v1/calendar_events",
+        {:controller => 'calendar_events_api', :action => 'create', :format => 'json'},
+         {:calendar_event => {
+           :context_code => @course.asset_string,
+           :title => "ohai",
+           :start_at => start_at.iso8601,
+           :end_at => end_at.iso8601,
+           :duplicate => {
+             :count => "201",
+             :interval => "1",
+             :frequency => "weekly"
+           }
+         }})
+      assert_status(400)
     end
 
     it 'should process html content in description on create' do
@@ -2104,7 +2151,7 @@ describe CalendarEventsApiController, type: :request do
         enrollment_state: 'active',
         associated_user_id: @student.id
       )
-      @observer.user_observees.create do |uo|
+      @observer.as_observer_observation_links.create do |uo|
         uo.user_id = @student.id
       end
       @contexts = [@course.asset_string]

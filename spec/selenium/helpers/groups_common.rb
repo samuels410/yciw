@@ -181,6 +181,7 @@ module GroupsCommon
   # Used to set group_limit field manually. Assumes you are on Edit Group Set page and self-sign up is checked
   def manually_set_groupset_limit(member_limit = "2")
     replace_content(fj('input[name="group_limit"]:visible'), member_limit)
+    scroll_page_to_bottom
     fj('.btn.btn-primary[type=submit]').click
     wait_for_ajaximations
   end
@@ -198,7 +199,7 @@ module GroupsCommon
 
   # Used to enable self-signup on an already created group set by opening Edit Group Set
   def manually_enable_self_signup
-    f('.icon-settings').click
+    f('.icon-more').click
     wait_for_ajaximations
     f('.edit-category').click
     wait_for_ajaximations
@@ -207,9 +208,9 @@ module GroupsCommon
   end
 
   def open_clone_group_set_option
-    f('.icon-settings').click
+    move_to_click('.icon-more')
     wait_for_ajaximations
-    f('.clone-category').click
+    move_to_click('.clone-category')
     wait_for_ajaximations
   end
 
@@ -224,7 +225,7 @@ module GroupsCommon
   end
 
   def select_randomly_assign_students_option
-    f('.group-category-summary .icon-settings').click
+    f('.group-category-summary .icon-more').click
     wait_for_ajaximations
     f('.randomly-assign-members').click
     wait_for_ajaximations
@@ -251,8 +252,9 @@ module GroupsCommon
     wait_for_ajaximations
     ff('.edit-group-assignment')[student].click
     wait_for_ajaximations
-    click_option('.single-select', "#{@testgroup[group_destination].name}")
-    f('.set-group').click
+    click_option('.move-select .move-select__group select', "#{@testgroup[group_destination].name}")
+    wait_for_animations
+    f('.move-select button[type="submit"]').click
     wait_for_ajaximations
   end
 
@@ -270,7 +272,7 @@ module GroupsCommon
   end
 
   def manually_delete_group
-    f('.group-actions .icon-settings').click
+    f('.group-actions .icon-more').click
     wait_for_ajaximations
     f('.delete-group').click
 
@@ -279,7 +281,7 @@ module GroupsCommon
   end
 
   def delete_group
-    f(".icon-settings").click
+    f(".icon-more").click
     wait_for_animations
 
     fln('Delete').click
@@ -295,7 +297,7 @@ module GroupsCommon
   end
 
   def save_group_set
-    f('#newGroupSubmitButton').click
+    move_to_click('#newGroupSubmitButton')
     wait_for_ajaximations
   end
 
@@ -303,8 +305,13 @@ module GroupsCommon
     category = @group_category[0]
     assignment = @course.assignments.create({
       :name => "test assignment",
-      :group_category => category})
-    assignment.submit_homework(student)
+      :group_category => category
+    })
+    a = Attachment.create! context: student,
+      filename: "homework.pdf",
+      uploaded_data: StringIO.new("blah blah blah")
+    assignment.submit_homework(student, attachments: [a],
+    submission_type: "online_upload")
   end
 
   def create_group_announcement_manually(title,text)

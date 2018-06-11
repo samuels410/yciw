@@ -18,7 +18,7 @@
 define [
   'i18n!lock_btn_module'
   'jquery'
-  'compiled/fn/preventDefault'
+  '../fn/preventDefault'
   'Backbone'
   'str/htmlEscape'
   'jquery.instructure_forms'
@@ -161,8 +161,8 @@ define [
     render: ->
       return unless @isMasterCourseContent()
 
+      @$el.attr 'role', 'button'
       if(!@disabled)
-        @$el.attr 'role', 'button'
         @$el.attr 'tabindex', '0'
 
       @$el.html '<i></i><span class="lock-text screenreader-only"></span>'
@@ -215,13 +215,13 @@ define [
         buttonClass: "#{@unlockedClass} #{@disabledClass}"
         iconClass:   'icon-blueprint'
 
-
-
     renderState: (options) ->
       @reset()
       @$el.addClass options.buttonClass
       if !@disabled
         @$el.attr 'aria-pressed', options.buttonClass is @lockedClass
+      else
+        @$el.attr 'aria-disabled', true
       @$icon.attr('class', options.iconClass)
 
       @$text.html "#{htmlEscape(options.label || options.hint)}"

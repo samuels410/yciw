@@ -45,9 +45,8 @@ describe SIS::CSV::AdminImporter do
     )
     expect(AccountUser.active.count).to eq before_count
 
-    expect(importer.errors).to eq []
-    warnings = importer.warnings.map(&:last)
-    expect(warnings).to eq ["No user_id given for admin",
+    errors = importer.errors.map(&:last)
+    expect(errors).to eq ["No user_id given for admin",
                             "Invalid or unknown user_id 'invalid' for admin",
                             "Invalid account_id given for admin",
                             "Invalid role 'invalid role' for admin",
@@ -88,7 +87,7 @@ describe SIS::CSV::AdminImporter do
 
     before_count = @account.account_users.active.count
 
-    work = SIS::AdminImporter::Work.new(nil, @account, Rails.logger, [])
+    work = SIS::AdminImporter::Work.new(@account.sis_batches.create!, @account, Rails.logger)
     expect(work).to receive(:root_account_from_id).with('account2').once.and_return(account2)
     expect(SIS::AdminImporter::Work).to receive(:new).with(any_args).and_return(work)
 
@@ -97,5 +96,18 @@ describe SIS::CSV::AdminImporter do
       'U001,,AccountAdmin,active,account2'
     )
     expect(@account.account_users.active.count).to eq before_count + 1
+  end
+
+  it 'should add admins by role_id' do
+    user_with_managed_pseudonym(account: @account, sis_user_id: 'U001')
+
+    role = @sub_account.available_account_roles.first
+
+    before_count = AccountUser.active.count
+    process_csv_data_cleanly(
+      'user_id,account_id,role_id,status',
+      "U001,sub1,#{role.id.to_s},active"
+    )
+    expect(AccountUser.active.count).to eq before_count + 1
   end
 end

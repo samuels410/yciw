@@ -20,13 +20,14 @@ define [
   'i18n!profile'
   'jquery'
   'underscore'
-  'compiled/views/DialogBaseView'
-  'compiled/views/profiles/UploadFileView'
-  'compiled/views/profiles/TakePictureView'
-  'compiled/views/profiles/GravatarView'
+  '../DialogBaseView'
+  './UploadFileView'
+  './TakePictureView'
+  './GravatarView'
+  'jsx/shared/upload_file'
   'jst/profiles/avatarDialog'
   'jst/profiles/avatar'
-], (I18n, $, _, DialogBaseView, UploadFileView, TakePictureView, GravatarView, template, avatarTemplate) ->
+], (I18n, $, _, DialogBaseView, UploadFileView, TakePictureView, GravatarView, uploader, template, avatarTemplate) ->
 
   class AvatarDialogView extends DialogBaseView
 
@@ -123,7 +124,9 @@ define [
           errorReducer = (errorString, currentError) ->
             errorString += currentError.message
 
-          message = if errors.base
+          message = if _.isString(errors.base)
+            errors.base
+          else if _.isArray(errors.base)
             errors.base.reduce(errorReducer, '')
           else
             I18n.t('Your profile photo could not be uploaded. You may have exceeded your upload limit.')
@@ -131,73 +134,44 @@ define [
           $.flashError(message)
           @enableSelectButton()
 
-    preflightRequest: ->
+    preflightRequest: =>
+      # not using uploader.uploadFile because need to have completeUpload also
+      # wait on @getImage in imageUpdateAvatar
       $.post('/files/pending', {
         name: 'profile.jpg'
         format: 'text'
         no_redirect: true
-        'attachment[duplicate_handling]': 'overwrite'
+        'attachment[on_duplicate]': 'overwrite'
         'attachment[folder_id]': ENV.folder_id
         'attachment[filename]': 'profile.jpg'
         'attachment[context_code]': 'user_'+ENV.current_user_id
-      })
+      }).fail((xhr) => @handleErrorUpdating(xhr.responseText))
 
     onPreflight: (image, response) =>
-      @handleErrorUpdating(response[0].responseText)
-      @image = image
-      preflightResponse = response[0]
-      @postAvatar(preflightResponse).then(_.partial(@onPostAvatar, preflightResponse))
+      preflight = response[0]
+      uploader.completeUpload(preflight, image, filename: 'profile.jpg', includeAvatar: true)
+        .then(@onUploadSuccess)
+        .catch((xhr) => @handleErrorUpdating(xhr.responseText))
 
-
-
-    postAvatar: (preflightResponse) =>
-      image = @image
-      req   = new FormData
-
-      delete @image
-
-      ###
-      xsslint xssable.receiver.whitelist req
-      ###
-      req.append(k, v) for k, v of preflightResponse.upload_params
-      req.append(preflightResponse.file_param, image, 'profile.jpg')
-      dataType = if preflightResponse.success_url then 'xml' else 'json'
-      $.ajax(preflightResponse.upload_url, {
-        contentType: false
-        data: req
-        dataType: dataType
-        processData: false
-        type: 'POST'
-        error: (xhr) => @handleErrorUpdating(xhr.responseText)
-      })
-
-    onPostAvatar: (preflightResponse, postAvatarResponse) =>
-      if preflightResponse.success_url
-        @s3Success(preflightResponse, postAvatarResponse).then(@onS3Success)
-      else
-        @waitAndSaveUserAvatar(postAvatarResponse.avatar.token, postAvatarResponse.avatar.url)
-
-    s3Success: (preflightResponse, s3Response) =>
-      $s3 = $(s3Response)
-      $.getJSON(preflightResponse.success_url, {
-        bucket: $s3.find('Bucket').text()
-        key:    $s3.find('Key').text()
-        etag:   $s3.find('ETag').text()
-      })
-
-    onS3Success: (response) =>
-      @waitAndSaveUserAvatar(response.avatar.token, response.avatar.url)
+    onUploadSuccess: (response) =>
+      @waitAndSaveUserAvatar(response.avatar.token, response.avatar.url, 0)
 
     # need to wait for the avatar to get processed by background jobs before
     # it will save properly.
-    waitAndSaveUserAvatar: (token, url) =>
+    # wait 5 seconds and then error out
+    waitAndSaveUserAvatar: (token, url, count) =>
       $.getJSON('/api/v1/users/self/avatars').then((avatarList) =>
         processedAvatar = _.find(avatarList, (avatar) -> avatar.token == token)
         if processedAvatar
           @saveUserAvatar(token, url)
+        else if count < 50
+          window.setTimeout((=> @waitAndSaveUserAvatar(token, url, count + 1)), 100)
         else
-          # throttle this a little bit
-          window.setTimeout((=> @waitAndSaveUserAvatar(token, url)), 100)
+          @handleErrorUpdating(JSON.stringify({
+            errors: { 
+              base: I18n.t("Profile photo save failed too many times")
+            }
+          }))
       )
 
     saveUserAvatar: (token, url) =>
@@ -246,4 +220,4 @@ define [
     toJSON: ->
       hasFileReader = !!window.FileReader
       hasUserMedia = !!(navigator.getUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia || navigator.webkitGetUserMedia)
-      { hasFileReader: hasFileReader, hasGetUserMedia: hasUserMedia }
+      { hasFileReader: hasFileReader, hasGetUserMedia: hasUserMedia, enableGravatar: ENV.enable_gravatar }

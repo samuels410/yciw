@@ -13,13 +13,15 @@
   {{/if}}
   <td role="gridcell">
     <div class="inline-block">
-      <a id="{{page_id}}" aria-label="{{title}}" class="al-trigger al-trigger-gray" href="#" role="button" data-popup-within="#application">
-        <i class="icon-settings"></i><i class="icon-mini-arrow-down"></i>
+      <a id="{{page_id}}" aria-label="{{#t}}Settings for {{title}}{{/t}}" class="al-trigger al-trigger-gray" href="#" role="button" data-popup-within="#application">
+        <i class="icon-more" aria-hidden="true"></i>
         <span class="screenreader-only">{{#t 'menu.settings'}}Settings{{/t}}</span>
       </a>
       <ul class="al-options">
         {{#unless cannot_edit_by_master_course}}
           <li><a href="#" class="icon-edit edit-menu-item" title="{{#t}}Edit{{/t}}">{{#t}}Edit{{/t}}</a></li>
+        {{/unless}}
+        {{#unless cannot_delete_by_master_course}}
           <li>
             <a href="#" class="icon-trash delete-menu-item{{#unless deletable}} disabled{{/unless}}"
                title="{{#t}}Delete {{title}}{{/t}}" {{#unless deletable}}aria-disabled="true"{{/unless}}>
@@ -27,15 +29,27 @@
             </a>
           </li>
         {{/unless}}
+        {{#if front_page}}
+          <li>
+            <a href="#" class="unset-as-front-page-menu-item{{#unless published}} disabled{{/unless}}"
+               title="{{#t}}Remove as Front Page{{/t}}" {{#unless published}}aria-disabled="true"{{/unless}}>
+                <i class="icon-remove-bookmark" aria-hidden="true">
+                 {{#t}}Remove as Front Page{{/t}}
+                </i>
+            </a>
+          </li>
+        {{/if}}
         {{#unless front_page}}
           <li>
-            <a href="#" class="icon-document use-as-front-page-menu-item{{#unless published}} disabled{{/unless}}"
+            <a href="#" class="use-as-front-page-menu-item{{#unless published}} disabled{{/unless}}"
                title="{{#t}}Use as Front Page{{/t}}" {{#unless published}}aria-disabled="true"{{/unless}}>
-               {{#t}}Use as Front Page{{/t}}
+                <i class="icon-bookmark" aria-hidden="true">
+                  {{#t}}Use as Front Page{{/t}}
+                </i>
             </a>
           </li>
         {{/unless}}
-        {{#if CAN.MANAGE}}
+        {{#if CAN.DUPLICATE}}
           <li>
             <a href="#" class="icon-copy-course duplicate-wiki-page" title="{{#t}}Duplicate{{/t}}">
               {{#t}}Duplicate{{/t}}
