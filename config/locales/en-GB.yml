@@ -649,8 +649,6 @@ en-GB:
       title: "Confirm delete %{user} from %{account}"
     consortium_user_search:
       find_user_by: "Find a user by login/email"
-      find_user_by_label: Login/email
-    consortium_users:
       find_user_by_label: Login/Email
     consortium_users:
       user_search_label: "User search"
@@ -3562,7 +3560,8 @@ en-GB:
       calendars: Calendars
       feed_dialog_title: "Calendar feed"
       feed_title: "Course Calendar Atom feed"
-      links: feed: "click here to view the feed"
+      links:
+        feed: "click here to view the feed"
       page_title_header: Calendar
       skip_to_calendar: "Skip to calendar"
       undated_items: Undated
@@ -4510,7 +4509,8 @@ en-GB:
         view_user_groups: "View user groups"
     roster_user:
       completed_enrollment: "completed *%{completed_at}*"
-      confirm: conclude: "Are you sure you want to conclude this enrolment?"
+      confirm:
+        conclude: "Are you sure you want to conclude this enrolment?"
         conclude_student: "Are you sure you want to conclude this student's enrolment?"
         delete_enrollment: "Are you sure you want to delete this enrolment?"
       enrolled_as: "Enrolled as a %{enrollment_type}"
@@ -10172,7 +10172,8 @@ en-GB:
         only_one_folder: "Can't set folder path and folder ID"
       over_quota: "file size exceeds quota"
     auth:
-      api: bad_request_message: bad_request
+      api:
+        bad_request_message: bad_request
         bad_request_messagee: bad_request
         bad_request_status: bad_request
         not_found_message: not_found

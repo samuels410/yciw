@@ -4508,7 +4508,8 @@ en-AU:
         view_user_groups: "View User Groups"
     roster_user:
       completed_enrollment: "completed *%{completed_at}*"
-      confirm: conclude: "Are you sure you want to conclude this enrolment?"
+      confirm:
+        conclude: "Are you sure you want to conclude this enrolment?"
         conclude_student: "Are you sure you want to conclude this student's enrolment?"
         delete_enrollment: "Are you sure you want to delete this enrolment?"
       enrolled_as: "Enrolled as a %{enrollment_type}"
@@ -10168,7 +10169,8 @@ en-AU:
         only_one_folder: "Can't set folder path and folder id"
       over_quota: "file size exceeds quota"
     auth:
-      api: bad_request_message: bad_request
+      api:
+        bad_request_message: bad_request
         bad_request_messagee: bad_request
         bad_request_status: bad_request
         not_found_message: not_found
