@@ -128,7 +128,7 @@ class Login::CanvasController < ApplicationController
   protected
 
   def validate_auth_type
-    @domain_root_account.authentication_providers.where(auth_type: params[:controller].sub(%r{^login/}, '')).active.take!
+    #@domain_root_account.authentication_providers.where(auth_type: params[:controller].sub(%r{^login/}, '')).active.take!
   end
 
   def unsuccessful_login(message)

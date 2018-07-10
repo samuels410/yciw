@@ -7,7 +7,7 @@ set :scm,     :git
 set :repo_url, 'https://github.com/samuels410/yciw.git'
 
 set :user,    'sysadmin'
-set :passenger_user, 'canvasuser'
+set :passenger_user, 'www-data'
 set :use_sudo,      true
 set :passenger_restart_with_sudo, true
 set :pty, true

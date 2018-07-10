@@ -47,7 +47,7 @@ module SIS
       i.courses_to_touch_ids.to_a.in_groups_of(1000, false) do |batch|
         courses = Course.where(id: batch)
         courses.touch_all
-        courses.each(&:recache_grade_distribution)
+        #courses.each(&:recache_grade_distribution)
       end
       i.courses_to_recache_due_dates.to_a.in_groups_of(1000, false) do |batch|
         batch.each do |course_id, user_ids|
