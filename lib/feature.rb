@@ -101,6 +101,7 @@ class Feature
   def self.register(feature_hash)
     @features ||= {}
     feature_hash.each do |feature_name, attrs|
+      puts "feature_name: #{feature_name}"
       validate_attrs(attrs)
       next if attrs[:development] && production_environment?
       feature = feature_name.to_s
@@ -568,7 +569,7 @@ END
       display_name: -> { I18n.t('Rich Content Editor Sidebar Enhancements') },
       description: -> { I18n.t('Use new rich content editor with enhanced sidebar everywhere') },
       applies_to: 'RootAccount',
-      stastatete: 'hidden',
+      state: 'hidden',
       beta: false,
       development: false,
       root_opt_in: false

@@ -4,7 +4,7 @@
 # You can define all roles on a single server, or split them:
 
 server '104.236.64.67', user: 'sysadmin', roles: %w{app db web}, port: 1001
-set :branch, 'merge-04-10-17'
+set :branch, 'merge-11-06-2018'
 # server 'example.com', user: 'deploy', roles: %w{app web}, other_property: :other_value
 # server 'db.example.com', user: 'deploy', roles: %w{db}
 

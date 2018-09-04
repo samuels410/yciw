@@ -66,6 +66,8 @@ docker-compose.local.*
 /spec/javascripts/compiled/
 /config/build.js
 /.idea/*
+.idea/yciw.iml
+.idea/.rakeTasks
 
 # sub-packages
 /packages/*/node_modules
