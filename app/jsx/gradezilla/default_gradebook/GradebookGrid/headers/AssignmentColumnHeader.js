@@ -18,26 +18,24 @@
 
 import React from 'react';
 import { arrayOf, bool, func, instanceOf, number, shape, string } from 'prop-types';
-import IconMoreSolid from 'instructure-icons/lib/Solid/IconMoreSolid';
-import Button from '@instructure/ui-core/lib/components/Button';
-import Grid, { GridCol, GridRow } from '@instructure/ui-core/lib/components/Grid';
-import Link from '@instructure/ui-core/lib/components/Link';
-import {
+import IconMoreSolid from '@instructure/ui-icons/lib/Solid/IconMore';
+import Button from '@instructure/ui-buttons/lib/components/Button';
+import Grid, { GridCol, GridRow } from '@instructure/ui-layout/lib/components/Grid';
+import Link from '@instructure/ui-elements/lib/components/Link';
+import Menu, {
   MenuItem,
-  MenuItemFlyout,
   MenuItemGroup,
   MenuItemSeparator
-} from '@instructure/ui-core/lib/components/Menu';
-import PopoverMenu from '@instructure/ui-core/lib/components/PopoverMenu';
-import Text from '@instructure/ui-core/lib/components/Text';
+} from '@instructure/ui-menu/lib/components/Menu';
+import Text from '@instructure/ui-elements/lib/components/Text';
 import 'message_students';
 import I18n from 'i18n!gradebook';
-import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent';
+import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent';
 import MessageStudentsWhoHelper from '../../../shared/helpers/messageStudentsWhoHelper'
 import ColumnHeader from './ColumnHeader'
 
 function SecondaryDetailLine (props) {
-  const anonymous = props.assignment.anonymousGrading;
+  const anonymous = props.assignment.anonymizeStudents;
   const unpublished = !props.assignment.published;
 
   if (anonymous || unpublished) {
@@ -76,7 +74,7 @@ function SecondaryDetailLine (props) {
 
 SecondaryDetailLine.propTypes = {
   assignment: shape({
-    anonymousGrading: bool.isRequired,
+    anonymizeStudents: bool.isRequired,
     muted: bool.isRequired,
     pointsPossible: number,
     published: bool.isRequired
@@ -87,7 +85,7 @@ export default class AssignmentColumnHeader extends ColumnHeader {
   static propTypes = {
     ...ColumnHeader.propTypes,
     assignment: shape({
-      anonymousGrading: bool.isRequired,
+      anonymizeStudents: bool.isRequired,
       courseId: string.isRequired,
       htmlUrl: string.isRequired,
       id: string.isRequired,
@@ -140,7 +138,7 @@ export default class AssignmentColumnHeader extends ColumnHeader {
       disabled: bool.isRequired,
       onSelect: func.isRequired
     }).isRequired,
-    onMenuClose: func.isRequired,
+    onMenuDismiss: func.isRequired,
     showUnpostedMenuItem: bool.isRequired
   };
 
@@ -158,8 +156,14 @@ export default class AssignmentColumnHeader extends ColumnHeader {
   reuploadSubmissions = () => { this.invokeAndSkipFocus(this.props.reuploadSubmissionsAction) };
 
   invokeAndSkipFocus (action) {
-    this.setState({ skipFocusOnClose: true });
-    action.onSelect(this.focusAtEnd);
+    // this is because the onToggle handler in ColumnHeader.js is going to get
+    // called synchronously, before the SetState takes effect, and it needs to
+    // know to skipFocusOnClose
+    this.state.skipFocusOnClose = true
+
+    this.setState({ skipFocusOnClose: true }, () =>
+      action.onSelect(this.focusAtEnd)
+    );
   }
 
   focusAtStart = () => { this.assignmentLink.focus() };
@@ -224,8 +228,8 @@ export default class AssignmentColumnHeader extends ColumnHeader {
     const optionsTitle = I18n.t('%{name} Options', { name: this.props.assignment.name });
 
     return (
-      <Button buttonRef={this.bindOptionsMenuTrigger} size="small" variant="icon">
-        <IconMoreSolid className="Gradebook__ColumnHeaderActionIcon" title={optionsTitle} />
+      <Button buttonRef={ref => this.optionsMenuTrigger = ref} size="small" variant="icon" icon={IconMoreSolid}>
+        <ScreenReaderContent>{optionsTitle}</ScreenReaderContent>
       </Button>
     );
   }
@@ -237,14 +241,14 @@ export default class AssignmentColumnHeader extends ColumnHeader {
     const selectedSortSetting = sortBySetting.isSortColumn && sortBySetting.settingKey;
 
     return (
-      <PopoverMenu
+      <Menu
         contentRef={this.bindOptionsMenuContent}
         shouldFocusTriggerOnClose={false}
         trigger={this.renderTrigger()}
         onToggle={this.onToggle}
-        onClose={this.props.onMenuClose}
+        onDismiss={this.props.onMenuDismiss}
       >
-        <MenuItemFlyout contentRef={this.bindSortByMenuContent} label={I18n.t('Sort by')}>
+        <Menu contentRef={this.bindSortByMenuContent} label={I18n.t('Sort by')}>
           <MenuItemGroup label={<ScreenReaderContent>{I18n.t('Sort by')}</ScreenReaderContent>}>
             <MenuItem
               selected={selectedSortSetting === 'grade' && sortBySetting.direction === 'ascending'}
@@ -289,7 +293,7 @@ export default class AssignmentColumnHeader extends ColumnHeader {
                 </MenuItem>
             }
           </MenuItemGroup>
-        </MenuItemFlyout>
+        </Menu>
 
         <MenuItem
           disabled={!this.props.submissionsLoaded}
@@ -325,7 +329,7 @@ export default class AssignmentColumnHeader extends ColumnHeader {
 
         {
           !this.props.enterGradesAsSetting.hidden && (
-            <MenuItemFlyout contentRef={this.bindEnterGradesAsMenuContent} label={I18n.t('Enter Grades as')}>
+            <Menu contentRef={this.bindEnterGradesAsMenuContent} label={I18n.t('Enter Grades as')}>
               <MenuItemGroup
                 label={<ScreenReaderContent>{I18n.t('Enter Grades as')}</ScreenReaderContent>}
                 onSelect={this.onEnterGradesAsSettingSelect}
@@ -347,7 +351,7 @@ export default class AssignmentColumnHeader extends ColumnHeader {
                   )
                 }
               </MenuItemGroup>
-            </MenuItemFlyout>
+            </Menu>
           )
         }
 
@@ -371,7 +375,7 @@ export default class AssignmentColumnHeader extends ColumnHeader {
             <span data-menu-item-id="reupload-submissions">{I18n.t('Re-Upload Submissions')}</span>
           </MenuItem>
         }
-      </PopoverMenu>
+      </Menu>
     );
   }
 

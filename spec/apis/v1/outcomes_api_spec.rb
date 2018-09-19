@@ -47,6 +47,9 @@ describe "Outcomes API", type: :request do
       "description"        => presets[:description]        || outcome.description,
       "assessed"           => presets[:assessed]           || outcome.assessed?,
       "calculation_method" => presets[:calculation_method] || outcome.calculation_method,
+      "mastery_points"     => outcome.mastery_points,
+      "points_possible"    => outcome.points_possible,
+      "ratings"            => outcome.rubric_criterion[:ratings].map(&:stringify_keys)
     }
 
     retval['has_updateable_rubrics'] = if presets[:has_updateable_rubrics].nil?
@@ -155,7 +158,7 @@ describe "Outcomes API", type: :request do
                      :action => 'show',
                      :id => @outcome.id.to_s,
                      :format => 'json')
-        expect(response).to be_success
+        expect(response).to be_successful
       end
 
       it "should require read permission" do
@@ -178,7 +181,7 @@ describe "Outcomes API", type: :request do
                      :action => 'show',
                      :id => @outcome.id.to_s,
                      :format => 'json')
-        expect(response).to be_success
+        expect(response).to be_successful
       end
 
       it "should still require a user for global outcomes" do
@@ -220,7 +223,10 @@ describe "Outcomes API", type: :request do
           "can_edit" => true,
           "has_updateable_rubrics" => false,
           "description" => @outcome.description,
-          "assessed" => false
+          "assessed" => false,
+          "mastery_points" => @outcome.mastery_points,
+          "points_possible" => @outcome.points_possible,
+          "ratings" => @outcome.rubric_criterion[:ratings].map(&:stringify_keys)
         })
       end
 
@@ -413,7 +419,10 @@ describe "Outcomes API", type: :request do
           "can_edit" => true,
           "has_updateable_rubrics" => false,
           "description" => "New Description",
-          "assessed" => false
+          "assessed" => false,
+          "mastery_points" => @outcome.mastery_points,
+          "points_possible" => @outcome.points_possible,
+          "ratings" => @outcome.rubric_criterion[:ratings].map(&:stringify_keys)
         })
       end
 

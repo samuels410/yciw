@@ -550,7 +550,8 @@ class ContextModuleItemsApiController < ApplicationController
     else
       assignment_ids = response[:body]['assignments'].map {|a| a['assignment_id'].try(&:to_i) }
       # assignment occurs in delayed job, may not be fully visible to user until job completes
-      assignments = @context.assignments.published.where(id: assignment_ids)
+      assignments = @context.assignments.published.where(id: assignment_ids).
+        preload(Api::V1::Assignment::PRELOADS)
 
       Assignment.preload_context_module_tags(assignments)
 
@@ -604,6 +605,7 @@ class ContextModuleItemsApiController < ApplicationController
     if authorized_action(@context, @current_user, :read)
       get_module_item
       @item.context_module_action(@current_user, :done)
+      sync_planner_completion(@item.content, @current_user, true) if planner_enabled?
       render :json => { :message => t('OK') }
     end
   end
@@ -614,6 +616,7 @@ class ContextModuleItemsApiController < ApplicationController
       if (progression = @item.progression_for_user(@current_user))
         progression.uncomplete_requirement(params[:id].to_i)
         progression.evaluate
+        sync_planner_completion(@item.content, @current_user, false) if planner_enabled?
       end
       render :json => { :message => t('OK') }
     end
@@ -655,7 +658,7 @@ class ContextModuleItemsApiController < ApplicationController
 
       # assemble a sequence of content tags in the course
       # (break ties on module position by module id)
-      tag_ids = @context.sequential_module_item_ids & @context.module_items_visible_to(@current_user).reorder(nil).pluck(:id)
+      tag_ids = @context.sequential_module_item_ids & Shackles.activate(:slave) { @context.module_items_visible_to(@current_user).reorder(nil).pluck(:id) }
 
       # find content tags to include
       tag_indices = []

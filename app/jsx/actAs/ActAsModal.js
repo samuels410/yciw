@@ -16,35 +16,37 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import React from 'react'
+import PropTypes from 'prop-types';
+
+import React from 'react';
 import keycode from 'keycode'
 import I18n from 'i18n!act_as'
 
-import Modal, {ModalHeader, ModalBody} from '@instructure/ui-core/lib/components/Modal'
-import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent'
-import Container from '@instructure/ui-core/lib/components/Container'
-import Text from '@instructure/ui-core/lib/components/Text'
-import Button from '@instructure/ui-core/lib/components/Button'
-import Avatar from '@instructure/ui-core/lib/components/Avatar'
-import Spinner from '@instructure/ui-core/lib/components/Spinner'
-import Table from '@instructure/ui-core/lib/components/Table'
+import Modal, {ModalBody} from '../shared/components/InstuiModal'
+import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
+import View from '@instructure/ui-layout/lib/components/View'
+import Text from '@instructure/ui-elements/lib/components/Text'
+import Button from '@instructure/ui-buttons/lib/components/Button'
+import Avatar from '@instructure/ui-elements/lib/components/Avatar'
+import Spinner from '@instructure/ui-elements/lib/components/Spinner'
+import Table from '@instructure/ui-elements/lib/components/Table'
 
 import ActAsMask from './ActAsMask'
 import ActAsPanda from './ActAsPanda'
 
 export default class ActAsModal extends React.Component {
   static propTypes = {
-    user: React.PropTypes.shape({
-      name: React.PropTypes.string,
-      short_name: React.PropTypes.string,
-      id: React.PropTypes.oneOfType([React.PropTypes.number, React.PropTypes.string]),
-      avatar_image_url: React.PropTypes.string,
-      sortable_name: React.PropTypes.string,
-      email: React.PropTypes.string,
-      pseudonyms: React.PropTypes.arrayOf(React.PropTypes.shape({
-        login_id: React.PropTypes.oneOfType([React.PropTypes.number, React.PropTypes.string]),
-        sis_id: React.PropTypes.oneOfType([React.PropTypes.number, React.PropTypes.string]),
-        integration_id: React.PropTypes.oneOfType([React.PropTypes.number, React.PropTypes.string])
+    user: PropTypes.shape({
+      name: PropTypes.string,
+      short_name: PropTypes.string,
+      id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+      avatar_image_url: PropTypes.string,
+      sortable_name: PropTypes.string,
+      email: PropTypes.string,
+      pseudonyms: PropTypes.arrayOf(PropTypes.shape({
+        login_id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+        sis_id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+        integration_id: PropTypes.oneOfType([PropTypes.number, PropTypes.string])
       }))
     }).isRequired
   }
@@ -67,7 +69,7 @@ export default class ActAsModal extends React.Component {
   }
 
   componentDidMount() {
-    this.closeButton.focus();
+    if (this.closeButton) this.closeButton.focus()
   }
 
   handleModalRequestClose = () => {
@@ -140,7 +142,7 @@ export default class ActAsModal extends React.Component {
           <Text size="small">{category}</Text>
         </td>
         <td>
-          <Container
+          <View
             as="div"
             textAlign="end"
           >
@@ -150,7 +152,7 @@ export default class ActAsModal extends React.Component {
             >
               {info}
             </Text>
-          </Container>
+          </View>
         </td>
       </tr>
     )
@@ -166,16 +168,8 @@ export default class ActAsModal extends React.Component {
           transition="fade"
           size="fullscreen"
           label={I18n.t('Act as User')}
-          closeButtonLabel={I18n.t('Close')}
-          applicationElement={() => document.getElementById('application')}
-          closeButtonRef={(el) => this.closeButton = el}
           open
         >
-          <ModalHeader>
-            <Text size="large">
-              {I18n.t('Act as User')}
-            </Text>
-          </ModalHeader>
           <ModalBody>
             {this.state.isLoading ?
               <div className="ActAs__loading">
@@ -192,11 +186,11 @@ export default class ActAsModal extends React.Component {
                   </div>
                 </div>
                 <div className="ActAs__text">
-                  <Container
+                  <View
                     as="div"
                     size="small"
                   >
-                    <Container
+                    <View
                       as="div"
                       textAlign="center"
                       padding="0 0 x-small 0"
@@ -207,8 +201,8 @@ export default class ActAsModal extends React.Component {
                       >
                         {I18n.t('Act as %{name}', { name: user.short_name })}
                       </Text>
-                    </Container>
-                    <Container
+                    </View>
+                    <View
                       as="div"
                       textAlign="center"
                     >
@@ -224,8 +218,8 @@ export default class ActAsModal extends React.Component {
                           'actions on behalf of this user.'
                         )}
                       </Text>
-                    </Container>
-                    <Container
+                    </View>
+                    <View
                       as="div"
                       textAlign="center"
                     >
@@ -235,25 +229,25 @@ export default class ActAsModal extends React.Component {
                         size="small"
                         margin="medium 0 x-small 0"
                       />
-                    </Container>
-                    <Container
+                    </View>
+                    <View
                       as="div"
                       textAlign="center"
                     >
                       {this.renderInfoTable(I18n.t('User details'), this.renderUserInfoRows)}
-                    </Container>
+                    </View>
                     {user.pseudonyms.map(pseudonym => (
-                        <Container
+                        <View
                           as="div"
                           textAlign="center"
                           margin="large 0 0 0"
                           key={pseudonym.login_id}
                         >
                           {this.renderInfoTable(I18n.t('Login info'), () => this.renderLoginInfoRows(pseudonym))}
-                        </Container>
+                        </View>
                       )
                     )}
-                    <Container
+                    <View
                       as="div"
                       textAlign="center"
                     >
@@ -267,8 +261,8 @@ export default class ActAsModal extends React.Component {
                       >
                         {I18n.t('Proceed')}
                       </Button>
-                    </Container>
-                  </Container>
+                    </View>
+                  </View>
                 </div>
               </div>
             }

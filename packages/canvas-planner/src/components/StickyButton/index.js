@@ -19,27 +19,31 @@ import React, { Component } from 'react';
 import classnames from 'classnames';
 import themeable from '@instructure/ui-themeable/lib';
 import { bool, func, node, number, string, oneOf } from 'prop-types';
-import IconArrowUpSolid from 'instructure-icons/lib/Solid/IconArrowUpSolid';
-import IconArrowDownLine from 'instructure-icons/lib/Line/IconArrowDownLine';
+import IconArrowUpSolid from '@instructure/ui-icons/lib/Solid/IconArrowUp';
+import IconArrowDownLine from '@instructure/ui-icons/lib/Line/IconArrowDown';
 
 import styles from './styles.css';
 import theme from './theme.js';
+import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent';
 
 class StickyButton extends Component {
   static propTypes = {
+    id: string.isRequired,
     children: node.isRequired,
     onClick: func,
     disabled: bool,
     hidden: bool,
     direction: oneOf(['none', 'up', 'down']),
+    className: string,
     zIndex: number,
-    offset: string,
     buttonRef: func,
+    description: string,
   };
 
   static defaultProps = {
     direction: 'none',
     offset: '0',
+    className: ''
   };
 
   handleClick = (e) => {
@@ -68,6 +72,21 @@ class StickyButton extends Component {
     }
   }
 
+  get descriptionId () {
+    return `${this.props.id}_desc`;
+  }
+
+  renderDescription () {
+    if (this.props.description) {
+      return (
+        <ScreenReaderContent id={this.descriptionId}>
+          {this.props.description}
+        </ScreenReaderContent>
+      );
+    }
+    return null;
+  }
+
   render () {
     const {
       children,
@@ -75,7 +94,6 @@ class StickyButton extends Component {
       hidden,
       direction,
       zIndex,
-      offset,
     } = this.props;
 
     const classes = {
@@ -85,24 +103,27 @@ class StickyButton extends Component {
 
     const style = {
       zIndex: (zIndex) ? zIndex : null,
-      top: offset,
     };
 
     return (
-      <button
-        type="button"
-        onClick={this.handleClick}
-        className={classnames(classes)}
-        style={style}
-        aria-disabled={(disabled) ? 'true' : null}
-        aria-hidden={(hidden) ? 'true' : null}
-        ref={this.props.buttonRef}
-      >
-        <span className={styles.layout}>
-          {children}
-          {this.renderIcon()}
-        </span>
-      </button>
+      <span>
+        <button
+          type="button"
+          onClick={this.handleClick}
+          className={classnames(classes, styles.newActivityButton)}
+          style={style}
+          aria-disabled={(disabled) ? 'true' : null}
+          aria-hidden={(hidden) ? 'true' : null}
+          ref={this.props.buttonRef}
+          aria-describedby={this.props.description ? this.descriptionId : null}
+        >
+          <span className={styles.layout}>
+            {children}
+            {this.renderIcon()}
+          </span>
+        </button>
+        {this.renderDescription()}
+      </span>
     );
   }
 }

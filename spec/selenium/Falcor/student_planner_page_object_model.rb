@@ -25,16 +25,16 @@ module PlannerPageObject
   end
 
   def select_list_view
-    fxpath("//span[contains(text(),'List View')]").click
+    fj('span[role="menuitemradio"]:contains("List View")').click
   end
 
   def select_dashboard_view
-    fxpath("//span[contains(text(),'Card View')]").click
+    fj('span[role="menuitemradio"]:contains("Card View")').click
   end
 
   def navigate_to_course_object(object)
     expect_new_page_load do
-      fln(object.title.to_s).click
+      flnpt(object.title.to_s).click
     end
   end
 
@@ -43,6 +43,13 @@ module PlannerPageObject
     domain = url.split('courses')[0]
     expected_url = domain + "courses/#{@course.id}/#{object_type}/#{object.id}"
     expected_url = domain + "courses/#{@course.id}/#{object_type}/#{object.title.downcase}" if object_type == 'pages'
+    expect(url).to eq(expected_url)
+  end
+
+  def validate_submissions_url(object_type, object, user)
+    url = driver.current_url
+    domain = url.split('courses')[0]
+    expected_url = domain + "courses/#{@course.id}/#{object_type}/#{object.id}/submissions/#{user.id}"
     expect(url).to eq(expected_url)
   end
 
@@ -93,11 +100,16 @@ module PlannerPageObject
     object.is_a?(CalendarEvent) ? validate_calendar_url(object) : validate_url(url_type, object)
   end
 
+  def validate_link_to_submissions(object, user, url_type)
+    navigate_to_course_object(object)
+    validate_submissions_url(url_type, object, user)
+  end
+
   def view_todo_item
     @student_to_do = @student1.planner_notes.create!(todo_date: Time.zone.now,
                                                      title: "Student to do", course_id: @course.id)
     go_to_list_view
-    fln(@student_to_do.title).click
+    flnpt(@student_to_do.title).click
     @modal = todo_sidebar_modal(@student_to_do.title)
   end
 
@@ -123,6 +135,20 @@ module PlannerPageObject
                                            message: "new reply from teacher")
   end
 
+  def discussion_index_page_detail
+    # might need to change when implementing
+    f('.todo-date')
+  end
+
+  def discussion_show_page_detail
+    # might need to change when implementing
+    f('.discussion-tododate')
+  end
+
+  def pages_detail
+    # Complete this while fixing ADMIN-1161
+  end
+
   def open_opportunities_dropdown
     fj("button:contains('opportunit')").click
   end
@@ -139,10 +165,15 @@ module PlannerPageObject
     fj("button:contains('New Activity')")
   end
 
+  def today_button
+    f("#planner-today-btn")
+  end
+
   def wait_for_planner_load
     wait_for_dom_ready
     wait_for_ajaximations
     todo_modal_button
+    f('.planner-day, .planner-empty-state') # one or the other will be rendered
   end
 
   def wait_for_dashboard_load
@@ -170,12 +201,16 @@ module PlannerPageObject
     f('textarea', modal)
   end
 
-  def todo_sidebar_modal(title = nil)
+  def todo_sidebar_modal_selector(title = nil)
     if title
-      f("[aria-label = 'Edit #{title}']")
+      "[aria-label = 'Edit #{title}']"
     else
-      f("[aria-label = 'Add To Do']")
+      "[aria-label = 'Add To Do']"
     end
+  end
+
+  def todo_sidebar_modal(title = nil)
+    f(todo_sidebar_modal_selector(title))
   end
 
   def wait_for_spinner

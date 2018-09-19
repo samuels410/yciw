@@ -110,7 +110,10 @@ define [
         title = json['title']
         start_at = $.fudgeDateForProfileTimezone(Date.parse(json['start_at'])) if json['start_at']
         end_at = $.fudgeDateForProfileTimezone(Date.parse(json['end_at'])) if json['end_at']
-        due_at = start_at if json['type'] == 'assignment'
+        if json['type'] == 'assignment'
+          due_at = start_at
+        else if json['type'] == 'wiki_page' || json['type'] == 'discussion_topic'
+          todo_at = $.fudgeDateForProfileTimezone(Date.parse(json['todo_at']))
 
         override = null
         _.each json.assignment_overrides ? [], (ov) ->
@@ -118,8 +121,10 @@ define [
           override.title = ov.title
 
         start_date = null
+        orig_start_date = null
         if start_at
           start_date = new Date start_at.getFullYear(), start_at.getMonth(), start_at.getDate()
+          orig_start_date = Date.parse(json['start_at'])
 
         end_date = null
         if end_at
@@ -128,6 +133,7 @@ define [
         if not lastDate or lastDate['date']?.getTime() != start_date?.getTime()
           lastDate =
             'date': start_date
+            'orig_date': orig_start_date
             'passed': start_date and start_date < today
             'events': []
 
@@ -144,6 +150,7 @@ define [
           'start_at': start_at
           'end_at': end_at
           'due_at': due_at
+          'todo_at': todo_at
           'same_day': start_date?.getTime() == end_date?.getTime()
           'same_time': start_at?.getTime() == end_at?.getTime()
           'last': true

@@ -17,12 +17,11 @@
  */
 
 import React from 'react';
-import { mount, shallow } from 'enzyme';
+import { mount, shallow } from 'old-enzyme-2.x-you-need-to-upgrade-this-spec-to-enzyme-3.x-by-importing-just-enzyme';
 import { SearchFormComponent } from 'jsx/gradebook-history/SearchForm';
-import Autocomplete from '@instructure/ui-core/lib/components/Autocomplete';
-import Button from '@instructure/ui-core/lib/components/Button';
-import DateInput from '@instructure/ui-core/lib/components/DateInput';
-import FormFieldGroup from '@instructure/ui-core/lib/components/FormFieldGroup';
+import Button from '@instructure/ui-buttons/lib/components/Button';
+import DateInput from '@instructure/ui-forms/lib/components/DateInput';
+import FormFieldGroup from '@instructure/ui-forms/lib/components/FormFieldGroup';
 import { destroyContainer } from 'jsx/shared/FlashAlert';
 import Fixtures from '../gradebook-history/Fixtures';
 
@@ -72,19 +71,19 @@ test('has a form field group', function () {
 test('has an Autocomplete with id #graders', function () {
   const input = this.wrapper.find('#graders');
   equal(input.length, 1);
-  ok(input.is(Autocomplete));
+  ok(input.is('Select'));
 });
 
 test('has an Autocomplete with id #students', function () {
   const input = this.wrapper.find('#students');
   equal(input.length, 1);
-  ok(input.is(Autocomplete));
+  ok(input.is('Select'));
 });
 
 test('has an Autocomplete with id #assignments', function () {
   const input = this.wrapper.find('#assignments');
   equal(input.length, 1);
-  ok(input.is(Autocomplete));
+  ok(input.is('Select'));
 });
 
 test('has DateInputs for from date and to date', function () {
@@ -177,7 +176,7 @@ test('does not disable the submit button when only to date is entered', function
 });
 
 test('calls getGradebookHistory prop on mount', function () {
-  const props = { getGradebookHistory: this.stub() };
+  const props = { getGradebookHistory: sinon.stub() };
   const wrapper = mount(<SearchFormComponent {...defaultProps()} {...props} />);
   strictEqual(props.getGradebookHistory.callCount, 1);
   wrapper.unmount();
@@ -185,7 +184,7 @@ test('calls getGradebookHistory prop on mount', function () {
 
 QUnit.module('SearchForm when button is clicked', {
   setup () {
-    this.props = { getGradebookHistory: this.stub() };
+    this.props = { getGradebookHistory: sinon.stub() };
     this.wrapper = mountComponent(this.props);
   },
 
@@ -236,9 +235,9 @@ QUnit.module('SearchForm Autocomplete', {
     this.props = {
       ...defaultProps(),
       fetchHistoryStatus: 'started',
-      clearSearchOptions: this.stub(),
-      getSearchOptions: this.stub(),
-      getSearchOptionsNextPage: this.stub(),
+      clearSearchOptions: sinon.stub(),
+      getSearchOptions: sinon.stub(),
+      getSearchOptionsNextPage: sinon.stub(),
     };
 
     this.wrapper = mount(<SearchFormComponent {...this.props} />);
@@ -329,7 +328,7 @@ test('getSearchOptionsNextPage is called if there are more options to load', fun
 
 QUnit.module('SearchForm Autocomplete options', {
   setup () {
-    this.props = { ...defaultProps(), clearSearchOptions: this.stub() };
+    this.props = { ...defaultProps(), clearSearchOptions: sinon.stub() };
     this.assignments = Fixtures.assignmentArray();
     this.graders = Fixtures.userArray();
     this.students = Fixtures.userArray();

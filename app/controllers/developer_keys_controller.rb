@@ -23,12 +23,16 @@ class DeveloperKeysController < ApplicationController
   include Api::V1::DeveloperKey
 
   def index
+    raise ActiveRecord::RecordNotFound unless @context.root_account?
     scope = index_scope.nondeleted.preload(:account).order("id DESC")
     @keys = Api.paginate(scope, self, account_developer_keys_url(@context))
     respond_to do |format|
       format.html do
         set_navigation
-        js_env(accountEndpoint: api_v1_account_developer_keys_path(@context))
+        js_env(
+          accountEndpoint: api_v1_account_developer_keys_path(@context),
+          enableTestClusterChecks: DeveloperKey.test_cluster_checks_enabled?
+        )
 
         if use_new_dev_key_features?
           render :index_react
@@ -71,6 +75,7 @@ class DeveloperKeysController < ApplicationController
   end
 
   protected
+
   def set_navigation
     @active_tab = 'developer_keys'
     add_crumb t('#crumbs.developer_keys', "Developer Keys")
@@ -102,10 +107,15 @@ class DeveloperKeysController < ApplicationController
 
   def use_new_dev_key_features?
     @_use_new_dev_key_features ||= begin
-      requested_context = @context || account_from_params || @key&.account
+      requested_context = @context || account_from_params || @key&.owner_account
       return if requested_context.blank?
-      requested_context.root_account.feature_enabled?(:developer_key_management_ui_rewrite)
+      has_site_admin_access?(requested_context) ||
+        requested_context.root_account.feature_enabled?(:developer_key_management_and_scoping)
     end
+  end
+
+  def has_site_admin_access?(requested_context)
+    requested_context.site_admin? && Setting.get(Setting::SITE_ADMIN_ACCESS_TO_NEW_DEV_KEY_FEATURES, nil).present?
   end
 
   def set_key
@@ -131,8 +141,6 @@ class DeveloperKeysController < ApplicationController
   def developer_key_params
     if use_new_dev_key_features?
       return params.require(:developer_key).permit(
-        :access_token_count,
-        :api_key,
         :auto_expire_tokens,
         :email,
         :icon_url,
@@ -142,13 +150,13 @@ class DeveloperKeysController < ApplicationController
         :redirect_uris,
         :vendor_code,
         :visible,
+        :test_cluster_only,
+        :require_scopes,
         scopes: []
       )
     end
 
     params.require(:developer_key).permit(
-      :access_token_count,
-      :api_key,
       :auto_expire_tokens,
       :email,
       :icon_url,

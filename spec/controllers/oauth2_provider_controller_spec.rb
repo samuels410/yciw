@@ -35,6 +35,35 @@ describe Oauth2ProviderController do
       expect(response.body).to match /redirect_uri does not match/
     end
 
+    context 'with invalid scopes' do
+      let(:dev_key) { DeveloperKey.create! redirect_uri: 'https://example.com', require_scopes: true, scopes: [] }
+
+      before do
+        allow_any_instance_of(Account).to receive(:feature_enabled?).with(:developer_key_management_and_scoping).and_return(true)
+      end
+
+      it 'renders 400' do
+        get :auth, params: {
+          client_id: dev_key.id,
+          redirect_uri: Canvas::Oauth::Provider::OAUTH2_OOB_URI,
+          response_type: 'code',
+          scope: 'not|valid'
+        }
+        assert_status(400)
+        expect(response.body).to match /A requested scope is invalid/
+      end
+
+      it 'renders 400 when scopes empty' do
+        get :auth, params: {
+          client_id: dev_key.id,
+          redirect_uri: Canvas::Oauth::Provider::OAUTH2_OOB_URI,
+          response_type: 'code'
+        }
+        assert_status(400)
+        expect(response.body).to match /A requested scope is invalid/
+      end
+    end
+
     it 'redirects back with an error for invalid response_type' do
       get :auth,
           params: {client_id: key.id,
@@ -147,7 +176,7 @@ describe Oauth2ProviderController do
         before do
           allow(Account.site_admin).to receive(:feature_allowed?).and_return(false)
           allow(Account.default).to receive(:feature_enabled?).and_return(false)
-          allow(Account.default).to receive(:feature_enabled?).with(:developer_key_management_ui_rewrite).and_return(true)
+          allow(Account.default).to receive(:feature_enabled?).with(:developer_key_management_and_scoping).and_return(true)
         end
 
         shared_examples_for 'the authorization endpoint' do
@@ -282,14 +311,20 @@ describe Oauth2ProviderController do
       redis
     end
 
-    it 'renders a 401 if theres no client_id' do
-      post :token
+    it 'renders a 401 if theres no client_id with authorization_code' do
+      post :token, params: { grant_type: 'authorization_code' }
+      assert_status(401)
+      expect(response.body).to match /unknown client/
+    end
+
+    it 'renders a 401 if theres no client_id with refresh_token' do
+      post :token, params: { grant_type: 'refresh_token' }
       assert_status(401)
       expect(response.body).to match /unknown client/
     end
 
     it 'renders a 401 if the secret is invalid' do
-      post :token, params: {:client_id => key.id, :client_secret => key.api_key + "123"}
+      post :token, params: {:client_id => key.id, :client_secret => key.api_key + "123", grant_type: 'authorization_code'}
       assert_status(401)
       expect(response.body).to match /invalid client/
     end
@@ -317,7 +352,7 @@ describe Oauth2ProviderController do
       expect(redis).to receive(:del).with(valid_code_redis_key).at_least(:once)
       allow(Canvas).to receive_messages(:redis => redis)
       post :token, params: {client_id: key.id, client_secret: key.api_key, grant_type: 'authorization_code', code: valid_code}
-      expect(response).to be_success
+      expect(response).to be_successful
       json = JSON.parse(response.body)
       expect(json.keys.sort).to match_array(['access_token',  'refresh_token', 'user', 'expires_in', 'token_type'])
       expect(json['token_type']).to eq 'Bearer'
@@ -335,7 +370,7 @@ describe Oauth2ProviderController do
       expect(redis).to receive(:del).with(valid_code_redis_key).at_least(:once)
       allow(Canvas).to receive_messages(:redis => redis)
       post :token, params: {:client_id => key.id, :client_secret => key.api_key, :code => valid_code}
-      expect(response).to be_success
+      expect(response).to be_successful
       json = JSON.parse(response.body)
       expect(json.keys.sort).to match_array ['access_token', 'refresh_token', 'user', 'expires_in', 'token_type']
     end
@@ -344,7 +379,7 @@ describe Oauth2ProviderController do
       old_token = user.access_tokens.create! :developer_key => key
       allow(Canvas).to receive_messages(:redis => redis)
       post :token, params: {:client_id => key.id, :client_secret => key.api_key, :code => valid_code, :replace_tokens => '1'}
-      expect(response).to be_success
+      expect(response).to be_successful
       expect(AccessToken.not_deleted.exists?(old_token.id)).to be(false)
     end
 
@@ -352,7 +387,7 @@ describe Oauth2ProviderController do
       old_token = user.access_tokens.create! :developer_key => key
       allow(Canvas).to receive_messages(:redis => redis)
       post :token, params: {:client_id => key.id, :client_secret => key.api_key, :code => valid_code}
-      expect(response).to be_success
+      expect(response).to be_successful
       expect(AccessToken.not_deleted.exists?(old_token.id)).to be(true)
     end
 
@@ -401,13 +436,13 @@ describe Oauth2ProviderController do
         access_token = old_token.full_token
 
         post :token, params: {client_id: key.id, client_secret: key.api_key, grant_type: "refresh_token", refresh_token: refresh_token}
-        expect(response).to be_success
+        expect(response).to be_successful
         json = JSON.parse(response.body)
         expect(json['access_token']).to_not eq access_token
 
         access_token = json['access_token']
         post :token, params: {client_id: key.id, client_secret: key.api_key, grant_type: "refresh_token", refresh_token: refresh_token}
-        expect(response).to be_success
+        expect(response).to be_successful
         json = JSON.parse(response.body)
         expect(json['access_token']).to_not eq access_token
       end
@@ -416,6 +451,13 @@ describe Oauth2ProviderController do
     context 'unsupported grant_type' do
       it 'returns a 400' do
         post :token, params: {:client_id => key.id, :client_secret => key.api_key, :grant_type => "client_credentials"}
+        assert_status(400)
+        json = JSON.parse(response.body)
+        expect(json['error']).to eq "unsupported_grant_type"
+      end
+
+      it 'returns a 400 when grant_type missing' do
+        post :token, params: {:client_id => key.id, :client_secret => key.api_key}
         assert_status(400)
         json = JSON.parse(response.body)
         expect(json['error']).to eq "unsupported_grant_type"

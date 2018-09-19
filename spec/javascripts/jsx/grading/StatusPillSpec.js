@@ -18,7 +18,7 @@
 
 import 'react';
 import ReactDOM from 'react-dom';
-import Pill from '@instructure/ui-core/lib/components/Pill';
+import Pill from '@instructure/ui-elements/lib/components/Pill';
 import StatusPill from 'jsx/grading/StatusPill';
 
 const wrapper = document.getElementById('fixtures');
@@ -39,7 +39,7 @@ QUnit.module('StatusPill', {
 });
 
 test('renderPills mounts a <Pill /> with correct text to each .submission-missing-pill', function () {
-  const stubbedRender = this.stub(ReactDOM, 'render');
+  const stubbedRender = sandbox.stub(ReactDOM, 'render');
   const spans = [1, 2, 3].map(() => addSpan('submission-missing-pill'));
   StatusPill.renderPills();
 
@@ -53,7 +53,7 @@ test('renderPills mounts a <Pill /> with correct text to each .submission-missin
 });
 
 test('renderPills mounts a <Pill /> with correct text to each .submission-late-pill', function () {
-  const stubbedRender = this.stub(ReactDOM, 'render');
+  const stubbedRender = sandbox.stub(ReactDOM, 'render');
   const spans = [1, 2, 3].map(() => addSpan('submission-late-pill'));
   StatusPill.renderPills();
 

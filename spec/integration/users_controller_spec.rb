@@ -47,9 +47,23 @@ describe UsersController do
       expect(Nokogiri::HTML(response.body).at_css('table.report tbody tr:first td:nth(2)').text).to match(/less than 1 day/)
     end
 
+    it "should use conversation message participants when calculating interaction" do
+      other_student = user_factory(:active_all => true)
+      @e1.course.enroll_student(other_student, :enrollment_state => 'active')
+
+      @conversation = Conversation.initiate([@e1.user, other_student, @teacher], false)
+      @conversation.add_message(@teacher, "hello", :only_users => [@e1.user]) # only send to one user
+
+      get user_student_teacher_activity_url(@teacher, @e1.user)
+      expect(Nokogiri::HTML(response.body).at_css('table.report tbody tr:first td:nth(2)').text).to match(/less than 1 day/)
+
+      get user_student_teacher_activity_url(@teacher, other_student)
+      expect(Nokogiri::HTML(response.body).at_css('table.report tbody tr:first td:nth(2)').text).to match(/never/)
+    end
+
     it "should only include students the teacher can view" do
       get user_course_teacher_activity_url(@teacher, @course)
-      expect(response).to be_success
+      expect(response).to be_successful
       expect(response.body).to match(/studentname1/)
       expect(response.body).not_to match(/studentname2/)
     end
@@ -68,7 +82,7 @@ describe UsersController do
       @course2.update_attribute(:name, 'coursename2')
       student_in_course(:course => @course2, :user => @e1.user)
       get user_student_teacher_activity_url(@teacher, @e1.user)
-      expect(response).to be_success
+      expect(response).to be_successful
       expect(response.body).to match(/studentname1/)
       expect(response.body).not_to match(/studentname2/)
       expect(response.body).to match(/coursename1/)
@@ -77,7 +91,7 @@ describe UsersController do
       # now put teacher in course2
       @course2.enroll_teacher(@teacher).accept!
       get user_student_teacher_activity_url(@teacher, @e1.user)
-      expect(response).to be_success
+      expect(response).to be_successful
       expect(response.body).to match(/coursename1/)
       expect(response.body).to match(/coursename2/)
     end
@@ -91,11 +105,11 @@ describe UsersController do
       @e1.conclude
 
       get user_student_teacher_activity_url(@teacher, @e1.user)
-      expect(response).to be_success
+      expect(response).to be_successful
       expect(response.body).to match(/studentname1/)
 
       get user_course_teacher_activity_url(@teacher, @course)
-      expect(response).to be_success
+      expect(response).to be_successful
       expect(response.body).to match(/studentname1/)
     end
 
@@ -103,11 +117,11 @@ describe UsersController do
       @e1.conclude
 
       get user_student_teacher_activity_url(@teacher, @e1.user)
-      expect(response).to be_success
+      expect(response).to be_successful
       expect(response.body).to match(/studentname1/)
 
       get user_course_teacher_activity_url(@teacher, @course)
-      expect(response).to be_success
+      expect(response).to be_successful
       expect(response.body).to match(/studentname1/)
     end
 
@@ -121,7 +135,7 @@ describe UsersController do
         course_with_student(:course => @course, :user => @student, :active_all => true)
 
         get user_student_teacher_activity_url(@teacher, @student)
-        expect(response).to be_success
+        expect(response).to be_successful
         expect(response.body).to include(@student.name)
       end
     end
@@ -130,27 +144,10 @@ describe UsersController do
   describe "#index" do
     it "should render" do
       user_with_pseudonym(:active_all => 1)
-      @johnstclair = @user.update_attributes(:name => 'John St. Clair', :sortable_name => 'St. Clair, John')
-      user_with_pseudonym(:active_all => 1, :username => 'jtolds@instructure.com', :name => 'JT Olds')
-      @jtolds = @user
       Account.default.account_users.create!(user: @user)
       user_session(@user, @pseudonym)
       get account_users_url(Account.default)
-      expect(response).to be_success
-      expect(response.body).to match /Olds, JT.*St\. Clair, John/m
-    end
-
-    it "should not show any student view students at the account level" do
-      course_with_teacher(:active_all => true)
-      @fake_student = @course.student_view_student
-
-      site_admin_user(:active_all => true)
-      user_session(@admin)
-
-      get account_users_url Account.default.id
-      body = Nokogiri::HTML(response.body)
-      expect(body.css("#user_#{@fake_student.id}")).to be_empty
-      expect(body.at_css('.users').text).not_to match(/Test Student/)
+      expect(response).to be_successful
     end
   end
 
@@ -162,7 +159,7 @@ describe UsersController do
       course_factory
       student_in_course(:course => @course)
       get "/users/#{@student.id}"
-      expect(response).to be_success
+      expect(response).to be_successful
 
       course_factory(:account => account_model)
       student_in_course(:course => @course)
@@ -181,7 +178,7 @@ describe UsersController do
       user_session(@user)
 
       get "/users/#{@student.id}"
-      expect(response).to be_success
+      expect(response).to be_successful
     end
 
     it "should show course user to account users that have the read_roster permission" do
@@ -194,7 +191,7 @@ describe UsersController do
       user_session(@user)
 
       get "/courses/#{@course.id}/users/#{@student.id}"
-      expect(response).to be_success
+      expect(response).to be_successful
     end
   end
 
@@ -295,12 +292,12 @@ describe UsersController do
       user_session(@admin)
 
       get user_admin_merge_url(@user, :pending_user_id => @admin.id)
-      expect(response).to be_success
+      expect(response).to be_successful
       expect(assigns['pending_other_user']).to eq @admin
       expect(assigns['other_user']).to be_nil
 
       get user_admin_merge_url(@user, :new_user_id => @admin.id)
-      expect(response).to be_success
+      expect(response).to be_successful
       expect(assigns['pending_other_user']).to be_nil
       expect(assigns['other_user']).to eq @admin
 

@@ -526,6 +526,11 @@ describe LearningOutcome do
       }.from(1).to(0)
     end
 
+    it "returns points possible value set through rubric_criterion assessor" do
+      @outcome.rubric_criterion[:points_possible] = 10
+      expect(@outcome.rubric_criterion[:points_possible]).to eq 10
+    end
+
     it "returns #data[:rubric_criterion] when #rubric_criterion is called" do
       @outcome.rubric_criterion = {
         description: "Thoughtful description",
@@ -806,6 +811,16 @@ describe LearningOutcome do
     end
 
     context "default values" do
+      it 'should default mastery points to 3' do
+        @outcome = LearningOutcome.create!(:title => 'outcome')
+        expect(@outcome.mastery_points).to be 3
+      end
+
+      it 'should default points possible to 5' do
+        @outcome = LearningOutcome.create!(:title => 'outcome')
+        expect(@outcome.points_possible).to be 5
+      end
+
       it "should default calculation_method to highest" do
         @outcome = LearningOutcome.create!(:title => 'outcome')
         expect(@outcome.calculation_method).to eql('highest')
@@ -962,6 +977,24 @@ describe LearningOutcome do
         expect(outcome).to be_assessed
         expect(outcome).to be_assessed(c1)
         expect(outcome).not_to be_assessed(c2)
+      end
+    end
+
+    describe '#ensure_presence_in_context' do
+      it 'adds active outcomes to a context if they are not present' do
+        account = Account.default
+        course_factory
+        3.times do |i|
+          LearningOutcome.create!(
+            context: account,
+            title: "outcome_#{i}",
+            calculation_method: 'highest',
+            workflow_state: i == 0 ? 'deleted' : 'active'
+          )
+        end
+        outcome_ids = account.created_learning_outcomes.pluck(:id)
+        LearningOutcome.ensure_presence_in_context(outcome_ids, @course)
+        expect(@course.linked_learning_outcomes.count).to eq(2)
       end
     end
 

@@ -18,11 +18,14 @@
 class Assignment
   class SpeedGrader
     include GradebookSettingsHelpers
+    include CoursesHelper
+    include Api::V1::SubmissionComment
+    include CanvadocsHelper
 
-    def initialize(assignment, user, avatars: false, grading_role: :grader)
+    def initialize(assignment, current_user, avatars: false, grading_role: :grader)
       @assignment = assignment
       @course = @assignment.context
-      @user = user
+      @current_user = current_user
       @avatars = avatars && !@assignment.grade_as_group?
       @grading_role = grading_role
       account_context = @course.try(:account) || @course.try(:root_account)
@@ -31,21 +34,21 @@ class Assignment
 
     def json
       Attachment.skip_thumbnails = true
-      submission_fields = %i(anonymous_id id submitted_at workflow_state grade
-                             grade_matches_current_submission graded_at turnitin_data
-                             submission_type score points_deducted assignment_id submission_comments
-                             grading_period_id excused updated_at)
+      submission_json_fields = %i(id submitted_at workflow_state grade
+                                  grade_matches_current_submission graded_at turnitin_data
+                                  submission_type score points_deducted assignment_id submission_comments
+                                  grading_period_id excused updated_at)
 
-      submission_fields << (anonymous_moderated_marking? ? :anonymous_id : :user_id)
+      submission_json_fields << (anonymous_students?(current_user: @current_user, assignment: @assignment) ? :anonymous_id : :user_id)
 
-      comment_fields = %i(comment id author_name created_at author_id media_comment_type
-                          media_comment_id cached_attachments attachments draft
-                          group_comment_id).freeze
+      attachment_json_fields = %i(id comment_id content_type context_id context_type display_name
+                                  filename mime_class size submitter_id workflow_state)
 
-      attachment_fields = %i(id comment_id content_type context_id context_type display_name
-                             filename mime_class size submitter_id workflow_state viewed_at).freeze
+      if !@assignment.anonymize_students? || @course.account_membership_allows(@current_user)
+        attachment_json_fields << :viewed_at
+      end
 
-      enrollment_fields = %i(course_section_id workflow_state user_id).freeze
+      enrollment_json_fields = %i(course_section_id workflow_state user_id)
 
       res = @assignment.as_json(
         :include => {
@@ -54,86 +57,80 @@ class Assignment
         },
         :include_root => false
       )
+      res['anonymize_students'] = @assignment.anonymize_students?
+      res['anonymize_graders'] = !@assignment.can_view_other_grader_identities?(@current_user)
 
       # include :provisional here someday if we need to distinguish
       # between provisional and real comments (also in
       # SubmissionComment#serialization_methods)
       submission_comment_methods = []
-      submission_comment_methods << :avatar_path if @avatars
+      submission_comment_methods << :avatar_path if avatars?
 
       res[:context][:rep_for_student] = {}
 
-      students = @assignment.representatives(@user, includes: gradebook_includes) do |rep, others|
+      # If we're working with anonymous IDs, skip students who don't have a
+      # valid submission object, which means no inactive or concluded students
+      # even if the user has elected to show them in gradebook
+      includes = @assignment.anonymize_students? ? [] : gradebook_includes(user: @current_user, course: @course)
+      @students = @assignment.representatives(@current_user, includes: includes) do |rep, others|
         others.each { |s| res[:context][:rep_for_student][s.id] = rep.id }
       end
+
       # Ensure that any test students are sorted last
-      students = students.partition { |r| r.preferences[:fake_student] != true }.flatten
+      @students = @students.partition { |r| r.preferences[:fake_student] != true }.flatten
 
-      enrollments = @course.apply_enrollment_visibility(gradebook_enrollment_scope, @user, nil,
-                                                        include: gradebook_includes)
+      enrollments = @course.apply_enrollment_visibility(
+        gradebook_enrollment_scope(user: @current_user, course: @course),
+        @current_user,
+        nil,
+        include: includes
+      )
 
-      is_provisional = @grading_role == :provisional_grader || @grading_role == :moderator
-      rubric_assmnts = @assignment.visible_rubric_assessments_for(@user, :provisional_grader => is_provisional) || []
+      current_user_rubric_assessments = @assignment.visible_rubric_assessments_for(@current_user, provisional_grader: provisional_grader_or_moderator?) || []
 
       # include all the rubric assessments if a moderator
-      all_provisional_rubric_assmnts = @grading_role == :moderator &&
-        (@assignment.visible_rubric_assessments_for(@user, :provisional_moderator => true) || [])
+      all_provisional_rubric_assessments =
+        @grading_role == :moderator ? @assignment.visible_rubric_assessments_for(@current_user, :provisional_moderator => true) : []
 
-      # if we're a provisional grader, calculate whether the student needs a grade
-      preloaded_pg_counts = is_provisional && @assignment.provisional_grades.not_final.group("submissions.user_id").count
-      ActiveRecord::Associations::Preloader.new.preload(@assignment, :moderated_grading_selections) if is_provisional
+      ActiveRecord::Associations::Preloader.new.preload(@assignment, :moderated_grading_selections) if provisional_grader_or_moderator?
 
       includes = [{ versions: :versionable }, :quiz_submission, :user, :attachment_associations, :assignment, :originality_reports]
-      key = @grading_role == :grader ? :submission_comments : :all_submission_comments
-
-      includes << {key => {submission: {assignment: { context: :root_account }}}}
-      submissions = @assignment.submissions.where(:user_id => students).preload(*includes)
-
-      student_ids_to_anonymous_ids = students.each_with_object({}) { |student, map| map[student.id.to_s] = nil }
-
-      student_fields = %i(name id sortable_name)
-      rubric_assessment_excludes = []
-
-      if anonymous_moderated_marking?
-        submissions.each do |submission|
-          student_ids_to_anonymous_ids[submission.user_id.to_s] = submission.anonymous_id
-        end
-
-        student_fields = []
-        rubric_assessment_excludes << :user_id
+      grader_comments_hidden = grader_comments_hidden?(current_user: @current_user, assignment: @assignment)
+      key = if @assignment.grades_published? || grader_comments_hidden
+        :submission_comments
+      else
+        :all_submission_comments
       end
 
-      res[:context][:students] = students.map do |u|
-        json = u.as_json(include_root: false, methods: submission_comment_methods, only: student_fields)
-        json[:anonymous_id] = student_ids_to_anonymous_ids[u.id.to_s]
+      includes << {key => {submission: {assignment: { context: :root_account }}}}
+      @submissions = @assignment.submissions.where(:user_id => @students).preload(*includes)
 
-        if preloaded_pg_counts
-          json[:needs_provisional_grade] = @assignment.student_needs_provisional_grade?(u, preloaded_pg_counts)
+      student_json_fields = anonymous_students?(current_user: @current_user, assignment: @assignment) ? [] : %i(name id sortable_name)
+
+      res[:context][:students] = @students.map do |student|
+        json = student.as_json(include_root: false, methods: submission_comment_methods, only: student_json_fields)
+        if anonymous_students?(current_user: @current_user, assignment: @assignment)
+          anonymous_ids = student_ids_to_anonymous_ids(current_user: @current_user, assignment: @assignment, course: @course, submissions: @submissions)
+          json[:anonymous_id] = anonymous_ids[student.id.to_s]
         end
-
-        json[:rubric_assessments] = rubric_assmnts.select{|ra| ra.user_id == u.id}.
-          as_json(except: rubric_assessment_excludes, methods: [:assessor_name], include_root: false)
-
+        json[:needs_provisional_grade] = @assignment.can_be_moderated_grader?(@current_user) if provisional_grader_or_moderator?
+        json[:rubric_assessments] = rubric_assessements_to_json(current_user_rubric_assessments.select {|assessment| assessment.user_id == student.id})
         json
       end
 
-      res[:context][:active_course_sections] = @assignment
-        .context
-        .sections_visible_to(
-          @user,
-          @assignment.sections_with_visibility(@user)
-        )
-        .map do |section|
-          section.as_json(
-            include_root: false,
-            only: [:id, :name]
-          )
-        end
+      res[:context][:active_course_sections] = @assignment.context.
+        sections_visible_to(@current_user, @assignment.sections_with_visibility(@current_user)).
+        map { |section| section.as_json(include_root: false, only: [:id, :name]) }
 
       res[:context][:enrollments] = enrollments.map do |enrollment|
-        enrollment_json = enrollment.as_json(include_root: false, only: enrollment_fields)
-        if anonymous_moderated_marking?
-          enrollment_json[:anonymous_id] = student_ids_to_anonymous_ids[enrollment.user_id.to_s]
+        enrollment_json = enrollment.as_json(include_root: false, only: enrollment_json_fields)
+        if anonymous_students?(current_user: @current_user, assignment: @assignment)
+          enrollment_json[:anonymous_id] = student_ids_to_anonymous_ids(
+            current_user: @current_user,
+            assignment: @assignment,
+            course: @course,
+            submissions: @submissions
+          ).fetch(enrollment.user_id.to_s, nil)
           enrollment_json.delete(:user_id)
         end
         enrollment_json
@@ -143,30 +140,35 @@ class Assignment
       attachment_includes = %i(crocodoc_document canvadoc root_attachment)
       # Preload attachments for later looping
       attachments_for_submission =
-        Submission.bulk_load_attachments_for_submissions(submissions, preloads: attachment_includes)
+        Submission.bulk_load_attachments_for_submissions(@submissions, preloads: attachment_includes)
 
       # Preloading submission history versioned attachments and originality reports
-      submission_histories = submissions.map(&:submission_history).flatten
+      submission_histories = @submissions.map(&:submission_history).flatten
       Submission.bulk_load_versioned_attachments(submission_histories,
                                                  preloads: attachment_includes)
       Submission.bulk_load_versioned_originality_reports(submission_histories)
       Submission.bulk_load_text_entry_originality_reports(submission_histories)
 
-      preloaded_prov_grades =
-        case @grading_role
-        when :moderator
-          @assignment.provisional_grades.order(:id).to_a.group_by(&:submission_id)
-        when :provisional_grader
-          @assignment.provisional_grades.not_final.where(:scorer_id => @user).order(:id).to_a.
-            group_by(&:submission_id)
+      provisional_grades = @assignment.provisional_grades
+      provisional_grades = provisional_grades.preload(:scorer) unless anonymous_graders?(current_user: @current_user, assignment: @assignment)
+
+      if @grading_role == :provisional_grader
+        provisional_grades = if grader_comments_hidden?(current_user: @current_user, assignment: @assignment)
+          provisional_grades.not_final.where(scorer: @current_user)
         else
-          {}
+          select_fields = ::ModeratedGrading::GRADE_ATTRIBUTES_ONLY.dup.push(:id, :submission_id)
+          provisional_grades.select(select_fields)
         end
+      elsif @grading_role == :grader
+        provisional_grades = ::ModeratedGrading::ProvisionalGrade.none
+      end
+      preloaded_prov_grades = provisional_grades.order(:id).to_a.group_by(&:submission_id)
 
-      preloaded_prov_selections = @grading_role == :moderator ? @assignment.moderated_grading_selections.index_by(&:student_id) : []
+      preloaded_prov_selections =
+        @grading_role == :moderator ? @assignment.moderated_grading_selections.index_by(&:student_id) : {}
 
-      res[:too_many_quiz_submissions] = too_many = @assignment.too_many_qs_versions?(submissions)
-      qs_versions = @assignment.quiz_submission_versions(submissions, too_many)
+      res[:too_many_quiz_submissions] = too_many = @assignment.too_many_qs_versions?(@submissions)
+      qs_versions = @assignment.quiz_submission_versions(@submissions, too_many)
 
       enrollment_types_by_id = enrollments.inject({}){ |h, e| h[e.user_id] ||= e.type; h }
 
@@ -178,35 +180,37 @@ class Assignment
         end
       end
 
-      res[:submissions] = submissions.map do |sub|
-        json = sub.as_json(:include_root => false,
-          :methods => [:submission_history, :late, :external_tool_url, :entered_score, :entered_grade],
-          :only => submission_fields
+      res[:submissions] = @submissions.map do |sub|
+        json = sub.as_json(
+          include_root: false,
+          methods: %i(submission_history late external_tool_url entered_score entered_grade),
+          only: submission_json_fields
         ).merge("from_enrollment_type" => enrollment_types_by_id[sub.user_id])
 
-        if @grading_role == :provisional_grader || @grading_role == :moderator
-          provisional_grade = sub.provisional_grade(@user, preloaded_grades: preloaded_prov_grades)
-          json.merge! provisional_grade.grade_attributes
+        if provisional_grader_or_moderator?
+          provisional_grade = sub.provisional_grade(@current_user, preloaded_grades: preloaded_prov_grades)
+          json.merge! provisional_grade_to_json(provisional_grade)
         end
 
-        comments = (provisional_grade || sub).submission_comments
+        comments = if @assignment.grades_published?
+          sub.submission_comments
+        elsif grader_comments_hidden
+          (provisional_grade || sub).submission_comments
+        else
+          sub.all_submission_comments
+        end
+
         if @assignment.grade_as_group?
           comments = comments.reject { |comment| comment.group_comment_id.nil? }
         end
-        json[:submission_comments] = comments.map do |comment|
-          comment_json = comment.as_json(
-            include_root: false,
-            methods: submission_comment_methods,
-            only: comment_fields
-          )
-          if anonymous_moderated_marking? && student_ids_to_anonymous_ids.key?(comment_json[:author_id].to_s)
-            author_id = comment_json.delete(:author_id).to_s
-            comment_json.delete(:author_name)
-            comment_json[:anonymous_id] = student_ids_to_anonymous_ids[author_id]
-            comment_json[:avatar_path] = User.default_avatar_fallback if @avatars
-          end
-          comment_json
-        end
+        json[:submission_comments] = anonymous_moderated_submission_comments(
+          assignment: @assignment,
+          course: @course,
+          current_user: @current_user,
+          avatars: avatars?,
+          submission_comments: comments,
+          submissions: @submissions
+        )
 
         # We get the attachments this way to avoid loading the
         # attachments again via the submission method that creates a
@@ -214,32 +218,37 @@ class Assignment
         json['attachments'] = attachments_for_submission[sub].map do |att|
           att.as_json(:only => [:mime_class, :comment_id, :id, :submitter_id ])
         end
-        has_crocodoc = attachments_for_submission[sub].any?(&:crocodoc_available?)
 
         sub_attachments = []
-        moderated_grading_whitelist = if is_provisional
-                                        [ sub.user, @user ].map do |u|
-                                          u.moderated_grading_ids(has_crocodoc)
-                                        end
-                                      else
-                                        sub.moderated_grading_whitelist
-                                      end
-
         url_opts = {
+          anonymous_instructor_annotations: @assignment.anonymous_instructor_annotations,
           enable_annotations: true,
-          moderated_grading_whitelist: moderated_grading_whitelist
+          moderated_grading_whitelist: sub.moderated_grading_whitelist(
+            @current_user,
+            loaded_attachments: attachments_for_submission[sub]
+          )
         }
+
+        if url_opts[:enable_annotations]
+          url_opts[:enrollment_type] = canvadocs_user_role(@course, @current_user)
+        end
 
         if json['submission_history'] && (@assignment.quiz.nil? || too_many)
           json['submission_history'] = json['submission_history'].map do |version|
             # to avoid a call to the DB in Submission#missing?
             version.assignment = sub.assignment
-            version.as_json(only: submission_fields,
+            version.as_json(only: submission_json_fields,
                             methods: %i[versioned_attachments late missing external_tool_url]).tap do |version_json|
               version_json['submission']['has_originality_report'] = version.has_originality_report?
               version_json['submission']['has_plagiarism_tool'] = version.assignment.assignment_configuration_tool_lookup_ids.present?
               version_json['submission']['has_originality_score'] = version.originality_reports_for_display.any? { |o| o.originality_score.present? }
               version_json['submission']['turnitin_data'].merge!(version.originality_data)
+
+              # Fill in the parent's anonymous ID if this version was serialized
+              # without it
+              if @assignment.anonymize_students? && version_json['submission']['anonymous_id'].blank?
+                version_json['submission']['anonymous_id'] = sub.anonymous_id
+              end
 
               if version_json['submission'][:submission_type] == 'discussion_topic'
                 url_opts[:enable_annotations] = false
@@ -253,10 +262,10 @@ class Assignment
                     # we'll use to create custom crocodoc urls for each prov grade
                     sub_attachments << a
                   end
-                  a.as_json(only: attachment_fields,
+                  a.as_json(only: attachment_json_fields,
                             methods: [:view_inline_ping_url]).tap do |json|
-                    json[:attachment][:canvadoc_url] = a.canvadoc_url(@user, url_opts)
-                    json[:attachment][:crocodoc_url] = a.crocodoc_url(@user, url_opts)
+                    json[:attachment][:canvadoc_url] = a.canvadoc_url(@current_user, url_opts)
+                    json[:attachment][:crocodoc_url] = a.crocodoc_url(@current_user, url_opts)
                     json[:attachment][:submitted_to_crocodoc] = a.crocodoc_document.present?
                     json[:attachment][:hijack_crocodoc_session] = a.crocodoc_document.present? && @should_migrate_to_canvadocs
                   end
@@ -280,32 +289,26 @@ class Assignment
           end
         end
 
-        if @grading_role == :moderator
+        if provisional_grader_or_moderator?
           pgs = preloaded_prov_grades[sub.id] || []
           selection = preloaded_prov_selections[sub.user.id]
-          unless pgs.count == 0 || (pgs.count == 1 && pgs.first.scorer_id == @user.id)
+          unless pgs.count == 0 || (pgs.count == 1 && pgs.first.scorer_id == @current_user.id)
             json['provisional_grades'] = []
             pgs.each do |pg|
-              pg_json = pg.grade_attributes.tap do |json|
-                json[:rubric_assessments] =
-                  all_provisional_rubric_assmnts.select { |ra| ra.artifact_id == pg.id }.
-                    as_json(:methods => [:assessor_name], :include_root => false)
+              current_pg_json = provisional_grade_to_json(pg).tap do |pg_json|
+                assessments = all_provisional_rubric_assessments.select {|assessment| assessment.artifact_id == pg.id}
+                pg_json[:rubric_assessments] = rubric_assessements_to_json(assessments)
 
-                json[:selected] = !!(selection && selection.selected_provisional_grade_id == pg.id)
+                pg_json[:selected] = !!(selection && selection.selected_provisional_grade_id == pg.id)
                 # this should really be provisional_doc_view_urls :: https://instructure.atlassian.net/browse/CNVS-38202
-                json[:crocodoc_urls] =
-                  sub_attachments.map { |a| pg.attachment_info(@user, a) }
-                json[:readonly] = !pg.final && (pg.scorer_id != @user.id)
-                json[:submission_comments] =
-                  pg.submission_comments.as_json(include_root: false,
-                                                 methods: submission_comment_methods,
-                                                 only: comment_fields)
+                pg_json[:crocodoc_urls] = sub_attachments.map { |a| pg.attachment_info(@current_user, a) }
+                pg_json[:readonly] = !pg.final && (pg.scorer_id != @current_user.id)
               end
 
               if pg.final
-                json['final_provisional_grade'] = pg_json
+                json['final_provisional_grade'] = current_pg_json
               else
-                json['provisional_grades'] << pg_json
+                json['provisional_grades'] << current_pg_json
               end
             end
           end
@@ -313,6 +316,7 @@ class Assignment
 
         json
       end
+
       res[:GROUP_GRADING_MODE] = @assignment.grade_as_group?
       StringifyIds.recursively_stringify_ids(res)
     ensure
@@ -321,8 +325,64 @@ class Assignment
 
     private
 
-    def anonymous_moderated_marking?
-      @course.root_account.feature_enabled?(:anonymous_moderated_marking) && @assignment.anonymous_grading?
+    def rubric_assessements_to_json(rubric_assessments)
+      rubric_assessments.map do |assessment|
+        json = assessment.as_json(methods: [:assessor_name], include_root: false)
+        assessor_id = json[:assessor_id]
+
+        if anonymous_graders?(current_user: @current_user, assignment: @assignment)
+          json.delete(:assessor_id)
+          json[:anonymous_assessor_id] = @assignment.grader_ids_to_anonymous_ids[assessor_id.to_s]
+          json.delete(:assessor_name) unless assessor_id == @current_user.id
+        end
+
+        if anonymous_students?(current_user: @current_user, assignment: @assignment)
+          json[:anonymous_user_id] = student_ids_to_anonymous_ids(
+            current_user: @current_user,
+            assignment: @assignment,
+            course: @course,
+            submissions: @submissions
+          ).fetch(json.delete(:user_id).to_s)
+        end
+
+        if grader_comments_hidden_or_other_grader?(assessor_id)
+          json['data'].each do |datum|
+            datum.delete(:comments)
+            datum.delete(:comments_html)
+          end
+        end
+
+        json
+      end
+    end
+
+    def provisional_grade_to_json(provisional_grade)
+      provisional_grade.grade_attributes.tap do |json|
+        if anonymous_graders?(current_user: @current_user, assignment: @assignment)
+          json[:anonymous_grader_id] = @assignment.grader_ids_to_anonymous_ids[json.delete(:scorer_id).to_s]
+        else
+          json[:scorer_name] = provisional_grade.scorer&.name
+        end
+      end
+    end
+
+    def provisional_grader_or_moderator?
+      @grading_role == :provisional_grader || @grading_role == :moderator
+    end
+
+    def avatars?
+      @avatars
+    end
+
+    def grader_comments_hidden_or_other_grader?(assessor_id)
+      grader_comments_hidden?(current_user: @current_user, assignment: @assignment) &&
+        other_grader?(
+          user_id: assessor_id,
+          current_user: @current_user,
+          course: @course,
+          assignment: @assignment,
+          submissions: @submissions
+        )
     end
   end
 end

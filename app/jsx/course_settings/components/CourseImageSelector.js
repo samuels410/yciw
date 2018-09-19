@@ -17,34 +17,26 @@
  */
 
 import React from 'react'
-import IconMoreLine from 'instructure-icons/lib/Line/IconMoreLine'
-import IconEditLine from 'instructure-icons/lib/Line/IconEditLine'
-import IconTrashLine from 'instructure-icons/lib/Line/IconTrashLine'
-import Button from '@instructure/ui-core/lib/components/Button'
-import PopoverMenu from '@instructure/ui-core/lib/components/PopoverMenu'
-import {MenuItem} from '@instructure/ui-core/lib/components/Menu'
-import Spinner from '@instructure/ui-core/lib/components/Spinner'
+import IconMoreLine from '@instructure/ui-icons/lib/Line/IconMore'
+import IconEditLine from '@instructure/ui-icons/lib/Line/IconEdit'
+import IconTrashLine from '@instructure/ui-icons/lib/Line/IconTrash'
+import Button from '@instructure/ui-buttons/lib/components/Button'
+import Menu, {MenuItem} from '@instructure/ui-menu/lib/components/Menu'
+import Spinner from '@instructure/ui-elements/lib/components/Spinner'
 import Modal from '../../shared/components/InstuiModal'
 import I18n from 'i18n!course_images'
 import Actions from '../actions'
 import CourseImagePicker from './CourseImagePicker'
 
 export default class CourseImageSelector extends React.Component {
-  constructor (props) {
-    super(props)
-    this.state = props.store.getState()
-  }
+  state = this.props.store.getState()
 
   componentWillMount() {
-    this.props.store.subscribe(this.handleChange)
+    this.props.store.subscribe(() => this.setState(this.props.store.getState()))
     this.props.store.dispatch(Actions.getCourseImage(this.props.courseId))
     this.setState({gettingImage: true})
-    this.mountHere = document.createElement('span');
-    this.mountHere.setAttribute('style', 'position:absolute; z-index: 9999;');
-    document.body.appendChild(this.mountHere);
   }
 
-  handleChange = () => this.setState(this.props.store.getState())
   handleModalClose = () => this.props.store.dispatch(Actions.setModalVisibility(false))
   changeImage = () => this.props.store.dispatch(Actions.setModalVisibility(true))
   removeImage = () => this.props.store.dispatch(Actions.putRemoveImage(this.props.courseId))
@@ -61,7 +53,7 @@ export default class CourseImageSelector extends React.Component {
               <Spinner title="Loading" size="small" />
             </div>
           ) : this.state.imageUrl ? (
-            <PopoverMenu
+            <Menu
               trigger={
                 <div className="CourseImageSelector__Button">
                   <Button size="small" variant="circle-primary">
@@ -74,7 +66,7 @@ export default class CourseImageSelector extends React.Component {
                 <IconEditLine /> {I18n.t('Choose image')}</MenuItem>
               <MenuItem onClick={this.removeImage}>
                 <IconTrashLine /> {I18n.t('Remove image')}</MenuItem>
-            </PopoverMenu>
+            </Menu>
           ) : (
             <Button onClick={this.changeImage}>{I18n.t('Choose Image')}</Button>
           )}
@@ -84,7 +76,6 @@ export default class CourseImageSelector extends React.Component {
           size="fullscreen"
           label={I18n.t('Choose Image')}
           onDismiss={this.handleModalClose}
-          mountNode={this.mountHere}
         >
           <CourseImagePicker
             courseId={this.props.courseId}

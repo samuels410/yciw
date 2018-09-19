@@ -19,6 +19,7 @@
 class AssessmentRequest < ActiveRecord::Base
   include Workflow
   include SendToStream
+  include Plannable
 
   belongs_to :user
   belongs_to :asset, polymorphic: [:submission]
@@ -32,6 +33,7 @@ class AssessmentRequest < ActiveRecord::Base
 
   before_save :infer_uuid
   after_save :delete_ignores
+  after_save :update_planner_overrides
   has_a_broadcast_policy
 
   def infer_uuid
@@ -61,6 +63,7 @@ class AssessmentRequest < ActiveRecord::Base
   end
 
   scope :incomplete, -> { where(:workflow_state => 'assigned') }
+  scope :complete, -> { where(:workflow_state => 'completed') }
   scope :for_assessee, lambda { |user_id| where(:user_id => user_id) }
   scope :for_assessor, lambda { |assessor_id| where(:assessor_id => assessor_id) }
   scope :for_asset, lambda { |asset_id| where(:asset_id => asset_id)}
@@ -140,4 +143,13 @@ class AssessmentRequest < ActiveRecord::Base
   end
 
   def self.serialization_excludes; [:uuid]; end
+
+  def update_planner_overrides
+    if saved_change_to_workflow_state? &&
+       workflow_state_before_last_save == 'assigned' &&
+       workflow_state == 'completed'
+      overrides = PlannerOverride.where(plannable_id: self.id, plannable_type: 'assessment_request')
+      overrides.update_all(marked_complete: true) if overrides.exists?
+    end
+  end
 end

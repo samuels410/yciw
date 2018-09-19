@@ -19,15 +19,15 @@
 import React from 'react'
 import * as enzyme from 'enzyme'
 import ChildContent from 'jsx/blueprint_courses/components/ChildContent'
-import sampleData from '../sampleData'
+import getSampleData from '../getSampleData'
 
 QUnit.module('ChildContent app')
 
 const defaultProps = () => ({
   isChangeLogOpen: false,
-  terms: sampleData.terms,
-  childCourse: sampleData.childCourse,
-  masterCourse: sampleData.masterCourse,
+  terms: getSampleData().terms,
+  childCourse: getSampleData().childCourse,
+  masterCourse: getSampleData().masterCourse,
   realRef: () => {},
   routeTo: () => {},
   selectChangeLog: () => {},
@@ -45,7 +45,7 @@ test('clearRoutes removes blueprint path', () => {
   const tree = enzyme.shallow(<ChildContent {...props} />)
   const instance = tree.instance()
   instance.clearRoutes()
-  equal(props.routeTo.getCall(0).args[0], '#!/')
+  equal(props.routeTo.getCall(0).args[0], '#!/blueprint')
 })
 
 test('showChangeLog calls selectChangeLog prop with argument', () => {

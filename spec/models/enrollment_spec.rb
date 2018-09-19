@@ -201,7 +201,6 @@ describe Enrollment do
 
     context 'when the user is a final grader' do
       before(:once) do
-        @course.root_account.enable_feature!(:anonymous_moderated_marking)
         @teacher = User.create!
         @another_teacher = User.create!
         @course.enroll_teacher(@teacher, enrollment_state: 'active', allow_multiple_enrollments: true)
@@ -210,7 +209,7 @@ describe Enrollment do
         @course.assignments.create!(moderated_grading: true, final_grader: @another_teacher, grader_count: 2)
       end
 
-      it 'removes the user as final grader from all course assignments if Anonymous Moderated Marking is enabled' do
+      it 'removes the user as final grader from all course assignments' do
         expect { @course.enrollments.find_by!(user: @teacher).destroy }.to change {
           @course.assignments.order(:created_at).pluck(:final_grader_id)
         }.from([nil, @teacher.id, @teacher.id, @another_teacher.id]).to([nil, nil, nil, @another_teacher.id])
@@ -1057,27 +1056,6 @@ describe Enrollment do
 
     it "should allow the user itself to read its own grades" do
       expect(@enrollment.grants_right?(@user, :read_grades)).to be_truthy
-    end
-  end
-
-  context "recompute_final_score_if_stale" do
-    before(:once) { course_with_student }
-    it "should only call recompute_final_score once within the cache window" do
-      expect(Enrollment).to receive(:recompute_final_score).once
-      enable_cache do
-        Enrollment.recompute_final_score_if_stale @course
-        Enrollment.recompute_final_score_if_stale @course
-      end
-    end
-
-    it "should yield iff it calls recompute_final_score" do
-      expect(Enrollment).to receive(:recompute_final_score).once
-      count = 1
-      enable_cache do
-        Enrollment.recompute_final_score_if_stale(@course, @user){ count += 1 }
-        Enrollment.recompute_final_score_if_stale(@course, @user){ count += 1 }
-      end
-      expect(count).to eql 2
     end
   end
 

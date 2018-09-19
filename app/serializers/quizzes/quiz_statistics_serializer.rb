@@ -49,6 +49,10 @@ module Quizzes
       # PS: this is always true for item analysis
       :includes_all_versions,
 
+      # whether statistics report includes sis ids
+      # always false for item analysis
+      :includes_sis_ids,
+
       :points_possible,
       :anonymous_survey,
 
@@ -143,6 +147,10 @@ module Quizzes
       object[:student_analysis].includes_all_versions
     end
 
+    def includes_sis_ids
+      object[:student_analysis].includes_sis_ids
+    end
+
     def points_possible
       quiz.points_possible
     end
@@ -166,7 +174,7 @@ module Quizzes
     private
 
     def show_speed_grader?
-      quiz.assignment.present? && quiz.published? && context.allows_speed_grader?
+      quiz.assignment.present? && quiz.published? && quiz.assignment.can_view_speed_grader?(current_user)
     end
 
     def student_analysis_report

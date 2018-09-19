@@ -123,6 +123,109 @@ describe "/submissions/show" do
     end
   end
 
+  context 'comments sidebar' do
+    before :each do
+      course_with_teacher
+      assignment_model(course: @course)
+      @submission = @assignment.submit_homework(@user)
+      view_context(@course, @teacher)
+      assign(:assignment, @assignment)
+      assign(:submission, @submission)
+    end
+
+    it "renders if assignment is not muted" do
+      @assignment.muted = false
+      @assignment.anonymous_grading = true
+      render 'submissions/show'
+      html = Nokogiri::HTML.fragment(response.body)
+      styles = html.css('.submission-details-comments').attribute('style').value.split("\;").map(&:strip)
+      expect(styles).not_to include('display: none')
+    end
+
+    it "renders if assignment is muted but not anonymous or moderated" do
+      @assignment.muted = true
+      @assignment.anonymous_grading = false
+      @assignment.moderated_grading = false
+      render 'submissions/show'
+      html = Nokogiri::HTML.fragment(response.body)
+      styles = html.css('.submission-details-comments').attribute('style').value.split("\;").map(&:strip)
+      expect(styles).not_to include('display: none')
+    end
+
+    describe 'non-owner comment visibility' do
+      let(:student) { User.create! }
+      let(:teacher) { User.create! }
+      let(:course) { Course.create!(name: 'a course') }
+
+      let(:muted_assignment) { course.assignments.create!(title: 'muted', muted: true) }
+      let(:muted_submission) { muted_assignment.submission_for_student(student) }
+      let(:unmuted_assignment) { course.assignments.create!(title: 'not muted') }
+      let(:unmuted_submission) { unmuted_assignment.submission_for_student(student) }
+
+      let(:comment_contents) do
+        html = Nokogiri::HTML.fragment(response.body)
+        comment_list = html.css('.submission-details-comments .comment_list')
+
+        # Comments are structured as:
+        # <div class="comment">
+        #   <div class="comment">the actual comment text</div>
+        #   <div class="author">author name</div>
+        #   ... and so on
+        # </div>
+        comment_list.css('.comment .comment').map { |comment| comment.text.strip }
+      end
+
+      before(:each) do
+        assign(:context, course)
+
+        course.enroll_teacher(teacher).accept(true)
+        course.enroll_student(student).accept(true)
+
+        muted_submission.add_comment(author: student, comment: 'I did a great job!')
+        muted_submission.add_comment(author: teacher, comment: 'No, you did not', hidden: true)
+
+        unmuted_submission.add_comment(author: student, comment: 'I did a great job!')
+        unmuted_submission.add_comment(author: teacher, comment: 'No, you did not')
+      end
+
+      it 'shows all comments when a teacher is viewing' do
+        assign(:current_user, teacher)
+        assign(:assignment, muted_assignment)
+        assign(:submission, muted_submission)
+
+        render 'submissions/show'
+
+        expect(comment_contents).to match_array ['I did a great job!', 'No, you did not']
+      end
+
+      context 'when a student is viewing' do
+        before(:each) do
+          assign(:current_user, student)
+        end
+
+        it 'shows all comments if the assignment is not muted' do
+          unmuted_submission.limit_comments(student)
+
+          assign(:assignment, unmuted_assignment)
+          assign(:submission, unmuted_submission)
+
+          render 'submissions/show'
+          expect(comment_contents).to match_array ['I did a great job!', 'No, you did not']
+        end
+
+        it 'shows only non-hidden comments if the assignment is muted' do
+          muted_submission.limit_comments(student)
+
+          assign(:assignment, muted_assignment)
+          assign(:submission, muted_submission)
+
+          render 'submissions/show'
+          expect(comment_contents).to match_array ['I did a great job!']
+        end
+      end
+    end
+  end
+
   context 'when assignment has a rubric' do
     before :once do
       assignment_model(course: @course)

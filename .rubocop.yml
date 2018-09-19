@@ -133,6 +133,11 @@ Style/FrozenStringLiteralComment:
   Enabled: false
 Style/AsciiComments:
   Enabled: false
+Style/BlockDelimiters:
+  Enabled: true
+  Exclude:
+    - spec/**/*_spec.rb
+    - spec/shared_examples/**/*.rb
 
 # RSpec cops we don't care about
 RSpec/MessageSpies:
@@ -143,7 +148,8 @@ RSpec/VerifiedDoubles:
   Enabled: false
 RSpec/NamedSubject:
   Enabled: false
-
+RSpec/NotToNot:
+  Enabled: false
 # RSpec cops we care extra about
 RSpec/EmptyExampleGroup:
   Severity: error
@@ -183,7 +189,7 @@ Lint/AmbiguousRegexpLiteral:
   Severity: convention
 Lint/AmbiguousBlockAssociation:
   Exclude:
-    - "spec/**/*"
+    - spec/**/*
 Lint/UselessAssignment:
   Severity: convention
 Lint/Debugger:
@@ -234,9 +240,10 @@ Metrics/ModuleLength:
 Metrics/BlockLength:
   Max: 50
   Exclude:
-  - 'gems/*/spec/**/*.rb'
-  - 'gems/plugins/*/spec_canvas/**/*.rb'
-  - 'spec/**/*.rb'
+  - gems/*/spec/**/*.rb
+  - gems/plugins/*/spec_canvas/**/*.rb
+  - spec/**/*.rb
+  - pact/spec/**/*_spec.rb
 Metrics/CyclomaticComplexity:
   Max: 28
 Metrics/PerceivedComplexity:
@@ -263,3 +270,8 @@ RSpec/ScatteredSetup:
   Enabled: false
 Style/RescueStandardError:
   Enabled: false
+
+Specs/EnsureSpecExtension:
+  Enabled: true
+  Exclude:
+    - spec/shared_examples/**/*

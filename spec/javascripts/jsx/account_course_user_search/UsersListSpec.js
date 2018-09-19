@@ -62,11 +62,11 @@ const usersProps = {
 
 test('displays users that are passed in as props', () => {
   const wrapper = shallow(<UsersList {...usersProps} />)
-  const renderedList = wrapper.find(UsersListRow)
+  const nodes = wrapper.find(UsersListRow).getElements()
 
-  equal(renderedList.nodes[0].props.user.name, 'UserA')
-  equal(renderedList.nodes[1].props.user.name, 'UserB')
-  equal(renderedList.nodes[2].props.user.name, 'UserC')
+  equal(nodes[0].props.user.name, 'UserA')
+  equal(nodes[1].props.user.name, 'UserB')
+  equal(nodes[2].props.user.name, 'UserC')
 });
 
 Object.entries({
@@ -98,16 +98,16 @@ Object.entries({
 
     test(`sorting by ${columnID} ${sortOrder} puts ${expectedArrow}-arrow on ${label} only`, () => {
       const wrapper = mount(<UsersList {...props} />)
-      equal(wrapper.find(`IconMiniArrow${unexpectedArrow}Solid`).length, 0, `no columns have an ${unexpectedArrow} arrow`)
-      const icons = wrapper.find(`IconMiniArrow${expectedArrow}Solid`)
+      equal(wrapper.find(`IconMiniArrow${unexpectedArrow}`).length, 0, `no columns have an ${unexpectedArrow} arrow`)
+      const icons = wrapper.find(`IconMiniArrow${expectedArrow}`)
       equal(icons.length, 1, `only one ${expectedArrow} arrow`)
       const header = icons.closest('UsersListHeader')
-      ok(header.find('ScreenReaderContent').text().match(RegExp(expectedTip, 'i')), 'has right tooltip')
+      ok(header.find('Tooltip').prop('tip').match(RegExp(expectedTip, 'i')), 'has right tooltip')
       ok(header.text().includes(label), `${label} is the one that has the ${expectedArrow} arrow`)
     })
 
     test(`clicking the ${label} column header calls onChangeSort with ${columnID}`, function() {
-      const sortSpy = this.spy()
+      const sortSpy = sinon.spy()
       const wrapper = mount(<UsersList {...{
         ...props,
         onUpdateFilters: sortSpy

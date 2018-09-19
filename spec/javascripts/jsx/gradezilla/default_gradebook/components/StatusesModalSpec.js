@@ -17,7 +17,7 @@
  */
 
 import React from 'react';
-import { shallow, mount, ReactWrapper } from 'enzyme';
+import { shallow, mount, ReactWrapper } from 'old-enzyme-2.x-you-need-to-upgrade-this-spec-to-enzyme-3.x-by-importing-just-enzyme';
 import StatusesModal from 'jsx/gradezilla/default_gradebook/components/StatusesModal';
 import { statusColors } from 'jsx/gradezilla/default_gradebook/constants/colors';
 
@@ -101,7 +101,7 @@ QUnit.module('StatusesModal', function (suiteHooks) {
   });
 
   test('on close prop is passed to Modal onExit', function () {
-    const onClose = this.stub();
+    const onClose = sinon.stub();
     const wrapper = shallow(<StatusesModal {...defaultProps({ onClose })} />);
     equal(wrapper.find('Modal').prop('onExited'), onClose);
   });
@@ -130,7 +130,7 @@ QUnit.module('StatusesModal', function (suiteHooks) {
   QUnit.module('StatusesModal#updateStatusColors');
 
   test('it calls afterUpdateStatusColors', function () {
-    const afterUpdateStatusColors = this.stub();
+    const afterUpdateStatusColors = sinon.stub();
     const wrapper = shallow(<StatusesModal {...defaultProps({ afterUpdateStatusColors })} />);
     const instance = wrapper.instance();
     instance.updateStatusColors('late')('#000000');
@@ -139,7 +139,7 @@ QUnit.module('StatusesModal', function (suiteHooks) {
   });
 
   test('it calls afterUpdateStatusColors with updated colors', function () {
-    const afterUpdateStatusColors = this.stub();
+    const afterUpdateStatusColors = sinon.stub();
     const color = '#000000';
     const expectedColors = {
       late: color,
@@ -157,7 +157,7 @@ QUnit.module('StatusesModal', function (suiteHooks) {
   });
 
   test('it calls afterUpdateStatusColors with updated successFn', function () {
-    const successFn = this.stub();
+    const successFn = sinon.stub();
     function afterUpdateStatusColors (_color, fn) { fn(); }
     const wrapper = shallow(<StatusesModal {...defaultProps({ afterUpdateStatusColors })} />);
     const instance = wrapper.instance();
@@ -168,7 +168,7 @@ QUnit.module('StatusesModal', function (suiteHooks) {
   });
 
   test('it calls afterUpdateStatusColors and sets openPopover to null', function () {
-    const successFn = this.stub();
+    const successFn = sinon.stub();
     function afterUpdateStatusColors (_color, fn) { fn(); }
     const wrapper = shallow(<StatusesModal {...defaultProps({ afterUpdateStatusColors })} />);
     const instance = wrapper.instance();
@@ -179,7 +179,7 @@ QUnit.module('StatusesModal', function (suiteHooks) {
   });
 
   test('it calls afterUpdateStatusColors with updated failureFn', function () {
-    const failureFn = this.stub();
+    const failureFn = sinon.stub();
     function afterUpdateStatusColors (_color, _fn, fn) { fn(); }
     const wrapper = shallow(<StatusesModal {...defaultProps({ afterUpdateStatusColors })} />);
     const instance = wrapper.instance();
@@ -230,7 +230,7 @@ QUnit.module('StatusesModal', function (suiteHooks) {
     const modalContent = new ReactWrapper(wrapper.node.modalContentRef, wrapper.node);
     modalContent.find('StatusColorListItem PopoverTrigger Button').at(0).simulate('click');
     const colorPickerContent = new ReactWrapper(wrapper.node.colorPickerContents.late, wrapper.node);
-    const applyButton = colorPickerContent.find('button').findWhere(button => button.prop('children') === 'Apply');
+    const applyButton = colorPickerContent.find('button').filterWhere(button => button.text() === 'Apply');
     applyButton.simulate('click');
     strictEqual(modalContent.find('StatusColorListItem Popover').at(0).prop('show'), false);
   });
@@ -253,7 +253,7 @@ QUnit.module('StatusesModal', function (suiteHooks) {
     const modalContent = new ReactWrapper(wrapper.node.modalContentRef, wrapper.node);
     modalContent.find('StatusColorListItem PopoverTrigger Button').at(0).simulate('click');
     const colorPickerContent = new ReactWrapper(wrapper.node.colorPickerContents.late, wrapper.node);
-    const applyButton = colorPickerContent.find('button').findWhere(button => button.prop('children') === 'Cancel');
+    const applyButton = colorPickerContent.find('button').filterWhere(button => button.text() === 'Cancel');
     applyButton.simulate('click');
     strictEqual(modalContent.find('StatusColorListItem Popover').at(0).prop('show'), false);
   });
@@ -262,7 +262,7 @@ QUnit.module('StatusesModal', function (suiteHooks) {
 
   test('selecting a color and clicking Apply in the color picker passes the ' +
     'color to afterUpdateStatusColors', function () {
-    const afterUpdateStatusColors = this.stub();
+    const afterUpdateStatusColors = sinon.stub();
     const wrapper = mount(<StatusesModal {...defaultProps({ afterUpdateStatusColors })} />);
     const instance = wrapper.instance();
     instance.open();
@@ -272,7 +272,7 @@ QUnit.module('StatusesModal', function (suiteHooks) {
     const colorPickerContent = new ReactWrapper(wrapper.node.colorPickerContents.late, wrapper.node);
     const whiteSwatch = colorPickerContent.find('button').findWhere(button => button.prop('title') === 'white (#FFFFFF)');
     whiteSwatch.simulate('click');
-    const applyButton = colorPickerContent.find('button').findWhere(button => button.prop('children') === 'Apply');
+    const applyButton = colorPickerContent.find('button').filterWhere(button => button.text() === 'Apply');
     applyButton.simulate('click');
     strictEqual(afterUpdateStatusColors.firstCall.args[0].late, '#FFFFFF');
     wrapper.unmount();

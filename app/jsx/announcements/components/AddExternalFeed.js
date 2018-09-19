@@ -22,18 +22,18 @@ import {bool, func} from 'prop-types'
 import {connect} from 'react-redux'
 import {bindActionCreators} from 'redux'
 import $ from 'jquery'
-import 'compiled/jquery.rails_flash_notifications'
+import 'compiled/jquery.rails_flash_notifications' // eslint-disable-line
 
-import Button from '@instructure/ui-core/lib/components/Button'
-import Container from '@instructure/ui-core/lib/components/Container'
-import Checkbox from '@instructure/ui-core/lib/components/Checkbox'
-import Dialog from '@instructure/ui-core/lib/components/Dialog'
-import TextInput from '@instructure/ui-core/lib/components/TextInput'
-import RadioInput from '@instructure/ui-core/lib/components/RadioInput'
-import RadioInputGroup from '@instructure/ui-core/lib/components/RadioInputGroup'
-import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent'
-import ToggleDetails from '@instructure/ui-core/lib/components/ToggleDetails'
-import { ConnectedRSSFeedList } from './RSSFeedList'
+import Button from '@instructure/ui-buttons/lib/components/Button'
+import View from '@instructure/ui-layout/lib/components/View'
+import Checkbox from '@instructure/ui-forms/lib/components/Checkbox'
+import Dialog from '@instructure/ui-a11y/lib/components/Dialog'
+import TextInput from '@instructure/ui-forms/lib/components/TextInput'
+import RadioInput from '@instructure/ui-forms/lib/components/RadioInput'
+import RadioInputGroup from '@instructure/ui-forms/lib/components/RadioInputGroup'
+import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
+import ToggleDetails from '@instructure/ui-toggle-details/lib/components/ToggleDetails'
+import {ConnectedRSSFeedList} from './RSSFeedList'
 
 import actions from '../actions'
 import select from '../../shared/select'
@@ -47,7 +47,7 @@ const verbosityTypes = [
 export default class AddExternalFeed extends React.Component {
   static propTypes = {
     defaultOpen: bool,
-    isSaving: bool.isRequired,
+    isSaving: bool.isRequired, // eslint-disable-line
     addExternalFeed: func.isRequired
   }
 
@@ -65,7 +65,7 @@ export default class AddExternalFeed extends React.Component {
 
   focusOnToggleHeader = () => {
     setTimeout(() => {
-      this.toggleBtn.focus();
+      this.toggleBtn.focus()
     })
   }
 
@@ -80,9 +80,12 @@ export default class AddExternalFeed extends React.Component {
 
   toggleOpenState = (event, expanded) => {
     $.screenReaderFlashMessage(I18n.t('dropdown changed state to %{expanded}.', {expanded}))
-    this.setState({
-      isOpen: expanded
-    }, this.focusOnToggleHeader)
+    this.setState(
+      {
+        isOpen: expanded
+      },
+      this.focusOnToggleHeader
+    )
   }
 
   clearAddRSS = () => {
@@ -126,13 +129,13 @@ export default class AddExternalFeed extends React.Component {
     )
   }
 
-  toggleRef = (c) => {
+  toggleRef = c => {
     this.toggleBtn = c && c.querySelector('button')
   }
 
   renderTextInput(value, text, onTextChange, name) {
     return (
-      <Container margin="small" display="block">
+      <View margin="small" display="block">
         <TextInput
           name={name}
           label={<ScreenReaderContent>{text}</ScreenReaderContent>}
@@ -140,29 +143,29 @@ export default class AddExternalFeed extends React.Component {
           onChange={onTextChange}
           value={value}
         />
-      </Container>
+      </View>
     )
   }
 
   renderRssFeedList() {
     return (
-      <Container
+      <View
         margin="small 0"
         as="div"
         textAlign="start"
         className="announcements-tray__rss-feed-root"
       >
-        <ConnectedRSSFeedList focusLastElement={this.focusOnToggleHeader}/>
-      </Container>
+        <ConnectedRSSFeedList focusLastElement={this.focusOnToggleHeader} />
+      </View>
     )
   }
 
   renderEmbeddedSelection() {
     return (
-      <Container margin="small 0" display="block">
+      <View margin="small 0" display="block">
         <RadioInputGroup
           name="verbosity-selection"
-          onChange={this.handleRadioSelectionSetVerbosity}
+          onChange={(e, val) => this.handleRadioSelectionSetVerbosity(val)}
           defaultValue={this.state.verbosityType}
           layout="inline"
           description={
@@ -173,13 +176,13 @@ export default class AddExternalFeed extends React.Component {
             <RadioInput key={input.value} value={input.value} label={input.label} />
           ))}
         </RadioInputGroup>
-      </Container>
+      </View>
     )
   }
 
   renderSubmitButtons() {
     return (
-      <Container
+      <View
         id="external-rss-feed__submit-button-group"
         margin="medium 0 small"
         textAlign="end"
@@ -198,14 +201,14 @@ export default class AddExternalFeed extends React.Component {
         >
           {I18n.t('Add Feed')}
         </Button>
-      </Container>
+      </View>
     )
   }
 
   renderSpecificHeaderPhrase() {
     return (
       <div className="announcements-tray-row">
-        <Container margin="medium 0" display="block">
+        <View margin="medium 0" display="block">
           <Checkbox
             checked={this.state.phraseChecked}
             onChange={this.handleCheckboxPhraseChecked}
@@ -219,14 +222,14 @@ export default class AddExternalFeed extends React.Component {
               this.handleTextInputSetPhrase,
               'external-rss-feed__phrase-input'
             )}
-        </Container>
+        </View>
       </div>
     )
   }
 
   render() {
     return (
-      <Container id="external-rss-feed__header" display="block" textAlign="start">
+      <View id="external-rss-feed__header" display="block" textAlign="start">
         <span id="external-rss-feed__toggle-button" ref={this.toggleRef}>
           <ToggleDetails
             id="external-rss-feed__toggle"
@@ -235,7 +238,11 @@ export default class AddExternalFeed extends React.Component {
             expanded={this.state.isOpen}
             name="external-rss-feed__toggle"
           >
-            <Dialog open={this.state.isOpen} shouldReturnFocus defaultFocusElement={() => this.toggleBtn}>
+            <Dialog
+              open={this.state.isOpen}
+              shouldReturnFocus
+              defaultFocusElement={() => this.toggleBtn}
+            >
               {this.renderTextInput(
                 this.state.feedURL,
                 I18n.t('Feed url'),
@@ -249,7 +256,7 @@ export default class AddExternalFeed extends React.Component {
           </ToggleDetails>
         </span>
         {this.renderRssFeedList()}
-      </Container>
+      </View>
     )
   }
 }
@@ -260,4 +267,7 @@ const connectState = state =>
   })
 const connectActions = dispatch =>
   bindActionCreators(select(actions, ['addExternalFeed']), dispatch)
-export const ConnectedAddExternalFeed = connect(connectState, connectActions)(AddExternalFeed)
+export const ConnectedAddExternalFeed = connect(
+  connectState,
+  connectActions
+)(AddExternalFeed)

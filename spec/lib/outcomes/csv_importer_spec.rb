@@ -157,7 +157,8 @@ describe Outcomes::CsvImporter do
     it 'works when no ratings are present' do
       expect_ok_import(csv_file('no-ratings'))
 
-      expect(by_guid['c'].rubric_criterion).to eq(nil)
+      expect(by_guid['c'].data).not_to be_nil
+      expect(by_guid['c'].rubric_criterion).not_to be_nil
     end
 
     it 'properly sets scoring types' do
@@ -240,15 +241,19 @@ describe Outcomes::CsvImporter do
       expect(LearningOutcomeGroup.count).to eq(4)
     end
 
-    it 'does not require workflow_state' do
-      no_workflow = headers - ['workflow_state']
-      rows = [no_workflow] + (1..3).map do |ix|
-        group_row_with_headers(no_workflow, vendor_guid: ix)
+    context 'with optional headers' do
+      Outcomes::CsvImporter::OPTIONAL_FIELDS.each do |field|
+        it "does not require #{field}" do
+          no_field = headers - [field]
+          rows = [no_field] + (1..3).map do |ix|
+            group_row_with_headers(no_field, vendor_guid: ix)
+          end
+          rows = rows.to_a + [outcome_row_with_headers(no_field, vendor_guid: 'outcome')]
+          import_fake_csv(rows)
+          expect(LearningOutcomeGroup.count).to eq(4)
+          expect(LearningOutcome.count).to eq(1)
+        end
       end
-      rows = rows.to_a + [outcome_row_with_headers(no_workflow, vendor_guid: 'outcome')]
-      import_fake_csv(rows)
-      expect(LearningOutcomeGroup.count).to eq(4)
-      expect(LearningOutcome.count).to eq(1)
     end
   end
 

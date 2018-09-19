@@ -161,6 +161,7 @@ class ApplicationController < ActionController::Base
       @js_env[:TIMEZONE] = Time.zone.tzinfo.identifier if !@js_env[:TIMEZONE]
       @js_env[:CONTEXT_TIMEZONE] = @context.time_zone.tzinfo.identifier if !@js_env[:CONTEXT_TIMEZONE] && @context.respond_to?(:time_zone) && @context.time_zone.present?
       unless @js_env[:LOCALE]
+        I18n.set_locale_with_localizer
         @js_env[:LOCALE] = I18n.locale.to_s
         @js_env[:BIGEASY_LOCALE] = I18n.bigeasy_locale
         @js_env[:FULLCALENDAR_LOCALE] = I18n.fullcalendar_locale
@@ -528,9 +529,7 @@ class ApplicationController < ActionController::Base
   end
 
   def user_url(*opts)
-    opts[0] == @current_user && !@current_user.grants_right?(@current_user, session, :view_statistics) ?
-      user_profile_url(@current_user) :
-      super
+    opts[0] == @current_user ? user_profile_url(@current_user) : super
   end
 
   def tab_enabled?(id, opts = {})
@@ -538,8 +537,15 @@ class ApplicationController < ActionController::Base
     tabs = Rails.cache.fetch(['tabs_available', @context, @current_user, @domain_root_account,
       session[:enrollment_uuid]].cache_key, expires_in: 1.hour) do
 
+      precalculated_permissions = @context.is_a?(Course) && @current_user &&
+        @current_user.precalculate_permissions_for_courses([@context], SectionTabHelper::PERMISSIONS_TO_PRECALCULATE, [@domain_root_account])&.values&.first
+
       @context.tabs_available(@current_user,
-        :session => session, :include_hidden_unused => true, :root_account => @domain_root_account)
+        :session => session,
+        :include_hidden_unused => true,
+        :root_account => @domain_root_account,
+        :precalculated_permissions => precalculated_permissions
+      )
     end
     valid = tabs.any?{|t| t[:id] == id }
     render_tab_disabled unless valid || opts[:no_render]
@@ -619,7 +625,7 @@ class ApplicationController < ActionController::Base
       path_params[:format] = nil
       @headers = !!@current_user if @headers != false
       @files_domain = @account_domain && @account_domain.host_type == 'files'
-      format.html {
+      format.any(:html, :pdf) do
         return unless fix_ms_office_redirects
         store_location
         return redirect_to login_url(params.permit(:authentication_provider)) if !@files_domain && !@current_user
@@ -637,8 +643,8 @@ class ApplicationController < ActionController::Base
           end
         end
 
-        render "shared/unauthorized", status: :unauthorized
-      }
+        render "shared/unauthorized", status: :unauthorized, content_type: Mime::Type.lookup('text/html'), formats: :html
+      end
       format.zip { redirect_to(url_for(path_params)) }
       format.json { render_json_unauthorized }
       format.all { render plain: 'Unauthorized', status: :unauthorized }
@@ -825,7 +831,7 @@ class ApplicationController < ActionController::Base
           groups = @context.current_groups.shard(opts[:cross_shard] ? @context.in_region_associated_shards : Shard.current).to_a
         end
       end
-      groups.reject!{|g| g.context_type == "Course" && g.context.concluded?}
+      groups = @context.filter_visible_groups_for_user(groups)
 
       if opts[:favorites_first]
         favorite_course_ids = @context.favorite_context_ids("Course")
@@ -904,23 +910,15 @@ class ApplicationController < ActionController::Base
 
     log_course(course)
 
-    if @current_user
-      submissions = @current_user.submissions.shard(@current_user).to_a
-      submissions.each{ |s| s.mute if s.muted_assignment? }
-    else
-      submissions = []
-    end
-
     assignments.map! {|a| a.overridden_for(@current_user)}
     sorted = SortsAssignments.by_due_date({
       :assignments => assignments,
       :user => @current_user,
       :session => session,
-      :upcoming_limit => 1.week.from_now,
-      :submissions => submissions
+      :upcoming_limit => 1.week.from_now
     })
 
-    sorted.upcoming.sort
+    sorted.upcoming.call.sort
   end
 
   def log_course(course)
@@ -1303,7 +1301,7 @@ class ApplicationController < ActionController::Base
   def render_optional_error_file(status)
     path = "#{Rails.public_path}/#{status.to_s[0,3]}"
     if File.exist?(path)
-      render :file => path, :status => status, :content_type => Mime::HTML, :layout => false, :formats => [:html]
+      render :file => path, :status => status, :content_type => Mime::Type.lookup('text/html'), :layout => false, :formats => [:html]
     else
       head status
     end
@@ -1595,7 +1593,19 @@ class ApplicationController < ActionController::Base
                                                         assignment: @assignment,
                                                         launch: @lti_launch,
                                                         tool: @tool})
-        adapter = Lti::LtiOutboundAdapter.new(@tool, @current_user, @context).prepare_tool_launch(@return_url, variable_expander, opts)
+
+        adapter = if @tool.settings.fetch('use_1_3', false)
+          Lti::LtiAdvantageAdapter.new(
+            tool: @tool,
+            user: @current_user,
+            context: @context,
+            return_url: @return_url,
+            expander: variable_expander,
+            opts: opts
+          )
+        else
+          Lti::LtiOutboundAdapter.new(@tool, @current_user, @context).prepare_tool_launch(@return_url, variable_expander, opts)
+        end
 
         if tag.try(:context_module)
           # if you change this, see also url_show.html.erb
@@ -1700,13 +1710,11 @@ class ApplicationController < ActionController::Base
     res = "#{request.protocol}#{host}"
 
     shard.activate do
-      ts, sig = @current_user && @current_user.access_verifier
-
       # add parameters so that the other domain can create a session that
       # will authorize file access but not full app access.  We need this in
       # case there are relative URLs in the file that point to other pieces
       # of content.
-      opts = { :user_id => @current_user.try(:id), :ts => ts, :sf_verifier => sig }
+      opts = generate_access_verifier
       opts[:verifier] = verifier if verifier.present?
 
       if download
@@ -1819,9 +1827,7 @@ class ApplicationController < ActionController::Base
             redirect_to_login
           end
         end
-        format.json do
-          render_json_unauthorized
-        end
+        format.json { render_json_unauthorized }
       end
       return false
     end
@@ -1933,7 +1939,7 @@ class ApplicationController < ActionController::Base
 
   def logout_current_user
     logged_in_user.try(:stamp_logout_time!)
-    InstFS.logout(logged_in_user)
+    InstFS.logout(logged_in_user) rescue nil
     destroy_session
   end
 
@@ -2205,17 +2211,14 @@ class ApplicationController < ActionController::Base
     js_env hash
   end
 
-  def set_js_assignment_data(include_assignment_permissions: false)
+  def set_js_assignment_data
     rights = [:manage_assignments, :manage_grades, :read_grades, :manage]
     permissions = @context.rights_status(@current_user, *rights)
     permissions[:manage_course] = permissions[:manage]
     permissions[:manage] = permissions[:manage_assignments]
-
-    if include_assignment_permissions
-      permissions[:by_assignment_id] = @context.assignments.map do |assignment|
-        [assignment.id, {update: assignment.user_can_update?(@current_user, session)}]
-      end.to_h
-    end
+    permissions[:by_assignment_id] = @context.assignments.map do |assignment|
+      [assignment.id, {update: assignment.user_can_update?(@current_user, session)}]
+    end.to_h
 
     js_env({
       :URLS => {
@@ -2294,15 +2297,13 @@ class ApplicationController < ActionController::Base
     nil
   end
 
-  def show_request_delete_account
-    false
-  end
-  helper_method :show_request_delete_account
-
-  def request_delete_account_link
+  def self.test_cluster_name
     nil
   end
-  helper_method :request_delete_account_link
+
+  def self.test_cluster?
+    false
+  end
 
   def setup_live_events_context
     ctx = {}
@@ -2396,7 +2397,9 @@ class ApplicationController < ActionController::Base
         analytics: @account.service_enabled?(:analytics),
         can_masquerade: @account.grants_right?(@current_user, session, :become_user),
         can_message_users: @account.grants_right?(@current_user, session, :send_messages),
-        can_edit_users: @account.grants_any_right?(@current_user, session, :manage_students, :manage_user_logins)
+        can_edit_users: @account.grants_any_right?(@current_user, session, :manage_students, :manage_user_logins),
+        can_manage_groups: @account.grants_right?(@current_user, session, :manage_groups),           # access to view user groups?
+        can_manage_admin_users: @account.grants_right?(@current_user, session, :manage_admin_users)  # access to manage user avatars page?
       }
     })
     render html: '', layout: true

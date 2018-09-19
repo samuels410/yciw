@@ -315,29 +315,24 @@ describe UserLearningObjectScopes do
       end
     end
 
-    context "only_favorites" do
+    context "context_codes" do
       before :once do
-        @u = User.create!
-
-        @c1 = course_with_student(:active_all => true, :user => @u).course
-        @u.favorites.create!(:context_type => "Course", :context_id => @c1)
-        @q1 = assignment_quiz([], :course => @c1, :user => @user)
-
-        @c2 = course_with_student(:active_all => true, :user => @u).course
-        @u.favorites.where(:context_type => "Course", :context_id => @c2).first.destroy
-        @q2 = assignment_quiz([], :course => @c2, :user => @user)
-        DueDateCacher.recompute(@q1.assignment)
-        DueDateCacher.recompute(@q2.assignment)
+        @opts = {scope_only: true}
+        @course1 = course_with_student(active_all: true).course
+        @course2 = course_with_student(active_all: true, user: @student).course
+        @assignment1 = assignment_model(context: @course1, due_at: 1.day.from_now, submission_types: "online_upload")
+        @assignment2 = assignment_model(context: @course2, due_at: 1.day.from_now, submission_types: "online_upload")
+        DueDateCacher.recompute(@assignment1)
+        DueDateCacher.recompute(@assignment2)
       end
 
-      it "should include assignments from all courses by default" do
-        expect(@u.assignments_for_student('submitting').count).to eq 2
+      it "should include assignments from active courses by default" do
+        expect(@student.assignments_for_student('submitting', @opts).order(:id)).to eq [@assignment1, @assignment2]
       end
 
-      it "should not include assignments from unfavorited courses if requested" do
-        assignments = @u.assignments_for_student('submitting', only_favorites: true)
-        expect(assignments.count).to eq 1
-        expect(assignments.map(&:id)).to be_include @q1.assignment_id
+      it "should only include assignments from given course ids" do
+        opts = @opts.merge({course_ids: [@course1.id], group_ids: []})
+        expect(@student.assignments_for_student('submitting', opts).order(:id)).to eq [@assignment1]
       end
     end
 
@@ -751,31 +746,53 @@ describe UserLearningObjectScopes do
 
       # make some assignments and submissions
       [@course1, @course2].each do |course|
-        assignment = course.assignments.create!(:title => "some assignment", :submission_types => ['online_text_entry'])
+        assignment = course.assignments.create!(
+          final_grader: @teacher,
+          grader_count: 2,
+          moderated_grading: true,
+          submission_types: ['online_text_entry'],
+          title: 'some assignment'
+        )
         [@student_a, @student_b].each do |student|
           assignment.submit_homework student, body: "submission for #{student.name}"
         end
       end
       @course2.assignments.first.update_attribute(:moderated_grading, true)
+      @course2.assignments.first.update_attribute(:grader_count, 2)
     end
 
     it "should not count assignments with no provisional grades" do
       expect(@teacher.assignments_needing_moderation.length).to eq 0
     end
 
-    it "should count assignments needing moderation" do
+    it "shows a count for final grader" do
       assmt = @course2.assignments.first
-      assmt.grade_student(@student_a, :grade => "1", :grader => @teacher, :provisional => true)
-      expect(@teacher.assignments_needing_moderation.length).to eq 1
+      assmt.update!(final_grader: @teacher)
+      assmt.grade_student(@student_a, grade: "1", grader: @teacher, provisional: true)
+      expect(@teacher.assignments_needing_moderation).to eq [assmt]
+    end
 
-      assmt.update_attribute(:grades_published_at, Time.now.utc)
-      expect(@teacher.assignments_needing_moderation.length).to eq 0 # should not count anymore once grades are published
+    it "does not show a count for admins that can moderate grades but are not final grader" do
+      admin = account_admin_user(account: @course2.account)
+      assmt = @course2.assignments.first
+      assmt.update!(final_grader: @teacher)
+      assmt.grade_student(@student_a, grade: "1", grader: @teacher, provisional: true)
+      expect(admin.assignments_needing_moderation).to be_empty
+    end
+
+    it "does not count assignments whose grades have been published" do
+      assmt = @course2.assignments.first
+      assmt.update!(final_grader: @teacher)
+      assmt.grade_student(@student_a, grade: "1", grader: @teacher, provisional: true)
+      assmt.update!(grades_published_at: Time.now.utc)
+      expect(@teacher.assignments_needing_moderation).to be_empty
     end
 
     it "should not return duplicates" do
       assmt = @course2.assignments.first
-      assmt.grade_student(@student_a, :grade => "1", :grader => @teacher, :provisional => true)
-      assmt.grade_student(@student_b, :grade => "2", :grader => @teacher, :provisional => true)
+      assmt.update!(final_grader: @teacher)
+      assmt.grade_student(@student_a, grade: "1", grader: @teacher, provisional: true)
+      assmt.grade_student(@student_b, grade: "2", grader: @teacher, provisional: true)
       expect(@teacher.assignments_needing_moderation.length).to eq 1
       expect(@teacher.assignments_needing_moderation.first).to eq assmt
     end
@@ -910,32 +927,25 @@ describe UserLearningObjectScopes do
         end
       end
 
-      context "only_favorites" do
+      context "context_codes" do
         before :once do
-          @u = User.create!
-
-          @c1 = course_with_student(:active_all => true, :user => @u).course
-          @u.favorites.create!(:context_type => "Course", :context_id => @c1)
-          @dt1 = discussion_topic_model(:context => @c1)
-          @dt1.todo_date = Time.zone.now
-          @dt1.save!
-          @dt1.publish!
-
-          @c2 = course_with_student(:active_all => true, :user => @u).course
-          @u.favorites.where(:context_type => "Course", :context_id => @c2).first.destroy
-          @dt2 = discussion_topic_model(:context => @c2)
-          @dt2.todo_date = Time.zone.now
-          @dt2.save!
-          @dt2.publish!
+          @opts = opts.merge({scope_only: true})
+          @course1 = course_with_student(active_all: true).course
+          @course2 = course_with_student(active_all: true, user: @student).course
+          group_with_user(active_all: true, user: @student)
+          @discussion1 = discussion_topic_model(context: @course1, todo_date: 1.day.from_now)
+          @discussion2 = discussion_topic_model(context: @course2, todo_date: 1.day.from_now)
+          @group_discussion = discussion_topic_model(context: @group, todo_date: 1.day.from_now)
         end
 
-        it "should include topics from all courses by default" do
-          expect(@u.discussion_topics_needing_viewing(opts).count).to eq 2
+        it "should include assignments from active courses by default" do
+          expect(@student.discussion_topics_needing_viewing(@opts).order(:id)).to eq [@discussion1, @discussion2, @group_discussion]
         end
 
-        it "should not include topics from unfavorited courses if requested" do
-          expect(@u.discussion_topics_needing_viewing(opts.merge(only_favorites: true)).count).to eq 1
-          expect(@u.discussion_topics_needing_viewing(opts.merge(only_favorites: true)).map(&:id)).to be_include @dt1.id
+        it "should only include assignments from given course/group ids" do
+          expect(@student.discussion_topics_needing_viewing(@opts.merge({course_ids: [], group_ids: []})).order(:id)).to eq []
+          opts = @opts.merge({course_ids: [@course1.id], group_ids: [@group.id]})
+          expect(@student.discussion_topics_needing_viewing(opts).order(:id)).to eq [@discussion1, @group_discussion]
         end
       end
     end
@@ -950,7 +960,7 @@ describe UserLearningObjectScopes do
         @course_announcement = announcement_model(context: @group1)
         @account = @course.account
         @group_category = @account.group_categories.create(name: 'Project Group')
-        @group2 = group_model(name: 'Project Group 1', group_category: @group_category, context: @account)
+        @group2 = group_model(name: 'Project Group 2', group_category: @group_category, context: @account)
         group_membership_model(group: @group2, user: @student)
         @account_topic = discussion_topic_model(context: @group2)
         @account_announcement = announcement_model(context: @group2)
@@ -1119,30 +1129,25 @@ describe UserLearningObjectScopes do
       end
     end
 
-    context "only_favorites" do
+    context "context_codes" do
       before :once do
-        @u = User.create!
-
-        @c1 = course_with_student(:active_all => true, :user => @u).course
-        @u.favorites.create!(:context_type => "Course", :context_id => @c1)
-        @wp1 = wiki_page_model(:course => @c1)
-        @wp1.todo_date = Time.zone.now
-        @wp1.save!
-
-        @c2 = course_with_student(:active_all => true, :user => @u).course
-        @u.favorites.where(:context_type => "Course", :context_id => @c2).first.destroy
-        @wp2 = wiki_page_model(:course => @c2)
-        @wp2.todo_date = Time.zone.now
-        @wp2.save!
+        @opts = opts.merge({scope_only: true})
+        @course1 = course_with_student(active_all: true).course
+        @course2 = course_with_student(active_all: true, user: @student).course
+        group_with_user(active_all: true, user: @student)
+        @discussion1 = wiki_page_model(course: @course1, todo_date: 1.day.from_now)
+        @discussion2 = wiki_page_model(course: @course2, todo_date: 1.day.from_now)
+        @group_discussion = wiki_page_model(course: @group, todo_date: 1.day.from_now)
       end
 
-      it "should include pages from all courses by default" do
-        expect(@u.wiki_pages_needing_viewing(opts).count).to eq 2
+      it "should include assignments from active courses by default" do
+        expect(@student.wiki_pages_needing_viewing(@opts).order(:id)).to eq [@discussion1, @discussion2, @group_discussion]
       end
 
-      it "should not include pages from unfavorited courses if requested" do
-        expect(@u.wiki_pages_needing_viewing(opts.merge(only_favorites: true)).count).to eq 1
-        expect(@u.wiki_pages_needing_viewing(opts.merge(only_favorites: true)).map(&:id)).to be_include @wp1.id
+      it "should only include assignments from given course/group ids" do
+        expect(@student.wiki_pages_needing_viewing(@opts.merge({course_ids: [], group_ids: []})).order(:id)).to eq []
+        opts = @opts.merge({course_ids: [@course1.id], group_ids: [@group.id]})
+        expect(@student.wiki_pages_needing_viewing(opts).order(:id)).to eq [@discussion1, @group_discussion]
       end
     end
   end

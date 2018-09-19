@@ -16,6 +16,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 import * as Actions from '../index';
+import * as SidebarActions from '../sidebar-actions';
 import moxios from 'moxios';
 import moment from 'moment-timezone';
 import {isPromise, moxiosWait, moxiosRespond} from '../../test-utils';
@@ -43,7 +44,8 @@ const getBasicState = () => ({
     pastNextUrl: null,
     allOpportunitiesLoaded: true,
   },
-  currentUser: {id: '1', displayName: 'Jane', avatarUrl: '/avatar/is/here'},
+  currentUser: {id: '1', displayName: 'Jane',
+    avatarUrl: '/avatar/is/here', color: "#00AC18"},
   opportunities: {
     items: [
       { id: 1, firstName: 'Fred', lastName: 'Flintstone', dismissed: false},
@@ -73,6 +75,7 @@ describe('api actions', () => {
 
   afterEach(() => {
     moxios.uninstall();
+    SidebarActions.maybeUpdateTodoSidebar.reset();
   });
 
   describe('getNextOpportunities', () => {
@@ -221,6 +224,24 @@ describe('api actions', () => {
     });
   });
 
+  it('calls the alert function when dismissing an opportunity fails', (done) => {
+    const mockDispatch = jest.fn();
+    const fakeAlert = jest.fn();
+    alertInitialize({
+      visualErrorCallback: fakeAlert
+    });
+    Actions.dismissOpportunity("6", {id: "6"})(() => {});
+    moxios.wait(() => {
+      let request = moxios.requests.mostRecent();
+      request.respondWith({
+        status: 400,
+      }).then(() => {
+        expect(fakeAlert).toHaveBeenCalled();
+        done();
+      });
+    })
+  });
+
   it('calls the alert function when a failure occurs', (done) => {
     const mockDispatch = jest.fn();
     const fakeAlert = jest.fn();
@@ -241,12 +262,13 @@ describe('api actions', () => {
 });
 
   describe('savePlannerItem', () => {
-    it('dispatches saving and saved actions', () => {
+    it('dispatches saving, clearUpdateTodo, and saved actions', () => {
       const mockDispatch = jest.fn();
       const plannerItem = simpleItem();
       const savePromise = Actions.savePlannerItem(plannerItem)(mockDispatch, getBasicState);
       expect(isPromise(savePromise)).toBe(true);
       expect(mockDispatch).toHaveBeenCalledWith({type: 'SAVING_PLANNER_ITEM', payload: {item: plannerItem, isNewItem: true}});
+      expect(mockDispatch).toHaveBeenCalledWith({type: 'CLEAR_UPDATE_TODO'});
       expect(mockDispatch).toHaveBeenCalledWith({type: 'SAVED_PLANNER_ITEM', payload: savePromise});
     });
 
@@ -256,6 +278,7 @@ describe('api actions', () => {
       const savePromise = Actions.savePlannerItem(plannerItem)(mockDispatch, getBasicState);
       expect(isPromise(savePromise)).toBe(true);
       expect(mockDispatch).toHaveBeenCalledWith({type: 'SAVING_PLANNER_ITEM', payload: {item: plannerItem, isNewItem: false}});
+      expect(mockDispatch).toHaveBeenCalledWith({type: 'CLEAR_UPDATE_TODO'});
       expect(mockDispatch).toHaveBeenCalledWith({type: 'SAVED_PLANNER_ITEM', payload: savePromise});
     });
 
@@ -362,13 +385,15 @@ describe('api actions', () => {
   });
 
   describe('deletePlannerItem', () => {
-    it('dispatches deleting and deleted actions', () => {
+    it('dispatches deleting, clearUpdateTodo, deleted, and maybe update sidebar actions', () => {
       const mockDispatch = jest.fn();
       const plannerItem = simpleItem();
       const deletePromise = Actions.deletePlannerItem(plannerItem)(mockDispatch, getBasicState);
       expect(isPromise(deletePromise)).toBe(true);
       expect(mockDispatch).toHaveBeenCalledWith({type: 'DELETING_PLANNER_ITEM', payload: plannerItem});
+      expect(mockDispatch).toHaveBeenCalledWith({type: 'CLEAR_UPDATE_TODO'});
       expect(mockDispatch).toHaveBeenCalledWith({type: 'DELETED_PLANNER_ITEM', payload: deletePromise});
+      expect(mockDispatch).toHaveBeenCalledWith(SidebarActions.maybeUpdateTodoSidebar);
     });
 
     it('sends a delete request for the item id', () => {
@@ -412,17 +437,19 @@ describe('api actions', () => {
   });
 
   describe('togglePlannerItemCompletion', () => {
-    it('dispatches saving and saved actions', () => {
+    it('dispatches saving, saved, and maybe update sidebar actions', () => {
       const mockDispatch = jest.fn();
       const plannerItem = simpleItem();
       const savingItem = {...plannerItem, show: true, toggleAPIPending: true};
       const savePromise = Actions.togglePlannerItemCompletion(plannerItem)(mockDispatch, getBasicState);
       expect(isPromise(savePromise)).toBe(true);
-      expect(mockDispatch).toHaveBeenCalledWith({type: 'SAVED_PLANNER_ITEM', payload: {item: savingItem, isNewItem: false}});
+      expect(mockDispatch).toHaveBeenCalledWith({type: 'SAVING_PLANNER_ITEM', payload: {item: savingItem, isNewItem: false, wasToggled: true}});
       expect(mockDispatch).toHaveBeenCalledWith({type: 'SAVED_PLANNER_ITEM', payload: savePromise});
+      expect(mockDispatch).toHaveBeenCalledWith(SidebarActions.maybeUpdateTodoSidebar);
+      expect(SidebarActions.maybeUpdateTodoSidebar.args()).toEqual([savePromise]);
     });
 
-    it ('updates marked_complete and sends override data in the request', () => {
+    it('updates marked_complete and sends override data in the request', () => {
       const mockDispatch = jest.fn();
       const plannerItem = simpleItem({marked_complete: null});
       Actions.togglePlannerItemCompletion(plannerItem)(mockDispatch, getBasicState);
@@ -462,6 +489,7 @@ describe('api actions', () => {
         togglePromise
       ).then((result) => {
         expect(result).toMatchObject({
+          wasToggled: true,
           item: {
             ...plannerItem,
             completed: false,
@@ -488,9 +516,19 @@ describe('api actions', () => {
       ).then((result) => {
         expect(fakeAlert).toHaveBeenCalled();
         expect(result).toMatchObject({
-          item: { ...plannerItem}
+          item: { ...plannerItem},
+          wasToggled: true,
         });
       });
+    });
+  });
+
+  describe('cancelEditingPlannerItem', () => {
+    it('dispatches clearUpdateTodo and canceledEditingPlannerItem actions', () => {
+      const mockDispatch = jest.fn();
+      Actions.cancelEditingPlannerItem()(mockDispatch, getBasicState);
+      expect(mockDispatch).toHaveBeenCalledWith({type: 'CLEAR_UPDATE_TODO'});
+      expect(mockDispatch).toHaveBeenCalledWith({type: 'CANCELED_EDITING_PLANNER_ITEM'});
     });
   });
 });

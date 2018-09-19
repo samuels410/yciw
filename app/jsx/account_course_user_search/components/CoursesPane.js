@@ -20,14 +20,15 @@ import React from 'react'
 import {shape, arrayOf, string, func} from 'prop-types'
 import {debounce} from 'underscore'
 import I18n from 'i18n!account_course_user_search'
-import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent'
+import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
 import CoursesStore from '../store/CoursesStore'
 import TermsStore from '../store/TermsStore'
 import AccountsTreeStore from '../store/AccountsTreeStore'
 import CoursesList from './CoursesList'
 import CoursesToolbar from './CoursesToolbar'
 import SearchMessage from './SearchMessage'
-import { SEARCH_DEBOUNCE_TIME } from './UsersPane'
+import SRSearchMessage from './SRSearchMessage'
+import {SEARCH_DEBOUNCE_TIME} from './UsersPane'
 
 const MIN_SEARCH_LENGTH = 3
 const stores = [CoursesStore, TermsStore, AccountsTreeStore]
@@ -43,13 +44,13 @@ const defaultFilters = {
 
 class CoursesPane extends React.Component {
   static propTypes = {
-    roles: arrayOf(shape({ id: string.isRequired })).isRequired,
+    roles: arrayOf(shape({id: string.isRequired})).isRequired,
     queryParams: shape().isRequired,
     onUpdateQueryParams: func.isRequired,
     accountId: string.isRequired
   }
 
-  constructor () {
+  constructor() {
     super()
 
     this.state = {
@@ -59,25 +60,26 @@ class CoursesPane extends React.Component {
       previousCourses: {
         data: [],
         loading: true
-      }
+      },
+      srMessageDisplayed: false
     }
 
     // Doing this here because the class property version didn't work :(
     this.debouncedApplyFilters = debounce(this.onApplyFilters, SEARCH_DEBOUNCE_TIME)
   }
 
-  componentWillMount () {
+  componentWillMount() {
     stores.forEach(s => s.addChangeListener(this.refresh))
     const filters = Object.assign({}, defaultFilters, this.props.queryParams)
     this.setState({filters, draftFilters: filters})
   }
 
-  componentDidMount () {
+  componentDidMount() {
     this.fetchCourses()
     TermsStore.loadAll()
   }
 
-  componentWillUnmount () {
+  componentWillUnmount() {
     stores.forEach(s => s.removeChangeListener(this.refresh))
   }
 
@@ -91,38 +93,53 @@ class CoursesPane extends React.Component {
     CoursesStore.load(this.state.filters)
   }
 
-  setPage = (page) => {
-    this.setState({
-      filters: {...this.state.filters, page},
-      previousCourses: CoursesStore.get(this.state.filters)
-    }, this.fetchCourses)
+  setPage = page => {
+    this.setState(
+      {
+        filters: {...this.state.filters, page},
+        previousCourses: CoursesStore.get(this.state.filters)
+      },
+      this.fetchCourses
+    )
   }
 
-  onUpdateFilters = (newFilters) => {
-    this.setState({
-      errors: {},
-      draftFilters: Object.assign({page: null}, this.state.draftFilters, newFilters)
-    }, this.debouncedApplyFilters)
+  onUpdateFilters = newFilters => {
+    this.setState(
+      {
+        errors: {},
+        draftFilters: Object.assign({page: null}, this.state.draftFilters, newFilters)
+      },
+      this.debouncedApplyFilters
+    )
   }
 
   onApplyFilters = () => {
     const filters = this.state.draftFilters
     if (filters.search_term && filters.search_term.length < MIN_SEARCH_LENGTH) {
-      this.setState({errors: {search_term: I18n.t('Search term must be at least %{num} characters', {num: MIN_SEARCH_LENGTH})}})
+      this.setState({
+        errors: {
+          search_term: I18n.t('Search term must be at least %{num} characters', {
+            num: MIN_SEARCH_LENGTH
+          })
+        }
+      })
     } else {
       this.setState({filters, errors: {}}, this.fetchCourses)
     }
   }
 
-  onChangeSort = (column) => {
+  onChangeSort = column => {
     const {sort, order} = this.state.filters
-    const newOrder = (column === sort && order === 'asc') ? 'desc' : 'asc'
+    const newOrder = column === sort && order === 'asc' ? 'desc' : 'asc'
 
     const newFilters = Object.assign({}, this.state.filters, {
       sort: column,
       order: newOrder
     })
-    this.setState({filters: newFilters, previousCourses: CoursesStore.get(this.state.filters)}, this.fetchCourses)
+    this.setState(
+      {filters: newFilters, previousCourses: CoursesStore.get(this.state.filters)},
+      this.fetchCourses
+    )
   }
 
   refresh = () => {
@@ -140,8 +157,8 @@ class CoursesPane extends React.Component {
     this.props.onUpdateQueryParams(differences)
   }
 
-  render () {
-    const { filters, draftFilters, errors } = this.state
+  render() {
+    const {filters, draftFilters, errors} = this.state
     let courses = CoursesStore.get(filters)
     if (!courses || !courses.data) {
       courses = this.state.previousCourses
@@ -162,6 +179,9 @@ class CoursesPane extends React.Component {
           isLoading={isLoading}
           errors={errors}
           draftFilters={draftFilters}
+          toggleSRMessage={(show = false) => {
+            this.setState({srMessageDisplayed: show})
+          }}
         />
 
         <CoursesList
@@ -179,6 +199,9 @@ class CoursesPane extends React.Component {
           noneFoundMessage={I18n.t('No courses found')}
           dataType="Course"
         />
+        {this.state.srMessageDisplayed && (
+          <SRSearchMessage collection={courses} dataType="Course" />
+        )}
       </div>
     )
   }

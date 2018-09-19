@@ -17,7 +17,7 @@
  */
 
 import React from 'react'
-import {mount} from 'enzyme'
+import {mount} from 'old-enzyme-2.x-you-need-to-upgrade-this-spec-to-enzyme-3.x-by-importing-just-enzyme'
 import ModeratedGradingCheckbox from 'jsx/assignments/ModeratedGradingCheckbox'
 
 QUnit.module('ModeratedGradingCheckbox', hooks => {
@@ -27,6 +27,9 @@ QUnit.module('ModeratedGradingCheckbox', hooks => {
   hooks.beforeEach(() => {
     props = {
       checked: false,
+      gradedSubmissionsExist: false,
+      isGroupAssignment: false,
+      isPeerReviewAssignment: false,
       onChange: () => {}
     }
   })
@@ -53,6 +56,30 @@ QUnit.module('ModeratedGradingCheckbox', hooks => {
     props.checked = true
     mountComponent()
     strictEqual(checkbox().node.checked, true)
+  })
+
+  test('enables the checkbox if no graded submissions exist, it is not a peer ' +
+  'review assignment, and it is not a group assignment', () => {
+    mountComponent()
+    strictEqual(checkbox().node.disabled, false)
+  })
+
+  test('disables the checkbox if graded submissions exist', () => {
+    props.gradedSubmissionsExist = true
+    mountComponent()
+    strictEqual(checkbox().node.disabled, true)
+  })
+
+  test('disables the checkbox if it is a peer review assignment', () => {
+    props.isPeerReviewAssignment = true
+    mountComponent()
+    strictEqual(checkbox().node.disabled, true)
+  })
+
+  test('disables the checkbox if it is a group assignment', () => {
+    props.isGroupAssignment = true
+    mountComponent()
+    strictEqual(checkbox().node.disabled, true)
   })
 
   test('calls onChange when checked', () => {

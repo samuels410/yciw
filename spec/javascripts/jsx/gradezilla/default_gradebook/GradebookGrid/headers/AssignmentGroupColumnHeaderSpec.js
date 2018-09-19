@@ -17,7 +17,7 @@
  */
 
 import React from 'react';
-import { mount } from 'enzyme';
+import { mount } from 'old-enzyme-2.x-you-need-to-upgrade-this-spec-to-enzyme-3.x-by-importing-just-enzyme';
 import AssignmentGroupColumnHeader from 'jsx/gradezilla/default_gradebook/GradebookGrid/headers/AssignmentGroupColumnHeader'
 import {findMenuItem, findFlyout} from './columnHeaderHelpers'
 
@@ -50,7 +50,7 @@ function defaultProps ({ props, sortBySetting, assignmentGroup } = {}) {
     weightedGroups: true,
     addGradebookElement () {},
     removeGradebookElement () {},
-    onMenuClose () {},
+    onMenuDismiss () {},
     ...props
   };
 }
@@ -59,9 +59,9 @@ QUnit.module('AssignmentGroupColumnHeader - base behavior', {
   setup () {
     this.props = defaultProps({
       props: {
-        addGradebookElement: this.stub(),
-        removeGradebookElement: this.stub(),
-        onMenuClose: this.stub()
+        addGradebookElement: sinon.stub(),
+        removeGradebookElement: sinon.stub(),
+        onMenuDismiss: sinon.stub()
       }
     });
     this.wrapper = mountComponent(this.props);
@@ -82,12 +82,12 @@ test('renders the assignment groupWeight percentage', function () {
   equal(groupWeight.text().trim(), '42.5% of grade');
 });
 
-test('renders a PopoverMenu with a trigger', function () {
+test('renders a Menu with a trigger', function () {
   const optionsMenuTrigger = this.wrapper.find('.Gradebook__ColumnHeaderAction button');
   equal(optionsMenuTrigger.length, 1);
 });
 
-test('adds a class to the action container when the PopoverMenu is opened', function () {
+test('adds a class to the action container when the Menu is opened', function () {
   const actionContainer = this.wrapper.find('.Gradebook__ColumnHeaderAction');
   actionContainer.find('button').simulate('click');
   ok(actionContainer.hasClass('menuShown'));
@@ -110,11 +110,11 @@ test('calls removeGradebookElement prop on close', function () {
   ok(this.props.removeGradebookElement.called);
 });
 
-test('calls onMenuClose prop on close', function () {
+test('calls onMenuDismiss prop on close', function () {
   this.wrapper.find('.Gradebook__ColumnHeaderAction button').simulate('click');
   this.wrapper.find('.Gradebook__ColumnHeaderAction button').simulate('click');
 
-  strictEqual(this.props.onMenuClose.callCount, 1);
+  strictEqual(this.props.onMenuDismiss.callCount, 1);
 });
 
 QUnit.module('AssignmentGroupColumnHeader - non-standard assignment group');
@@ -164,7 +164,7 @@ test('does not select "Grade - Low to High" when isSortColumn is false', functio
 });
 
 test('clicking "Grade - Low to High" calls onSortByGradeAscending', function () {
-  const onSortByGradeAscending = this.stub();
+  const onSortByGradeAscending = sinon.stub();
   const props = defaultProps({ sortBySetting: { onSortByGradeAscending } });
   findMenuItem.call(this, props, 'Sort by', 'Grade - Low to High').simulate('click');
   strictEqual(onSortByGradeAscending.callCount, 1);
@@ -194,7 +194,7 @@ test('does not select "Grade - High to Low" when isSortColumn is false', functio
 });
 
 test('clicking "Grade - High to Low" calls onSortByGradeDescending', function () {
-  const onSortByGradeDescending = this.stub();
+  const onSortByGradeDescending = sinon.stub();
   const props = defaultProps({ sortBySetting: { onSortByGradeDescending } });
   findMenuItem.call(this, props, 'Sort by', 'Grade - High to Low').simulate('click');
   strictEqual(onSortByGradeDescending.callCount, 1);
@@ -240,8 +240,8 @@ QUnit.module('AssignmentGroupColumnHeader#handleKeyDown', function (hooks) {
 
   test('Enter opens the options menu', function () {
     this.handleKeyDown(13); // Enter
-    const optionsMenu = this.wrapper.find('PopoverMenu');
-    strictEqual(optionsMenu.node.show, true);
+    const optionsMenu = this.wrapper.find('Menu');
+    strictEqual(optionsMenu.node.shown, true);
   });
 
   test('returns false for Enter on options menu', function () {
@@ -288,15 +288,20 @@ test('#focusAtEnd sets focus on the options menu trigger', function () {
   equal(document.activeElement, this.wrapper.node.optionsMenuTrigger);
 });
 
-test('applies the "focused" class when the options menu has focus', function() {
-  const button = this.wrapper.find('.Gradebook__ColumnHeaderAction button')
-  button.get(0).focus()
-  ok(this.wrapper.hasClass('focused'))
+test('applies the "focused" class when the options menu has focus', function(assert) {
+  const done = assert.async();
+  this.wrapper.setState({ hasFocus: true }, () => {
+    ok(this.wrapper.hasClass('focused'));
+    done();
+  });
 })
 
-test('removes the "focused" class when the header blurs', function() {
-  const button = this.wrapper.find('.Gradebook__ColumnHeaderAction button')
-  button.get(0).focus()
-  button.get(0).blur()
-  notOk(this.wrapper.hasClass('focused'))
+test('removes the "focused" class when the header blurs', function(assert) {
+  const done = assert.async()
+  this.wrapper.setState({ hasFocus: true }, () => {
+    this.wrapper.setState({ hasFocus: false }, () => {
+      notOk(this.wrapper.hasClass('focused'));
+      done();
+    });
+  });
 })

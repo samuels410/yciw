@@ -55,6 +55,13 @@ describe Canvas::Security do
           allow(JSON::JWT).to receive_messages(new: jwt)
           Canvas::Security.create_jwt({ a: 1 }, nil, "mykey")
         end
+
+        it "should encode with supplied algorithm" do
+          jwt = double
+          expect(jwt).to receive(:sign).with("mykey", :HS512).and_return("sometoken")
+          allow(JSON::JWT).to receive_messages(new: jwt)
+          Canvas::Security.create_jwt({a: 1}, nil, "mykey", :HS512)
+        end
       end
 
       describe ".create_encrypted_jwt" do
@@ -127,6 +134,12 @@ describe Canvas::Security do
         expect { Canvas::Security.decode_jwt(back_to_the_future_jwt, [ key ]) }.to(
           raise_error(Canvas::Security::InvalidToken)
         )
+      end
+
+      it "allows 5 minutes of future clock skew" do
+        back_to_the_future_jwt = test_jwt(exp: 1.hour.from_now, nbf: 1.minutes.from_now, iat: 1.minutes.from_now)
+        body = Canvas::Security.decode_jwt(back_to_the_future_jwt, [ key ])
+        expect(body[:a]).to eq 1
       end
 
       it "produces an InvalidToken error if string isn't a jwt (even if it looks like one)" do

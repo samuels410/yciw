@@ -20,7 +20,9 @@ class SubmissionComment < ActiveRecord::Base
   include SendToStream
   include HtmlTextHelper
 
-  belongs_to :submission #, :touch => true
+  alias_attribute :body, :comment
+
+  belongs_to :submission
   belongs_to :author, :class_name => 'User'
   belongs_to :assessment_request
   belongs_to :context, polymorphic: [:course]
@@ -42,14 +44,15 @@ class SubmissionComment < ActiveRecord::Base
 
   scope :visible, -> { where(:hidden => false) }
   scope :draft, -> { where(draft: true) }
-  scope :published, -> { where("submission_comments.draft IS NOT TRUE") }
+  scope :published, -> { where(draft: false) }
   scope :after, lambda { |date| where("submission_comments.created_at>?", date) }
   scope :for_final_grade, -> { where(:provisional_grade_id => nil) }
   scope :for_provisional_grade, ->(id) { where(:provisional_grade_id => id) }
+  scope :for_provisional_grades, -> { where.not(provisional_grade_id: nil) }
   scope :for_assignment_id, lambda { |assignment_id| where(:submissions => { :assignment_id => assignment_id }).joins(:submission) }
 
   def delete_other_comments_in_this_group
-    update_other_comments_in_this_group &:destroy
+    update_other_comments_in_this_group(&:destroy)
   end
 
   def publish_other_comments_in_this_group
@@ -127,7 +130,16 @@ class SubmissionComment < ActiveRecord::Base
 
   set_broadcast_policy do |p|
     p.dispatch :submission_comment
-    p.to { ([submission.user] + User.observing_students_in_course(submission.user, submission.assignment.context)) - [author] }
+    p.to do
+      course_id = /\d+/.match(submission.context_code).to_s.to_i
+      section_ended =
+        Enrollment.where({
+                           user_id: submission.user.id
+                         }).section_ended(course_id).length > 0
+      unless section_ended
+        ([submission.user] + User.observing_students_in_course(submission.user, submission.assignment.context)) - [author]
+      end
+    end
     p.whenever {|record|
       # allows broadcasting when this record is initially saved (assuming draft == false) and also when it gets updated
       # from draft to final
@@ -160,7 +172,7 @@ class SubmissionComment < ActiveRecord::Base
     raise IncomingMail::Errors::UnknownAddress if self.context.root_account.deleted?
     user = opts[:user]
     message = opts[:text].strip
-    user = nil unless user && self.context.users.include?(user)
+    user = nil unless user && self.submission.grants_right?(user, :comment)
     if !user
       raise "Only comment participants may reply to messages"
     elsif !message || message.empty?
@@ -259,6 +271,10 @@ class SubmissionComment < ActiveRecord::Base
     methods = []
     methods << :avatar_path if context.root_account.service_enabled?(:avatars)
     methods
+  end
+
+  def publishable_for?(user)
+    draft? && author_id == user.id
   end
 
   def update_participation

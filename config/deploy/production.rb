@@ -3,8 +3,8 @@
 # Defines a single server with a list of roles and multiple properties.
 # You can define all roles on a single server, or split them:
 
-server '104.236.64.67', user: 'sysadmin', roles: %w{app db web}, port: 1001
-set :branch, 'merge-11-06-2018'
+server '163.172.211.191', user: 'sysadmin', roles: %w{app db web}, port: 1001
+set :branch, 'merge-18-9-2018'
 # server 'example.com', user: 'deploy', roles: %w{app web}, other_property: :other_value
 # server 'db.example.com', user: 'deploy', roles: %w{db}
 

@@ -17,7 +17,6 @@
 #
 
 module AuthenticationMethods
-
   def load_pseudonym_from_policy
     if (policy_encoded = params['Policy']) &&
         (signature = params['Signature']) &&
@@ -86,7 +85,7 @@ module AuthenticationMethods
   end
 
   def validate_scopes
-    if @access_token && @domain_root_account.feature_enabled?(:api_token_scoping)
+    if @access_token && @domain_root_account.feature_enabled?(:developer_key_management_and_scoping)
       developer_key = @access_token.developer_key
       request_method = request.method.casecmp('HEAD') == 0 ? 'GET' : request.method.upcase
 
@@ -123,7 +122,6 @@ module AuthenticationMethods
       unless @current_user && @current_pseudonym
         raise AccessTokenError
       end
-
       validate_scopes
       @access_token.used!
 
@@ -156,7 +154,7 @@ module AuthenticationMethods
     if !@current_pseudonym
       if @policy_pseudonym_id
         @current_pseudonym = Pseudonym.where(id: @policy_pseudonym_id).first
-      elsif @pseudonym_session = PseudonymSession.find
+      elsif (@pseudonym_session = PseudonymSession.with_scope(find_options: Pseudonym.eager_load(:user)) { PseudonymSession.find })
         @current_pseudonym = @pseudonym_session.record
 
         # if the session was created before the last time the user explicitly
@@ -314,29 +312,29 @@ module AuthenticationMethods
   def redirect_to_login
     return unless fix_ms_office_redirects
     respond_to do |format|
-      format.html {
+      format.json { render_json_unauthorized }
+      format.all do
         store_location
         flash[:warning] = I18n.t('lib.auth.errors.not_authenticated', "You must be logged in to access this page") unless request.path == '/'
         redirect_to login_url(params.permit(:canvas_login, :authentication_provider))
-      }
-      format.json { render_json_unauthorized }
+      end
     end
   end
 
   def render_json_unauthorized
     add_www_authenticate_header if api_request? && !@current_user
     if @current_user
-      render :json => {
-               :status => I18n.t('lib.auth.status_unauthorized', 'unauthorized'),
-               :errors => [{ :message => I18n.t('lib.auth.not_authorized', "user not authorized to perform that action") }]
-             },
-             :status => :unauthorized
+      render json: {
+        status: I18n.t('lib.auth.status_unauthorized', 'unauthorized'),
+        errors: [{ message: I18n.t('lib.auth.not_authorized', "user not authorized to perform that action") }]
+      },
+      status: :unauthorized
     else
-      render :json => {
-               :status => I18n.t('lib.auth.status_unauthenticated', 'unauthenticated'),
-               :errors => [{ :message => I18n.t('lib.auth.authentication_required', "user authorization required") }]
-             },
-             :status => :unauthorized
+      render json: {
+        status: I18n.t('lib.auth.status_unauthenticated', 'unauthenticated'),
+        errors: [{ :message => I18n.t('lib.auth.authentication_required', "user authorization required") }]
+      },
+      status: :unauthorized
     end
   end
 

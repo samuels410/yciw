@@ -16,16 +16,14 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Modal, {ModalHeader, ModalBody} from '@instructure/ui-core/lib/components/Modal'
+import Modal, { ModalBody} from './components/InstuiModal'
 import $ from 'jquery'
-import Heading from '@instructure/ui-core/lib/components/Heading'
-import Link from '@instructure/ui-core/lib/components/Link'
+import Link from '@instructure/ui-elements/lib/components/Link'
 import React from 'react'
-import PropTypes from 'prop-types'
+import { bool } from 'prop-types'
 import I18n from 'i18n!terms_of_service_modal'
 import RichContentEditor from './rce/RichContentEditor'
 
-const { bool } = PropTypes
 const termsOfServiceText = I18n.t('Acceptable Use Policy')
 
 export default class TermsOfServiceModal extends React.Component {
@@ -59,21 +57,15 @@ export default class TermsOfServiceModal extends React.Component {
   render() {
     return (
       <span id="terms_of_service_modal">
-       <Link ref={(c) => { this.link = c; }} onClick={this.handleLinkClick}>
+       <a className="terms_link"  href="#" ref={(c) => { this.link = c; }} onClick={this.handleLinkClick}>
          {this.props.preview ? I18n.t('Preview') : termsOfServiceText}
-       </Link>
+       </a>
        <Modal
          open={this.state.open}
          onDismiss={this.handleCloseModal}
          size="fullscreen"
          label={termsOfServiceText}
-         shouldCloseOnOverlayClick
-         closeButtonLabel={I18n.t('Close')}
-         applicationElement={() => [document.getElementById('main')] }
        >
-         <ModalHeader>
-           <Heading>{termsOfServiceText}</Heading>
-         </ModalHeader>
          <ModalBody>
            <div dangerouslySetInnerHTML={{__html: ENV.TERMS_OF_SERVICE_CUSTOM_CONTENT}} />
          </ModalBody>

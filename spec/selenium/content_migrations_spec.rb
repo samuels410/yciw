@@ -159,7 +159,7 @@ describe "content migrations", :non_parallel do
       hrefs = source_links.map { |a| a.attribute(:href) }
 
       @course.content_migrations.each do |cm|
-        expect(hrefs.find { |href| href.include?("/files/#{cm.attachment.id}/download") }).not_to be_nil
+        expect(hrefs.find { |href| href.include?("/files/#{cm.attachment_id}/download") }).not_to be_nil
       end
     end
 
@@ -580,10 +580,10 @@ describe "content migrations", :non_parallel do
       tool_iframe = f(".tool_launch")
       expect(f('.ui-dialog-title').text).to eq import_tool.label_for(:migration_selection)
 
-      driver.switch_to.frame(tool_iframe)
-      f("#basic_lti_link").click
+      in_frame(tool_iframe, '#basic_lti_link') do
+        f("#basic_lti_link").click
+      end
 
-      driver.switch_to.default_content
       expect(f("#converter .file_name")).to include_text "lti embedded link"
     end
 

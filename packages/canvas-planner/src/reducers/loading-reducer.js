@@ -19,6 +19,7 @@
 import { handleActions } from 'redux-actions';
 import parseLinkHeader from 'parse-link-header';
 import {mergeDays, purgeDuplicateDays} from '../utilities/daysUtils';
+import {findNextLink} from '../utilities/apiUtils';
 
 function loadingState (currentState, loadingState) {
   return {
@@ -32,23 +33,15 @@ function loadingState (currentState, loadingState) {
   };
 }
 
-function findNextLink (state, action) {
+function findNextLinkFromAction (action) {
   const response = action.payload.response;
   if (response == null) return null;
-
-  const linkHeader = response.headers.link;
-  if (linkHeader == null) return null;
-
-  const parsedLinks = parseLinkHeader(linkHeader);
-  if (parsedLinks == null) return null;
-
-  if (parsedLinks.next == null) return null;
-  return parsedLinks.next.url;
+  return findNextLink(response);
 }
 
 function getNextUrls (state, action) {
   const linkState = {};
-  const nextLink = findNextLink(state, action);
+  const nextLink = findNextLinkFromAction(action);
 
   if (state.isLoading || state.loadingFuture) {
     linkState.futureNextUrl = nextLink;
@@ -63,7 +56,7 @@ function getNextUrls (state, action) {
 }
 
 function gotDaysSuccess (state, action) {
-  const newState = {seekingNewActivity: false};
+  const newState = {seekingNewActivity: false, plannerLoaded: true};
   newState.partialPastDays = purgeDuplicateDays(state.partialPastDays, action.payload.internalDays);
   newState.partialFutureDays = purgeDuplicateDays(state.partialFutureDays, action.payload.internalDays);
   return loadingState(state, newState);
@@ -110,11 +103,24 @@ export default handleActions({
       seekingNewActivity: action.payload.seekingNewActivity
     });
   },
+  PEEKED_INTO_PAST: (state, action) => {
+    return loadingState(state, {
+      hasSomeItems: action.payload.hasSomeItems,
+      allPastItemsLoaded: !action.payload.hasSomeItems,
+      isLoading: state.isLoading,
+    });
+  },
   GETTING_FUTURE_ITEMS: (state, action) => {
     return loadingState(state, {
       loadingError: state.loadingError, // don't reset error until we're successful
       loadingFuture: true
     });
+  },
+  DELETED_PLANNER_ITEM: (state, action) => {
+    return loadingState(state, {hasSomeItems: false});  // because we can no longer be sure
+  },
+  SAVED_PLANNER_ITEM: (state, action) => {
+    return loadingState(state, {hasSomeItems: true}); // even if days[] is empty, we know we have an item
   },
   ALL_FUTURE_ITEMS_LOADED: (state, action) => {
     return loadingState(state, {allFutureItemsLoaded: true});
@@ -137,6 +143,10 @@ export default handleActions({
      gradesLoadingError: action.payload.message}),
 
 }, loadingState({}, {
+  isLoading: false,
+  loadingPast: false,
+  loadingFuture: false,
+  plannerLoaded: false,
   allPastItemsLoaded: false,
   allFutureItemsLoaded: false,
   allOpportunitiesLoaded: false,
@@ -146,6 +156,10 @@ export default handleActions({
   seekingNewActivity: false,
   partialPastDays: [],
   partialFutureDays: [],
+  hasSomeItems: null,     // Tri-state. Initially null because we haven't checked yet.
+                          // Set to true if the first peek into the past returns an item.
+                          // Reset to false if an item is deleted, because we can't know
+                          // if it was the last one.
   loadingGrades: false,
   gradesLoaded: false,
   gradesLoadingError: null,

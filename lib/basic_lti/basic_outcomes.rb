@@ -256,9 +256,9 @@ to because the assignment has no points possible.
         else
           if attachment
             job_options = {
-              :priority => Delayed::LOW_PRIORITY,
+              :priority => Delayed::HIGH_PRIORITY,
               :max_attempts => 1,
-              :n_strand => 'file_download'
+              :n_strand => Attachment.clone_url_strand(url)
             }
 
             send_later_enqueue_args(:fetch_attachment_and_save_submission, job_options, url, attachment, _tool, submission_hash, assignment, user, new_score, raw_score)
@@ -281,7 +281,7 @@ to because the assignment has no points possible.
           submission_hash[:grade] = (new_score >= 1 ? "pass" : "fail") if assignment.grading_type == "pass_fail"
           submission_hash[:grader_id] = -_tool.id
           @submission = assignment.grade_student(user, submission_hash).first
-          if submission_hash[:submission_type] == 'external_tool' && submitted_at_date.nil?
+          if @submission.submitted_at.blank? && submission_hash[:submission_type] == 'external_tool' && submitted_at_date.nil?
             @submission.submitted_at = Time.zone.now
           end
         end

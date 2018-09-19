@@ -34,6 +34,7 @@ class WikiPage < ActiveRecord::Base
   include Plannable
   include DuplicatingObjects
   include SearchTermHelper
+  include LockedFor
 
   include MasterCourses::Restrictor
   restrict_columns :content, [:body, :title]
@@ -61,10 +62,6 @@ class WikiPage < ActiveRecord::Base
   after_save  :touch_context
   after_save  :update_assignment,
     if: proc { self.context.try(:feature_enabled?, :conditional_release) }
-
-  scope :without_assignment_in_course, lambda { |course_ids|
-    where(assignment_id: nil).joins(:course).where(courses: {id: course_ids})
-  }
 
   scope :starting_with_title, lambda { |title|
     where('title ILIKE ?', "#{title}%")
@@ -219,7 +216,7 @@ class WikiPage < ActiveRecord::Base
     self.versions.map(&:model)
   end
 
-  scope :deleted_last, -> { order("workflow_state='deleted'") }
+  scope :deleted_last, -> { order(Arel.sql("workflow_state='deleted'")) }
 
   scope :not_deleted, -> { where("wiki_pages.workflow_state<>'deleted'") }
 
@@ -233,13 +230,14 @@ class WikiPage < ActiveRecord::Base
 
   scope :order_by_id, -> { order(:id) }
 
-  def locked_for?(user, opts={})
+  def low_level_locked_for?(user, opts={})
     return false unless self.could_be_locked
     Rails.cache.fetch([locked_cache_key(user), opts[:deep_check_if_needed]].cache_key, :expires_in => 1.minute) do
       locked = false
       if item = locked_by_module_item?(user, opts)
-        locked = {:asset_string => self.asset_string, :context_module => item.context_module.attributes}
-        locked[:unlock_at] = locked[:context_module]["unlock_at"] if locked[:context_module]["unlock_at"] && locked[:context_module]["unlock_at"] > Time.now.utc
+        locked = {object: self, :module => item.context_module}
+        unlock_at = locked[:module].unlock_at
+        locked[:unlock_at] = unlock_at if unlock_at && unlock_at > Time.now.utc
       end
       locked
     end
@@ -257,6 +255,7 @@ class WikiPage < ActiveRecord::Base
     end
 
     self.wiki.set_front_page_url!(self.url)
+    self.touch if self.persisted?
   end
 
   def context_module_tag_for(context)
@@ -447,6 +446,10 @@ class WikiPage < ActiveRecord::Base
         })
     end
     result
+  end
+
+  def can_duplicate?
+    true
   end
 
   def initialize_wiki_page(user)

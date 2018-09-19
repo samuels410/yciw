@@ -20,11 +20,18 @@ import React from 'react'
 import PropTypes from 'prop-types'
 import I18n from 'i18n!student_context_tray'
 import classnames from 'classnames'
-import Heading from '@instructure/ui-core/lib/components/Heading'
-import Progress from '@instructure/ui-core/lib/components/Progress'
-import Tooltip from '@instructure/ui-core/lib/components/Tooltip'
-import Text from '@instructure/ui-core/lib/components/Text'
-import Link from '@instructure/ui-core/lib/components/Link'
+import Heading from '@instructure/ui-elements/lib/components/Heading'
+import Progress from '@instructure/ui-elements/lib/components/Progress'
+import Tooltip from '@instructure/ui-overlays/lib/components/Tooltip'
+import Text from '@instructure/ui-elements/lib/components/Text'
+import Link from '@instructure/ui-elements/lib/components/Link'
+
+function scoreInPoints(score, pointsPossible) {
+  const formattedScore = I18n.n(score, {precision: 2, strip_insignificant_zeros: true})
+  const formattedPointsPossible = I18n.n(pointsPossible, {precision: 2, strip_insignificant_zeros: true})
+  return formattedScore + '/' + formattedPointsPossible
+}
+
 
   class SubmissionProgressBars extends React.Component {
     static propTypes = {
@@ -58,7 +65,7 @@ import Link from '@instructure/ui-core/lib/components/Link'
         display = SubmissionProgressBars.renderIcon(grade)
       } else {
         // Default to show score out of points possible
-        display = `${score}/${pointsPossible}`
+        display = scoreInPoints(score, pointsPossible)
       }
 
       return display
@@ -76,7 +83,7 @@ import Link from '@instructure/ui-core/lib/components/Link'
         display = grade
       } else {
         // Default to show score out of points possible
-        display = `${score}/${pointsPossible}`
+        display = scoreInPoints(score, pointsPossible)
       }
 
       return display

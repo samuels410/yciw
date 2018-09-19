@@ -20,6 +20,7 @@ class ContextModule < ActiveRecord::Base
   include Workflow
   include SearchTermHelper
   include DuplicatingObjects
+  include LockedFor
 
   include MasterCourses::Restrictor
   restrict_columns :state, [:workflow_state]
@@ -170,10 +171,8 @@ class ContextModule < ActiveRecord::Base
       :context_type => self.context_type,
       :name => copy_title,
       :position => ContextModule.not_deleted.where(context_id: self.context_id).maximum(:position) + 1,
-      :prerequisites => self.prerequisites,
       :completion_requirements => self.completion_requirements,
       :workflow_state => 'unpublished',
-      :unlock_at => self.unlock_at,
       :require_sequential_progress => self.require_sequential_progress,
       :completion_events => self.completion_events,
       :requirement_count => self.requirement_count
@@ -194,6 +193,8 @@ class ContextModule < ActiveRecord::Base
       :content_type => original_content_tag.content_type,
       :context_id => original_content_tag.context_id,
       :context_type => original_content_tag.context_type,
+      :url => original_content_tag.url,
+      :new_tab => original_content_tag.new_tab,
       :title => original_content_tag.title,
       :tag_type => original_content_tag.tag_type,
       :position => original_content_tag.position,
@@ -320,11 +321,11 @@ class ContextModule < ActiveRecord::Base
     can :read
   end
 
-  def locked_for?(user, opts={})
+  def low_level_locked_for?(user, opts={})
     return false if self.grants_right?(user, :read_as_admin)
     available = self.available_for?(user, opts)
-    return {:asset_string => self.asset_string, :context_module => self.attributes} unless available
-    return {:asset_string => self.asset_string, :context_module => self.attributes, :unlock_at => self.unlock_at} if self.to_be_unlocked
+    return {object: self, module: self} unless available
+    return {object: self, module: self, unlock_at: unlock_at} if to_be_unlocked
     false
   end
 

@@ -17,30 +17,18 @@
 #
 
 module GradebooksHelper
-  def anonymous_assignment?(assignment)
-    anonymous_assignment =
-      assignment.quiz &&
-      assignment.quiz.survey? &&
-      assignment.quiz.anonymous_submissions
-    !!anonymous_assignment
-  end
-
-  def anonymous_grading_required?(assignment)
-    if assignment.root_account.feature_enabled?(:anonymous_moderated_marking)
-      assignment.anonymous_grading?
-    else
-      assignment.course.feature_enabled?(:anonymous_grading)
-    end
+  def anonymous_survey?(assignment)
+    !!assignment.quiz&.anonymous_survey?
   end
 
   def force_anonymous_grading?(assignment)
-    anonymous_assignment?(assignment) || anonymous_grading_required?(assignment)
+    anonymous_survey?(assignment) || assignment.anonymize_students?
   end
 
   def force_anonymous_grading_reason(assignment)
-    if anonymous_assignment?(assignment)
+    if anonymous_survey?(assignment)
       I18n.t("Student names must be hidden because this is an anonymous survey.")
-    elsif anonymous_grading_required?(assignment)
+    elsif assignment.anonymize_students?
       I18n.t("Student names must be hidden because anonymous grading is required.")
     else
       ""
@@ -94,22 +82,6 @@ module GradebooksHelper
       icon_class: 'icon-x',
       screenreader_text: I18n.t('#gradebooks.grades.incomplete', 'Incomplete'),
     }
-  end
-
-  def format_grade?(grade)
-    return false if grade.blank?
-    (grade.to_s =~ /^\d+\.?\d*%?$/).present?
-  end
-
-  def percentage?(grade)
-    (grade.to_s =~ /^\d+\.?\d*%$/).present?
-  end
-
-  def format_grade(grade)
-    return grade unless format_grade?(grade)
-
-    formatted_grade = grade.delete('%')
-    I18n.n(formatted_grade, percentage: percentage?(grade))
   end
 
   def display_grade(grade)

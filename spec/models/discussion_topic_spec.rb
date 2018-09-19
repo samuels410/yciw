@@ -395,7 +395,6 @@ describe DiscussionTopic do
 
     it "section-specific-topics should be visible to account admins" do
       account = @course.root_account
-      account.enable_feature!(:section_specific_discussions)
       section = @course.course_sections.create!(name: "Section of topic")
       add_section_to_topic(@topic, section)
       @topic.save!
@@ -487,7 +486,6 @@ describe DiscussionTopic do
         end
 
         it "should filter out-of-section students" do
-          @course.root_account.enable_feature!(:section_specific_discussions)
           topic = @course.discussion_topics.create(
             :title => "foo", :message => "bar", :user => @teacher)
           section1 = @course.course_sections.create!
@@ -1077,6 +1075,22 @@ describe DiscussionTopic do
 
       expect(@student.stream_item_instances.count).to eq 0
       expect(@teacher.stream_item_instances.count).to eq 1
+    end
+
+    it "should send stream items to participating students" do
+      expect { @course.discussion_topics.create!(:title => "topic", :user => @teacher) }.to change { @student.stream_item_instances.count }.by(1)
+    end
+
+    it "should not send stream items to students if the topic isn't published" do
+      topic = nil
+      expect { topic = @course.discussion_topics.create!(:title => "secret topic", :user => @teacher, :workflow_state => 'unpublished') }.to change { @student.stream_item_instances.count }.by(0)
+      expect { topic.discussion_entries.create! }.to change { @student.stream_item_instances.count }.by(0)
+    end
+
+    it "should not send stream items to students if the topic is not available yet" do
+      topic = nil
+      expect { topic = @course.discussion_topics.create!(:title => "secret topic", :user => @teacher, :delayed_post_at => 1.week.from_now) }.to change { @student.stream_item_instances.count }.by(0)
+      expect { topic.discussion_entries.create! }.to change { @student.stream_item_instances.count }.by(0)
     end
 
     it "should send stream items to students for graded discussions" do
@@ -2124,18 +2138,7 @@ describe DiscussionTopic do
       expect(errors.include?("Only course announcements and discussions can be section-specific")).to eq true
     end
 
-    it "does not allow discussions to be section-specific if the feature is disabled" do
-      @course.root_account.disable_feature!(:section_specific_discussions)
-      topic = DiscussionTopic.create!(:title => "some title", :context => @course,
-        :user => @teacher)
-      add_section_to_topic(topic, @section)
-      expect(topic.valid?).to eq false
-      errors = topic.errors[:is_section_specific]
-      expect(errors).to eq ["Section-specific discussions are disabled"]
-    end
-
     it "allows discussions to be section-specific if the feature is enabled" do
-      @course.root_account.enable_feature!(:section_specific_discussions)
       topic = DiscussionTopic.create!(:title => "some title", :context => @course,
         :user => @teacher)
       add_section_to_topic(topic, @section)
@@ -2144,14 +2147,12 @@ describe DiscussionTopic do
 
     it "does not allow graded discussions to be section-specific" do
       group_discussion_assignment
-      @course.root_account.enable_feature!(:section_specific_discussions)
       add_section_to_topic(@topic, @section)
       expect(@topic.valid?).to eq false
     end
 
     it "does not allow course grouped discussions to be section-specific" do
       group_discussion_topic_model
-      @course.root_account.enable_feature!(:section_specific_discussions)
       add_section_to_topic(@group_topic, @section)
       expect(@group_topic.valid?).to eq false
     end
@@ -2464,7 +2465,6 @@ describe DiscussionTopic do
     end
 
     it "duplicates sections" do
-      @course.root_account.enable_feature!(:section_specific_discussions)
       discussion_topic_model(:context => @course)
       @topic.is_section_specific = true
       @topic.course_sections = [@course_section1, @course_section2]
@@ -2477,7 +2477,6 @@ describe DiscussionTopic do
     end
 
     it "does not duplicate deleted visibilities" do
-      @course.root_account.enable_feature!(:section_specific_discussions)
       discussion_topic_model(:context => @course)
       @topic.is_section_specific = true
       @topic.course_sections = [@course_section1, @course_section2]
@@ -2493,7 +2492,6 @@ describe DiscussionTopic do
   describe "users with permissions" do
     before :once do
       @course = course_factory(:active_all => true)
-      @course.root_account.enable_feature!(:section_specific_discussions)
       @section1 = @course.course_sections.create!
       @section2 = @course.course_sections.create!
       @limited_teacher = create_enrolled_user(@course, @section1, :name => 'limited teacher',

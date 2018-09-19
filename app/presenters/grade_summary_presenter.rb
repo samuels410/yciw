@@ -195,9 +195,6 @@ class GradeSummaryPresenter
         ActiveRecord::Associations::Preloader.new.preload(ss, :originality_reports)
       end
 
-      visible_assignment_ids = AssignmentStudentVisibility.visible_assignment_ids_for_user(student_id, @context.id)
-      ss.select!{ |submission| visible_assignment_ids.include?(submission.assignment_id) }
-
       assignments_index = assignments.index_by(&:id)
 
       # preload submission comment stuff
@@ -214,6 +211,14 @@ class GradeSummaryPresenter
 
       ss
     end
+  end
+
+  def rubric_assessments
+    assignment_presenters.flat_map(&:rubric_assessments)
+  end
+
+  def rubrics
+    rubric_assessments.map(&:rubric).uniq
   end
 
   # Called by external classes that want to make sure we clear out

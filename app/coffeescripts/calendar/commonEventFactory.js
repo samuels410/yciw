@@ -21,6 +21,7 @@ import Assignment from '../calendar/CommonEvent.Assignment'
 import AssignmentOverride from '../calendar/CommonEvent.AssignmentOverride'
 import CalendarEvent from '../calendar/CommonEvent.CalendarEvent'
 import PlannerNote from '../calendar/CommonEvent.PlannerNote'
+import ToDoItem from '../calendar/CommonEvent.ToDoItem'
 import splitAssetString from '../str/splitAssetString'
 
 export default function commonEventFactory(data, contexts) {
@@ -35,11 +36,11 @@ export default function commonEventFactory(data, contexts) {
   let actualContextCode = data.context_code
   let contextCode = data.effective_context_code || actualContextCode
 
-  const type = data.assignment_overrides
-    ? 'assignment_override'
-    : data.assignment || data.assignment_group_id
-      ? 'assignment'
-      : data.type === 'planner_note' ? 'planner_note' : 'calendar_event'
+  const type = data.assignment_overrides ? 'assignment_override' :
+    data.assignment || data.assignment_group_id ? 'assignment' :
+    data.type === 'planner_note' ? 'planner_note' :
+    data.plannable ? 'todo_item' :
+    'calendar_event'
 
   data = data.assignment_overrides
     ? {assignment: data.assignment, assignment_override: data.assignment_overrides[0]}
@@ -78,6 +79,8 @@ export default function commonEventFactory(data, contexts) {
     obj = new AssignmentOverride(data, contextInfo)
   } else if (type === 'planner_note') {
     obj = new PlannerNote(data, contextInfo, actualContextInfo)
+  } else if (type === 'todo_item') {
+    obj = new ToDoItem(data, contextInfo, actualContextInfo)
   } else {
     obj = new CalendarEvent(data, contextInfo, actualContextInfo)
   }
@@ -134,6 +137,13 @@ export default function commonEventFactory(data, contexts) {
     obj.can_change_context = true // TODO: will change to false when note is linked to an asset
     obj.can_edit = true
     obj.can_delete = true
+  }
+
+  if (type === 'todo_item') {
+    const can_update_object = contextInfo[`can_update_${obj.object.plannable_type}`]
+    const can_manage_todo = contextInfo.can_update_todo_date
+    obj.can_edit = can_update_object && can_manage_todo
+    obj.can_delete = can_update_object
   }
 
   // disable fullcalendar.js dragging unless the user has permissions

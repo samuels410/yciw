@@ -32,6 +32,11 @@ const conferenceView = function(conferenceOpts = {}) {
   if (!('user_settings' in conferenceOpts)) conferenceOpts.user_settings = {}
   const conference = new Conference({
     id: conferenceOpts.id,
+    conference_type: 'AdobeConnect',
+    context_code: 'course_1',
+    context_id: 1,
+    context_type: 'Course',
+    join_url: 'www.blah.com',
     recordings: conferenceOpts.recordings,
     user_settings: conferenceOpts.user_settings,
     permissions: {
@@ -72,7 +77,7 @@ test('renders', () => {
 })
 
 test('delete calls screenreader', function() {
-  this.stub(window, 'confirm').returns(true)
+  sandbox.stub(window, 'confirm').returns(true)
   ENV.context_asset_string = 'course_1'
   const server = sinon.fakeServer.create()
   server.respondWith('DELETE', '/api/v1/courses/1/conferences/1', [
@@ -86,7 +91,7 @@ test('delete calls screenreader', function() {
       join_url: 'www.blah.com'
     })
   ])
-  this.spy($, 'screenReaderFlashMessage')
+  sandbox.spy($, 'screenReaderFlashMessage')
   const view = conferenceView()
   view.delete($.Event('click'))
   server.respond()
@@ -95,7 +100,7 @@ test('delete calls screenreader', function() {
 })
 
 test('deleteRecordings calls screenreader', function() {
-  this.stub(window, 'confirm').returns(true)
+  sandbox.stub(window, 'confirm').returns(true)
   ENV.context_asset_string = 'course_1'
   const server = sinon.fakeServer.create()
   server.respondWith('POST', '/recording', [
@@ -132,11 +137,57 @@ test('deleteRecordings calls screenreader', function() {
       record: true
     }
   }
-  this.spy($, 'screenReaderFlashMessage')
+  sandbox.spy($, 'screenReaderFlashMessage')
   const view = conferenceView(big_blue_button_conference)
   $('div.ig-button[data-id="954cc3"]').children('a').trigger($.Event( "click" ))
   server.respond()
   equal($.screenReaderFlashMessage.callCount, 1)
   server.restore()
   ok(view)
+})
+
+test('renders adobe connect link', function() {
+  ENV.context_asset_string = 'course_1'
+  ENV.conference_type_details = [
+    {
+      name:"Adobe Connect",
+      type:"AdobeConnect",
+      settings:[]
+    }
+  ]
+  const adobe_connect_conference = {
+    id: 1,
+    conference_type: 'AdobeConnect',
+    context_code: 'course_1',
+    context_id: 1,
+    context_type: 'Course',
+    playback_url: 'www.blah.com',
+    join_url: 'www.blah.com',
+    recordings: [
+      {
+        recording_id: "954cc3",
+        title: "Conference",
+        playback_url: 'www.blah.com',
+        duration_minutes: 0,
+        playback_formats: [
+          {
+            type: "statistics",
+            url: "www.blah.com",
+            length: null
+          },
+          {
+            type: "presentation",
+            url: "www.blah.com",
+            length: 0
+          }
+        ],
+        created_at: 1518554650000,
+      }
+    ],
+    user_settings: {
+      record: true
+    }
+  }
+  conferenceView(adobe_connect_conference)
+  equal($('#adobe-connect-playback-link').attr('href'), 'www.blah.com')
 })
