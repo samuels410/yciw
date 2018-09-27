@@ -40,4 +40,18 @@ describe Login::CanvasHelper do
       end
     end
   end
+
+  describe '#reg_link_data' do
+    before :once do
+      @domain_root_account = account_model
+    end
+
+    it 'returns the proper template when an auth type is present' do
+      expect(helper.reg_link_data('customAuth')[:template]).to eq 'customauthDialog'
+    end
+
+    it 'returns the proper template without an auth type' do
+      expect(helper.reg_link_data(nil)[:template]).to eq 'newParentDialog'
+    end
+  end
 end

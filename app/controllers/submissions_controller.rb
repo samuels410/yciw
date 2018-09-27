@@ -88,12 +88,12 @@ require 'action_controller_test_process'
 #       }
 #     }
 #
-class SubmissionsController < ApplicationController
+class SubmissionsController < SubmissionsBaseController
   include Submissions::ShowHelper
+  include Api::V1::Submission
+
   before_action :get_course_from_section, :only => :create
   before_action :require_context
-
-  include Api::V1::Submission
 
   def index
     @assignment = @context.assignments.active.find(params[:assignment_id])
@@ -108,39 +108,21 @@ class SubmissionsController < ApplicationController
   end
 
   def show
+    @submission_for_show = Submissions::SubmissionForShow.new(
+      assignment_id: params.fetch(:assignment_id),
+      context: @context,
+      id: params.fetch(:id)
+    )
     begin
-      service = Submissions::SubmissionForShow.new(
-        @context, params.slice(:assignment_id, :id)
-      )
-      @assignment = service.assignment
-      @submission = service.submission
+      @assignment = @submission_for_show.assignment
+      @submission = @submission_for_show.submission
     rescue ActiveRecord::RecordNotFound
       return render_user_not_found
     end
 
-    @visible_rubric_assessments = @submission.visible_rubric_assessments_for(@current_user)
-    @assessment_request = @submission.assessment_requests.where(assessor_id: @current_user).first
-    if authorized_action(@submission, @current_user, :read)
-      if @submission&.user_id == @current_user.id
-        @submission&.mark_read(@current_user)
-      end
-      respond_to do |format|
-        @submission.limit_comments(@current_user, session)
-        format.html
-        format.json do
-          @submission.limit_comments(@current_user, session)
-          render :json => @submission.as_json(
-            Submission.json_serialization_full_parameters(
-              except: %i(quiz_submission submission_history)
-            ).merge(permissions: {
-              user: @current_user,
-              session: session,
-              include_permissions: false
-            })
-          )
-        end
-      end
-    end
+    return render_unauthorized_action unless @submission.can_view_details?(@current_user)
+
+    super
   end
 
   API_SUBMISSION_TYPES = {
@@ -295,6 +277,14 @@ class SubmissionsController < ApplicationController
         format.json { render :json => @submission.errors, :status => :bad_request }
       end
     end
+  end
+
+  def update
+    @assignment = @context.assignments.active.find(params.fetch(:assignment_id))
+    @user = @context.all_students.find(params.fetch(:id))
+    @submission = @assignment.find_or_create_submission(@user)
+
+    super
   end
 
   def lookup_existing_attachments
@@ -461,22 +451,30 @@ class SubmissionsController < ApplicationController
     end
 
     # process the file and create an attachment
-    filename = "google_doc_#{Time.now.strftime("%Y%m%d%H%M%S")}#{@current_user.id}.#{file_extension}"
+    filename = "google_doc_#{Time.zone.now.strftime('%Y%m%d%H%M%S')}#{@current_user.id}.#{file_extension}"
+
+    attachment = @assignment.attachments.new
+    attachment.user = @current_user
+    attachment.display_name = display_name
+
     Dir.mktmpdir do |dirname|
-      path     = File.join(dirname, filename)
+      path = File.join(dirname, filename)
       File.open(path, 'wb') do |f|
         f.write(document_response.body)
       end
-
-      @attachment = @assignment.attachments.new(
-        uploaded_data: Rack::Test::UploadedFile.new(path, content_type, true),
-        display_name: display_name, user: @current_user
-      )
-      @attachment.save!
+      store_google_doc_attachment(attachment, Rack::Test::UploadedFile.new(path, content_type, true))
+      attachment.save!
     end
-    @attachment
+    attachment
   end
   protected :submit_google_doc
+
+  def store_google_doc_attachment(attachment, uploaded_data)
+    # This seemingly-redundant method was extracted to facilitate testing
+    # as storing of the document was previously deeply tied to fetching
+    # the document from Google
+    Attachments::Storage.store_for_attachment(attachment, uploaded_data)
+  end
 
   def turnitin_report
     plagiarism_report('turnitin')
@@ -574,102 +572,9 @@ class SubmissionsController < ApplicationController
     always_permitted_params = [:eula_agreement_timestamp].freeze
     params.require(:submission).permit(always_permitted_params)
   end
-
-  def update
-    @assignment = @context.assignments.active.find(params[:assignment_id])
-    @user = @context.all_students.find(params[:id])
-    @submission = @assignment.find_or_create_submission(@user)
-    provisional = @assignment.moderated_grading? && params[:submission][:provisional]
-
-    if params[:submission][:student_entered_score] && @submission.grants_right?(@current_user, session, :comment)
-      update_student_entered_score(params[:submission][:student_entered_score])
-
-      render json: @submission.as_json(permissions: {
-        user: @current_user,
-        session: session,
-        include_permissions: false
-      })
-      return
-    end
-
-    if authorized_action(@submission, @current_user, :comment)
-      params[:submission][:commenter] = @current_user
-      admin_in_context = !@context_enrollment || @context_enrollment.admin?
-
-      if params[:attachments]
-        attachments = []
-        params[:attachments].keys.each do |idx|
-          attachment = params[:attachments][idx].permit(Attachment.permitted_attributes)
-          attachment[:user] = @current_user
-          attachments << @assignment.attachments.create(attachment)
-        end
-        params[:submission][:comment_attachments] = attachments#.map{|a| a.id}.join(",")
-      end
-      unless @submission.grants_right?(@current_user, session, :submit)
-        @request = @submission.assessment_requests.where(assessor_id: @current_user).first if @current_user
-        params[:submission] = {
-          :comment => params[:submission][:comment],
-          :comment_attachments => params[:submission][:comment_attachments],
-          :media_comment_id => params[:submission][:media_comment_id],
-          :media_comment_type => params[:submission][:media_comment_type],
-          :commenter => @current_user,
-          :assessment_request => @request,
-          :group_comment => params[:submission][:group_comment],
-          :hidden => @assignment.muted? && admin_in_context,
-          :provisional => provisional,
-          :final => params[:submission][:final],
-          :draft_comment => Canvas::Plugin.value_to_boolean(params[:submission][:draft_comment])
-        }
-      end
-      begin
-        @submissions = @assignment.update_submission(@user, params[:submission].to_unsafe_h)
-      rescue => e
-        Canvas::Errors.capture_exception(:submissions, e)
-        logger.error(e)
-      end
-      respond_to do |format|
-        if @submissions
-          @submissions = @submissions.select{|s| s.grants_right?(@current_user, session, :read) }
-          is_final = provisional && params[:submission][:final] && @context.grants_right?(@current_user, :moderate_grades)
-          @submissions.each do |s|
-            s.limit_comments(@current_user, session) unless @submission.grants_right?(@current_user, session, :submit)
-            s.apply_provisional_grade_filter!(s.provisional_grade(@current_user, final: is_final)) if provisional
-          end
-
-          flash[:notice] = t('assignment_submitted', 'Assignment submitted.')
-
-          format.html { redirect_to course_assignment_url(@context, @assignment) }
-
-          json_args = Submission.json_serialization_full_parameters({
-            :except => [:quiz_submission,:submission_history],
-            :comments => admin_in_context ? :submission_comments : :visible_submission_comments
-          }).merge(:permissions => { :user => @current_user, :session => session, :include_permissions => false })
-          json_args[:methods] << :provisional_grade_id if provisional
-          format.json {
-            render :json => @submissions.map{ |s| s.as_json(json_args) }, :status => :created, :location => course_gradebook_url(@submission.assignment.context)
-          }
-          format.text {
-            render :json => @submissions.map{ |s| s.as_json(json_args) }, :status => :created, :location => course_gradebook_url(@submission.assignment.context)
-          }
-        else
-          @error_message = t('errors_update_failed', "Update Failed")
-          flash[:error] = @error_message
-          format.html { render :show, id: @assignment.context.id }
-          format.json { render :json => {:errors => {:base => @error_message}}, :status => :bad_request }
-          format.text { render :json => {:errors => {:base => @error_message}}, :status => :bad_request }
-        end
-      end
-    end
-  end
+  private :always_permitted_create_params
 
   protected
-
-  def update_student_entered_score(score)
-    new_score = score.present? && score != "null" ? score.to_f.round(2) : nil
-    # intentionally skipping callbacks here to fix a bug where entering a
-    # what-if grade for a quiz can put the submission back in a 'pending review' state
-    @submission.update_column(:student_entered_score, new_score)
-  end
 
   def generate_submission_zip(assignment, context)
     attachment = submission_zip(assignment)

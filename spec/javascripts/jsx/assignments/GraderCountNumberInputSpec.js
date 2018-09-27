@@ -108,10 +108,17 @@ QUnit.module('GraderCountNumberInput', hooks => {
     ok(numberInputContainer().text().includes('There are currently 10 available graders'))
   })
 
+  test('shows a message with correct grammar if the grader count is > the max and the max is 1', () => {
+    props.maxGraderCount = 1
+    mountComponent()
+    numberInput().simulate('change', { target: { value: '2' } })
+    ok(numberInputContainer().text().includes('There is currently 1 available grader'))
+  })
+
   test('shows an error message on blur if the grader count is the empty string', () => {
     mountComponent()
-    numberInput().simulate('change', { target: { value: '' } })
-    numberInput().simulate('blur')
+    numberInput().simulate('change', {target: {value: '' }})
+    numberInput().simulate('blur', {type: 'blur', target: {value: ''}})
     ok(numberInputContainer().text().includes('Must have at least 1 grader'))
   })
 

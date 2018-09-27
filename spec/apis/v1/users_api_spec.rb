@@ -1014,7 +1014,7 @@ describe "Users API", type: :request do
     end
 
     it "should send a confirmation if send_confirmation is set to 1" do
-      expect_any_instance_of(Pseudonym).to receive(:send_registration_notification!)
+      expect_any_instance_of(Pseudonym).to receive(:send_registration_done_notification!)
       api_call(:post, "/api/v1/accounts/#{@admin.account.id}/users",
         { :controller => 'users', :action => 'create', :format => 'json', :account_id => @admin.account.id.to_s },
         {
@@ -2039,6 +2039,33 @@ describe "Users API", type: :request do
       expect(json.length).to eql 2
     end
 
+    it "should return assignments in order of the submission time for the user" do
+      assign = @course.assignments.create!(due_at: 5.days.ago, workflow_state: 'published', submission_types: "online_text_entry")
+      create_adhoc_override_for_assignment(assign, @student, due_at: 3.days.ago)
+      DueDateCacher.recompute(assign)
+
+      json = api_call(:get, @path, @params)
+      expect(json[0]['id']).to eq assign.id
+    end
+
+    it "paginates properly when multiple submissions have the same cached_due_date" do
+      id1 = api_call(:get, @path, @params.merge(per_page: 1, page: 1))[0]['id'].to_i
+      id2 = api_call(:get, @path, @params.merge(per_page: 1, page: 2))[0]['id'].to_i
+      expect([id1, id2]).to eq @course.assignments.pluck(:id).sort
+    end
+
+    it "should not return locked assignments if filter is set to 'submittable'" do
+      @course.assignments.create!(due_at: 3.days.ago,
+                                  workflow_state: 'published',
+                                  submission_types: 'online_text_entry',
+                                  lock_at: 2.days.ago)
+      json = api_call(:get, @path, @params)
+      expect(json.length).to eql 3
+
+      submittable_json = api_call(:get, @path, @params.merge(:filter => ["submittable"]))
+      expect(submittable_json.length).to eql 2
+    end
+
     it "should return course information if requested" do
       @params['include'] = ['course']
       json = api_call(:get, @path, @params)
@@ -2090,36 +2117,53 @@ describe "Users API", type: :request do
     end
   end
 
-  describe 'POST pandata_token' do
+  describe 'POST pandata_events_token' do
     let(:fake_secrets){
       {
-        "ios-pandata-key" => "IOS_pandata_key",
-        "ios-pandata-secret" => "teamrocketblastoffatthespeedoflight",
-        "android-pandata-key" => "ANDROID_pandata_key",
-        "android-pandata-secret" => "surrendernoworpreparetofight"
+        "url" => "https://example.com/pandata/events",
+        "ios-key" => "IOS_key",
+        "ios-secret" => "teamrocketblastoffatthespeedoflight",
+        "android-key" => "ANDROID_key",
+        "android-secret" => "surrendernoworpreparetofight"
       }
     }
 
     before do
-      allow(Canvas::DynamicSettings).to receive(:find).with(any_args).and_call_original
-      allow(Canvas::DynamicSettings).to receive(:find).with(service: 'pandata').and_return(fake_secrets)
+      allow(Canvas::DynamicSettings).to receive(:find).
+        with(any_args).and_call_original
+      allow(Canvas::DynamicSettings).to receive(:find).
+        with('events', service: 'pandata').and_return(fake_secrets)
     end
 
-    it 'should return token and expiration' do
-      json = api_call(:post, "/api/v1/users/#{@user.id}/pandata_token",
-          { controller: 'users', action: 'pandata_token', format:'json', id: @user.to_param },
-          { app_key: 'IOS_pandata_key'}
+    it 'returns token and expiration' do
+      Setting.set("pandata_events_token_allowed_developer_key_ids", DeveloperKey.default.global_id)
+      json = api_call(:post, "/api/v1/users/self/pandata_events_token",
+          { controller: 'users', action: 'pandata_events_token', format:'json', id: @user.to_param },
+          { app_key: 'IOS_key'}
       )
-      expect(json['token']).to be_present
+      expect(json['url']).to be_present
+      expect(json['auth_token']).to be_present
+      expect(json['props_token']).to be_present
       expect(json['expires_at']).to be_present
     end
 
-    it 'should return a bad request for incorrect app keys' do
-      json = raw_api_call(:post, "/api/v1/users/#{@user.id}/pandata_token",
-          { controller: 'users', action: 'pandata_token', format:'json', id: @user.to_param },
+    it 'returns bad_request for incorrect app keys' do
+      Setting.set("pandata_events_token_allowed_developer_key_ids", DeveloperKey.default.global_id)
+      json = api_call(:post, "/api/v1/users/self/pandata_events_token",
+          { controller: 'users', action: 'pandata_events_token', format:'json', id: @user.to_param },
           { app_key: 'IOS_not_right'}
       )
       assert_status(400)
+      expect(json['message']).to eq "Invalid app key"
+    end
+
+    it 'returns forbidden if the tokens key is not authorized' do
+      json = api_call(:post, "/api/v1/users/self/pandata_events_token",
+          { controller: 'users', action: 'pandata_events_token', format:'json', id: @user.to_param },
+          { app_key: 'IOS_key'}
+      )
+      assert_status(403)
+      expect(json['message']).to eq "Developer key not authorized"
     end
   end
 end

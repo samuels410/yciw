@@ -32,7 +32,7 @@ describe('Account Course User Search CoursesList Sorting', () => {
       total_students: 6,
       teachers: [{
         id: '1',
-        display_name: 'Testing Teacher'
+        name: 'Testing Teacher'
       }],
       term: {
         name: "A Term"
@@ -45,7 +45,7 @@ describe('Account Course User Search CoursesList Sorting', () => {
       total_students: 7,
       teachers: [{
         id: '1',
-        display_name: 'Testing Teacher'
+        name: 'Testing Teacher'
       }],
       term: {
         name: "Ba Term"
@@ -58,7 +58,7 @@ describe('Account Course User Search CoursesList Sorting', () => {
       total_students: 6,
       teachers: [{
         id: '1',
-        display_name: 'Testing Teacher'
+        name: 'Testing Teacher'
       }],
       term: {
         name: "Bb Term"
@@ -71,7 +71,7 @@ describe('Account Course User Search CoursesList Sorting', () => {
       total_students: 6,
       teachers: [{
         id: '1',
-        display_name: 'Testing Teacher'
+        name: 'Testing Teacher'
       }],
       term: {
         name: "C Term"
@@ -84,7 +84,7 @@ describe('Account Course User Search CoursesList Sorting', () => {
       total_students: 11,
       teachers: [{
         id: '1',
-        display_name: 'Testing Teacher'
+        name: 'Testing Teacher'
       }],
       term: {
         name: "De Term"
@@ -97,7 +97,7 @@ describe('Account Course User Search CoursesList Sorting', () => {
       total_students: 10,
       teachers: [{
         id: '1',
-        display_name: 'Testing Teacher'
+        name: 'Testing Teacher'
       }],
       term: {
         name: "Dz Term"
@@ -129,17 +129,17 @@ describe('Account Course User Search CoursesList Sorting', () => {
         order: 'asc'
       }} />)
 
-      expect(wrapper.find('IconMiniArrowUpSolid')).toHaveLength(0)
-      const downArrow = wrapper.find('IconMiniArrowDownSolid')
+      expect(wrapper.find('IconMiniArrowUp')).toHaveLength(0)
+      const downArrow = wrapper.find('IconMiniArrowDown')
       expect(downArrow).toHaveLength(1)
-      const header = downArrow.closest('th')
+      const header = downArrow.closest('CourseListHeader')
 
       const expectedTip = {
         course_name: 'Click to sort by name descending',
         total_students: 'Click to sort by number of students descending'
       }[columnID] || `Click to sort by ${label} descending`
 
-      expect(header.text()).toMatch(RegExp(expectedTip, 'i'))
+      expect(header.find('Tooltip').prop('tip')).toMatch(RegExp(expectedTip, 'i'))
       expect(header.text()).toMatch(label)
     })
 
@@ -150,17 +150,17 @@ describe('Account Course User Search CoursesList Sorting', () => {
         order: 'desc'
       }} />)
 
-      expect(wrapper.find('IconMiniArrowDownSolid')).toHaveLength(0)
-      const upArrow = wrapper.find('IconMiniArrowUpSolid')
+      expect(wrapper.find('IconMiniArrowDown')).toHaveLength(0)
+      const upArrow = wrapper.find('IconMiniArrowUp')
       expect(upArrow).toHaveLength(1)
-      const header = upArrow.closest('th')
+      const header = upArrow.closest('CourseListHeader')
 
       const expectedTip = {
         course_name: 'Click to sort by name ascending',
         total_students: 'Click to sort by number of students ascending'
       }[columnID] || `Click to sort by ${label} ascending`
 
-      expect(header.text()).toMatch(RegExp(expectedTip, 'i'))
+      expect(header.find('Tooltip').prop('tip')).toMatch(RegExp(expectedTip, 'i'))
       expect(header.text()).toMatch(label)
     })
 

@@ -26,10 +26,6 @@ class DiscussionsIndex
       wait_for_ajaximations
     end
 
-    def set_section_specific_discussions_flag(course, state)
-      course.account.set_feature_flag! :section_specific_discussions, state
-    end
-
     def new_discussion_url
       '/discussion_topics/new'
     end
@@ -105,6 +101,10 @@ class DiscussionsIndex
 
     def subscribe_button(title)
       f('.subscribe-button', discussion(title))
+    end
+
+    def discussion_availability(title)
+      f('.discussion-availability', discussion(title))
     end
 
     # ---------------------- Discussion Menu ----------------------

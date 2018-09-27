@@ -20,12 +20,13 @@ import I18n from 'i18n!announcements_v2'
 import React, { Component } from 'react'
 import { string } from 'prop-types'
 
-import Tray from '@instructure/ui-core/lib/components/Tray'
-import Link from '@instructure/ui-core/lib/components/Link'
-import Heading from '@instructure/ui-core/lib/components/Heading'
-import Container from '@instructure/ui-core/lib/components/Container'
-import IconRssLine from 'instructure-icons/lib/Line/IconRssLine'
-import Text from '@instructure/ui-core/lib/components/Text'
+import Tray from '@instructure/ui-overlays/lib/components/Tray'
+import Link from '@instructure/ui-elements/lib/components/Link'
+import Button from '@instructure/ui-buttons/lib/components/Button'
+import Heading from '@instructure/ui-elements/lib/components/Heading'
+import View from '@instructure/ui-layout/lib/components/View'
+import IconRssLine from '@instructure/ui-icons/lib/Line/IconRss'
+import Text from '@instructure/ui-elements/lib/components/Text'
 
 import { ConnectedAddExternalFeed } from './AddExternalFeed'
 import propTypes from '../propTypes'
@@ -46,30 +47,30 @@ export default class ExternalFeedsTray extends Component {
 
   renderTrayContent() {
     return (
-      <Container>
+      <View>
         {this.renderHeader()}
         {this.renderRssFeedLink()}
         {this.props.permissions.create && this.renderAddExternalFeed()}
-      </Container>
+      </View>
     )
   }
 
   renderHeader() {
     return (
-      <Container
+      <View
         margin="0 0 0 large"
         as="div"
         textAlign="start"
       >
         <Heading margin="small 0 0 small" level="h3" as="h2">{I18n.t('External feeds')}</Heading>
-      </Container>
+      </View>
     )
   }
 
   renderRssFeedLink() {
     if (this.props.atomFeedUrl) {
       return (
-        <Container
+        <View
           margin="medium"
           as="div"
           textAlign="start"
@@ -79,9 +80,9 @@ export default class ExternalFeedsTray extends Component {
             linkRef={(link) => {this.rssFeedLink = link}}
             href={this.props.atomFeedUrl}>
             <IconRssLine />
-            <Container margin="0 0 0 x-small">{I18n.t('RSS Feed')}</Container>
+            <View margin="0 0 0 x-small">{I18n.t('RSS Feed')}</View>
           </Link>
-        </Container>
+        </View>
       )
     }
     return null
@@ -89,7 +90,7 @@ export default class ExternalFeedsTray extends Component {
 
   renderAddExternalFeed() {
     return (
-      <Container
+      <View
         id="announcements-tray__add-rss-root"
         margin="medium medium small"
         display="block"
@@ -98,40 +99,41 @@ export default class ExternalFeedsTray extends Component {
       >
         <Text size="medium" as="h2" weight="bold">{I18n.t("Feeds")}</Text>
         <div className="announcements-tray-row">
-          <Container
+          <View
             margin="small 0 0"
             display="block"
             textAlign="start"
           >
             <ConnectedAddExternalFeed defaultOpen={false}/>
-          </Container>
+          </View>
         </div>
-      </Container>
+      </View>
     )
   }
 
   render () {
     return (
-      <Container display="block" textAlign="end">
-        <Link
+      <View display="block" textAlign="end">
+        <Button
           id="external_feed"
-          linkRef={(link) => {this.externalFeedRef = link}}
-          onClick={() => { this.setState({ open: !this.state.open }) }}>
+          buttonRef={(link) => {this.externalFeedRef = link}}
+          onClick={() => { this.setState({ open: !this.state.open }) }}
+          variant="link">
           {I18n.t('External feeds')}
-        </Link>
+        </Button>
         <Tray
           label={I18n.t('External feeds')}
           closeButtonLabel={I18n.t('Close')}
           open={this.state.open}
-          onExit={() => this.externalFeedRef.focus()}
           size="small"
-          onDismiss={() => { this.setState({ open: false }) }}
+          onDismiss={() => {
+            this.setState({ open: false })
+          }}
           placement="end"
-          applicationElement={() => document.getElementById('application') }
         >
           {this.renderTrayContent()}
         </Tray>
-      </Container>
+      </View>
     )
   }
 }

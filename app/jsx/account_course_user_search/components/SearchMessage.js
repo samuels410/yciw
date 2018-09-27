@@ -17,11 +17,12 @@
  */
 
 import React, { Component } from 'react'
-import Pagination, {PaginationButton} from '@instructure/ui-core/lib/components/Pagination'
-import Spinner from '@instructure/ui-core/lib/components/Spinner'
+import Pagination, {PaginationButton} from '@instructure/ui-pagination/lib/components/Pagination'
+import Spinner from '@instructure/ui-elements/lib/components/Spinner'
 import { array, func, string, shape, oneOf } from 'prop-types'
 import I18n from 'i18n!account_course_user_search'
 import Alert from '@instructure/ui-alerts/lib/components/Alert'
+import View from '@instructure/ui-layout/lib/components/View'
 
 const linkPropType = shape({
   url: string.isRequired,
@@ -34,10 +35,7 @@ export default class SearchMessage extends Component {
   static propTypes = {
     collection: shape({
       data: array.isRequired,
-      links: shape({
-        current: linkPropType,
-        last: linkPropType
-      })
+      links: shape({ current: linkPropType })
     }).isRequired,
     setPage: func.isRequired,
     noneFoundMessage: string.isRequired,
@@ -67,6 +65,7 @@ export default class SearchMessage extends Component {
 
       if (nextProps.collection.links.last) {
         newState.lastKnownPage = nextProps.collection.links.last;
+        newState.lastUnknown = false
       } else {
         newState.lastKnownPage = nextProps.collection.links.next;
         newState.lastUnknown = true
@@ -94,16 +93,26 @@ export default class SearchMessage extends Component {
     });
   }
 
-  renderSearchDoneAlert = (isLoading, message) => {
-    if (isLoading) {
-      return null;
-    }
+  renderPaginationButton(pageIndex) {
+    const pageNumber = pageIndex + 1
+    const isCurrent = this.state.pageBecomingCurrent
+      ? pageNumber === this.state.pageBecomingCurrent
+      : pageNumber === this.state.currentPage
     return (
-      <Alert screenReaderOnly liveRegion={this.props.getLiveAlertRegion}>
-        {message}
-      </Alert>
-    );
-  };
+      <PaginationButton
+        key={pageNumber}
+        onClick={() => this.handleSetPage(pageNumber)}
+        current={isCurrent}
+        aria-label={I18n.t('Page %{pageNum}', {pageNum: pageNumber})}
+      >
+        {isCurrent && this.state.pageBecomingCurrent ? (
+          <Spinner size="x-small" title={I18n.t('Loading...')} />
+        ) : (
+          I18n.n(pageNumber)
+        )}
+      </PaginationButton>
+    )
+  }
 
 
   render () {
@@ -125,58 +134,48 @@ export default class SearchMessage extends Component {
       return (
         <div className="text-center pad-box">
           <div className="alert alert-error">
-            {this.renderSearchDoneAlert(collection.loading, errorLoadingMessage)}
             {errorLoadingMessage}
           </div>
         </div>
       )
+    } else if (collection.loading) {
+      return (
+        <View display="block" textAlign="center" padding="medium">
+          <Spinner size="medium" title={I18n.t('Loading...')} />
+        </View>
+      )
     } else if (!collection.data.length) {
       return (
         <div className="text-center pad-box">
-          {this.renderSearchDoneAlert(collection.loading, noneFoundMessage)}
           <div className="alert alert-info">{noneFoundMessage}</div>
         </div>
       )
     } else if (collection.links) {
+      const lastIndex = this.state.pageNumbers.length - 1
+      const paginationButtons = []
+      paginationButtons[0] = this.renderPaginationButton(0)
+      paginationButtons[lastIndex] = this.renderPaginationButton(lastIndex)
+      const visiblePageRangeStart = Math.max(this.state.currentPage - 2, 0)
+      const visiblePageRangeEnd = Math.min(this.state.currentPage + 5, lastIndex)
+      for (let i = visiblePageRangeStart; i < visiblePageRangeEnd; i++) {
+        paginationButtons[i] = this.renderPaginationButton(i)
+      }
+
       return (
-        <div>
-          {this.renderSearchDoneAlert(collection.loading, resultsFoundMessage)}
           <Pagination
+            as="nav"
             variant="compact"
             labelNext={I18n.t('Next Page')}
             labelPrev={I18n.t('Previous Page')}
           >
-            {this.state.pageNumbers.map((v, i) => {
-              const pageNumber = i + 1
-              const isCurrent = (this.state.pageBecomingCurrent) ?
-                              pageNumber === this.state.pageBecomingCurrent :
-                              pageNumber === this.state.currentPage;
-              return (
-                <PaginationButton
-                  key={pageNumber}
-                  onClick={() => this.handleSetPage(pageNumber)}
-                  current={isCurrent}
-                >
-                    { isCurrent && this.state.pageBecomingCurrent ? (
-                      <Spinner size="x-small" title={I18n.t('Loading...')} />
-                    ) : (
-                      I18n.n(pageNumber)
-                    )}
-                </PaginationButton>
-              )
-            }).concat(this.state.lastUnknown
+            {paginationButtons.concat(this.state.lastUnknown
               ? <span key="page-count-is-unknown-indicator" aria-hidden>...</span>
               : []
             )}
           </Pagination>
-        </div>
       )
     } else {
-      return (
-        <div>
-          {this.renderSearchDoneAlert(collection.loading, resultsFoundMessage)}
-        </div>
-      )
+      return (<div />)
     }
   }
 }

@@ -36,6 +36,7 @@ class Assignment < ActiveRecord::Base
   include TurnitinID
   include Plannable
   include DuplicatingObjects
+  include LockedFor
 
   ALLOWED_GRADING_TYPES = %w(points percent letter_grade gpa_scale pass_fail not_graded).freeze
 
@@ -53,8 +54,8 @@ class Assignment < ActiveRecord::Base
   restrict_assignment_columns
   restrict_columns :state, [:workflow_state]
 
-  has_many :submissions, -> { active.preload(:grading_period) }
-  has_many :all_submissions, class_name: 'Submission', dependent: :destroy
+  has_many :submissions, -> { active.preload(:grading_period) }, inverse_of: :assignment
+  has_many :all_submissions, class_name: 'Submission', dependent: :delete_all
   has_many :provisional_grades, :through => :submissions
   has_many :attachments, :as => :context, :inverse_of => :context, :dependent => :destroy
   has_many :assignment_student_visibilities
@@ -86,6 +87,7 @@ class Assignment < ActiveRecord::Base
   has_one :score_statistic, dependent: :destroy
 
   has_many :moderation_graders, inverse_of: :assignment
+  has_many :moderation_grader_users, through: :moderation_graders, source: :user
 
   validates_associated :external_tool_tag, :if => :external_tool?
   validate :group_category_changes_ok?
@@ -99,20 +101,13 @@ class Assignment < ActiveRecord::Base
   validate :assignment_name_length_ok?
   validates :lti_context_id, presence: true, uniqueness: true
 
-  before_create do
-    self.muted = true if moderated_grading? && anonymous_moderated_marking?
-  end
-
-  validates :graders_anonymous_to_graders, absence: true, unless: :anonymous_grading?
-
   with_options unless: :moderated_grading? do
-    #validates :grader_comments_visible_to_graders, absence: true
+    validates :graders_anonymous_to_graders, absence: true
     validates :grader_section, absence: true
     validates :final_grader, absence: true
-    #validates :grader_names_visible_to_final_grader, absence: true
   end
 
-  with_options if: -> { moderated_grading? && anonymous_moderated_marking? } do
+  with_options if: -> { moderated_grading? } do
     validates :grader_count, numericality: { greater_than: 0, message: "Number of graders must be positive" }
     validate :grader_section_ok?
     validate :final_grader_ok?
@@ -266,6 +261,14 @@ class Assignment < ActiveRecord::Base
     )
   end
 
+  def self.clean_up_importing_assignments
+    importing_for_too_long.update_all(
+      importing_started_at: nil,
+      workflow_state: 'failed_to_import',
+      updated_at: Time.zone.now
+    )
+  end
+
   def group_category_changes_ok?
     return unless group_category_id_changed?
 
@@ -396,6 +399,9 @@ class Assignment < ActiveRecord::Base
     anonymous_instructor_annotations
     anonymous_grading
     workflow_state
+    graders_anonymous_to_graders
+    grader_comments_visible_to_graders
+    grader_names_visible_to_final_grader
   ).freeze
 
   def external_tool?
@@ -447,7 +453,9 @@ class Assignment < ActiveRecord::Base
               :process_if_quiz,
               :default_values,
               :maintain_group_category_attribute,
-              :validate_assignment_overrides
+              :validate_assignment_overrides,
+              :mute_if_changed_to_anonymous,
+              :mute_if_changed_to_moderated
 
 
   after_save  :update_submissions_and_grades_if_details_changed,
@@ -750,6 +758,7 @@ class Assignment < ActiveRecord::Base
       :peer_reviews, :automatic_peer_reviews, :muted, :intra_group_peer_reviews,
       :anonymous_grading
     ].each { |attr| self[attr] = false if self[attr].nil? }
+    self.graders_anonymous_to_graders = false unless grader_comments_visible_to_graders
   end
   protected :default_values
 
@@ -970,6 +979,11 @@ class Assignment < ActiveRecord::Base
       event :fail_to_duplicate, :transitions_to => :failed_to_duplicate
     end
     state :failed_to_duplicate
+    state :importing do
+      event :finish_importing, :transitions_to => :unpublished
+      event :fail_to_import, :transitions_to => :fail_to_import
+    end
+    state :fail_to_import
     state :deleted
   end
 
@@ -1235,22 +1249,24 @@ class Assignment < ActiveRecord::Base
     ])
   end
 
-  def locked_for?(user, opts={})
+  def low_level_locked_for?(user, opts={})
     return false if opts[:check_policies] && context.grants_right?(user, :read_as_admin)
     Rails.cache.fetch(locked_cache_key(user), :expires_in => 1.minute) do
       locked = false
       assignment_for_user = self.overridden_for(user)
       if (assignment_for_user.unlock_at && assignment_for_user.unlock_at > Time.zone.now)
-        locked = {:asset_string => assignment_for_user.asset_string, :unlock_at => assignment_for_user.unlock_at}
+        locked = {object: assignment_for_user, unlock_at: assignment_for_user.unlock_at}
       elsif self.could_be_locked && item = locked_by_module_item?(user, opts)
-        locked = {:asset_string => self.asset_string, :context_module => item.context_module.attributes}
+        locked = {object: self, module: item.context_module}
       elsif (assignment_for_user.lock_at && assignment_for_user.lock_at < Time.zone.now)
-        locked = {:asset_string => assignment_for_user.asset_string, :lock_at => assignment_for_user.lock_at, :can_view => true}
+        locked = {object: assignment_for_user, lock_at: assignment_for_user.lock_at, can_view: true}
       else
         each_submission_type do |submission, _, short_type|
           next unless self.send("#{short_type}?")
-          if submission_locked = submission.locked_for?(user, opts.merge(:skip_assignment => true))
+          if submission_locked = submission.low_level_locked_for?(user, opts.merge(:skip_assignment => true))
+
             locked = submission_locked
+
           end
           break
         end
@@ -1373,11 +1389,10 @@ class Assignment < ActiveRecord::Base
 
   def user_can_update?(user, session=nil)
     return false unless context.grants_right?(user, session, :manage_assignments)
-    return true unless moderated_grading? && root_account.feature_enabled?(:anonymous_moderated_marking)
+    return true unless moderated_grading?
 
-    # When Anonymous Moderated Marking is on, a moderated assignment may only be
-    # edited by the assignment's moderator (assuming one has been specified) or
-    # by an account admin with 'Select Final Grader for Moderation' privileges.
+    # a moderated assignment may only be edited by the assignment's moderator (assuming one has
+    # been specified) or by an account admin with 'Select Final Grader for Moderation' privileges.
     final_grader_id.blank? || permits_moderation?(user)
   end
 
@@ -1484,15 +1499,6 @@ class Assignment < ActiveRecord::Base
     self.all_submissions.where(user_id: user.id).first_or_initialize
   end
 
-  class GradeError < StandardError
-    attr_accessor :status_code
-
-    def initialize(message = nil, status_code = nil)
-      super(message)
-      self.status_code = status_code
-    end
-  end
-
   def compute_grade_and_score(grade, score)
     if grade
       score = self.grade_to_score(grade)
@@ -1519,13 +1525,15 @@ class Assignment < ActiveRecord::Base
     submissions = []
     grade_group_students = !(grade_group_students_individually || opts[:excused])
 
-    if grade_group_students
-      find_or_create_submissions(students) do |submission|
+    ensure_grader_can_adjudicate(grader: opts[:grader], provisional: opts[:provisional]) do
+      if grade_group_students
+        find_or_create_submissions(students, Submission.preload(:grading_period)) do |submission|
+          submissions << save_grade_to_submission(submission, original_student, group, opts)
+        end
+      else
+        submission = find_or_create_submission(original_student)
         submissions << save_grade_to_submission(submission, original_student, group, opts)
       end
-    else
-      submission = find_or_create_submission(original_student)
-      submissions << save_grade_to_submission(submission, original_student, group, opts)
     end
 
     submissions.compact
@@ -1605,7 +1613,12 @@ class Assignment < ActiveRecord::Base
     grade, score = compute_grade_and_score(opts[:grade], opts[:score])
 
     did_grade = false
-    submission.attributes = opts.slice(:excused, :submission_type, :url, :body)
+    submission.attributes = opts.slice(:submission_type, :url, :body)
+
+    # Only moderators or admins may excuse an assignment under moderation
+    if !opts[:provisional] || permits_moderation?(grader)
+      submission.excused = opts[:excused] && score.blank?
+    end
 
     unless opts[:provisional]
       submission.grader = grader
@@ -1613,13 +1626,12 @@ class Assignment < ActiveRecord::Base
       submission.grade = grade
       submission.score = score
       submission.graded_anonymously = opts[:graded_anonymously] if opts.key?(:graded_anonymously)
-      submission.excused = false if score.present?
       did_grade = true if score.present? || submission.excused?
     end
 
     if did_grade
       submission.grade_matches_current_submission = true
-      submission.instance_variable_set(:@regraded, true)
+      submission.regraded = true
     end
 
     if (submission.score_changed? ||
@@ -1632,6 +1644,8 @@ class Assignment < ActiveRecord::Base
     previously_graded ? submission.with_versioning(:explicit => true) { submission.save! } : submission.save!
 
     if opts[:provisional]
+      raise GradeError, error_code: 'PROVISIONAL_GRADE_INVALID_SCORE' unless score.present? || submission.excused
+
       submission.find_or_create_provisional_grade!(grader,
         grade: grade,
         score: score,
@@ -1657,8 +1671,10 @@ class Assignment < ActiveRecord::Base
     end
   end
 
-  def find_or_create_submissions(students)
-    submissions = self.all_submissions.where(user_id: students).order(:user_id).to_a
+  def find_or_create_submissions(students, relation = nil)
+    submissions = self.all_submissions.where(user_id: students).order(:user_id)
+    submissions = submissions.merge(relation) if relation
+    submissions = submissions.to_a
     submissions_hash = submissions.index_by(&:user_id)
     # we touch the user in an after_save; the FK causes a read lock
     # to be taken on the user during submission INSERT, so to avoid
@@ -1730,14 +1746,16 @@ class Assignment < ActiveRecord::Base
       opts[:assessment_request].complete unless opts[:assessment_request].rubric_association
     end
 
-    if opts[:comment] && Canvas::Plugin.value_to_boolean(opts[:group_comment])
-      uuid = CanvasSlug.generate_securish_uuid
-      res = find_or_create_submissions(students) do |submission|
-        save_comment_to_submission(submission, group, opts, uuid)
+    ensure_grader_can_adjudicate(grader: opts[:author], provisional: opts[:provisional]) do
+      if opts[:comment] && Canvas::Plugin.value_to_boolean(opts[:group_comment])
+        uuid = CanvasSlug.generate_securish_uuid
+        res = find_or_create_submissions(students) do |submission|
+          save_comment_to_submission(submission, group, opts, uuid)
+        end
+      else
+        submission = find_or_create_submission(original_student)
+        res << save_comment_to_submission(submission, group, opts)
       end
-    else
-      submission = find_or_create_submission(original_student)
-      res << save_comment_to_submission(submission, group, opts)
     end
     res
   end
@@ -1751,8 +1769,9 @@ class Assignment < ActiveRecord::Base
   end
   private :save_comment_to_submission
 
-  SUBMIT_HOMEWORK_ATTRS = %w[body url submission_type
-                             media_comment_id media_comment_type]
+  SUBMIT_HOMEWORK_ATTRS = %w[
+    body url submission_type media_comment_id media_comment_type submitted_at
+  ].freeze
   ALLOWABLE_SUBMIT_HOMEWORK_OPTS = (SUBMIT_HOMEWORK_ATTRS +
                                     %w[comment group_comment attachments]).to_set
 
@@ -1780,7 +1799,7 @@ class Assignment < ActiveRecord::Base
                   true
                 end
     transaction do
-      find_or_create_submissions(students) do |homework|
+      find_or_create_submissions(students, Submission.preload(:grading_period)) do |homework|
         # clear out attributes from prior submissions
         if opts[:submission_type].present?
           SUBMIT_HOMEWORK_ATTRS.each { |attr| homework[attr] = nil }
@@ -1797,7 +1816,7 @@ class Assignment < ActiveRecord::Base
           :workflow_state => submitted ? "submitted" : "unsubmitted",
           :group => group
         })
-        homework.submitted_at = Time.zone.now
+        homework.submitted_at = opts[:submitted_at] || Time.zone.now
         homework.lti_user_id = Lti::Asset.opaque_identifier_for(student)
         homework.turnitin_data[:eula_agreement_timestamp] = eula_timestamp if eula_timestamp.present?
         homework.with_versioning(:explicit => (homework.submission_type != "discussion_topic")) do
@@ -1853,20 +1872,6 @@ class Assignment < ActiveRecord::Base
 
   def grades_published?
     !moderated_grading? || grades_published_at.present?
-  end
-
-  def student_needs_provisional_grade?(student, preloaded_counts=nil)
-    pg_count = if preloaded_counts
-      preloaded_counts[student.id] || 0
-    else
-      self.provisional_grades.not_final.where(:submissions => {:user_id => student}).count
-    end
-    in_moderation_set = if self.moderated_grading_selections.loaded?
-      self.moderated_grading_selections.detect{|s| s.student_id == student.id}.present?
-    else
-      self.moderated_grading_selections.where(:student_id => student).exists?
-    end
-    pg_count < (in_moderation_set ? 2 : 1)
   end
 
   def sections_with_visibility(user)
@@ -2264,12 +2269,12 @@ class Assignment < ActiveRecord::Base
   # Return all assignments and their active overrides where either the
   # assignment or one of its overrides is due between start and ending.
   scope :due_between_with_overrides, lambda { |start, ending|
-    joins("LEFT OUTER JOIN #{AssignmentOverride.quoted_table_name} assignment_overrides
-          ON assignment_overrides.assignment_id = assignments.id").
-    group("assignments.id").
-    where('assignments.due_at BETWEEN ? AND ?
-          OR assignment_overrides.due_at_overridden AND
-          assignment_overrides.due_at BETWEEN ? AND ?', start, ending, start, ending)
+    where('assignments.due_at BETWEEN ? AND ? OR (EXISTS (?))',
+        start, ending,
+        AssignmentOverride.where('assignment_overrides.assignment_id = assignments.id AND
+          assignment_overrides.due_at_overridden AND
+          assignment_overrides.due_at BETWEEN ? AND ?', start, ending)
+    )
   }
 
   scope :due_between_for_user, -> (start, ending, user) do
@@ -2359,6 +2364,10 @@ class Assignment < ActiveRecord::Base
 
   scope :duplicating_for_too_long, -> {
     where("workflow_state = 'duplicating' AND duplication_started_at < ?", 5.minutes.ago)
+  }
+
+  scope :importing_for_too_long, -> {
+    where("workflow_state = 'importing' AND importing_started_at < ?", 5.minutes.ago)
   }
 
   def overdue?
@@ -2549,7 +2558,9 @@ class Assignment < ActiveRecord::Base
   def update_cached_due_dates?
     will_save_change_to_due_at? || saved_change_to_due_at? ||
       will_save_change_to_workflow_state? || saved_change_to_workflow_state? ||
-      will_save_change_to_only_visible_to_overrides? || saved_change_to_only_visible_to_overrides?
+      will_save_change_to_only_visible_to_overrides? ||
+      saved_change_to_only_visible_to_overrides? ||
+      will_save_change_to_moderated_grading? || saved_change_to_moderated_grading?
   end
 
   def apply_late_policy
@@ -2645,7 +2656,7 @@ class Assignment < ActiveRecord::Base
 
   def unmute!
     return unless muted?
-    return super unless !grades_published? && anonymous_moderated_marking? && anonymous_grading?
+    return super unless !grades_published? && anonymous_grading?
     errors.add :muted, I18n.t("Anonymous moderated assignments cannot be unmuted until grades are posted")
     false
   end
@@ -2662,9 +2673,9 @@ class Assignment < ActiveRecord::Base
     elsif submissions.loaded?
       # no need to check grading_periods are loaded because of
       # submissions association preload(:grading_period)
-      submissions.map(&:grading_period).compact.any?(&:closed?)
+      submissions.map(&:grading_period).compact.any? { |gp| gp.workflow_state == 'active' && gp.closed? }
     else
-      GradingPeriod.joins(:submissions).where(submissions: { assignment: self }).closed.exists?
+      GradingPeriod.joins(:submissions).active.where(submissions: { assignment: self }).closed.exists?
     end
   end
 
@@ -2753,11 +2764,8 @@ class Assignment < ActiveRecord::Base
   end
 
   def permits_moderation?(user)
-    if root_account.feature_enabled?(:anonymous_moderated_marking)
-      final_grader_id == user.id || context.account_membership_allows(user, :select_final_grade)
-    else
-      context.grants_right?(user, :moderate_grades)
-    end
+    return false unless user
+    final_grader_id == user.id || context.account_membership_allows(user, :select_final_grade)
   end
 
   def available_moderators
@@ -2776,6 +2784,18 @@ class Assignment < ActiveRecord::Base
     moderators
   end
 
+  def provisional_moderation_graders
+    if final_grader_id.present?
+      moderation_graders.where.not(user_id: final_grader_id)
+    else
+      moderation_graders
+    end
+  end
+
+  def ordered_moderation_graders
+    moderation_graders.order(:anonymous_id)
+  end
+
   def moderated_grading_max_grader_count
     max_course_count = course.moderated_grading_max_grader_count
     return max_course_count if grader_count.blank?
@@ -2783,7 +2803,75 @@ class Assignment < ActiveRecord::Base
     [grader_count, max_course_count].max
   end
 
+  def moderated_grader_limit_reached?
+    moderated_grading? && provisional_moderation_graders.count >= grader_count
+  end
+
+  def can_be_moderated_grader?(user)
+    return false unless context.grants_any_right?(user, :manage_grades, :view_all_grades)
+    return true unless moderated_grader_limit_reached?
+    # Final grader can always be a moderated grader, and existing moderated graders can re-grade
+    final_grader_id == user.id || moderation_graders.where(user_id: user.id).exists?
+  end
+
+  def can_view_speed_grader?(user)
+    context.allows_speed_grader? && can_be_moderated_grader?(user)
+  end
+
+  def can_view_other_grader_identities?(user)
+    return false unless context.grants_any_right?(user, :manage_grades, :view_all_grades)
+    return true unless moderated_grading?
+
+    return grader_names_visible_to_final_grader? if final_grader_id == user.id
+    return true if context.account_membership_allows(user, :select_final_grade)
+    return false unless grader_comments_visible_to_graders?
+
+    !graders_anonymous_to_graders?
+  end
+
+  def can_view_other_grader_comments?(user)
+    return false unless context.grants_any_right?(user, :manage_grades, :view_all_grades)
+    return true unless moderated_grading?
+
+    return true if final_grader_id == user.id || context.account_membership_allows(user, :select_final_grade)
+
+    grader_comments_visible_to_graders?
+  end
+
+  def grader_ids_to_anonymous_ids
+    @grader_ids_to_anonymous_ids ||= moderation_graders.each_with_object({}) do |grader, map|
+      map[grader.user_id.to_s] = grader.anonymous_id
+    end
+  end
+
+  def anonymize_students?
+    return false unless anonymous_grading?
+
+    # Only anonymize students for moderated assignments if grades have not been published.
+    # Only anonymize students for non-moderated assignments if the assignment is muted.
+    moderated_grading? ? !grades_published? : muted?
+  end
+  alias anonymize_students anonymize_students?
+
+  def can_view_student_names?(user)
+    return false if anonymize_students?
+
+    context.grants_any_right?(user, :manage_grades, :view_all_grades)
+  end
+
   private
+
+  def mute_if_changed_to_anonymous
+    return unless anonymous_grading_changed?
+
+    self.muted = true if anonymous_grading?
+  end
+
+  def mute_if_changed_to_moderated
+    return unless moderated_grading_changed?
+
+    self.muted = true if moderated_grading?
+  end
 
   def due_date_ok?
     if unlock_at && lock_at && due_at
@@ -2852,12 +2940,52 @@ class Assignment < ActiveRecord::Base
     end
   end
 
-  def anonymous_moderated_marking?
-    course.root_account.feature_enabled?(:anonymous_moderated_marking)
-  end
-
   def clear_moderated_grading_attributes(assignment)
     assignment.final_grader_id = nil
     assignment.grader_count = nil
+    assignment.grader_names_visible_to_final_grader = true
+    assignment.grader_comments_visible_to_graders = true
+    assignment.graders_anonymous_to_graders = false
+  end
+
+  def create_moderation_grader_if_needed(grader:)
+    return false if moderation_graders.where(user: grader).exists?
+
+    if moderated_grader_limit_reached?
+      raise MaxGradersReachedError unless grader.id == final_grader_id
+    end
+
+    existing_anonymous_ids = moderation_graders.pluck(:anonymous_id)
+    new_anonymous_id = Anonymity.generate_id(existing_ids: existing_anonymous_ids)
+    moderation_graders.create!(user: grader, anonymous_id: new_anonymous_id)
+
+    true
+  end
+
+  # This is a helper method intended to ensure the number of provisional graders
+  # for a moderated assignment doesn't exceed the prescribed maximum. Currently,
+  # it is used for submitting grades and comments via SpeedGrader. If the assignment
+  # is not moderated or the grade/comment being issued is not provisional, this
+  # method will simply execute the provided block without any additional checks.
+  def ensure_grader_can_adjudicate(grader:, provisional: false)
+    unless provisional && moderated_grading?
+      yield and return
+    end
+
+    Assignment.transaction do
+      # If we can't add a new grader, this will raise an error and abort
+      # the transaction.
+      added_moderation_grader = create_moderation_grader_if_needed(grader: grader)
+
+      yield
+
+      # If we added a grader, attempt to handle a potential race condition:
+      # multiple new graders could have tried to add themselves simultaneously
+      # when there weren't enough slots open for all of them. If we ended up
+      # with too many provisional graders, throw an error to roll things back.
+      if added_moderation_grader && provisional_moderation_graders.count > grader_count
+        raise MaxGradersReachedError
+      end
+    end
   end
 end

@@ -110,6 +110,10 @@ class GradeSummaryAssignmentPresenter
     assignment.special_class ? ("hard_coded " + assignment.special_class) : "editable"
   end
 
+  def show_submission_details_link?
+    is_assignment? && !!submission&.can_view_details?(@current_user)
+  end
+
   def classes
     classes = ["student_assignment"]
     classes << "assignment_graded" if graded?
@@ -219,14 +223,8 @@ class GradeSummaryAssignmentPresenter
   end
 
   def rubric_assessments
-    @visible_rubric_assessments ||= begin
-      if submission && !assignment.muted?
-        assessments = submission.rubric_assessments.select { |a| a.grants_right?(@current_user, :read) }
-        assessments.sort_by { |a| [a.assessment_type == 'grading' ? CanvasSort::First : CanvasSort::Last, a.assessor_name] }
-      else
-        []
-      end
-    end
+    return [] unless submission
+    submission.visible_rubric_assessments_for(@current_user)
   end
 
   def group

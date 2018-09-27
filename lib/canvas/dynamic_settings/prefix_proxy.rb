@@ -41,7 +41,8 @@ module Canvas
                      environment: nil,
                      cluster: nil,
                      default_ttl: DEFAULT_TTL,
-                     kv_client: Imperium::KV.default_client)
+                     kv_client: Imperium::KV.default_client,
+                     data_center: nil)
         @prefix = prefix
         @tree = tree
         @service = service
@@ -49,6 +50,7 @@ module Canvas
         @cluster = cluster
         @default_ttl = default_ttl
         @kv_client = kv_client
+        @data_center = data_center
       end
 
       # Fetch the value at the requested key using the prefix passed to the
@@ -66,13 +68,13 @@ module Canvas
       # @return [nil] When no value was found
       def fetch(key, ttl: @default_ttl)
         keys = [
-          [tree, service, environment, cluster, prefix, key].compact.join("/"),
+          full_key(key),
           [tree, service, environment, prefix, key].compact.join("/"),
         ].uniq
 
         fallback_keys = [
           [tree, service, prefix, key].compact.join("/"), # for backcompat only
-          ["global", tree, service, environment, prefix, key].compact.join("/"),
+          full_key(key, global: true),
         ] - keys
 
         # pre-cache an entire tree
@@ -129,7 +131,35 @@ module Canvas
         )
       end
 
+      # Set multiple key value pairs
+      #
+      # @param kvs [Hash] Key value pairs where the hash key is the key
+      #   and the hash value is the value
+      # @param global [boolean] Is it a global key?
+      # @return [Imperium::TransactionResponse]
+      def set_keys(kvs, global: false)
+        opts = @data_center.nil? ? {} : { dc: @data_center }
+        @kv_client.transaction(opts) do |tx|
+          kvs.each { |k, v| tx.set(full_key(k, global: global), v) }
+        end
+      end
+
       private
+
+      # Returns the full key
+      #
+      # @param key [String, Symbol] The key
+      # @param global [boolean] Is it a global key?
+      # @return [String] Full key
+      def full_key(key, global: false)
+        key_array = [tree, service, environment]
+        if global
+          key_array.prepend('global')
+        else
+          key_array << cluster
+        end
+        key_array.concat([prefix, key]).compact.join("/")
+      end
 
       def populate_cache(prefix, subtree, ttl)
         if subtree.is_a?(Hash)

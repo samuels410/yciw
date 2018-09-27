@@ -36,6 +36,18 @@ describe TermsController do
       }}}
   end
 
+  it "should not be able to change the name for a default term" do
+    account_model
+    account_admin_user(:account => @account)
+    user_session(@user)
+
+    put 'update', params: {:account_id => @account.id, :id => @account.default_enrollment_term.id, :enrollment_term => {:name => "new name lol"}}
+
+    expect(response).to_not be_successful
+    error = json_parse(response.body)["errors"]["name"].first["message"]
+    expect(error).to eq "Cannot change the default term name"
+  end
+
   it "should not be able to delete a default term" do
     account_model
     account_admin_user(:account => @account)
@@ -43,7 +55,7 @@ describe TermsController do
 
     delete 'destroy', params: {:account_id => @account.id, :id => @account.default_enrollment_term.id}
 
-    expect(response).to_not be_success
+    expect(response).to_not be_successful
     error = json_parse(response.body)["errors"]["workflow_state"].first["message"]
     expect(error).to eq "Cannot delete the default term"
   end
@@ -60,7 +72,7 @@ describe TermsController do
 
     delete 'destroy', params: {:account_id => @account.id, :id => @term.id}
 
-    expect(response).to_not be_success
+    expect(response).to_not be_successful
     error = json_parse(response.body)["errors"]["workflow_state"].first["message"]
     expect(error).to eq "Cannot delete a term with active courses"
 
@@ -68,7 +80,7 @@ describe TermsController do
 
     delete 'destroy', params: {:account_id => @account.id, :id => @term.id}
 
-    expect(response).to be_success
+    expect(response).to be_successful
 
     @term.reload
     expect(@term).to be_deleted

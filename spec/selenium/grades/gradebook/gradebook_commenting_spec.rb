@@ -16,6 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 require_relative '../../helpers/gradebook_common'
+require_relative '../pages/gradebook_page'
 
 describe "gradebook" do
   include_context "in-process server selenium tests"
@@ -29,7 +30,7 @@ describe "gradebook" do
 
     get "/courses/#{@course.id}/gradebook"
 
-    dialog = open_comment_dialog
+    dialog = Gradebook::MultipleGradingPeriods.open_comment_dialog
     set_value(dialog.find_element(:id, "add_a_comment"), comment_text)
     f("form.submission_details_add_comment_form.clearfix > button.btn").click
     wait_for_ajax_requests
@@ -37,21 +38,21 @@ describe "gradebook" do
     # make sure it is still there if you reload the page
     refresh_page
 
-    comment = open_comment_dialog.find_element(:css, '.comment')
+    comment = Gradebook::MultipleGradingPeriods.open_comment_dialog.find_element(:css, '.comment')
     expect(comment).to include_text(comment_text)
   end
 
   it "should let you post a group comment to a group assignment", priority: "1", test_id: 210047 do
     group_assignment = @course.assignments.create!({
-      :title => 'group assignment',
-      :due_at => (Time.zone.now + 1.week),
-      :points_possible => @assignment_3_points,
-      :submission_types => 'online_text_entry',
-      :assignment_group => @group,
-      :group_category => GroupCategory.create!(:name => "groups", :context => @course),
-      :grade_group_students_individually => true
+      title: 'group assignment',
+      due_at: (Time.zone.now + 1.week),
+      points_possible: @assignment_3_points,
+      submission_types: 'online_text_entry',
+      assignment_group: @group,
+      group_category: GroupCategory.create!(name: "groups", context: @course),
+      grade_group_students_individually: true
     })
-    project_group = group_assignment.group_category.groups.create!(:name => 'g1', :context => @course)
+    project_group = group_assignment.group_category.groups.create!(name: 'g1', context: @course)
     project_group.users << @student_1
     project_group.users << @student_2
 
@@ -59,7 +60,7 @@ describe "gradebook" do
 
     get "/courses/#{@course.id}/gradebook"
 
-    dialog = open_comment_dialog(3)
+    dialog = Gradebook::MultipleGradingPeriods.open_comment_dialog(3)
     set_value(dialog.find_element(:id, "add_a_comment"), comment_text)
     f('label[for="group_comment"]').click
     f("form.submission_details_add_comment_form.clearfix > button.btn").click
@@ -69,7 +70,7 @@ describe "gradebook" do
     expect(f('body')).not_to contain_css('.submission_details_add_comment_form')
 
     # make sure it's on the other student's submission
-    open_comment_dialog(3, 1)
+    Gradebook::MultipleGradingPeriods.open_comment_dialog(3, 1)
     comment = fj(".submission_details_dialog:visible .comment")
     expect(comment).to include_text(comment_text)
   end

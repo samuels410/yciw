@@ -20,8 +20,16 @@ class Speedgrader
     include SeleniumDependencies
 
     # components/elements
+    def right_inner_panel
+      f('#rightside_inner')
+    end
+
     def grade_value
       f('#grade_container input[type=text]').attribute('value')
+    end
+
+    def points_possible_label
+      f('#grading-box-points-possible')
     end
 
     def fraction_graded
@@ -36,6 +44,10 @@ class Speedgrader
       f('#grading-box-extended')
     end
 
+    def grading_enabled?
+      grade_input.enabled?
+    end
+
     def top_bar
       f("#content")
     end
@@ -45,7 +57,19 @@ class Speedgrader
     end
 
     def settings_link
-      f('#settings_link')
+      f('#speedgrader-settings button')
+    end
+
+    def options_link
+      fxpath('//span[text() = "Options"]')
+    end
+
+    def keyboard_shortcuts_link
+      fxpath('//ul[@role = "menu"]//span[text() = "Keyboard Shortcuts"]')
+    end
+
+    def mute_button
+      f('button#mute_link')
     end
 
     def hide_students_chkbox
@@ -80,7 +104,11 @@ class Speedgrader
       f('#students_selectmenu-button')
     end
 
-    def comment_text_area
+    def comment_citation
+      ff('.author_name')
+    end
+
+    def new_comment_text_area
       f('#speedgrader_comment_textarea')
     end
 
@@ -89,7 +117,11 @@ class Speedgrader
     end
 
     def delete_comment
-      f('.delete_comment_link')
+      ff('.delete_comment_link')
+    end
+
+    def comments
+      ff('#comments>.comment')
     end
 
     def submission_file_name
@@ -98,6 +130,10 @@ class Speedgrader
 
     def submission_to_view_dropdown
       f('#submission_to_view')
+    end
+
+    def submission_file_download
+      f('.submission-file-download')
     end
 
     def attachment_button
@@ -124,18 +160,6 @@ class Speedgrader
       f("#final-grade").text
     end
 
-    def view_rubric_button
-      fj("button:contains('View Rubric')")
-    end
-
-    def rubric_grade_input(criteria_id)
-      f("#criterion_#{criteria_id} input.criterion_points")
-    end
-
-    def save_rubric_button
-      f("button.save_rubric_button")
-    end
-
     def student_grading_status_icon(student_name)
       fj("#students_selectmenu-button:contains('#{student_name}')")
     end
@@ -149,11 +173,104 @@ class Speedgrader
     end
 
     def students_select_menu_list
-      ff("#students_selectmenu-menu li")
+      ff("#students_selectmenu-menu li .ui-selectmenu-item-header")
     end
 
     def section_all
       f("a[data-section-id=\"all\"]")
+    end
+
+    def grading_details_container
+      f("div#grading_details_container")
+    end
+
+    def show_details_button
+      f("button", grading_details_container)
+    end
+
+    def provisional_grade_radio_buttons
+      ff("label", grading_details_container)
+    end
+
+    def provisional_grade_radio_button_by_label(label)
+      fj(":contains('#{label}')", provisional_grade_radio_buttons)
+    end
+
+    # returns a list of comment strings from right pane
+    def comment_list
+      ff('span.comment').map(&:text)
+    end
+
+    def media_comment_button
+      f('#media_comment_button')
+    end
+
+    def media_audio_record_option
+      f('#audio_record_option')
+    end
+
+    def media_video_record_option
+      f('#video_record_option')
+    end
+
+    def attachment_input_close_button
+      f('#comment_attachments a')
+    end
+
+    def comment_posted_at
+      ff('#comments > .comment .posted_at')
+    end
+
+    def avatar
+      f("#avatar_image")
+    end
+
+    def avatar_comment
+      f("#comments > .comment .avatar")
+    end
+
+    def assignment_link
+      f('#assignment_url')
+    end
+
+    def comment_saved_alert
+      f('#comment_saved')
+    end
+
+    def comment_saved_alert_close_button
+      f('#comment_saved .dismiss_alert')
+    end
+
+    def draft_comments
+      ff('#comments .comment.draft')
+    end
+
+    def draft_comment_markers
+      ff('#comments .comment.draft .comment_flex > .draft-marker')
+    end
+
+    def publish_draft_link
+      f('#comments .comment.draft .comment_flex > button.submit_comment_button')
+    end
+
+    def draft_comment_delete_button
+      ff('#comments .comment.draft .comment_flex > a.delete_comment_link')
+    end
+
+    def comment_delete_buttons
+      ff('#comments .comment .comment_flex > a.delete_comment_link')
+    end
+
+    def gradebook_link
+      f('#speed_grader_gradebook_link')
+    end
+
+    def keyboard_navigation_modal
+      f('#keyboard_navigation')
+    end
+
+    def keyboard_modal_close_button
+      f('.ui-resizable .ui-dialog-titlebar-close')
     end
 
     # action
@@ -161,6 +278,11 @@ class Speedgrader
       get "/courses/#{course_id}/gradebook/speed_grader?assignment_id=#{assignment_id}"
       visibility_check = grade_input
       keep_trying_until { visibility_check.displayed? }
+    end
+
+    def select_provisional_grade_by_label(label)
+      provisional_grade_radio_button_by_label(label).click
+      driver.action.send_keys(:space).perform
     end
 
     def visit_section(section)
@@ -171,7 +293,7 @@ class Speedgrader
     end
 
     def enter_grade(grade)
-      grade_input.send_keys(grade, :tab)
+      grade_input.send_keys(grade, :enter)
     end
 
     def current_grade
@@ -194,8 +316,16 @@ class Speedgrader
       settings_link.click
     end
 
+    def click_options_link
+      options_link.click
+    end
+
+    def click_keyboard_shortcuts_link
+      keyboard_shortcuts_link.click
+    end
+
     def select_hide_student_names
-      hide_students_chkbox
+      hide_students_chkbox.click
     end
 
     def click_next_student_btn
@@ -203,7 +333,7 @@ class Speedgrader
     end
 
     def add_comment_and_submit(comment)
-      replace_content(comment_text_area, comment)
+      replace_content(new_comment_text_area, comment)
       comment_submit_button.click
     end
 
@@ -221,11 +351,134 @@ class Speedgrader
     end
 
     def submit_settings_form
-      fj('.ui-dialog-buttonset .ui-button:visible:last').click
+      wait_for_new_page_load { fj('.ui-dialog-buttonset .ui-button:visible:last').click }
     end
 
     def grade_rubric_criteria(criteria_id, grade)
       rubric_grade_input(criteria_id).send_keys(grade)
+    end
+
+    def clear_new_comment
+      new_comment_text_area.clear
+    end
+
+    def check_hide_student_name
+      click_settings_link
+      click_options_link
+      unless hide_students_chkbox.selected?
+        select_hide_student_names
+      end
+      submit_settings_form
+    end
+
+    def uncheck_hide_student_name
+      click_settings_link
+      click_options_link
+      if hide_students_chkbox.selected?
+        select_hide_student_names
+      end
+      submit_settings_form
+    end
+
+    def select_student(student)
+      click_students_dropdown
+      students_select_menu_list.find { |e| e.text == student.name}.click
+      wait_for_ajaximations
+    end
+
+    def fetch_comment_posted_at_by_index(index)
+      comment_posted_at[index]
+    end
+
+    def close_saved_comment_alert
+      comment_saved_alert_close_button.click
+    end
+
+    def wait_for_grade_input
+      wait = Selenium::WebDriver::Wait.new(timeout: 5)
+      wait.until { grade_input.attribute('value') != "" }
+    end
+
+    # quizzes
+    def quiz_alerts
+      ff('#update_history_form .alert')
+    end
+
+    def quiz_questions_need_review
+      ff('#questions_needing_review li a')
+    end
+
+    def quiz_header
+      f('header.quiz-header')
+    end
+
+    def quiz_nav
+      f('#quiz-nav-inner-wrapper')
+    end
+
+    def quiz_nav_questions
+      ff('.quiz-nav-li')
+    end
+
+    def quiz_point_inputs
+      ff('#questions .user_points input')
+    end
+
+    def quiz_fudge_points
+      f('#fudge_points_entry')
+    end
+
+    def quiz_after_fudge_total
+      f('#after_fudge_points_total')
+    end
+
+    def quiz_update_scores_button
+      f('button.update-scores')
+    end
+
+    # rubric
+    def view_rubric_button
+      f('button.toggle_full_rubric')
+    end
+
+    def view_longer_description_link
+      f('#criterion_crit1 .long_description_link')
+    end
+
+    def rating(rat_num)
+      f("#rating_rat#{rat_num}")
+    end
+
+    def save_rubric_button
+      f('button.save_rubric_button')
+    end
+
+    def rubric_total_points
+      f('#grading span.rubric_total')
+    end
+
+    def rating_tiers
+      ff('.rating-tier')
+    end
+
+    def rating_by_text(rating_text)
+      fj("span:contains(\"#{rating_text}\")")
+    end
+
+    def saved_rubric_ratings
+      ff('#rubric_summary_container .rating-description')
+    end
+
+    def learning_outcome_points
+      f('.learning_outcome_criterion input.criterion_points')
+    end
+
+    def enter_rubric_points(points)
+      replace_content(learning_outcome_points, points)
+    end
+
+    def rubric_grade_input(criteria_id)
+      f("#criterion_#{criteria_id} input.criterion_points")
     end
   end
 end

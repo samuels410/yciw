@@ -976,7 +976,7 @@ class Attachment < ActiveRecord::Base
           group(:context_id, :context_type).
           having("MAX(updated_at)<?", quiet_period).
           limit(500).
-          pluck("COUNT(attachments.id), MIN(attachments.id), MAX(updated_at), context_id, context_type")
+          pluck(Arel.sql("COUNT(attachments.id), MIN(attachments.id), MAX(updated_at), context_id, context_type"))
       break if file_batches.empty?
       file_batches.each do |count, attachment_id, last_updated_at, context_id, context_type|
         # clear the need_notify flag for this batch
@@ -989,7 +989,7 @@ class Attachment < ActiveRecord::Base
         # now generate the notification
         record = Attachment.find(attachment_id)
         next if record.context.is_a?(Course) && (!record.context.available? || record.context.concluded?)
-        if record.context.is_a?(Course) && (record.folder.locked? || record.context.tab_hidden?(Course::TAB_FILES))
+        if record.context.is_a?(Course) && (record.folder.locked? || record.locked? || record.context.tab_hidden?(Course::TAB_FILES))
           # only notify course students if they are able to access it
           to_list = record.context.participating_admins - [record.user]
         elsif record.context.respond_to?(:participants)
@@ -1333,18 +1333,24 @@ class Attachment < ActiveRecord::Base
   # this will delete the content of the attachment but not delete the attachment
   # object. It will replace the attachment content with a file_removed file.
   def destroy_content_and_replace(deleted_by_user = nil)
-    att = self.root_attachment_id? ? self.root_attachment : self
-    return true if Purgatory.where(attachment_id: att).active.exists?
-    att.send_to_purgatory(deleted_by_user)
-    att.destroy_content
-    att.thumbnail&.destroy
-    file_removed_file = File.open Rails.root.join('public', 'file_removed', 'file_removed.pdf')
-    # TODO set the instfs_uuid of the attachment to a single "file removed" file to avoid
-    # upload the same file over and over. This instfs_uuid should be retrieved from the inst-fs services
-    Attachments::Storage.store_for_attachment(att, file_removed_file)
-    CrocodocDocument.where(attachment_id: att.children_and_self.select(:id)).delete_all
-    Canvadoc.where(attachment_id: att.children_and_self.select(:id)).delete_all
-    att.save!
+    self.shard.activate do
+      att = self.root_attachment_id? ? self.root_attachment : self
+      return true if Purgatory.where(attachment_id: att).active.exists?
+      att.send_to_purgatory(deleted_by_user)
+      att.destroy_content
+      att.thumbnail&.destroy
+      new_name = 'file_removed.pdf'
+      file_removed_file = File.open Rails.root.join('public', 'file_removed', new_name)
+      # TODO set the instfs_uuid of the attachment to a single "file removed" file to avoid
+      # upload the same file over and over. This instfs_uuid should be retrieved from the inst-fs services
+      Attachments::Storage.store_for_attachment(att, file_removed_file)
+      att.filename = new_name
+      att.display_name = new_name
+      att.content_type = "application/pdf"
+      CrocodocDocument.where(attachment_id: att.children_and_self.select(:id)).delete_all
+      Canvadoc.where(attachment_id: att.children_and_self.select(:id)).delete_all
+      att.save!
+    end
   end
 
   # this method does not destroy anything. It copies the content to a new s3object
@@ -1360,10 +1366,12 @@ class Attachment < ActiveRecord::Base
       p = Purgatory.where(attachment_id: self).take
       p.deleted_by_user = deleted_by_user
       p.old_filename = filename
+      p.old_display_name = display_name
+      p.old_content_type = content_type
       p.workflow_state = 'active'
       p.save!
     else
-      Purgatory.create!(attachment: self, old_filename: filename, deleted_by_user: deleted_by_user)
+      Purgatory.create!(attachment: self, old_filename: filename, old_display_name: display_name, old_content_type: content_type, deleted_by_user: deleted_by_user)
     end
   end
 
@@ -1383,6 +1391,8 @@ class Attachment < ActiveRecord::Base
     p = Purgatory.where(attachment_id: id).take
     raise 'must have been sent to purgatory first' unless p
     write_attribute(:filename, p.old_filename)
+    write_attribute(:display_name, p.old_display_name)
+    write_attribute(:content_type, p.old_content_type)
     write_attribute(:root_attachment_id, nil)
 
     if Attachment.s3_storage?
@@ -1410,7 +1420,7 @@ class Attachment < ActiveRecord::Base
       # TODO: once inst-fs has a delete method, call here
       # for now these objects will be orphaned
     elsif Attachment.s3_storage?
-      self.s3object.delete unless ApplicationController.try(:test_cluster?)
+      self.s3object.delete unless ApplicationController.test_cluster?
     else
       FileUtils.rm full_filename
     end
@@ -1535,7 +1545,9 @@ class Attachment < ActiveRecord::Base
       doc = canvadoc || create_canvadoc
       doc.upload({
         annotatable: opts[:wants_annotation],
-        preferred_plugins: opts[:preferred_plugins]
+        preferred_plugins: opts[:preferred_plugins],
+        # TODO: Remove the next line after the DocViewer Data Migration project RD-4702
+        region: doc.shard.database_server.config[:region] || "none"
       })
       update_attribute(:workflow_state, 'processing')
     end
@@ -1677,7 +1689,7 @@ class Attachment < ActiveRecord::Base
   scope :uploadable, -> { where(:workflow_state => 'pending_upload') }
   scope :active, -> { where(:file_state => 'available') }
   scope :by_display_name, -> { order(display_name_order_by_clause('attachments')) }
-  scope :by_position_then_display_name, -> { order("attachments.position, #{display_name_order_by_clause('attachments')}") }
+  scope :by_position_then_display_name, -> { order(:position, display_name_order_by_clause('attachments')) }
   def self.serialization_excludes; [:uuid, :namespace]; end
 
   # returns filename, if it's already unique, or returns a modified version of
@@ -1733,6 +1745,15 @@ class Attachment < ActiveRecord::Base
   end
 
   class OverQuotaError < StandardError; end
+
+  def self.clone_url_strand(url)
+    _, uri = CanvasHttp.validate_url(url) rescue nil
+    return "file_download" unless uri&.host
+    first_dot = uri.host.rindex('.')
+    second_dot = uri.host.rindex('.', first_dot - 1) if first_dot
+    return ["file_download", uri.host] unless second_dot
+    ["file_download", uri.host[second_dot + 1..-1]]
+  end
 
   def clone_url(url, duplicate_handling, check_quota, opts={})
     begin

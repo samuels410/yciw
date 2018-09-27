@@ -25,8 +25,8 @@ import CurveGradesDialog from 'compiled/shared/CurveGradesDialog'
 QUnit.module('GradebookHeaderMenu#menuPopupOpenHandler', {
   setup() {
     this.menuPopupOpenHandler = GradebookHeaderMenu.prototype.menuPopupOpenHandler
-    this.hideMenuActionsWithUnmetDependencies = this.stub()
-    this.disableUnavailableMenuActions = this.stub()
+    this.hideMenuActionsWithUnmetDependencies = sinon.stub()
+    this.disableUnavailableMenuActions = sinon.stub()
     this.menu = 'mockMenu'
   },
   teardown() {
@@ -62,7 +62,7 @@ QUnit.module('GradebookHeaderMenu#hideMenuActionsWithUnmetDependencies', {
       submissions_downloads: 1
     }
     this.gradebook = {
-      options: {anonymous_moderated_marking_enabled: false, gradebook_is_editable: true}
+      options: {gradebook_is_editable: true}
     }
     this.menuElement = document.createElement('ul')
     this.createMenu(this.menuElement)
@@ -180,7 +180,7 @@ QUnit.module('GradebookHeaderMenu#disableUnavailableMenuActions', {
     this.createMenu(this.menuElement)
     this.menu = $(this.menuElement)
     this.gradebook = {
-      options: {anonymous_moderated_marking_enabled: false, gradebook_is_editable: true}
+      options: {gradebook_is_editable: true}
     }
   },
   teardown() {
@@ -241,37 +241,20 @@ test('does not disable "Set Default Grade" when isAdmin', function() {
   strictEqual(this.menu.find('[data-action="setDefaultGrade"]')[0].getAttribute('aria-disabled'), null)
 })
 
-test('disables "Unmute Assignment" when the assignment cannot be unmuted', function () {
-  this.gradebook.options.anonymous_moderated_marking_enabled = true
-  this.assignment = {anonymous_grading: true, grades_published: false, inClosedGradingPeriod: false, muted: true}
+test('disables "Unmute Assignment" when the assignment is moderated and grades have not been published', function () {
+  this.assignment = {moderated_grading: true, grades_published: false, inClosedGradingPeriod: false, muted: true}
   this.disableUnavailableMenuActions(this.menu)
   strictEqual(this.menu.find('[data-action="toggleMuting"]')[0].getAttribute('aria-disabled'), 'true')
 })
 
-test('does not disable "Unmute Assignment" for anonymous assignments when Anonymous Moderated Marking is disabled', function () {
-  this.gradebook.options.anonymous_moderated_marking_enabled = false
-  this.assignment = {anonymous_grading: true, grades_published: false, inClosedGradingPeriod: false, muted: true}
+test('does not disable "Unmute Assignment" when grades are published', function () {
+  this.assignment = {moderated_grading: true, grades_published: true, inClosedGradingPeriod: false, muted: true}
   this.disableUnavailableMenuActions(this.menu)
   strictEqual(this.menu.find('[data-action="toggleMuting"]')[0].getAttribute('aria-disabled'), null)
 })
 
-test('does not disable "Unmute Assignment" for moderated assignments when not anonymous', function () {
-  this.gradebook.options.anonymous_moderated_marking_enabled = false
-  this.assignment = {anonymous_grading: false, grades_published: false, inClosedGradingPeriod: false, muted: true}
-  this.disableUnavailableMenuActions(this.menu)
-  strictEqual(this.menu.find('[data-action="toggleMuting"]')[0].getAttribute('aria-disabled'), null)
-})
-
-test('does not disable "Unmute Assignment" for anonymous assignments when not moderated', function () {
-  this.gradebook.options.anonymous_moderated_marking_enabled = false
-  this.assignment = {anonymous_grading: true, grades_published: true, inClosedGradingPeriod: false, muted: true}
-  this.disableUnavailableMenuActions(this.menu)
-  strictEqual(this.menu.find('[data-action="toggleMuting"]')[0].getAttribute('aria-disabled'), null)
-})
-
-test('does not disable "Mute Assignment"', function () {
-  this.gradebook.options.anonymous_moderated_marking_enabled = true
-  this.assignment = {anonymous_grading: true, grades_published: false, inClosedGradingPeriod: false, muted: false}
+test('does not disable "Mute Assignment" when the assignment can be muted', function () {
+  this.assignment = {moderated_grading: true, grades_published: false, inClosedGradingPeriod: false, muted: false}
   this.disableUnavailableMenuActions(this.menu)
   strictEqual(this.menu.find('[data-action="toggleMuting"]')[0].getAttribute('aria-disabled'), null)
 })
@@ -284,8 +267,8 @@ QUnit.module('GradebookHeaderMenu#setDefaultGrade', {
     })
     this.setDefaultGrade = GradebookHeaderMenu.prototype.setDefaultGrade
     this.options = {assignment: {inClosedGradingPeriod: false}}
-    this.spy($, 'flashError')
-    this.dialogStub = this.stub(SetDefaultGradeDialog.prototype, 'show')
+    sandbox.spy($, 'flashError')
+    this.dialogStub = sandbox.stub(SetDefaultGradeDialog.prototype, 'show')
   },
   teardown() {
     fakeENV.teardown()
@@ -325,8 +308,8 @@ QUnit.module('GradebookHeaderMenu#curveGrades', {
     })
     this.curveGrades = GradebookHeaderMenu.prototype.curveGrades
     this.options = {assignment: {inClosedGradingPeriod: false}}
-    this.spy($, 'flashError')
-    this.dialogStub = this.stub(CurveGradesDialog.prototype, 'show')
+    sandbox.spy($, 'flashError')
+    this.dialogStub = sandbox.stub(CurveGradesDialog.prototype, 'show')
   },
   teardown() {
     fakeENV.teardown()

@@ -15,9 +15,9 @@
  * You should have received a copy of the GNU Affero General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-import Autocomplete from '@instructure/ui-core/lib/components/Autocomplete'
-import Container from '@instructure/ui-core/lib/components/Container'
-import AccessibleContent from '@instructure/ui-core/lib/components/AccessibleContent'
+import Select from '@instructure/ui-forms/lib/components/Select'
+import View from '@instructure/ui-layout/lib/components/View'
+import AccessibleContent from '@instructure/ui-a11y/lib/components/AccessibleContent'
 import React from 'react'
 import I18n from 'i18n!sections_autocomplete'
 import PropTypes from 'prop-types'
@@ -83,7 +83,7 @@ export default class SectionsAutocomplete extends React.Component {
 
   render () {
     return (
-      <Container
+      <View
         display="block"
         margin="0 0 large 0"
       >
@@ -91,7 +91,8 @@ export default class SectionsAutocomplete extends React.Component {
           name="specific_sections"
           type="hidden"
           value={this.state.selectedSectionsValue}/>
-        <Autocomplete
+        <Select
+          editable
           label={I18n.t('Post to')}
           selectedOption={this.state.selectedSectionsValue}
           messages={this.state.messages}
@@ -107,8 +108,8 @@ export default class SectionsAutocomplete extends React.Component {
               {section.name}
             </option>
           ))}
-        </Autocomplete>
-      </Container>
+        </Select>
+      </View>
     )
   }
 }

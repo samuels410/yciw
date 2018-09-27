@@ -121,8 +121,7 @@ describe("RCEWrapper", () => {
 
   afterEach(() => {
     jsdomify.destroy();
-    execCommandSpy.reset();
-    editorCommandSpy.reset();
+    execCommandSpy.restore();
   });
 
   // ====================
@@ -248,6 +247,14 @@ describe("RCEWrapper", () => {
       assert.ok(contentInsertion.insertLink.calledWith(editor, link));
       contentInsertion.insertLink.restore();
     });
+
+    describe("insert image", () => {
+      it("works when no element is returned from content insertion", () => {
+        sinon.stub(contentInsertion, "insertImage").returns(null);
+        instance.insertImage({});
+        contentInsertion.insertImage.restore();
+      })
+    })
 
     describe("indicator", () => {
       it("does not indicate() if editor is hidden", () => {

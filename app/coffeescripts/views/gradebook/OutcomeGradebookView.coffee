@@ -22,26 +22,27 @@ define [
   'Backbone'
   'vendor/slickgrid'
   '../../gradebook/OutcomeGradebookGrid'
+  '../../userSettings'
   '../gradebook/CheckboxView'
   '../gradebook/SectionMenuView'
   'jst/gradebook/outcome_gradebook'
   'vendor/jquery.ba-tinypubsub'
   '../../jquery.rails_flash_notifications'
   'jquery.instructure_misc_plugins'
-], (I18n, $, _, {View}, Slick, Grid, CheckboxView, SectionMenuView, template, cellTemplate) ->
+], (I18n, $, _, {View}, Slick, Grid, userSettings, CheckboxView, SectionMenuView, template, cellTemplate) ->
 
   Dictionary =
     exceedsMastery:
-      color : '#6a843f'
+      color : '#127A1B'
       label : I18n.t('Exceeds Mastery')
     mastery:
-      color : '#8aac53'
+      color : if ENV.use_high_contrast then '#127A1B' else '#00AC18'
       label : I18n.t('Meets Mastery')
     nearMastery:
-      color : '#e0d773'
+      color : if ENV.use_high_contrast then '#C23C0D' else '#FC5E13'
       label : I18n.t('Near Mastery')
     remedial:
-      color : '#df5b59'
+      color : '#EE0612'
       label : I18n.t('Well Below Mastery')
 
   class OutcomeGradebookView extends View
@@ -57,11 +58,14 @@ define [
     hasOutcomes: $.Deferred()
 
     # child views rendered using the {{view}} helper in the template
-    checkboxes:
-      'exceeds':         new CheckboxView(Dictionary.exceedsMastery)
-      mastery:           new CheckboxView(Dictionary.mastery)
-      'near-mastery':    new CheckboxView(Dictionary.nearMastery)
-      remedial:          new CheckboxView(Dictionary.remedial)
+    checkboxes: [
+      new CheckboxView(Dictionary.exceedsMastery),
+      new CheckboxView(Dictionary.mastery),
+      new CheckboxView(Dictionary.nearMastery),
+      new CheckboxView(Dictionary.remedial)
+    ]
+
+    ratings: []
 
     events:
       'click .sidebar-toggle': 'onSidebarToggle'
@@ -69,6 +73,9 @@ define [
     constructor: (options) ->
       super
       @_validateOptions(options)
+      if ENV.GRADEBOOK_OPTIONS.outcome_proficiency?.ratings
+        @ratings = ENV.GRADEBOOK_OPTIONS.outcome_proficiency.ratings
+        @checkboxes = @ratings.map (rating) -> new CheckboxView({color: "\##{rating.color}", label: rating.description})
 
     # Public: Show/hide the sidebar.
     #
@@ -106,8 +113,10 @@ define [
           $(this).find('.checkbox')
             .attr('data-tooltip', 'left')
             .attr('title', $(this).find('.checkbox-label').text())
+        @$('.filters').hide()
       else
         @$('.checkbox').removeAttr('data-tooltip').removeAttr('title')
+        @$('.filters').show()
 
     # Internal: Validate options passed to constructor.
     #
@@ -121,10 +130,39 @@ define [
     #
     # Returns nothing.
     _attachEvents: ->
-      view.on('togglestate', @_createFilter(name)) for name, view of @checkboxes
+      view.on('togglestate', @_createFilter("rating_#{i}")) for view, i in @checkboxes
       $.subscribe('currentSection/change', Grid.Events.sectionChangeFunction(@grid))
       $.subscribe('currentSection/change', @updateExportLink)
       @updateExportLink(@gradebook.sectionToShow)
+      _this = @
+      @$('#no_results_outcomes').change(() -> _this._toggleOutcomesWithNoResults(this.checked))
+      @$('#no_results_students').change(() -> _this._toggleStudentsWithNoResults(this.checked))
+
+    _setFilterSetting: (name, value) ->
+      filters = userSettings.contextGet('lmgb_filters')
+      filters = {} unless filters
+      filters[name] = value
+      userSettings.contextSet('lmgb_filters', filters)
+
+    _getFilterSetting: (name) ->
+      filters = userSettings.contextGet('lmgb_filters')
+      filters && filters[name]
+
+    _toggleOutcomesWithNoResults: (enabled) ->
+      @_setFilterSetting('outcomes_no_results', enabled)
+      if enabled
+        columns = [@columns[0]].concat(_.filter(@columns, (c) => c.hasResults))
+        @grid.setColumns(columns)
+      else
+        @grid.setColumns(@columns)
+
+    _toggleStudentsWithNoResults: (enabled) ->
+      @_setFilterSetting('students_no_results', enabled)
+      @grid.setData([])
+      @grid.invalidate()
+      @hasOutcomes = $.Deferred()
+      $.when(@hasOutcomes).then(@renderGrid)
+      @_loadOutcomes()
 
     # Internal: Listen for events on grid.
     #
@@ -138,7 +176,11 @@ define [
     #
     # Returns an object.
     toJSON: ->
-      _.extend({}, @checkboxes)
+      _.extend({}, checkboxes: @checkboxes)
+
+    _loadFilterSettings: ->
+      @$('#no_results_outcomes').prop('checked', @._getFilterSetting('outcomes_no_results'))
+      @$('#no_results_students').prop('checked', @._getFilterSetting('students_no_results'))
 
     # Public: Render the view once all needed data is loaded.
     #
@@ -156,23 +198,34 @@ define [
     #
     # Returns nothing.
     renderGrid: (response) =>
+      Grid.filter = _.range(@checkboxes.length).map (i) -> "rating_#{i}"
+      Grid.ratings = @ratings
       Grid.Util.saveOutcomes(response.linked.outcomes)
       Grid.Util.saveStudents(response.linked.users)
       Grid.Util.saveOutcomePaths(response.linked.outcome_paths)
       Grid.Util.saveSections(@gradebook.sections) # might want to put these into the api results at some point
       [columns, rows] = Grid.Util.toGrid(response, column: { formatter: Grid.View.cell }, row: { section: @menu.currentSection })
-      @grid = new Slick.Grid(
-        '.outcome-gradebook-wrapper',
-        rows,
-        columns,
-        Grid.options)
-      @_attachGridEvents()
-      @grid.init()
-      Grid.Events.init(@grid)
-      @_attachEvents()
+      @columns = columns
+      if @$('#no_results_outcomes:checkbox:checked').length == 1
+        columns = [columns[0]].concat(_.filter(columns, (c) => c.hasResults))
+      if @grid
+        @grid.setData(rows)
+        @grid.setColumns(columns)
+      else
+        @grid = new Slick.Grid(
+          '.outcome-gradebook-wrapper',
+          rows,
+          columns,
+          Grid.options)
+        @_attachGridEvents()
+        @grid.init()
+        Grid.Events.init(@grid)
+        @_attachEvents()
+        Grid.View.redrawHeader(@grid,  Grid.averageFn, @menu.currentSection)
 
     isLoaded: false
     onShow: ->
+      @_loadFilterSettings() if !@isLoaded
       @loadOutcomes() if !@isLoaded
       @isLoaded = true
       @$el.fillWindowWithMe({
@@ -186,10 +239,15 @@ define [
     loadOutcomes: () ->
       $.when(@gradebook.hasSections).then(@_loadOutcomes)
 
+    _rollupsUrl: (course, exclude) ->
+      excluding = if exclude == '' then '' else "&exclude[]=#{exclude}"
+      "/api/v1/courses/#{course}/outcome_rollups?per_page=100&include[]=outcomes&include[]=users&include[]=outcome_paths#{excluding}"
+
     _loadOutcomes: =>
+      exclude = if @$('#no_results_students').prop('checked') then 'missing_user_rollups' else ''
       course = ENV.context_asset_string.split('_')[1]
       @$('.outcome-gradebook-wrapper').disableWhileLoading(@hasOutcomes)
-      @_loadPage("/api/v1/courses/#{course}/outcome_rollups?per_page=100&include[]=outcomes&include[]=users&include[]=outcome_paths")
+      @_loadPage(@_rollupsUrl(course, exclude))
 
     # Internal: Load a page of outcome results from the given URL.
     #

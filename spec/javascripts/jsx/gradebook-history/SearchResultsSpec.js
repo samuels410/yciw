@@ -18,9 +18,9 @@
 
 import React from 'react';
 import { mount, shallow } from 'enzyme';
-import Spinner from '@instructure/ui-core/lib/components/Spinner';
-import Table from '@instructure/ui-core/lib/components/Table';
-import Text from '@instructure/ui-core/lib/components/Text';
+import Spinner from '@instructure/ui-elements/lib/components/Spinner';
+import Table from '@instructure/ui-elements/lib/components/Table';
+import Text from '@instructure/ui-elements/lib/components/Text';
 import { SearchResultsComponent } from 'jsx/gradebook-history/SearchResults';
 
 function defaultHistoryItems () {
@@ -148,7 +148,7 @@ test('loads next page if possible and the first results did not result in a scro
   // fake to test that there's not a vertical scrollbar
   window.innerHeight = document.body.clientHeight + 1;
   const historyItems = defaultHistoryItems();
-  const props = { ...defaultProps(), nextPage: 'example.com', getNextPage: this.stub() };
+  const props = { ...defaultProps(), nextPage: 'example.com', getNextPage: sinon.stub() };
   const wrapper = mount(<SearchResultsComponent {...props} />);
   wrapper.setProps({ historyItems });
   ok(props.getNextPage.callCount > 0);
@@ -161,7 +161,7 @@ test('loads next page on scroll if possible', function () {
   const props = {
     ...defaultProps(),
     nextPage: 'example.com',
-    getNextPage: this.stub()
+    getNextPage: sinon.stub()
   };
   const wrapper = mount(<SearchResultsComponent {...props} />);
   window.innerHeight = document.body.clientHeight - 1;
@@ -177,7 +177,7 @@ test('loads next page if available on window resize that causes window to not ha
     ...defaultProps(),
     historyItems,
     nextPage: 'example.com',
-    getNextPage: this.stub()
+    getNextPage: sinon.stub()
   };
   const wrapper = mount(<SearchResultsComponent {...props} />);
   window.innerHeight = document.body.clientHeight;

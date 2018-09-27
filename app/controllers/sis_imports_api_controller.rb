@@ -247,6 +247,7 @@ class SisImportsApiController < ApplicationController
   before_action :get_context
   before_action :check_account
   include Api::V1::SisImport
+  include Api::V1::Progress
 
   def check_account
     return render json: {errors: ["SIS imports can only be executed on root accounts"]}, status: :bad_request unless @account.root_account?
@@ -261,8 +262,8 @@ class SisImportsApiController < ApplicationController
   #   If set, only shows imports created after the specified date (use ISO8601 format)
   #
   # Example:
-  #   curl 'https://<canvas>/api/v1/accounts/<account_id>/sis_imports' \
-  #     -H "Authorization: Bearer <token>"
+  #   curl https://<canvas>/api/v1/accounts/<account_id>/sis_imports \
+  #     -H 'Authorization: Bearer <token>'
   #
   # @returns [SisImport]
   def index
@@ -271,7 +272,8 @@ class SisImportsApiController < ApplicationController
       if (created_since = CanvasTime.try_parse(params[:created_since]))
         scope = scope.where("created_at > ?", created_since)
       end
-      @batches = Api.paginate(scope, self, api_v1_account_sis_imports_url)
+      # we don't need to know how many there are
+      @batches = Api.paginate(scope, self, api_v1_account_sis_imports_url, total_entries: nil)
       render json: {sis_imports: sis_imports_json(@batches, @current_user, session)}
     end
   end
@@ -299,7 +301,7 @@ class SisImportsApiController < ApplicationController
   #
   #   Examples:
   #     curl -F attachment=@<filename> -H "Authorization: Bearer <token>" \
-  #         'https://<canvas>/api/v1/accounts/<account_id>/sis_imports.json?import_type=instructure_csv'
+  #         https://<canvas>/api/v1/accounts/<account_id>/sis_imports.json?import_type=instructure_csv
   #
   #   If you decide to do a raw post, you can skip the 'attachment' argument,
   #   but you will then be required to provide a suitable Content-Type header.
@@ -308,19 +310,19 @@ class SisImportsApiController < ApplicationController
   #   Examples:
   #     curl -H 'Content-Type: application/octet-stream' --data-binary @<filename>.zip \
   #         -H "Authorization: Bearer <token>" \
-  #         'https://<canvas>/api/v1/accounts/<account_id>/sis_imports.json?import_type=instructure_csv&extension=zip'
+  #         https://<canvas>/api/v1/accounts/<account_id>/sis_imports.json?import_type=instructure_csv&extension=zip
   #
   #     curl -H 'Content-Type: application/zip' --data-binary @<filename>.zip \
   #         -H "Authorization: Bearer <token>" \
-  #         'https://<canvas>/api/v1/accounts/<account_id>/sis_imports.json?import_type=instructure_csv'
+  #         https://<canvas>/api/v1/accounts/<account_id>/sis_imports.json?import_type=instructure_csv
   #
   #     curl -H 'Content-Type: text/csv' --data-binary @<filename>.csv \
   #         -H "Authorization: Bearer <token>" \
-  #         'https://<canvas>/api/v1/accounts/<account_id>/sis_imports.json?import_type=instructure_csv'
+  #         https://<canvas>/api/v1/accounts/<account_id>/sis_imports.json?import_type=instructure_csv
   #
   #     curl -H 'Content-Type: text/csv' --data-binary @<filename>.csv \
   #         -H "Authorization: Bearer <token>" \
-  #         'https://<canvas>/api/v1/accounts/<account_id>/sis_imports.json?import_type=instructure_csv&batch_mode=1&batch_mode_term_id=15'
+  #         https://<canvas>/api/v1/accounts/<account_id>/sis_imports.json?import_type=instructure_csv&batch_mode=1&batch_mode_term_id=15
   #
   # @argument extension [String]
   #   Recommended for raw post request style imports. This field will be used to
@@ -505,14 +507,56 @@ class SisImportsApiController < ApplicationController
   # Get the status of an already created SIS import.
   #
   #   Examples:
-  #     curl 'https://<canvas>/api/v1/accounts/<account_id>/sis_imports/<sis_import_id>' \
-  #         -H "Authorization: Bearer <token>"
+  #     curl https://<canvas>/api/v1/accounts/<account_id>/sis_imports/<sis_import_id> \
+  #         -H 'Authorization: Bearer <token>'
   #
   # @returns SisImport
   def show
     if authorized_action(@account, @current_user, [:import_sis, :manage_sis])
       @batch = @account.sis_batches.find(params[:id])
       render json: sis_import_json(@batch, @current_user, session, includes: ['errors'])
+    end
+  end
+
+  # @API Restore workflow_states of SIS imported items
+  #
+  # This will restore the the workflow_state for all the items that changed
+  # their workflow_state during the import being restored.
+  # This will restore states for items imported with the following importers:
+  # accounts.csv terms.csv courses.csv sections.csv group_categories.csv
+  # groups.csv users.csv admins.csv
+  # This also restores states for other items that changed during the import.
+  # An example would be if an enrollment was deleted from a sis import and the
+  # group_membership was also deleted as a result of the enrollment deletion,
+  # both items would be restored when the sis batch is restored.
+  #
+  # @argument batch_mode [Boolean]
+  #   If set, will only restore items that were deleted from batch_mode.
+  #
+  # @argument undelete_only [Boolean]
+  #   If set, will only restore items that were deleted. This will ignore any
+  #   items that were created or modified.
+  #
+  # @argument unconclude_only [Boolean]
+  #   If set, will only restore enrollments that were concluded. This will
+  #   ignore any items that were created or deleted.
+  #
+  # @example_request
+  #   curl https://<canvas>/api/v1/accounts/<account_id>/sis_imports/<sis_import_id>/restore_states \
+  #     -H 'Authorization: Bearer <token>'
+  #
+  # @returns Progress
+  def restore_states
+    if authorized_action(@account, @current_user, :manage_sis)
+      @batch = @account.sis_batches.find(params[:id])
+      batch_mode = value_to_boolean(params[:batch_mode])
+      undelete_only = value_to_boolean(params[:undelete_only])
+      unconclude_only = value_to_boolean(params[:unconclude_only])
+      if undelete_only && unconclude_only
+        return render json: 'cannot set both undelete_only and unconclude_only', status: :bad_request
+      end
+      progress = @batch.restore_states_later(batch_mode: batch_mode, undelete_only: undelete_only, unconclude_only: unconclude_only)
+      render json: progress_json(progress, @current_user, session)
     end
   end
 

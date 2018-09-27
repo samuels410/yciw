@@ -25,6 +25,7 @@ module CC::Importer::Canvas
     def settings_doc(file, html = false)
       path = @package_root.item_path(COURSE_SETTINGS_DIR, file)
       return nil unless File.exist? path
+      return nil if File.size(path) > Setting.get('course_settings_import_xml_threshold', 25.megabytes).to_i # totally arbitrary hack to keep some broken exports from killing things
       if html
         open_file path
       else
@@ -67,14 +68,14 @@ module CC::Importer::Canvas
        'hide_distribution_graphs', 'allow_student_discussion_topics',
        'allow_student_discussion_editing', 'show_announcements_on_home_page',
        'restrict_student_future_view', 'restrict_student_past_view', 'show_total_grade_as_points',
-       'organize_epub_by_content_type', 'enable_offline_web_export'
+       'organize_epub_by_content_type', 'enable_offline_web_export', 'restrict_enrollments_to_course_dates'
       ].each do |bool_val|
         val = get_bool_val(doc, bool_val)
         course[bool_val] = val unless val.nil?
       end
       ['start_at', 'conclude_at'].each do |date_type|
         val = get_time_val(doc, date_type)
-        course[date_type] = val unless val.nil?
+        course[date_type] = val
       end
       ['grading_standard_id', 'home_page_announcement_limit'].each do |int_val|
         if val = get_int_val(doc, int_val)

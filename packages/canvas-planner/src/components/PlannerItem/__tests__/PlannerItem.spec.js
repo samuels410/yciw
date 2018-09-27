@@ -21,6 +21,8 @@ import {PlannerItem} from '../index';
 import moment from 'moment-timezone';
 
 const DEFAULT_DATE = moment.tz('2011-12-17T03:30:00', "America/Los_Angeles");
+const user = {id: '1', displayName: 'Jane',
+  avatarUrl: '/picture/is/here', color: "#00AC18"};
 
 function defaultProps (option = {}) {
   return {
@@ -28,7 +30,7 @@ function defaultProps (option = {}) {
       id: "1",
       uniqueId: "one",
       associated_item: option.associated_item || "Assignment",
-      date: option.date,
+      date: DEFAULT_DATE,
       courseName: 'A Course about being Diffrient',
       completed: !!option.completed,
       title: option.title || "This Assignment is about awesome stuff",
@@ -36,7 +38,7 @@ function defaultProps (option = {}) {
       html_url: option.html_url,
       toggleCompletion: () => {},
       updateTodo: () => {},
-      currentUser: {id: '1', displayName: 'Jane', avatarUrl: '/picture/is/here'},
+      currentUser: user,
       ...option
   };
 }
@@ -46,13 +48,15 @@ function noteProps (option) {
       id: "22",
       uniqueId: "twenty-two",
       associated_item: null,
-      date: option.date,
+      date: DEFAULT_DATE,
       courseName: option.courseName,
       completed: !!option.completed,
       title: option.title || "A note about note taking",
       toggleCompletion: () => {},
       updateTodo: () => {},
-      currentUser: {id: '1', displayName: 'Jane', avatarUrl: '/picture/is/here'},
+      currentUser: user,
+      dateStyle: "todo",
+      ...option
   };
 }
 
@@ -78,7 +82,7 @@ function groupProps (option) {
     "badges": [],
     toggleCompletion: () => {},
     updateTodo: () => {},
-    currentUser: {id: '1', displayName: 'Jane', avatarUrl: '/picture/is/here'},
+    currentUser: user,
   };
 }
 
@@ -156,7 +160,7 @@ it('renders Assignment correctly with everything', () => {
         {
           associated_item: 'Assignment',
           completed: true,
-          title: "I am a Assignment",
+          title: "I am an Assignment",
           points: 4,
           html_url: "http://www.non_default_url.com",
           date: DEFAULT_DATE,
@@ -173,7 +177,7 @@ it('renders Assignment correctly with just points', () => {
         {
           associated_item: 'Assignment',
           completed: false,
-          title: "I am a Assignment",
+          title: "I am an Assignment",
           points: 2,
         })
     } />
@@ -188,7 +192,7 @@ it('renders Assignment correctly without right side content', () => {
         {
           associated_item: 'Assignment',
           completed: false,
-          title: "I am a Assignment",
+          title: "I am an Assignment",
         })
     } />
   );
@@ -202,7 +206,7 @@ it('renders Assignment correctly with just date', () => {
         {
           associated_item: 'Assignment',
           completed: false,
-          title: "I am a Assignment",
+          title: "I am an Assignment",
           date: DEFAULT_DATE,
         })
     } />
@@ -277,7 +281,7 @@ it('renders Announcement correctly with everything', () => {
         {
           associated_item: 'Announcement',
           completed: true,
-          title: "I am a Announcement",
+          title: "I am an Announcement",
           points: 4,
           date: DEFAULT_DATE,
         })
@@ -293,7 +297,7 @@ it('renders Announcement correctly with just points', () => {
         {
           associated_item: 'Announcement',
           completed: false,
-          title: "I am a Announcement",
+          title: "I am an Announcement",
           points: 2,
         })
     } />
@@ -308,7 +312,7 @@ it('renders Announcement correctly without right side content', () => {
         {
           associated_item: 'Announcement',
           completed: false,
-          title: "I am a Announcement",
+          title: "I am an Announcement",
         })
     } />
   );
@@ -322,7 +326,7 @@ it('renders Announcement correctly with just date', () => {
         {
           associated_item: 'Announcement',
           completed: false,
-          title: "I am a Announcement",
+          title: "I am an Announcement",
           date: DEFAULT_DATE,
         })
     } />
@@ -340,6 +344,7 @@ it('renders Calendar Event correctly with everything', () => {
           title: "I am a Calendar Event",
           points: 4,
           date: DEFAULT_DATE,
+          dateStyle: "due"
         })
     } />
   );
@@ -354,6 +359,7 @@ it('renders Calendar Event correctly without right side content', () => {
           associated_item: 'Calendar Event',
           completed: false,
           title: "I am a Calendar Event",
+          dateStyle: "due",
         })
     } />
   );
@@ -369,6 +375,24 @@ it('renders Calendar Event correctly with just date', () => {
           completed: false,
           title: "I am a Calendar Event",
           date: DEFAULT_DATE,
+          dateStyle: "due",
+        })
+    } />
+  );
+  expect(wrapper).toMatchSnapshot();
+});
+
+it('renders Calendar Event correctly with start and end time', () => {
+  const wrapper = shallow(
+    <PlannerItem {
+      ...defaultProps(
+        {
+          associated_item: 'Calendar Event',
+          completed: false,
+          title: "I am a Calendar Event",
+          date: DEFAULT_DATE,
+          endTime: DEFAULT_DATE.clone().add(2, "hours"),
+          dateStyle: "due",
         })
     } />
   );
@@ -459,6 +483,7 @@ it('renders Note correctly with everything', () => {
     <PlannerItem {
       ...noteProps(
         {
+          associated_item: 'To Do',
           completed: true,
           title: "I am a Note",
           date: DEFAULT_DATE,
@@ -474,11 +499,27 @@ it('renders Note correctly without Course', () => {
     <PlannerItem {
       ...noteProps(
         {
-          associated_item: 'Note',
+          associated_item: 'To Do',
           completed: false,
           title: "I am a Note",
         })
     } />
+  );
+  expect(wrapper).toMatchSnapshot();
+});
+
+it('renders user-created Todo correctly', () => {
+  const wrapper = shallow(
+    <PlannerItem {
+                   ...defaultProps(
+                     {
+                       associated_item: null,
+                       completed: false,
+                       title: "do that one thing",
+                       courseName: "To Do",
+                       color: null,
+                     })
+                 } />
   );
   expect(wrapper).toMatchSnapshot();
 });
@@ -562,4 +603,66 @@ it('renders a NewActivityIndicator when asked to', () => {
     <PlannerItem {...props} />
   );
   expect(wrapper.find('Animatable(NewActivityIndicator)')).toHaveLength(1);
+});
+
+it('renders feedback if available', () => {
+  const props = defaultProps({feedback: {
+    author_avatar_url: '/avatar/is/here/',
+    author_name: 'Boyd Crowder',
+    comment: 'Death will not be the end of your suffering.',
+    is_media: false,
+  }});
+  const wrapper = shallow(<PlannerItem {...props} />);
+  expect(wrapper).toMatchSnapshot();
+})
+
+it('renders the location if available', () => {
+  const props = defaultProps({
+    location: 'Columbus, OH'
+  });
+  const wrapper = shallow(<PlannerItem {...props} />);
+  expect(wrapper).toMatchSnapshot();
+})
+
+it('prefers to render feedback if it and the location are available', () => {
+  // I don't believe this is possible, but it's how the code handles it.
+  const props = defaultProps({
+    feedback: {
+      author_avatar_url: '/avatar/is/here/',
+      author_name: 'Dr. David Bowman',
+      comment: 'Open the pod bay doors, HAL.'
+    },
+    location: "NYC"
+  });
+  const wrapper = shallow(<PlannerItem {...props} />);
+  expect(wrapper).toMatchSnapshot();
+})
+
+it('renders the end time if available', () => {
+  const props = defaultProps({
+    associated_item: 'Calendar Event',
+    endTime: DEFAULT_DATE.clone().add(2, 'hours')
+  });
+  const wrapper = shallow(<PlannerItem {...props} />);
+  expect(wrapper).toMatchSnapshot();
+});
+
+it('does not render end time if the same as start time', () => {
+  const props = defaultProps({
+    associated_item: 'Calendar Event',
+    endTime: DEFAULT_DATE.clone()
+  });
+  const wrapper = shallow(<PlannerItem {...props} />);
+  expect(wrapper).toMatchSnapshot();
+});
+
+it('renders media feedback if available', () => {
+  const props = defaultProps({feedback: {
+    author_avatar_url: '/avatar/is/here/',
+    author_name: 'Howard Stern',
+    comment: 'This is a media comment.',
+    is_media: true,
+  }});
+  const wrapper = shallow(<PlannerItem {...props} />);
+  expect(wrapper).toMatchSnapshot(); 
 });

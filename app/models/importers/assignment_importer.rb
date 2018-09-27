@@ -288,7 +288,7 @@ module Importers
       [:peer_reviews,
        :automatic_peer_reviews, :anonymous_peer_reviews,
        :grade_group_students_individually, :allowed_extensions,
-       :position, :peer_review_count, :muted, :moderated_grading,
+       :position, :peer_review_count,
        :omit_from_final_grade, :intra_group_peer_reviews, :post_to_sis
       ].each do |prop|
         item.send("#{prop}=", hash[prop]) unless hash[prop].nil?
@@ -356,7 +356,7 @@ module Importers
         vendor_code = similarity_tool["vendor_code"]
         product_code = similarity_tool["product_code"]
         resource_type_code = similarity_tool["resource_type_code"]
-        item.assignment_configuration_tool_lookups.create(
+        item.assignment_configuration_tool_lookups.find_or_create_by!(
           tool_vendor_code: vendor_code,
           tool_product_code: product_code,
           tool_resource_type_code: resource_type_code,

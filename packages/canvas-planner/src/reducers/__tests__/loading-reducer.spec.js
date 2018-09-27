@@ -15,6 +15,8 @@
  * You should have received a copy of the GNU Affero General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
+
+import moment from 'moment-timezone';
 import loadingReducer from '../loading-reducer';
 import * as Actions from '../../actions/loading-actions';
 import * as OtherActions from '../../actions';
@@ -35,7 +37,7 @@ function linkHeader (nextLink) {
 }
 
 function mockItem (id) {
-  return { id };
+  return { uniqueId: id, title: id.toString(), date: moment.tz('2018-01-01', 'UTC') };
 }
 
 it('sets loading to true on START_LOADING_ITEMS', () => {
@@ -53,10 +55,11 @@ it('sets loadingFuture to true on GETTING_FUTURE_ITEMS', () => {
   expect(newState).toMatchObject({ loadingFuture: true });
 });
 
-it('sets loading to false on GOT_DAYS_SUCCESS', () => {
+it('sets loading to false and plannerLoaded to true on GOT_DAYS_SUCCESS', () => {
   const state = initialState({isLoading: true});
   const newState = loadingReducer(state, Actions.gotDaysSuccess([]));
   expect(newState).toMatchObject({
+    plannerLoaded: true,
     isLoading: false,
     loadingPast: false,
     loadingFuture: false,
@@ -68,6 +71,26 @@ it('sets loadingPast to false on GOT_DAYS_SUCCESS', () => {
   const state = initialState({ loadingPast: true });
   const newState = loadingReducer(state, Actions.gotDaysSuccess([]));
   expect(newState).toMatchObject({ loadingPast: false });
+});
+
+it('handles PEEKED_INTO_PAST finding some items', () => {
+  const state = initialState({isLoading: true});
+  const newState = loadingReducer(state, Actions.peekedIntoPast({hasSomeItems: true}));
+  expect(newState).toMatchObject( {
+    isLoading: true,
+    hasSomeItems: true,
+    allPastItemsLoaded: false,
+  });
+});
+
+it('handles PEEKED_INTO_PAST finding no items', () => {
+  const state = initialState({isLoading: true});
+  const newState = loadingReducer(state, Actions.peekedIntoPast({hasSomeItems: false}));
+  expect(newState).toMatchObject( {
+    isLoading: true,
+    hasSomeItems: false,
+    allPastItemsLoaded: true,
+  });
 });
 
 it('sets only opportunities fields on ALL_OPPORTUNITIES_LOADED', () => {
@@ -165,29 +188,6 @@ it('clears past url when not found', () => {
     allFutureItemsLoaded: false,
     pastNextUrl: null,
     allPastItemsLoaded: true,
-  });
-});
-
-it('adds to partialPastDays', () => {
-  const originalDays = [
-    ['2017-12-18', ['original items']],
-  ];
-  const state = initialState({
-    originalState: 'original state',
-    partialPastDays: originalDays,
-  });
-  const newDays = [
-    ['2017-12-17', ['prior items']],
-    ['2017-12-19', ['future items']],
-  ];
-  const newState = loadingReducer(state, Actions.gotPartialPastDays(newDays));
-  expect(newState).toMatchObject({
-    originalState: 'original state',
-    partialPastDays: [
-      newDays[0],
-      ...originalDays,
-      newDays[1],
-    ]
   });
 });
 

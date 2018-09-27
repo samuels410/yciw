@@ -19,15 +19,16 @@
 /*global jsonData*/
 import React from 'react';
 import ReactDOM from 'react-dom';
-import Alert from '@instructure/ui-core/lib/components/Alert';
-import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent';
-import TextArea from '@instructure/ui-core/lib/components/TextArea';
+import Alert from '@instructure/ui-alerts/lib/components/Alert';
+import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent';
+import TextArea from '@instructure/ui-forms/lib/components/TextArea';
 import OutlierScoreHelper from 'jsx/grading/helpers/OutlierScoreHelper';
 import quizzesNextSpeedGrading from 'jsx/grading/quizzesNextSpeedGrading';
 import StatusPill from 'jsx/grading/StatusPill';
 import JQuerySelectorCache from 'jsx/shared/helpers/JQuerySelectorCache';
 import numberHelper from 'jsx/shared/helpers/numberHelper';
 import GradeFormatHelper from 'jsx/gradebook/shared/helpers/GradeFormatHelper';
+import SpeedGraderProvisionalGradeSelector from 'jsx/speed_grader/SpeedGraderProvisionalGradeSelector'
 import SpeedGraderSettingsMenu from 'jsx/speed_grader/SpeedGraderSettingsMenu'
 import studentViewedAtTemplate from 'jst/speed_grader/student_viewed_at';
 import submissionsDropdownTemplate from 'jst/speed_grader/submissions_dropdown';
@@ -44,10 +45,10 @@ import htmlEscape from './str/htmlEscape';
 import rubricAssessment from './rubric_assessment';
 import SpeedgraderSelectMenu from './speed_grader_select_menu';
 import SpeedgraderHelpers, {
-  isAnonymousModeratedMarkingEnabled,
   setupAnonymizableId,
   setupAnonymizableStudentId,
   setupAnonymizableUserId,
+  setupAnonymizableAuthorId,
   setupIsAnonymous
 } from './speed_grader_helpers';
 import turnitinInfoTemplate from 'jst/_turnitinInfo';
@@ -81,6 +82,7 @@ let isAnonymous
 let anonymizableId
 let anonymizableUserId
 let anonymizableStudentId
+let anonymizableAuthorId
 
 let $window
 let $full_width_container
@@ -89,6 +91,7 @@ let $resize_overlay
 let $right_side
 let $width_resizer
 let $gradebook_header
+let $grading_box_selected_grader
 let assignmentUrl
 let $rightside_inner
 let $moderation_bar
@@ -162,42 +165,24 @@ let utils
 let sessionTimer
 let isAdmin
 let showSubmissionOverride
+let provisionalGraderDisplayNames
 let EG
+const customProvisionalGraderLabel = I18n.t('Custom')
 
 function setupHandleFragmentChanged () {
-  if (!EG.isHandleFragmentChangedSet) {
-    window.addEventListener('hashchange', EG.handleFragmentChanged);
-    EG.isHandleFragmentChangedSet = true
-    return true
-  }
-  return false
+  window.addEventListener('hashchange', EG.handleFragmentChanged);
 }
 
 function teardownHandleFragmentChanged () {
-  if (EG.isHandleFragmentChangedSet) {
-    window.removeEventListener('hashchange', EG.handleFragmentChanged);
-    EG.isHandleFragmentChangedSet = false
-    return true
-  }
-  return false
+  window.removeEventListener('hashchange', EG.handleFragmentChanged);
 }
 
 function setupBeforeLeavingSpeedgrader () {
-  if (!EG.isBeforeLeavingSpeedgraderSet) {
-    window.addEventListener('beforeunload', EG.beforeLeavingSpeedgrader);
-    EG.isBeforeLeavingSpeedgraderSet = true
-    return true
-  }
-  return false
+  window.addEventListener('beforeunload', EG.beforeLeavingSpeedgrader);
 }
 
 function teardownBeforeLeavingSpeedgrader () {
-  if (EG.isBeforeLeavingSpeedgraderSet) {
-    window.removeEventListener('beforeunload', EG.beforeLeavingSpeedgrader);
-    EG.isBeforeLeavingSpeedgraderSet = false
-    return true
-  }
-  return false
+  window.removeEventListener('beforeunload', EG.beforeLeavingSpeedgrader);
 }
 
 function unexcuseSubmission (grade, submission, assignment) {
@@ -218,9 +203,7 @@ utils = {
     // this is for backwards compatability, we used to store the value as
     // strings "true" or "false", but now we store boolean true/false values.
     var settingVal = userSettings.get("eg_hide_student_names");
-    return settingVal === true ||
-      settingVal === "true" ||
-      ENV.force_anonymous_grading
+    return settingVal === true || settingVal === "true" || ENV.force_anonymous_grading
   }
 };
 
@@ -317,48 +300,62 @@ function mergeStudentsAndSubmission() {
     } else {
       alert(I18n.t('alerts.no_students_in_section', "Could not find any students in that section, falling back to showing all sections."));
       userSettings.contextRemove('grading_show_only_section');
-      window.location.reload();
+      SpeedgraderHelpers.reloadPage();
     }
   }
 
-  // by default the list is sorted alphabetically by student last name so we
-  // don't have to do any more work here, if the cookie to sort it by
-  // submitted_at is set we need to sort by submitted_at.
   if (isAnonymous) {
-    jsonData.studentsWithSubmissions.sort(EG.compareStudentsBy(student => student.anonymous_id))
-
-    // update index again to be in line with the anonymous_id sorting
-    jsonData.studentsWithSubmissions.forEach((student, index) => {
-      student.index = index /* eslint-disable-line no-param-reassign */
+    // When student anonymity is enabled, the students must be indexed
+    // consistently. For a given anonymous id, the student name (e.g. Student 1)
+    // must be consistent regardless of how the students are sorted.
+    const orderedIds = Object.keys(window.jsonData.studentMap).sort()
+    orderedIds.forEach((id, index) => {
+      window.jsonData.studentMap[id].index = index
     })
-  } else if (utils.shouldHideStudentNames() && userSettings.get('eg_sort_by') === 'alphabetically') {
-    window.jsonData.studentsWithSubmissions.sort(EG.compareStudentsBy(function (student) {
-      return student && student.submission && student.submission.id;
-    }));
-  } else if (userSettings.get("eg_sort_by") == "submitted_at") {
-    window.jsonData.studentsWithSubmissions.sort(EG.compareStudentsBy(function (student) {
-      var submittedAt = student &&
-        student.submission &&
-        student.submission.submitted_at;
-      if (submittedAt) {
-        return +tz.parse(submittedAt);
-      } else {
-        // puts the unsubmitted assignments at the bottom
-        return Number.NaN;
+  }
+
+  switch(userSettings.get("eg_sort_by")) {
+    case 'submitted_at': {
+      window.jsonData.studentsWithSubmissions.sort(EG.compareStudentsBy(student => {
+        const submittedAt = student && student.submission && student.submission.submitted_at;
+        if (submittedAt) {
+          return +tz.parse(submittedAt);
+        } else {
+          // puts the unsubmitted assignments at the bottom
+          return Number.NaN;
+        }
+      }));
+      break;
+    }
+
+    case 'submission_status': {
+      const states = {
+        "not_graded": 1,
+        "resubmitted": 2,
+        "not_submitted": 3,
+        "graded": 4,
+        "not_gradeable": 5
+      };
+      window.jsonData.studentsWithSubmissions.sort(EG.compareStudentsBy(student => (
+        student && states[SpeedgraderHelpers.submissionState(student, ENV.grading_role)]
+      )));
+      break;
+    }
+
+    default: {
+      // The list of students is sorted alphabetically on the server by student
+      // last name.
+
+      if (isAnonymous) {
+        // When student anonymity is enabled, sort by the student's related
+        // anonymous id.
+        window.jsonData.studentsWithSubmissions.sort(EG.compareStudentsBy(student => student.anonymous_id))
+      } else if (utils.shouldHideStudentNames()) {
+        window.jsonData.studentsWithSubmissions.sort(EG.compareStudentsBy(student => (
+          student && student.submission && student.submission.id
+        )));
       }
-    }));
-  } else if (userSettings.get("eg_sort_by") == "submission_status") {
-    var states = {
-      "not_graded": 1,
-      "resubmitted": 2,
-      "not_submitted": 3,
-      "graded": 4,
-      "not_gradeable": 5
-    };
-    window.jsonData.studentsWithSubmissions.sort(EG.compareStudentsBy(function (student) {
-      return student &&
-        states[SpeedgraderHelpers.submissionState(student, ENV.grading_role)];
-    }));
+    }
   }
 }
 
@@ -370,7 +367,7 @@ function changeToSection (sectionId) {
     userSettings.contextSet('grading_show_only_section', sectionId);
   }
 
-  window.location.reload();
+  SpeedgraderHelpers.reloadPage();
 }
 
 function initDropdown(){
@@ -382,7 +379,7 @@ function initDropdown(){
     let {name} = student
     const className = SpeedgraderHelpers.classNameBasedOnStudent({submission_state, submission})
     if (hideStudentNames || isAnonymous) {
-      name = I18n.t("Student %{number}", {number: index + 1})
+      name = I18n.t("Student %{number}", {number: student.index + 1})
     }
 
     return {[anonymizableId]: student[anonymizableId], anonymizableId, name, className};
@@ -467,13 +464,7 @@ function setupHeader () {
         modal: $('#unmute_dialog')
       },
       nav: $gradebook_header.find('#prev-student-button, #next-student-button'),
-      settings: {
-        form: $('#settings_form'),
-        link: $('#settings_link')
-      },
-      keyinfo: {
-        icon: $('#keyboard-shortcut-info-icon')
-      }
+      settings: { form: $('#settings_form') }
     },
     courseId: utils.getParam('courses'),
     assignmentId: utils.getParam('assignment_id'),
@@ -488,10 +479,6 @@ function setupHeader () {
       this.elements.mute.link.click($.proxy(this.onMuteClick, this));
 
       this.elements.settings.form.submit(this.submitSettingsForm.bind(this));
-      if (!isAnonymous) {
-        this.elements.settings.link.click(this.showSettingsModal.bind(this));
-      }
-      this.elements.keyinfo.icon.click(this.keyboardShortcutInfoModal.bind(this));
     },
     createModals () {
       this.elements.settings.form.dialog({
@@ -574,7 +561,7 @@ function setupHeader () {
       $.post(ENV.settings_url, {
         enable_speedgrader_grade_by_question: gradeByQuestion
       }).then(function() {
-        window.location.reload();
+        SpeedgraderHelpers.reloadPage();
       });
     },
 
@@ -639,7 +626,7 @@ function renderCommentTextArea () {
   }
 
   const textAreaProps = {
-    autoGrow: true,
+    height: '4rem',
     id: 'speedgrader_comment_textarea',
     label: React.createElement(ScreenReaderContent, null, I18n.t('Add a Comment')),
     placeholder: I18n.t('Add a Comment'),
@@ -822,8 +809,24 @@ function getSelectedAssessment(){
   ))[0];
 }
 
-function initRubricStuff(){
+function handleSelectedRubricAssessmentChanged({validateEnteredData = true} = {}) {
+  // This function is triggered both when we assess a student and when we switch
+  // students. In the former case, we want populateNewRubricSummary to check the
+  // data we entered and show an alert if the grader tried to assign more points
+  // to an outcome than it allows (and the course does not allow extra credit).
+  // In the latter case, because this function is called *before* the editing
+  // data is switched over to the new student, we don't want to perform the
+  // comparison since it could result in specious alerts being shown.
+  const editingData = validateEnteredData ? rubricAssessment.assessmentData($("#rubric_full")) : null
+  rubricAssessment.populateNewRubricSummary(
+    $("#rubric_summary_holder .rubric_summary"),
+    getSelectedAssessment(),
+    jsonData.rubric_association,
+    editingData
+  );
+}
 
+function initRubricStuff(){
   $("#rubric_summary_container .button-container").appendTo("#rubric_assessments_list_and_edit_button_holder").find('.edit').text(I18n.t('edit_view_rubric', "View Rubric"));
 
   $(".toggle_full_rubric, .hide_rubric_link").click(function(e){
@@ -832,13 +835,7 @@ function initRubricStuff(){
   });
 
   selectors.get('#rubric_assessments_select').change(() => {
-    const editingData = rubricAssessment.assessmentData($("#rubric_full"))
-    var selectedAssessment = getSelectedAssessment();
-    rubricAssessment.populateRubricSummary(
-      $("#rubric_summary_holder .rubric_summary"),
-      selectedAssessment,
-      editingData
-    );
+    handleSelectedRubricAssessmentChanged();
   });
 
   $rubric_full_resizer_handle.draggable({
@@ -874,7 +871,15 @@ function initRubricStuff(){
         data['final'] = '1';
       }
     }
-    data['graded_anonymously'] = utils.shouldHideStudentNames();
+    if (isAnonymous) {
+      // FIXME: data['rubric_assessment[user_id]'] should not contain anonymous_id,
+      // figure out how to fix the keys elsewhere
+      data[`rubric_assessment[${anonymizableUserId}]`] = data['rubric_assessment[user_id]'];
+      delete data['rubric_assessment[user_id]'];
+      data.graded_anonymously = true;
+    } else {
+      data.graded_anonymously = utils.shouldHideStudentNames();
+    }
     var url = $(".update_rubric_assessment_url").attr('href');
     var method = "POST";
     EG.toggleFullRubric('close');
@@ -885,7 +890,7 @@ function initRubricStuff(){
         rubricAssessment.updateRubricAssociation($rubric, response.rubric_association);
         delete response.rubric_association;
       }
-      for (var i in EG.currentStudent.rubric_assessments) {
+      for (let i = 0; i < EG.currentStudent.rubric_assessments.length; i++) {
         if (response.id === EG.currentStudent.rubric_assessments[i].id) {
           $.extend(true, EG.currentStudent.rubric_assessments[i], response);
           found = true;
@@ -1133,6 +1138,7 @@ EG = {
     anonymizableId = setupAnonymizableId(isAnonymous)
     anonymizableUserId = setupAnonymizableUserId(isAnonymous)
     anonymizableStudentId = setupAnonymizableStudentId(isAnonymous)
+    anonymizableAuthorId = setupAnonymizableAuthorId(isAnonymous)
 
     mergeStudentsAndSubmission();
     if (jsonData.GROUP_GRADING_MODE && !jsonData.studentsWithSubmissions.length) {
@@ -1213,11 +1219,8 @@ EG = {
     if (!jsonData.rubric_association) { return; }
     if (!rubricFull.filter(":visible").length) { return; }
 
-    rubricAssessment.populateRubric(
-      rubricFull.find(".rubric"),
-      rubricAssessmentToPopulate()
-    );
-
+    const container = rubricFull.find(".rubric")
+    rubricAssessment.populateNewRubric(container, rubricAssessmentToPopulate(), jsonData.rubric_association)
     $("#grading").height(rubricFull.height());
   },
 
@@ -1319,29 +1322,8 @@ EG = {
         this.currentStudent.submission.grade = null; // otherwise it may be tricked into showing the wrong submission_state
       }
 
-      let status_url = `${ENV.provisional_status_url}?student_id=${this.currentStudent[anonymizableId]}`
-      if (ENV.grading_role == 'moderator') {
-        status_url += "&last_updated_at="
-        if (this.currentStudent.submission) status_url += this.currentStudent.submission.updated_at;
-      }
-
-      // hit the API to check whether we still can give a provisional grade
-      $full_width_container.disableWhileLoading(
-        $.getJSON(status_url, {}, function(data) {
-          EG.currentStudent.needs_provisional_grade = data.needs_provisional_grade;
-
-          if (ENV.grading_role == 'moderator' && data.provisional_grades) {
-            if (!EG.currentStudent.submission) EG.currentStudent.submission = {}
-            EG.currentStudent.submission.provisional_grades = data.provisional_grades;
-            EG.currentStudent.submission.updated_at = data.updated_at;
-            EG.currentStudent.submission.final_provisional_grade = data.final_provisional_grade;
-          }
-
-          EG.currentStudent.submission_state =
-            SpeedgraderHelpers.submissionState(EG.currentStudent, ENV.grading_role);
-          EG.showStudent();
-        })
-      );
+      // check whether we still can give a provisional grade
+      $full_width_container.disableWhileLoading(this.fetchProvisionalGrades());
     } else {
       this.showStudent();
     }
@@ -1358,7 +1340,19 @@ EG = {
     }
     if (ENV.grading_role == "moderator") {
       this.current_prov_grade_index = null;
-      this.handleModerationTabs(0); // sets up tabs and loads first grade
+      this.removeModerationBarAndShowSubmission();
+
+      this.renderProvisionalGradeSelector({showingNewStudent: true})
+
+      const selectedGrade = currentStudentProvisionalGrades().find(grade => grade.selected);
+      if (selectedGrade) {
+        this.setActiveProvisionalGradeFields({
+          label: provisionalGraderDisplayNames[selectedGrade.provisional_grade_id],
+          grade: selectedGrade
+        });
+      } else {
+        this.setActiveProvisionalGradeFields();
+      }
     } else {
       // showSubmissionOverride is optionally set if the user is
       // using the quizzes.next lti tool. Rather than reload the tool based
@@ -1372,96 +1366,17 @@ EG = {
   showSubmission: function(){
     this.showGrade();
     this.showDiscussion();
-    this.showRubric();
+    this.showRubric({validateEnteredData: false});
     this.updateStatsInHeader();
     this.showSubmissionDetails();
     this.refreshFullRubric();
   },
 
-  handleModerationTabs: function(index_to_load) {
-    var prov_grades = this.currentStudent.submission && this.currentStudent.submission.provisional_grades;
-    var final_grade = this.currentStudent.submission && this.currentStudent.submission.final_provisional_grade;
-
-    if (prov_grades && prov_grades.length == 1 && !final_grade && !prov_grades[0].readonly) {
-      $full_width_container.removeClass("with_moderation_tabs");
-      $moderation_bar.hide();
-      EG.showProvisionalGrade(0);
-    } else if (prov_grades && prov_grades.length > 0) {
-      if (prov_grades.length == 1) {
-        // hide and disable second mark tab
-        $moderation_tab_2nd.hide();
-        $moderation_tabs_div.tabs('disable', 1);
-
-        if (this.currentStudent.needs_provisional_grade || final_grade) {
-          $new_mark_container.show();
-          $new_mark_copy_link2_menu_item.hide(); // hide copy 2nd mark
-          if (final_grade) {
-            $new_mark_link_menu_item.hide();
-          } else {
-            EG.can_add_review = true;
-            $new_mark_link_menu_item.show();
-          }
-        } else {
-          $new_mark_container.hide(); // hide new mark dropdown if not selected for moderation
-        }
-      } else if (prov_grades.length == 2) {
-        // enable and show second mark tab
-        $moderation_tabs_div.tabs('enable', 1);
-        $moderation_tab_2nd.show();
-        $new_mark_container.show();
-        $new_mark_link_menu_item.hide();
-        if (prov_grades[1].provisional_grade_id) {
-          $new_mark_copy_link2_menu_item.show(); // show copy 2nd mark
-        } else {
-          $new_mark_copy_link2_menu_item.hide(); // don't show if it's a new unsaved mark
-        }
-      }
-
-      if (final_grade) {
-        $moderation_tabs_div.tabs('enable', 2);
-        $moderation_tab_final.show();
-        $new_mark_final_link_menu_item.hide();
-      } else {
-        $moderation_tabs_div.tabs('disable', 2);
-        $moderation_tab_final.hide();
-        $new_mark_final_link_menu_item.show();
-      }
-
-      $full_width_container.addClass("with_moderation_tabs");
-      $moderation_bar.show();
-
-      if (this.add_review && this.can_add_review) {
-        this.add_review = false;
-        this.newProvisionalGrade('new', 1);
-      } else {
-        if (this.selected_provisional_grade_id) {
-          var selected_id = this.selected_provisional_grade_id;
-          // load provisional grade id from anchor hash
-
-          if (final_grade && final_grade.provisional_grade_id == selected_id) {
-            index_to_load = 'final'; // final mark
-          } else {
-            $.each(prov_grades, function (idx, pg) {
-              if (pg.provisional_grade_id == selected_id) {
-                index_to_load = idx;
-              }
-            });
-          }
-
-          this.selected_provisional_grade_id = null; // don't load it again
-        }
-        if (index_to_load == 'final') {
-          $moderation_tab_final.find('a').click();
-        } else {
-          $moderation_tabs.eq(index_to_load).find('a').click(); // show a grade
-        }
-      }
-    } else {
-      $full_width_container.removeClass("with_moderation_tabs");
-      $moderation_bar.hide();
-      this.showSubmission();
-      this.setReadOnly(false);
-    }
+  removeModerationBarAndShowSubmission() {
+    $full_width_container.removeClass("with_moderation_tabs")
+    $moderation_bar.hide()
+    this.showSubmission()
+    this.setReadOnly(false)
   },
 
   updateModerationTabs: function() {
@@ -1536,11 +1451,10 @@ EG = {
       };
       if (index == 1) {
         this.currentStudent.submission.provisional_grades.push(new_mark);
-        this.handleModerationTabs(1);
       } else if (index == 'final') {
         this.currentStudent.submission.final_provisional_grade = new_mark;
-        this.handleModerationTabs('final');
       }
+      this.removeModerationBarAndShowSubmission();
     } else if (type == 'copy') {
       if (!this.currentStudent.submission.final_provisional_grade ||
           confirm(I18n.t("Are you sure you want to copy to the final mark? This will overwrite the existing mark."))) {
@@ -1553,7 +1467,7 @@ EG = {
             EG.currentStudent.submission_state =
               SpeedgraderHelpers.submissionState(EG.currentStudent, ENV.grading_role);
             EG.current_prov_grade_index = null;
-            EG.handleModerationTabs('final');
+            this.removeModerationBarAndShowSubmission();
             EG.updateModerationTabs();
             $moderation_tab_final.focus();
           })
@@ -1586,9 +1500,9 @@ EG = {
 
   setGradeReadOnly: function(readonly) {
     if (readonly) {
-      $grade.addClass('ui-state-disabled').attr('readonly', true).attr('aria-disabled', true);
+      $grade.addClass('ui-state-disabled').attr('readonly', true).attr('aria-disabled', true).prop('disabled', true);
     } else {
-      $grade.removeClass('ui-state-disabled').removeAttr('aria-disabled').removeAttr('readonly');
+      $grade.removeClass('ui-state-disabled').removeAttr('aria-disabled').removeAttr('readonly').removeProp('disabled');
     }
   },
 
@@ -1702,7 +1616,7 @@ EG = {
             .text(I18n.t('vericite.resubmitting', 'Resubmitting...'));
 
           $.ajaxJSON(resubmitUrl, "POST", {}, function() {
-            window.location.reload();
+            SpeedgraderHelpers.reloadPage();
           });
         });
       }
@@ -1713,17 +1627,15 @@ EG = {
     clearInterval(sessionTimer);
 
     function currentIndex (context, submissionToViewVal) {
-      var result;
       if (submissionToViewVal) {
-        result = Number(submissionToViewVal);
-      } else if (context.currentStudent && context.currentStudent.submission &&
-                 context.currentStudent.submission.currentSelectedIndex ) {
-        result = context.currentStudent.submission.currentSelectedIndex;
-      } else {
-        result = 0;
-      }
+        return Number(submissionToViewVal);
+      } else if (context.currentStudent &&
+        context.currentStudent.submission &&
+        context.currentStudent.submission.currentSelectedIndex ) {
 
-      return result;
+        return context.currentStudent.submission.currentSelectedIndex;
+      }
+      return 0;
     };
 
     const $submission_to_view = $("#submission_to_view")
@@ -1796,20 +1708,26 @@ EG = {
           $.isPreviewable(attachment.content_type, 'google')) {
         inlineableAttachments.push(attachment);
       }
-      var viewedAtHTML = studentViewedAtTemplate({
-        viewed_at: $.datetimeString(attachment.viewed_at)
-      });
+
+      let viewedAtHTML = ''
+      if (!jsonData.anonymize_students || isAdmin) {
+        viewedAtHTML = studentViewedAtTemplate({
+          viewed_at: $.datetimeString(attachment.viewed_at)
+        })
+      }
       $submission_attachment_viewed_at.html($.raw(viewedAtHTML));
+
       if (browserableCssClasses.test(attachment.mime_class)) {
         browserableAttachments.push(attachment);
       }
+      const anonymizableSubmissionIdKey = isAnonymous ? 'anonymousId' : 'submissionId';
       var $submission_file = $submission_file_hidden.clone(true).fillTemplateData({
         data: {
-          submissionId: submission.user_id,
+          [anonymizableSubmissionIdKey]: submission[anonymizableUserId],
           attachmentId: attachment.id,
           display_name: attachment.display_name
         },
-        hrefValues: ['submissionId', 'attachmentId']
+        hrefValues: [anonymizableSubmissionIdKey, 'attachmentId']
       }).appendTo($submission_files_list)
         .find('a.display_name')
         .data('attachment', attachment)
@@ -1956,6 +1874,7 @@ EG = {
       });
 
       innerHTML = submissionsDropdownTemplate({
+        showSubmissionStatus: !jsonData.anonymize_students || isAdmin,
         singleSubmission: submissionHistory.length == 1,
         submissions: templateSubmissions,
         linkToQuizHistory: jsonData.too_many_quiz_submissions,
@@ -2052,6 +1971,7 @@ EG = {
     $(".speedgrader_alert").hide();
     if (!this.currentStudent.submission || !this.currentStudent.submission.submission_type || this.currentStudent.submission.workflow_state == 'unsubmitted') {
       $this_student_does_not_have_a_submission.show();
+      this.emptyIframeHolder()
     } else if (this.currentStudent.submission && this.currentStudent.submission.submitted_at && jsonData.context.quiz && jsonData.context.quiz.anonymous_submissions) {
       $this_student_has_a_submission.show();
     } else if (attachment) {
@@ -2077,12 +1997,13 @@ EG = {
     this.emptyIframeHolder()
     const {context_id: courseId} = jsonData
     const {assignment_id: assignmentId} = this.currentStudent.submission
-    const submissionId = this.currentStudent.submission[anonymizableUserId]
+    const anonymizableSubmissionId = this.currentStudent.submission[anonymizableUserId]
+    const resourceSegment = isAnonymous ? 'anonymous_submissions' : 'submissions'
     const iframePreviewVersion = SpeedgraderHelpers.iframePreviewVersion(this.currentStudent.submission)
     const hideStudentNames = utils.shouldHideStudentNames() ? "&hide_student_name=1" : ""
     const queryParams = `${iframePreviewVersion}${hideStudentNames}`
     const src =
-      `/courses/${courseId}/assignments/${assignmentId}/submissions/${submissionId}?preview=true${queryParams}`
+      `/courses/${courseId}/assignments/${assignmentId}/${resourceSegment}/${anonymizableSubmissionId}?preview=true${queryParams}`
     const iframe = SpeedgraderHelpers.buildIframe(htmlEscape(src), {frameborder: 0, allowfullscreen: true}, domElement)
     $iframe_holder.html($.raw(iframe)).show();
   },
@@ -2115,7 +2036,7 @@ EG = {
     sessionTimer = window.setInterval(() => {
       const elapsed = new Date() - start;
       if (elapsed > sessionLimit) {
-        window.location.reload();
+        SpeedgraderHelpers.reloadPage();
       } else if (elapsed > aggressiveWarnings[0]) {
         $.flashWarning(message);
         aggressiveWarnings.shift();
@@ -2165,7 +2086,8 @@ EG = {
       this.displayExpirationWarnings(aggressiveWarnings, 10, canvadocMessage);
 
       $iframe_holder.show().loadDocPreview($.extend(previewOptions, {
-        canvadoc_session_url: (attachment.provisional_canvadoc_url || attachment.canvadoc_url)
+        canvadoc_session_url: (attachment.provisional_canvadoc_url || attachment.canvadoc_url),
+        iframe_min_height: 0
       }));
     } else if ($.isPreviewable(attachment.content_type, 'google')) {
       if (!INST.disableCrocodocPreviews) $no_annotation_warning.show();
@@ -2187,8 +2109,9 @@ EG = {
     let contents;
     const genericSrc = unescape($submission_file_hidden.find('.display_name').attr('href'));
 
+    const anonymizableSubmissionIdToken = isAnonymous ? 'anonymousId' : 'submissionId';
     const src = genericSrc
-      .replace('{{submissionId}}', this.currentStudent.submission[anonymizableUserId])
+      .replace(`{{${anonymizableSubmissionIdToken}}}`, this.currentStudent.submission[anonymizableUserId])
       .replace('{{attachmentId}}', attachment.id);
 
     if (attachment.mime_class === 'image') {
@@ -2200,7 +2123,7 @@ EG = {
     return $.raw(contents);
   },
 
-  showRubric: function(){
+  showRubric ({validateEnteredData = true} = {}) {
     const selectMenu = selectors.get('#rubric_assessments_select');
     //if this has some rubric_assessments
     if (jsonData.rubric_association) {
@@ -2234,7 +2157,7 @@ EG = {
 
       // hide the select box if there is not >1 option
       $("#rubric_assessments_list").showIf(selectMenu.find("option").length > 1);
-      selectMenu.change();
+      handleSelectedRubricAssessmentChanged({validateEnteredData});
     }
   },
 
@@ -2267,8 +2190,10 @@ EG = {
     // assignment (I am administrator in the course) or if I wrote
     // this comment... and if the student isn't concluded
     const isConcluded = EG.isStudentConcluded(EG.currentStudent[anonymizableId]);
-    var commentIsDeleteableByMe = (ENV.RUBRIC_ASSESSMENT.assessment_type === 'grading' ||
-                                   ENV.RUBRIC_ASSESSMENT.assessor_id === comment.author_id) && !isConcluded;
+    const commentIsDeleteableByMe = (
+      ENV.RUBRIC_ASSESSMENT.assessment_type === 'grading' ||
+      ENV.RUBRIC_ASSESSMENT.assessor_id === comment[anonymizableAuthorId]
+    ) && !isConcluded;
 
     commentElement.find('.delete_comment_link').click(function (_event) {
       $(this).parents('.comment').confirmDelete({
@@ -2302,15 +2227,7 @@ EG = {
   addCommentSubmissionHandler: function (commentElement, comment) {
     var that = this;
 
-    // this is really poorly decoupled but over in
-    // speed_grader.html.erb these rubricAssessment. variables are
-    // set.  what this is saying is: if I am able to grade this
-    // assignment (I am administrator in the course) or if I wrote
-    // this comment... and if the student isn't concluded
     const isConcluded = EG.isStudentConcluded(EG.currentStudent[anonymizableId]);
-    var commentIsPublishableByMe = comment.draft &&
-        (comment.author_id.toString() === ENV.current_user_id) && !isConcluded;
-
     commentElement.find('.submit_comment_button').click(function (_event) {
       var updateUrl = '';
       var updateData = {};
@@ -2347,7 +2264,7 @@ EG = {
 
         $.ajax(updateAjaxOptions).done(commentUpdateSucceeded).fail(commentUpdateFailed);
       }
-    }).showIf(commentIsPublishableByMe);
+    }).showIf(comment.publishable && !isConcluded);
   },
 
   renderComment: function (commentData, incomingOpts) {
@@ -2375,8 +2292,21 @@ EG = {
 
     comment.posted_at = $.datetimeString(comment.created_at);
 
-    hideStudentName = opts.hideStudentNames && window.jsonData.studentMap[comment.author_id];
-    if (hideStudentName) { comment.author_name = I18n.t('Student'); }
+    hideStudentName = opts.hideStudentNames && window.jsonData.studentMap[comment[anonymizableAuthorId]];
+    if (hideStudentName) {
+      const { index } = window.jsonData.studentMap[comment[anonymizableAuthorId]];
+      comment.author_name = I18n.t('Student %{position}', { position: index + 1 });
+    }
+    // anonymous commentors
+    if (comment.author_name == null) {
+      const {provisional_grade_id} = EG.currentStudent.submission.provisional_grades.find(pg =>
+        pg.anonymous_grader_id === comment.anonymous_id
+      )
+      if (provisionalGraderDisplayNames == null || provisionalGraderDisplayNames[provisional_grade_id] == null) {
+        this.setupProvisionalGraderDisplayNames()
+      }
+      comment.author_name = provisionalGraderDisplayNames[provisional_grade_id]
+    }
     commentElement = commentElement.fillTemplateData({ data: comment });
 
     if (comment.draft) {
@@ -2439,7 +2369,7 @@ EG = {
     $comments.scrollTop(9999999);  // the scrollTop part forces it to scroll down to the bottom so it shows the most recent comment.
   },
 
-  revertFromFormSubmit: function(draftComment) {
+  revertFromFormSubmit: ({draftComment = null, errorSubmitting = false} = {}) => {
     // This is to continue existing behavior of creating finalized comments by default
     if (draftComment === undefined) {
       draftComment = false;
@@ -2453,7 +2383,7 @@ EG = {
       // Show a different message when auto-saving a draft comment
       $comment_saved.show();
       $comment_saved_message.attr("tabindex",-1).focus();
-    } else {
+    } else if (!errorSubmitting) {
       $comment_submitted.show();
       $comment_submitted_message.attr("tabindex",-1).focus();
     }
@@ -2476,7 +2406,7 @@ EG = {
       // that means that they did not type a comment, attach a file or record any media. so dont do anything.
       return false;
     }
-    const url = `${assignmentUrl}/submissions/${EG.currentStudent[anonymizableId]}`
+    const url = `${assignmentUrl}/${isAnonymous ? 'anonymous_' : ''}submissions/${EG.currentStudent[anonymizableId]}`
     var method = "PUT";
     var formData = {
       'submission[assignment_id]': jsonData.id,
@@ -2502,15 +2432,21 @@ EG = {
       $.each(submissions, function(){
         EG.setOrUpdateSubmission(this.submission);
       });
-      EG.revertFromFormSubmit(draftComment);
+      EG.revertFromFormSubmit({draftComment});
       window.setTimeout(function() {
         $rightside_inner.scrollTo($rightside_inner[0].scrollHeight, 500);
       });
     }
+
+    const formError = (data, _xhr, _textStatus, _errorThrown) => {
+      EG.handleGradingError(data);
+      EG.revertFromFormSubmit({errorSubmitting: true});
+    }
+
     if($add_a_comment.find("input[type='file']:visible").length) {
-      $.ajaxJSONFiles(url + ".text", method, formData, $add_a_comment.find("input[type='file']:visible"), formSuccess);
+      $.ajaxJSONFiles(url + ".text", method, formData, $add_a_comment.find("input[type='file']:visible"), formSuccess, formError);
     } else {
-      $.ajaxJSON(url, method, formData, formSuccess);
+      $.ajaxJSON(url, method, formData, formSuccess, formError);
     }
 
     $("#comment_attachments").empty();
@@ -2520,9 +2456,10 @@ EG = {
   },
 
   setOrUpdateSubmission: function(submission){
-
-    // find the student this submission belongs to and update their submission with this new one, if they dont have a submission, set this as their submission.
-    var student =  jsonData.studentMap[submission.user_id];
+    // find the student this submission belongs to and update their
+    // submission with this new one, if they dont have a submission,
+    // set this as their submission.
+    const student = jsonData.studentMap[submission[anonymizableUserId]];
     if (!student) return;
 
     student.submission = student.submission || {};
@@ -2579,7 +2516,7 @@ EG = {
     const formData = {
       'submission[assignment_id]': jsonData.id,
       [`submission[${anonymizableUserId}]`]: EG.currentStudent[anonymizableId],
-      'submission[graded_anonymously]': utils.shouldHideStudentNames()
+      'submission[graded_anonymously]': isAnonymous ? true : utils.shouldHideStudentNames()
     };
 
     var grade = SpeedgraderHelpers.determineGradeToSubmit(
@@ -2607,7 +2544,7 @@ EG = {
       }
     }
 
-    $.ajaxJSON(url, method, formData, function(submissions) {
+    const submissionSuccess = submissions => {
       var pointsPossible = jsonData.points_possible;
       var score = submissions[0].submission.score;
 
@@ -2628,7 +2565,46 @@ EG = {
       EG.refreshSubmissionsToView();
       $multiple_submissions.change();
       EG.showGrade();
-    });
+
+      if (ENV.grading_role === 'moderator' && currentStudentProvisionalGrades().length > 0) {
+        // This is the ID of the possibly-new grade that the server returned
+        const newProvisionalGradeId = submissions[0].submission.provisional_grade_id;
+        const existingGrade = currentStudentProvisionalGrades().find(
+          provisionalGrade => provisionalGrade.provisional_grade_id === newProvisionalGradeId
+        );
+
+        // If it's not a new grade but an existing one, update the grade to match
+        if (existingGrade) {
+          existingGrade.grade = grade;
+          existingGrade.score = score;
+        }
+
+        EG.submitSelectedProvisionalGrade(newProvisionalGradeId, !existingGrade);
+        EG.setActiveProvisionalGradeFields({grade: existingGrade, label: customProvisionalGraderLabel});
+      }
+    };
+
+    const submissionError = (data, _xhr, _textStatus, _errorThrown) => {
+      EG.handleGradingError(data)
+
+      let selectedGrade
+      if (ENV.grading_role === 'moderator') {
+        selectedGrade = currentStudentProvisionalGrades().find(provisionalGrade => provisionalGrade.selected)
+      }
+
+      // Revert to the previously selected provisional grade (if we're moderating) or
+      // the last valid value (if not moderating or no provisional grade was chosen)
+      if (selectedGrade) {
+        EG.setActiveProvisionalGradeFields({
+          grade: selectedGrade,
+          label: provisionalGraderDisplayNames[selectedGrade.provisional_grade_id]
+        })
+      } else {
+        EG.showGrade()
+      }
+    };
+
+    $.ajaxJSON(url, method, formData, submissionSuccess, submissionError);
   },
 
   showGrade: function() {
@@ -2768,6 +2744,8 @@ EG = {
   },
 
   compareStudentsBy: function (f) {
+    const secondaryAttr = isAnonymous ? 'anonymous_id' : 'sortable_name'
+
     return function (studentA, studentB) {
       var a = f(studentA);
       var b = f(studentB);
@@ -2775,7 +2753,7 @@ EG = {
       if ((!a && !b) || a === b) {
         // chrome / safari sort isn't stable, so we need to sort by name in
         // case of tie
-        return natcompare.strings(studentA.sortable_name, studentB.sortable_name);
+        return natcompare.strings(studentA[secondaryAttr], studentB[secondaryAttr]);
       } else if (!a || a > b) {
         return 1;
       }
@@ -2830,6 +2808,189 @@ EG = {
     teardownHandleFragmentChanged()
     teardownBeforeLeavingSpeedgrader()
     return undefined
+  },
+
+  handleGradingError (data={}) {
+    const errorCode = data.errors && data.errors.error_code
+
+    // If the grader entered an invalid provisional grade, revert it without
+    // showing an explicit error
+    if (errorCode === 'PROVISIONAL_GRADE_INVALID_SCORE') {
+      return;
+    }
+
+    let errorMessage
+    if (errorCode === 'MAX_GRADERS_REACHED') {
+      errorMessage = I18n.t('The maximum number of graders has been reached for this assignment.');
+    } else {
+      errorMessage = I18n.t('An error occurred updating this assignment.');
+    }
+
+    $.flashError(errorMessage);
+  },
+
+  // (This *should* properly be called selectProvisionalGrade, but it has a
+  // different name to avoid confusion with the method on the EG object with
+  // that name. This one is only called when Anonymous Moderated Marking is
+  // on, meaning we don't need to update the moderation tab.)
+  submitSelectedProvisionalGrade (provisionalGradeId, refetchOnSuccess=false) {
+    const selectGradeUrl = $.replaceTags(
+      ENV.provisional_select_url,
+      { provisional_grade_id: provisionalGradeId }
+    );
+
+    const submitSucceeded = (data) => {
+      const selectedProvisionalGradeId = data.selected_provisional_grade_id;
+      // Update the "selected" field on our grades manually. No need to bother
+      // the server solely to verify the new selections.
+      currentStudentProvisionalGrades().forEach(grade => {
+        grade.selected = grade.provisional_grade_id === selectedProvisionalGradeId;
+      })
+
+      if (refetchOnSuccess) {
+        // If this involved submitting a new provisional grade, re-fetch the
+        // list of grades so we have a real data structure for the new one
+        this.fetchProvisionalGrades();
+      } else {
+        // Otherwise we just selected an existing grade and didn't change
+        // anything, so go ahead and re-render
+        this.renderProvisionalGradeSelector();
+      }
+    }
+
+    $.ajaxJSON(selectGradeUrl, 'PUT', {}, submitSucceeded);
+  },
+
+  setupProvisionalGraderDisplayNames() {
+    provisionalGraderDisplayNames = {};
+    let provisionalGrades = currentStudentProvisionalGrades();
+    const anonymous_grader_ids = window.jsonData.anonymous_grader_ids || [];
+    const anonymousIdToProvisionalName = {};
+
+    // By doing this, we guarantee that the provisional graders will
+    // maintain the same order within the same speedgrader session.
+    for (let i = 0; i < anonymous_grader_ids.length; i += 1) {
+      anonymousIdToProvisionalName[anonymous_grader_ids[i]] = I18n.t('Grader %{index}',{index: i+1});
+    }
+
+    provisionalGrades.forEach((grade) => {
+      if (grade.readonly) {
+        const displayName = grade.anonymous_grader_id
+          ? anonymousIdToProvisionalName[grade.anonymous_grader_id]
+          : grade.scorer_name;
+        provisionalGraderDisplayNames[grade.provisional_grade_id] = displayName;
+      } else {
+        provisionalGraderDisplayNames[grade.provisional_grade_id] = customProvisionalGraderLabel;
+      }
+    });
+  },
+
+  fetchProvisionalGrades() {
+    const {course_id: courseId, assignment_id: assignmentId} = ENV;
+    const resourceSegment = isAnonymous ? 'anonymous_provisional_grades' : 'provisional_grades';
+    const resourceUrl = `/api/v1/courses/${courseId}/assignments/${assignmentId}/${resourceSegment}/status`;
+
+    let status_url = `${resourceUrl}?${anonymizableStudentId}=${EG.currentStudent[anonymizableId]}`
+    if (ENV.grading_role === 'moderator') {
+      status_url += "&last_updated_at="
+      if (EG.currentStudent.submission) {
+        status_url += EG.currentStudent.submission.updated_at;
+      }
+    }
+
+    // Check with the API ("hit the API" sounds so brutish) to get the updated
+    // list of provisional grades. We return this so that disableWhileLoading
+    // has access to the Deferred object.
+    return $.getJSON(status_url, {}, EG.onProvisionalGradesFetched)
+  },
+
+  onProvisionalGradesFetched (data) {
+    EG.currentStudent.needs_provisional_grade = data.needs_provisional_grade;
+
+    if (ENV.grading_role === 'moderator' && data.provisional_grades) {
+      if (!EG.currentStudent.submission) EG.currentStudent.submission = {}
+      EG.currentStudent.submission.provisional_grades = data.provisional_grades;
+      EG.currentStudent.submission.updated_at = data.updated_at;
+      EG.currentStudent.submission.final_provisional_grade = data.final_provisional_grade;
+    }
+
+    EG.currentStudent.submission_state = SpeedgraderHelpers.submissionState(EG.currentStudent, ENV.grading_role);
+    EG.showStudent();
+  },
+
+  setActiveProvisionalGradeFields({label='', grade=null} = {}) {
+    $grading_box_selected_grader.text(label);
+
+    const submission = EG.currentStudent.submission || {};
+    if (grade !== null) {
+      // If the moderator has selected their own custom grade
+      // (i.e., the selected grade isn't read-only) and has
+      // excused this submission, show that instead of the
+      // provisional grade's score
+      if (!grade.readonly && submission.excused) {
+        $grade.val('EX')
+        $score.text('')
+      } else {
+        $grade.val(grade.grade);
+        $score.text(grade.score);
+      }
+    }
+  },
+
+  handleProvisionalGradeSelected ({selectedGrade, isNewGrade=false} = {}) {
+    if (selectedGrade) {
+      const selectedGradeId = selectedGrade.provisional_grade_id;
+
+      this.submitSelectedProvisionalGrade(selectedGradeId);
+      this.setActiveProvisionalGradeFields({
+        grade: selectedGrade,
+        label: provisionalGraderDisplayNames[selectedGradeId]
+      });
+    } else if (isNewGrade) {
+      // If this is a "new" grade with no value, don't submit anything to the
+      // server. This will only happen when the moderator selects a custom
+      // grade for a given student for the first time (since no provisional grade
+      // object exists yet). If/when the grade text field gets updated,
+      // handleGradeSubmit will fire, create the new object, and re-fetch the
+      // provisional grades from the server.
+      this.setActiveProvisionalGradeFields({label: customProvisionalGraderLabel});
+
+      // For now, set the grader fields appropriately and mark the grades we have
+      // as not-selected until we get the new one.
+      currentStudentProvisionalGrades().forEach(grade => {
+        grade.selected = false;
+      });
+      this.renderProvisionalGradeSelector();
+    }
+  },
+
+  renderProvisionalGradeSelector ({showingNewStudent=false} = {}) {
+    const mountPoint = document.getElementById('grading_details_mount_point');
+    const provisionalGrades = currentStudentProvisionalGrades();
+
+    // Only show the selector if the current student has at least one grade from
+    // a provisional grader (i.e., not the moderator).
+    if (!provisionalGrades.some(grade => grade.readonly)) {
+      ReactDOM.unmountComponentAtNode(mountPoint);
+      return;
+    }
+
+    if (showingNewStudent) {
+      this.setupProvisionalGraderDisplayNames();
+    }
+
+    const props = {
+      gradingType: ENV.grading_type,
+      onGradeSelected: params => {
+        this.handleProvisionalGradeSelected(params)
+      },
+      pointsPossible: jsonData.points_possible,
+      provisionalGraderDisplayNames,
+      provisionalGrades
+    }
+
+    const gradeSelector = <SpeedGraderProvisionalGradeSelector {...props} />
+    ReactDOM.render(gradeSelector, mountPoint)
   }
 }
 
@@ -2902,6 +3063,7 @@ function setupSelectors() {
   $grade_container = $('#grade_container')
   $grade = $grade_container.find('input, select')
   $gradebook_header = $('#gradebook_header')
+  $grading_box_selected_grader = $('#grading-box-selected-grader')
   $grded_so_far = $('#x_of_x_graded')
   $iframe_holder = $('#iframe_holder')
   $left_side = $('#left_side')
@@ -2978,13 +3140,17 @@ function renderSettingsMenu () {
   ReactDOM.render(settingsMenu, document.getElementById('speedgrader-settings'))
 }
 
+// Helper function that guard against provisional_grades being null, allowing
+// Anonymous Moderated Marking-related moderation code to forgo that check
+// when considering provisional grades.
+function currentStudentProvisionalGrades () {
+  return EG.currentStudent.submission.provisional_grades || [];
+}
+
 export default {
   setup () {
     setupSelectors()
-
-    if (isAnonymousModeratedMarkingEnabled()) {
-      renderSettingsMenu()
-    }
+    renderSettingsMenu()
 
     function registerQuizzesNext (overriddenShowSubmission) {
       showSubmissionOverride = overriddenShowSubmission;
@@ -3002,6 +3168,11 @@ export default {
     $(document).ready(function() {
       EG.domReady();
     });
+  },
+
+  teardown() {
+    teardownHandleFragmentChanged()
+    teardownBeforeLeavingSpeedgrader()
   },
 
   EG

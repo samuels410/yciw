@@ -21,7 +21,7 @@ import PropTypes from 'prop-types'
 import ReactDOM from 'react-dom'
 import update from 'immutability-helper'
 import _ from 'underscore'
-import Button from '@instructure/ui-core/lib/components/Button'
+import Button from '@instructure/ui-buttons/lib/components/Button'
 import I18n from 'i18n!external_tools'
 import DueDateCalendarPicker from '../due_dates/DueDateCalendarPicker'
 import accessibleDateFormat from '../shared/helpers/accessibleDateFormat'
@@ -49,7 +49,7 @@ import round from 'compiled/util/round'
   let GradingPeriodForm = React.createClass({
     propTypes: {
       period:   Types.shape({
-        id:        Types.string.isRequired,
+        id:        Types.string,
         title:     Types.string.isRequired,
         weight:    Types.number,
         startDate: Types.instanceOf(Date).isRequired,

@@ -40,12 +40,12 @@ class Enrollment < ActiveRecord::Base
   belongs_to :role
   include Role::AssociationHelper
 
-  has_one :enrollment_state, :dependent => :destroy
+  has_one :enrollment_state, :dependent => :destroy, inverse_of: :enrollment
 
   has_many :role_overrides, :as => :context, :inverse_of => :context
   has_many :pseudonyms, :primary_key => :user_id, :foreign_key => :user_id
   has_many :course_account_associations, :foreign_key => 'course_id', :primary_key => 'course_id'
-  has_many :scores, -> { active }
+  has_many :scores, -> { active }, inverse_of: :enrollment
 
   validates_presence_of :user_id, :course_id, :type, :root_account_id, :course_section_id, :workflow_state, :role_id
   validates_inclusion_of :limit_privileges_to_course_section, :in => [true, false]
@@ -106,13 +106,13 @@ class Enrollment < ActiveRecord::Base
   end
 
   def valid_course?
-    if self.course.deleted? && !self.deleted?
+    if !deleted? && course.deleted?
       self.errors.add(:course_id, "is not a valid course")
     end
   end
 
   def valid_section?
-    unless self.course_section.active? || self.deleted?
+    unless deleted? || course_section.active?
       self.errors.add(:course_section_id, "is not a valid section")
     end
   end
@@ -236,12 +236,12 @@ class Enrollment < ActiveRecord::Base
   scope :admin, -> {
     select(:course_id).
         joins(:course).
-        where("enrollments.type IN ('TeacherEnrollment','TaEnrollment', 'DesignerEnrollment') AND (courses.workflow_state='claimed' OR (enrollments.workflow_state='active' AND courses.workflow_state='available'))") }
+        where("enrollments.type IN ('TeacherEnrollment','TaEnrollment', 'DesignerEnrollment') AND (courses.workflow_state IN ('created', 'claimed') OR (enrollments.workflow_state='active' AND courses.workflow_state='available'))") }
 
   scope :instructor, -> {
     select(:course_id).
         joins(:course).
-        where("enrollments.type IN ('TeacherEnrollment','TaEnrollment') AND (courses.workflow_state='claimed' OR (enrollments.workflow_state='active' AND courses.workflow_state='available'))") }
+        where("enrollments.type IN ('TeacherEnrollment','TaEnrollment') AND (courses.workflow_state IN ('created', 'claimed') OR (enrollments.workflow_state='active' AND courses.workflow_state='available'))") }
 
   scope :of_student_type, -> { where(:type => "StudentEnrollment") }
 
@@ -628,8 +628,8 @@ class Enrollment < ActiveRecord::Base
   STATE_BY_DATE_RANK = ['active', ['invited', 'creation_pending', 'pending_active', 'pending_invited'], 'completed', 'inactive', 'rejected', 'deleted']
   STATE_BY_DATE_RANK_HASH = rank_hash(STATE_BY_DATE_RANK)
   def self.state_by_date_rank_sql
-    @state_by_date_rank_sql ||= rank_sql(STATE_BY_DATE_RANK, 'enrollment_states.state').
-      sub(/^CASE/, "CASE WHEN enrollment_states.restricted_access THEN #{STATE_BY_DATE_RANK.index('inactive')}") # pretend restricted access is the same as inactive
+    @state_by_date_rank_sql ||= Arel.sql(rank_sql(STATE_BY_DATE_RANK, 'enrollment_states.state').
+      sub(/^CASE/, "CASE WHEN enrollment_states.restricted_access THEN #{STATE_BY_DATE_RANK.index('inactive')}")) # pretend restricted access is the same as inactive
   end
 
   def state_with_date_sortable
@@ -714,10 +714,13 @@ class Enrollment < ActiveRecord::Base
 
   def enrollment_state
     raise "cannot call enrollment_state on a new record" if new_record?
-    state = self.association(:enrollment_state).target ||=
-      self.shard.activate { EnrollmentState.where(:enrollment_id => self).first }
-    state.association(:enrollment).target ||= self # ensure reverse association
-    state
+    result = super
+    unless result
+      association(:enrollment_state).reload
+      result = super
+    end
+    result.enrollment = self # ensure reverse association
+    result
   end
 
   def create_enrollment_state
@@ -998,18 +1001,6 @@ class Enrollment < ActiveRecord::Base
     GradeCalculator.recompute_final_score(*args)
   end
 
-  def self.recompute_final_score_if_stale(course, user=nil, compute_score_opts = {})
-    Rails.cache.fetch(
-      ['recompute_final_scores', course.id, user, compute_score_opts[:grading_period_id]].cache_key,
-      expires_in: Setting.get('recompute_grades_window', 600).to_i.seconds
-    ) do
-      user_id = user ? user.id : course.student_enrollments.except(:preload).distinct.pluck(:user_id)
-      recompute_final_score(user_id, course.id, compute_score_opts)
-      yield if block_given?
-      true
-    end
-  end
-
   # This method is intended to not duplicate work for a single user.
   def self.recompute_final_score_in_singleton(user_id, course_id, opts = {})
     # Guard against getting more than one user_id
@@ -1028,7 +1019,7 @@ class Enrollment < ActiveRecord::Base
   end
 
   def self.recompute_final_scores(user_id)
-    StudentEnrollment.where(user_id: user_id).pluck('distinct course_id').each do |course_id|
+    StudentEnrollment.where(user_id: user_id).distinct.pluck(:course_id).each do |course_id|
       recompute_final_score_in_singleton(user_id, course_id)
     end
   end
@@ -1077,11 +1068,21 @@ class Enrollment < ActiveRecord::Base
     id_opts ||= Score.params_for_course
     valid_keys = %i(course_score grading_period grading_period_id assignment_group assignment_group_id)
     return nil if id_opts.except(*valid_keys).any?
-    if scores.loaded?
+    result = if scores.loaded?
       scores.detect { |score| score.attributes >= id_opts.with_indifferent_access }
     else
       scores.where(id_opts).first
     end
+    if result
+      result.enrollment = self
+      # have to go through gymnastics to force-preload a has_one :through without causing a db transaction
+      if association(:course).loaded?
+        assn = result.association(:course)
+        assn.target = course
+        Bullet::Detector::Association.add_object_associations(result, :course) if defined?(Bullet) && Bullet.start?
+      end
+    end
+    result
   end
 
   def graded_at
@@ -1250,7 +1251,7 @@ class Enrollment < ActiveRecord::Base
     raise "top_enrollment_by_user must be scoped" unless all.where_clause.present?
 
     key = key.to_s
-    order("#{key}, #{type_rank_sql(rank_order)}").distinct_on(key)
+    order(Arel.sql("#{key}, #{type_rank_sql(rank_order)}")).distinct_on(key)
   end
 
   def assign_uuid
@@ -1440,7 +1441,6 @@ class Enrollment < ActiveRecord::Base
 
   def remove_user_as_final_grader?
     instructor? &&
-      root_account.feature_enabled?(:anonymous_moderated_marking) &&
       !other_enrollments_of_type(['TaEnrollment', 'TeacherEnrollment']).exists?
   end
 

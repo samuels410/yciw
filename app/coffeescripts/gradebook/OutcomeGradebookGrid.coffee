@@ -34,9 +34,13 @@ define [
   ###
 
   Grid =
-    filter: ['exceeds', 'mastery', 'near-mastery', 'remedial']
+    filter: []
+
+    ratings: []
 
     averageFn: 'mean'
+
+    section: undefined
 
     dataSource: {}
 
@@ -83,7 +87,7 @@ define [
         (currentSection) ->
           rows = Grid.Util.toRows(Grid.dataSource.rollups, section: currentSection)
           grid.setData(rows, false)
-          Grid.View.redrawHeader(grid)
+          Grid.View.redrawHeader(grid, Grid.averageFn, currentSection)
           grid.invalidate()
 
       # Public: Sort and rerender the grid.
@@ -135,7 +139,7 @@ define [
       _sortResults: (a, b, sortAsc, field) ->
         scoreA = a[field]
         scoreB = b[field]
-        val = numberCompare(scoreA, scoreB, descending: !sortAsc)
+        val = numberCompare(scoreA?.score, scoreB?.score, descending: !sortAsc)
         if val == 0
           Grid.Events._sortStudents(a, b, sortAsc)
         else
@@ -154,21 +158,23 @@ define [
       # Returns an array with [columns, rows].
       toGrid: (response, options = { column: {}, row: {} }) ->
         Grid.dataSource = response
-        [Grid.Util.toColumns(response.linked.outcomes, options.column),
+        [Grid.Util.toColumns(response.linked.outcomes, response.rollups, options.column),
          Grid.Util.toRows(response.rollups, options.row)]
 
       # Public: Translate an array of outcomes to columns that can be used by SlickGrid.
       #
       # outcomes - An array of outcomes from the outcome rollups API.
+      # rollups  - An array of rollups from the outcome rollups API.
       #
       # Returns an array of columns.
-      toColumns: (outcomes, options = {}) ->
+      toColumns: (outcomes, rollups, options = {}) ->
         options = _.extend({}, Grid.Util.COLUMN_OPTIONS, options)
         columns = _.map outcomes, (outcome) ->
           _.extend(id: "outcome_#{outcome.id}",
                    name: _.escape(outcome.title),
                    field: "outcome_#{outcome.id}",
                    cssClass: 'outcome-result-cell',
+                   hasResults: _.some(rollups, (r) => _.find(r.scores, (s) => s.links.outcome == outcome.id)),
                    outcome: outcome, options)
         [Grid.Util._studentColumn()].concat(columns)
 
@@ -224,7 +230,7 @@ define [
             section_name: if _.keys(Grid.sections).length > 1 then section_name else null
             student)
         _.each rollup[0].scores, (score) ->
-          row["outcome_#{score.links.outcome}"] = score.score
+          row["outcome_#{score.links.outcome}"] = _.pick score, 'score', 'hide_points'
         row
 
       # Public: Filter the given row by its section.
@@ -310,28 +316,6 @@ define [
         else
           parseFloat((total / values.length).toString().slice(0, 4))
 
-      median: (values) ->
-        sortedValues = _.sortBy(values, _.identity)
-        if values.length % 2 == 0
-          i = values.length / 2
-          Grid.Math.mean(sortedValues.slice(i - 1, i + 1))
-        else
-          sortedValues[Math.floor(values.length / 2)]
-
-      mode: (values) ->
-        counts = _.chain(values)
-          .countBy(_.identity)
-          .reduce((t, v, k) ->
-            t.push([v, parseInt(k)])
-            t
-          , [])
-          .sortBy(_.first)
-          .reverse()
-          .value()
-        max = counts[0][0]
-        mode = _.reject(counts, (n) -> n[0] < max)
-        mode = Grid.Math.mean(_.map(mode, _.last), true)
-
       max: (values) -> Math.max(values...)
 
       min: (values) -> Math.min(values...)
@@ -343,70 +327,105 @@ define [
       #
       # row - Current row index.
       # cell - Current cell index.
-      # value - Current value of the cell.
+      # value - Object with current score and hide_points status of the cell
       # columnDef - Object that defines the current column.
       # dataContext - Context for the cell.
       #
       # Returns cell HTML.
       cell: (row, cell, value, columnDef, dataContext) ->
-        Grid.View.cellHtml(value, columnDef, true)
+        score = value?.score
+        hide_points = value?.hide_points
+        Grid.View.cellHtml(score, hide_points, columnDef, true)
 
       # Internal: Determine HTML for a cell.
       #
-      # value - The proposed value for the cell
+      # score - The proposed value for the cell
+      # hide_points - Whether or not to show raw points or tier description
       # columnDef - The object for the current column
-      # applyFilter - Wheter filtering should be applied
+      # applyFilter - Whether filtering should be applied
       #
       # Returns cell HTML
-      cellHtml: (value, columnDef, shouldFilter) ->
+      cellHtml: (score, hide_points, columnDef, shouldFilter) ->
         outcome     = Grid.Util.lookupOutcome(columnDef.field)
-        return unless outcome and _.isNumber(value)
-        className   = Grid.View.masteryClassName(value, outcome)
+        return unless outcome and _.isNumber(score)
+        [className, color, description] = Grid.View.masteryDetails(score, outcome)
         return '' if shouldFilter and !_.include(Grid.filter, className)
-        cellTemplate(score: Math.round(value * 100.0) / 100.0, className: className, masteryScore: outcome.mastery_points)
+        cssColor = if color then "background-color:#{color};" else ''
+        if hide_points
+          cellTemplate(color: cssColor, className: className, description: description)
+        else
+          cellTemplate(color: cssColor, score: Math.round(score * 100.0) / 100.0, className: className, masteryScore: outcome.mastery_points)
 
       studentCell: (row, cell, value, columnDef, dataContext) ->
         studentCellTemplate(_.extend value, course_id: ENV.GRADEBOOK_OPTIONS.context_id)
 
-      # Public: Create a string class name for the given score.
+      masteryDetails: (score, outcome) ->
+        if Grid.ratings.length > 0
+          total_points = outcome.points_possible
+          total_points = outcome.mastery_points if total_points == 0
+          scaled = if total_points == 0 then score else (score / total_points) * Grid.ratings[0].points
+          idx = Grid.ratings.findIndex((r) -> scaled >= r.points)
+          idx = if idx == -1 then Grid.ratings.length - 1 else idx
+          ["rating_#{idx}", "\##{Grid.ratings[idx].color}", Grid.ratings[idx].description]
+        else
+          Grid.View.legacyMasteryDetails(score, outcome)
+
+      # Public: Create a string class name and color for the given score.
       #
       # score - The number score to evaluate.
       # outcome - The outcome to compare the score against.
       #
-      # Returns a string ('mastery', 'near-mastery', or 'remedial').
-      masteryClassName: (score, outcome) ->
+      # Returns an array with a className and CSS color.
+      legacyMasteryDetails: (score, outcome) ->
         mastery     = outcome.mastery_points
         nearMastery = mastery / 2
         exceedsMastery = mastery + (mastery / 2)
-        return 'exceeds' if score >= exceedsMastery
-        return 'mastery' if score >= mastery
-        return 'near-mastery' if score >= nearMastery
-        'remedial'
+        return ['rating_0', '#127A1B', I18n.t('Exceeds Mastery')] if score >= exceedsMastery
+        return ['rating_1', (if ENV.use_high_contrast then '#127A1B' else '#00AC18'), I18n.t('Meets Mastery')] if score >= mastery
+        return ['rating_2', (if ENV.use_high_contrast then '#C23C0D' else '#FC5E13'), I18n.t('Near Mastery')] if score >= nearMastery
+        ['rating_3', '#EE0612', I18n.t('Well Below Mastery')]
 
       getColumnResults: (data, column) ->
         _.chain(data)
           .pluck(column.field)
-          .filter(_.isNumber)
+          .filter(_.isObject)
           .value()
 
-      headerRowCell: ({node, column, grid}, fn = Grid.averageFn) ->
+      headerRowCell: ({node, column, grid}, score = undefined) ->
         return Grid.View.studentHeaderRowCell(node, column, grid) if column.field == 'student'
 
         results = Grid.View.getColumnResults(grid.getData(), column)
         return $(node).empty() unless results.length
-        value = Grid.Math[fn].call(this, (results))
-        $(node).empty().append(Grid.View.cellHtml(value, column, false))
+        $(node).empty().append(Grid.View.cellHtml(score?.score, score?.hide_points, column, false))
 
-      redrawHeader: (grid, fn = Grid.averageFn) ->
+      _aggregateUrl: (stat) ->
+        course = ENV.context_asset_string.split('_')[1]
+        sectionParam = if Grid.section then "&section_id=#{Grid.section}" else ""
+        "/api/v1/courses/#{course}/outcome_rollups?aggregate=course&aggregate_stat=#{stat}#{sectionParam}"
+
+      redrawHeaderWithSection: (grid, fn = Grid.averageFn) ->
+        Grid.View.redrawHeader(grid, fn, Grid.section)
+
+      redrawHeader: (grid, fn = Grid.averageFn, section) ->
         Grid.averageFn = fn
+        Grid.section = section
         cols = grid.getColumns()
-        _.each(cols, (col) ->
-          header = grid.getHeaderRowColumn(col.id)
-          Grid.View.headerRowCell(node: header, column: col, grid: grid, fn))
+        dfd = $.getJSON(Grid.View._aggregateUrl(fn)).fail((e) ->
+          $.flashError(I18n.t('There was an error fetching course statistics'))
+        )
+        dfd.then (response, status, xhr) =>
+          # do for each column
+          _.each(cols, (col) ->
+            header = grid.getHeaderRowColumn(col.id)
+            score = if col.outcome
+                      _.find(response['rollups'][0]['scores'], (s) -> s.links.outcome == col.outcome.id)
+                    else
+                      undefined
+            Grid.View.headerRowCell(node: header, column: col, grid: grid, score))
 
       studentHeaderRowCell: (node, column, grid) ->
         $(node).addClass('average-filter')
-        view = new HeaderFilterView(grid: grid, redrawFn: Grid.View.redrawHeader)
+        view = new HeaderFilterView(grid: grid, redrawFn: Grid.View.redrawHeaderWithSection)
         view.render()
         $(node).append(view.$el)
 
@@ -422,6 +441,6 @@ define [
         ratings.result_count = results.length
         points = _.pluck ratings, 'points'
         counts = _.countBy results, (result) ->
-          _.find points, (x) -> x <= result
+          _.find points, (x) -> result && x <= result.score
         _.each ratings, (rating) ->
           rating.percent = Math.round((counts[rating.points] || 0) / results.length * 100)

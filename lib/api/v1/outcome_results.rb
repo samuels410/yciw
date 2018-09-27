@@ -35,12 +35,13 @@ module Api::V1::OutcomeResults
   def outcome_result_json(result)
     hash = api_json(result, @current_user, session, {
       methods: :submitted_or_assessed_at,
-      only: %w(id score mastery possible percent)
+      only: %w(id score mastery possible percent hide_points hidden)
     })
     hash[:links] = {
       user: result.user.id.to_s,
       learning_outcome: result.learning_outcome_id.to_s,
-      alignment: result.alignment.content.asset_string
+      alignment: result.alignment.content.asset_string,
+      assignment: result.assignment&.asset_string
     }
     hash
   end
@@ -122,6 +123,17 @@ module Api::V1::OutcomeResults
     end
   end
 
+  def outcome_results_assignments_json(assignments)
+    assignments.compact.map do |a|
+      {
+        id: a.asset_string,
+        name: a.title,
+        html_url: polymorphic_url([a.context, a]),
+        submission_types: a.submission_types
+      }
+    end
+  end
+
   # Public: Serializes the aggregate rollup. Uses the specified context for the
   # id and name fields.
   def aggregate_outcome_results_rollups_json(rollups)
@@ -192,6 +204,7 @@ module Api::V1::OutcomeResults
       title: score.title,
       submitted_at: score.submitted_at,
       count: score.count,
+      hide_points: score.hide_points,
       links: {outcome: score.outcome.id.to_s},
     }
   end

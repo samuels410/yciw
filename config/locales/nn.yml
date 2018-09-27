@@ -4588,6 +4588,7 @@ nn:
   count_replies_a685c742: "%{count} svar"
   count_results_9926447c: 
     one: "Eit resultat"
+    other: "*%{count}* resultat"
   count_results_displayed_ed39a0f0: 
     one: "Eit resultat viser"
     other: "%{count} resultat viser"
@@ -5255,7 +5256,7 @@ nn:
       headings: 
         current_users: "Gjeldande brukarar"
       help: 
-        reset_course_content: "Nullstilling av emneinnhald slettar alle tilknytte oppgåver, diskusjonar, quizar, modular, vurderingsskjema, sider, filer, læringsmål, spørsmålsbankar, samarbeid, konferansar og anna innhald for godt. Handlinga er endeleg og dataa *kan ikkje* gjenopprettast. Er du sikker på at du vil halde fram?"
+        reset_course_content: "Nullstilling av emneinnhald slettar alle tilknytte oppgåver, diskusjonar, quizar, modular, vurderingsskjema, sider, filer, læringsmål, spørsmålsbankar, samarbeid, konferansar og anna innhald for godt. Handlinga er endeleg og data *kan ikkje* gjenopprettast. Er du sikker på at du vil halde fram?"
       links: 
         calendar: Emnekalender
         conclude: "Avslutt emnet"

@@ -44,12 +44,13 @@ class GradebookGradingPeriodAssignments
   def the_query
     Submission.
       active.
-      joins(:assignment, user: :enrollments).
+      joins(:assignment).
+      joins("INNER JOIN #{Enrollment.quoted_table_name} enrollments ON enrollments.user_id = submissions.user_id").
       merge(Assignment.for_course(@course).active).
       where(enrollments: { course_id: @course, type: ['StudentEnrollment', 'StudentViewEnrollment'] }).
       where.not(grading_period_id: nil, enrollments: { workflow_state: excluded_workflow_states }).
       group(:grading_period_id).
-      pluck(:grading_period_id, "array_agg(DISTINCT assignment_id)").
+      pluck(:grading_period_id, Arel.sql("array_agg(DISTINCT assignment_id)")).
       to_h
   end
 end

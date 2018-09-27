@@ -45,7 +45,7 @@ import './jquery.loadingImg'
       "application/vnd.oasis.opendocument.text":                                   [1, 1],
       "application/vnd.openxmlformats-officedocument.presentationml.template":     [1, 1],
       "application/vnd.openxmlformats-officedocument.presentationml.slideshow":    [1, 1],
-      "text/plain":                                                                [1, false],
+      "text/plain":                                                                [1, 1],
       "application/vnd.openxmlformats-officedocument.presentationml.presentation": [1, 1],
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document":   [1, 1],
       "application/postscript":                                                    [1, 1],
@@ -106,11 +106,13 @@ import './jquery.loadingImg'
         const canvadocWrapper = $('<div style="overflow: auto; resize: vertical;\
         border: 1px solid transparent; height: 100%;"/>')
         canvadocWrapper.appendTo($this)
+
+        const minHeight = opts.iframe_min_height !== undefined ? opts.iframe_min_height : '800px'
         var iframe = $('<iframe/>', {
           src: opts.canvadoc_session_url,
           width: opts.width,
           allowfullscreen: '1',
-          css: {border: 0, overflow: 'auto', height: '99%', 'min-height': '800px'},
+          css: {border: 0, overflow: 'auto', height: '99%', 'min-height': minHeight},
           id: opts.id
         });
         iframe.appendTo(canvadocWrapper)

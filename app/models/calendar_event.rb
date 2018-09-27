@@ -95,7 +95,7 @@ class CalendarEvent < ActiveRecord::Base
     return unless @child_event_data
     current_events = child_events.group_by{ |e| e[:context_code] }
     @child_event_data.each do |data|
-      if event = current_events.delete(data[:context_code]) and event = event[0]
+      if (event = current_events.delete(data[:context_code])&.first)
         event.updating_user = @updating_user
         event.update_attributes(:start_at => data[:start_at], :end_at => data[:end_at])
       else
@@ -270,11 +270,11 @@ class CalendarEvent < ActiveRecord::Base
     :description,
     :location_name,
     :location_address
-  ]
+  ].freeze
   LOCKED_ATTRIBUTES = CASCADED_ATTRIBUTES + [
     :start_at,
     :end_at
-  ]
+  ].freeze
 
   def sync_child_events
     locked_changes = LOCKED_ATTRIBUTES.select { |attr| saved_change_to_attribute?(attr) }
@@ -454,7 +454,6 @@ class CalendarEvent < ActiveRecord::Base
       participant.lock! # in case two people try to make a reservation for the same participant
 
       if options[:cancel_existing]
-        now = Time.now.utc
         context.reservations_for(participant).lock.each do |reservation|
           raise ReservationError, "cannot cancel past reservation" if reservation.end_at < Time.now.utc
           reservation.updating_user = user
@@ -532,10 +531,11 @@ class CalendarEvent < ActiveRecord::Base
     end
   end
 
-  def to_ics(in_own_calendar: true, preloaded_attachments: {}, user: nil)
+  def to_ics(in_own_calendar: true, preloaded_attachments: {}, user: nil, user_events: [])
     CalendarEvent::IcalEvent.new(self).to_ics(in_own_calendar:       in_own_calendar,
                                               preloaded_attachments: preloaded_attachments,
-                                              include_description:   true)
+                                              include_description:   true,
+                                              user_events: user_events)
   end
 
   def self.max_visible_calendars
@@ -591,7 +591,7 @@ class CalendarEvent < ActiveRecord::Base
     def location
     end
 
-    def to_ics(in_own_calendar:, preloaded_attachments: {}, include_description: false)
+    def to_ics(in_own_calendar:, preloaded_attachments: {}, include_description: false, user_events: [])
       cal = Icalendar::Calendar.new
       # to appease Outlook
       cal.custom_property("METHOD","PUBLISH")
@@ -633,6 +633,23 @@ class CalendarEvent < ActiveRecord::Base
         loc_string << @event.location_address if @event.location_address.present?
       else
         loc_string = nil
+      end
+
+      if @event.context_type.eql?("AppointmentGroup")
+        # We should only enter this block if a user has made an appointment, so
+        # there is always at least one element in current_apts
+        current_appts = user_events.select { |appointment| @event.id == appointment[:parent_id]}
+
+        if !event.description.nil?
+          event.description.concat("\n\n" + current_appts[0][:course_name] + "\n\n")
+        else
+          event.description = current_appts[0][:course_name] + "\n\n"
+        end
+
+        event.description.concat("Participants: ")
+        current_appts.each { |appt| event.description.concat("\n" + appt[:user]) }
+        comments = current_appts.map{ |appt| appt[:comments] }.join(",\n")
+        event.description.concat("\n\n" + comments)
       end
 
       event.location = loc_string

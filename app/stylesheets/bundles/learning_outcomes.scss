@@ -233,22 +233,23 @@ table.criterion td {
   }
 }
 
-.rating-wrap {
-  position: relative;
-}
-
-h5, .h5 {
+.criterion h3, .criterion .h3, .criterion h5, .criterion .h5 {
   margin-top: 0;
   margin-bottom: 10px;
   color: var(--ic-link-color);
   font-weight: normal;
   min-height: 1em;
+  font-size: 1rem;
   &.total {
     font-weight: bold;
     @if $use_high_contrast {
       color: $ic-font-color-dark;
     }
   }
+}
+
+.rating-wrap {
+  position: relative;
 }
 
 table.criterion .edit {

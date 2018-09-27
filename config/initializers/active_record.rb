@@ -450,7 +450,7 @@ class ActiveRecord::Base
         max_date.advance(:days => 1)
       ).
       group(expression).
-      order(expression).
+      order(Arel.sql(expression)).
       count
 
     return result if result.keys.first.is_a?(Date)
@@ -506,9 +506,9 @@ class ActiveRecord::Base
                elsif first_or_last == :last && direction == :desc
                  " NULLS LAST"
                end
-      "#{column} #{direction.to_s.upcase}#{clause}".strip
+      Arel.sql("#{column} #{direction.to_s.upcase}#{clause}".strip)
     else
-      "#{column} IS#{" NOT" unless first_or_last == :last} NULL, #{column} #{direction.to_s.upcase}".strip
+      Arel.sql("#{column} IS#{" NOT" unless first_or_last == :last} NULL, #{column} #{direction.to_s.upcase}".strip)
     end
   end
 
@@ -631,8 +631,8 @@ class ActiveRecord::Base
     end
   end
 
-  def self.wait_for_replication(start: nil)
-    return unless Shackles.activate(:slave) { connection.readonly? }
+  def self.wait_for_replication(start: nil, timeout: nil)
+    return true unless Shackles.activate(:slave) { connection.readonly? }
 
     start ||= current_xlog_location
     Shackles.activate(:slave) do
@@ -644,10 +644,13 @@ class ActiveRecord::Base
         "pg_last_xlog_replay_location()"
       # positive == first value greater, negative == second value greater
       # SELECT pg_xlog_location_diff(<START>, pg_last_xlog_replay_location())
+      start_time = Time.now
       while connection.select_value("SELECT #{diff_fn}(#{connection.quote(start)}, #{fn})").to_i >= 0
+        return false if timeout && Time.now > start_time + timeout
         sleep 0.1
       end
     end
+    true
   end
 
   def self.bulk_insert(records)
@@ -892,11 +895,11 @@ ActiveRecord::Relation.class_eval do
         quoted_plucks = pluck && pluck.map do |column_name|
           # Rails 4.2 is going to try to quote them anyway but unfortunately not to the temp table, so just make it explicit
           column_names.include?(column_name) ?
-            "#{connection.quote_local_table_name(table)}.#{connection.quote_column_name(column_name)}" : column_name
+            Arel.sql("#{connection.quote_local_table_name(table)}.#{connection.quote_column_name(column_name)}") : column_name
         end
 
         if pluck
-          batch = klass.from(table).order(index).limit(batch_size).pluck(*quoted_plucks)
+          batch = klass.from(table).order(Arel.sql(index)).limit(batch_size).pluck(*quoted_plucks)
         else
           sql = "SELECT * FROM #{table} ORDER BY #{index} LIMIT #{batch_size}"
           batch = klass.find_by_sql(sql)
@@ -908,7 +911,7 @@ ActiveRecord::Relation.class_eval do
 
           if pluck
             last_value = pluck.length == 1 ? batch.last : batch.last[pluck.index(index)]
-            batch = klass.from(table).order(index).where("#{index} > ?", last_value).limit(batch_size).pluck(*quoted_plucks)
+            batch = klass.from(table).order(Arel.sql(index)).where("#{index} > ?", last_value).limit(batch_size).pluck(*quoted_plucks)
           else
             last_value = batch.last[index]
             sql = "SELECT *

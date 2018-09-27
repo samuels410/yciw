@@ -51,6 +51,13 @@ afterEach(() => {
   document.body.removeChild(flashElements);
 });
 
+it("shows spinner when loading", () => {
+  const props = getProps();
+  props.collection.loading = true;
+  const wrapper = mount(<SearchMessage {...props} />);
+  expect(wrapper.find('Spinner').exists()).toBe(true);
+})
+
 describe("Pagination Handling", () => {
   it("shows the loading spinner on the page that is becoming current", () => {
     const props = getProps();
@@ -60,55 +67,23 @@ describe("Pagination Handling", () => {
     const buttons = wrapper.find("PaginationButton").map(x => x.text());
     expect(buttons).toEqual(["1", "5", "Loading...", "7", "8", "9", "10"]);
   });
-});
 
-describe("Screenreader Alerting", () => {
-  it("renders a screenreader only alert indicating when results are updated", () => {
+  it("sets state to lastUnknown if there is no last link", () => {
     const props = getProps();
-    props.collection.loading = true;
     const wrapper = mount(<SearchMessage {...props} />);
-    const alert = wrapper.find("Alert");
-    expect(alert.exists()).toBe(false);
-  });
-  it("renders a screenreader only alert when there are errors", () => {
-    const props = getProps();
-    props.collection.error = true;
-    const wrapper = mount(<SearchMessage {...props} />);
-    const alert = wrapper.find("Alert");
-    expect(alert.exists()).toBe(true);
-    expect(
-      document.getElementById("flash_screenreader_holder").textContent
-    ).toBe("There was an error with your query; please try a different search");
-  });
-  it("renders a screenreader only result when there are no additional pages of results", () => {
-    const props = getProps();
-    props.collection.links = undefined;
-    const wrapper = mount(<SearchMessage {...props} />);
-    const alert = wrapper.find("Alert");
-    expect(alert.exists()).toBe(true);
-    expect(
-      document.getElementById("flash_screenreader_holder").textContent
-    ).toBe("Course results updated.");
-  });
-  it("renders a screenreader only message when there are no results", () => {
-    const props = getProps();
-    props.collection.data = [];
-    const wrapper = mount(<SearchMessage {...props} />);
-    const alert = wrapper.find("Alert");
-    expect(alert.exists()).toBe(true);
-    expect(
-      document.getElementById("flash_screenreader_holder").textContent
-    ).toBe("None Found!");
-  });
+    delete props.collection.links.last;
+    props.collection.links.next = { url: "next", page: "2" };
+    wrapper.setProps(props);
+    expect(wrapper.state().lastUnknown).toBe(true);
+  })
 
-  it('renders the proper message when the dataType prop is "User"', () => {
+  it("sets state to lastUnknown false if there is a last link", () => {
     const props = getProps();
-    props.dataType = "User";
     const wrapper = mount(<SearchMessage {...props} />);
-    const alert = wrapper.find("Alert");
-    expect(alert.exists()).toBe(true);
-    expect(
-      document.getElementById("flash_screenreader_holder").textContent
-    ).toBe("User results updated.");
-  });
+    delete props.collection.links.last;
+    props.collection.links.next = { url: "next", page: "2" };
+    wrapper.setProps(props);
+    wrapper.setProps(getProps());
+    expect(wrapper.state().lastUnknown).toBe(false);
+  })
 });

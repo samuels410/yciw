@@ -28,6 +28,8 @@ module PlannerHelper
     'calendar_event' => 'CalendarEvent'
   }.freeze
 
+  class InvalidDates < StandardError; end
+
   def planner_meta_cache_key
     ['planner_items_meta', @current_user].cache_key
   end
@@ -44,19 +46,51 @@ module PlannerHelper
       elsif val =~ Api::ISO8601_REGEX
         Time.zone.parse(val)
       else
-        @errors[input] = t('Invalid date or invalid datetime for %{attr}', attr: input)
+        raise(InvalidDates, I18n.t("Invalid date or datetime for %{field}", field: input))
       end
     else
       default
     end
   end
 
-  def ensure_valid_planner_params
-    if @errors.empty?
-      true
+  def require_planner_enabled
+    render json: { message: "Feature disabled" }, status: :forbidden unless @domain_root_account.feature_enabled?(:student_planner)
+  end
+
+  def sync_module_requirement_done(item, user, complete)
+    return unless item.is_a?(ContextModuleItem)
+    doneable = mark_doneable_tag(item)
+    return unless doneable
+    if complete
+      doneable.context_module_action(user, :done)
     else
-      render json: {errors: @errors.as_json}, status: :bad_request
-      false
+      progression = doneable.progression_for_user(user)
+      if progression&.requirements_met&.find {|req| req[:id] == doneable.id && req[:type] == "must_mark_done" }
+        progression.uncomplete_requirement(doneable.id)
+        progression.evaluate
+      end
     end
+  end
+
+  def sync_planner_completion(item, user, complete)
+    return unless item.is_a?(ContextModuleItem) && item.is_a?(Plannable)
+    return unless mark_doneable_tag(item)
+    planner_override = PlannerOverride.where(user: user, plannable_id: item.id,
+                                             plannable_type: item.class.to_s).first_or_create
+    planner_override.marked_complete = complete
+    planner_override.dismissed = complete
+    planner_override.save
+    Rails.cache.delete(planner_meta_cache_key)
+    planner_override
+  end
+
+  private
+  def mark_doneable_tag(item)
+    doneable_tags = item.context_module_tags.select do |tag|
+      tag.context_module.completion_requirements.find do |req|
+        req[:id] == tag.id && req[:type] == "must_mark_done"
+      end
+    end
+    return doneable_tags.length == 1 ? doneable_tags.first : nil
   end
 end

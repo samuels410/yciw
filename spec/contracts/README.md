@@ -9,7 +9,7 @@ and the folks at Thoughtworks. This allows microservices to retain independent
 CI and deployment pipelines. We use [Pact] to make this happen.
 
 We use a Pact Broker web service to share Pact files between consumers and
-providers. Ours is hosted internally at https://inst-pact-broker.inseng.net
+providers. Ours is hosted internally at [https://inst-pact-broker.inseng.net].
 Ask for credentials in the #test_advisory_board Slack channel.
 
 ## Running the tests locally
@@ -33,6 +33,7 @@ files:
 
 ```sh
 cd path/to/quiz_lti # clone the repo first if necessary
+dinghy up # if not already running
 bin/dev-setup
 bin/contracts-generate
 ```
@@ -70,17 +71,32 @@ LMS Live Events". Click on the document icon to view the contract, if you like.
 
 ### Verify the Contracts
 
-To verify the Live Events contracts for Canvas LMS, start Canvas on your
-computer---either in docker or natively---then run:
+Because we're only verifying the Quiz LTI contracts, you'll first want to open
+`canvas-lms/spec/contracts/service_consumers/pact_config.rb` and comment out all
+constants in the `Consumers` module with the exception of `QUIZ_LTI` and `ALL`.
+For example:
 
-```sh
-bin/contract-verify-live-events
+```ruby
+module Consumers
+  # GENERIC_CONSUMER = 'Generic Consumer'.freeze
+  QUIZ_LTI = 'Quiz LTI'.freeze
+  ALL = Consumers.constants.map { |c| Consumers.const_get(c) }.freeze
+end
 ```
 
-The spec(s) should pass. You're finished!
+This avoids attempting to verify contracts for consumers whose Pact files we
+didn't generate (otherwise you'd get errors). Now you're ready to verify the
+Quiz LTI contracts.
 
-Note: As of 3 May 2018, no API clients have published a Pact file for Canvas to
-verify. Once they do, we'll add a script to verify them also.
+To verify the contracts, start Canvas on your computer---either in docker or
+natively---and then run:
+
+```sh
+bin/contracts-verify-live-events
+bin/contracts-verify-api
+```
+
+The specs should pass. You're finished!
 
 ## More Info
 
@@ -92,4 +108,5 @@ You're also welcome to stop by the #test_advisory_board Slack channel!
 
 [Martin Fowler]: https://martinfowler.com/articles/microservice-testing/#testing-contract-introduction
 [Pact]: https://docs.pact.io/
+[https://inst-pact-broker.inseng.net]: https://inst-pact-broker.inseng.net
 [Test Advisory Board github repo]: https://github.com/instructure/test_advisory_board

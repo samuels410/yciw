@@ -100,6 +100,45 @@ require 'csv'
 #       }
 #     }
 #
+# @model TermsOfService
+#     {
+#       "id": "TermsOfService",
+#       "description": "",
+#       "properties":
+#       {
+#         "id": {
+#           "description": "Terms Of Service id",
+#           "example": 1,
+#           "type": "integer"
+#         },
+#         "terms_type": {
+#           "description": "The given type for the Terms of Service",
+#           "enum":
+#           [
+#             "default",
+#             "custom",
+#             "no_terms"
+#           ],
+#           "example": "default",
+#           "type": "string"
+#         },
+#         "passive": {
+#           "description": "Boolean dictating if the user must accept Terms of Service",
+#           "example": false,
+#           "type": "boolean"
+#         },
+#         "account_id": {
+#           "description": "The id of the root account that owns the Terms of Service",
+#           "example": 1,
+#           "type": "integer"
+#         },
+#         "content": {
+#           "description": "Content of the Terms of Service",
+#           "example": "To be or not to be that is the question",
+#           "type": "string"
+#         }
+#       }
+#     }
 class AccountsController < ApplicationController
   before_action :require_user, :only => [:index, :terms_of_service]
   before_action :reject_student_view_student
@@ -264,7 +303,9 @@ class AccountsController < ApplicationController
     render :json => @accounts.map { |a| account_json(a, @current_user, session, []) }
   end
 
-  # @API Returns the terms of service for that account
+  # @API Get the Terms of Service
+  #
+  # Returns the terms of service for that account
   #
   # @returns TermsOfService
   def terms_of_service
@@ -387,7 +428,7 @@ class AccountsController < ApplicationController
     end
 
     opts = { :include_crosslisted_courses => value_to_boolean(params[:include_crosslisted_courses]) }
-    @courses = @account.associated_courses(opts).order(order).where(:workflow_state => params[:state])
+    @courses = @account.associated_courses(opts).order(Arel.sql(order)).where(:workflow_state => params[:state])
 
     if params[:hide_enrollmentless_courses] || value_to_boolean(params[:with_enrollments])
       @courses = @courses.with_enrollments
@@ -462,8 +503,9 @@ class AccountsController < ApplicationController
     page_opts[:total_entries] = nil if params[:search_term] # doesn't calculate a total count
     @courses = Api.paginate(@courses, self, api_v1_account_courses_url, page_opts)
 
-    ActiveRecord::Associations::Preloader.new.preload(@courses, [:account, :root_account])
+    ActiveRecord::Associations::Preloader.new.preload(@courses, [:account, :root_account, course_account_associations: :account])
     ActiveRecord::Associations::Preloader.new.preload(@courses, [:teachers]) if includes.include?("teachers")
+    ActiveRecord::Associations::Preloader.new.preload(@courses, [:enrollment_term]) if includes.include?("term")
 
     if includes.include?("total_students")
       student_counts = StudentEnrollment.not_fake.where("enrollments.workflow_state NOT IN ('rejected', 'completed', 'deleted', 'inactive')").
@@ -559,6 +601,7 @@ class AccountsController < ApplicationController
 
         if success
           # Successfully completed
+          update_user_dashboards
           render :json => account_json(@account, @current_user, session, includes)
         else
           # Failed (hopefully with errors)
@@ -739,6 +782,7 @@ class AccountsController < ApplicationController
         set_default_dashboard_view(params.dig(:account, :settings)&.delete(:default_dashboard_view))
 
         if @account.update_attributes(strong_account_params)
+          update_user_dashboards
           format.html { redirect_to account_settings_url(@account) }
           format.json { render :json => @account }
         else
@@ -1165,6 +1209,11 @@ class AccountsController < ApplicationController
     end
   end
 
+  def update_user_dashboards
+    return unless value_to_boolean(params.dig(:account, :settings, :force_default_dashboard_view))
+    @account.update_user_dashboards
+  end
+
   def format_avatar_count(count = 0)
     count > 99 ? "99+" : count
   end
@@ -1221,7 +1270,7 @@ class AccountsController < ApplicationController
                                    :strict_sis_check, :storage_quota, :students_can_create_courses,
                                    :sub_account_includes, :teachers_can_create_courses, :trusted_referers,
                                    :turnitin_host, :turnitin_account_id, :users_can_edit_name,
-                                   :app_center_access_token, :default_dashboard_view].freeze
+                                   :app_center_access_token, :default_dashboard_view, :force_default_dashboard_view].freeze
 
   def permitted_account_attributes
     [:name, :turnitin_account_id, :turnitin_shared_secret, :include_crosslisted_courses,

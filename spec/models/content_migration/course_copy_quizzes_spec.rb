@@ -558,6 +558,28 @@ equation: <img class="equation_image" title="Log_216" src="/equation_images/Log_
       expect(qq_to.question_data[:question_text]).to match_ignoring_whitespace(qq.question_data[:question_text])
     end
 
+    it "should do more terrible equation stuff" do
+      qtext = <<-HTML.strip
+            hmm: <p><img class="equation_image" 
+      data-equation-content="h\\left( x \\right) = \\left\\{ {\\begin{array}{*{20}{c}}
+      {{x^2} + 4x - 1}&amp;{{\\rm{for}}}&amp;{ - 7 \\le x \\le - 1}\\\\
+      { - 3x + p}&amp;{{\\rm{for}}}&amp;{ - 1 &lt; x \\le 6}
+      \\end{array}} \\right." />
+      HTML
+
+      data = {'question_name' => 'test question 1', 'question_type' => 'essay_question', 'question_text' => qtext}
+
+      q1 = @copy_from.quizzes.create!(:title => 'quiz1')
+      qq = q1.quiz_questions.create!(:question_data => data)
+
+      run_course_copy
+
+      q_to = @copy_to.quizzes.where(:migration_id => mig_id(q1)).first
+      qq_to = q_to.active_quiz_questions.first
+
+      expect(qq_to.question_data['question_text']).to match_ignoring_whitespace(qq.question_data['question_text'])
+    end
+
     it "should copy all html fields in assessment questions" do
       @bank = @copy_from.assessment_question_banks.create!(:title => 'Test Bank')
       data = {:correct_comments_html => "<strong>correct</strong>",
@@ -803,6 +825,26 @@ equation: <img class="equation_image" title="Log_216" src="/equation_images/Log_
       expect(answer["numerical_answer_type"]).to eq "precision_answer"
       expect(answer["approximate"]).to eq 0.0042
       expect(answer["precision"]).to eq 3
+    end
+
+    it "should copy large precision answers for numeric questions" do
+      q = @copy_from.quizzes.create!(:title => "blah")
+      data = {:question_type => "numerical_question",
+        :question_text => "how many problems does QTI cause?",
+        :answers => [{
+          :text => "answer_text", :weight => 100,
+          :numerical_answer_type => "precision_answer",
+          :answer_approximate => 99000000, :answer_precision => 2
+        }]}.with_indifferent_access
+      q.quiz_questions.create!(:question_data => data)
+
+      run_course_copy
+
+      q2 = @copy_to.quizzes.where(migration_id: mig_id(q)).first
+      answer = q2.quiz_questions[0].question_data["answers"][0]
+      expect(answer["numerical_answer_type"]).to eq "precision_answer"
+      expect(answer["approximate"]).to eq 99000000
+      expect(answer["precision"]).to eq 2
     end
 
     it "should copy range answers for numeric questions" do

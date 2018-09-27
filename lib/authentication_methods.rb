@@ -86,7 +86,7 @@ module AuthenticationMethods
   end
 
   def validate_scopes
-    if @access_token && @domain_root_account.feature_enabled?(:api_token_scoping)
+    if @access_token && @domain_root_account.feature_enabled?(:developer_key_management_and_scoping)
       developer_key = @access_token.developer_key
       request_method = request.method.casecmp('HEAD') == 0 ? 'GET' : request.method.upcase
 
@@ -123,7 +123,6 @@ module AuthenticationMethods
       unless @current_user && @current_pseudonym
         raise AccessTokenError
       end
-
       validate_scopes
       @access_token.used!
 
@@ -156,7 +155,7 @@ module AuthenticationMethods
     if !@current_pseudonym
       if @policy_pseudonym_id
         @current_pseudonym = Pseudonym.where(id: @policy_pseudonym_id).first
-      elsif @pseudonym_session = PseudonymSession.find
+      elsif (@pseudonym_session = PseudonymSession.with_scope(find_options: Pseudonym.eager_load(:user)) { PseudonymSession.find })
         @current_pseudonym = @pseudonym_session.record
 
         # if the session was created before the last time the user explicitly

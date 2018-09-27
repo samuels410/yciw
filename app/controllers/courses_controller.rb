@@ -1727,12 +1727,16 @@ class CoursesController < ApplicationController
       @course_home_view = "feed" if params[:view] == "feed"
       @course_home_view ||= default_view
 
-      js_env COURSE: {
-        id: @context.id.to_s,
-        pages_url: polymorphic_url([@context, :wiki_pages]),
-        front_page_title: @context&.wiki&.front_page&.title,
-        default_view: default_view
-      }
+      js_env({
+        # don't check for student enrollments because we want to show course items on the teacher's  syllabus
+        STUDENT_PLANNER_ENABLED: @domain_root_account&.feature_enabled?(:student_planner),
+        COURSE: {
+          id: @context.id.to_s,
+          pages_url: polymorphic_url([@context, :wiki_pages]),
+          front_page_title: @context&.wiki&.front_page&.title,
+          default_view: default_view
+        }
+      })
 
       # make sure the wiki front page exists
       if @course_home_view == 'wiki'&& @context.wiki.front_page.nil?
@@ -1754,10 +1758,9 @@ class CoursesController < ApplicationController
         @padless = true
       when 'assignments'
         add_crumb(t('#crumbs.assignments', "Assignments"))
-        set_js_assignment_data(
-          include_assignment_permissions: @context.root_account.feature_enabled?(:anonymous_moderated_marking)
-        )
+        set_js_assignment_data
         js_env(:SIS_NAME => AssignmentUtil.post_to_sis_friendly_name(@context))
+        js_env(:QUIZ_LTI_ENABLED => @context.feature_enabled?(:quizzes_next) && @context.quiz_lti_tool.present?)
         js_env(:COURSE_HOME => true)
         @upcoming_assignments = get_upcoming_assignments(@context)
       when 'modules'
@@ -2730,7 +2733,7 @@ class CoursesController < ApplicationController
       SubmissionComment.where(:provisional_grade_id => pg_scope).delete_all
       pg_scope.delete_all
       OriginalityReport.where(:submission_id => @fake_student.all_submissions).delete_all
-      @fake_student.all_submissions.destroy_all
+      @fake_student.all_submissions.preload(:all_submission_comments, :lti_result, :versions).destroy_all
       @fake_student.quiz_submissions.each{|qs| qs.events.destroy_all}
       @fake_student.quiz_submissions.destroy_all
 
@@ -2935,15 +2938,22 @@ class CoursesController < ApplicationController
       preloads << { enrollment_term: { grading_period_group: :grading_periods } }
       preloads << { grading_period_groups: :grading_periods }
     end
+    preloads << { context_modules: :content_tags } if includes.include?('course_progress')
     ActiveRecord::Associations::Preloader.new.preload(courses, preloads)
 
-    if includes.include?('total_scores') || includes.include?('current_grading_period_scores')
-      ActiveRecord::Associations::Preloader.new.preload(enrollments, scores: :course)
+    preloads = []
+    preloads << :course_section if includes.include?('sections')
+    preloads << { scores: :course } if includes.include?('total_scores') || includes.include?('current_grading_period_scores')
+
+    ActiveRecord::Associations::Preloader.new.preload(enrollments, preloads) unless preloads.empty?
+    if includes.include?('course_progress')
+      progressions = ContextModuleProgression.joins(:context_module).where(user: user, context_modules: { course: courses }).select("context_module_progressions.*, context_modules.context_id AS course_id").to_a.group_by { |cmp| cmp['course_id'] }
     end
 
     enrollments_by_course.each do |course_enrollments|
       course = course_enrollments.first.course
-      hash << course_json(course, @current_user, session, includes, course_enrollments, user)
+      hash << course_json(course, @current_user, session, includes, course_enrollments, user,
+                          preloaded_progressions: progressions)
     end
     hash
   end

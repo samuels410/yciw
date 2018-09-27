@@ -154,16 +154,10 @@ describe Course do
   describe '#moderators' do
     before(:once) do
       @course = Course.create!
-      @course.root_account.enable_feature!(:anonymous_moderated_marking)
       @teacher = User.create!
       @course.enroll_teacher(@teacher)
       @ta = User.create!
       @course.enroll_ta(@ta)
-    end
-
-    it 'returns an empty list if the root account has Anonymous Moderated Marking disabled' do
-      @course.root_account.disable_feature!(:anonymous_moderated_marking)
-      expect(@course.moderators).to be_empty
     end
 
     it 'includes active teachers' do
@@ -1684,7 +1678,7 @@ describe Course, "gradebook_to_csv" do
 
   it "marks excused assignments" do
     a = @course.assignments.create! name: "asdf", points_possible: 10
-    a.grade_student @student, excuse: true
+    a.grade_student(@student, grader: @teacher, excuse: true)
     csv = CSV.parse(GradebookExporter.new(@course, @teacher).to_csv)
     _name, _id, _section, _sis_login_id, score, _ = csv[-1]
     expect(score).to eq "EX"

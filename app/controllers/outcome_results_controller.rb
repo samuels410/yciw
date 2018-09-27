@@ -192,6 +192,7 @@ class OutcomeResultsController < ApplicationController
   before_action :require_context
   before_action :require_outcome_context
   before_action :verify_aggregate_parameter, only: :rollups
+  before_action :verify_aggregate_stat_parameter, only: :rollups
   before_action :verify_include_parameter
   before_action :require_outcomes
   before_action :require_users
@@ -218,12 +219,18 @@ class OutcomeResultsController < ApplicationController
   #   "outcomes.alignments" includes all alignments referenced by outcomes in the
   #   context.
   #
+  # @argument include_hidden [Boolean]
+  #   If true, results that are hidden from the learning mastery gradebook and student rollup
+  #   scores will be included
+  #
   # @example_response
   #    {
   #      outcome_results: [OutcomeResult]
   #    }
   def index
-    @results = find_outcome_results(users: @users, context: @context, outcomes: @outcomes)
+    @results = find_results(
+      include_hidden: value_to_boolean(params[:include_hidden])
+    )
     @results = Api.paginate(@results, self, api_v1_course_outcome_results_url)
     json = outcome_results_json(@results)
     json[:linked] = linked_include_collections if params[:include].present?
@@ -238,7 +245,12 @@ class OutcomeResultsController < ApplicationController
   # @argument aggregate [String, "course"]
   #   If specified, instead of returning one rollup for each user, all the user
   #   rollups will be combined into one rollup for the course that will contain
-  #   the average rollup score for each outcome.
+  #   the average (or median, see below) rollup score for each outcome.
+  #
+  # @argument aggregate_stat [String, "mean"|"median"]
+  #   If aggregate rollups requested, then this value determines what
+  #   statistic is used for the aggregate. Defaults to "mean" if this value
+  #   is not specified.
   #
   # @argument user_ids[] [Integer]
   #   If specified, only the users whose ids are given will be included in the
@@ -252,6 +264,10 @@ class OutcomeResultsController < ApplicationController
   #
   # @argument include[] [String, "courses"|"outcomes"|"outcomes.alignments"|"outcome_groups"|"outcome_links"|"outcome_paths"|"users"]
   #   Specify additional collections to be side loaded with the result.
+  #
+  # @argument exclude[] [String, "missing_user_rollups"]
+  #   Specify additional values to exclude. "missing_user_rollups" excludes
+  #   rollups for users without results.
   #
   # @example_response
   #    {
@@ -303,9 +319,14 @@ class OutcomeResultsController < ApplicationController
 
   private
 
-  def user_rollups(opts = {})
-    @results = find_outcome_results(users: @users, context: @context, outcomes: @outcomes).preload(:user)
-    outcome_results_rollups(@results, @users)
+  def find_results(opts = {})
+    find_outcome_results(@current_user, users: @users, context: @context, outcomes: @outcomes, **opts)
+  end
+
+  def user_rollups(_opts = {})
+    excludes = Api.value_to_array(params[:exclude]).uniq
+    @results = find_results.preload(:user)
+    outcome_results_rollups(@results, @users, excludes)
   end
 
   def user_rollups_json
@@ -317,9 +338,9 @@ class OutcomeResultsController < ApplicationController
 
   def aggregate_rollups_json
     # calculating averages for all users in the context and only returning one
-    # rollup, so don't paginate users in ths method.
-    @results = find_outcome_results(users: @users, context: @context, outcomes: @outcomes)
-    aggregate_rollups = [aggregate_outcome_results_rollup(@results, @context)]
+    # rollup, so don't paginate users in this method.
+    @results = find_results
+    aggregate_rollups = [aggregate_outcome_results_rollup(@results, @context, params[:aggregate_stat])]
     json = aggregate_outcome_results_rollups_json(aggregate_rollups)
     # no pagination, so no meta field
     json
@@ -369,6 +390,11 @@ class OutcomeResultsController < ApplicationController
     outcome_results_include_alignments_json(alignments)
   end
 
+  def include_assignments
+    assignments = @results.map(&:assignment)
+    outcome_results_assignments_json(assignments)
+  end
+
   def require_outcome_context
     reject! "invalid context type" unless @context.is_a?(Course)
 
@@ -387,6 +413,12 @@ class OutcomeResultsController < ApplicationController
   def verify_aggregate_parameter
     aggregate = params[:aggregate]
     reject! "invalid aggregate parameter value" if aggregate && !%w(course).include?(aggregate)
+    true
+  end
+
+  def verify_aggregate_stat_parameter
+    aggregate_stat = params[:aggregate_stat]
+    reject! "invalid aggregate_stat parameter value" if aggregate_stat && !%w(mean median).include?(aggregate_stat)
     true
   end
 

@@ -47,6 +47,20 @@ describe UsersController do
       expect(Nokogiri::HTML(response.body).at_css('table.report tbody tr:first td:nth(2)').text).to match(/less than 1 day/)
     end
 
+    it "should use conversation message participants when calculating interaction" do
+      other_student = user_factory(:active_all => true)
+      @e1.course.enroll_student(other_student, :enrollment_state => 'active')
+
+      @conversation = Conversation.initiate([@e1.user, other_student, @teacher], false)
+      @conversation.add_message(@teacher, "hello", :only_users => [@e1.user]) # only send to one user
+
+      get user_student_teacher_activity_url(@teacher, @e1.user)
+      expect(Nokogiri::HTML(response.body).at_css('table.report tbody tr:first td:nth(2)').text).to match(/less than 1 day/)
+
+      get user_student_teacher_activity_url(@teacher, other_student)
+      expect(Nokogiri::HTML(response.body).at_css('table.report tbody tr:first td:nth(2)').text).to match(/never/)
+    end
+
     it "should only include students the teacher can view" do
       get user_course_teacher_activity_url(@teacher, @course)
       expect(response).to be_success
@@ -130,27 +144,10 @@ describe UsersController do
   describe "#index" do
     it "should render" do
       user_with_pseudonym(:active_all => 1)
-      @johnstclair = @user.update_attributes(:name => 'John St. Clair', :sortable_name => 'St. Clair, John')
-      user_with_pseudonym(:active_all => 1, :username => 'jtolds@instructure.com', :name => 'JT Olds')
-      @jtolds = @user
       Account.default.account_users.create!(user: @user)
       user_session(@user, @pseudonym)
       get account_users_url(Account.default)
       expect(response).to be_success
-      expect(response.body).to match /Olds, JT.*St\. Clair, John/m
-    end
-
-    it "should not show any student view students at the account level" do
-      course_with_teacher(:active_all => true)
-      @fake_student = @course.student_view_student
-
-      site_admin_user(:active_all => true)
-      user_session(@admin)
-
-      get account_users_url Account.default.id
-      body = Nokogiri::HTML(response.body)
-      expect(body.css("#user_#{@fake_student.id}")).to be_empty
-      expect(body.at_css('.users').text).not_to match(/Test Student/)
     end
   end
 

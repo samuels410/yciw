@@ -19,23 +19,59 @@
 require 'spec_helper'
 
 describe Api::V1::Submission do
-  include Api::V1::Submission
-  include Rails.application.routes.url_helpers
-  Rails.application.routes.default_url_options[:host] = 'localhost'
+  subject(:fake_controller) do
+    Class.new do
+      include Api::V1::Submission
+      include Rails.application.routes.url_helpers
+
+      private
+
+      def default_url_options
+        {host: :localhost}
+      end
+    end.new
+  end
 
   let(:user) { User.create! }
   let(:course) { Course.create! }
   let(:assignment) { course.assignments.create! }
+  let(:teacher) {
+    teacher = User.create!
+    course.enroll_teacher(teacher)
+    teacher
+  }
   let(:session) { {} }
   let(:context) { nil }
   let(:params) { { includes: [field]} }
-  let(:submission) { assignment.submissions.build(user: user) }
+  let(:submission) { assignment.submissions.create!(user: user) }
+  let(:provisional_grade) { submission.provisional_grades.create!(scorer: teacher) }
+
+  describe 'speedgrader_url' do
+    it "links to the speed grader for a student's submission" do
+      expect(assignment).to receive(:can_view_student_names?).with(user).and_return true
+      json = fake_controller.provisional_grade_json(provisional_grade, submission, assignment, user)
+      path = "/courses/#{course.id}/gradebook/speed_grader"
+      query = { 'assignment_id' => assignment.id.to_s }
+      fragment = { 'provisional_grade_id' => provisional_grade.id, 'student_id' => user.id }
+      expect(json.fetch('speedgrader_url')).to match_path(path).and_query(query).and_fragment(fragment)
+    end
+
+    it "links to the speed grader for a student's anonymous submission when grader cannot view student names" do
+      expect(assignment).to receive(:can_view_student_names?).with(user).and_return false
+      json = fake_controller.provisional_grade_json(provisional_grade, submission, assignment, user)
+      path = "/courses/#{course.id}/gradebook/speed_grader"
+      query = { 'assignment_id' => assignment.id.to_s }
+      fragment = { 'provisional_grade_id' => provisional_grade.id, 'anonymous_id' => submission.anonymous_id }
+      expect(json.fetch('speedgrader_url')).to match_path(path).and_query(query).and_fragment(fragment)
+    end
+  end
 
   describe "submission status" do
     let(:field) { 'submission_status' }
+    let(:submission) { assignment.submissions.build(user: user) }
     let(:submission_status) do
       -> (submission) do
-        json = submission_json(submission, assignment, user, session, context, [field], params)
+        json = fake_controller.submission_json(submission, assignment, user, session, context, [field], params)
         json.fetch(field)
       end
     end
@@ -175,7 +211,7 @@ describe Api::V1::Submission do
 
       describe "Late before Unsubmitted, and Submitted," do
         it "is Late when it was first Submitted" do
-          # make a submitted submisison
+          # make a submitted submission
           submission.workflow_state = 'submitted'
           # make it late
           assignment.update!(due_at: 1.week.ago)
@@ -213,7 +249,7 @@ describe Api::V1::Submission do
     let(:field) { 'grading_status' }
     let(:grading_status) do
       -> (submission) do
-        json = submission_json(submission, assignment, user, session, context, [field], params)
+        json = fake_controller.submission_json(submission, assignment, user, session, context, [field], params)
         json.fetch(field)
       end
     end
@@ -339,6 +375,25 @@ describe Api::V1::Submission do
         submission.score = 10
         expect(grading_status.call(submission)).to be :graded
       end
+    end
+  end
+
+  describe '#submission_zip' do
+    let(:attachment) { fake_controller.submission_zip(assignment) }
+
+    it 'locks the attachment if the assignment is anonymous and muted' do
+      assignment.muted = true
+      assignment.anonymous_grading = true
+      expect(attachment).to be_locked
+    end
+
+    it 'does not lock the attachment if the assignment is anonymous and unmuted' do
+      assignment.anonymous_grading = true
+      expect(attachment).not_to be_locked
+    end
+
+    it 'does not lock the attachment if the assignment is not anonymous' do
+      expect(attachment).not_to be_locked
     end
   end
 end

@@ -75,7 +75,7 @@ module.exports = {
   // In development, generate `eval` sourcemaps.
   devtool: process.env.NODE_ENV === 'production' ?
     (process.env.JS_BUILD_NO_UGLIFY ? undefined : 'source-map')
-    : 'eval',
+    : ((process.env.COVERAGE || process.env.SENTRY_DSN) ? 'source-map' : 'eval'),
 
   entry: Object.assign({
     vendor: require('./modulesToIncludeInVendorBundle'),
@@ -108,10 +108,6 @@ module.exports = {
       d3: 'd3/d3',
       'node_modules-version-of-backbone': require.resolve('backbone'),
       'node_modules-version-of-react-modal': require.resolve('react-modal'),
-
-      // don't let people import these top-level modules, because then you
-      // get :allthethings: ... you need to import particular components
-      'instructure-icons$': 'invalid',
 
       backbone: 'Backbone',
       timezone$: 'timezone_core',

@@ -19,13 +19,13 @@
 import React from 'react'
 import {arrayOf, string, bool, func, shape, oneOf} from 'prop-types'
 import {isEqual, groupBy, map} from 'lodash'
-import IconPlusLine from 'instructure-icons/lib/Line/IconPlusLine'
-import Button from '@instructure/ui-core/lib/components/Button'
-import Checkbox from '@instructure/ui-core/lib/components/Checkbox'
-import Grid, {GridCol, GridRow} from '@instructure/ui-core/lib/components/Grid'
-import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent'
+import IconPlusLine from '@instructure/ui-icons/lib/Line/IconPlus'
+import Button from '@instructure/ui-buttons/lib/components/Button'
+import Checkbox from '@instructure/ui-forms/lib/components/Checkbox'
+import Grid, {GridCol, GridRow} from '@instructure/ui-layout/lib/components/Grid'
+import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
 import Select from '@instructure/ui-core/lib/components/Select'
-import TextInput from '@instructure/ui-core/lib/components/TextInput'
+import TextInput from '@instructure/ui-forms/lib/components/TextInput'
 import I18n from 'i18n!account_course_user_search'
 import preventDefault from 'compiled/fn/preventDefault'
 import {propType as termsPropType} from '../store/TermsStore'
@@ -51,7 +51,8 @@ export default function CoursesToolbar({
   isLoading,
   errors,
   draftFilters,
-  show_blueprint_courses_checkbox
+  show_blueprint_courses_checkbox,
+  toggleSRMessage
 }) {
   const groupedTerms = groupBy(terms.data, termGroup)
   const searchLabel =
@@ -116,6 +117,15 @@ export default function CoursesToolbar({
                       value={draftFilters.search_term}
                       placeholder={searchLabel}
                       onChange={e => onUpdateFilters({search_term: e.target.value})}
+                      onKeyUp={e => {
+                        if (e.key === "Enter") {
+                          toggleSRMessage(true)
+                        } else {
+                          toggleSRMessage(false)
+                        }
+                      }}
+                      onBlur={ () => toggleSRMessage(true) }
+                      onFocus={ () => toggleSRMessage(false) }
                       messages={errors.search_term && [{type: 'error', text: errors.search_term}]}
                     />
                   </GridCol>
@@ -158,6 +168,7 @@ export default function CoursesToolbar({
 }
 
 CoursesToolbar.propTypes = {
+  toggleSRMessage: func.isRequired,
   can_create_courses: bool,
   show_blueprint_courses_checkbox: bool,
   onUpdateFilters: func.isRequired,

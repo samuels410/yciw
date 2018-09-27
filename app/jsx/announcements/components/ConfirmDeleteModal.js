@@ -21,9 +21,8 @@ import React, {Component} from 'react'
 import ReactDOM from 'react-dom'
 import {func, number, node} from 'prop-types'
 
-import Modal, { ModalHeader, ModalBody, ModalFooter } from '@instructure/ui-core/lib/components/Modal'
-import Heading from '@instructure/ui-core/lib/components/Heading'
-import Button from '@instructure/ui-core/lib/components/Button'
+import Modal, { ModalBody, ModalFooter } from '../../shared/components/InstuiModal'
+import Button from '@instructure/ui-buttons/lib/components/Button'
 
 export function showConfirmDelete (props) {
   const parent = document.createElement('div')
@@ -39,7 +38,6 @@ export function showConfirmDelete (props) {
 
 export default class ConfirmDeleteModal extends Component {
   static propTypes = {
-    applicationElement: func.isRequired,
     selectedCount: number.isRequired,
     onConfirm: func.isRequired,
     onCancel: func,
@@ -95,14 +93,8 @@ export default class ConfirmDeleteModal extends Component {
         open={this.state.show}
         onDismiss={this.onCancel}
         size="small"
-        label={I18n.t('Confirm Delete Announcements')}
-        shouldCloseOnOverlayClick
-        closeButtonLabel={I18n.t('Close')}
-        applicationElement={this.props.applicationElement}
+        label={I18n.t('Confirm Delete')}
       >
-        <ModalHeader>
-          <Heading>{I18n.t('Confirm Delete')}</Heading>
-        </ModalHeader>
         <ModalBody>
           {I18n.t({
             one: 'You are about to delete 1 announcement. Are you sure?',

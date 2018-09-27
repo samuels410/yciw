@@ -55,24 +55,31 @@ describe ModeratedGrading::ProvisionalGrade do
         'graded_at' => nil,
         'scorer_id' => provisional_grade.scorer_id,
         'graded_anonymously' => nil,
+        'entered_grade' => 'A',
+        'entered_score' => 100.0,
         'final' => false,
         'grade_matches_current_submission' => true
       })
     end
   end
 
-  describe "final" do
-    it "shares the final provisional grade among moderators" do
-      teacher1 = teacher_in_course(:course => course, :active_all => true).user
-      teacher2 = teacher_in_course(:course => course, :active_all => true).user
-      ta = ta_in_course(:course => course, :active_all => true).user
-
+  describe 'final' do
+    before(:each) do
+      @admin1 = account_admin_user(account: course.root_account)
+      @admin2 = account_admin_user(account: course.root_account)
+      ta = ta_in_course(course: course, active_all: true).user
       submission.find_or_create_provisional_grade!(ta)
-      teacher1_pg = submission.find_or_create_provisional_grade!(teacher1, final: true)
-      expect(teacher1_pg.final).to be_truthy
-      teacher2_pg = submission.provisional_grade(teacher2, final: true)
-      expect(teacher2_pg).to eq teacher1_pg
-      expect(teacher1_pg).to eq submission.find_or_create_provisional_grade!(teacher2, final: true)
+    end
+
+    it 'shares the final provisional grade among moderators' do
+      admin1_provisional_grade = submission.find_or_create_provisional_grade!(@admin1, final: true)
+      admin2_provisional_grade = submission.provisional_grade(@admin2, final: true)
+      expect(admin2_provisional_grade).to eq admin1_provisional_grade
+    end
+
+    it 'does not create a new final provisional grade if a shared one already exists' do
+      admin1_provisional_grade = submission.find_or_create_provisional_grade!(@admin1, final: true)
+      expect(admin1_provisional_grade).to eq submission.find_or_create_provisional_grade!(@admin2, final: true)
     end
   end
 
@@ -238,9 +245,8 @@ describe ModeratedGrading::ProvisionalGrade do
       expect(sub.graded_anonymously).to eq true
     end
 
-    context 'for a moderated assignment with Anonymous Moderated Marking enabled' do
+    context 'for a moderated assignment' do
       before(:each) do
-        course.root_account.enable_feature!(:anonymous_moderated_marking)
         assignment.update!(moderated_grading: true, grader_count: 2)
       end
 
@@ -261,6 +267,7 @@ describe ModeratedGrading::ProvisionalGrade do
       @course = course
       @scorer = scorer
       @moderator = teacher_in_course(:course => @course, :active_all => true).user
+      assignment.update!(moderated_grading: true, grader_count: 2, final_grader: @moderator)
       outcome_with_rubric
       @association = @rubric.associate_with(assignment, course, :purpose => 'grading', :use_for_grading => true)
       @sub = assignment.submit_homework(student, :submission_type => 'online_text_entry', :body => 'hallo')
@@ -363,5 +370,18 @@ describe ModeratedGrading::NullProvisionalGrade do
     comments = double
     expect(sub).to receive(:submission_comments).and_return(comments)
     expect(ModeratedGrading::NullProvisionalGrade.new(sub, 1, false).submission_comments).to eq(comments)
+  end
+
+  describe 'scorer' do
+    it 'returns the associated scorer if scorer_id is present' do
+      scorer = user_factory(active_user: true)
+      scored_grade = ModeratedGrading::NullProvisionalGrade.new(nil, scorer.id, true)
+      expect(scored_grade.scorer).to eq scorer
+    end
+
+    it 'returns nil if scorer_id is nil' do
+      scored_grade = ModeratedGrading::NullProvisionalGrade.new(nil, nil, true)
+      expect(scored_grade.scorer).to be nil
+    end
   end
 end

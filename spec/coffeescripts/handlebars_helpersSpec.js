@@ -368,7 +368,7 @@ test('it passes format info through to date format', function() {
 QUnit.module('i18n number helper', {
   setup() {
     this.ret = '47.00%'
-    this.stub(I18n, 'n').returns(this.ret)
+    sandbox.stub(I18n, 'n').returns(this.ret)
   }
 })
 
@@ -383,7 +383,7 @@ test('proxies to I18n.localizeNumber', function() {
 QUnit.module('i18n number format helper', {
   setup() {
     this.ret = '2,34'
-    this.stub(numberFormat, 'outcomeScore').returns(this.ret)
+    sandbox.stub(numberFormat, 'outcomeScore').returns(this.ret)
   }
 })
 
@@ -392,4 +392,26 @@ test('proxies to numberFormat', function() {
   const format = 'outcomeScore'
   equal(helpers.nf(num, {hash: {format}}), this.ret)
   ok(numberFormat.outcomeScore.calledWithMatch(num))
+})
+
+QUnit.module('eachWithIndex', (hooks) => {
+  let items
+  let itemFunc
+
+  hooks.beforeEach(() => {
+    items = [{text: 'a'}, {text: 'b'}, {text: 'c'}]
+    itemFunc = (element) => `<p>Item ${element._index}: ${element.text}</p>`
+  })
+
+  test('assigns the value of startingValue to the _index variable', () => {
+    const output = helpers.eachWithIndex(items, {hash: {startingValue: 1}, fn: itemFunc})
+
+    strictEqual(output, '<p>Item 1: a</p><p>Item 2: b</p><p>Item 3: c</p>')
+  })
+
+  test('defaults to 0 if no startingValue is specified', () => {
+    const output = helpers.eachWithIndex(items, {hash: {}, fn: itemFunc})
+
+    strictEqual(output, '<p>Item 0: a</p><p>Item 1: b</p><p>Item 2: c</p>')
+  })
 })

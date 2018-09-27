@@ -277,7 +277,7 @@ module Importers
       imported_asset_hash = {}
       migration.imported_migration_items_hash.each{|k, assets| imported_asset_hash[k] = assets.values.map(&:id).join(',') if assets.present?}
       migration.migration_settings[:imported_assets] = imported_asset_hash
-      migration.workflow_state = :imported
+      migration.workflow_state = :imported unless post_processing?(migration)
       migration.save
       ActiveRecord::Base.skip_touch_context(false)
       if course.changed?
@@ -292,9 +292,13 @@ module Importers
       migration.imported_migration_items
     end
 
+    def self.post_processing?(migration)
+      migration.quizzes_next_migration?
+    end
+
     def self.import_syllabus_from_migration(course, syllabus_body, migration)
       if migration.for_master_course_import?
-        course.updating_master_template_id = migration.master_course_subscription.master_template_id
+        course.master_migration = migration
       end
       course.syllabus_body = migration.convert_html(syllabus_body, :syllabus, nil, :syllabus)
     end
@@ -338,6 +342,12 @@ module Importers
             page.set_as_front_page!
           end
         end
+      end
+
+      if migration.for_master_course_import?
+        course.restrict_enrollments_to_course_dates = settings['restrict_enrollments_to_course_dates'] if settings.has_key?('restrict_enrollments_to_course_dates')
+        course.start_at    = Canvas::Migration::MigratorHelper.get_utc_time_from_timestamp(settings['start_at']) if settings.has_key?('start_at')
+        course.conclude_at = Canvas::Migration::MigratorHelper.get_utc_time_from_timestamp(settings['conclude_at']) if settings.has_key?('conclude_at')
       end
 
       settings.slice(*atts.map(&:to_s)).each do |key, val|

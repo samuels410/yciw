@@ -42,7 +42,7 @@ class SubmissionComment < ActiveRecord::Base
 
   scope :visible, -> { where(:hidden => false) }
   scope :draft, -> { where(draft: true) }
-  scope :published, -> { where("submission_comments.draft IS NOT TRUE") }
+  scope :published, -> { where(draft: false) }
   scope :after, lambda { |date| where("submission_comments.created_at>?", date) }
   scope :for_final_grade, -> { where(:provisional_grade_id => nil) }
   scope :for_provisional_grade, ->(id) { where(:provisional_grade_id => id) }
@@ -160,7 +160,7 @@ class SubmissionComment < ActiveRecord::Base
     raise IncomingMail::Errors::UnknownAddress if self.context.root_account.deleted?
     user = opts[:user]
     message = opts[:text].strip
-    user = nil unless user && self.context.users.include?(user)
+    user = nil unless user && self.submission.grants_right?(user, :comment)
     if !user
       raise "Only comment participants may reply to messages"
     elsif !message || message.empty?
@@ -259,6 +259,10 @@ class SubmissionComment < ActiveRecord::Base
     methods = []
     methods << :avatar_path if context.root_account.service_enabled?(:avatars)
     methods
+  end
+
+  def publishable_for?(user)
+    draft? && author_id == user.id
   end
 
   def update_participation
