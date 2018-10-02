@@ -40,10 +40,11 @@ describe FilesController do
       get "http://test.host/files/#{@submission.attachment.id}/download", params: {:inline => '1', :verifier => @submission.attachment.uuid}
       expect(response).to be_redirect
       uri = URI.parse response['Location']
-      qs = Rack::Utils.parse_nested_query(uri.query)
+      qs = Rack::Utils.parse_nested_query(uri.query).with_indifferent_access
       expect(uri.host).to eq 'files-test.host'
       expect(uri.path).to eq "/files/#{@submission.attachment.id}/download"
-      expect(@me.valid_access_verifier?(qs['ts'], qs['sf_verifier'])).to be_truthy
+      expect{ Users::AccessVerifier.validate(qs) }.not_to raise_exception
+      expect(Users::AccessVerifier.validate(qs)[:user]).to eql(@me)
       expect(qs['verifier']).to eq @submission.attachment.uuid
       location = response['Location']
       remove_user_session
@@ -78,16 +79,17 @@ describe FilesController do
       get "http://test.host/users/#{@me.id}/files/#{@att.id}/download"
       expect(response).to be_redirect
       uri = URI.parse response['Location']
-      qs = Rack::Utils.parse_nested_query(uri.query)
+      qs = Rack::Utils.parse_nested_query(uri.query).with_indifferent_access
       expect(uri.host).to eq 'files-test.host'
       # redirects to a relative url, since relative files are available in user context
       expect(uri.path).to eq "/users/#{@me.id}/files/#{@att.id}/my%20files/unfiled/my-pic.png"
-      expect(@me.valid_access_verifier?(qs['ts'], qs['sf_verifier'])).to be_truthy
+      expect{ Users::AccessVerifier.validate(qs) }.not_to raise_exception
+      expect(Users::AccessVerifier.validate(qs)[:user]).to eql(@me)
       location = response['Location']
       remove_user_session
 
       get location
-      expect(response).to be_success
+      expect(response).to be_successful
       expect(response.content_type).to eq 'image/png'
       # ensure that the user wasn't logged in by the normal means
       expect(controller.instance_variable_get(:@current_user)).to be_nil
@@ -96,7 +98,7 @@ describe FilesController do
     it "without safefiles" do
       allow(HostUrl).to receive(:file_host).and_return('test.host')
       get "http://test.host/users/#{@me.id}/files/#{@att.id}/download"
-      expect(response).to be_success
+      expect(response).to be_successful
       expect(response.content_type).to eq 'image/png'
       expect(response['Pragma']).to be_nil
       expect(response['Cache-Control']).not_to match(/no-cache/)
@@ -119,7 +121,7 @@ describe FilesController do
 
         get location
         # the response will be on the main domain, with an iframe pointing to the files domain and the actual uploaded html file
-        expect(response).to be_success
+        expect(response).to be_successful
         expect(response.content_type).to eq 'text/html'
         doc = Nokogiri::HTML::DocumentFragment.parse(response.body)
         expect(doc.at_css('iframe#file_content')['src']).to match %r{^http://files-test.host/users/#{@me.id}/files/#{@att.id}/my%20files/unfiled/ohai.html}
@@ -156,10 +158,11 @@ describe FilesController do
     get "http://test.host/courses/#{@course.id}/files/#{a1.id}/download", params: {:inline => '1'}
     expect(response).to be_redirect
     uri = URI.parse response['Location']
-    qs = Rack::Utils.parse_nested_query(uri.query)
+    qs = Rack::Utils.parse_nested_query(uri.query).with_indifferent_access
     expect(uri.host).to eq 'files-test.host'
     expect(uri.path).to eq "/courses/#{@course.id}/files/#{a1.id}/course%20files/test%20my%20file%3F%20hai!%26.png"
-    expect(@user.valid_access_verifier?(qs['ts'], qs['sf_verifier'])).to be_truthy
+    expect{ Users::AccessVerifier.validate(qs) }.not_to raise_exception
+    expect(Users::AccessVerifier.validate(qs)[:user]).to eql(@user)
     expect(qs['verifier']).to be_nil
     location = response['Location']
     remove_user_session
@@ -206,7 +209,7 @@ describe FilesController do
     remove_user_session
 
     get location
-    expect(response).to be_success
+    expect(response).to be_successful
     expect(response.content_type).to eq 'image/png'
     # ensure that the user wasn't logged in by the normal means
     expect(controller.instance_variable_get(:@current_user)).to be_nil
@@ -228,7 +231,7 @@ describe FilesController do
     remove_user_session
 
     get location
-    expect(response).to be_success
+    expect(response).to be_successful
     expect(response.content_type).to eq 'image/png'
     # ensure that the user wasn't logged in by the normal means
     expect(controller.instance_variable_get(:@current_user)).to be_nil
@@ -250,7 +253,7 @@ describe FilesController do
 
     # the response will be on the main domain, with an iframe pointing to the files domain and the actual uploaded html file
     get "http://test.host/courses/#{@course.id}/files/#{@att.id}"
-    expect(response).to be_success
+    expect(response).to be_successful
     expect(response.content_type).to eq 'text/html'
     doc = Nokogiri::HTML::DocumentFragment.parse(response.body)
     location = doc.at_css('iframe#file_content')['src']
@@ -278,16 +281,17 @@ describe FilesController do
       get url
       expect(response).to be_redirect
       uri = URI.parse response['Location']
-      qs = Rack::Utils.parse_nested_query(uri.query)
+      qs = Rack::Utils.parse_nested_query(uri.query).with_indifferent_access
       expect(uri.host).to eq 'files-test.host'
       expect(uri.path).to eq "/files/#{@att.id}/download"
-      expect(@user.valid_access_verifier?(qs['ts'], qs['sf_verifier'])).to be_truthy
+      expect{ Users::AccessVerifier.validate(qs) }.not_to raise_exception
+      expect(Users::AccessVerifier.validate(qs)[:user]).to eql(@user)
       expect(qs['verifier']).to eq @att.uuid
       location = response['Location']
       remove_user_session
 
       get location
-      expect(response).to be_success
+      expect(response).to be_successful
       expect(response.content_type).to eq 'image/png'
       # ensure that the user wasn't logged in by the normal means
       expect(controller.instance_variable_get(:@current_user)).to be_nil
@@ -306,7 +310,7 @@ describe FilesController do
     def do_without_safefiles_test(url)
       allow(HostUrl).to receive(:file_host).and_return('test.host')
       get url
-      expect(response).to be_success
+      expect(response).to be_successful
       expect(response.content_type).to eq 'image/png'
       expect(response['Pragma']).to be_nil
       expect(response['Cache-Control']).not_to match(/no-cache/)
@@ -340,7 +344,7 @@ describe FilesController do
     remove_user_session
 
     get location
-    expect(response).to be_success
+    expect(response).to be_successful
     expect(response.content_type).to eq 'image/png'
     expect(controller.instance_variable_get(:@current_user)).to be_nil
     expect(controller.instance_variable_get(:@context)).to be_nil
@@ -367,7 +371,7 @@ describe FilesController do
     att2 = attachment_model(:uploaded_data => stub_png_data("file2.png"), :context => @course)
 
     post "/courses/#{@course.id}/files/reorder", params: {:order => "#{att2.id}, #{att1.id}", :folder_id => @folder.id}
-    expect(response).to be_success
+    expect(response).to be_successful
 
     expect(@folder.file_attachments.by_position_then_display_name).to eq [att2, att1]
   end
@@ -381,8 +385,8 @@ describe FilesController do
     user_factory(active_all: true)
     user_session(@user)
 
-    ts, sf_verifier = @user.access_verifier
-    get "/files/#{att.id}", params: {:user_id => @user.id, :ts => ts, :sf_verifier => sf_verifier} # set the file access session tokens
+    user_verifier = Users::AccessVerifier.generate(user: @user)
+    get "/files/#{att.id}", params: user_verifier # set the file access session tokens
     expect(session['file_access_user_id']).to be_present
 
     get "/courses/#{@course.id}/files/#{att.id}/file_preview"
@@ -402,6 +406,6 @@ describe FilesController do
     expect(response['Location']).to include("files/#{attachment.id}")
 
     get response['Location']
-    expect(response).to be_success
+    expect(response).to be_successful
   end
 end

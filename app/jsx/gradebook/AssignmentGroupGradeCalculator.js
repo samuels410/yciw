@@ -17,15 +17,7 @@
  */
 
 import _ from 'underscore'
-
-function sum (collection) {
-  return _.reduce(collection, (total, value) => total + value, 0);
-}
-
-function sumBy (collection, attr) {
-  const values = _.map(collection, attr);
-  return sum(values);
-}
+import {divide, sum, sumBy} from './shared/helpers/GradeCalculationHelper'
 
 function partition (collection, partitionFn) {
   const grouped = _.groupBy(collection, partitionFn);
@@ -107,7 +99,7 @@ function dropPointed (droppableSubmissionData, cannotDrop, keepHighest, keepLowe
     const allSubmissionData = [...submissions, ...cannotDrop];
     const [unpointed, pointed] = partition(allSubmissionData, submissionDatum => submissionDatum.total === 0);
 
-    const grades = _.map(pointed, getSubmissionGrade).sort();
+    const grades = pointed.map(getSubmissionGrade).sort();
     let qHigh = estimateQHigh(pointed, unpointed, grades);
     let qLow = grades[0];
     let qMid = (qLow + qHigh) / 2;
@@ -252,16 +244,17 @@ function calculateGroupGrade (group, allSubmissions, includeUngraded) {
     score,
     possible,
     submission_count: _.filter(submissionData, 'submitted').length,
-    submissions: _.map(submissionData, submissionDatum => (
-      {
+    submissions: _.map(submissionData, submissionDatum => {
+      const percent = submissionDatum.total ? divide(submissionDatum.score, submissionDatum.total) : 0
+      return {
         drop: submissionDatum.drop,
-        percent: parseScore(submissionDatum.score / submissionDatum.total),
+        percent: parseScore(percent),
         score: parseScore(submissionDatum.score),
         possible: submissionDatum.total,
         submission: submissionDatum.submission,
         submitted: submissionDatum.submitted
       }
-    ))
+    })
   };
 }
 

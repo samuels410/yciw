@@ -42,13 +42,15 @@ module Importers
       assignment_records = []
       context = migration.context
 
-      Assignment.suspend_callbacks(:update_submissions_later) do
-        assignments.each do |assign|
-          if migration.import_object?("assignments", assign['migration_id'])
-            begin
-              assignment_records << import_from_migration(assign, context, migration, nil, nil)
-            rescue
-              migration.add_import_warning(t('#migration.assignment_type', "Assignment"), assign[:title], $!)
+      AssignmentGroup.suspend_callbacks(:update_student_grades) do
+        Assignment.suspend_callbacks(:update_submissions_later) do
+          assignments.each do |assign|
+            if migration.import_object?("assignments", assign['migration_id'])
+              begin
+                assignment_records << import_from_migration(assign, context, migration, nil, nil)
+              rescue
+                migration.add_import_warning(t('#migration.assignment_type', "Assignment"), assign[:title], $!)
+              end
             end
           end
         end
@@ -111,6 +113,7 @@ module Importers
       item ||= Assignment.where(context_type: context.class.to_s, context_id: context, migration_id: hash[:migration_id]).first if hash[:migration_id]
       item ||= context.assignments.temp_record #new(:context => context)
 
+      item.saved_by = :migration
       item.mark_as_importing!(migration)
       master_migration = migration&.for_master_course_import?  # propagate null dates only for blueprint syncs
 
@@ -288,7 +291,7 @@ module Importers
       [:peer_reviews,
        :automatic_peer_reviews, :anonymous_peer_reviews,
        :grade_group_students_individually, :allowed_extensions,
-       :position, :peer_review_count, :muted, :moderated_grading,
+       :position, :peer_review_count,
        :omit_from_final_grade, :intra_group_peer_reviews, :post_to_sis
       ].each do |prop|
         item.send("#{prop}=", hash[prop]) unless hash[prop].nil?
@@ -356,7 +359,7 @@ module Importers
         vendor_code = similarity_tool["vendor_code"]
         product_code = similarity_tool["product_code"]
         resource_type_code = similarity_tool["resource_type_code"]
-        item.assignment_configuration_tool_lookups.create(
+        item.assignment_configuration_tool_lookups.find_or_create_by!(
           tool_vendor_code: vendor_code,
           tool_product_code: product_code,
           tool_resource_type_code: resource_type_code,

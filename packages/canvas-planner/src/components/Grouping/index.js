@@ -92,7 +92,7 @@ export class Grouping extends Component {
     this.groupingLink = link;
   }
 
-  getFocusable () { return this.groupingLink; }
+  getFocusable = () => { return this.groupingLink; }
   getScrollable () { return this.groupingLink || this.plannerNoteHero; }
 
   handleFacadeClick = (e) => {
@@ -116,7 +116,7 @@ export class Grouping extends Component {
     }
 
     const componentsToRender = this.renderItems(itemsToRender);
-    componentsToRender.push(this.renderFacade(completedItems, itemsToRender.length));
+    componentsToRender.push(this.renderFacade(completedItems, this.props.animatableIndex * 100 + itemsToRender.length + 1));
     return componentsToRender;
   }
 
@@ -136,7 +136,7 @@ export class Grouping extends Component {
           overrideId={item.overrideId}
           id={item.id}
           uniqueId={item.uniqueId}
-          animatableIndex={itemIndex}
+          animatableIndex={this.props.animatableIndex * 100 + itemIndex + 1}
           courseName={this.props.title}
           context={item.context || {}}
           date={moment(item.date).tz(this.props.timeZone)}
@@ -154,6 +154,10 @@ export class Grouping extends Component {
           allDay={item.allDay}
           showNotificationBadge={showNotificationBadgeOnItem}
           currentUser={this.props.currentUser}
+          feedback={item.feedback}
+          location={item.location}
+          endTime={item.endTime}
+          dateStyle={item.dateStyle}
         />
       </li>
     ));
@@ -162,6 +166,8 @@ export class Grouping extends Component {
   renderFacade (completedItems, animatableIndex) {
     const showNotificationBadgeOnItem = this.getLayout() !== 'large';
     if (!this.state.showCompletedItems && completedItems.length > 0) {
+      const theDay = completedItems[0].date.clone();
+      theDay.startOf('day');
       let missing = false;
       let newActivity = false;
       const completedItemIds = completedItems.map(item => {
@@ -190,6 +196,10 @@ export class Grouping extends Component {
             animatableIndex={animatableIndex}
             animatableItemIds={completedItemIds}
             notificationBadge={notificationBadge}
+            theme={{
+              labelColor: this.props.color
+            }}
+            date={theDay}
           />
         </li>
       );
@@ -220,7 +230,8 @@ export class Grouping extends Component {
           <IndicatorComponent
           title={badgeMessage}
           itemIds={this.itemUniqueIds()}
-          animatableIndex={this.props.animatableIndex} />
+          animatableIndex={this.props.animatableIndex}
+          getFocusable={this.getFocusable} />
         </NotificationBadge>
       );
     } else {

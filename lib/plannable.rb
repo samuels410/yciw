@@ -44,7 +44,11 @@ module Plannable
   end
 
   def planner_override_for(user)
-    self.planner_overrides.where(user_id: user).where.not(workflow_state: 'deleted').take
+    if self.association(:planner_overrides).loaded?
+      self.planner_overrides.find{|po| po.user_id == user.id && po.workflow_state != 'deleted'}
+    else
+      self.planner_overrides.where(user_id: user).where.not(workflow_state: 'deleted').take
+    end
   end
 
   class Bookmarker
@@ -70,7 +74,6 @@ module Plannable
     end
 
     def bookmark_for(object)
-      values = object.attributes.values_at *@columns
       bookmark = Bookmark.new
       bookmark.descending = @descending
       @columns.each do |col|
@@ -87,7 +90,7 @@ module Plannable
       string: -> (val) { val.is_a?(String) },
       integer: -> (val) { val.is_a?(Integer) },
       datetime: -> (val) { val.is_a?(String) && !!(DateTime.parse(val) rescue false) }
-    }
+    }.freeze
 
     def validate(bookmark)
       bookmark.is_a?(Array) &&
@@ -108,7 +111,7 @@ module Plannable
     end
 
     def restrict_scope(scope, pager)
-      if bookmark = pager.current_bookmark
+      if (bookmark = pager.current_bookmark)
         scope = scope.where(*comparison(bookmark))
       end
       scope.except(:order).order(order_by)

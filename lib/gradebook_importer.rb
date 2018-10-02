@@ -21,7 +21,7 @@ require 'csv'
 class GradebookImporter
   ASSIGNMENT_PRELOADED_FIELDS = %i/
     id title points_possible grading_type updated_at context_id context_type group_category_id
-    created_at due_at only_visible_to_overrides
+    created_at due_at only_visible_to_overrides moderated_grading grades_published_at final_grader_id
   /.freeze
 
   class NegativeId
@@ -110,8 +110,12 @@ class GradebookImporter
     @pp_row = []
     @warning_messages = {
       prevented_new_assignment_creation_in_closed_period: false,
-      prevented_grading_ungradeable_submission: false
+      prevented_grading_ungradeable_submission: false,
+      prevented_changing_read_only_column: false
     }
+    @custom_column_titles_and_indexes = []
+    @gradebook_importer_assignments = {}
+    @gradebook_importer_custom_columns = {}
 
     begin
       csv_stream do |row|
@@ -168,7 +172,7 @@ class GradebookImporter
     end
 
     @students.each do |student|
-      student.gradebook_importer_submissions.each do |submission|
+      @gradebook_importer_assignments[student.id].each do |submission|
         submission_assignment_id = submission.fetch('assignment_id').to_i
         assignment = original_submissions_by_student.
           fetch(student.id, {}).
@@ -190,9 +194,14 @@ class GradebookImporter
           )
         end
       end
+      @gradebook_importer_custom_columns[student.id].each do |student_custom_column_cell|
+        custom_column = custom_gradebook_columns.detect {|custom_col| custom_col.id == student_custom_column_cell['column_id']}
+        datum = custom_column.custom_gradebook_column_data.detect {|custom_column_datum| custom_column_datum.user_id == student.id}
+        student_custom_column_cell['current_content'] = datum&.content
+      end
     end
 
-    translate_pass_fail(@assignments, @students)
+    translate_pass_fail(@assignments, @students, @gradebook_importer_assignments)
 
     unless @missing_student
       # weed out assignments with no changes
@@ -200,36 +209,56 @@ class GradebookImporter
       @assignments.each_with_index do |assignment, idx|
         next if assignment.changed? && !readonly_assignment?(idx)
         indexes_to_delete << idx if readonly_assignment?(idx) || @students.all? do |student|
-          submission = student.gradebook_importer_submissions[idx]
+          submission = @gradebook_importer_assignments[student.id][idx]
 
           # Have potentially mixed case excused in grade match case
           # expectations for the compare so it doesn't look changed
-          submission['grade'] = 'EX' if submission['grade'].to_s.upcase == 'EX'
+          submission['grade'] = 'EX' if submission['grade'].to_s.casecmp('EX') == 0
           no_change = submission['grade'] == submission['original_grade'] ||
             (submission['original_grade'].present? && submission['grade'].present? && submission['original_grade'].to_f == submission['grade'].to_f) ||
             (submission['original_grade'].blank? && submission['grade'].blank?)
 
-          if !submission['gradeable'] && !no_change
-            @warning_messages[:prevented_grading_ungradeable_submission] = true
-          end
+          @warning_messages[:prevented_grading_ungradeable_submission] = true if !submission['gradeable'] && !no_change
 
           no_change || !submission['gradeable']
         end
       end
 
-      indexes_to_delete.reverse_each do |idx|
-        @assignments.delete_at(idx)
+      custom_column_ids_to_skip_on_import = []
+      custom_gradebook_columns.each_with_index do |custom_column, index|
+        exclude_custom_column_on_import = @students.all? do |student|
+          custom_column_datum = @gradebook_importer_custom_columns[student.id][index]
+          no_change = (custom_column_datum['current_content'] == custom_column_datum['new_content']) ||
+            (custom_column_datum['current_content'].blank? && custom_column_datum['new_content'].blank?)
+
+          @warning_messages[:prevented_changing_read_only_column] = true if !no_change && custom_column.read_only
+
+          no_change
+        end
+
+        custom_column_ids_to_skip_on_import << custom_column.id if exclude_custom_column_on_import || custom_column.read_only
+      end
+
+      indexes_to_delete.reverse_each do |index|
+        @assignments.delete_at(index)
         @students.each do |student|
-          student.gradebook_importer_submissions.delete_at(idx)
+          @gradebook_importer_assignments[student.id].delete_at(index)
+        end
+      end
+
+      @custom_gradebook_columns = @custom_gradebook_columns.reject { |custom_col| custom_column_ids_to_skip_on_import.include?(custom_col.id) }
+      @students.each do |student|
+        @gradebook_importer_custom_columns[student.id] = @gradebook_importer_custom_columns[student.id].reject do |custom_col|
+          custom_column_ids_to_skip_on_import.include?(custom_col.fetch('column_id'))
         end
       end
 
       @students.each do |student|
-        student.gradebook_importer_submissions.select! { |sub| sub['gradeable'] }
+        @gradebook_importer_assignments[student.id].select! { |sub| sub['gradeable'] }
       end
 
       @unchanged_assignments = !indexes_to_delete.empty?
-      @students = [] if @assignments.empty?
+      @students = [] if @assignments.empty? && @custom_gradebook_columns.empty?
     end
 
     # remove concluded enrollments
@@ -254,33 +283,52 @@ class GradebookImporter
     @upload.save!
   end
 
-  def translate_pass_fail(assignments, students)
+  def translate_pass_fail(assignments, students, gradebook_importer_assignments)
     assignments.each_with_index do |assignment, idx|
       next unless assignment.grading_type == "pass_fail"
       students.each do |student|
-        submission = student.gradebook_importer_submissions[idx]
+        submission = gradebook_importer_assignments.fetch(student.id)[idx]
         if submission['grade'].present?
-          submission['grade'] = assignment.score_to_grade(submission['grade'],
-                                                          submission['grade'])
+          gradebook_importer_assignments.fetch(student.id)[idx]['grade'] = assignment.score_to_grade(submission['grade'], \
+            submission['grade'])
         end
         if submission['original_grade'].present?
-          submission['original_grade'] =
-            assignment.score_to_grade(submission['original_grade'],
-                                      submission['original_grade'])
+          gradebook_importer_assignments.fetch(student.id)[idx]['original_grade'] = assignment.score_to_grade(submission['original_grade'],
+            submission['original_grade'])
         end
       end
     end
   end
 
+  def process_custom_columns_headers(row)
+    custom_columns = custom_gradebook_columns
+    row.each_with_index do |header_column, index|
+      cc = custom_columns.detect { |column| column.title == header_column }
+      if cc.present?
+        @custom_column_titles_and_indexes << {title: header_column, index: index, read_only: cc.read_only}
+      end
+    end
+  end
+
+  def strip_custom_columns(stripped_row)
+    @custom_column_titles_and_indexes.each do |column|
+      stripped_row.delete(column[:title])
+    end
+    stripped_row
+  end
+
   def process_header(row)
     raise InvalidHeaderRow unless header?(row)
-
     row = strip_non_assignment_columns(row)
+    row = strip_custom_columns(row)
     parse_assignments(row) # requires non-assignment columns to be stripped
   end
 
   def header?(row)
     return false unless row_has_student_headers? row
+
+    # this is here instead of in process_header() because @custom_column_titles_and_indexes needs to be updated before update_column_count()
+    process_custom_columns_headers(row)
 
     update_column_count row
 
@@ -290,7 +338,8 @@ class GradebookImporter
   end
 
   def last_student_info_column(row)
-    row[@student_columns - 1]
+    # Custom Columns are between section and assignments
+    row[@student_columns - (1 + @custom_column_titles_and_indexes.length)]
   end
 
   def row_has_student_headers?(row)
@@ -313,18 +362,20 @@ class GradebookImporter
         @root_account_column = 4
       end
     end
+
+    # For Custom Columns
+    @student_columns += @custom_column_titles_and_indexes.length
   end
 
-  def strip_non_assignment_columns(row)
-    drop_student_information_columns(row)
+  def strip_non_assignment_columns(stripped_row)
+    drop_student_information_columns(stripped_row)
 
     # This regex will also include columns for unposted scores, which
     # will be one of these values with "Unposted" prepended.
-    while row.last =~ /Current Score|Current Points|Current Grade|Final Score|Final Points|Final Grade/
-      row.pop
+    while stripped_row.last =~ /Current Score|Current Points|Current Grade|Final Score|Final Points|Final Grade/
+      stripped_row.pop
     end
-
-    row
+    stripped_row
   end
 
   def drop_student_information_columns(row)
@@ -409,11 +460,26 @@ class GradebookImporter
       end
       new_submission = {
         'grade' => grade,
-        'assignment_id' => assignment_id
+        'assignment_id' => assignment_id,
       }
       importer_submissions << new_submission
     end
-    student.gradebook_importer_submissions = importer_submissions
+
+    # custom columns
+    first_custom_column_index = @student_columns - custom_gradebook_columns.length
+    importer_custom_columns = []
+
+    custom_gradebook_columns.each_with_index do |cc, index|
+      col_index = index + first_custom_column_index
+      new_custom_column_data = {
+        'new_content' => row[col_index],
+        'column_id' => cc.id,
+      }
+      importer_custom_columns << new_custom_column_data
+    end
+
+    @gradebook_importer_custom_columns[student.id] = importer_custom_columns
+    @gradebook_importer_assignments[student.id] = importer_submissions
   end
 
   def assignment_visible_to_student(student, assignment, assignment_id, visible_assignments)
@@ -434,16 +500,22 @@ class GradebookImporter
       },
       :original_submissions => @original_submissions,
       :unchanged_assignments => @unchanged_assignments,
-      :warning_messages => @warning_messages
+      :warning_messages => @warning_messages,
+      :custom_columns => custom_gradebook_columns.map { |cc| custom_columns_to_hash(cc) },
     }
   end
 
   protected
 
+  def custom_gradebook_columns
+    @custom_gradebook_columns ||= @context.custom_gradebook_columns.to_a
+  end
+
   def identify_delimiter(rows)
     field_counts = {}
     %w[; ,].each do |separator|
       begin
+        field_counts[separator] = 0
         field_count_by_row = rows.map { |line| CSV.parse_line(line, col_sep: separator).size }
 
         # If the number of fields generated by this separator is consistent for all lines,
@@ -453,7 +525,7 @@ class GradebookImporter
       end
     end
 
-    (field_counts.size == 1 && field_counts.keys.first == ';') ? :semicolon : :comma
+    field_counts[';'] > field_counts[','] ? :semicolon : :comma
   end
 
   def semicolon_delimited?(csv_file)
@@ -526,13 +598,22 @@ class GradebookImporter
     end
   end
 
-  def student_to_hash(user)
+  def custom_columns_to_hash(cc)
     {
-      :last_name_first => user.last_name_first,
-      :name => user.name,
-      :previous_id => user.previous_id,
-      :id => user.id,
-      :submissions => user.gradebook_importer_submissions
+      id: cc.id,
+      title: cc.title,
+      read_only: cc.read_only,
+    }
+  end
+
+  def student_to_hash(student)
+    {
+      :last_name_first => student.last_name_first,
+      :name => student.name,
+      :previous_id => student.previous_id,
+      :id => student.id,
+      :submissions => @gradebook_importer_assignments[student.id],
+      :custom_column_data => @gradebook_importer_custom_columns[student.id]
     }
   end
 

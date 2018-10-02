@@ -280,7 +280,16 @@ module AccountReports::ReportHelper
     # we use total_lines to track progress in the normal progress.
     # just use it here to do the same thing here even though it is not really
     # the number of lines.
-    @account_report.update_attributes(total_lines: @account_report.account_report_runners.count)
+    total_runners = @account_report.account_report_runners.count
+
+    # If there are no runners, short-circuit and just send back an empty report with headers only.
+    # Otherwise, the report will get stuck in a "running" state and never exit.
+    if total_runners == 0
+      write_report(headers)
+      return
+    end
+
+    @account_report.update_attributes(total_lines: total_runners)
 
     args = {priority: Delayed::LOW_PRIORITY, max_attempts: 1, n_strand: ["account_report_runner", root_account.global_id]}
     @account_report.account_report_runners.find_each do |runner|
@@ -360,7 +369,7 @@ module AccountReports::ReportHelper
   end
 
   def last_account_report_runner?(account_report)
-    return false if account_report.account_report_runners.in_progress.exists?
+    return false if account_report.account_report_runners.incomplete.exists?
     AccountReport.transaction do
       @account_report.reload(lock: true)
       if @account_report.workflow_state == 'running'

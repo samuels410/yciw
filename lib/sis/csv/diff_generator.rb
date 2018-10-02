@@ -28,12 +28,14 @@ module SIS
       end
 
       def generate(previous_data_path, current_data_path)
-        previous_import = SIS::CSV::Import.new(@root_account, files: [previous_data_path], batch: @batch)
+        previous_import = SIS::CSV::ImportRefactored.new(@root_account, files: [previous_data_path], batch: @batch)
         previous_csvs = previous_import.prepare
-        current_import = SIS::CSV::Import.new(@root_account, files: [current_data_path], batch: @batch)
+        current_import = SIS::CSV::ImportRefactored.new(@root_account, files: [current_data_path], batch: @batch)
         current_csvs = current_import.prepare
 
         output_csvs = generate_csvs(previous_csvs, current_csvs)
+        return unless output_csvs.any?
+
         output_file = Tempfile.new(["sis_csv_diff_generator", ".zip"])
         output_path = output_file.path
         output_file.close!

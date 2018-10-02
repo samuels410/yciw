@@ -19,7 +19,7 @@
 import React from 'react'
 import { mount } from 'enzyme'
 import SubmissionTrayRadioInput from 'jsx/gradezilla/default_gradebook/components/SubmissionTrayRadioInput'
-import NumberInput from '@instructure/ui-core/lib/components/NumberInput'
+import NumberInput from '@instructure/ui-forms/lib/components/NumberInput'
 
 let wrapper
 let updateSubmission
@@ -50,11 +50,11 @@ function numberInput () {
 }
 
 function numberInputDescription () {
-  return numberInputContainer().find('span[role="presentation"]').node.textContent
+  return numberInputContainer().find('span.NumberInput__Container.NumberInput__Container-LeftIndent').instance().textContent
 }
 
 function numberInputLabel () {
-  return numberInputContainer().find('label').node.textContent
+  return numberInputContainer().find('label').instance().textContent
 }
 
 function radioInput () {
@@ -76,18 +76,18 @@ QUnit.module('SubmissionTrayRadioInput', function (hooks) {
 
   test('renders a radio option with a name of "SubmissionTrayRadioInput"', function () {
     wrapper = mountComponent()
-    strictEqual(radioInput().node.name, 'SubmissionTrayRadioInput')
+    strictEqual(radioInput().instance().name, 'SubmissionTrayRadioInput')
   })
 
   test('renders with a background color specified by the "color" prop', function () {
     wrapper = mountComponent({ color: 'green' })
-    const { style } = radioInputContainer().node
+    const { style } = radioInputContainer().instance()
     strictEqual(style.getPropertyValue('background-color'), 'green')
   })
 
   test('renders with a "transparent" background color if a color is not specified', function () {
     wrapper = mountComponent({ color: undefined })
-    const { style } = radioInputContainer().node
+    const { style } = radioInputContainer().instance()
     strictEqual(style.getPropertyValue('background-color'), 'transparent')
   })
 
@@ -103,12 +103,12 @@ QUnit.module('SubmissionTrayRadioInput', function (hooks) {
 
   test('renders with the radio option selected when checked is true', function () {
     wrapper = mountComponent({ checked: true })
-    strictEqual(radioInput().node.checked, true)
+    strictEqual(radioInput().instance().checked, true)
   })
 
   test('renders with the radio option deselected when checked is false', function () {
     wrapper = mountComponent()
-    strictEqual(radioInput().node.checked, false)
+    strictEqual(radioInput().instance().checked, false)
   })
 
   test('calls onChange when the radio option is selected', function () {
@@ -146,12 +146,12 @@ QUnit.module('SubmissionTrayRadioInput', function (hooks) {
 
     test('the text next to the input reads "Day(s)" if the late policy interval is "day"', function () {
       wrapper = mountComponent({ value: 'late', checked: true })
-      strictEqual(numberInputDescription(), 'Day(s)')
+      strictEqual(numberInputDescription(), 'Days lateDay(s)')
     })
 
     test('the text next to the input reads "Hour(s)" if the late policy interval is "day"', function () {
       wrapper = mountComponent({ value: 'late', checked: true, latePolicy: { lateSubmissionInterval: 'hour' } })
-      strictEqual(numberInputDescription(), 'Hour(s)')
+      strictEqual(numberInputDescription(), 'Hours lateHour(s)')
     })
 
     test('the label for the input reads "Days late" if the late policy interval is "day"', function () {
@@ -203,48 +203,42 @@ QUnit.module('SubmissionTrayRadioInput', function (hooks) {
       test('does not call updateSubmission if the input value is an empty string', function () {
         wrapper = mountComponent({ value: 'late', checked: true, updateSubmission })
         const input = numberInput()
-        input.simulate('change', { target: { value: '' } })
-        input.simulate('blur')
+        input.simulate('blur', { target: { value: '' } })
         strictEqual(updateSubmission.callCount, 0)
       })
 
       test('does not call updateSubmission if the input value cannot be parsed as a number', function () {
         wrapper = mountComponent({ value: 'late', checked: true, updateSubmission })
         const input = numberInput()
-        input.simulate('change', { target: { value: 'foo' } })
-        input.simulate('blur')
+        input.simulate('blur', { target: { value: 'foo' } })
         strictEqual(updateSubmission.callCount, 0)
       })
 
       test('does not call updateSubmission if the input value matches the current value', function () {
         wrapper = mountComponent({ value: 'late', checked: true, updateSubmission })
         const input = numberInput()
-        input.simulate('change', { target: { value: '0' } })
-        input.simulate('blur')
+        input.simulate('blur', { target: { value: '0' } })
         strictEqual(updateSubmission.callCount, 0)
       })
 
       test('does not call updateSubmission if the parsed value (2 decimals) matches the current value', function () {
         wrapper = mountComponent({ value: 'late', checked: true, updateSubmission })
         const input = numberInput()
-        input.simulate('change', { target: { value: '0.004' } })
-        input.simulate('blur')
+        input.simulate('blur', { target: { value: '0.004' } })
         strictEqual(updateSubmission.callCount, 0)
       })
 
       test('calls updateSubmission if the parsed value (2 decimals) differs from the current value', function () {
         wrapper = mountComponent({ value: 'late', checked: true, updateSubmission })
         const input = numberInput()
-        input.simulate('change', { target: { value: '2' } })
-        input.simulate('blur')
+        input.simulate('blur', { target: { value: '2' } })
         strictEqual(updateSubmission.callCount, 1)
       })
 
       test('calls updateSubmission with latePolicyStatus set to "late"', function () {
         wrapper = mountComponent({ value: 'late', checked: true, updateSubmission })
         const input = numberInput()
-        input.simulate('change', { target: { value: '2' } })
-        input.simulate('blur')
+        input.simulate('blur', { target: { value: '2' } })
         strictEqual(updateSubmission.getCall(0).args[0].latePolicyStatus, 'late')
       })
 
@@ -256,8 +250,7 @@ QUnit.module('SubmissionTrayRadioInput', function (hooks) {
         })
 
         const input = numberInput()
-        input.simulate('change', { target: { value: '2' } })
-        input.simulate('blur')
+        input.simulate('blur', { target: { value: '2' } })
         const expectedSeconds = 2 * 3600
         strictEqual(updateSubmission.getCall(0).args[0].secondsLateOverride, expectedSeconds)
       })
@@ -265,8 +258,7 @@ QUnit.module('SubmissionTrayRadioInput', function (hooks) {
       test('interval is day: calls updateSubmission with the input converted to seconds', function () {
         wrapper = mountComponent({ value: 'late', checked: true, updateSubmission })
         const input = numberInput()
-        input.simulate('change', { target: { value: '2' } })
-        input.simulate('blur')
+        input.simulate('blur', { target: { value: '2' } })
         const expectedSeconds = 2 * 86400
         strictEqual(updateSubmission.getCall(0).args[0].secondsLateOverride, expectedSeconds)
       })
@@ -274,8 +266,7 @@ QUnit.module('SubmissionTrayRadioInput', function (hooks) {
       test('truncates the remainder if one exists', function () {
         wrapper = mountComponent({ value: 'late', checked: true, updateSubmission })
         const input = numberInput()
-        input.simulate('change', { target: { value: '2.3737' } })
-        input.simulate('blur')
+        input.simulate('blur', { target: { value: '2.3737' } })
         const expectedSeconds = Math.trunc(2.3737 * 86400)
         strictEqual(updateSubmission.getCall(0).args[0].secondsLateOverride, expectedSeconds)
       })

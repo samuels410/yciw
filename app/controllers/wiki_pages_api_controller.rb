@@ -257,19 +257,19 @@ class WikiPagesApiController < ApplicationController
       scope = WikiPage.search_by_attribute(scope, :title, params[:search_term])
 
       order_clause = case params[:sort]
-        when 'title'
-          WikiPage.title_order_by_clause
-        when 'created_at'
-          'wiki_pages.created_at'
-        when 'updated_at'
-          'wiki_pages.updated_at'
-      end
+                     when 'title'
+                       WikiPage.title_order_by_clause
+                     when 'created_at',
+                       'updated_at',
+                       'todo_date'
+                       params[:sort].to_sym
+                     end
       if order_clause
-        order_clause += ' DESC' if params[:order] == 'desc'
-        scope = scope.order(WikiPage.send(:sanitize_sql, order_clause))
+        order_clause = { order_clause => :desc } if params[:order] == 'desc'
+        scope = scope.order(order_clause)
       end
-      id_clause = "wiki_pages.id"
-      id_clause += ' DESC' if params[:order] == 'desc'
+      id_clause = :id
+      id_clause = { id: :desc } if params[:order] == 'desc'
       scope = scope.order(id_clause)
 
       wiki_pages = Api.paginate(scope, self, pages_route)
@@ -655,14 +655,14 @@ class WikiPagesApiController < ApplicationController
   end
 
   def assign_todo_date
+    return if params.dig(:wiki_page, :student_todo_at).nil? && params.dig(:wiki_page, :student_planner_checkbox).nil?
     if @context.root_account.feature_enabled?(:student_planner) && @page.context.grants_any_right?(@current_user, session, :manage)
-      @page.todo_date = params[:wiki_page][:student_todo_at] if params[:wiki_page][:student_todo_at]
+      @page.todo_date = params.dig(:wiki_page, :student_todo_at) if params.dig(:wiki_page, :student_todo_at)
       # Only clear out if the checkbox is explicitly specified in the request
       if params[:wiki_page].key?("student_planner_checkbox") &&
         !value_to_boolean(params[:wiki_page][:student_planner_checkbox])
         @page.todo_date = nil
       end
-      @page.save!
     end
   end
 

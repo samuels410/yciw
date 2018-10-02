@@ -28,24 +28,26 @@ class DeveloperKey < ActiveRecord::Base
   has_many :page_views
   has_many :access_tokens, -> { where(:workflow_state => "active") }
   has_many :developer_key_account_bindings, inverse_of: :developer_key, dependent: :destroy
+  has_many :context_external_tools
 
   has_one :tool_consumer_profile, :class_name => 'Lti::ToolConsumerProfile'
   serialize :scopes, Array
 
+  before_validation :validate_scopes!
   before_create :generate_api_key
   before_create :set_auto_expire_tokens
   before_create :set_visible
   before_save :nullify_empty_icon_url
   before_save :protect_default_key
   after_save :clear_cache
+  after_update :invalidate_access_tokens_if_scopes_removed!
   after_create :create_default_account_binding
-  before_validation :set_require_scopes
-  before_validation :validate_scopes!
 
   validates_as_url :redirect_uri, allowed_schemes: nil
   validate :validate_redirect_uris
 
   scope :nondeleted, -> { where("workflow_state<>'deleted'") }
+  scope :not_active, -> { where("workflow_state<>'active'") } # search for deleted & inactive keys
   scope :visible, -> { where(visible: true) }
 
   workflow do
@@ -56,6 +58,18 @@ class DeveloperKey < ActiveRecord::Base
       event :activate, transitions_to: :active
     end
     state :deleted
+  end
+
+  alias_method :destroy_permanently!, :destroy
+  def destroy
+    self.workflow_state = 'deleted'
+    self.save
+  end
+
+  def usable?
+    return false if DeveloperKey.test_cluster_checks_enabled? &&
+      test_cluster_only? && !ApplicationController.test_cluster?
+    active?
   end
 
   def redirect_uri=(value)
@@ -82,12 +96,6 @@ class DeveloperKey < ActiveRecord::Base
     raise "Please never delete the default developer key" if workflow_state != 'active' && self == self.class.default
   end
 
-  alias_method :destroy_permanently!, :destroy
-  def destroy
-    self.workflow_state = 'deleted'
-    self.save
-  end
-
   def nullify_empty_icon_url
     self.icon_url = nil if icon_url.blank?
   end
@@ -97,34 +105,53 @@ class DeveloperKey < ActiveRecord::Base
   end
 
   def set_auto_expire_tokens
-    self.auto_expire_tokens = true if self.respond_to?(:auto_expire_tokens=)
-  end
-
-  def self.default
-    get_special_key("User-Generated")
+    self.auto_expire_tokens = true
   end
 
   def set_visible
     self.visible = !site_admin?
-    true
-  end
-
-  def authorized_for_account?(target_account)
-    return false unless binding_on_in_account?(target_account)
-    return true if account_id.blank?
-    return true if target_account.id == account_id
-    target_account.account_chain_ids.include?(account_id)
-  end
-
-  def account_name
-    account.try(:name)
-  end
-
-  def last_used_at
-    self.access_tokens.maximum(:last_used_at)
   end
 
   class << self
+    def default
+      get_special_key("User-Generated")
+    end
+
+    def get_special_key(default_key_name)
+      Shard.birth.activate do
+        @special_keys ||= {}
+
+        if Rails.env.test?
+          # TODO: we have to do this because tests run in transactions
+          return @special_keys[default_key_name] = DeveloperKey.where(name: default_key_name).first_or_create
+        end
+
+        key = @special_keys[default_key_name]
+        return key if key
+        if (key_id = Setting.get("#{default_key_name}_developer_key_id", nil)) && key_id.present?
+          key = DeveloperKey.where(id: key_id).first
+        end
+        return @special_keys[default_key_name] = key if key
+        key = DeveloperKey.create!(:name => default_key_name)
+        Setting.set("#{default_key_name}_developer_key_id", key.id)
+        return @special_keys[default_key_name] = key
+      end
+    end
+
+    # for now, only one AWS account for SNS is supported
+    def sns
+      if !defined?(@sns)
+        settings = ConfigFile.load('sns')
+        @sns = nil
+        @sns = Aws::SNS::Client.new(settings) if settings
+      end
+      @sns
+    end
+
+    def test_cluster_checks_enabled?
+      Setting.get("dev_key_test_cluster_checks_enabled", nil).present?
+    end
+
     def find_cached(id)
       global_id = Shard.global_id_for(id)
       MultiCache.fetch("developer_key/#{global_id}") do
@@ -146,25 +173,19 @@ class DeveloperKey < ActiveRecord::Base
     MultiCache.delete("developer_keys/#{vendor_code}") if vendor_code.present?
   end
 
-  def self.get_special_key(default_key_name)
-    Shard.birth.activate do
-      @special_keys ||= {}
+  def authorized_for_account?(target_account)
+    return false unless binding_on_in_account?(target_account)
+    return true if account_id.blank?
+    return true if target_account.id == account_id
+    target_account.account_chain_ids.include?(account_id)
+  end
 
-      if Rails.env.test?
-        # TODO: we have to do this because tests run in transactions
-        return @special_keys[default_key_name] = DeveloperKey.where(name: default_key_name).first_or_create
-      end
+  def account_name
+    account.try(:name)
+  end
 
-      key = @special_keys[default_key_name]
-      return key if key
-      if (key_id = Setting.get("#{default_key_name}_developer_key_id", nil)) && key_id.present?
-        key = DeveloperKey.where(id: key_id).first
-      end
-      return @special_keys[default_key_name] = key if key
-      key = DeveloperKey.create!(:name => default_key_name)
-      Setting.set("#{default_key_name}_developer_key_id", key.id)
-      return @special_keys[default_key_name] = key
-    end
+  def last_used_at
+    self.access_tokens.maximum(:last_used_at)
   end
 
   # verify that the given uri has the same domain as this key's
@@ -184,16 +205,6 @@ class DeveloperKey < ActiveRecord::Base
     return false
   end
 
-  # for now, only one AWS account for SNS is supported
-  def self.sns
-    if !defined?(@sns)
-      settings = ConfigFile.load('sns')
-      @sns = nil
-      @sns = Aws::SNS::Client.new(settings) if settings
-    end
-    @sns
-  end
-
   def account_binding_for(binding_account)
     # If no account was specified return nil to prevent unneeded searching
     return if binding_account.blank?
@@ -210,34 +221,47 @@ class DeveloperKey < ActiveRecord::Base
     binding || DeveloperKeyAccountBinding.find_in_account_priority(accounts.reverse, self.id, false)
   end
 
+  def owner_account
+    account || Account.site_admin
+  end
+
   private
 
+  def invalidate_access_tokens_if_scopes_removed!
+    return unless developer_key_management_and_scoping_on?
+    return unless saved_change_to_scopes?
+    return if (scopes_before_last_save - scopes).blank?
+    send_later_if_production(:invalidate_access_tokens!)
+  end
+
+  def invalidate_access_tokens!
+    access_tokens.destroy_all
+  end
+
   def binding_on_in_account?(target_account)
-    return true unless target_account.root_account.feature_enabled?(:developer_key_management_ui_rewrite)
+    if target_account.site_admin?
+      return true unless Setting.get(Setting::SITE_ADMIN_ACCESS_TO_NEW_DEV_KEY_FEATURES, nil).present?
+    else
+      return true unless target_account.root_account.feature_enabled?(:developer_key_management_and_scoping)
+    end
+
     account_binding_for(target_account)&.workflow_state == DeveloperKeyAccountBinding::ON_STATE
   end
 
-  def api_token_scoping_on?
-    owner_account.root_account.feature_enabled?(:api_token_scoping)
+  def developer_key_management_and_scoping_on?
+    owner_account.root_account.feature_enabled?(:developer_key_management_and_scoping) || (
+      owner_account.site_admin? && Setting.get(Setting::SITE_ADMIN_ACCESS_TO_NEW_DEV_KEY_FEATURES, nil).present?
+    )
   end
 
   def create_default_account_binding
     owner_account.developer_key_account_bindings.create!(developer_key: self)
   end
 
-  def owner_account
-    account || Account.site_admin
-  end
-
-  def set_require_scopes
-    return unless api_token_scoping_on?
-    self.require_scopes = self.scopes.present?
-  end
-
   def validate_scopes!
-    return true unless api_token_scoping_on?
+    return true unless developer_key_management_and_scoping_on?
     return true if self.scopes.empty?
-    invalid_scopes = self.scopes - TokenScopes::ALL_SCOPES
+    invalid_scopes = self.scopes - TokenScopes.all_scopes
     return true if invalid_scopes.empty?
     self.errors[:scopes] << "cannot contain #{invalid_scopes.join(', ')}"
   end

@@ -31,7 +31,6 @@ define [
     labels:
       average: I18n.t('course_average', 'Course average')
       median: I18n.t('course_median', 'Course median')
-      mode: I18n.t('course_mode', 'Course mode')
 
     events:
       'click li a': 'onClick'

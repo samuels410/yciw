@@ -18,29 +18,42 @@
 import React from 'react';
 import { shallow, mount } from 'enzyme';
 import { PlannerHeader } from '../index';
+import moment from "moment-timezone";
+import sinon from 'sinon';
 
+const TZ = 'America/Denver';
+const plannerDays = [
+  moment("2018-03-01T14:00:42Z").tz(TZ),
+  moment("2018-03-02T14:00:42Z").tz(TZ),
+  moment("2018-03-03T14:00:42Z").tz(TZ)
+];
 
 function defaultProps (options) {
   return {
-    courses: [{id: "1", shortName: "Course Short Name", informStudentsOfOverdueSubmissions: true}],
+    courses: [{id: "1", longName: "Course Long Name", shortName: "Course Short Name", informStudentsOfOverdueSubmissions: true}],
     opportunities: {
       items: [{id: "1", course_id: "1", due_at: "2017-03-09T20:40:35Z", html_url: "http://www.non_default_url.com", name: "learning object title"}],
       nextUrl: null
     },
+    days: plannerDays.map(d => [d.format('YYYY-MM-DD'), [{dateBucketMoment: d}]]),
     getInitialOpportunities: () => {},
     getNextOpportunities: () => {},
     savePlannerItem: () => {},
     locale: 'en',
-    timeZone: 'America/Denver',
+    timeZone: TZ,
     deletePlannerItem: () => {},
     dismissOpportunity: () => {},
     clearUpdateTodo: () => {},
     startLoadingGradesSaga: () => {},
+    cancelEditingPlannerItem: () => {},
     ariaHideElement: document.createElement('div'),
+    stickyZIndex: 3,
+    firstNewActivityDate: null,
     loading: {
+      isLoading: false,
       allPastItemsLoaded: false,
       allFutureItemsLoaded: false,
-      allOpportunitiesLoaded: false,
+      allOpportunitiesLoaded: true,
       setFocusAfterLoad: false,
       firstNewDayKey: null,
       futureNextUrl: null,
@@ -49,9 +62,12 @@ function defaultProps (options) {
       loadingGrades: false,
       gradesLoaded: false,
     },
-    todo: {
-      updateTodoItem: null
+    ui: {
+      naiAboveScreen: false
     },
+    todo: {
+    },
+    auxElement: document.createElement("div"),
     ...options,
   };
 }
@@ -74,14 +90,17 @@ it('renders the base component correctly with buttons and trays', () => {
 });
 
 it('toggles the new item tray', () => {
+  const mockCancel = jest.fn();
   const wrapper = mount(
-    <PlannerHeader {...defaultProps()} />
+    <PlannerHeader {...defaultProps()} cancelEditingPlannerItem={mockCancel} />
   );
   const button = wrapper.find('[children="Add To Do"]');
   button.simulate('click');
   expect(findEditTray(wrapper).props().open).toEqual(true);
+  expect(mockCancel).not.toHaveBeenCalled();
   button.simulate('click');
   expect(findEditTray(wrapper).props().open).toEqual(false);
+  expect(mockCancel).toHaveBeenCalled();
 });
 
 it('sends focus back to the add new item button', () => {
@@ -89,8 +108,8 @@ it('sends focus back to the add new item button', () => {
   const wrapper = mount(
     <PlannerHeader {...defaultProps()} cancelEditingPlannerItem={mockCancel}/>
   );
-  wrapper.instance().toggleUpdateItemTray();
-  wrapper.instance().handleCancelPlannerItem();
+  wrapper.instance().handleToggleTray();  // simulate clicking the + button
+  wrapper.instance().handleCloseTray();   // simulate cancelling
   expect(mockCancel).toHaveBeenCalled();
 });
 
@@ -122,7 +141,7 @@ it('toggles aria-hidden on the ariaHideElement when opening the add to do item t
     <PlannerHeader {...defaultProps()} ariaHideElement={fakeElement} />
   );
 
-  const button = wrapper.find('IconPlusLine').parent();
+  const button = wrapper.find('IconPlus').parent();
 
   button.simulate('click');
   expect(fakeElement.getAttribute('aria-hidden')).toBe('true');
@@ -137,23 +156,13 @@ it('renders the tray with the name of an existing item when provided', () => {
   expect(findEditTray(wrapper).prop('label')).toBe('Edit abc');
 });
 
-it('calls clearUpdateTodo when closing the tray', () => {
-  const fakeClearFunc = jest.fn();
-  const wrapper = mount(
-    <PlannerHeader {...defaultProps()} clearUpdateTodo={fakeClearFunc} />
-  );
-  wrapper.instance().toggleUpdateItemTray();
-  wrapper.instance().noteBtnOnClose();
-  expect(fakeClearFunc).toHaveBeenCalled();
-});
-
-it('does not call getNextOpportunities when component has 12 opportunities', () => {
+it('does not call getNextOpportunities when component has loaded all opportunities', () => {
   const mockDispatch = jest.fn();
   const props = defaultProps();
   props.courses = [
-    {id: "1", shortName: "Course Short Name"},
-    {id: "2", shortName: "Course Other Name"},
-    {id: "3", shortName: "Course Big Name"}
+    {id: "1", longName: "Course Long Name", shortName: "Course Short Name"},
+    {id: "2", longName: "Course Other Long Name", shortName: "Course Other Name"},
+    {id: "3", longName: "Course Big Long Name", shortName: "Course Big Name"}
   ];
 
   props.opportunities.items = [
@@ -172,9 +181,10 @@ it('does not call getNextOpportunities when component has 12 opportunities', () 
   ];
 
   props.loading = {
+    isLoading: false,
     allPastItemsLoaded: false,
     allFutureItemsLoaded: false,
-    allOpportunitiesLoaded: false,
+    allOpportunitiesLoaded: true,
     setFocusAfterLoad: false,
     firstNewDayKey: null,
     futureNextUrl: null,
@@ -197,9 +207,9 @@ it('does call getNextOpportunities when component has 9 opportunities', () => {
   const mockDispatch = jest.fn();
   const props = defaultProps();
   props.courses = [
-    {id: "1", shortName: "Course Short Name"},
-    {id: "2", shortName: "Course Other Name"},
-    {id: "3", shortName: "Course Big Name"}
+    {id: "1", longName: "Course Long Name", shortName: "Course Short Name"},
+    {id: "2", longName: "Course Other Long Name", shortName: "Course Other Name"},
+    {id: "3", longName: "Course Big Long Name", shortName: "Course Big Name"}
   ];
 
   props.opportunities.items = [
@@ -239,9 +249,9 @@ it('opens tray if todo update item props is set', () => {
   const mockDispatch = jest.fn();
   const props = defaultProps();
   props.courses = [
-    {id: "1", shortName: "Course Short Name"},
-    {id: "2", shortName: "Course Other Name"},
-    {id: "3", shortName: "Course Big Name"}
+    {id: "1", longName: "Course Long Name", shortName: "Course Short Name"},
+    {id: "2", longName: "Course Other Long Name", shortName: "Course Other Name"},
+    {id: "3", longName: "Course Big Long Name", shortName: "Course Big Name"}
   ];
 
   props.opportunities.items = [
@@ -259,29 +269,28 @@ it('opens tray if todo update item props is set', () => {
     {id: "10", course_id: "2", due_at: "2017-17-09T20:40:35Z", html_url: "http://www.non_default_url.com", name: "learning object title"}
   ];
 
+  props.getNextOpportunities = mockDispatch;
+  const wrapper = shallow(
+    <PlannerHeader {...props} />
+  );
+
   props.todo = {
     updateTodoItem: {
       id: 10
     }
   };
 
-  props.updateTodoItem = true;
-
-  props.getNextOpportunities = mockDispatch;
-  const wrapper = shallow(
-    <PlannerHeader {...props} />
-  );
-
   wrapper.setProps(props);
   expect(wrapper.state().trayOpen).toEqual(true);
 });
 
-it('shows only 10 opportunities badge when we over 10 items', () => {
+it('shows all opportunities on badge even when we have over 10 items', () => {
+  const mockDispatch = jest.fn();
   const props = defaultProps();
   props.courses = [
-    {id: "1", shortName: "Course Short Name"},
-    {id: "2", shortName: "Course Other Name"},
-    {id: "3", shortName: "Course Big Name"}
+    {id: "1", longName: "Course Long Name", shortName: "Course Short Name"},
+    {id: "2", longName: "Course Other Long Name", shortName: "Course Other Name"},
+    {id: "3", longName: "Course Big Long Name", shortName: "Course Big Name"}
   ];
 
   props.opportunities.items = [
@@ -299,13 +308,19 @@ it('shows only 10 opportunities badge when we over 10 items', () => {
     {id: "12", course_id: "3", due_at: "2017-16-09T20:40:35Z", html_url: "http://www.non_default_url.com", name: "learning object title"},
   ];
 
+  props.loading = {
+    loadingOpportunities: false,
+    allOpportunitiesLoaded: true,
+  };
+
   const fakeElement = document.createElement('div');
   const wrapper = mount(
     <PlannerHeader {...props} ariaHideElement={fakeElement} />
   );
+
   wrapper.setProps(props);
   expect(wrapper.find('Badge').filterWhere((item) => {
-    return item.prop('count') === 10; //src undefined
+    return item.prop('count') === props.opportunities.items.length; //src undefined
   }).length).toEqual(1);
 });
 
@@ -350,12 +365,13 @@ it('sets the maxHeight on the Opportunities', () => {
   expect(wrapper.find('Animatable(Opportunities)').prop('maxHeight')).toEqual(640);
 });
 
-it('leaves the tray in current open state when receiving new empty todo props', () => {
+it('opens the tray when it gets an updateTodoItem prop', () => {
   const wrapper = shallow(
     <PlannerHeader {...defaultProps()} />
   );
-  wrapper.instance().toggleUpdateItemTray();
-  wrapper.setProps({...defaultProps({todo: {}})});
+
+  expect(findEditTray(wrapper).prop('open')).toBe(false);
+  wrapper.setProps({...defaultProps({todo: {updateTodoItem: {}}})});
   expect(findEditTray(wrapper).prop('open')).toBe(true);
 });
 
@@ -401,4 +417,113 @@ it('does not start the grades saga when grades have been loaded', () => {
   const wrapper = shallow(<PlannerHeader {...props} />);
   wrapper.instance().toggleGradesTray();
   expect(props.startLoadingGradesSaga).not.toHaveBeenCalled();
+});
+
+describe('new activity button', () => {
+  let spy;
+
+  beforeEach(() => {
+    spy = sinon.stub(PlannerHeader.prototype, 'newActivityAboveView');
+  });
+
+  afterEach(() => {
+    spy.reset();
+    spy.restore();
+  });
+
+  it('does not show when there is no new activity', () => {
+    spy.returns(false);
+    const wrapper = shallow(<PlannerHeader {...defaultProps()} />);
+    expect(wrapper).toMatchSnapshot();
+    expect(spy.calledOnce).toEqual(true);
+  });
+
+  it('shows when there is new activity', () => {
+    spy.returns(true);
+    const wrapper = shallow(<PlannerHeader {...defaultProps()} />);
+    expect(wrapper).toMatchSnapshot();
+    expect(spy.calledOnce).toEqual(true);
+  });
+});
+
+describe('decision to show new activity indicator', () => {
+
+  it('is false while data is loading', () => {
+    const props = defaultProps();
+    props.loading.isLoading = true;
+    const wrapper = shallow(<PlannerHeader {...props} />);
+    expect(wrapper.instance().newActivityAboveView()).toEqual(false);
+  });
+
+  it('is false when there are no planner items', () => {
+    const props = defaultProps();
+    props.days = [];
+    props.loading.isLoading = false;
+    const wrapper = shallow(<PlannerHeader {...props} />);
+    expect(wrapper.instance().newActivityAboveView()).toEqual(false);
+  });
+
+  it('is false when first activity date is unknown', () => {
+    const props = defaultProps();
+    props.loading.isLoading = false;
+    props.firstNewActivityDate = undefined;
+    const wrapper = shallow(<PlannerHeader {...props} />);
+    expect(wrapper.instance().newActivityAboveView()).toEqual(false);
+  });
+
+  it('is false when the newest activity is already on or below the viewport', () => {
+    const props = defaultProps();
+    props.loading.isLoading = false;
+    props.firstNewActivityDate = plannerDays[0];
+    props.ui.naiAboveScreen = false;
+    const wrapper = shallow(<PlannerHeader {...props} />);
+    expect(wrapper.instance().newActivityAboveView()).toEqual(false);
+  });
+
+    it('is true when there is new activity still to be loaded from the past', () => {
+    const props = defaultProps();
+    props.loading.isLoading = false;
+    props.firstNewActivityDate = moment(plannerDays[0]);
+    props.firstNewActivityDate.subtract(5, 'days');
+    props.ui.naiAboveScreen = false;
+    const wrapper = shallow(<PlannerHeader {...props} />);
+    expect(wrapper.instance().newActivityAboveView()).toEqual(true);
+  });
+
+  it('is true when a new activity is above the viewport', () => {
+    const props = defaultProps();
+    props.loading.isLoading = false;
+    props.firstNewActivityDate = plannerDays[0];
+    props.ui.naiAboveScreen = true;
+    const wrapper = shallow(<PlannerHeader {...props} />);
+    expect(wrapper.instance().newActivityAboveView()).toEqual(true);
+  });
+
+  it('is true when there is new activity but no current items', () => {
+    const props = defaultProps();
+    props.days = [];
+    props.loading.isLoading = false;
+    props.firstNewActivityDate = plannerDays[0];
+    props.ui.naiAboveScreen = true;
+    const wrapper = shallow(<PlannerHeader {...props} />);
+    expect(wrapper.instance().newActivityAboveView()).toEqual(true);
+  });
+
+});
+
+describe('today button', () => {
+  it('is displayed when the planner has items', () => {
+    const props = defaultProps();
+    const wrapper = shallow(<PlannerHeader {...props} />);
+    const todaybtn = wrapper.find('#planner-today-btn');
+    expect(todaybtn.length).toEqual(1)
+  });
+
+  it('is not displayed when the planner has no items to display', () => {
+    const props = defaultProps();
+    props.days = [];
+    const wrapper = shallow(<PlannerHeader {...props} />);
+    const todaybtn = wrapper.find('#planner-today-btn');
+    expect(todaybtn.length).toEqual(0)
+  });
 });

@@ -72,14 +72,14 @@ test('renders right arrow when displayRightArrow is true', function () {
 });
 
 test('calls onLeftArrowClick when left arrow is clicked', function () {
-  const onLeftArrowClick = this.stub();
+  const onLeftArrowClick = sinon.stub();
   this.wrapper = mountComponent({ displayLeftArrow: true, onLeftArrowClick });
   this.wrapper.find('.left-arrow-button-container button').simulate('click');
   strictEqual(onLeftArrowClick.callCount, 1);
 });
 
 test('calls onRightArrowClick when right arrow is clicked', function () {
-  const onRightArrowClick = this.stub();
+  const onRightArrowClick = sinon.stub();
   this.wrapper = mountComponent({ displayRightArrow: true, onRightArrowClick });
   this.wrapper.find('.right-arrow-button-container button').simulate('click');
   strictEqual(onRightArrowClick.callCount, 1);
@@ -137,10 +137,10 @@ test('right button is not disabled', function () {
 
 test('adds a VO description for the left arrow button', function () {
   this.wrapper = mountComponent({ displayLeftArrow: true, leftArrowDescription: 'Previous record' });
-  strictEqual(this.wrapper.find('IconArrowOpenLeftLine').prop('title'), 'Previous record');
+  strictEqual(this.wrapper.find('IconArrowOpenStart').prop('title'), 'Previous record');
 });
 
 test('adds a VO description for the right arrow button', function () {
   this.wrapper = mountComponent({ displayRightArrow: true, rightArrowDescription: 'Next record' });
-  strictEqual(this.wrapper.find('IconArrowOpenRightLine').prop('title'), 'Next record');
+  strictEqual(this.wrapper.find('IconArrowOpenEnd').prop('title'), 'Next record');
 });

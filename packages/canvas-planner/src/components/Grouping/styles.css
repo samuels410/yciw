@@ -105,11 +105,13 @@
   border-top: var(--borderTopWidth) solid;
   border-color: var(--groupColor);
   color: var(--groupColor);
+  min-width: 1px;
 }
 
 .medium {
   &.root {
     display: block;
+    margin: 0;
   }
   .hero, .overlay {
     border-radius: 0;

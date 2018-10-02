@@ -17,7 +17,7 @@
  */
 
 import React from 'react';
-import { mount, ReactWrapper } from 'enzyme';
+import { mount, ReactWrapper } from 'old-enzyme-2.x-you-need-to-upgrade-this-spec-to-enzyme-3.x-by-importing-just-enzyme';
 import ViewOptionsMenu from 'jsx/gradezilla/default_gradebook/components/ViewOptionsMenu';
 
 function defaultProps ({ props, filterSettings } = {}) {
@@ -64,7 +64,7 @@ function mountAndOpenOptions (props) {
 function openArrangeBy (props) {
   const wrapper = mountAndOpenOptions(props);
   const menuContent = new ReactWrapper(wrapper.node.menuContent, wrapper.node);
-  const flyouts = menuContent.find('MenuItemFlyout').map(flyout => flyout);
+  const flyouts = menuContent.find('Menu').map(flyout => flyout);
   const flyout = flyouts.find(menuItem => menuItem.text().trim() === 'Arrange By')
   flyout.find('button').simulate('mouseOver');
   return wrapper;
@@ -73,7 +73,7 @@ function openArrangeBy (props) {
 function openFilters (props) {
   const wrapper = mountAndOpenOptions(props);
   const menuContent = new ReactWrapper(wrapper.node.menuContent, wrapper.node);
-  const flyouts = menuContent.find('MenuItemFlyout').map(flyout => flyout);
+  const flyouts = menuContent.find('Menu').map(flyout => flyout);
   const flyout = flyouts.find(menuItem => menuItem.text().trim() === 'Filters')
   flyout.find('button').simulate('mouseOver');
   return wrapper;
@@ -129,7 +129,7 @@ test('teacher notes are optionally disabled', function () {
 });
 
 test('triggers the onSelect when the "Notes" option is clicked', function () {
-  this.stub(this.props.teacherNotes, 'onSelect');
+  sandbox.stub(this.props.teacherNotes, 'onSelect');
   this.wrapper = mountAndOpenOptions(this.props);
   const notesMenuItem = this.getMenuItem();
   notesMenuItem.simulate('click');
@@ -190,13 +190,13 @@ test('does not display filters group when no filters are available', function ()
   const props = defaultProps({ filterSettings: { available: [] } });
   this.wrapper = mountAndOpenOptions(props);
   const menuContent = new ReactWrapper(this.wrapper.node.menuContent, this.wrapper.node);
-  const flyouts = menuContent.find('MenuItemFlyout').map(flyout => flyout);
+  const flyouts = menuContent.find('Menu').map(flyout => flyout);
   const flyout = flyouts.find(menuItem => menuItem.text().trim() === 'Filters')
   strictEqual(flyout, undefined);
 });
 
 test('onSelect is called when a filter is selected', function () {
-  const onSelect = this.stub();
+  const onSelect = sinon.stub();
   const props = defaultProps({ filterSettings: { onSelect } });
   this.wrapper = openFilters(props);
   const menuContent = new ReactWrapper(this.wrapper.node.filtersMenuContent, this.wrapper.node);
@@ -207,7 +207,7 @@ test('onSelect is called when a filter is selected', function () {
 });
 
 test('onSelect is called with the selected filter', function () {
-  const onSelect = this.stub();
+  const onSelect = sinon.stub();
   const props = defaultProps({ filterSettings: { onSelect } });
   this.wrapper = openFilters(props);
   const menuContent = new ReactWrapper(this.wrapper.node.filtersMenuContent, this.wrapper.node);
@@ -218,7 +218,7 @@ test('onSelect is called with the selected filter', function () {
 });
 
 test('onSelect is called with list of selected filters upon any selection change', function () {
-  const onSelect = this.stub();
+  const onSelect = sinon.stub();
   const props = defaultProps({
     filterSettings: {
       onSelect,
@@ -277,7 +277,7 @@ test('Unpublished Assignments is not selected when showUnpublishedAssignments is
 });
 
 test('onSelectShowUnpublishedAssignment is called when selected', function () {
-  const onSelectShowUnpublishedAssignmentsStub = this.stub();
+  const onSelectShowUnpublishedAssignmentsStub = sinon.stub();
   this.wrapper = this.mountViewOptionsMenu({
     onSelectShowUnpublishedAssignments: onSelectShowUnpublishedAssignmentsStub
   });
@@ -295,15 +295,15 @@ QUnit.module('ViewOptionsMenu - Column Sorting', {
         direction,
         disabled,
         modulesEnabled,
-        onSortByDefault: this.stub(),
-        onSortByNameAscending: this.stub(),
-        onSortByNameDescending: this.stub(),
-        onSortByDueDateAscending: this.stub(),
-        onSortByDueDateDescending: this.stub(),
-        onSortByPointsAscending: this.stub(),
-        onSortByPointsDescending: this.stub(),
-        onSortByModuleAscending: this.stub(),
-        onSortByModuleDescending: this.stub(),
+        onSortByDefault: sinon.stub(),
+        onSortByNameAscending: sinon.stub(),
+        onSortByNameDescending: sinon.stub(),
+        onSortByDueDateAscending: sinon.stub(),
+        onSortByDueDateDescending: sinon.stub(),
+        onSortByPointsAscending: sinon.stub(),
+        onSortByPointsDescending: sinon.stub(),
+        onSortByModuleAscending: sinon.stub(),
+        onSortByModuleDescending: sinon.stub(),
       }
     };
   },
@@ -524,7 +524,7 @@ QUnit.module('ViewOptionsMenu - Statuses');
 test('clicking Statuses calls onSelectShowStatusesModal', function () {
   const props = {
     ...defaultProps(),
-    onSelectShowStatusesModal: this.stub()
+    onSelectShowStatusesModal: sinon.stub()
   };
   const wrapper = mountAndOpenOptions(props);
   const optionsMenu = new ReactWrapper(wrapper.node.menuContent, wrapper.node);

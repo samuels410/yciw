@@ -25,14 +25,14 @@ define [
 
   dialogDefaults =
     fixDialogButtons: false
-    title: I18n.t 'delete_dialog_title', 'Delete Wiki Page'
+    title: I18n.t 'delete_dialog_title', 'Delete Page'
     width: 400
     height: 'auto'
 
   class WikiPageDeleteDialog extends DialogFormView
     setViewProperties: false
     wrapperTemplate: -> '<div class="outlet"></div>'
-    template: -> I18n.t 'delete_confirmation', 'Are you sure you wish to delete this wiki page?'
+    template: -> I18n.t 'delete_confirmation', 'Are you sure you want to delete this page?'
 
     @optionProperty 'wiki_pages_path'
     @optionProperty 'focusOnCancel'

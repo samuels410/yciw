@@ -16,13 +16,49 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import { shape, string, bool } from 'prop-types'
+import {shape, string, bool, oneOf, object} from 'prop-types'
+import I18n from 'i18n!permissions_v2_propTypes'
 
 const propTypes = {}
 
+export const COURSE = 'Course'
+export const ACCOUNT = 'Account'
+export const ALL_ROLES_VALUE = '0'
+export const ALL_ROLES_LABEL = I18n.t('All Roles')
+
+propTypes.permissionDetails = shape({
+  title: string.isRequired,
+  description: string.isRequired
+})
+
 propTypes.permission = shape({
-  name: string.isRequired,
-  value: bool.isRequred
+  permission_name: string.isRequired,
+  label: string.isRequired,
+  contextType: oneOf([COURSE, ACCOUNT]),
+  displayed: bool.isRequired
+})
+
+propTypes.rolePermission = shape({
+  enabled: bool.isRequired,
+  explicit: bool.isRequired,
+  locked: bool.isRequired,
+  readonly: bool.isRequired,
+  applies_to_descendants: bool,
+  applies_to_self: bool
+})
+
+propTypes.role = shape({
+  id: string.isRequired,
+  label: string.isRequired,
+  base_role_type: string.isRequired,
+  contextType: oneOf([COURSE, ACCOUNT]),
+  displayed: bool.isRequired,
+  permissions: object.isRequired // eslint-disable-line, shape is indeterminate
+})
+
+propTypes.filteredRole = shape({
+  label: string.isRequired,
+  value: string.isRequired
 })
 
 export default propTypes

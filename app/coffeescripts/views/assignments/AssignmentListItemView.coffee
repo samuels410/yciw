@@ -68,7 +68,8 @@ define [
       'click .icon-unlock': 'onLockAssignment'
       'click .move_assignment': 'onMove'
       'click .duplicate-failed-retry': 'onDuplicateFailedRetry'
-      'click .duplicate-failed-cancel': 'onDuplicateFailedCancel'
+      'click .duplicate-failed-cancel': 'onDuplicateOrImportFailedCancel'
+      'click .import-failed-cancel': 'onDuplicateOrImportFailedCancel'
 
     messages:
       confirm: I18n.t('Are you sure you want to delete this assignment?')
@@ -93,7 +94,7 @@ define [
         @model.on(observe, @render)
       @model.on 'change:submission', @updateScore
 
-      @model.pollUntilFinishedDuplicating() if @model.isDuplicating()
+      @model.pollUntilFinishedLoading()
 
     initializeChildViews: ->
       @publishIconView = false
@@ -254,6 +255,8 @@ define [
       @model.collection.forEach((a) =>
         a.set('position', response.new_positions[a.get('id')])
       )
+      if @hasIndividualPermissions()
+        ENV.PERMISSIONS.by_assignment_id[assignment.id] = ENV.PERMISSIONS.by_assignment_id[assignment.originalAssignmentID()]
       @model.collection.add(assignment)
       @focusOnAssignment(response)
 
@@ -272,7 +275,7 @@ define [
         @delete(silent: true)
       ).always -> $button.prop('disabled', false)
 
-    onDuplicateFailedCancel: (e) =>
+    onDuplicateOrImportFailedCancel: (e) =>
       e.preventDefault()
       @delete(silent: true)
 
@@ -318,7 +321,7 @@ define [
       if !@hasIndividualPermissions()
         return @userIsAdmin or @canManage()
 
-      @userIsAdmin or (@canManage() and ENV.PERMISSIONS.by_assignment_id[@model.id].update)
+      @userIsAdmin or (@canManage() && !!(ENV.PERMISSIONS.by_assignment_id[@model.id] && ENV.PERMISSIONS.by_assignment_id[@model.id].update))
 
     canManage: ->
       ENV.PERMISSIONS.manage

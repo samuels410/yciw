@@ -80,8 +80,8 @@ define [
   'jsx/grading/helpers/GradeInputHelper'
   'jsx/grading/helpers/OutlierScoreHelper'
   'jsx/grading/LatePolicyApplicator'
-  '@instructure/ui-core/lib/components/Button'
-  'instructure-icons/lib/Solid/IconSettingsSolid'
+  '@instructure/ui-buttons/lib/components/Button'
+  '@instructure/ui-icons/lib/Solid/IconSettings'
   'jsx/shared/FlashAlert'
   'jquery.ajaxJSON'
   'jquery.instructure_date_and_time'
@@ -234,7 +234,8 @@ define [
   class Gradebook
     columnWidths =
       assignment:
-        min: 214
+        min: 10
+        default_max: 200
         max: 400
       assignmentGroup:
         min: 35
@@ -259,7 +260,6 @@ define [
       @gradebookGrid = new GradebookGrid({
         $container: document.getElementById('gradebook_grid')
         activeBorderColor: '#1790DF' # $active-border-color
-        change_grade_url: @options.change_grade_url
         data: @gridData
         editable: @options.gradebook_is_editable
         gradebook: @
@@ -895,7 +895,7 @@ define [
     handleAssignmentMutingChange: (assignment) =>
       @gradebookGrid.gridSupport.columns.updateColumnHeaders([@getAssignmentColumnId(assignment.id)])
       @updateFilteredContentInfo()
-      @buildRows()
+      @resetGrading()
 
     handleSubmissionsDownloading: (assignmentId) =>
       @getAssignment(assignmentId).hasDownloadedSubmissions = true
@@ -1061,7 +1061,9 @@ define [
       @gradebookGrid.gridSupport.state.blur()
 
     sectionList: () ->
-      _.values(@sections).sort((a, b) => (a.id - b.id))
+      _.values(@sections)
+        .sort((a, b) => (a.id - b.id))
+        .map((section) => Object.assign({}, section, {name: htmlEscape.unescape(section.name)}))
 
     updateSectionFilterVisibility: () ->
       mountPoint = document.getElementById('sections-filter-container')
@@ -1513,13 +1515,16 @@ define [
     # Assignment Column
 
     buildAssignmentColumn: (assignment) ->
+      shrinkForOutOfText = assignment && assignment.grading_type == 'points' && assignment.points_possible?
+      minWidth = if shrinkForOutOfText then 140 else 90
+
       columnId = @getAssignmentColumnId(assignment.id)
       fieldName = "assignment_#{assignment.id}"
 
       if @gradebookColumnSizeSettings && @gradebookColumnSizeSettings[fieldName]
         assignmentWidth = parseInt(@gradebookColumnSizeSettings[fieldName])
       else
-        assignmentWidth = columnWidths.assignment.min
+        assignmentWidth = testWidth(assignment.name, minWidth, columnWidths.assignment.default_max)
 
       columnDef =
         id: columnId
@@ -1535,6 +1540,10 @@ define [
         toolTip: assignment.name
         type: 'assignment'
         assignmentId: assignment.id
+
+      unless columnDef.width > columnDef.minWidth
+        columnDef.cssClass += ' minimized'
+        columnDef.headerCssClass += ' minimized'
 
       columnDef
 
@@ -1716,13 +1725,9 @@ define [
       if obj.column.type == 'custom_column' && @getCustomColumn(obj.column.customColumnId)?.read_only
         return false
       return true if obj.column.type != 'assignment'
-      return false unless student = @student(obj.item.id)
-      return false if student.isConcluded
-      submissionState = @submissionStateMap.getSubmissionState({
-        user_id: obj.item.id,
-        assignment_id: obj.column.assignmentId
-      })
-      not submissionState?.locked
+
+      # Allow editing when the student has been loaded.
+      !!@student(obj.item.id)
 
     # The current cell editor has been changed and is valid
     onCellChange: (event, obj) =>
@@ -2163,7 +2168,6 @@ define [
       submissionState = @submissionStateMap.getSubmissionState({ user_id: studentId, assignment_id: assignmentId })
       isGroupWeightZero = @assignmentGroups[assignment.assignment_group_id].group_weight == 0
 
-      anonymousModeratedMarkingEnabled: @options.anonymous_moderated_marking_enabled
       assignment: ConvertCase.camelize(assignment)
       colors: @getGridColors()
       comments: comments
@@ -2179,7 +2183,8 @@ define [
       isLastAssignment: isLastAssignment
       isFirstStudent: isFirstStudent
       isLastStudent: isLastStudent
-      isNotCountedForScore: assignment.omit_from_final_grade or isGroupWeightZero
+      isNotCountedForScore: assignment.omit_from_final_grade or
+                            (@options.group_weighting_scheme == 'percent' and isGroupWeightZero)
       isOpen: open
       key: "grade_details_tray"
       latePolicy: @courseContent.latePolicy
@@ -2356,6 +2361,16 @@ define [
 
     setSubmissionsLoaded: (loaded) =>
       @contentLoadStates.submissionsLoaded = loaded
+
+    isGradeEditable: (studentId, assignmentId) =>
+      student = @student(studentId)
+      return false if !student || student.isConcluded
+      submissionState = @submissionStateMap.getSubmissionState(assignment_id: assignmentId, user_id: studentId)
+      submissionState? && !submissionState.locked
+
+    isGradeVisible: (studentId, assignmentId) =>
+      submissionState = @submissionStateMap.getSubmissionState(assignment_id: assignmentId, user_id: studentId)
+      submissionState? && !submissionState.hideGrade
 
     addPendingGradeInfo: (submission, gradeInfo) =>
       { userId, assignmentId } = submission
@@ -2675,8 +2690,7 @@ define [
       manager = new AssignmentMuterDialogManager(
         assignment,
         "#{@options.context_url}/assignments/#{assignmentId}/mute",
-        @contentLoadStates.submissionsLoaded,
-        @options.anonymous_moderated_marking_enabled
+        @contentLoadStates.submissionsLoaded
       )
 
       {

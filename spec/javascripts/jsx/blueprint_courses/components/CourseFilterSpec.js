@@ -19,13 +19,13 @@
 import React from 'react'
 import * as enzyme from 'enzyme'
 import CourseFilter from 'jsx/blueprint_courses/components/CourseFilter'
-import data from '../sampleData'
+import getSampleData from '../getSampleData'
 
 QUnit.module('CourseFilter component')
 
 const defaultProps = () => ({
-  subAccounts: data.subAccounts,
-  terms: data.terms,
+  subAccounts: getSampleData().subAccounts,
+  terms: getSampleData().terms,
 })
 
 test('renders the CourseFilter component', () => {
@@ -43,7 +43,7 @@ test('onChange fires with search filter when text is entered in search box', (as
   }
   const tree = enzyme.mount(<CourseFilter {...props} />)
   const input = tree.find('TextInput input')
-  input.node.value = 'giraffe'
+  input.instance().value = 'giraffe'
   input.simulate('change')
 })
 
@@ -56,7 +56,7 @@ test('onChange fires with term filter when term is selected', (assert) => {
   }
   const tree = enzyme.mount(<CourseFilter {...props} />)
   const input = tree.find('select').at(0)
-  input.node.value = '1'
+  input.instance().value = '1'
   input.simulate('change')
 })
 
@@ -69,7 +69,7 @@ test('onChange fires with subaccount filter when a subaccount is selected', (ass
   }
   const tree = enzyme.mount(<CourseFilter {...props} />)
   const input = tree.find('select').at(1)
-  input.node.value = '1'
+  input.instance().value = '1'
   input.simulate('change')
 })
 
@@ -88,7 +88,7 @@ test('onChange not fired when < 3 chars are entered in search text input', (asse
   props.onChange = sinon.spy()
   const tree = enzyme.mount(<CourseFilter {...props} />)
   const input = tree.find('input[type="search"]')
-  input.node.value = 'aa'
+  input.instance().value = 'aa'
   input.simulate('change')
   setTimeout(() => {
     equal(props.onChange.callCount, 0)
@@ -102,7 +102,7 @@ test('onChange fired when 3 chars are entered in search text input', (assert) =>
   props.onChange = sinon.spy()
   const tree = enzyme.mount(<CourseFilter {...props} />)
   const input = tree.find('input[type="search"]')
-  input.node.value = 'aaa'
+  input.instance().value = 'aaa'
   input.simulate('change')
   setTimeout(() => {
     ok(props.onChange.calledOnce)

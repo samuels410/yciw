@@ -22,7 +22,6 @@ import ReactDOM from 'react-dom';
 import TestUtils from 'react-addons-test-utils';
 import { shallow } from 'enzyme';
 import jQuery from 'jquery';
-import Modal from 'jsx/shared/modal';
 import SaveThemeButton from 'jsx/theme_editor/SaveThemeButton';
 import 'jquery.ajaxJSON';
 
@@ -55,8 +54,8 @@ test('save', function (assert) {
   const done = assert.async()
   let component = ReactDOM.render(<SaveThemeButton {...props} />, elem)
   const updatedBrandConfig = {}
-  this.stub(jQuery, 'ajaxJSON').callsArgOnWith(3, component, updatedBrandConfig)
-  this.spy(component, 'setState')
+  sandbox.stub(jQuery, 'ajaxJSON').callsArgOnWith(3, component, updatedBrandConfig)
+  sandbox.spy(component, 'setState')
   component.save()
   ok(
     jQuery.ajaxJSON.calledWithMatch(props.accountID, 'PUT'),
@@ -91,7 +90,7 @@ test('save', function (assert) {
 test('modal visibility', function () {
   const wrapper = shallow(<SaveThemeButton {...props} />);
 
-  let modal = wrapper.find('InstuiModal');
+  let modal = wrapper.find('CanvasInstUIModal');
   ok(modal.exists(), 'renders a modal');
   notOk(modal.props().open, 'modal is closed');
 
@@ -99,7 +98,7 @@ test('modal visibility', function () {
     modalIsOpen: true
   });
 
-  modal = wrapper.find('InstuiModal');
+  modal = wrapper.find('CanvasInstUIModal');
   ok(modal.props().open, 'modal is open')
 })
 

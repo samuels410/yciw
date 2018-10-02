@@ -22,6 +22,7 @@ class AssignmentsController < ApplicationController
   include Api::V1::Assignment
   include Api::V1::AssignmentOverride
   include Api::V1::AssignmentGroup
+  include Api::V1::ModerationGrader
   include Api::V1::Outcome
   include Api::V1::ExternalTools
 
@@ -51,10 +52,7 @@ class AssignmentsController < ApplicationController
       # because of course import/copy.
       @context.require_assignment_group
 
-      set_js_assignment_data(
-        include_assignment_permissions: @context.root_account.feature_enabled?(:anonymous_moderated_marking)
-      )
-
+      set_js_assignment_data
       set_tutorial_js_env
       hash = {
         WEIGHT_FINAL_GRADES: @context.apply_group_weights?,
@@ -81,6 +79,7 @@ class AssignmentsController < ApplicationController
   def show
     rce_js_env(:highrisk)
     @assignment ||= @context.assignments.find(params[:id])
+    @assignment_presenter = AssignmentPresenter.new(@assignment)
     if @assignment.deleted?
       respond_to do |format|
         flash[:notice] = t 'notices.assignment_delete', "This assignment has been deleted"
@@ -191,28 +190,13 @@ class AssignmentsController < ApplicationController
     add_crumb(@assignment.title, polymorphic_url([@context, @assignment]))
     add_crumb(t('Moderate'))
 
-    can_edit_grades = @context.grants_right?(@current_user, :manage_grades)
-    js_env({
-      ASSIGNMENT_TITLE: @assignment.title,
-      GRADES_PUBLISHED: @assignment.grades_published?,
-      COURSE_ID: @context.id,
-      STUDENT_CONTEXT_CARDS_ENABLED: @domain_root_account.feature_enabled?(:student_context_cards),
-      PERMISSIONS: {
-        view_grades: can_edit_grades || @context.grants_right?(@current_user, :view_all_grades),
-        edit_grades: can_edit_grades
-      },
-      URLS: {
-        student_submissions_url: polymorphic_url([:api_v1, @context, @assignment, :submissions]) + "?include[]=user_summary&include[]=provisional_grades",
-        publish_grades_url: api_v1_publish_provisional_grades_url({course_id: @context.id, assignment_id: @assignment.id}),
-        list_gradeable_students: api_v1_course_assignment_gradeable_students_url({course_id: @context.id, assignment_id: @assignment.id}) + "?include[]=provisional_grades&per_page=50",
-        add_moderated_students: api_v1_add_moderated_students_url({course_id: @context.id, assignment_id: @assignment.id}),
-        assignment_speedgrader_url: speed_grader_course_gradebook_url({course_id: @context.id, assignment_id: @assignment.id}),
-        provisional_grades_base_url: polymorphic_url([:api_v1, @context, @assignment]) + "/provisional_grades"
-      }})
+    css_bundle :assignment_grade_summary
+    js_bundle :assignment_grade_summary
+    js_env(show_moderate_env)
 
-    respond_to do |format|
-      format.html { render }
-    end
+    @page_title = @assignment.title
+
+    render html: "", layout: true
   end
 
   def downloadable_submissions?(current_user, context, assignment)
@@ -355,7 +339,11 @@ class AssignmentsController < ApplicationController
       ).to_a
       @syllabus_body = syllabus_user_content
 
-      hash = { :CONTEXT_ACTION_SOURCE => :syllabus }
+      hash = {
+        CONTEXT_ACTION_SOURCE: :syllabus,
+        # don't check for student enrollments because we want this to show for the teacher as well
+        STUDENT_PLANNER_ENABLED: @domain_root_account&.feature_enabled?(:student_planner)
+      }
       append_sis_data(hash)
       js_env(hash)
       set_tutorial_js_env
@@ -370,11 +358,16 @@ class AssignmentsController < ApplicationController
   def toggle_mute
     return nil unless authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
     @assignment = @context.assignments.active.find(params[:assignment_id])
-    method = if params[:status] == "true" then :mute! else :unmute! end
+
+    toggle_value = params[:status] == 'true'
+    return render_unauthorized_action if !toggle_value && !@assignment.grades_published?
+
+    method = toggle_value ? :mute! : :unmute!
+    @assignment.updating_user = @current_user
 
     respond_to do |format|
       if @assignment && @assignment.send(method)
-        format.json { render :json => @assignment }
+        format.json { render json: @assignment.as_json(methods: :anonymize_students) }
       else
         format.json { render :json => @assignment, :status => :bad_request }
       end
@@ -476,7 +469,6 @@ class AssignmentsController < ApplicationController
 
       post_to_sis = Assignment.sis_grade_export_enabled?(@context)
       hash = {
-        ANONYMOUS_MODERATED_MARKING_ENABLED: @context.root_account.feature_enabled?(:anonymous_moderated_marking),
         ASSIGNMENT_GROUPS: json_for_assignment_groups,
         ASSIGNMENT_INDEX_URL: polymorphic_url([@context, :assignments]),
         ASSIGNMENT_OVERRIDES: assignment_overrides_json(
@@ -506,7 +498,6 @@ class AssignmentsController < ApplicationController
           }
         end,
         VALID_DATE_RANGE: CourseDateRange.new(@context),
-        ANONYMOUS_INSTRUCTOR_ANNOTATIONS_ENABLED: ENV['ANONYMOUS_INSTRUCTOR_ANNOTATIONS'] == 'true'
       }
 
       add_crumb(@assignment.title, polymorphic_url([@context, @assignment]))
@@ -531,6 +522,8 @@ class AssignmentsController < ApplicationController
       end
 
       hash[:ANONYMOUS_GRADING_ENABLED] = @context.feature_enabled?(:anonymous_marking)
+
+      hash[:MODERATED_GRADING_ENABLED] = @context.feature_enabled?(:moderated_grading)
 
       append_sis_data(hash)
       if context.is_a?(Course)
@@ -567,6 +560,45 @@ class AssignmentsController < ApplicationController
   end
 
   protected
+
+  def show_moderate_env
+    can_view_grader_identities = @assignment.can_view_other_grader_identities?(@current_user)
+
+    if can_view_grader_identities
+      current_grader_id = @current_user.id
+      final_grader_id = @assignment.final_grader_id
+    else
+      # When the user cannot view other grader identities, the moderation page
+      # will be loaded with grader data that has been anonymized. This includes
+      # the current user's grader information. The relevant id must be provided
+      # to the front end in this case.
+
+      current_grader_id = @assignment.grader_ids_to_anonymous_ids[@current_user.id.to_s]
+      final_grader_id = @assignment.grader_ids_to_anonymous_ids[@assignment.final_grader_id&.to_s]
+    end
+
+    {
+      ASSIGNMENT: {
+        course_id: @context.id,
+        grades_published: @assignment.grades_published?,
+        id: @assignment.id,
+        muted: @assignment.muted?,
+        title: @assignment.title
+      },
+      CURRENT_USER: {
+        can_view_grader_identities: can_view_grader_identities,
+        can_view_student_identities: @assignment.can_view_student_names?(@current_user),
+        grader_id: current_grader_id,
+        id: @current_user.id
+      },
+      FINAL_GRADER: @assignment.final_grader && {
+        grader_id: final_grader_id,
+        id: @assignment.final_grader_id
+      },
+      GRADERS: moderation_graders_json(@assignment, @current_user, session),
+      STUDENT_CONTEXT_CARDS_ENABLED: @domain_root_account.feature_enabled?(:student_context_cards)
+    }
+  end
 
   def tool_eula_url
     @assignment.tool_settings_tool.try(:tool_proxy)&.find_service(Assignment::LTI_EULA_SERVICE, 'GET')&.endpoint

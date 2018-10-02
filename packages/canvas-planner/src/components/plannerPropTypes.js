@@ -22,7 +22,8 @@ import PropTypes from 'prop-types';
 export const userShape = {
   id: PropTypes.string,
   displayName: PropTypes.string,
-  avatarUrl: PropTypes.string
+  avatarUrl: PropTypes.string,
+  color: PropTypes.string
 };
 
 export const badgeShape = {
@@ -61,6 +62,13 @@ export const statusShape = PropTypes.oneOfType([
   })
 ]);
 
+export const feedbackShape = {
+  author_avatar_url: PropTypes.string,
+  author_name: PropTypes.string,
+  comment: PropTypes.string,
+  is_media: PropTypes.bool,
+};
+
 export default {
   badgeShape,
   userShape,
@@ -69,4 +77,5 @@ export default {
   opportunityShape,
   sizeShape,
   statusShape,
+  feedbackShape,
 };

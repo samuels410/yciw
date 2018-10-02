@@ -17,7 +17,6 @@
 #
 
 require_relative '../spec_helper'
-
 require 'csv'
 
 describe GradebookExporter do
@@ -31,7 +30,43 @@ describe GradebookExporter do
       GradebookExporter.new(@course, @teacher, opts)
     end
 
+    describe "custom columns" do
+      before(:once) do
+        first_column = @course.custom_gradebook_columns.create! title: "Custom Column 1"
+        second_column = @course.custom_gradebook_columns.create! title: "Custom Column 2"
+        third_column = @course.custom_gradebook_columns.create!({title: "Custom Column 3", workflow_state: "hidden"})
+
+        student1_enrollment = student_in_course(course: @course, active_all: true).user
+        student2_enrollment = student_in_course(course: @course, active_all: true).user
+
+        first_column.custom_gradebook_column_data.create!({content: 'Row1 Custom Column 1', user_id: student1_enrollment.id})
+        first_column.custom_gradebook_column_data.create!({content: 'Row2 Custom Column 1', user_id: student2_enrollment.id})
+        second_column.custom_gradebook_column_data.create!({content: 'Row1 Custom Column 2', user_id: student1_enrollment.id})
+        second_column.custom_gradebook_column_data.create!({content: 'Row2 Custom Column 2', user_id: student2_enrollment.id})
+        third_column.custom_gradebook_column_data.create!({content: 'Row1 Custom Column 3', user_id: student1_enrollment.id})
+        third_column.custom_gradebook_column_data.create!({content: 'Row2 Custom Column 3', user_id: student2_enrollment.id})
+      end
+
+      it "have the correct custom column data in proper order" do
+        csv = GradebookExporter.new(@course, @teacher).to_csv
+        rows = CSV.parse(csv, headers: true)
+
+        expect(rows[1]['Custom Column 1']).to eq 'Row1 Custom Column 1'
+        expect(rows[2]['Custom Column 1']).to eq 'Row2 Custom Column 1'
+        expect(rows[1]['Custom Column 2']).to eq 'Row1 Custom Column 2'
+        expect(rows[2]['Custom Column 2']).to eq 'Row2 Custom Column 2'
+        expect(rows[1]['Custom Column 3']).to eq nil
+        expect(rows[2]['Custom Column 3']).to eq nil
+      end
+    end
+
     describe "default output with blank course" do
+      before(:once) do
+        @course.custom_gradebook_columns.create! title: "Custom Column 1"
+        @course.custom_gradebook_columns.create! title: "Custom Column 2"
+        @course.custom_gradebook_columns.create!({title: "Custom Column 3", workflow_state: "hidden"})
+      end
+
       subject(:csv) { exporter.to_csv }
 
       it { is_expected.to be_a String }
@@ -47,10 +82,12 @@ describe GradebookExporter do
 
       it "has headers in a default order" do
         expected_headers = [
-          "Student", "ID", "SIS Login ID", "Section", "Current Points", "Final Points",
+          "Student", "ID", "SIS Login ID", "Section", "Custom Column 1", "Custom Column 2",
+          "Current Points", "Final Points",
           "Current Score", "Unposted Current Score", "Final Score", "Unposted Final Score",
           "Current Grade", "Unposted Current Grade", "Final Grade", "Unposted Final Grade"
         ]
+
         actual_headers = CSV.parse(csv, headers: true).headers
 
         expect(actual_headers).to match_array(expected_headers)
@@ -303,33 +340,56 @@ describe GradebookExporter do
       end
     end
 
-    it "should include inactive students" do
-      assmt = @course.assignments.create!(title: "assmt", points_possible: 10)
+    describe "with inactive students" do
+      before :once do
+        assmt = @course.assignments.create!(title: "assmt", points_possible: 10)
 
-      student1_enrollment = student_in_course(course: @course, active_all: true)
-      student1 = student1_enrollment.user
-      student2_enrollment = student_in_course(course: @course, active_all: true)
-      student2 = student2_enrollment.user
+        student1_enrollment = student_in_course(course: @course, active_all: true)
+        @student1 = student1_enrollment.user
+        student2_enrollment = student_in_course(course: @course, active_all: true)
+        @student2 = student2_enrollment.user
 
-      assmt.grade_student(student1, grade: 1, grader: @teacher)
-      assmt.grade_student(student2, grade: 2, grader: @teacher)
+        assmt.grade_student(@student1, grade: 1, grader: @teacher)
+        assmt.grade_student(@student2, grade: 2, grader: @teacher)
 
-      student1_enrollment.deactivate
-      student2_enrollment.deactivate
+        student1_enrollment.deactivate
+        student2_enrollment.deactivate
 
-      @teacher.preferences[:gradebook_settings] =
-      { @course.id =>
-        {
-          'show_inactive_enrollments' => 'true',
-          'show_concluded_enrollments' => 'false'
+        @teacher.preferences[:gradebook_settings] = {
+          @course.id => {
+            'show_inactive_enrollments' => 'true',
+            'show_concluded_enrollments' => 'false'
+          }
         }
-      }
-      @teacher.save!
+        @teacher.save!
+      end
 
-      csv = exporter.to_csv
-      rows = CSV.parse(csv, headers: true)
+      it "includes inactive students" do
+        csv = exporter.to_csv
+        rows = CSV.parse(csv, headers: true)
+        expect([rows[1]["ID"], rows[2]["ID"]]).to match_array([@student1.id.to_s, @student2.id.to_s])
+      end
 
-      expect([rows[1]["ID"], rows[2]["ID"]]).to match_array([student1.id.to_s, student2.id.to_s])
+      it "includes grades for inactive students if show inactive enrollments" do
+        csv = exporter.to_csv
+        rows = CSV.parse(csv, headers: true)
+        assignment_data_first_student = rows[1].find { |column_info| column_info.first.include? "assmt" }
+        assignment_data_second_student = rows[2].find { |column_info| column_info.first.include? "assmt" }
+        expect([assignment_data_first_student.second, assignment_data_second_student.second]).to match_array(["1.0", "2.0"])
+      end
+
+      it "does not include inactive students if show inactive enrollments is set to false" do
+        @teacher.preferences[:gradebook_settings] = {
+          @course.id => {
+            'show_inactive_enrollments' => 'false',
+            'show_concluded_enrollments' => 'false'
+          }
+        }
+        @teacher.save!
+        csv = exporter.to_csv
+        rows = CSV.parse(csv, headers: true)
+        expect([rows[1], rows[2]]).to match_array([nil, nil])
+      end
     end
 
     it 'handles gracefully any assignments with nil position' do

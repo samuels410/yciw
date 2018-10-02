@@ -913,6 +913,27 @@ QUnit.module 'ScreenReader Gradebook', (suiteHooks) ->
         srgb.set('selectedStudent', student)
         equal srgb.get('selectedSubmissionHidden'), true
 
+  QUnit.module 'hideComments', (hooks) ->
+    hooks.beforeEach ->
+      initializeApp()
+      asyncHelper.waitForRequests()
+
+    test 'false when anonymize_students is false', ->
+      assignment = srgb.get('assignments.firstObject')
+      assignment.anonymize_students = false
+
+      Ember.run ->
+        srgb.set('selectedAssignment', assignment)
+        equal srgb.get('hideComments'), false
+
+    test 'true when anonymize_students is true', ->
+      assignment = srgb.get('assignments.firstObject')
+      assignment.anonymize_students = true
+
+      Ember.run ->
+        srgb.set('selectedAssignment', assignment)
+        equal srgb.get('hideComments'), true
+
   QUnit.module 'selectedOutcomeResult', (hooks) ->
     hooks.beforeEach ->
       initializeApp()

@@ -256,9 +256,9 @@ to because the assignment has no points possible.
         else
           if attachment
             job_options = {
-              :priority => Delayed::LOW_PRIORITY,
+              :priority => Delayed::HIGH_PRIORITY,
               :max_attempts => 1,
-              :n_strand => 'file_download'
+              :n_strand => Attachment.clone_url_strand(url)
             }
 
             send_later_enqueue_args(:fetch_attachment_and_save_submission, job_options, url, attachment, _tool, submission_hash, assignment, user, new_score, raw_score)
@@ -291,6 +291,7 @@ to because the assignment has no points possible.
         end
 
         if @submission
+          @submission.attempt -= 1 if @submission.attempt.try(:'>', 0) && @submission.submitted_at_changed?
           @submission.save
         else
           self.code_major = 'failure'

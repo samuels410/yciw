@@ -17,14 +17,14 @@
  */
 
 import React from 'react'
-import * as enzyme from 'enzyme'
+import * as enzyme from 'old-enzyme-2.x-you-need-to-upgrade-this-spec-to-enzyme-3.x-by-importing-just-enzyme'
 import SyncChange from 'jsx/blueprint_courses/components/SyncChange'
-import data from '../sampleData'
+import getSampleData from '../getSampleData'
 
 QUnit.module('SyncChange component')
 
 const defaultProps = () => ({
-  change: data.history[0].changes[0],
+  change: getSampleData().history[0].changes[0],
 })
 
 test('renders the SyncChange component', () => {
@@ -34,10 +34,9 @@ test('renders the SyncChange component', () => {
 })
 
 test('renders the SyncChange component expanded when state.isExpanded = true', () => {
-  const props = defaultProps()
-  props.isLoadingHistory = true
+  const props = {...defaultProps(), isLoadingHistory: true}
   const tree = enzyme.shallow(<SyncChange {...props} />)
-  tree.instance().setState({ isExpanded: true })
+  tree.setState({ isExpanded: true })
   const node = tree.find('.bcs__history-item__change__expanded')
   ok(node.exists())
 })

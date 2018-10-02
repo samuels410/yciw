@@ -26,12 +26,10 @@ describe PlannerNotesController do
     @course_1 = @course
     course_with_student(user: @student, active_all: true)
     @course_2 = @course
-    @course_1.root_account.enable_feature!(:student_planner)
-    @course_2.root_account.enable_feature!(:student_planner)
-    @student_note = planner_note_model(user: @student, todo_date: (1.week.from_now))
-    @teacher_note = planner_note_model(user: @teacher, todo_date: (1.week.from_now))
-    @course_1_note = planner_note_model(user: @student, todo_date: (1.week.ago), course: @course_1)
-    @course_2_note = planner_note_model(user: @student, todo_date: (3.weeks.ago), course: @course_2)
+    @student_note = planner_note_model(user: @student, todo_date: 1.week.from_now)
+    @teacher_note = planner_note_model(user: @teacher, todo_date: 1.week.from_now)
+    @course_1_note = planner_note_model(user: @student, todo_date: 1.week.ago, course: @course_1)
+    @course_2_note = planner_note_model(user: @student, todo_date: 3.weeks.ago, course: @course_2)
   end
 
   context "unauthenticated" do
@@ -45,7 +43,26 @@ describe PlannerNotesController do
     end
   end
 
+  context "feature disabled" do
+    before :each do
+      user_session(@student)
+    end
+
+    it "should return forbidden" do
+      get :index
+      assert_forbidden
+
+      post :create, params: {title: 'thing', todo_date: 1.day.from_now}
+      assert_forbidden
+    end
+  end
+
   context "authenticated" do
+    before :once do
+      @course_1.root_account.enable_feature!(:student_planner)
+      @course_2.root_account.enable_feature!(:student_planner)
+    end
+
     context "as student" do
       before :each do
         user_session(@student)
@@ -54,7 +71,19 @@ describe PlannerNotesController do
       describe "GET #index" do
         it "returns http success" do
           get :index
-          expect(response).to have_http_status(:success)
+          expect(response).to be_successful
+        end
+
+        it "excludes deleted courses" do
+          @course_1.destroy
+          get :index
+          note_ids = json_parse(response.body).map{|n| n["id"]}
+          expect(note_ids).to_not include(@course_1_note.id)
+          expect(note_ids).to include(@course_2_note.id)
+
+          get :index, params: {context_codes: ["course_#{@course_1.id}"]}
+          course_notes = json_parse(response.body)
+          expect(course_notes.length).to eq 0
         end
 
         it "filters by context codes when specified" do
@@ -67,6 +96,13 @@ describe PlannerNotesController do
           course_notes = json_parse(response.body)
           expect(course_notes.length).to eq 1
           expect(course_notes.first["id"]).to eq @course_2_note.id
+        end
+
+        it "includes own notes if specified" do
+          get :index, params: {context_codes: ["course_#{@course_1.id}", "user_#{@user.id}"]}
+          course_notes = json_parse(response.body)
+          expect(course_notes.length).to eq 2
+          expect(course_notes.map{|n| n["id"]}).to match_array [@course_1_note.id, @student_note.id]
         end
 
         it "filters by start and end dates when specified" do
@@ -86,19 +122,25 @@ describe PlannerNotesController do
           expect(all_notes.pluck("id").sort).to eq [@student_note.id, @course_1_note.id, @course_2_note.id].sort
         end
 
-        it 'should 400 for bad dates' do
-          get :index, params: {start_date: '123-456-7890', end_date: '98765-43210'}
-          expect(response.code).to eql '400'
+        it 'should 400 for bad start dates' do
+          get :index, params: {start_date: '123-456-7890'}
+          expect(response.code).to eq '400'
           json = json_parse(response.body)
-          expect(json['errors']['start_date']).to eq 'Invalid date or invalid datetime for start_date'
-          expect(json['errors']['end_date']).to eq 'Invalid date or invalid datetime for end_date'
+          expect(json['errors']).to eq 'Invalid date or datetime for start_date'
+        end
+
+        it 'should 400 for bad end dates' do
+          get :index, params: {end_date: '5678-90'}
+          expect(response.code).to eq '400'
+          json = json_parse(response.body)
+          expect(json['errors']).to eq 'Invalid date or datetime for end_date'
         end
       end
 
       describe "GET #show" do
         it "returns http success for accessing your notes" do
           get :show, params: {id: @student_note.id}
-          expect(response).to have_http_status(:success)
+          expect(response).to be_successful
         end
 
         it "returns http not found for notes not yours" do
@@ -113,7 +155,7 @@ describe PlannerNotesController do
         it "returns http success" do
           updated_title = "updated note title"
           put :update, params: {id: @student_note.id, title: updated_title}
-          expect(response).to have_http_status(:success)
+          expect(response).to be_successful
           expect(@student_note.reload.title).to eq updated_title
         end
 
@@ -125,7 +167,7 @@ describe PlannerNotesController do
 
         it "links to a course" do
           put :update, params: {id: @student_note.id, course_id: @course_1.to_param}
-          expect(response).to have_http_status(:success)
+          expect(response).to be_successful
           expect(@student_note.reload.course_id).to eq @course_1.id
         end
 
@@ -133,7 +175,7 @@ describe PlannerNotesController do
           @student_note.course = @course_1
           @student_note.save!
           put :update, params: {id: @student_note.id, course_id: ''}
-          expect(response).to have_http_status(:success)
+          expect(response).to be_successful
           expect(@student_note.reload.course_id).to be_nil
         end
 
@@ -157,7 +199,7 @@ describe PlannerNotesController do
 
           it "does allow other updates" do
             put :update, params: {id: @student_note.id, details: 'this assignment is terrible'}
-            expect(response).to have_http_status(:success)
+            expect(response).to be_successful
             expect(@student_note.reload.details).to eq 'this assignment is terrible'
           end
         end
@@ -317,7 +359,7 @@ describe PlannerNotesController do
             n.destroy
             post :create, params: {details: 'bar', todo_date: 2.days.from_now, linked_object_type: 'assignment',
                                    course_id: @course_1.id, linked_object_id: a.id}
-            expect(response).to have_http_status(:success)
+            expect(response).to be_successful
 
             scope = @student.planner_notes.where(linked_object_id: a.id, linked_object_type: 'Assignment')
             expect(scope.count).to eq 2
@@ -338,7 +380,7 @@ describe PlannerNotesController do
             it "links to an object in another shard" do
               post :create, params: {todo_date: 1.day.from_now, course_id: @remote_course.id,
                 linked_object_type: 'assignment', linked_object_id: @remote_assignment.id}
-              expect(response).to have_http_status(:success)
+              expect(response).to be_successful
 
               json = JSON.parse(response.body)
               note = PlannerNote.find(json['id'])
@@ -351,7 +393,7 @@ describe PlannerNotesController do
       describe "DELETE #destroy" do
         it "returns http success" do
           delete :destroy, params: {id: @student_note.id}
-          expect(response).to have_http_status(:success)
+          expect(response).to be_successful
           expect(@student_note.reload).to be_deleted
         end
 
@@ -371,14 +413,14 @@ describe PlannerNotesController do
       describe "GET #index" do
         it "returns http success" do
           get :index
-          expect(response).to have_http_status(:success)
+          expect(response).to be_successful
         end
       end
 
       describe "GET #show" do
         it "returns http success" do
           get :show, params: {id: @teacher_note.id}
-          expect(response).to have_http_status(:success)
+          expect(response).to be_successful
         end
 
         it "returns http not found for notes not yours" do
@@ -397,7 +439,7 @@ describe PlannerNotesController do
         it "returns http success" do
           updated_title = "updated note title"
           put :update, params: {id: @teacher_note.id, title: updated_title}
-          expect(response).to have_http_status(:success)
+          expect(response).to be_successful
           expect(@teacher_note.reload.title).to eq updated_title
         end
 
@@ -425,7 +467,7 @@ describe PlannerNotesController do
       describe "DELETE #destroy" do
         it "returns http success" do
           delete :destroy, params: {id: @teacher_note.id}
-          expect(response).to have_http_status(:success)
+          expect(response).to be_successful
           expect(@teacher_note.reload).to be_deleted
         end
 

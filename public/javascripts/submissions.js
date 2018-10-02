@@ -47,7 +47,7 @@ import './rubric_assessment' /*global rubricAssessment*/
       if(submission.user_id != ENV.SUBMISSION.user_id) { continue; }
 
       for(var idx in comments) {
-        var comment = comments[idx].submission_comment;
+        var comment = comments[idx].submission_comment || comments[idx];
         if($("#submission_comment_" + comment.id).length > 0) { continue; }
         var $comment = $("#comment_blank").clone(true).removeAttr('id');
         comment.posted_at = $.datetimeString(comment.created_at);
@@ -337,7 +337,10 @@ import './rubric_assessment' /*global rubricAssessment*/
             found = assessment;
           }
         }
-        rubricAssessment.populateRubric($("#rubric_holder .rubric"), found);
+
+        const container = $("#rubric_holder .rubric")
+        rubricAssessment.populateNewRubric(container, found, ENV.rubricAssociation);
+
         var current_user = (!found || found.assessor_id == ENV.RUBRIC_ASSESSMENT.assessor_id);
         $("#rubric_holder .save_rubric_button").showIf(current_user);
       }).change();

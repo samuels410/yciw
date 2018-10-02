@@ -16,8 +16,8 @@ echo '
 Welcome! This script will guide you through the process of setting up a
 Canvas development environment with docker and dinghy/dory.
 
-When you git pull new changes, you can run this script again to bring
-everything up to date.'
+When you git pull new changes, you can run ./scripts/docker_dev_update.sh
+to bring everything up to date.'
 
 if [[ "$USER" == 'root' ]]; then
   echo 'Please do not run this script as root!'
@@ -41,7 +41,7 @@ if [[ $OS == 'Darwin' ]]; then
   dependencies='docker docker-machine docker-compose dinghy'
 elif [[ $OS == 'Linux' ]]; then
   install='sudo apt-get update && sudo apt-get install -y'
-  dependencies='docker docker-compose'
+  dependencies='docker-compose'
 else
   echo 'This script only supports MacOS and Linux :('
   exit 1
@@ -195,9 +195,7 @@ function build_images {
   docker-compose build --pull
 }
 
-function install_gems {
-  message 'Installing gems...'
-
+function check_gemfile {
   if [[ -e Gemfile.lock ]]; then
     message \
 'For historical reasons, the Canvas Gemfile.lock is not tracked by git. We may
@@ -207,15 +205,13 @@ errors.'
   fi
 
   # Fixes 'error while trying to write to `/usr/src/app/Gemfile.lock`'
-  if ! docker-compose run --rm web touch Gemfile.lock; then
+  if ! docker-compose run --no-deps --rm web touch Gemfile.lock; then
     message \
 "The 'docker' user is not allowed to write to Gemfile.lock. We need write
 permissions so we can install gems."
     touch Gemfile.lock
     confirm_command 'chmod a+rw Gemfile.lock' || true
   fi
-
-  docker-compose run --rm web bundle install
 }
 
 function database_exists {
@@ -223,10 +219,8 @@ function database_exists {
     bundle exec rails runner 'ActiveRecord::Base.connection' &> /dev/null
 }
 
-function prepare_database {
-  message 'Setting up the development database...'
-
-  if ! docker-compose run --rm web touch db/structure.sql; then
+function create_db {
+  if ! docker-compose run --no-deps --rm web touch db/structure.sql; then
     message \
 "The 'docker' user is not allowed to write to db/structure.sql. We need write
 permissions so we can run migrations."
@@ -235,31 +229,37 @@ permissions so we can run migrations."
   fi
 
   if database_exists; then
-    message 'Database exists. Migrating...'
-    docker-compose run --rm web bundle exec rake db:migrate
-  else
-    message 'Database does not exist. Running initial setup...'
-    docker-compose run --rm web bundle exec rake db:create db:migrate db:initial_setup
+    message \
+'An existing database was found.
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+This script will destroy ALL EXISTING DATA if it continues
+If you want to migrate the existing database, use docker_dev_update.sh
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+    message 'About to run "bundle exec rake db:drop"'
+    prompt "type NUKE in all caps: " nuked
+    [[ ${nuked:-n} == 'NUKE' ]] || exit 1
+    docker-compose run --rm web bundle exec rake db:drop
   fi
 
-  message 'Setting up the test database...'
-  docker-compose run --rm web bundle exec rake db:create db:migrate RAILS_ENV=test
-}
-
-function compile_assets {
-  message 'Compiling assets...'
-  docker-compose run --rm web bundle exec rake \
-    canvas:compile_assets_dev \
-    brand_configs:generate_and_upload_all
+  message "Creating new database"
+  docker-compose run --rm web \
+    bundle exec rake db:create
+  docker-compose run --rm web \
+    bundle exec rake db:migrate
+  docker-compose run --rm web \
+    bundle exec rake db:initial_setup
 }
 
 function setup_canvas {
   message 'Now we can set up Canvas!'
   copy_docker_config
   build_images
-  install_gems
-  prepare_database
-  compile_assets
+
+  check_gemfile
+  docker-compose run --rm web ./script/canvas_update -n code -n data
+  create_db
+  docker-compose run --rm web ./script/canvas_update -n code -n deps
 }
 
 function display_next_steps {

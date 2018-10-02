@@ -20,10 +20,11 @@ module Outcomes
   module ResultAnalytics
 
     Rollup = Struct.new(:context, :scores)
-    Result = Struct.new(:learning_outcome, :score, :count)
+    Result = Struct.new(:learning_outcome, :score, :count, :hide_points)
 
     # Public: Queries learning_outcome_results for rollup.
     #
+    # user - User requesting results.
     # opts - The options for the query. In a later version of ruby, these would
     #        be named parameters.
     #        :users    - The users to lookup results for (required)
@@ -31,15 +32,22 @@ module Outcomes
     #        :outcomes - The outcomes to lookup results for (required)
     #
     # Returns a relation of the results, suitably ordered.
-    def find_outcome_results(opts)
+    def find_outcome_results(user, opts)
       required_opts = [:users, :context, :outcomes]
       required_opts.each { |p| raise "#{p} option is required" unless opts[p] }
       users, context, outcomes = opts.values_at(*required_opts)
-      order_results_for_rollup LearningOutcomeResult.active.where(
+      results = LearningOutcomeResult.active.where(
         context_code:        context.asset_string,
         user_id:             users.map(&:id),
-        learning_outcome_id: outcomes.map(&:id)
+        learning_outcome_id: outcomes.map(&:id),
       )
+      unless context.grants_any_right?(user, :manage_grades, :view_all_grades)
+        results = results.exclude_muted_associations
+      end
+      unless opts[:include_hidden]
+        results = results.where(hidden: false)
+      end
+      order_results_for_rollup results
     end
 
     # Internal: Add an order clause to a relation so results are returned in an
@@ -60,15 +68,21 @@ module Outcomes
     # users - (Optional) Ensure rollups are included for users in this list.
     #         A listed user with no results will have an empty score array.
     #
+    # excludes - (Optional) Specify additional values to exclude. "missing_user_rollups" excludes
+    #            rollups for users without results.
+    #
     # Returns an Array of Rollup objects.
-    def outcome_results_rollups(results, users=[])
+    def outcome_results_rollups(results, users=[], excludes = [])
       ActiveRecord::Associations::Preloader.new.preload(results, :learning_outcome)
       rollups = results.chunk(&:user_id).map do |_, user_results|
         Rollup.new(user_results.first.user, rollup_user_results(user_results))
       end
-      add_missing_user_rollups(rollups, users)
+      if excludes.include? 'missing_user_rollups'
+        rollups
+      else
+        add_missing_user_rollups(rollups, users)
+      end
     end
-
 
     # Public: Calculates an average rollup for the specified results
     #
@@ -76,15 +90,15 @@ module Outcomes
     # context - The context to use for the resulting rollup.
     #
     # Returns a Rollup.
-    def aggregate_outcome_results_rollup(results, context)
+    def aggregate_outcome_results_rollup(results, context, stat = 'mean')
       rollups = outcome_results_rollups(results)
       rollup_scores = rollups.map(&:scores).flatten
       outcome_results = rollup_scores.group_by(&:outcome).values
       aggregate_results = outcome_results.map do |scores|
-        scores.map{|score| Result.new(score.outcome, score.score, score.count)}
+        scores.map{|score| Result.new(score.outcome, score.score, score.count, score.hide_points)}
       end
       aggregate_rollups = aggregate_results.map do |result|
-        RollupScore.new(result,{aggregate_score: true})
+        RollupScore.new(result, {aggregate_score: true, aggregate_stat: stat})
       end
       Rollup.new(context, aggregate_rollups)
     end

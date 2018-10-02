@@ -40,8 +40,8 @@ RSpec.describe DeveloperKeyAccountBindingsController, type: :controller do
   end
 
   before do
-    allow_any_instance_of(Account).to receive(:feature_enabled?).and_return(false)
-    allow_any_instance_of(Account).to receive(:feature_enabled?).with(:developer_key_management_ui_rewrite).and_return(true)
+    Setting.set(Setting::SITE_ADMIN_ACCESS_TO_NEW_DEV_KEY_FEATURES, 'true')
+    root_account.enable_feature!(:developer_key_management_and_scoping)
   end
 
   shared_examples 'the developer key account binding create endpoint' do
@@ -49,6 +49,7 @@ RSpec.describe DeveloperKeyAccountBindingsController, type: :controller do
     let(:unauthorized_admin) { raise 'set in example' }
     let(:params) { raise 'set in example' }
     let(:created_binding) { DeveloperKeyAccountBinding.find(json_parse['id']) }
+    let(:expected_account) { raise 'set in example' }
 
     it 'renders unauthorized if the user does not have "manage_developer_keys"' do
       user_session(unauthorized_admin)
@@ -59,11 +60,12 @@ RSpec.describe DeveloperKeyAccountBindingsController, type: :controller do
     it 'succeeds if the user has "manage_developer_keys"' do
       user_session(authorized_admin)
       post :create_or_update, params: params
-      expect(response).to be_success
+      expect(response).to be_successful
     end
 
     it 'renders unauthorized if the flag is not enabled in the root account' do
-      allow_any_instance_of(Account).to receive(:feature_enabled?).with(:developer_key_management_ui_rewrite).and_return(false)
+      allow_any_instance_of(Account).to receive(:feature_enabled?)
+      allow_any_instance_of(Account).to receive(:feature_enabled?).with(:developer_key_management_and_scoping).and_return(false)
       user_session(authorized_admin)
       post :create_or_update, params: params
       expect(response).to be_unauthorized
@@ -72,7 +74,7 @@ RSpec.describe DeveloperKeyAccountBindingsController, type: :controller do
     it 'creates the binding' do
       user_session(authorized_admin)
       post :create_or_update, params: params
-      expect(created_binding.account_id).to eq params[:account_id]
+      expect(created_binding.account).to eq expected_account
       expect(created_binding.developer_key_id).to eq params[:developer_key_id]
       expect(created_binding.workflow_state).to eq params.dig(:developer_key_account_binding, :workflow_state)
     end
@@ -107,7 +109,8 @@ RSpec.describe DeveloperKeyAccountBindingsController, type: :controller do
     end
 
     it 'renders unauthorized if the flag is not enabled in the root account' do
-      allow_any_instance_of(Account).to receive(:feature_enabled?).with(:developer_key_management_ui_rewrite).and_return(false)
+      allow_any_instance_of(Account).to receive(:feature_enabled?)
+      allow_any_instance_of(Account).to receive(:feature_enabled?).with(:developer_key_management_and_scoping).and_return(false)
       user_session(unauthorized_admin)
       post :create_or_update, params: params, format: :json
       expect(response).to be_unauthorized
@@ -142,7 +145,8 @@ RSpec.describe DeveloperKeyAccountBindingsController, type: :controller do
     end
 
     it 'renders unauthorized if the flag is not enabled in the root account' do
-      allow_any_instance_of(Account).to receive(:feature_enabled?).with(:developer_key_management_ui_rewrite).and_return(false)
+      allow_any_instance_of(Account).to receive(:feature_enabled?)
+      allow_any_instance_of(Account).to receive(:feature_enabled?).with(:developer_key_management_and_scoping).and_return(false)
       user_session(unauthorized_admin)
       get :index, params: params, format: :json
       expect(response).to be_unauthorized
@@ -186,6 +190,7 @@ RSpec.describe DeveloperKeyAccountBindingsController, type: :controller do
         let(:authorized_admin) { root_account_admin }
         let(:unauthorized_admin) { sub_account_admin }
         let(:params) { valid_parameters }
+        let(:expected_account) { root_account }
       end
 
       it_behaves_like 'the developer key update endpoint' do
@@ -207,7 +212,24 @@ RSpec.describe DeveloperKeyAccountBindingsController, type: :controller do
 
         user_session(account_admin_user(account: Account.site_admin))
         post :create_or_update, params: site_admin_params
-        expect(response).to be_success
+        expect(response).to be_successful
+      end
+
+      it 'fails when there is no setting and the account is site admin and developer key has no bindings' do
+        Setting.remove(Setting::SITE_ADMIN_ACCESS_TO_NEW_DEV_KEY_FEATURES)
+        site_admin_key = DeveloperKey.create!
+        site_admin_key.developer_key_account_bindings.destroy_all
+        site_admin_params = {
+          account_id: 'site_admin',
+          developer_key_id: site_admin_key.global_id,
+          developer_key_account_binding: {
+            workflow_state: 'on'
+          }
+        }
+
+        user_session(account_admin_user(account: Account.site_admin))
+        post :create_or_update, params: site_admin_params
+        expect(response).to be_unauthorized
       end
     end
 
@@ -264,6 +286,9 @@ RSpec.describe DeveloperKeyAccountBindingsController, type: :controller do
     end
 
     describe "POST #create_or_edit" do
+      before do
+        Account.default.enable_feature!(:developer_key_management_and_scoping)
+      end
       let(:binding_to_edit) do
         DeveloperKeyAccountBinding.create!(
           account: sub_account,
@@ -276,6 +301,20 @@ RSpec.describe DeveloperKeyAccountBindingsController, type: :controller do
         let(:authorized_admin) { sub_account_admin }
         let(:unauthorized_admin) { invalid_admin }
         let(:params) { sub_account_params }
+        let(:expected_account) { sub_account }
+      end
+
+      # test when the account id is 'self'
+      it_behaves_like 'the developer key account binding create endpoint' do
+        let(:authorized_admin) { account_admin_user(account: Account.default) }
+        let(:unauthorized_admin) { invalid_admin }
+        let(:expected_account) { Account.default }
+        let(:params) do
+          sub_account_params.merge({
+            account_id: 'self',
+            developer_key_id: DeveloperKey.create!(account: Account.default).id,
+          })
+        end
       end
 
       it 'only allows creating bindings for keys in the context account chain' do

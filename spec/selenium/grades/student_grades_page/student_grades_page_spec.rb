@@ -20,7 +20,6 @@ require_relative '../pages/student_grades_page'
 
 describe "gradebook - logged in as a student" do
   include_context "in-process server selenium tests"
-  include GradebookCommon
 
   # Helpers
   def backend_group_helper
@@ -31,11 +30,9 @@ describe "gradebook - logged in as a student" do
     Factories::GradingPeriodHelper.new
   end
 
-  let(:student_grades_page) { StudentGradesPage.new }
-
   describe 'total point displays' do
-    before(:each) do
-      course_with_student_logged_in
+    before(:once) do
+      course_with_student({active_course: true, active_enrollment: true})
       @teacher = User.create!
       @course.enroll_teacher(@teacher)
       assignment = @course.assignments.build(points_possible: 20)
@@ -46,20 +43,24 @@ describe "gradebook - logged in as a student" do
       @course.save!
     end
 
+    before(:each) do
+      user_session(@student)
+      StudentGradesPage.visit_as_student(@course)
+    end
+
     it 'should display total grades as points', priority: "2", test_id: 164229 do
-      student_grades_page.visit_as_student(@course)
-      expect(student_grades_page.final_grade).to include_text("10")
+      expect(StudentGradesPage.final_grade).to include_text("10")
     end
 
     it 'should display total "out of" point values' do
-      student_grades_page.visit_as_student(@course)
-      expect(student_grades_page.final_points_possible).to include_text("10.00 / 20.00")
+      expect(StudentGradesPage.final_points_possible).to include_text("10.00 / 20.00")
     end
   end
 
   context 'when testing grading periods' do
-    before do
-      course_with_admin_logged_in
+    before(:once) do
+      account_admin_user({:active_user => true})
+      course_with_teacher({user: @user, active_course: true, active_enrollment: true})
       student_in_course
     end
 
@@ -85,15 +86,74 @@ describe "gradebook - logged in as a student" do
         @course.assignments.create!(due_at: 1.week.from_now, title: current_assignment_name)
 
         # go to student grades page
-        student_grades_page.visit_as_teacher(@course, @student)
+        user_session(@teacher)
+        StudentGradesPage.visit_as_teacher(@course, @student)
       end
 
       it 'should only show assignments that belong to the selected grading period', priority: "1", test_id: 2528639 do
-        student_grades_page.select_period_by_name(past_period_name)
-        expect_new_page_load { student_grades_page.click_apply_button }
-        expect(student_grades_page.assignment_titles).to include(past_assignment_name)
-        expect(student_grades_page.assignment_titles).not_to include(current_assignment_name)
+        StudentGradesPage.select_period_by_name(past_period_name)
+        expect_new_page_load { StudentGradesPage.click_apply_button }
+        expect(StudentGradesPage.assignment_titles).to include(past_assignment_name)
+        expect(StudentGradesPage.assignment_titles).not_to include(current_assignment_name)
       end
+    end
+  end
+
+  describe 'grade-only assignment' do
+    before :once do
+      skip('Unskip in GRADE-1359')
+      course_with_teacher(name: "Teacher Boss", active_course: true, active_user: true)
+      course_with_student(course: @course, name: "Student Slave", active_all: true)
+      @assignment = @course.assignments.create!(
+        title: 'Grade Only Assignment',
+        grading_type: 'grade_only',
+        points_possible: 10,
+        submission_types: 'online_text_entry'
+      )
+      @assignment.grade_student(@student, grade: 'A', grader: @teacher)
+    end
+
+    before :each do
+      skip('Unskip in GRADE-1359')
+      user_session(@student)
+      StudentGradesPage.visit_as_student(@course)
+    end
+
+    it 'does not show point/percentage on student grades page' do
+      skip('Unskip in GRADE-1359')
+
+      expect(StudentGradesPage.fetch_assignment_score(@assignment)).to eql "A"
+      expect(StudentGradesPage.assignment_row(@assignment)).not_to include_text "10"
+    end
+
+    it 'shows total grade not as points' do
+      skip('Unskip in GRADE-1359')
+
+      @assignment2 = @course.assignments.create!(
+        title: 'Another Grade Only Assignment',
+        grading_type: 'grade_only',
+        points_possible: 50,
+        submission_types: 'online_text_entry'
+      )
+      @assignment2.grade_student(@student, grade: 'B', grader: @teacher)
+
+      expect(StudentGradesPage.final_grade.text).to eql 'A-'
+      expect(StudentGradesPage.final_points_possible).to eql 'A-'
+    end
+
+    it 'does not calculate into total points' do
+      skip('Unskip in GRADE-1359')
+
+      @assignment2 = @course.assignments.create!(
+        title: 'Points Assignment',
+        grading_type: 'points',
+        points_possible: 100,
+        submission_types: 'online_text_entry'
+      )
+      @assignment2.grade_student(@student, grade: 80, grader: @teacher)
+
+      expect(StudentGradePage.final_points_possible).to include_text '80 / 100'
+      expect(StudentGradePage.final_grade.text).to eql '80%'
     end
   end
 end

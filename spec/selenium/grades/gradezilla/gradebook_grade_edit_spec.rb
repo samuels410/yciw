@@ -42,7 +42,7 @@ describe "Gradezilla editing grades" do
 
   it "updates a graded quiz and have the points carry over to the quiz attempts page", priority: "1", test_id: 220310 do
     points = 50
-    q = factory_with_protected_attributes(@course.quizzes, :title => "new quiz", :points_possible => points, :quiz_type => 'assignment', :workflow_state => 'available')
+    q = factory_with_protected_attributes(@course.quizzes, title: "new quiz", points_possible: points, quiz_type: 'assignment', workflow_state: 'available')
     q.save!
     qs = q.generate_submission(@student_1)
     Quizzes::SubmissionGrader.new(qs).grade_submission
@@ -227,7 +227,7 @@ describe "Gradezilla editing grades" do
 
   it "does not factor non graded assignments into group total", priority: "1", test_id: 220323 do
     expected_totals = [@student_1_total_ignoring_ungraded, @student_2_total_ignoring_ungraded]
-    ungraded_submission = @ungraded_assignment.submit_homework(@student_1, :body => 'student 1 submission ungraded assignment')
+    ungraded_submission = @ungraded_assignment.submit_homework(@student_1, body: 'student 1 submission ungraded assignment')
     @ungraded_assignment.grade_student(@student_1, grade: 20, grader: @teacher)
     ungraded_submission.save!
     Gradezilla.visit(@course)
@@ -267,6 +267,43 @@ describe "Gradezilla editing grades" do
       refresh_page
       current_score = Gradezilla::Cells.get_grade(@students[0], @assignment)
       expect(current_score).to eq('10')
+    end
+  end
+
+  context "for a moderated assignment" do
+    before(:each) do
+      # turn on the moderation flag
+      Account.default.enable_feature!(:anonymous_marking)
+
+      now = Time.zone.now
+      # create a moderated assignment
+      @moderated_assignment = @course.assignments.create!(
+        title: 'Moderated Assignment',
+        submission_types: 'online_text_entry',
+        grader_count: 1,
+        final_grader: @teacher,
+        due_at: 1.week.from_now(now),
+        moderated_grading: true,
+        points_possible: 10
+      )
+
+      user_session(@teacher)
+      Gradezilla.visit(@course)
+    end
+
+    it "is not allowed until grades are posted", priority: "1", test_id: 3503489 do
+      Gradezilla::Cells.grading_cell(@student_1, @moderated_assignment).click
+      grid_cell = Gradezilla::Cells.grid_assignment_row_cell(@student_1, @moderated_assignment)
+      class_attribute_fetched = grid_cell.attribute("class")
+      expect(class_attribute_fetched).to include "Grid__ReadOnlyCell"
+    end
+
+    it "is allowed if grades are posted ", priority: "1" do # test_id: 3503489
+      @moderated_assignment.update!(grades_published_at: Time.zone.now)
+      @moderated_assignment.unmute!
+      refresh_page
+      Gradezilla::Cells.edit_grade(@student_1, @moderated_assignment, "20,000")
+      expect(Gradezilla::Cells.get_grade(@student_1, @moderated_assignment)).to eq '20000'
     end
   end
 

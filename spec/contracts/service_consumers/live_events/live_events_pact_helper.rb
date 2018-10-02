@@ -67,6 +67,8 @@ module LiveEvents
         case event_subscriber
         when PactConfig::Consumers::QUIZ_LTI
           LiveEvents::PactHelper.quiz_lti_contract_for(event_name)
+        else
+          raise ArgumentError, "Invalid event_subscriber: #{event_subscriber}"
         end
       end
 
@@ -108,7 +110,7 @@ module LiveEvents
 
       def message_contract_for(consumer, event)
         Pact::Messages.get_message_contract(
-          PactConfig::CANVAS_LMS_LIVE_EVENTS,
+          PactConfig::Providers::CANVAS_LMS_LIVE_EVENTS,
           consumer,
           event
         )

@@ -10,6 +10,7 @@ module.exports = {
     "prettier",
     "prettier/react",
     "plugin:jest/recommended",
+    "plugin:jsx-a11y/recommended"
   ],
   parserOptions: {
     ecmaVersion: 7,
@@ -43,8 +44,9 @@ module.exports = {
     "react/no-typos": [0],
     "no-cond-assign": ["warn", "except-parens"],
     "no-else-return": [0],
+    "no-nested-ternary": "off",
     "no-plusplus": [0],
-    "no-return-assign": ['error', 'except-parens'],
+    "no-return-assign": "off",
     "no-underscore-dangle": [0],
     "no-unused-vars": [2, { "argsIgnorePattern": "^_"}],
     "no-use-before-define": "off",
@@ -72,6 +74,10 @@ module.exports = {
     {
       files: ['app/**/*', 'spec/**/*', 'public/**/*'],
       rules: {
+        // Turn off the "absolute-first" rule. Until we get rid of the `compiled/` and `jsx/`
+        // stuff and use real realitive paths it will tell you to do the wrong thing
+        "import/first": ["error", {"absolute-first": false}],
+
         "import/no-amd": "error",
         "import/no-commonjs": "error",
         "import/no-extraneous-dependencies": "off", // allows 'i18n!webzip_exports' and 'compiled/foo/bar'
@@ -86,7 +92,10 @@ module.exports = {
       // to start ensuring conforms to prettier, add it to this array to opt-in
       // now to conform to prettier.
       files: [
-        'app/jsx/permissions/**/*.js'
+        'app/jsx/permissions/**/*.js',
+        'app/jsx/account_course_user_search/**/*.js',
+        'app/jsx/discussions/**/*.js',
+        'app/jsx/announcements/**/*.js'
       ],
       rules: {
         'prettier/prettier': 'error'

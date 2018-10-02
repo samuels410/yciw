@@ -71,8 +71,12 @@ class GradebookExporter
   end
 
   def csv_data
-    enrollment_scope = @course.apply_enrollment_visibility(gradebook_enrollment_scope, @user, nil,
-                                                           include: gradebook_includes).preload(:root_account, :sis_pseudonym)
+    enrollment_scope = @course.apply_enrollment_visibility(
+      gradebook_enrollment_scope(user: @user, course: @course),
+      @user,
+      nil,
+      include: gradebook_includes(user: @user, course: @course)
+    ).preload(:root_account, :sis_pseudonym)
     student_enrollments = enrollments_for_csv(enrollment_scope)
 
     student_section_names = {}
@@ -114,6 +118,11 @@ class GradebookExporter
       row << "SIS Login ID"
       row << "Root Account" if include_sis_id && include_root_account
       row << "Section"
+
+      custom_gradebook_columns.each do |column|
+        row << column.title
+      end
+
       row.concat assignments.map(&:title_with_id)
 
       if should_show_totals
@@ -145,6 +154,11 @@ class GradebookExporter
           row << nil if include_root_account
         end
 
+        # Custom Columns
+        custom_gradebook_columns.count.times do
+          row << nil
+        end
+
         row.concat(assignments.map { |a| 'Muted' if a.muted? })
 
         if should_show_totals
@@ -163,6 +177,12 @@ class GradebookExporter
         row << nil
         row << nil if include_root_account
       end
+
+      # Custom Columns
+      custom_gradebook_columns.each do |column|
+        row << (column.read_only? ? read_only : nil)
+      end
+
       row.concat(assignments.map{ |a| I18n.n(a.points_possible) })
 
       if should_show_totals
@@ -171,22 +191,35 @@ class GradebookExporter
         row << read_only << read_only << read_only << read_only
         row.concat(buffer_columns(:grading_standard, read_only)) if @course.grading_standard_enabled?
       end
+
       csv << row
 
+      # Rest of the Rows
       student_enrollments.each_slice(100) do |student_enrollments_batch|
 
-        visible_assignments = AssignmentStudentVisibility.visible_assignment_ids_in_course_by_user(
-          user_id: student_enrollments_batch.map(&:user_id),
-          course_id: @course.id
-        )
+        student_ids = student_enrollments_batch.map(&:user_id)
+
+        visible_assignments = @course.submissions.
+          active.
+          where(user_id: student_ids.uniq).
+          pluck(:assignment_id, :user_id).
+          each_with_object(Hash.new {|hash, key| hash[key] = Set.new}) do |ids, reducer|
+            assignment_key = ids.first
+            student_key = ids.second
+            reducer[assignment_key].add(student_key)
+          end
+
+        # Custom Columns, custom_column_data are hashes
+        custom_column_data = CustomGradebookColumnDatum.where(
+          custom_gradebook_column: custom_gradebook_columns,
+          user_id: student_ids
+        ).group_by(&:user_id)
 
         student_enrollments_batch.each do |student_enrollment|
           student = student_enrollment.user
           student_sections = student_section_names[student.id].sort.to_sentence
           student_submissions = assignments.map do |a|
-            if visible_assignments[student.id] && !visible_assignments[student.id].include?(a.id)
-              "N/A"
-            else
+            if visible_assignments[a.id].include? student.id
               submission = submissions[[student.id, a.id]]
               if submission.try(:excused?)
                 "EX"
@@ -195,6 +228,8 @@ class GradebookExporter
               else
                 I18n.n(submission.try(:score))
               end
+            else
+              "N/A"
             end
           end
           row = [student_name(student), student.id]
@@ -203,6 +238,12 @@ class GradebookExporter
           row << pseudonym.try(:unique_id)
           row << (pseudonym && HostUrl.context_host(pseudonym.account)) if include_sis_id && include_root_account
           row << student_sections
+
+          # Custom Columns Data
+          custom_gradebook_columns.each do |column|
+            row << custom_column_data[student.id]&.find {|datum| column.id == datum.custom_gradebook_column_id}&.content
+          end
+
           row.concat(student_submissions)
 
           if should_show_totals
@@ -226,6 +267,7 @@ class GradebookExporter
     includes = {:user => {:pseudonyms => :account}, :course_section => [], :scores => []}
 
     enrollments = scope.preload(includes).eager_load(:user).order_by_sortable_name.to_a
+    enrollments.each { |e| e.course = @course }
     enrollments.partition { |e| e.type != "StudentViewEnrollment" }.flatten
   end
 
@@ -300,6 +342,10 @@ class GradebookExporter
     if @options[:grading_period_id].to_i != 0
       @grading_period = GradingPeriod.for(@course).find_by(id: @options[:grading_period_id])
     end
+  end
+
+  def custom_gradebook_columns
+    @custom_gradebook_columns ||= @course.custom_gradebook_columns.active.to_a
   end
 
   def select_in_grading_period(assignments)

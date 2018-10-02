@@ -24,10 +24,14 @@ import ReactDOM from 'react-dom';
 import { Provider } from 'react-redux';
 import PlannerApp from './components/PlannerApp';
 import PlannerHeader from './components/PlannerHeader';
-import ApplyTheme from '@instructure/ui-core/lib/components/ApplyTheme';
+import ToDoSidebar from './components/ToDoSidebar';
+import ApplyTheme from '@instructure/ui-themeable/lib/components/ApplyTheme';
 import i18n from './i18n';
 import configureStore from './store/configureStore';
-import { initialOptions, getPlannerItems, scrollIntoPast, loadFutureItems } from './actions';
+import {
+  initialOptions, getPlannerItems, scrollIntoPast, loadFutureItems,
+
+ } from './actions';
 import { registerScrollEvents } from './utilities/scrollUtils';
 import { initialize as initializeAlerts } from './utilities/alertUtils';
 import moment from 'moment-timezone';
@@ -44,10 +48,11 @@ const defaultOptions = {
   stickyZIndex: 5,
 };
 
-const dynamicUiManager = new DynamicUiManager();
-export const store = configureStore(dynamicUiManager);
+let externalPlannerActive;
+const plannerActive = () => externalPlannerActive ? externalPlannerActive() : false;
 
-let plannerActive = () => { return false; };
+const dynamicUiManager = new DynamicUiManager({plannerActive});
+export const store = configureStore(dynamicUiManager);
 
 function handleScrollIntoPastAttempt () {
   if (!plannerActive()) return;
@@ -99,8 +104,7 @@ export function render (element, options) {
         <PlannerApp
           appRef={app => dynamicUiManager.setApp(app)}
           stickyOffset={opts.stickyOffset}
-          stickyZIndex={opts.stickyZIndex}
-          changeToDashboardCardView={opts.changeToDashboardCardView}
+          changeDashboardView={opts.changeDashboardView}
           plannerActive={plannerActive}
           currentUser={opts.currentUser}
           focusFallback={() => dynamicUiManager.focusFallback('item')}
@@ -111,20 +115,37 @@ export function render (element, options) {
 }
 
 // This method allows you to render the header items into a separate DOM node
-export function renderHeader (element, options) {
+export function renderHeader (element, auxElement, options) {
   // Using this pattern because default params don't merge objects
   const opts = { ...defaultOptions, ...options };
   ReactDOM.render(applyTheme(
     <DynamicUiProvider manager={dynamicUiManager} >
       <Provider store={store}>
         <PlannerHeader
+          stickyZIndex={opts.stickyZIndex}
           timeZone={opts.timeZone}
           locale={opts.locale}
           ariaHideElement={opts.ariaHideElement}
+          auxElement={auxElement}
         />
       </Provider>
     </DynamicUiProvider>
   , opts.theme), element);
+}
+
+// This method allows you to render the To Do Sidebar into a separate DOM node
+export function renderToDoSidebar (element, options) {
+  ReactDOM.render(
+    <Provider store={store}>
+      <ToDoSidebar
+        courses={options.courses || window.ENV.STUDENT_PLANNER_COURSES}
+        timeZone={ENV.TIMEZONE}
+        locale={ENV.LOCALE}
+        changeDashboardView={options.changeDashboardView}
+        forCourse={options.forCourse}
+      />
+    </Provider>
+  , element);
 }
 
 function applyTheme (el, theme) {
@@ -138,9 +159,10 @@ function applyTheme (el, theme) {
   ): el;
 }
 
-export default function loadPlannerDashboard ({changeToCardView, getActiveApp, flashError, flashMessage, srFlashMessage, externalFallbackFocusable, env}) {
+export default function loadPlannerDashboard ({changeDashboardView, getActiveApp, flashError, flashMessage, srFlashMessage, externalFallbackFocusable, env}) {
   const element = document.getElementById('dashboard-planner');
   const headerElement = document.getElementById('dashboard-planner-header');
+  const headerAuxElement = document.getElementById('dashboard-planner-header-aux');
   const stickyElement = document.getElementById('dashboard_header_container');
   const courses = env.STUDENT_PLANNER_COURSES.map(dc => ({
     ...dc,
@@ -154,8 +176,8 @@ export default function loadPlannerDashboard ({changeToCardView, getActiveApp, f
     })) : [];
 
   const stickyElementRect = stickyElement.getBoundingClientRect();
-  const stickyOffset = stickyElementRect.bottom - stickyElementRect.top;
-  plannerActive = () => getActiveApp() === 'planner';
+  const stickyOffset = stickyElementRect.bottom - stickyElementRect.top + 24;
+  externalPlannerActive = () => getActiveApp() === 'planner';
 
   const options = {
     flashAlertFunctions: {
@@ -169,17 +191,16 @@ export default function loadPlannerDashboard ({changeToCardView, getActiveApp, f
     currentUser: {
       id: env.current_user.id,
       displayName: env.current_user.display_name,
-      avatarUrl: env.current_user.avatar_image_url
+      avatarUrl: env.current_user.avatar_image_url,
+      color: env.PREFERENCES.custom_colors[`user_${env.current_user.id}`]
     },
     ariaHideElement: document.getElementById('application'),
     theme: '',
-    // the new activity button isn't sticky in IE yet, so make sure it slides
-    // under the header that is sticky in IE
     stickyZIndex: 3,
     stickyOffset: stickyOffset,
     courses: courses,
     groups: groups,
-    changeToDashboardCardView: changeToCardView,
+    changeDashboardView,
   };
 
   if (element) {
@@ -187,6 +208,6 @@ export default function loadPlannerDashboard ({changeToCardView, getActiveApp, f
   }
 
   if (headerElement) {
-    renderHeader(headerElement, options);
+    renderHeader(headerElement, headerAuxElement, options);
   }
 }

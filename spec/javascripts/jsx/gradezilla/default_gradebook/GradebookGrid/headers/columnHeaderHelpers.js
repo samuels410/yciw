@@ -16,7 +16,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import { ReactWrapper } from 'enzyme';
+import { ReactWrapper } from 'old-enzyme-2.x-you-need-to-upgrade-this-spec-to-enzyme-3.x-by-importing-just-enzyme';
 
 const MENU_CONTENT_REF_MAP = {
   'Sort by': 'sortByMenuContent',
@@ -33,7 +33,7 @@ function findMenuContent (props) {
 
 function findFlyout (props, flyoutLabel) {
   const menuContent = findMenuContent.call(this, props)
-  const flyouts = menuContent.find('MenuItemFlyout').map(flyout => flyout);
+  const flyouts = menuContent.find('Menu').map(flyout => flyout);
   return flyouts.find(menuItem => menuItem.text().trim() === flyoutLabel);
 }
 

@@ -1282,6 +1282,9 @@ describe User do
       expect(User.avatar_fallback_url('%{fallback}')).to eq(
         '%{fallback}'
       )
+      expect(User.avatar_fallback_url("http://somedomain/path",
+                                      OpenObject.new(:host => "somedomain", :protocol => "http://",
+                                                     :params => {:no_avatar_fallback => 1}))).to be_nil
     end
 
     describe "#clear_avatar_image_url_with_uuid" do
@@ -1479,8 +1482,14 @@ describe User do
       end
 
       it "should include cross shard favorite courses" do
-        @user.favorites.by("Course").where("id % 2 = 0").destroy_all
-        expect(@user.menu_courses.size).to eql(@courses.length / 2)
+        expect(@user.menu_courses).to match_array(@courses)
+      end
+
+      it 'works for shadow records' do
+        @shard1.activate do
+          @shadow = User.create!(:id => @user.global_id)
+        end
+        expect(@shadow.favorites.exists?).to be_truthy
       end
     end
   end
@@ -2495,6 +2504,38 @@ describe User do
         expect(@root_admin.grants_right?(other_admin, :manage_user_details)).to eq false
       end
     end
+
+    describe ":generate_observer_pairing_code" do
+      before :once do
+        @root_account = Account.default
+        @root_admin = account_admin_user(account: @root_account)
+        @sub_account = Account.create! root_account: @root_account
+        @sub_admin = account_admin_user(account: @sub_account)
+        @student = course_with_student(account: @sub_account, active_all: true).user
+      end
+
+      it "is granted to self" do
+        expect(@student.grants_right?(@student, :generate_observer_pairing_code)).to eq true
+      end
+
+      it "is granted to root account admins" do
+        expect(@student.grants_right?(@root_admin, :generate_observer_pairing_code)).to eq true
+      end
+
+      it "is not granted to root account w/o :generate_observer_pairing_code" do
+        @root_account.role_overrides.create!(role: admin_role, enabled: false, permission: :generate_observer_pairing_code)
+        expect(@student.grants_right?(@root_admin, :generate_observer_pairing_code)).to eq false
+      end
+
+      it "is granted to sub-account admins" do
+        expect(@student.grants_right?(@sub_admin, :generate_observer_pairing_code)).to eq true
+      end
+
+      it "is not granted to sub-account admins w/o :generate_observer_pairing_code" do
+        @root_account.role_overrides.create!(role: admin_role, enabled: false, permission: :generate_observer_pairing_code)
+        expect(@student.grants_right?(@sub_admin, :generate_observer_pairing_code)).to eq false
+      end
+    end
   end
 
   describe "check_accounts_right?" do
@@ -3038,6 +3079,19 @@ describe User do
         @user.pseudonyms.where(account_id: @other_account).first.destroy
         expect(@user.user_can_edit_name?).to eq false
       end
+    end
+  end
+
+  describe 'generate_observer_pairing_code' do
+    before(:once) do
+      course_with_student
+    end
+
+    it 'doesnt create overlapping active codes' do
+      allow(SecureRandom).to receive(:base64).and_return('abc123', 'abc123', '123abc')
+      @student.generate_observer_pairing_code
+      pairing_code = @student.generate_observer_pairing_code
+      expect(pairing_code.code).to eq '123abc'
     end
   end
 end

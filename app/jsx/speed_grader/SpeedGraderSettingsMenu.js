@@ -18,10 +18,25 @@
 
 import React from 'react'
 import {bool, func, string} from 'prop-types'
-import MenuItem from '@instructure/ui-core/lib/components/Menu/MenuItem'
-import PopoverMenu from '@instructure/ui-core/lib/components/PopoverMenu'
-import Text from '@instructure/ui-core/lib/components/Text'
+import Menu, {MenuItem} from '@instructure/ui-menu/lib/components/Menu'
+import Text from '@instructure/ui-elements/lib/components/Text'
 import I18n from 'i18n!gradebook'
+
+// We're foregoing the use of InstUI buttons or instructure-icons icons here to be consistent
+// with the look/styling of this button's siblings. When those siblings have been updated to
+// use InstUI + instructure-icons, we can do the same here
+const menuTrigger = (
+  <button
+    type="button"
+    className="Button Button--icon-action gradebookActions__Button"
+    title={I18n.t('Settings')}
+  >
+    <i className="icon-settings" aria-hidden="true" />
+    <span className="screenreader-only" aria-hidden="true">
+      {I18n.t('SpeedGrader Settings')}
+    </span>
+  </button>
+)
 
 export default function SpeedGraderSettingsMenu(props) {
   function handleModerationPageSelect () {
@@ -33,24 +48,19 @@ export default function SpeedGraderSettingsMenu(props) {
     SpeedGraderSettingsMenu.setURL(props.helpURL)
   }
 
-  // We're foregoing the use of InstUI buttons or instructure-icons icons here to be consistent
-  // with the look/styling of this button's siblings. When those siblings have been updated to
-  // use InstUI + instructure-icons, we can do the same here
-  const menuTrigger = (
-    <button
-      type="button"
-      className="Button Button--icon-action gradebookActions__Button"
-      title={I18n.t('Settings')}
-    >
-      <i className="icon-settings" aria-hidden="true" />
-      <span className="screenreader-only" aria-hidden="true">
-        {I18n.t('SpeedGrader Settings')}
-      </span>
-    </button>
-  )
+  function handleToggle(isOpen) {
+    if (isOpen) {
+      props.onMenuShow()
+    }
+  }
 
   return (
-    <PopoverMenu contentRef={props.menuContentRef} placement="bottom end" trigger={menuTrigger}>
+    <Menu
+      contentRef={props.menuContentRef}
+      onToggle={handleToggle}
+      placement="bottom end"
+      trigger={menuTrigger}
+    >
       <MenuItem name="options" onSelect={props.openOptionsModal} value="options">
         <Text>{I18n.t('Options')}</Text>
       </MenuItem>
@@ -70,7 +80,7 @@ export default function SpeedGraderSettingsMenu(props) {
           <Text>{I18n.t('Help')}</Text>
         </MenuItem>
       )}
-    </PopoverMenu>
+    </Menu>
   )
 }
 
@@ -79,6 +89,7 @@ SpeedGraderSettingsMenu.propTypes = {
   courseID: string.isRequired,
   helpURL: string.isRequired,
   menuContentRef: func,
+  onMenuShow: func,
   openOptionsModal: func.isRequired,
   openKeyboardShortcutsModal: func.isRequired,
   showHelpMenuItem: bool.isRequired,
@@ -86,7 +97,8 @@ SpeedGraderSettingsMenu.propTypes = {
 }
 
 SpeedGraderSettingsMenu.defaultProps = {
-  menuContentRef: null
+  menuContentRef: null,
+  onMenuShow() {}
 }
 
 SpeedGraderSettingsMenu.setURL = function (url) {

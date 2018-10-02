@@ -350,17 +350,18 @@ class DiscussionTopicsController < ApplicationController
       scope = scope.active.where('delayed_post_at IS NULL OR delayed_post_at<?', Time.now.utc)
     end
 
-    @topics = Api.paginate(scope, self, topic_pagination_url)
+    if @context.is_a?(Group) || request.format.json?
+      @topics = Api.paginate(scope, self, topic_pagination_url)
+      if params[:exclude_context_module_locked_topics]
+        @topics = DiscussionTopic.reject_context_module_locked_topics(@topics, @current_user)
+      end
 
-    if params[:exclude_context_module_locked_topics]
-      @topics = DiscussionTopic.reject_context_module_locked_topics(@topics, @current_user)
+      if states.present?
+        @topics.reject! { |t| t.locked_for?(@current_user) } if states.include?('unlocked')
+        @topics.select! { |t| t.locked_for?(@current_user) } if states.include?('locked')
+      end
+      @topics.each { |topic| topic.current_user = @current_user }
     end
-
-    if states.present?
-      @topics.reject! { |t| t.locked_for?(@current_user) } if states.include?('unlocked')
-      @topics.select! { |t| t.locked_for?(@current_user) } if states.include?('locked')
-    end
-    @topics.each { |topic| topic.current_user = @current_user }
 
     respond_to do |format|
       format.html do
@@ -370,16 +371,17 @@ class DiscussionTopicsController < ApplicationController
         add_crumb(t('#crumbs.discussions', 'Discussions'),
                   named_context_url(@context, :context_discussion_topics_url))
 
-        locked_topics, open_topics = @topics.partition do |topic|
-          locked = topic.locked? || topic.locked_for?(@current_user)
-          locked.is_a?(Hash) ? locked[:can_view] : locked
+        if @context.is_a?(Group)
+          locked_topics, open_topics = @topics.partition do |topic|
+            locked = topic.locked? || topic.locked_for?(@current_user)
+            locked.is_a?(Hash) ? locked[:can_view] : locked
+          end
+          js_env openTopics: open_topics, lockedTopics: locked_topics, newTopicURL: named_context_url(@context, :new_context_discussion_topic_url)
         end
 
         hash = {
           USER_SETTINGS_URL: api_v1_user_settings_url(@current_user),
-          openTopics: open_topics,
-          lockedTopics: locked_topics,
-          newTopicURL: named_context_url(@context, :new_context_discussion_topic_url),
+          totalDiscussions: scope.count,
           permissions: {
             create: @context.discussion_topics.temp_record.grants_right?(@current_user, session, :create),
             moderate: user_can_moderate,
@@ -537,8 +539,7 @@ class DiscussionTopicsController < ApplicationController
       end
     end
 
-    js_hash[:SECTION_SPECIFIC_DISCUSSIONS_ENABLED] = @context.account.feature_enabled?(:section_specific_discussions)
-
+    js_hash[:SECTION_SPECIFIC_DISCUSSIONS_ENABLED] = !@context.is_a?(Group)
     js_hash[:MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT] = AssignmentUtil.name_length_required_for_account?(@context)
     js_hash[:MAX_NAME_LENGTH] = AssignmentUtil.assignment_max_name_length(@context)
     js_hash[:DUE_DATE_REQUIRED_FOR_ACCOUNT] = AssignmentUtil.due_date_required_for_account?(@context)
@@ -717,8 +718,9 @@ class DiscussionTopicsController < ApplicationController
                 :COURSE_ID => @sequence_asset.context.id,
               }
             end
-            if @topic.for_assignment? &&
-               @topic.assignment.grants_right?(@current_user, session, :grade) && @presenter.allows_speed_grader?
+            @assignment_presenter = AssignmentPresenter.new(@topic.assignment)
+            if @topic.for_assignment? && @presenter.allows_speed_grader? &&
+              @assignment_presenter.can_view_speed_grader_link?(@current_user)
               env_hash[:SPEEDGRADER_URL_TEMPLATE] = named_context_url(@topic.assignment.context,
                                                                       :speed_grader_context_gradebook_url,
                                                                       :assignment_id => @topic.assignment.id,
@@ -1072,6 +1074,7 @@ class DiscussionTopicsController < ApplicationController
 
   def process_discussion_topic_runner(is_new = false)
     @errors = {}
+
     model_type = if value_to_boolean(params[:is_announcement]) &&
         @context.announcements.temp_record.grants_right?(@current_user, session, :create)
                     :announcements

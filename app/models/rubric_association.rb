@@ -144,6 +144,11 @@ class RubricAssociation < ActiveRecord::Base
     self.context.grants_right?(assessor, :manage_grades) || self.assessment_requests.incomplete.for_assessee(assessee).pluck(:assessor_id).include?(assessor.id)
   end
 
+  def user_did_assess_for?(assessor: nil, assessee: nil)
+    raise "assessor and assessee required" unless assessor && assessee
+    self.assessment_requests.complete.for_assessee(assessee).for_assessor(assessor).any?
+  end
+
   set_policy do
     given {|user, session| self.context.grants_right?(user, session, :manage_rubrics) }
     can :update and can :delete and can :manage
@@ -213,6 +218,10 @@ class RubricAssociation < ActiveRecord::Base
     raise "association required" unless association || association_object
     # Update/create the association -- this is what ties the rubric to an entity
     update_if_existing = params.delete(:update_if_existing)
+    if params[:hide_points] == '1'
+      params.delete(:use_for_grading)
+      params.delete(:hide_score_total)
+    end
     association ||= rubric.associate_with(association_object, context, :use_for_grading => params[:use_for_grading] == "1", :purpose => params[:purpose], :update_if_existing => update_if_existing)
     association.rubric = rubric
     association.context = context

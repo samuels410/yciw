@@ -18,6 +18,7 @@
 
 import {bool, func} from 'prop-types'
 import React from 'react'
+import Tooltip from '@instructure/ui-overlays/lib/components/Tooltip'
 import I18n from 'i18n!assignments'
 
 export default function ModeratedGradingCheckbox(props) {
@@ -25,26 +26,61 @@ export default function ModeratedGradingCheckbox(props) {
     props.onChange(!props.checked)
   }
 
-  return (
+  function tooltipMessage() {
+    if (props.gradedSubmissionsExist) {
+      return I18n.t('Moderated grading setting cannot be changed if graded submissions exist')
+    } else if (props.isGroupAssignment) {
+      return I18n.t('Moderated grading cannot be enabled for group assignments')
+    } else if (props.isPeerReviewAssignment) {
+      return I18n.t('Moderated grading cannot be enabled for peer reviewed assignments')
+    }
+
+    return ''
+  }
+
+  const isDisabled = props.gradedSubmissionsExist || props.isGroupAssignment || props.isPeerReviewAssignment
+  const body = (
     <label className="ModeratedGrading__CheckboxLabel" htmlFor="assignment_moderated_grading">
       <input type="hidden" name="moderated_grading" value={props.checked} />
+
       <input
-        className="ModeratedGrading__Checkbox"
+        aria-disabled={isDisabled}
+        className="Assignment__Checkbox ModeratedGrading__Checkbox"
         checked={props.checked}
+        disabled={isDisabled}
         id="assignment_moderated_grading"
         name="moderated_grading"
         onChange={handleChange}
         type="checkbox"
       />
+
       <strong className="ModeratedGrading__CheckboxLabelText">{I18n.t('Moderated Grading')}</strong>
+
       <div className="ModeratedGrading__CheckboxDescription">
         {I18n.t('Allow moderator to review multiple independent grades for selected submissions')}
       </div>
     </label>
   )
+
+  if (isDisabled) {
+    return (
+      <Tooltip
+        on={['hover']}
+        tip={tooltipMessage()}
+        variant="inverse"
+      >
+        {body}
+      </Tooltip>
+    )
+  }
+
+  return body
 }
 
 ModeratedGradingCheckbox.propTypes = {
   checked: bool.isRequired,
+  gradedSubmissionsExist: bool.isRequired,
+  isGroupAssignment: bool.isRequired,
+  isPeerReviewAssignment: bool.isRequired,
   onChange: func.isRequired
 }

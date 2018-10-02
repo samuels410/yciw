@@ -37,6 +37,9 @@ class Oauth2ProviderController < ApplicationController
 
     raise Canvas::Oauth::RequestError, :invalid_client_id unless provider.has_valid_key?
     raise Canvas::Oauth::RequestError, :invalid_redirect unless provider.has_valid_redirect?
+    if developer_key_management_and_scoping_enabled? provider
+      raise Canvas::Oauth::RequestError, :invalid_scope unless scopes.present? && scopes.all? { |scope| provider.key.scopes.include?(scope) }
+    end
 
     session[:oauth2] = provider.session_hash
     session[:oauth2][:state] = params[:state] if params.key?(:state)
@@ -89,32 +92,17 @@ class Oauth2ProviderController < ApplicationController
     basic_user, basic_pass = ActionController::HttpAuthentication::Basic.user_name_and_password(request) if request.authorization
     client_id = params[:client_id].presence || basic_user
     secret = params[:client_secret].presence || basic_pass
-    provider = Canvas::Oauth::Provider.new(client_id)
-    raise Canvas::Oauth::RequestError, :invalid_client_id unless provider.has_valid_key?
-    raise Canvas::Oauth::RequestError, :invalid_client_secret unless provider.is_authorized_by?(secret)
 
-    if grant_type == "authorization_code"
-      raise Canvas::Oauth::RequestError, :authorization_code_not_supplied unless params[:code]
-
-      token = provider.token_for(params[:code])
-      raise Canvas::Oauth::RequestError, :invalid_authorization_code  unless token.is_for_valid_code?
-      raise Canvas::Oauth::RequestError, :incorrect_client unless token.key.id == token.client_id
-
-      token.create_access_token_if_needed(value_to_boolean(params[:replace_tokens]))
-      Canvas::Oauth::Token.expire_code(params[:code])
+    granter = if grant_type == "authorization_code"
+      Canvas::Oauth::GrantTypes::AuthorizationCode.new(client_id, secret, params)
     elsif params[:grant_type] == "refresh_token"
-      raise Canvas::Oauth::RequestError, :refresh_token_not_supplied unless params[:refresh_token]
-
-      token = provider.token_for_refresh_token(params[:refresh_token])
-      # token = AccessToken.authenticate_refresh_token(params[:refresh_token])
-      raise Canvas::Oauth::RequestError, :invalid_refresh_token unless token
-      raise Canvas::Oauth::RequestError, :incorrect_client unless token.access_token.developer_key_id == token.key.id
-      token.access_token.regenerate_access_token
+      Canvas::Oauth::GrantTypes::RefreshToken.new(client_id, secret, params)
     else
-      raise Canvas::Oauth::RequestError, :unsupported_grant_type
+      Canvas::Oauth::GrantTypes::BaseType.new(client_id, secret, params)
     end
 
-    render :json => token
+    raise Canvas::Oauth::RequestError, :unsupported_grant_type unless granter.supported_type?
+    render :json => granter.token
   end
 
   def destroy
@@ -136,5 +124,16 @@ class Oauth2ProviderController < ApplicationController
         !params[:grant_type] && params[:code] ? "authorization_code" : "__UNSUPPORTED_PLACEHOLDER__"
       )
     )
+  end
+
+  def developer_key_management_and_scoping_enabled?(provider)
+    (
+      (
+        @domain_root_account.site_admin? &&
+        Setting.get(Setting::SITE_ADMIN_ACCESS_TO_NEW_DEV_KEY_FEATURES, nil).present?
+      ) ||
+      @domain_root_account.feature_enabled?(:developer_key_management_and_scoping)
+    ) &&
+    provider.key.require_scopes?
   end
 end

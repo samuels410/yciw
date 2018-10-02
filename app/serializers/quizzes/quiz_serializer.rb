@@ -39,7 +39,7 @@ module Quizzes
                 :quiz_submissions_zip_url, :preview_url, :quiz_submission_versions_html_url,
                 :assignment_id, :one_time_results, :only_visible_to_overrides,
                 :assignment_group_id, :show_correct_answers_last_attempt, :version_number,
-                :has_access_code, :post_to_sis, :anonymous_submissions
+                :has_access_code, :post_to_sis, :anonymous_submissions, :migration_id
 
     def_delegators :@controller,
       # :api_v1_course_assignment_group_url,
@@ -193,8 +193,8 @@ module Quizzes
       !serializer_option(:skip_date_overrides) && due_dates == all_dates
     end
 
-    def include_unpublishable?
-      quiz.grants_right?(current_user, :manage)
+    def include_permissions?
+      !serializer_option(:skip_permissions)
     end
 
     def filter(keys)
@@ -203,7 +203,7 @@ module Quizzes
         when :all_dates
           include_all_dates?
         when :unpublishable, :can_unpublish
-          include_unpublishable?
+          user_may_manage?
         when :section_count,
              :speed_grader_url,
              :message_students_url,
@@ -216,7 +216,7 @@ module Quizzes
         when :quiz_extensions_url, :moderate_url, :deleted
           accepts_jsonapi? && user_may_manage?
         when :quiz_submission_html_url, :take_quiz_url
-         accepts_jsonapi?
+          accepts_jsonapi?
         when :quiz_submissions_zip_url
           accepts_jsonapi? && user_may_grade? && has_file_uploads?
         when :preview_url
@@ -225,6 +225,8 @@ module Quizzes
           !serializer_option(:skip_lock_tests)
         when :anonymous_submissions
           quiz.survey?
+        when :permissions
+          include_permissions?
         else true
         end
       end
@@ -317,7 +319,7 @@ module Quizzes
     private
 
     def show_speedgrader?
-      quiz.assignment.present? && quiz.published? && context.allows_speed_grader?
+      quiz.assignment.present? && quiz.published? && quiz.assignment.can_view_speed_grader?(current_user)
     end
 
     def quiz_locked_for_user?
@@ -361,11 +363,11 @@ module Quizzes
     end
 
     def user_may_grade?
-      quiz.grants_right?(current_user, :grade)
+      context.grants_right?(current_user, :manage_grades)
     end
 
     def user_may_manage?
-      quiz.grants_right?(current_user, :manage)
+      context.grants_right?(current_user, :manage_assignments)
     end
 
     def user_finder

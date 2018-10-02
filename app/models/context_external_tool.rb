@@ -23,6 +23,7 @@ class ContextExternalTool < ActiveRecord::Base
   has_many :context_external_tool_placements, :autosave => true
 
   belongs_to :context, polymorphic: [:course, :account]
+  belongs_to :developer_key
 
   include MasterCourses::Restrictor
   restrict_columns :content, [:name, :description]
@@ -74,6 +75,10 @@ class ContextExternalTool < ActiveRecord::Base
     return unless tag
     launch_url = assignment.external_tool_tag.url
     self.find_external_tool(launch_url, assignment.context)
+  end
+
+  def deployment_id
+    "#{self.id}:#{Lti::Asset.opaque_identifier_for(self.context)}"
   end
 
   def content_migration_configured?
@@ -523,6 +528,8 @@ class ContextExternalTool < ActiveRecord::Base
       [context] + (context.context ? contexts_to_search(context.context) : context.account_chain)
     when Account
       context.account_chain
+    when Assignment
+      contexts_to_search(context.context)
     else
       []
     end
@@ -554,7 +561,7 @@ class ContextExternalTool < ActiveRecord::Base
       scope = ContextExternalTool.shard(context.shard).polymorphic_where(context: contexts).active
       scope = scope.placements(*placements)
       scope = scope.selectable if Canvas::Plugin.value_to_boolean(options[:selectable])
-      scope.order(ContextExternalTool.best_unicode_collation_key('context_external_tools.name') + Arel.sql(", context_external_tools.id"))
+      scope.order(ContextExternalTool.best_unicode_collation_key('context_external_tools.name')).order(Arel.sql('context_external_tools.id'))
     end
   end
 

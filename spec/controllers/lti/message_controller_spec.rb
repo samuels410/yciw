@@ -45,7 +45,7 @@ module Lti
           course_with_teacher_logged_in(:active_all => true)
           course = @course
           post 'registration', params: {course_id: course.id, tool_consumer_url: 'http://tool.consumer.url'}
-          expect(response).to be_success
+          expect(response).to be_successful
           lti_launch = assigns[:lti_launch]
           expect(lti_launch.resource_url).to eq 'http://tool.consumer.url'
           launch_params = lti_launch.params
@@ -375,6 +375,42 @@ module Lti
       end
 
       context 'account' do
+        context 'content tags' do
+          subject do
+            get 'basic_lti_launch_request', params: {course_id: course.id, message_handler_id: message_handler.id, module_item_id: tag.id}
+            assigns[:lti_launch].params[:com_instructure_assignment_anonymous_grading]
+          end
+
+          let_once(:course) { course_model }
+          let_once(:assignment) { assignment_model(course: course) }
+
+          before { message_handler.update!(capabilities: ['com.instructure.Assignment.anonymous_grading']) }
+
+          context 'when the tag context is an assignment' do
+            let(:tag) { ContentTag.create!(context: assignment, content: message_handler) }
+
+            it 'finds the specified assignment from content tag' do
+              expect(subject).to eq false
+            end
+          end
+
+          context 'when the tag context is a course' do
+            let(:tag) { ContentTag.create!(context: course, content: message_handler) }
+
+            it 'does not find an specified assignment' do
+              expect(subject).to be_nil
+            end
+          end
+
+          context 'when the tag context is an assignment from another course' do
+            let(:course_two) { course_model }
+            let(:tag) { ContentTag.create!(context: course_two, content: message_handler) }
+
+            it 'does not find the specified assignment' do
+              expect(subject).to be_nil
+            end
+          end
+        end
 
         it 'returns the signed params' do
           tool_proxy.raw_data['enabled_capability'] += enabled_capability

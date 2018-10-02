@@ -276,13 +276,19 @@ describe BasicLTI::BasicOutcomes do
       expect(request.body).to eq '<replaceResultResponse />'
     end
 
-    it "sets submitted_at to now if resultData is not present" do
+    it "Does not increment the attempt number" do
       xml.css('resultData').remove
-      now = Time.now.utc
-      Timecop.freeze(now) do
+      BasicLTI::BasicOutcomes.process_request(tool, xml)
+      submission = assignment.submissions.where(user_id: @user.id).first
+      expect(submission.attempt).to eq 1
+    end
+
+    it "sets 'submitted_at' to the current time when result data is not sent" do
+      xml.css('resultData').remove
+      Timecop.freeze do
         BasicLTI::BasicOutcomes.process_request(tool, xml)
         submission = assignment.submissions.where(user_id: @user.id).first
-        expect(submission.submitted_at).to eq now
+        expect(submission.submitted_at).to eq Time.zone.now
       end
     end
 
@@ -297,6 +303,16 @@ describe BasicLTI::BasicOutcomes do
         BasicLTI::BasicOutcomes.process_request(tool, xml)
         submission = assignment.submissions.where(user_id: @user.id).first
         expect(submission.submitted_at.iso8601(3)).to eq timestamp
+      end
+
+      it "does not increment the submision count" do
+        xml.css('resultData').remove
+        xml.at_css('imsx_POXBody > replaceResultRequest').add_child(
+          "<submissionDetails><submittedAt>#{timestamp}</submittedAt></submissionDetails>"
+        )
+        BasicLTI::BasicOutcomes.process_request(tool, xml)
+        submission = assignment.submissions.where(user_id: @user.id).first
+        expect(submission.attempt).to eq 1
       end
 
       it "sets submitted_at to submitted_at details if resultData is present" do
@@ -446,7 +462,7 @@ describe BasicLTI::BasicOutcomes do
         xml.css('resultScore').remove
         xml.at_css('text').replace('<documentName>face.doc</documentName><downloadUrl>http://example.com/download</downloadUrl>')
         BasicLTI::BasicOutcomes.process_request(tool, xml)
-        expect(Delayed::Job.strand_size('file_download')).to be > 0
+        expect(Delayed::Job.strand_size('file_download/example.com')).to be > 0
         run_jobs
         expect(submission.reload.versions.count).to eq 2
         expect(submission.attachments.count).to eq 1

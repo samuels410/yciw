@@ -18,7 +18,7 @@
 
 define([
   'react',
-  'enzyme',
+  'old-enzyme-2.x-you-need-to-upgrade-this-spec-to-enzyme-3.x-by-importing-just-enzyme',
   'jquery',
   'underscore',
   'jsx/grading/CourseTabContainer',
@@ -35,7 +35,7 @@ define([
     },
 
     setup () {
-      this.stub($, 'getJSON').returns({success: () => ({ error: () => {} }), done: () => {}});
+      sandbox.stub($, 'getJSON').returns({success: () => ({ error: () => {} }), done: () => {}});
     },
 
     teardown () {
@@ -57,13 +57,13 @@ define([
   });
 
   test('jquery-ui tabs() is called when there are grading periods', function () {
-    const tabsSpy = this.spy($.fn, 'tabs');
+    const tabsSpy = sandbox.spy($.fn, 'tabs');
     this.renderComponent({ hasGradingPeriods: true });
     ok(tabsSpy.calledOnce);
   });
 
   test('jquery-ui tabs() is not called when there are no grading periods', function () {
-    const tabsSpy = this.spy($.fn, 'tabs');
+    const tabsSpy = sandbox.spy($.fn, 'tabs');
     this.renderComponent({ hasGradingPeriods: false});
     notOk(tabsSpy.called);
   });

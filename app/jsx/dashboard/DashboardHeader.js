@@ -17,37 +17,51 @@
  */
 
 import React from 'react';
+import $ from 'jquery'
 import I18n from 'i18n!dashboard';
 import axios from 'axios';
-import { bool, func, string } from 'prop-types';
-import { showFlashError } from '../shared/FlashAlert'
+import { bool, func, string, object } from 'prop-types';
+import loadPlannerDashboard, { renderToDoSidebar } from 'canvas-planner';
+import { showFlashAlert, showFlashError } from '../shared/FlashAlert'
 import DashboardOptionsMenu from '../dashboard_card/DashboardOptionsMenu';
 import loadCardDashboard from '../bundles/dashboard_card'
 
+const [show, hide] = ['block', 'none'].map(displayVal => id => {
+  const el = document.getElementById(id)
+  if (el) el.style.display = displayVal
+})
 /**
- * This component renders the header for the user dashboard and loads the current dashboard.
+ * This component renders the header and the to do sidebar for the user
+ * dashboard and loads the current dashboard.
  */
-class DashboardHeader extends React.Component {
+export default class DashboardHeader extends React.Component {
+  static propTypes = {
+    dashboard_view: string,
+    planner_enabled: bool.isRequired,
+    screenReaderFlashMessage: func,
+    env: object, // eslint-disable-line react/forbid-prop-types
+    showTodoList: func
+  }
 
-  constructor (props) {
-    super(props);
+  static defaultProps = {
+    dashboard_view: 'cards',
+    screenReaderFlashMessage: () => {},
+    env: {},
+    showTodoList
+  }
 
-    let currentDashboard;
-    const enabledViews = ['cards', 'activity']
-
-    if (props.planner_enabled) enabledViews.push('planner')
-
-    if (enabledViews.includes(props.dashboard_view)) {
-      currentDashboard = props.dashboard_view
-    } else {
-      currentDashboard = 'cards'
-    }
-
-    this.state = { currentDashboard, loadedViews: ['activity'] }
+  state = {
+    currentDashboard: ['cards', 'activity', this.props.planner_enabled && 'planner']
+      .filter(Boolean)
+      .includes(this.props.dashboard_view)
+      ? this.props.dashboard_view
+      : 'cards',
+    loadedViews: []
   }
 
   componentDidMount () {
     this.showDashboard(this.state.currentDashboard)
+    this.props.showTodoList(this.switchDashboard)
   }
 
   getActiveApp = () => this.state.currentDashboard
@@ -61,18 +75,14 @@ class DashboardHeader extends React.Component {
   }
 
   loadPlannerComponent () {
-    require.ensure([], (require) => {
-      const Planner = require('canvas-planner')
-      const props = {
-        changeToCardView: () => this.changeDashboard('cards'),
-        getActiveApp: this.getActiveApp,
-        flashError: this.props.flashError,
-        flashMessage: this.props.flashMessage,
-        srFlashMessage: this.props.screenReaderFlashMessage,
-        externalFallbackFocusable: this.menuButtonFocusable,
-        env: this.props.env,
-      }
-      Planner.default(props)
+    loadPlannerDashboard({
+      changeDashboardView: this.changeDashboard,
+      getActiveApp: this.getActiveApp,
+      flashError: (message) => showFlashAlert({message, type: 'error'}),
+      flashMessage: (message) => showFlashAlert({message, type: 'info'}),
+      srFlashMessage: this.props.screenReaderFlashMessage,
+      externalFallbackFocusable: this.menuButtonFocusable,
+      env: this.props.env,
     })
   }
 
@@ -81,14 +91,35 @@ class DashboardHeader extends React.Component {
     loadCardDashboard()
   }
 
-  loadDashboard (newView) {
+  loadStreamItemDashboard() {
+    // populates the stream items via ajax when the toggle is switched
+    const $dashboardActivity = $('#dashboard-activity')
+    if ($dashboardActivity.text().trim()) return // don't do anything if it is already populated
+
+    const promiseToGetCode = import('../views/DashboardView')
+    const promiseToGetHtml = axios.get('/dashboard/stream_items')
+    $dashboardActivity.show().disableWhileLoading(
+      Promise.all([promiseToGetCode, promiseToGetHtml])
+        .then(([DashboardView, axiosResponse]) => {
+          $dashboardActivity.html(axiosResponse.data)
+          new DashboardView()
+        })
+        .catch(showFlashError(I18n.t('Failed to load recent activity')))
+    )
+  }
+
+  loadDashboard(newView) {
     if (this.state.loadedViews.includes(newView)) return
+
     if (newView === 'planner' && this.props.planner_enabled) {
       this.loadPlannerComponent()
     } else if (newView === 'cards') {
       this.loadCardDashboard()
+    } else if (newView === 'activity') {
+      this.loadStreamItemDashboard()
     }
-    this.setState({loadedViews: this.state.loadedViews.concat(newView) })
+
+    this.setState({loadedViews: this.state.loadedViews.concat(newView)})
   }
 
   saveDashboardView (newView) {
@@ -101,42 +132,30 @@ class DashboardHeader extends React.Component {
 
   changeDashboard = (newView) => {
     this.saveDashboardView(newView)
+    this.switchDashboard(newView)
+  }
+
+  switchDashboard = (newView) => {
     this.showDashboard(newView)
     this.setState({ currentDashboard: newView })
   }
 
-  showDashboard = (newView) => {
+  showDashboard = newView => {
     this.resetClasses(newView)
-    const fakeObj = {
-      style: {}
+    const elements = {
+      planner: ['dashboard-planner', 'dashboard-planner-header', 'dashboard-planner-header-aux'],
+      activity: ['dashboard-activity', 'right-side-wrapper'],
+      cards: ['DashboardCard_Container', 'right-side-wrapper']
     }
-    const dashboardPlanner = document.getElementById('dashboard-planner') || fakeObj
-    const dashboardPlannerHeader = document.getElementById('dashboard-planner-header') || fakeObj
-    const dashboardActivity = document.getElementById('dashboard-activity')
-    const dashboardCards = document.getElementById('DashboardCard_Container')
-    const rightSideContent = document.getElementById('right-side-wrapper') || fakeObj
-
     this.loadDashboard(newView)
 
-    if (newView === 'planner') {
-      dashboardPlanner.style.display = 'block'
-      dashboardPlannerHeader.style.display = 'block'
-      dashboardActivity.style.display = 'none'
-      dashboardCards.style.display = 'none'
-      rightSideContent.style.display = 'none'
-    } else if (newView === 'activity') {
-      dashboardPlanner.style.display = 'none'
-      dashboardPlannerHeader.style.display = 'none'
-      dashboardActivity.style.display = 'block'
-      dashboardCards.style.display = 'none'
-      rightSideContent.style.display = 'block'
-    } else {
-      dashboardPlanner.style.display = 'none'
-      dashboardPlannerHeader.style.display = 'none'
-      dashboardActivity.style.display = 'none'
-      dashboardCards.style.display = 'block'
-      rightSideContent.style.display = 'block'
-    }
+    // hide the elements not part of this view
+    Object.keys(elements)
+      .filter(k => k !== newView)
+      .forEach(k => elements[k].forEach(hide))
+
+    // show the ones that are
+    elements[newView].forEach(show)
   }
 
   render () {
@@ -154,33 +173,33 @@ class DashboardHeader extends React.Component {
           <div id="DashboardOptionsMenu_Container">
             <DashboardOptionsMenu
               view={this.state.currentDashboard}
-              hide_dashcard_color_overlays={this.props.hide_dashcard_color_overlays}
               planner_enabled={this.props.planner_enabled}
               onDashboardChange={this.changeDashboard}
               menuButtonRef={(ref) => {this.menuButtonFocusable = ref}}
             />
           </div>
+          {this.props.planner_enabled && (
+            <div id="dashboard-planner-header-aux" />
+          )}
         </div>
       </div>
     );
   }
 }
 
-DashboardHeader.propTypes = {
-  dashboard_view: string,
-  hide_dashcard_color_overlays: bool,
-  planner_enabled: bool.isRequired,
-  flashError: func,
-  flashMessage: func,
-  screenReaderFlashMessage: func,
+// extract this out to a property so tests can override it and not have to mock
+// out the timers in every single test.
+function showTodoList (changeDashboard) {
+  // The sidebar itself is loaded via a separate fetch from the server. This
+  // means we need to wait for the element to appear on the page before we can
+  // render the to do list.
+  const interval = window.setInterval(() => {
+    const container = document.querySelector('.Sidebar__TodoListContainer')
+    if (container) {
+      renderToDoSidebar(container, {
+        changeDashboardView: changeDashboard,
+      });
+      window.clearInterval(interval);
+    }
+  }, 100);
 }
-
-DashboardHeader.defaultProps = {
-  dashboard_view: 'cards',
-  hide_dashcard_color_overlays: false,
-  flashError: () => {},
-  flashMessage: () => {},
-  screenReaderFlashMessage: () => {},
-}
-
-export default DashboardHeader;

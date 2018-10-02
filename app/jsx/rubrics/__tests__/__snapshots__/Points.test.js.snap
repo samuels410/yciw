@@ -1,0 +1,20 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`The Points component renders the component when assessing with the expected layout 1`] = `
+"<div className=\\"react-rubric-cell graded-points\\">
+  <Flex alignItems=\\"end\\" wrapItems={true} as=\\"span\\" direction=\\"row\\" justifyItems=\\"start\\" inline={false} visualDebug={false}>
+    <FlexItem size=\\"4rem\\" margin=\\"none small none none\\" as=\\"span\\" grow={false} shrink={false}>
+      <TextInput inline={true} label={{...}} messages={{...}} onChange={[Function: onChange]} value=\\"1\\" width=\\"4rem\\" type=\\"text\\" size=\\"medium\\" textAlign=\\"start\\" disabled={false} readOnly={false} inputRef={[Function: inputRef]} layout=\\"stacked\\" />
+    </FlexItem>
+    <FlexItem margin=\\"small none none none\\" as=\\"span\\" grow={false} shrink={false}>
+      / 2 pts
+    </FlexItem>
+  </Flex>
+</div>"
+`;
+
+exports[`The Points component renders the root component as expected 1`] = `
+"<div className=\\"react-rubric-cell graded-points\\">
+  1 / 2 pts
+</div>"
+`;
