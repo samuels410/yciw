@@ -1,5 +1,5 @@
 # config valid only for current version of Capistrano
-lock '3.9.1'
+lock '3.11.0'
 
 set :application,   'yciw'
 set :deploy_to,     '/var/deploy/capistrano/yciw'
@@ -7,7 +7,7 @@ set :scm,     :git
 set :repo_url, 'https://github.com/samuels410/yciw.git'
 
 set :user,    'sysadmin'
-set :passenger_user, 'www-data'
+set :passenger_user, 'canvasuser'
 set :use_sudo,      true
 set :passenger_restart_with_sudo, true
 set :pty, true
