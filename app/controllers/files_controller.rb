@@ -111,7 +111,7 @@ class FilesController < ApplicationController
   # brand-config-uploaded JS to work
   # verify_authenticity_token is manually-invoked where @context is not
   # an Account in show_relative
-  protect_from_forgery :except => [:api_capture, :show_relative], with: :exception
+  protect_from_forgery :except => [:api_capture, :show_relative, :show], with: :exception
 
   before_action :require_user, only: :create_pending
   before_action :require_context, except: [
