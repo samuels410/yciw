@@ -274,7 +274,7 @@ class GroupsController < ApplicationController
 
     respond_to do |format|
       format.html do
-        @categories  = @context.group_categories.order("role <> 'student_organized'", GroupCategory.best_unicode_collation_key('name')).preload(:root_account)
+        @categories  = @context.group_categories.order(Arel.sql("role <> 'student_organized'"), GroupCategory.best_unicode_collation_key('name')).preload(:root_account)
         @user_groups = @current_user.group_memberships_for(@context) if @current_user
 
         if @context.grants_right?(@current_user, session, :manage_groups)
@@ -351,6 +351,7 @@ class GroupsController < ApplicationController
           add_crumb @group.short_name, named_context_url(@group, :context_url)
         end
         @context = @group
+        assign_localizer
         if @group.deleted? && @group.context
           flash[:notice] = t('notices.already_deleted', "That group has been deleted")
           redirect_to named_context_url(@group.context, :context_url)
@@ -829,6 +830,30 @@ class GroupsController < ApplicationController
     if authorized_action(@context, @current_user, :read)
       api_render_stream_summary([@context])
     end
+  end
+
+  # @API Permissions
+  # Returns permission information for the calling user in the given group.
+  # See also the {api:AccountsController#permissions Account} and
+  # {api:CoursesController#permissions Course} counterparts.
+  #
+  # @argument permissions[] [String]
+  #   List of permissions to check against the authenticated user.
+  #   Permission names are documented in the {api:RoleOverridesController#add_role Create a role} endpoint.
+  #
+  # @example_request
+  #     curl https://<canvas>/api/v1/groups/<group_id>/permissions \
+  #       -H 'Authorization: Bearer <token>' \
+  #       -d 'permissions[]=read_roster'
+  #       -d 'permissions[]=send_messages_all'
+  #
+  # @example_response
+  #   {'read_roster': 'true', 'send_messages_all': 'false'}
+  def permissions
+    get_context
+    return unless authorized_action(@context, @current_user, :read)
+    permissions = Array(params[:permissions]).map(&:to_sym)
+    render json: @context.rights_status(@current_user, session, *permissions)
   end
 
   protected

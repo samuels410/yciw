@@ -19,9 +19,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom'
 import TestUtils from 'react-addons-test-utils'
-import axios from 'axios'
+import moxios from 'moxios';
 import MessageStudents from 'jsx/shared/MessageStudents'
-import Transition from '@instructure/ui-core/lib/components/Transition'
 
 let $domNode, subject, fixtures
 
@@ -34,15 +33,14 @@ const renderComponent = props => {
 QUnit.module('MessageStudents', hooks => {
   hooks.beforeEach(() => {
     fixtures = document.getElementById('fixtures')
-    const appElement = document.createElement('div')
-    appElement.id = 'application'
-    fixtures.appendChild(appElement)
+    moxios.install();
   })
   hooks.afterEach(() => {
     ReactDOM.unmountComponentAtNode($domNode)
     $domNode = null
     subject = null
     fixtures.innerHTML = ''
+    moxios.uninstall();
   })
 
   test('it renders', () => {
@@ -88,18 +86,9 @@ QUnit.module('MessageStudents', hooks => {
   })
 
   QUnit.module('sendMessage()', hooks => {
-    let data, successPromise, errorPromise
+    let data
 
     hooks.beforeEach(() => {
-      successPromise = Promise.resolve()
-      const errorResponse = {
-        data: {
-          attribute: 'subject',
-          message: 'blank'
-        }
-      }
-      errorPromise = Promise.reject(errorResponse)
-
       subject = renderComponent({
         title: 'Send a message',
         contextCode: 'course_1',
@@ -134,17 +123,15 @@ QUnit.module('MessageStudents', hooks => {
 
     QUnit.module('on success', hooks => {
       hooks.beforeEach(() => {
-        sinon.stub(axios, 'post').returns(successPromise)
-      })
-
-      hooks.afterEach(() => {
-        axios.post.restore()
+        moxios.stubRequest('/api/v1/conversations', {
+          status: 200
+        })
       })
 
       test('calls handleResponseSuccess', assert => {
         const done = assert.async()
         subject.sendMessage(data)
-        successPromise.then(() => {
+        moxios.wait(() => {
           ok(subject.handleResponseSuccess.calledOnce)
           done()
         })
@@ -153,17 +140,18 @@ QUnit.module('MessageStudents', hooks => {
 
     QUnit.module('on error', hooks => {
       hooks.beforeEach(() => {
-        sinon.stub(axios, 'post').returns(errorPromise)
+        moxios.stubRequest('/api/v1/conversations', {
+          status: 500,
+          response: [
+            { attribute: 'fake', message: 'error' }
+          ]
+        })
       })
 
-      hooks.afterEach(() => {
-        axios.post.restore()
-      })
-
-      test('calls handleResponseSuccess', assert => {
+      test('calls handleResponseError', assert => {
         const done = assert.async()
         subject.sendMessage(data)
-        Promise.all([errorPromise]).catch(() => {
+        moxios.wait(() => {
           ok(subject.handleResponseError.calledOnce)
           done()
         })
@@ -230,10 +218,6 @@ QUnit.module('MessageStudents', hooks => {
     test('sets state.hideAlert to true', () => {
       notOk(subject.state.hideAlert, 'precondition')
       TestUtils.Simulate.click(closeButton)
-      // can remove these ticks once this ticket is resolved
-      // https://instructure.atlassian.net/browse/INSTUI-607
-      clocks.tick(Transition.duration)
-      clocks.tick(Transition.duration)
       ok(subject.state.hideAlert)
     })
   })

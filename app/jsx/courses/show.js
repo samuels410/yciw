@@ -20,11 +20,14 @@ import CourseHomeDialog from '../courses/CourseHomeDialog'
 import HomePagePromptContainer from '../courses/HomePagePromptContainer'
 import createStore from '../shared/helpers/createStore'
 import $ from 'jquery'
+import 'compiled/jquery.rails_flash_notifications'
 import I18n from 'i18n!courses_show'
 import axios from 'axios'
 import React from 'react'
 import PropTypes from 'prop-types'
 import ReactDOM from 'react-dom'
+import { initializePlanner, renderToDoSidebar } from 'canvas-planner';
+import { showFlashAlert } from '../shared/FlashAlert';
 
 const defaultViewStore = createStore({
   selectedDefaultView: ENV.COURSE.default_view,
@@ -127,3 +130,23 @@ const container = document.getElementById('choose_home_page')
 if (container) {
   ReactDOM.render(<ChooseHomePageButton store={defaultViewStore} />, container)
 }
+
+
+
+const addToDoSidebar = (parent) => {
+  initializePlanner({
+    env: window.ENV, // missing STUDENT_PLANNER_COURSES, which is what we want
+    flashError: message => showFlashAlert({message, type: 'error'}),
+    flashMessage: message => showFlashAlert({message, type: 'info'}),
+    srFlashMessage: $.screenReaderFlashMessage,
+    forCourse: ENV.COURSE.id
+  })
+  renderToDoSidebar(parent)
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const todo_container = document.querySelector('.todo-list')
+  if (todo_container) {
+    addToDoSidebar(todo_container)
+  }
+})

@@ -10,14 +10,8 @@
   line-height: var(--lineHeight);
 }
 
-.header {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  justify-content: space-between;
-}
 .oppNameAndTitle {
-  flex-grow: 1;
+  max-width: 16.5rem;
 }
 .oppName {
   box-sizing: border-box;
@@ -28,6 +22,7 @@
   letter-spacing: 0.0625rem;
   color: var(--secondaryColor);
   font-size: var(--nameFontSize);
+  margin-right: var(--closeButtonIconSize);
 }
 
 .title {
@@ -35,8 +30,9 @@
 }
 
 .close {
-  flex-grow: 0;
-  flex-shrink: 0;
+  position: absolute;
+  top: 0;
+  offset-inline-end: 0;
 }
 
 .oppName,
@@ -85,10 +81,4 @@
 
 .dueText {
   font-weight: var(--dueTextFontWeight);
-}
-
-
-
-.closeButtonIcon {
-  font-size: var(--closeButtonIconSize);
 }

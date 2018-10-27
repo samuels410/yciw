@@ -17,33 +17,31 @@
  */
 import moment from 'moment-timezone';
 import _ from 'lodash';
+import parseLinkHeader from 'parse-link-header';
 import { makeEndOfDayIfMidnight } from './dateUtils';
 
 const getItemDetailsFromPlannable = (apiResponse, timeZone) => {
   let { plannable, plannable_type, planner_override } = apiResponse;
   const plannableId = plannable.id || plannable.page_id;
-  const markedComplete = planner_override;
 
   const details = {
-    course_id: plannable.course_id,
-    title: plannable.name || plannable.title,
-    completed: (markedComplete != null) ? markedComplete.marked_complete : (apiResponse.submissions
-      && (apiResponse.submissions.submitted
-      || apiResponse.submissions.excused
-      || apiResponse.submissions.graded)
-    ),
+    course_id: plannable.course_id || apiResponse.course_id,
+    title: plannable.title,
+    completed: isComplete(apiResponse),
     points: plannable.points_possible,
-    html_url: plannable.html_url,
+    html_url: apiResponse.html_url || plannable.html_url,
     overrideId: planner_override && planner_override.id,
     overrideAssignId: plannable.assignment_id,
     id: plannableId,
     uniqueId: `${plannable_type}-${plannableId}`,
+    location: plannable.location_name || null,
+    dateStyle: plannable.todo_date ? 'todo' : 'due'
   };
+  details.originallyCompleted = details.completed;
+  details.feedback = apiResponse.submissions ? apiResponse.submissions.feedback : undefined;
+
   if (plannable_type === 'discussion_topic' || plannable_type === 'announcement') {
     details.unread_count = plannable.unread_count;
-  }
-  if (plannable_type === 'announcement' && !details.date) {
-    details.date = plannable.delayed_post_at || plannable.posted_at;
   }
 
   if (plannable_type === 'planner_note') {
@@ -51,8 +49,12 @@ const getItemDetailsFromPlannable = (apiResponse, timeZone) => {
   }
 
   if (plannable_type === 'calendar_event') {
-    details.allDay = plannable.all_day
+    details.allDay = plannable.all_day;
+    if (!details.allDay && plannable.end_at && plannable.end_at !== apiResponse.plannable_date ) {
+      details.endTime = moment(plannable.end_at);
+    }
   }
+
   return details;
 };
 
@@ -64,6 +66,7 @@ const TYPE_MAPPING = {
   announcement: "Announcement",
   planner_note: "To Do",
   calendar_event: "Calendar Event",
+  assessment_request: "Peer Review",
 };
 
 const getItemType = (plannableType) => {
@@ -73,6 +76,17 @@ const getItemType = (plannableType) => {
 const getApiItemType = (overrideType) => {
   return _.findKey(TYPE_MAPPING, _.partial(_.isEqual, overrideType));
 };
+
+export function findNextLink (response) {
+  const linkHeader = response.headers.link;
+  if (linkHeader == null) return null;
+
+  const parsedLinks = parseLinkHeader(linkHeader);
+  if (parsedLinks == null) return null;
+
+  if (parsedLinks.next == null) return null;
+  return parsedLinks.next.url;
+}
 
 /**
 * Translates the API data to the format the planner expects
@@ -110,10 +124,10 @@ export function transformApiToInternalItem (apiResponse, courses, groups, timeZo
     dateBucketMoment: moment.tz(plannableDate, timeZone).startOf('day'),
     type: getItemType(apiResponse.plannable_type),
     status: apiResponse.submissions,
-    newActivity: apiResponse.new_activity,
+    newActivity: apiResponse.new_activity && (apiResponse.plannable_type !== 'discussion_topic' || details.unread_count > 0),
     toggleAPIPending: false,
     date: plannableDate,
-    ...details
+    ...details,
   };
 }
 
@@ -137,7 +151,7 @@ export function transformPlannerNoteApiToInternalItem (plannerItemApiResponse, c
     course_id: plannerNote.course_id,
     context: context,
     title: plannerNote.title,
-    date: plannerNote.todo_date,
+    date: moment.tz(plannerNote.todo_date, timeZone),
     details: plannerNote.details,
     completed: false
   };
@@ -200,7 +214,6 @@ function getCourseContext(course) {
     id: course.id,
     title: course.shortName,
     image_url: course.image,
-    inform_students_of_overdue_submissions: course.informStudentsOfOverdueSubmissions,
     color: course.color,
     url: course.href
   };
@@ -213,8 +226,23 @@ function getGroupContext(apiResponse, group) {
     id: group.id,
     title: group.name,
     image_url: undefined,
-    inform_students_of_overdue_submissions: false,  // group items don't have submissions
     color: group.color,
     url: group.url
   };
+}
+
+// is the item complete?
+// either marked as complete by the user, or because the work was completed.
+function isComplete(apiResponse) {
+  const { plannable, plannable_type, planner_override, submissions } = apiResponse;
+
+  let complete = false;
+  if (planner_override) {
+    complete = planner_override.marked_complete
+  } else if (plannable_type === 'assessment_request') {
+    complete = plannable.workflow_state === 'completed';
+  } else if (submissions) {
+    complete = submissions.submitted
+  }
+  return complete;
 }

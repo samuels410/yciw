@@ -112,6 +112,16 @@ describe CanvadocSessionsController do
       get :show, params: {blob: @blob.to_json, hmac: Canvas::Security.hmac_sha1(@blob.to_json)}
     end
 
+    it "should send region" do
+      allow(Attachment).to receive(:find).and_return(@attachment1)
+      expect(@attachment1).to receive(:submit_to_canvadocs) do |arg1, arg2|
+        expect(arg1).to eq 1
+        expect(arg2[:region].class).to eq String
+      end
+
+      get :show, params: {blob: @blob.to_json, hmac: Canvas::Security.hmac_sha1(@blob.to_json)}
+    end
+
     it "needs to be run by the blob user" do
       @blob[:user_id] = @student.global_id
       blob = @blob.to_json
@@ -179,39 +189,99 @@ describe CanvadocSessionsController do
     end
 
     describe "annotations" do
-      before(:each) do
-        @assignment = assignment_model
+      before(:once) do
+        @assignment = assignment_model(course: @course)
         @submission = submission_model(assignment: @assignment, user: @student)
         @attachment = attachment_model(content_type: 'application/pdf', user: @student)
         @attachment.associate_with(@submission)
+        Canvadoc.create!(attachment: @attachment)
+      end
 
+      before(:each) do
+        allow(Attachment).to receive(:find).with(@attachment.global_id).and_return(@attachment)
         user_session(@student)
       end
 
       let(:blob) do
-        {attachment_id: @attachment.global_id, user_id: @student.global_id, type: "canvadoc", enable_annotations: true}
+        {
+          attachment_id: @attachment.global_id,
+          user_id: @student.global_id,
+          type: "canvadoc",
+          enable_annotations: true,
+          enrollment_type: 'student',
+          submission_id: @submission.id
+        }
       end
       let(:hmac) { Canvas::Security.hmac_sha1(blob.to_json) }
 
-      it "disables submission annotations for an anonymously-graded assignment " \
-      "when Anonymous Moderated Marking is enabled" do
-        @course.root_account.enable_feature!(:anonymous_moderated_marking)
+      it "sends along the audit url when annotations are enabled and assignment is anonymous" do
         @assignment.update!(anonymous_grading: true)
-        # The controller fetches different instances of the model objects we're
-        # working with here, so unfortunately we can't mock them specifically.
-        expect_any_instance_of(Canvadoc).to receive(:session_url).
-          with(hash_including(enable_annotations: false))
+        domain = @assignment.course.root_account.domain
+        url = submission_docviewer_audit_events_url(@submission.id)
+        expect(@attachment.canvadoc).to receive(:session_url).with(hash_including(audit_url: url))
 
         get :show, params: {blob: blob.to_json, hmac: hmac}
       end
 
-      it "enables submission annotations for an anonymously-graded assignment " \
-      "when Anonymous Moderated Marking is disabled" do
-        @assignment.update!(anonymous_grading: true)
-        # The controller fetches different instances of the model objects we're
-        # working with here, so unfortunately we can't mock them specifically.
+      it "sends along the audit url when annotations are enabled and assignment is moderated" do
+        @assignment.update!(moderated_grading: true, grader_count: 1, final_grader: @teacher)
+        domain = @assignment.course.root_account.domain
+        url = submission_docviewer_audit_events_url(@submission.id)
+        expect(@attachment.canvadoc).to receive(:session_url).with(hash_including(audit_url: url))
+
+        get :show, params: {blob: blob.to_json, hmac: hmac}
+      end
+
+      it "does not send the audit url when annotations are enabled but assignment is neither anonymous nor moderated" do
+        domain = @assignment.course.root_account.domain
+        url = "https://#{domain}/submissions/#{@submission.id}/docviewer_audit_events"
+        expect(@attachment.canvadoc).not_to receive(:session_url).with(hash_including(audit_url: url))
+
+        get :show, params: {blob: blob.to_json, hmac: hmac}
+      end
+
+      it "disables submission annotations when passed enable_annotations false" do
+        custom_blob = blob.merge(enable_annotations: false).to_json
+        custom_hmac = Canvas::Security.hmac_sha1(custom_blob)
+        expect(@attachment.canvadoc).to receive(:session_url).with(hash_including(enable_annotations: false))
+
+        get :show, params: {blob: custom_blob, hmac: custom_hmac}
+      end
+
+      it "enables submission annotations when passed enable_annotations true" do
+        expect(@attachment.canvadoc).to receive(:session_url).with(hash_including(enable_annotations: true))
+
+        get :show, params: {blob: blob.to_json, hmac: hmac}
+      end
+
+      it "passes user information based on the submission (if past submission / missing attachment assocation)" do
+        @submission.attachment_associations.destroy_all
+        expect(@attachment.canvadoc).to receive(:session_url).with(hash_including(user_id: @student.global_id.to_s))
+
+        get :show, params: {blob: blob.to_json, hmac: hmac}
+      end
+
+      it "sends anonymous_instructor_annotations when true in the blob" do
+        blob[:anonymous_instructor_annotations] = true
+
         expect_any_instance_of(Canvadoc).to receive(:session_url).
-          with(hash_including(enable_annotations: true))
+          with(hash_including(anonymous_instructor_annotations: true))
+
+        get :show, params: {blob: blob.to_json, hmac: hmac}
+      end
+
+      it "doesn't send anonymous_instructor_annotations when false in the blob" do
+        blob[:anonymous_instructor_annotations] = false
+
+        expect_any_instance_of(Canvadoc).to receive(:session_url).
+          with(hash_excluding(:anonymous_instructor_annotations))
+
+        get :show, params: {blob: blob.to_json, hmac: hmac}
+      end
+
+      it "doesn't send anonymous_instructor_annotations when missing" do
+        expect_any_instance_of(Canvadoc).to receive(:session_url).
+          with(hash_excluding(:anonymous_instructor_annotations))
 
         get :show, params: {blob: blob.to_json, hmac: hmac}
       end

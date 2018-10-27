@@ -159,6 +159,41 @@ describe Quizzes::Quiz do
     end
   end
 
+  describe '#anonymize_students?' do
+    before(:once) do
+      @quiz = @course.quizzes.build
+      @assignment = @course.assignments.build
+    end
+
+    it 'returns false if there is no assignment' do
+      expect(@quiz).not_to be_anonymize_students
+    end
+
+    it 'returns true if the assignment is anonymous and muted' do
+      @quiz.assignment = @assignment
+      @assignment.anonymous_grading = true
+      @assignment.muted = true
+      expect(@quiz).to be_anonymize_students
+    end
+
+    it 'returns false if the assignment is anonymous and unmuted' do
+      @quiz.assignment = @assignment
+      @assignment.anonymous_grading = true
+      expect(@quiz).not_to be_anonymize_students
+    end
+
+    it 'returns false if the assignment is not anonymous' do
+      @quiz.assignment = @assignment
+      expect(@quiz).not_to be_anonymize_students
+    end
+
+    it 'calls Assignment#anonymize_students if an assignment is present' do
+      @quiz.assignment = @assignment
+      expect(@assignment).to receive(:anonymize_students?).once
+      @quiz.anonymize_students?
+    end
+  end
+
   describe "#unpublish!" do
     it "sets the workflow state to unpublished and save!s the quiz" do
       quiz = @course.quizzes.build :title => "hello"
@@ -479,6 +514,7 @@ describe Quizzes::Quiz do
 
     expect(q.assignment_id).not_to be_nil
     expect(q.assignment.published?).to be false
+    q = Quizzes::Quiz.find(q.id) # reload
     expect(q.assignment).to receive(:save_without_broadcasting!).never
 
     q.publish!
@@ -1419,6 +1455,10 @@ describe Quizzes::Quiz do
     it 'returns true when the quiz only_visible_to_overrides_changed is changed' do
       expect { @quiz.only_visible_to_overrides = true }.
         to change { @quiz.update_cached_due_dates? }.from(false).to(true)
+    end
+
+    it 'returns true when quiz was previously not an assignment, but about to become one' do
+      expect(@quiz.update_cached_due_dates?('assignment')).to be true
     end
   end
 
@@ -2484,6 +2524,13 @@ describe Quizzes::Quiz do
 
     it 'respects limit' do
       expect(@course.quizzes.need_submitting_info(@student, 1).length).to eql 1
+    end
+  end
+
+  describe '#anonymous_grading?' do
+    it 'returns the value of anonymous_submissions' do
+      quiz = @course.quizzes.create!(title: "hello", anonymous_submissions: true)
+      expect(quiz.anonymous_grading?).to be true
     end
   end
 end

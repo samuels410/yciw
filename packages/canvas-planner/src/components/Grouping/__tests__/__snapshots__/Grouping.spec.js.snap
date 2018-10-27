@@ -35,13 +35,12 @@ exports[`grouping contains link pointing to course url 1`] = `
   >
     <li>
       <Animatable(ResponsivePlannerItem)
-        animatableIndex={0}
+        animatableIndex={101}
         color="#5678"
         context={
           Object {
             "color": "#5678",
             "id": 256,
-            "inform_students_of_overdue_submissions": true,
             "url": "example.com",
           }
         }
@@ -62,13 +61,12 @@ exports[`grouping contains link pointing to course url 1`] = `
     </li>
     <li>
       <Animatable(ResponsivePlannerItem)
-        animatableIndex={1}
+        animatableIndex={102}
         color="#5678"
         context={
           Object {
             "color": "#5678",
             "id": 256,
-            "inform_students_of_overdue_submissions": true,
           }
         }
         courseName="Board Games"
@@ -125,13 +123,12 @@ exports[`renders a CompletedItemsFacade when completed items are present by defa
   >
     <li>
       <Animatable(ResponsivePlannerItem)
-        animatableIndex={0}
+        animatableIndex={101}
         color="#5678"
         context={
           Object {
             "color": "#5678",
             "id": 256,
-            "inform_students_of_overdue_submissions": true,
           }
         }
         courseName="Board Games"
@@ -151,16 +148,22 @@ exports[`renders a CompletedItemsFacade when completed items are present by defa
     </li>
     <li>
       <Animatable(CompletedItemsFacade)
-        animatableIndex={1}
+        animatableIndex={102}
         animatableItemIds={
           Array [
             "five",
           ]
         }
         badges={Array []}
+        date={"2017-04-25T06:00:00.000Z"}
         itemCount={1}
         notificationBadge="none"
         onClick={[Function]}
+        theme={
+          Object {
+            "labelColor": "#5678",
+          }
+        }
       />
     </li>
   </ol>
@@ -202,13 +205,12 @@ exports[`renders the base component with required props 1`] = `
   >
     <li>
       <Animatable(ResponsivePlannerItem)
-        animatableIndex={0}
+        animatableIndex={101}
         color="#5678"
         context={
           Object {
             "color": "#5678",
             "id": 256,
-            "inform_students_of_overdue_submissions": true,
             "url": "example.com",
           }
         }
@@ -229,13 +231,12 @@ exports[`renders the base component with required props 1`] = `
     </li>
     <li>
       <Animatable(ResponsivePlannerItem)
-        animatableIndex={1}
+        animatableIndex={102}
         color="#5678"
         context={
           Object {
             "color": "#5678",
             "id": 256,
-            "inform_students_of_overdue_submissions": true,
           }
         }
         courseName="Board Games"
@@ -284,7 +285,7 @@ exports[`renders to do items correctly 1`] = `
   >
     <li>
       <Animatable(ResponsivePlannerItem)
-        animatableIndex={0}
+        animatableIndex={101}
         color={null}
         context={Object {}}
         courseName={null}

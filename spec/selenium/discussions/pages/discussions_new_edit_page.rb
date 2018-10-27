@@ -26,10 +26,6 @@ class DiscussionNewEdit
       get("/courses/#{course.id}/discussion_topics/new")
     end
 
-    def set_section_specific_discussion_flag(course, state)
-      course.account.set_feature_flag! :section_specific_discussions, state
-    end
-
     def new_discussion_url
       '/discussion_topics/new'
     end
@@ -57,6 +53,14 @@ class DiscussionNewEdit
 
     def section_error
       f('#sections_autocomplete_root').text
+    end
+
+    def section_disabled_item
+      f('#disabled_sections_autocomplete')
+    end
+
+    def graded_checkbox
+      f('#use_for_grading')
     end
 
     def select_a_section(section_name)

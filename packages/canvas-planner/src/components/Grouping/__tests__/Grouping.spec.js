@@ -17,6 +17,7 @@
  */
 import React from 'react';
 import { shallow, mount } from 'enzyme';
+import moment from 'moment-timezone';
 import {Grouping} from '../index';
 
 const getDefaultProps = () => ({
@@ -24,22 +25,20 @@ const getDefaultProps = () => ({
     id: "5",
     uniqueId: "five",
     title: 'San Juan',
-    date: '2017-04-25T05:06:07-08:00',
+    date: moment.tz('2017-04-25T05:06:07-08:00', "America/Denver"),
     context: {
       url: 'example.com',
       color: "#5678",
       id: 256,
-      inform_students_of_overdue_submissions: true
     }
   }, {
     id: "6",
     uniqueId: "six",
-    date: '2017-04-25T05:06:07-08:00',
+    date: moment.tz('2017-04-25T05:06:07-08:00', "America/Denver"),
     title: 'Roll for the Galaxy',
     context: {
       color: "#5678",
       id: 256,
-      inform_students_of_overdue_submissions: true
     }
   }],
   timeZone: "America/Denver",
@@ -47,7 +46,8 @@ const getDefaultProps = () => ({
   id: 256,
   url: 'example.com',
   title: 'Board Games',
-  updateTodo: () => {}
+  updateTodo: () => {},
+  animatableIndex: 1,
 });
 
 it('renders the base component with required props', () => {
@@ -72,7 +72,7 @@ it('renders to do items correctly', () => {
       id: "700",
       uniqueId: "seven hundred",
       title: 'To Do 700',
-      date: '2017-06-16T05:06:07-06:00',
+      date: moment.tz('2017-06-16T05:06:07-06:00', "America/Denver"),
       context: null,
     }],
     timeZone: "America/Denver",
@@ -80,7 +80,8 @@ it('renders to do items correctly', () => {
     id: null,
     url: null,
     title: null,
-    updateTodo: () => {}
+    updateTodo: () => {},
+    animatableIndex: 1,
   };
   const wrapper = shallow(
     <Grouping {...props} />
@@ -181,7 +182,6 @@ it(`does not render a danger activity notification when there is a missing item
   const props = getDefaultProps();
   const item = props.items[1];
   item.status = { missing: true };
-  item.context.inform_students_of_overdue_submissions = false;
   const wrapper = shallow(<Grouping {...props} />);
   expect(wrapper.find('Badge')).toHaveLength(0);
   expect(wrapper.find('ScreenReaderContent')).toHaveLength(0);
@@ -255,8 +255,8 @@ describe('toggleCompletion', () => {
 it('registers itself as animatable', () => {
   const fakeRegister = jest.fn();
   const fakeDeregister = jest.fn();
-  const firstItems = [{title: 'asdf', context: {id: 128, inform_students_of_overdue_submissions: true}, id: '1', uniqueId: 'first'}, {title: 'jkl', context: {id: 256, inform_students_of_overdue_submissions: true}, id: '2', uniqueId: 'second'}];
-  const secondItems = [{title: 'qwer', context: {id: 128, inform_students_of_overdue_submissions: true}, id: '3', uniqueId: 'third'}, {title: 'uiop', context: {id: 256, inform_students_of_overdue_submissions: true}, id: '4', uniqueId: 'fourth'}];
+  const firstItems = [{title: 'asdf', context: {id: 128}, id: '1', uniqueId: 'first'}, {title: 'jkl', context: {id: 256}, id: '2', uniqueId: 'second'}];
+  const secondItems = [{title: 'qwer', context: {id: 128}, id: '3', uniqueId: 'third'}, {title: 'uiop', context: {id: 256}, id: '4', uniqueId: 'fourth'}];
   const wrapper = mount(
     <Grouping
       {...getDefaultProps()}

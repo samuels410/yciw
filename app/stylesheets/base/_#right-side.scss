@@ -39,6 +39,15 @@
     margin: 0 0 $ic-sp / 2;
     font-weight: bold;
   }
+  .shared-space {
+    padding-bottom: 0;
+    h2 {
+      display: inline-block;
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom-style: none;
+    }
+  }
 }
 
 .rs-margin-bottom {
@@ -82,7 +91,6 @@
     // this is for things like "nothing for the next week"
     small {
       display: block;
-      font-style: italic;
       @include fontSize(13px);
     }
     b, em, p {
@@ -103,7 +111,6 @@
       }
     }
     .more_link {
-      font-style: italic;
       padding-top: 6px;
     }
   }

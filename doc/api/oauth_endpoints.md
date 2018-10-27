@@ -59,13 +59,11 @@ wrong person in, as <a href="http://homakov.blogspot.com/2012/07/saferweb-most-c
     </tr>
     <tr>
       <td class="mono">scope<span class="label optional"></span></td>
-      <td>This can be used to specify what information the access token
-      will provide access to.  By default an access token will have access to
-      all api calls that a user can make.  The only other accepted value
-      for this at present is '/auth/userinfo'. When used, this will return only
-      the current canvas user's identity. Some OAuth libraries may require a
-      scope parameter to be specified; if so, passing no value for the scope
-      parameter will behave as if no scope parameter was specified.</td>
+      <td>
+        This can be used to specify what information the access token will provide access to.
+        Scopes may be found beneath their corresponding endpoints in the "resources" documentation pages.
+        If the developer key does not require scopes and no scope parameter is specified, the access token will have access to all scopes. If the developer key does require scopes and no scope parameter is specified, Canvas will respond with "invalid_scope."
+      </td>
     </tr>
     <tr>
       <td class="mono">purpose<span class="label optional"></span></td>
@@ -87,6 +85,9 @@ wrong person in, as <a href="http://homakov.blogspot.com/2012/07/saferweb-most-c
     </tr>
   </tbody>
 </table>
+
+- To successfully pass multiple scope values, the scope parameter is included once, with multiple values separated by spaces: `GET https://<canvas-install-url>/login/oauth2/auth?scope=value_0 value_1 value_2`
+- Passing multiple scope parameters, as is common in other areas of Canvas, causes only the last value to be applied to the generated token: `GET https://<canvas-install-url>/login/oauth2/auth?scope=value_0&scope=value_1&scope=value_2` will only be scoped for value_2
 
 </div>
 
@@ -110,18 +111,18 @@ See <a href="http://tools.ietf.org/html/rfc6749#section-4.1.3">Section 4.1.3</a>
     <tbody>
       <tr>
         <td class="mono">grant_type <span class="label required"></span></td>
-        <td>Values currently supported "authorization_code", "refresh_token"</td>
+        <td>Values currently supported "authorization_code", "refresh_token", and "client_credentials"</td>
       </tr>
       <tr>
-        <td class="mono">client_id <span class="label required"></span></td>
+        <td class="mono">client_id <span class="label required-for">grant_types: authorization_code refresh_token</span></td>
         <td>The client id for your registered application.</td>
       </tr>
       <tr>
-        <td class="mono">client_secret <span class="label required"></span></td>
+        <td class="mono">client_secret <span class="label required-for">grant_types: authorization_code refresh_token</span></td>
         <td>The client secret for your registered application.</td>
       </tr>
       <tr>
-        <td class="mono">redirect_uri <span class="label required"></span></td>
+        <td class="mono">redirect_uri <span class="label required-for">grant_types: authorization_code refresh_token</span></td>
         <td>If a redirect_uri was passed to the initial request in
         step 1, the same redirect_uri must be given here.</td>
       </tr>
@@ -132,6 +133,19 @@ See <a href="http://tools.ietf.org/html/rfc6749#section-4.1.3">Section 4.1.3</a>
       <tr>
         <td class="mono">refresh_token <span class="label required-for">grant_type: refresh_token</span></td>
         <td>Required if grant_type is refresh_token. The refresh_token you received in a redirect response.</td>
+      </tr>
+      <tr>
+        <td class="mono">client_assertion_type <span class="label required-for">grant_type: client_credentials</span></td>
+        <td>Currently the only supported value for this field is `urn:ietf:params:oauth:client-assertion-type:jwt-bearer`</td>
+      </tr>
+      <tr>
+        <td class="mono">client_assertion <span class="label required-for">grant_type: client_credentials</span></td>
+        <td>The signed jwt used to request an access token. Includes the value of Developer Key id
+        as the sub claim of the jwt body. Should be signed by the private key of the stored public key on the DeveloperKey.</td>
+      </tr>
+      <tr>
+        <td class="mono">scope <span class="label required-for">grant_type: client_credentials</span></td>
+        <td>A list of scopes to be granted to the token. Currently only IMS defined scopes may be used.</td>
       </tr>
     </tbody>
   </table>
@@ -206,6 +220,31 @@ See <a href="http://tools.ietf.org/html/rfc6749#section-4.1.3">Section 4.1.3</a>
       </tr>
     </tbody>
   </table>
+
+  When using grant_type=client_credentials:
+
+  <h5>Example request</h5>
+
+  <pre class="example_code">
+  {
+    "grant_type": "client_credentials",
+    "client_assertion_type": "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+    "client_assertion": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9
+.eyJpc3MiOiJ0b29sLmNvbSIsInN1YiI6Ind3dy5leGFtcGxlLmNvbSIsImF1ZCI6Imh0dHBzOi8vd3d3LmV4YW1wbGUuY29tL2x0aS9hdXRoL3R
+va2VuIiwiaWF0IjoiMTQ4NTkwNzIwMCIsImV4cCI6IjE0ODU5MDc1MDAiLCJqdGkiOiIyOWY5MGMwNDdhNDRiMmVjZTczZDAwYTA5MzY0ZDQ5YiJ9
+.liArqLDIF-xGcCu8ythy0HlzntxwZ90AYTnwH-daCQQ",
+    "scope": "https://purl.imsglobal.org/spec/lti-ags/lineitem https://purl.imsglobal.org/spec/lti-ags/result/read"
+  }
+  </pre>
+
+  <h5>Example Response</h5>
+
+  {
+    "access_token" : "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ3d3cuZXhhbXBsZS5jb20iLCJpYXQiOiIxNDg1OTA3MjAwIiwiZXhwIjoiMTQ4NTkwNzUwMCIsImltc2dsb2JhbC5vcmcuc2VjdXJpdHkuc2NvcGUiOiJMdGlMaW5rU2V0dGluZ3MgU2NvcmUuaXRlbS5QVVQifQ.UWCuoD05KDYVQHEcciTV88YYtWWMwgb3sTbrjwxGBZA",
+    "token_type" : "Bearer",
+    "expires_in" : 3600,
+    "scope" : "https://purl.imsglobal.org/spec/lti-ags/lineitem https://purl.imsglobal.org/spec/lti-ags/result/read"
+  }
 </div>
 
 <a name="delete-login-oauth2-token"></a>

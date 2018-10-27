@@ -27,13 +27,13 @@ QUnit.module('FilesUsage#update', {
     this.server = sinon.fakeServer.create()
     this.filesUsage = TestUtils.renderIntoDocument(<FilesUsage {...props} />)
     test()
-    ReactDOM.unmountComponentAtNode(this.filesUsage.getDOMNode().parentNode)
+    ReactDOM.unmountComponentAtNode(ReactDOM.findDOMNode(this.filesUsage).parentNode)
     return this.server.restore()
   }
 })
 
 test('makes a get request with contextType and contextId', function() {
-  this.stub($, 'get')
+  sandbox.stub($, 'get')
   return this.filesUpdateTest(
     {
       contextType: 'users',
@@ -59,7 +59,7 @@ test('sets state with ajax requests returned data', function() {
         {'Content-Type': 'application/json'},
         JSON.stringify(data)
       ])
-      this.spy(this.filesUsage, 'setState')
+      sandbox.spy(this.filesUsage, 'setState')
       this.filesUsage.update()
       this.server.respond()
       ok(
@@ -77,7 +77,7 @@ test('update called after component mounted', function() {
       contextId: 4
     },
     () => {
-      this.stub(this.filesUsage, 'update').returns(true)
+      sandbox.stub(this.filesUsage, 'update').returns(true)
       this.filesUsage.componentDidMount()
       ok(this.filesUsage.update.calledOnce, 'called update after it mounted')
     }

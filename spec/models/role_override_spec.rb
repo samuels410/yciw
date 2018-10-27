@@ -101,6 +101,20 @@ describe RoleOverride do
     }.to_not raise_error
   end
 
+  it "should update the roles updated_at timestamp on save" do
+    account = account_model(:parent_account => Account.default)
+    role = teacher_role
+    role_override = RoleOverride.create!(:context => account, :permission => 'moderate_forum',
+                                         :role => role, :enabled => false)
+    role.update!(updated_at: 1.day.ago)
+    old_updated_at = role.updated_at
+
+    role_override.update!(enabled: true)
+    new_updated_at = role.updated_at
+
+    expect(old_updated_at).not_to eq(new_updated_at)
+  end
+
   describe "student view permissions" do
     it "should mirror student permissions" do
       permission = 'comment_on_others_submissions'
@@ -523,38 +537,19 @@ describe RoleOverride do
       it 'is available to account admins, account memberships, teachers, and TAs' do
         expect(permission[:available_to]).to match_array %w(AccountAdmin AccountMembership TeacherEnrollment TaEnrollment)
       end
-
-      it 'is allowed when Anonymous Moderated Marking is enabled for the account' do
-        @account.root_account.enable_feature!(:anonymous_moderated_marking)
-        expect(permission[:account_allows].call(@account)).to be true
-      end
-
-      it 'is not allowed when Anonymous Moderated Marking is disabled for the account' do
-        @account.root_account.disable_feature!(:anonymous_moderated_marking)
-        expect(permission[:account_allows].call(@account)).to be false
-      end
     end
 
     describe 'view_audit_trail' do
       let(:permission) { RoleOverride.permissions[:view_audit_trail] }
 
       it 'is enabled by default for teachers, TAs and admins' do
-        expect(permission[:true_for]).to match_array %w(TeacherEnrollment AccountAdmin)
+        expect(permission[:true_for]).to match_array %w(AccountAdmin)
       end
 
       it 'is available to teachers, TAs, admins and account memberships' do
         expect(permission[:available_to]).to match_array %w(TeacherEnrollment AccountAdmin AccountMembership)
       end
-
-      it 'is allowed when Anonymous Moderated Marking is enabled for the account' do
-        @account.root_account.enable_feature!(:anonymous_moderated_marking)
-        expect(permission[:account_allows].call(@account)).to be true
-      end
-
-      it 'is not allowed when Anonymous Moderated Marking is disabled for the account' do
-        @account.root_account.disable_feature!(:anonymous_moderated_marking)
-        expect(permission[:account_allows].call(@account)).to be false
-      end
     end
   end
+
 end

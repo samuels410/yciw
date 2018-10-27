@@ -33,7 +33,6 @@
 
 .icon {
   color: var(--iconColor);
-  font-size: var(--iconFontSize);
   margin: 0 var(--gutterWidth);
 
   > svg { /* stylelint-disable-line selector-no-type */
@@ -48,17 +47,26 @@
 
 .layout {
   display: flex;
-  flex: 1;
+  flex-direction: column;
+  flex: 1 0;
+  min-width: 1px;
+}
+.innerLayout {
+  display: flex;
+  flex: 1 0;
   align-items: center;
   min-width: 1px;
+  min-height: 2.5rem; /* or ie11 smashes it down */
 }
 
 .details {
   flex: 0 0 50%;
   margin-bottom: 0;
   box-sizing: border-box;
-
   min-width: 1px;
+  &.details_no_badges {
+     flex: 0 0 75%;
+   }
 }
 
 .secondary {
@@ -68,6 +76,9 @@
   align-items: center;
   justify-content: flex-end;
   min-width: 1px;
+  &.secondary_no_badges {
+     flex: 0 0 25%;
+   }
 }
 
 .type {
@@ -83,19 +94,18 @@
   line-height: var(--titleLineHeight);
 }
 
-.type,
-.title {
-  overflow-wrap: break-word;
-  word-wrap: break-word;
-  hyphens: auto;
-}
-
 .metrics {
   box-sizing: border-box;
   text-align: end;
-  flex: 0 0 7rem;
+  flex: 0 0 10rem;
   min-width: 1px;
   padding-inline-start: var(--metricsPadding);
+  &.with_end_time {
+    flex-basis: 14rem;
+    .due {
+      text-transform: none;
+    }
+  }
 }
 
 .due,
@@ -111,6 +121,22 @@
   flex: 1;
   text-align: end;
   min-width: 1px;
+}
+
+.feedback {
+  display: flex;
+  align-items: center;
+  min-height: 40px;   /* height of the avater, so ie11 doesn't squish it */
+
+  .feedbackAvatar {
+    flex-shrink: 0;
+    margin-inline-end: var(--gutterWidth);
+  }
+  .feedbackComment {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
 }
 
 .medium {

@@ -36,6 +36,11 @@ p {
   font-family: monospace;
 }
 
+.note.deprecated { background: #ffe5e5; border-color: #e9dada; padding: 1.33em; }
+.note.title.deprecated { background: #ffe5e5; border-color: #e9dada; }
+.request-param.deprecated, .response-field.deprecated { background: #ffe5e5; border-color: #e9dada; }
+.param-deprecated { width: 185px; }
+
 h1 a:link, h1 a:visited,
 h2 a:link, h2 a:visited,
 h3 a:link, h3 a:visited,
@@ -163,6 +168,11 @@ h3.beta {
   border-left: 3px solid #0073ac;
 }
 
+.method_details code.scope {
+  background-color: #eee;
+  padding: 1px;
+}
+
 h2 .defined-in {
   float:right;
   font-size:10px;
@@ -184,6 +194,43 @@ table th {
 table th, table td {
   border: 1px inset gray;
   padding: 4px;
+}
+
+table.changelog {
+  border: 2px solid gray;
+  width: 100%
+}
+
+table.changelog th {
+  padding: 4px;
+  border: 1px inset gray;
+  border-spacing: 1px;
+  height: 30px;
+  text-align:left;
+  vertical-align: center;
+  font-weight: bold;
+  color: #333;
+  background-color: #DDD;
+}
+
+table.changelog tr td:nth-child(1) {
+     width:20%;
+}
+
+table.changelog tr td:nth-child(2) {
+     width:30%;
+}
+
+table.changelog tr td:last-child {
+     width:auto;
+}
+
+table.changelog td {
+  padding: 10px 8px 10px 5px;
+  border: 1px inset gray;
+  border-spacing: 1px;
+  vertical-align: top;
+  text-align: left;
 }
 
 table.sis_csv {
@@ -320,36 +367,38 @@ code.enum {
   padding: 12px;
   font-size: 1.1em;
 }
-table.request-params {
+table.request-params, table.response-fields {
   table-layout: fixed;
   width: 100%;
+  margin-bottom: 1.33em;
 }
-table.request-params, table.request-params th, table.request-params td {
+
+table.request-params, table.request-params th, table.request-params td, table.response-fields, table.response-fields th, table.response-fields td {
   border: 0;
   text-align: left;
 }
-table.request-params td {
+table.request-params td, table.response-fields td {
   border-bottom: 1px solid #ccc;
   vertical-align: text-top;
   font-family: Monaco, Lucida Console, monospace;
   font-size: 12px;
   word-wrap: break-word;
 }
-table.request-params td.param-desc {
+table.request-params td.param-desc, table.response-fields td.param-desc {
   font-family: "Helvetica Neue", Helvetica;
 }
-table.request-params td.param-desc ul {
+table.request-params td.param-desc ul, table.response-fields td.param-desc ul {
   padding: 0;
   list-style-position: inside;
 }
 
-.param-name {
+.param-name, .field-name {
   width: 20em;
 }
 .param-req {
   width: 5em;
 }
-.param-type {
+.param-type, .param-deprecated, .param-effective, .field-type, .field-deprecated, .field-effective, {
   width: 10em;
 }
 .param-desc {

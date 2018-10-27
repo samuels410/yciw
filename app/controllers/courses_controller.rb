@@ -145,6 +145,11 @@ require 'securerandom'
 #            "example": 25,
 #            "type": "integer"
 #         },
+#         "created_at": {
+#           "description": "the date the course was created.",
+#           "example": "2012-05-01T00:00:00-06:00",
+#           "type": "datetime"
+#         },
 #         "start_at": {
 #           "description": "the start date for the course, if applicable",
 #           "example": "2012-06-01T00:00:00-06:00",
@@ -454,12 +459,10 @@ class CoursesController < ApplicationController
   def index
     respond_to do |format|
       format.html {
-        all_enrollments = @current_user.enrollments.not_deleted.shard(@current_user).to_a
+        all_enrollments = Shackles.activate(:slave) { @current_user.enrollments.not_deleted.shard(@current_user).preload(:enrollment_state, :course, :course_section).to_a }
         @past_enrollments = []
         @current_enrollments = []
         @future_enrollments  = []
-        Canvas::Builders::EnrollmentDateBuilder.preload(all_enrollments)
-        ActiveRecord::Associations::Preloader.new.preload(all_enrollments, :course_section)
 
         all_enrollments.group_by{|e| [e.course_id, e.type]}.values.each do |enrollments|
           e = enrollments.sort_by{|e| e.state_with_date_sortable}.first
@@ -473,8 +476,7 @@ class CoursesController < ApplicationController
             ([:active, :invited].include?(state) && e.section_or_course_date_in_past?) # strictly speaking, these enrollments are perfectly active but enrollment dates are terrible
             @past_enrollments << e unless e.workflow_state == "invited"
           elsif !e.hard_inactive?
-            start_at, end_at = e.enrollment_dates.first
-            if start_at && start_at > Time.now.utc
+            if e.enrollment_state.pending? || state == :creation_pending || (e.admin? && e.course.start_at&.>(Time.now.utc))
               @future_enrollments << e unless e.restrict_future_listing?
             elsif state != :inactive
               @current_enrollments << e
@@ -925,7 +927,7 @@ class CoursesController < ApplicationController
         end
 
         users = Api.paginate(users, self, api_v1_course_users_url)
-        includes = Array(params[:include])
+        includes = Array(params[:include]).concat(['sis_user_id'])
 
         # user_json_preloads loads both active/accepted and deleted
         # group_memberships when passed "group_memberships: true." In a
@@ -990,7 +992,7 @@ class CoursesController < ApplicationController
     get_context
     if authorized_action(@context, @current_user, :read_reports)
       scope = User.for_course_with_last_login(@context, @context.root_account_id, 'StudentEnrollment')
-      scope = scope.order('login_info_exists, last_login DESC')
+      scope = scope.order('last_login DESC NULLS LAST')
       users = Api.paginate(scope, self, api_v1_course_recent_students_url)
       user_json_preloads(users)
       render :json => users.map { |u| user_json(u, @current_user, session, ['last_login']) }
@@ -1727,12 +1729,16 @@ class CoursesController < ApplicationController
       @course_home_view = "feed" if params[:view] == "feed"
       @course_home_view ||= default_view
 
-      js_env COURSE: {
-        id: @context.id.to_s,
-        pages_url: polymorphic_url([@context, :wiki_pages]),
-        front_page_title: @context&.wiki&.front_page&.title,
-        default_view: default_view
-      }
+      js_env({
+        # don't check for student enrollments because we want to show course items on the teacher's  syllabus
+        STUDENT_PLANNER_ENABLED: @domain_root_account&.feature_enabled?(:student_planner),
+        COURSE: {
+          id: @context.id.to_s,
+          pages_url: polymorphic_url([@context, :wiki_pages]),
+          front_page_title: @context&.wiki&.front_page&.title,
+          default_view: default_view
+        }
+      })
 
       # make sure the wiki front page exists
       if @course_home_view == 'wiki'&& @context.wiki.front_page.nil?
@@ -1754,10 +1760,9 @@ class CoursesController < ApplicationController
         @padless = true
       when 'assignments'
         add_crumb(t('#crumbs.assignments', "Assignments"))
-        set_js_assignment_data(
-          include_assignment_permissions: @context.root_account.feature_enabled?(:anonymous_moderated_marking)
-        )
+        set_js_assignment_data
         js_env(:SIS_NAME => AssignmentUtil.post_to_sis_friendly_name(@context))
+        js_env(:QUIZ_LTI_ENABLED => @context.feature_enabled?(:quizzes_next) && @context.quiz_lti_tool.present?)
         js_env(:COURSE_HOME => true)
         @upcoming_assignments = get_upcoming_assignments(@context)
       when 'modules'
@@ -2677,7 +2682,8 @@ class CoursesController < ApplicationController
 
   # @API Permissions
   # Returns permission information for the calling user in the given course.
-  # See also {api:AccountsController#permissions the Account counterpart}.
+  # See also the {api:AccountsController#permissions Account} and
+  # {api:GroupsController#permissions Group} counterparts.
   #
   # @argument permissions[] [String]
   #   List of permissions to check against the authenticated user.
@@ -2730,7 +2736,8 @@ class CoursesController < ApplicationController
       SubmissionComment.where(:provisional_grade_id => pg_scope).delete_all
       pg_scope.delete_all
       OriginalityReport.where(:submission_id => @fake_student.all_submissions).delete_all
-      @fake_student.all_submissions.destroy_all
+      AnonymousOrModerationEvent.where(submission: @fake_student.all_submissions).destroy_all
+      @fake_student.all_submissions.preload(:all_submission_comments, :lti_result, :versions).destroy_all
       @fake_student.quiz_submissions.each{|qs| qs.events.destroy_all}
       @fake_student.quiz_submissions.destroy_all
 
@@ -2935,15 +2942,27 @@ class CoursesController < ApplicationController
       preloads << { enrollment_term: { grading_period_group: :grading_periods } }
       preloads << { grading_period_groups: :grading_periods }
     end
+    preloads << { context_modules: :content_tags } if includes.include?('course_progress')
     ActiveRecord::Associations::Preloader.new.preload(courses, preloads)
 
-    if includes.include?('total_scores') || includes.include?('current_grading_period_scores')
-      ActiveRecord::Associations::Preloader.new.preload(enrollments, scores: :course)
+    preloads = []
+    preloads << :course_section if includes.include?('sections')
+    preloads << { scores: :course } if includes.include?('total_scores') || includes.include?('current_grading_period_scores')
+
+    ActiveRecord::Associations::Preloader.new.preload(enrollments, preloads) unless preloads.empty?
+    if includes.include?('course_progress')
+      progressions = ContextModuleProgression.joins(:context_module).where(user: user, context_modules: { course: courses }).select("context_module_progressions.*, context_modules.context_id AS course_id").to_a.group_by { |cmp| cmp['course_id'] }
     end
+
+    permissions_to_precalculate = [:read_sis, :manage_sis]
+    permissions_to_precalculate += SectionTabHelper::PERMISSIONS_TO_PRECALCULATE if includes.include?('tabs')
+    all_precalculated_permissions = @current_user.precalculate_permissions_for_courses(courses, permissions_to_precalculate)
 
     enrollments_by_course.each do |course_enrollments|
       course = course_enrollments.first.course
-      hash << course_json(course, @current_user, session, includes, course_enrollments, user)
+      hash << course_json(course, @current_user, session, includes, course_enrollments, user,
+                          preloaded_progressions: progressions,
+                          precalculated_permissions: all_precalculated_permissions&.dig(course.global_id))
     end
     hash
   end

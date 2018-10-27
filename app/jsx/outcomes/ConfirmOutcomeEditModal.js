@@ -20,7 +20,7 @@ import I18n from 'i18n!outcomes'
 import React, {Component} from 'react'
 import ReactDOM from 'react-dom'
 import {func, shape, bool} from 'prop-types'
-import Button from '@instructure/ui-core/lib/components/Button'
+import Button from '@instructure/ui-buttons/lib/components/Button'
 
 import Modal, { ModalBody, ModalFooter } from '../shared/components/InstuiModal'
 
@@ -95,7 +95,6 @@ export default class ConfirmOutcomeEditModal extends Component {
         open={this.state.show}
         onDismiss={this.onCancel}
         size="small"
-        shouldCloseOnOverlayClick
       >
         <ModalBody>
           <div>

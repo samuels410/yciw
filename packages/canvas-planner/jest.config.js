@@ -25,6 +25,7 @@ module.exports = {
     'enzyme-to-json/serializer'
   ],
   setupFiles: [
+    'jest-canvas-mock',
     './jest-env.js'
   ],
   testPathIgnorePatterns: [
@@ -35,7 +36,8 @@ module.exports = {
   testRegex: "/__tests__/.*\\.(test|spec)\\.js$",
   coverageReporters: [
     'html',
-    'text'
+    'text',
+    'json'
   ],
   collectCoverageFrom: [
     'src/**/*.js'
@@ -47,9 +49,9 @@ module.exports = {
   coverageThreshold: {
     global: {
       branches: 85,
-      functions: 90,
-      lines: 90,
-      statements: 90
+      functions: 85,
+      lines: 85,
+      statements: 85
     }
   }
 };

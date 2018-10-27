@@ -17,7 +17,7 @@
 
 import React from 'react';
 import { mount } from 'enzyme';
-import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent';
+import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent';
 import SubmissionCommentUpdateForm from 'jsx/gradezilla/default_gradebook/components/SubmissionCommentUpdateForm';
 
 QUnit.module('SubmissionCommentUpdateForm', function (hooks) {
@@ -53,7 +53,7 @@ QUnit.module('SubmissionCommentUpdateForm', function (hooks) {
 
   test('initializes with the original comment in the textarea', function () {
     wrapper = mountComponent();
-    strictEqual(wrapper.find('textarea').node.innerText, 'A comment');
+    strictEqual(wrapper.find('textarea').instance().innerText, 'A comment');
   });
 
   test('"Submit" button is present even if there is no text entered in the comment area', function () {

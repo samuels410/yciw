@@ -70,6 +70,22 @@ describe DeveloperKey do
   end
 
   describe 'callbacks' do
+    describe 'public_jwk validations' do
+      subject { developer_key_saved }
+
+      before { subject.public_jwk = {invalid: 'test'} }
+
+      it 'verifies public_jwk kty is "RSA"' do
+        expect(subject.save).to eq false
+      end
+
+      it 'adds an error message whn public_jwk is invalid' do
+        subject.public_jwk = {invalid: 'test'}
+        subject.save
+        expect(subject.errors[:public_jwk]).to include 'Must use RSA kty'
+      end
+    end
+
     it 'does not validate scopes' do
       expect do
         DeveloperKey.create!(
@@ -84,7 +100,47 @@ describe DeveloperKey do
           url:GET|/api/v1/audit/grade_change/courses/:course_id/assignments/:assignment_id/graders/:grader_id)
       end
 
-      before { Account.site_admin.enable_feature!(:api_token_scoping) }
+      before { Account.site_admin.enable_feature!(:developer_key_management_and_scoping) }
+
+      describe 'after_update' do
+        let(:user) { user_model }
+        let(:developer_key_with_scopes) { DeveloperKey.create!(scopes: valid_scopes) }
+        let(:access_token) { user.access_tokens.create!(developer_key: developer_key_with_scopes) }
+        let(:valid_scopes) do
+          [
+            "url:GET|/api/v1/courses/:course_id/quizzes",
+            "url:GET|/api/v1/courses/:course_id/quizzes/:id",
+            "url:GET|/api/v1/courses/:course_id/users",
+            "url:GET|/api/v1/courses/:id",
+            "url:GET|/api/v1/users/:user_id/profile",
+            "url:POST|/api/v1/courses/:course_id/assignments",
+            "url:POST|/api/v1/courses/:course_id/quizzes",
+          ]
+        end
+
+        before { access_token }
+
+        it 'deletes its associated access tokens if scopes are removed' do
+          developer_key_with_scopes.update!(scopes: [valid_scopes.first])
+          expect(developer_key_with_scopes.access_tokens).to be_empty
+        end
+
+        it 'does not delete its associated access tokens if scopes are not changed' do
+          developer_key_with_scopes.update!(email: 'test@test.com')
+          expect(developer_key_with_scopes.access_tokens).to match_array [access_token]
+        end
+
+        it 'does not delete its associated access tokens if a new scope was added' do
+          developer_key_with_scopes.update!(scopes: valid_scopes.push("url:PUT|/api/v1/courses/:course_id/quizzes/:id"))
+          expect(developer_key_with_scopes.access_tokens).to match_array [access_token]
+        end
+
+        it 'does not delete the associated access tokens if feature flags are off' do
+          Account.site_admin.disable_feature!(:developer_key_management_and_scoping)
+          developer_key_with_scopes.update!(scopes: [valid_scopes.first])
+          expect(developer_key_with_scopes.access_tokens).to match_array [access_token]
+        end
+      end
 
       it 'raises an error if scopes contain invalid scopes' do
         expect do
@@ -102,17 +158,16 @@ describe DeveloperKey do
         end.not_to raise_exception
       end
 
-      it 'sets "require_scopes" to true if scopes are present' do
-        key = DeveloperKey.create!(scopes: valid_scopes)
-        expect(key.require_scopes).to eq true
-      end
-
-      it 'sets "require_scopes" to false if scopes are blank' do
-        key = DeveloperKey.create!
+      it 'does not set "require_scopes" to true if scopes are present and require_scopes is false' do
+        key = DeveloperKey.create!(scopes: valid_scopes, require_scopes: false)
         expect(key.require_scopes).to eq false
       end
-    end
 
+      it 'does not set "require_scopes" to false if scopes are blank and require_scopes is true' do
+        key = DeveloperKey.create!(require_scopes: true)
+        expect(key.require_scopes).to eq true
+      end
+    end
 
     context 'when site admin' do
       it 'it creates a binding on save' do
@@ -136,6 +191,20 @@ describe DeveloperKey do
       binding_id = developer_key_account_binding.id
       developer_key_saved.destroy_permanently!
       expect(DeveloperKeyAccountBinding.find_by(id: binding_id)).to be_nil
+    end
+
+    it 'has many context external tools' do
+      tool = ContextExternalTool.create!(
+        context: account,
+        consumer_key: 'key',
+        shared_secret: 'secret',
+        name: 'test tool',
+        url: 'http://www.tool.com/launch',
+        developer_key: developer_key_saved
+      )
+      expect(developer_key_saved.context_external_tools).to match_array [
+        tool
+      ]
     end
   end
 
@@ -307,6 +376,65 @@ describe DeveloperKey do
     at = AccessToken.create!(:user => user_model, :developer_key => developer_key_saved)
     at.used!
     expect(developer_key_saved.last_used_at).not_to be_nil
+  end
+
+  describe '#generate_rsa_keypair!' do
+    context 'when "public_jwk" is already set' do
+      subject do
+        developer_key.generate_rsa_keypair!
+        developer_key
+      end
+
+      let(:developer_key) do
+        key = DeveloperKey.create!
+        key.generate_rsa_keypair!
+        key.save!
+        key
+      end
+      let(:public_jwk) { developer_key.public_jwk }
+
+      context 'when "override" is false' do
+        it 'does not change the "public_jwk"' do
+          expect(subject.public_jwk).to eq public_jwk
+        end
+
+        it 'does not change the "private_jwk" attribute' do
+          previous_private_key = developer_key.private_jwk
+          expect(subject.private_jwk).to eq previous_private_key
+        end
+      end
+
+      context 'when "override: is true' do
+        subject do
+          developer_key.generate_rsa_keypair!(overwrite: true)
+          developer_key
+        end
+
+        it 'does change the "public_jwk"' do
+          previous_public_key = developer_key.public_jwk
+          expect(subject.public_jwk).not_to eq previous_public_key
+        end
+
+        it 'does change the "private_jwk"' do
+          previous_private_key = developer_key.private_jwk
+          expect(subject.private_jwk).not_to eq previous_private_key
+        end
+      end
+    end
+
+    context 'when "public_jwk" is not set' do
+      subject { DeveloperKey.new }
+
+      before { subject.generate_rsa_keypair! }
+
+      it 'populates the "public_jwk" column with a public key' do
+        expect(subject.public_jwk['kty']).to eq Lti::RSAKeyPair::KTY
+      end
+
+      it 'populates the "private_jwk" attribute with a private key' do
+        expect(subject.private_jwk['kty']).to eq Lti::RSAKeyPair::KTY.to_sym
+      end
+    end
   end
 
   describe "#redirect_domain_matches?" do

@@ -27,120 +27,6 @@ describe "legacyNode" do
     CanvasSchema.execute(query, context: {current_user: user})
   end
 
-  context "courses" do
-    before(:once) do
-      @query = <<-GQL
-      query {
-        course: legacyNode(type: Course, _id: "#{@course.id}") {
-          ... on Course {
-            _id,
-            name
-          }
-        }
-      }
-      GQL
-    end
-
-    it "works" do
-      expect(
-        run_query(@query, @student)["data"]["course"]["_id"]
-      ).to eq @course.id.to_s
-    end
-
-    it "needs read permission" do
-      @course1, @student1 = @course, @student
-      course_with_student
-      @course2, @student2 = @course, @student
-
-      expect(run_query(@query, @student2)["data"]["course"]).to be_nil
-    end
-  end
-
-  context "assignments" do
-    before(:once) do
-      @assignment = @course.assignments.create! name: "Some Assignment"
-      @query = <<-GQL
-      query {
-        assignment: legacyNode(type: Assignment, _id: "#{@assignment.id}") {
-          ... on Assignment {
-            _id
-            name
-          }
-        }
-      }
-      GQL
-    end
-
-    it "works" do
-      expect(
-        run_query(@query, @student)["data"]["assignment"]["_id"]
-      ).to eq @assignment.id.to_s
-    end
-
-    it "needs read permission" do
-      @assignment.unpublish
-      expect(run_query(@query, @student)["data"]["assignment"]).to be_nil
-    end
-  end
-
-  context "sections" do
-    before(:once) do
-      @section = @course.course_sections.create! name: "Section 1"
-      @query = <<-GQL
-      query {
-        section: legacyNode(type: Section, _id: "#{@section.id}") {
-          ... on Section {
-            _id
-          }
-        }
-      }
-      GQL
-    end
-
-    it "works" do
-      @course.enroll_student(@student,
-                             enrollment_state: 'active',
-                             section: @section,
-                             allow_multiple_enrollments: true)
-      expect(
-        run_query(@query, @student)["data"]["section"]["_id"]
-      ).to eq @section.id.to_s
-    end
-
-    it "requires read permission" do
-      @student.enrollments.update_all limit_privileges_to_course_section: true
-      expect(
-        run_query(@query, @student)["data"]["section"]
-      ).to be_nil
-    end
-  end
-
-  context "users" do
-    before(:once) do
-      @query = <<-GQL
-      query {
-        user: legacyNode(type: User, _id: "#{@student.id}") {
-          ... on User {
-            _id
-          }
-        }
-      }
-      GQL
-    end
-
-    it "works" do
-      expect(
-        run_query(@query, @student)["data"]["user"]["_id"]
-      ).to eq @student.id.to_s
-    end
-
-    it "requires read_full_profile permission" do
-      orig_student = @student
-      student_in_course
-      expect(run_query(@query, @student)["data"]["user"]).to be_nil
-    end
-  end
-
   context "enrollments" do
     before(:once) do
       @enrollment = @student.enrollments.first
@@ -168,6 +54,64 @@ describe "legacyNode" do
       @other_class_student = @student
       expect(
         run_query(@query, @other_class_student)["data"]["enrollment"]
+      ).to be_nil
+    end
+  end
+
+  context "modules" do
+    before(:once) do
+      @module = @course.context_modules.create! name: "asdf"
+      @query = <<~GQL
+      query {
+        module: legacyNode(type: Module, _id: "#{@module.id}") {
+          ... on Module {
+            _id
+          }
+        }
+      }
+      GQL
+    end
+
+    it "works" do
+      expect(
+        run_query(@query, @student)["data"]["module"]["_id"]
+      ).to eq @module.id.to_s
+    end
+
+    it "requires read permission" do
+      @module.unpublish
+      expect(
+        run_query(@query, @student)["data"]["module"]
+      ).to be_nil
+    end
+  end
+
+  context "page" do
+    before(:once) do
+      @course.create_wiki! has_no_front_page: false, title: "asdf"
+      @page = @course.wiki.front_page
+      @page.save!
+      @query = <<~GQL
+      query {
+        page: legacyNode(type: Page, _id: "#{@page.id}") {
+          ... on Page {
+            _id
+          }
+        }
+      }
+      GQL
+    end
+
+    it "works" do
+      expect(
+        run_query(@query, @student)["data"]["page"]["_id"]
+      ).to eq @page.id.to_s
+    end
+
+    it "requires read permission" do
+      @page.unpublish
+      expect(
+        run_query(@query, @student)["data"]["page"]
       ).to be_nil
     end
   end

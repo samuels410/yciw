@@ -114,14 +114,14 @@ test('renders', function() {
 })
 
 test('tells RCE to manage the parent', function() {
-  const lne = this.stub(RichContentEditor, 'loadNewEditor')
+  const lne = sandbox.stub(RichContentEditor, 'loadNewEditor')
   const view = this.editView()
   view.loadNewEditor()
   ok(lne.firstCall.args[1].manageParent, 'manageParent flag should be set')
 })
 
 test('does not tell RCE to manage the parent of locked content', function() {
-  const lne = this.stub(RichContentEditor, 'loadNewEditor')
+  const lne = sandbox.stub(RichContentEditor, 'loadNewEditor')
   const view = this.editView({lockedItems: {content: true}})
   view.loadNewEditor()
   ok(lne.callCount === 0, 'RCE not called')
@@ -215,7 +215,13 @@ test('shows todo input with date when given date', function() {
   ENV.STUDENT_PLANNER_ENABLED = true
   const view = this.editView({}, {todo_date: '2017-01-03'})
   equal(view.$el.find('#allow_todo_date').prop('checked'), true)
-  equal(view.$el.find('#todo_date').val(), 'Jan 3, 2017 at 12am')
+  equal(view.$el.find('input[name="todo_date"').val(), 'Jan 3, 2017 12am')
+})
+
+test('renders announcement page when planner enabled', function() {
+  ENV.STUDENT_PLANNER_ENABLED = true
+  const view = this.editView({isAnnouncement: true})
+  equal(view.$el.find('#discussion-edit-view').length, 1)
 })
 
 test('does not show todo checkbox without permission', function() {
@@ -239,8 +245,8 @@ test('does save todo date if allow_todo_date is checked and discussion is not gr
   view.renderGroupCategoryOptions()
   view.$el.find('#allow_todo_date').prop('checked', true)
   view.$el.find('#allow_todo_date').trigger('change')
-  view.$el.find('#todo_date').val(todo_date.toISOString())
-  view.$el.find('#todo_date').trigger('change')
+  view.$el.find('input[name="todo_date"').val(todo_date.toISOString())
+  view.$el.find('input[name="todo_date"').trigger('change')
   const formData = view.getFormData()
   equal(formData.todo_date.toString(), todo_date.toString())
 })
@@ -450,7 +456,7 @@ test('conditional release editor is updated on tab change', function() {
   view.renderTabs()
   view.renderGroupCategoryOptions()
   view.loadConditionalRelease()
-  const stub = this.stub(view.conditionalReleaseEditor, 'updateAssignment')
+  const stub = sandbox.stub(view.conditionalReleaseEditor, 'updateAssignment')
   view.$discussionEditView.tabs('option', 'active', 1)
   ok(stub.calledOnce)
   stub.reset()
@@ -464,7 +470,7 @@ test('validates conditional release', function(assert) {
   const resolved = assert.async()
   const view = this.editView({withAssignment: true})
   return defer(() => {
-    const stub = this.stub(view.conditionalReleaseEditor, 'validateBeforeSave').returns('foo')
+    const stub = sandbox.stub(view.conditionalReleaseEditor, 'validateBeforeSave').returns('foo')
     const errors = view.validateBeforeSave(view.getFormData(), {})
     ok(errors.conditional_release === 'foo')
     return resolved()
@@ -483,7 +489,7 @@ test('calls save in conditional release', function(assert) {
       .promise()
     const mockSuper = sinon.mock(EditView.__super__)
     mockSuper.expects('saveFormData').returns(superPromise)
-    const stub = this.stub(view.conditionalReleaseEditor, 'save').returns(crPromise)
+    const stub = sandbox.stub(view.conditionalReleaseEditor, 'save').returns(crPromise)
     const finalPromise = view.saveFormData()
     return finalPromise.then(() => {
       mockSuper.verify()
@@ -537,4 +543,37 @@ test('switches to details tab if save error does not contain conditional release
     equal(0, view.$discussionEditView.tabs('option', 'active'))
     return resolved()
   })
+})
+
+test('Does not change the locked status of an existing discussion topic', function() {
+  const view = this.editView({}, {locked: true})
+  equal(true, view.model.get('locked'))
+})
+
+QUnit.module('EditView: Assignment External Tools', {
+  setup() {
+    fakeENV.setup({})
+    this.server = sinon.fakeServer.create()
+  },
+
+  teardown() {
+    this.server.restore()
+    fakeENV.teardown()
+  },
+
+  editView() {
+    return editView.apply(this, arguments)
+  }
+})
+
+test('it attaches assignment external tools component in course context', function() {
+  ENV.context_asset_string = "course_1"
+  const view = this.editView()
+  equal(view.$AssignmentExternalTools.children().size(), 1)
+})
+
+test('it does not attach assignment external tools component in group context', function() {
+  ENV.context_asset_string = "group_1"
+  const view = this.editView()
+  equal(view.$AssignmentExternalTools.children().size(), 0)
 })

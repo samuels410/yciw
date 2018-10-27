@@ -24,10 +24,14 @@ import moxios from 'moxios'
 import sinon from 'sinon'
 import $ from 'jquery'
 import DashboardHeader from 'jsx/dashboard/DashboardHeader'
+import { resetPlanner } from 'canvas-planner'
 
 const container = document.getElementById('fixtures')
 
 const FakeDashboard = function (props) {
+  // let property be null to force the default property on DashboardHeader
+  let showTodoList = props.showTodoList
+  if (showTodoList === null) showTodoList = undefined;
   return (
     <div>
       <DashboardHeader
@@ -35,6 +39,8 @@ const FakeDashboard = function (props) {
         ref={(c) => { props.headerRef(c) }}
         planner_enabled={props.planner_enabled}
         dashboard_view={props.dashboard_view}
+        showTodoList={showTodoList}
+        env={window.ENV}
       />
       <div
         id="flashalert_message_holder"
@@ -62,12 +68,16 @@ const FakeDashboard = function (props) {
 
 FakeDashboard.propTypes = {
   planner_enabled: PropTypes.bool,
-  dashboard_view: PropTypes.string
+  dashboard_view: PropTypes.string,
+  headerRef: PropTypes.func,
+  showTodoList: PropTypes.func,
 }
 
 FakeDashboard.defaultProps = {
   planner_enabled: false,
-  dashboard_view: 'cards'
+  dashboard_view: 'cards',
+  headerRef: () => {},
+  showTodoList: () => {},
 }
 
 let plannerStub
@@ -75,6 +85,9 @@ let plannerStub
 QUnit.module('Dashboard Header', {
   setup () {
     window.ENV = {
+      MOMENT_LOCALE: 'en',
+      TIMEZONE: 'UTC',
+      current_user: {},
       PREFERENCES: {},
       STUDENT_PLANNER_COURSES: [],
     }
@@ -83,6 +96,7 @@ QUnit.module('Dashboard Header', {
   },
 
   teardown () {
+    resetPlanner()
     moxios.uninstall()
     plannerStub.restore()
     ReactDOM.unmountComponentAtNode(container)
@@ -91,9 +105,64 @@ QUnit.module('Dashboard Header', {
 
 test('it renders', () => {
   const dashboardHeader = shallow(
-    <DashboardHeader planner_enabled planner_selected />
+    <DashboardHeader planner_enabled planner_selected env={window.ENV} />
   )
   ok(dashboardHeader)
+})
+
+test('it waits for the erb html to be injected before rendering the ToDoSidebar', assert => {
+  const done = assert.async()
+  ENV.STUDENT_PLANNER_ENABLED = true
+  ENV.DASHBOARD_SIDEBAR_URL = 'fake-dashboard-sidebar-url'
+  const $fakeRightSide = $('<div id="right-side">').appendTo(document.body)
+  const fakeServerResponse = Promise.resolve(`
+    <div class="Sidebar__TodoListContainer"></div>
+    This came from the server
+  `)
+
+  sandbox
+    .mock($)
+    .expects('get')
+    .once()
+    .withArgs('fake-dashboard-sidebar-url')
+    .returns(fakeServerResponse)
+
+  moxios.stubOnce('GET', '/api/v1/planner/items', {
+    status: 200,
+    responseText: {}
+  })
+  const promiseToGetNewCourseForm = import('compiled/util/newCourseForm')
+
+  ReactDOM.render(
+    <FakeDashboard planner_enabled={false} dashboard_view="activity" showTodoList={null} />,
+    container
+  )
+  notOk(
+    $fakeRightSide
+      .find('.Sidebar__TodoListContainer')
+      .text()
+      .includes('Loading'),
+    'container should not contain "Loading"'
+  )
+
+  Promise.all([promiseToGetNewCourseForm, promiseToGetNewCourseForm]).then(() => {
+    moxios.wait(() => {
+      ok(
+        $fakeRightSide.text().includes('This came from the server'),
+        'injects the server erb html where it should'
+      )
+
+      ok(
+        $fakeRightSide
+          .find('.Sidebar__TodoListContainer')
+          .text()
+          .includes('Loading'),
+        'container should contain "Loading"'
+      )
+      $fakeRightSide.remove()
+      done()
+    })
+  })
 })
 
 test('it should switch dashboard view appropriately when changeDashboard is called', () => {
@@ -133,6 +202,7 @@ test('it should switch dashboard view appropriately with Student Planner enabled
   dashboardHeader.changeDashboard('cards')
   strictEqual(document.getElementById('dashboard-planner').style.display, 'none')
   strictEqual(document.getElementById('dashboard-planner-header').style.display, 'none')
+  strictEqual(document.getElementById('dashboard-planner-header-aux').style.display, 'none')
   strictEqual(document.getElementById('DashboardCard_Container').style.display, 'block')
   strictEqual(document.getElementById('dashboard-activity').style.display, 'none')
   strictEqual(dashboardHeader.getActiveApp(), 'cards')
@@ -140,6 +210,7 @@ test('it should switch dashboard view appropriately with Student Planner enabled
   dashboardHeader.changeDashboard('planner')
   strictEqual(document.getElementById('dashboard-planner').style.display, 'block')
   strictEqual(document.getElementById('dashboard-planner-header').style.display, 'block')
+  strictEqual(document.getElementById('dashboard-planner-header-aux').style.display, 'block')
   strictEqual(document.getElementById('DashboardCard_Container').style.display, 'none')
   strictEqual(document.getElementById('dashboard-activity').style.display, 'none')
   strictEqual(dashboardHeader.getActiveApp(), 'planner')
@@ -147,6 +218,7 @@ test('it should switch dashboard view appropriately with Student Planner enabled
   dashboardHeader.changeDashboard('activity')
   strictEqual(document.getElementById('dashboard-planner').style.display, 'none')
   strictEqual(document.getElementById('dashboard-planner-header').style.display, 'none')
+  strictEqual(document.getElementById('dashboard-planner-header-aux').style.display, 'none')
   strictEqual(document.getElementById('DashboardCard_Container').style.display, 'none')
   strictEqual(document.getElementById('dashboard-activity').style.display, 'block')
   strictEqual(dashboardHeader.getActiveApp(), 'activity')
@@ -176,7 +248,6 @@ test('it should use the dashboard view endpoint when Student Planner is enabled'
     equal(request.config.data, '{"dashboard_view":"cards"}');
     done()
   })
-
   ok(plannerStub.notCalled)
 })
 

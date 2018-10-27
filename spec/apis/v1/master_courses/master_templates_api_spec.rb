@@ -93,6 +93,7 @@ describe MasterCourses::MasterTemplatesController, type: :request do
       expect(course1_json['name']).to eq child_course1.name
       expect(course1_json['course_code']).to eq child_course1.course_code
       expect(course1_json['term_name']).to eq term.name
+      expect(course1_json['sis_course_id']).to eq 'sisid'
       expect(course1_json['teachers'].first['display_name']).to eq @teacher.short_name
     end
   end
@@ -394,19 +395,22 @@ describe MasterCourses::MasterTemplatesController, type: :request do
 
   describe "migration_details / import_details" do
     before :once do
-      setup_template
-      @master = @course
-      @minions = (1..2).map do |n|
-        @template.add_child_course!(course_factory(:name => "Minion #{n}", :active_all => true)).child_course
-      end
+      Timecop.travel(1.hour.ago) do
+        setup_template
+        @master = @course
+        @minions = (1..2).map do |n|
+          @template.add_child_course!(course_factory(:name => "Minion #{n}", :active_all => true)).child_course
+        end
 
-      # set up some stuff
-      @file = attachment_model(:context => @master, :display_name => 'Some File')
-      @assignment = @master.assignments.create! :title => 'Blah', :points_possible => 10
-      @full_migration = run_master_migration
+        # set up some stuff
+        @file = attachment_model(:context => @master, :display_name => 'Some File')
+        @assignment = @master.assignments.create! :title => 'Blah', :points_possible => 10
+        @full_migration = run_master_migration
+      end
 
       # prepare some exceptions
       @minions.first.attachments.first.update_attribute :display_name, 'Some Renamed Nonsense'
+      @minions.first.syllabus_body = 'go away'; @minions.first.save!
       @minions.last.assignments.first.update_attribute :points_possible, 11
 
       # now push some incremental changes
@@ -417,6 +421,7 @@ describe MasterCourses::MasterTemplatesController, type: :request do
       @quiz = @master.quizzes.create! :title => 'TestQuiz'
       @file.update_attribute :display_name, 'I Can Rename Files Too'
       @assignment.destroy
+      @master.syllabus_body = 'syllablah frd'; @master.save!
       run_master_migration
     end
 
@@ -434,7 +439,10 @@ describe MasterCourses::MasterTemplatesController, type: :request do
           "locked"=>false,"exceptions"=>[{"course_id"=>@minions.last.id, "conflicting_changes"=>["points"]}]},
          {"asset_id"=>@file.id,"asset_type"=>"attachment","asset_name"=>"I Can Rename Files Too",
           "change_type"=>"updated","html_url"=>"http://www.example.com/courses/#{@master.id}/files/#{@file.id}",
-          "locked"=>false,"exceptions"=>[{"course_id"=>@minions.first.id, "conflicting_changes"=>["content"]}]}
+          "locked"=>false,"exceptions"=>[{"course_id"=>@minions.first.id, "conflicting_changes"=>["content"]}]},
+         {"asset_id"=>@master.id,"asset_type"=>"syllabus","asset_name"=>"Syllabus","change_type"=>"updated",
+           "html_url"=>"http://www.example.com/courses/#{@master.id}/assignments/syllabus","locked"=>false,
+           "exceptions"=>[{"course_id"=>@minions.first.id,"conflicting_changes"=>["content"]}]}
       ])
     end
 
@@ -460,7 +468,10 @@ describe MasterCourses::MasterTemplatesController, type: :request do
           "html_url"=>"http://www.example.com/courses/#{minion.id}/assignments/#{minion_assignment.id}","locked"=>false,"exceptions"=>[]},
          {"asset_id"=>minion_file.id,"asset_type"=>"attachment","asset_name"=>"Some Renamed Nonsense",
           "change_type"=>"updated","html_url"=>"http://www.example.com/courses/#{minion.id}/files/#{minion_file.id}",
-          "locked"=>false,"exceptions"=>[{"course_id"=>minion.id, "conflicting_changes"=>["content"]}]}
+          "locked"=>false,"exceptions"=>[{"course_id"=>minion.id, "conflicting_changes"=>["content"]}]},
+         {"asset_id"=>minion.id,"asset_type"=>"syllabus","asset_name"=>"Syllabus","change_type"=>"updated",
+          "html_url"=>"http://www.example.com/courses/#{minion.id}/assignments/syllabus","locked"=>false,
+          "exceptions"=>[{"course_id"=>minion.id,"conflicting_changes"=>["content"]}]}
       ])
     end
 
@@ -477,7 +488,7 @@ describe MasterCourses::MasterTemplatesController, type: :request do
       api_call_as_user(@admin, :get, "/api/v1/courses/#{@master.id}/blueprint_templates/default/migrations/#{@migration.id}/details",
                  :controller => 'master_courses/master_templates', :format => 'json', :template_id => 'default',
                  :id => @migration.to_param, :course_id => @master.to_param, :action => 'migration_details')
-      expect(response).to be_success
+      expect(response).to be_successful
     end
 
     it "requires manage rights on the course" do
@@ -487,6 +498,11 @@ describe MasterCourses::MasterTemplatesController, type: :request do
                  { :controller => 'master_courses/master_templates', :format => 'json', :subscription_id => 'default',
                    :id => minion_migration.to_param, :course_id => @minions.first.to_param, :action => 'import_details' },
                  {}, {}, { :expected_status => 401 })
+    end
+
+    it "syncs syllabus content unless changed downstream" do
+      expect(@minions.first.reload.syllabus_body).to include "go away"
+      expect(@minions.last.reload.syllabus_body).to include "syllablah frd"
     end
   end
 
@@ -511,6 +527,7 @@ describe MasterCourses::MasterTemplatesController, type: :request do
       @file.update_attribute(:display_name, 'Renamed')
       @folder.update_attribute(:name, 'Blergh')
       @new_page = @master.wiki_pages.create! :title => 'New News'
+      @master.syllabus_body = "srslywat"; @master.save!
 
       json = api_call_as_user(@admin, :get, "/api/v1/courses/#{@master.id}/blueprint_templates/default/unsynced_changes",
         :controller => 'master_courses/master_templates', :format => 'json', :template_id => 'default',
@@ -524,6 +541,8 @@ describe MasterCourses::MasterTemplatesController, type: :request do
         "html_url"=>"http://www.example.com/courses/#{@master.id}/pages/new-news","locked"=>false},
        {"asset_id"=>@folder.id,"asset_type"=>"folder","asset_name"=>"Blergh","change_type"=>"updated",
         "html_url"=>"http://www.example.com/courses/#{@master.id}/folders/#{@folder.id}","locked"=>false},
+       {"asset_id"=>@master.id,"asset_type"=>"syllabus","asset_name"=>"Syllabus","change_type"=>"updated",
+        "html_url"=>"http://www.example.com/courses/#{@master.id}/assignments/syllabus","locked"=>false}
       ])
     end
 
@@ -537,6 +556,57 @@ describe MasterCourses::MasterTemplatesController, type: :request do
         :course_id => @master.to_param, :action => 'unsynced_changes')
 
       expect(json.length).to eq 2
+    end
+  end
+
+  describe 'subscriptions_index' do
+    before :once do
+      setup_template
+      @blueprint = @template.course
+      @blueprint.update_attribute(:sis_source_id, 'sisid')
+      @minion = course_factory(:name => 'Minion', :active_all => true)
+      @subscription = @template.add_child_course!(@minion)
+    end
+
+    it "returns information about the subscription" do
+      json = api_call_as_user(@teacher, :get, "/api/v1/courses/#{@minion.id}/blueprint_subscriptions",
+                              :controller => 'master_courses/master_templates', :format => 'json',
+                              :course_id => @minion.to_param, :action => 'subscriptions_index')
+      expect(json).to eq([{
+        'id' => @subscription.id,
+        'template_id' => @template.id,
+        'blueprint_course' => {
+          'id' => @blueprint.id,
+          'name' => @blueprint.name,
+          'course_code' => @blueprint.course_code,
+          'term_name' => @blueprint.enrollment_term.name
+        }
+      }])
+    end
+
+    it "includes sis_course_id if the caller has permission to see it" do
+      json = api_call_as_user(@admin, :get, "/api/v1/courses/#{@minion.id}/blueprint_subscriptions",
+                              :controller => 'master_courses/master_templates', :format => 'json',
+                              :course_id => @minion.to_param, :action => 'subscriptions_index')
+      expect(json).to eq([{
+        'id' => @subscription.id,
+        'template_id' => @template.id,
+        'blueprint_course' => {
+          'id' => @blueprint.id,
+          'name' => @blueprint.name,
+          'course_code' => @blueprint.course_code,
+          'term_name' => @blueprint.enrollment_term.name,
+          'sis_course_id' => 'sisid'
+        }
+      }])
+    end
+
+    it "returns an empty array if there is no subscription" do
+      course_factory(active_all: true)
+      json = api_call_as_user(@teacher, :get, "/api/v1/courses/#{@course.id}/blueprint_subscriptions",
+                       :controller => 'master_courses/master_templates', :format => 'json',
+                       :course_id => @course.to_param, :action => 'subscriptions_index')
+      expect(json).to eq([])
     end
   end
 end

@@ -130,19 +130,9 @@ describe "conversations new" do
       user = account_admin_user
       user_logged_in({:user => user})
 
-      # TODO: delete these lines when we remove the :course_user_search feature flag
       get "/accounts/#{Account.default.id}/users"
       wait_for_ajaximations
-      f('li.user a').click
-      wait_for_ajaximations
-      f('.icon-email').click
-      wait_for_ajaximations
-      expect(f('.ac-token')).not_to be_nil
-      Account.default.enable_feature!(:course_user_search)
-
-      get "/accounts/#{Account.default.id}/users"
-      wait_for_ajaximations
-      f('[data-automation="users list"] tr a [name="IconMessageLine"]').click
+      fj('[data-automation="users list"] tr a:has([name="IconMessage"])').click
       wait_for_ajaximations
       expect(f('.ac-token')).not_to be_nil
     end
@@ -219,6 +209,7 @@ describe "conversations new" do
       end
 
       it "should check and lock the bulk_message checkbox when over the max size", priority: "2", test_id: 206022 do
+        skip('COMMS-1164')
         conversations
         compose course: @course, subject: 'lockme', body: 'hallo!', send: false
 

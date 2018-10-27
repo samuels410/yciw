@@ -18,13 +18,13 @@
 
 import React from 'react'
 import {number, string, shape, arrayOf, bool} from 'prop-types'
-import Button from '@instructure/ui-core/lib/components/Button'
-import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent'
-import Tooltip from '@instructure/ui-core/lib/components/Tooltip'
-import IconBlueprintLine from 'instructure-icons/lib/Line/IconBlueprintLine'
-import IconPlusLine from 'instructure-icons/lib/Line/IconPlusLine'
-import IconSettingsLine from 'instructure-icons/lib/Line/IconSettingsLine'
-import IconStatsLine from 'instructure-icons/lib/Line/IconStatsLine'
+import Button from '@instructure/ui-buttons/lib/components/Button'
+import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
+import Tooltip from '@instructure/ui-overlays/lib/components/Tooltip'
+import IconBlueprintLine from '@instructure/ui-icons/lib/Line/IconBlueprint'
+import IconPlusLine from '@instructure/ui-icons/lib/Line/IconPlus'
+import IconSettingsLine from '@instructure/ui-icons/lib/Line/IconSettings'
+import IconStatsLine from '@instructure/ui-icons/lib/Line/IconStats'
 import {get} from 'axios'
 import {uniqBy} from 'lodash'
 import {flashMessage} from 'compiled/jquery.rails_flash_notifications'
@@ -51,9 +51,7 @@ export default class CoursesListRow extends React.Component {
   static defaultProps = {
     roles: [],
     can_create_enrollments:
-      window.ENV &&
-      window.ENV.PERMISSIONS &&
-      window.ENV.PERMISSIONS.can_create_enrollments
+      window.ENV && window.ENV.PERMISSIONS && window.ENV.PERMISSIONS.can_create_enrollments
   }
 
   constructor(props) {
@@ -67,7 +65,9 @@ export default class CoursesListRow extends React.Component {
 
   getSections = () =>
     this.promiseToGetSections ||
-    (this.promiseToGetSections = get(`/api/v1/courses/${this.props.id}/sections?per_page=100`)).then(resp => resp.data)
+    (this.promiseToGetSections = get(
+      `/api/v1/courses/${this.props.id}/sections?per_page=100`
+    )).then(resp => resp.data)
 
   uniqueTeachers = () => uniqBy(this.props.teachers, 'id')
 
@@ -142,13 +142,13 @@ export default class CoursesListRow extends React.Component {
     return (
       <tr>
         <th scope="row">
-        {isPublished && (
-          <Tooltip tip={I18n.t('Published')}>
-            <span className="published-status published">
-              <i className="icon-publish" />
-            </span>
-          </Tooltip>
-        )}
+          {isPublished && (
+            <Tooltip tip={I18n.t('Published')}>
+              <span className="published-status published">
+                <i className="icon-publish" />
+              </span>
+            </Tooltip>
+          )}
         </th>
         <td>
           <a href={url}>
@@ -167,13 +167,13 @@ export default class CoursesListRow extends React.Component {
         <td>
           {(teachersToShow || []).map(teacher => (
             <div>
-            <UserLink
-              key={teacher.id}
-              href={teacher.html_url}
-              name={teacher.display_name}
-              avatar_url={teacher.avatar_image_url}
-              size="x-small"
-            />
+              <UserLink
+                key={teacher.id}
+                href={teacher.html_url}
+                name={teacher.display_name}
+                avatar_url={teacher.avatar_image_url}
+                size="x-small"
+              />
             </div>
           ))}
           {teachers.length > 2 &&
@@ -195,12 +195,12 @@ export default class CoursesListRow extends React.Component {
           )}
           <Tooltip tip={statsTip}>
             <Button variant="icon" size="small" href={`${url}/statistics`}>
-              <IconStatsLine height="1.5em" title={statsTip} />
+              <IconStatsLine title={statsTip} />
             </Button>
           </Tooltip>
           <Tooltip tip={settingsTip}>
             <Button variant="icon" size="small" href={`${url}/settings`}>
-              <IconSettingsLine  height="1.5em" title={settingsTip} />
+              <IconSettingsLine title={settingsTip} />
             </Button>
           </Tooltip>
         </td>

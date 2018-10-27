@@ -18,7 +18,7 @@
 if CANVAS_RAILS5_1
   gem 'rails', '5.1.6'
 else
-  gem 'rails', '5.2.0'
+  gem 'rails', '5.2.1'
 end
 
 gem 'rack', '2.0.4'
@@ -38,7 +38,7 @@ gem 'active_model_serializers',   '0.9.0alpha1',
 gem 'authlogic', '4.0.1'
   gem 'scrypt', '3.0.5'
 gem 'active_model-better_errors', '1.6.7', require: 'active_model/better_errors'
-gem 'switchman', '1.12.2'
+gem 'switchman', '1.12.10'
   gem 'open4', '1.3.4', require: false
 gem 'folio-pagination', '0.0.12', require: 'folio/rails'
   # for folio, see the folio README
@@ -46,10 +46,14 @@ gem 'folio-pagination', '0.0.12', require: 'folio/rails'
 
 gem 'addressable', '2.5.2', require: false
 gem "after_transaction_commit", '2.0.0'
-gem "aws-sdk-kinesis", '1.2.0', require: false
-gem "aws-sdk-s3", '1.8.2', require: false
-gem "aws-sdk-sns", '1.1.0', require: false
-gem "aws-sdk-sqs", '1.3.0', require: false
+gem "aws-sdk-kinesis", '1.6.0', require: false
+gem "aws-sdk-s3", '1.19.0', require: false
+gem "aws-sdk-sns", '1.5.0', require: false
+gem "aws-sdk-sqs", '1.6.0', require: false
+gem "aws-sdk-core", "3.27.0", require: false
+gem "aws-sdk-kms", "1.9.0", require: false
+gem "aws-sigv4", "1.0.3", require: false
+
 gem 'barby', '0.6.5', require: false
   gem 'rqrcode', '0.10.1', require: false
   gem 'chunky_png', '1.3.10', require: false
@@ -57,13 +61,15 @@ gem 'bcrypt', '3.1.11'
 gem 'canvas_connect', '0.3.11'
   gem 'adobe_connect', '1.0.6', require: false
 gem 'canvas_webex', '0.17'
-gem 'inst-jobs', '0.14.6'
+gem 'inst-jobs', '0.15.3'
   gem 'rufus-scheduler', '3.4.2', require: false
     gem 'et-orbi', '1.0.8', require: false
-gem 'switchman-inst-jobs', '1.1.5'
-gem 'inst-jobs-autoscaling', '1.0.3'
+gem 'switchman-inst-jobs', '1.2.1'
+gem 'inst-jobs-autoscaling', '1.0.5'
   gem 'aws-sdk-autoscaling', '1.5.0', require: false
-gem 'ffi', '1.9.23', require: false
+# ffi 1.9.2x seem to have issues on RHEL & CentOS causing segfaults
+# check https://github.com/ffi/ffi/issues/621 for resolution prior to bumping version
+gem 'ffi', '1.9.18', require: false
 gem 'hashery', '2.1.2', require: false
 gem 'highline', '1.7.10', require: false
 gem 'httparty', '0.16.1'
@@ -81,7 +87,7 @@ gem 'simple_oauth', '0.3.1', require: false
 gem 'json', '2.1.0'
 gem 'oj', '3.3.9'
 gem 'jwt', '1.5.6', require: false
-gem 'json-jwt', '1.7.2', require: false
+gem 'json-jwt', '1.9.4', require: false
 gem 'twilio-ruby', '5.7.2', require: false
 
 gem 'mail', '2.7.0', require: false
@@ -105,12 +111,12 @@ gem 'rotp', '3.3.1', require: false
 gem 'net-ldap', '0.16.1', require: false
 gem 'ruby-duration', '3.2.3', require: false
 gem 'ruby-saml-mod', '0.3.8'
-gem 'saml2', '2.2.3'
+gem 'saml2', '3.0.1'
   gem 'nokogiri-xmlsec-instructure', '0.9.6', require: false
 gem 'rubycas-client', '2.3.9', require: false
 gem 'rubyzip', '1.2.1', require: 'zip'
 gem 'safe_yaml', '1.0.4', require: false
-gem 'sanitize', '2.1.0', require: false
+gem 'sanitize', '2.1.1', require: false
 gem 'shackles', '1.4.1'
 
 gem 'useragent', '0.16.10', require: false
@@ -121,11 +127,13 @@ gem 'canvas_statsd', '2.0.4'
   gem 'statsd-ruby', '1.4.0', require: false
   gem 'aroi', '0.0.6', require: false
 gem 'gepub', '0.7.0beta4'
-gem 'imperium', '0.3.0', require: false
+gem 'imperium', '0.5.0', require: false
 gem 'academic_benchmarks', '0.0.10', require: false
 
-gem 'graphql', '1.7.12'
+gem 'graphql', '1.8.8'
 gem 'graphql-batch', '0.3.9'
+
+gem 'prawn-rails', '1.2.0'
 
 gem 'activesupport-suspend_callbacks', path: 'gems/activesupport-suspend_callbacks'
 gem 'acts_as_list', path: 'gems/acts_as_list'
@@ -160,6 +168,7 @@ gem 'json_token', path: 'gems/json_token'
 gem 'linked_in', path: 'gems/linked_in'
 gem 'live_events', path: 'gems/live_events'
 gem 'diigo', path: 'gems/diigo'
+gem 'lti-advantage', path: 'gems/lti-advantage'
 gem 'lti_outbound', path: 'gems/lti_outbound'
 gem 'multipart', path: 'gems/multipart'
 gem 'paginated_collection', path: 'gems/paginated_collection'

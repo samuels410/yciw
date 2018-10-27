@@ -16,9 +16,9 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-require File.expand_path(File.dirname(__FILE__) + '/../api_spec_helper')
-require File.expand_path(File.dirname(__FILE__) + '/../../sharding_spec_helper')
-require File.expand_path(File.dirname(__FILE__) + '/../file_uploads_spec_helper')
+require_relative '../api_spec_helper'
+require_relative '../../sharding_spec_helper'
+require_relative '../file_uploads_spec_helper'
 
 class TestCourseApi
   include Api::V1::Course
@@ -536,7 +536,7 @@ describe CoursesController, type: :request do
 
         it "returns 200 success" do
           api_call(:put, @path, @params, { :event => 'undelete', :course_ids => [@course.id] })
-          expect(response).to be_success
+          expect(response).to be_successful
         end
       end
 
@@ -584,6 +584,13 @@ describe CoursesController, type: :request do
     json = api_call(:get, "/api/v1/courses.json?exclude_blueprint_courses=1",
       controller: 'courses', action: 'index', format: 'json', exclude_blueprint_courses: '1')
     expect(json.map { |course| course['id'] }).to eq([c2.id])
+  end
+
+  it "should include tabs (and precalculate stuff in theory) if requested" do
+    c1 = course_with_student(course_name: 'def', active_all: true).course
+
+    json = api_call(:get, "/api/v1/courses.json?include[]=tabs", controller: 'courses', action: 'index', format: 'json', include: ['tabs'])
+    expect(json.first['tabs']).to be_present
   end
 
   describe "user index" do
@@ -774,6 +781,7 @@ describe CoursesController, type: :request do
         expect(new_course.time_zone.tzinfo.name).to eql 'America/Juneau'
         course_response.merge!(
           'id' => new_course.id,
+          'created_at' => new_course.created_at.as_json,
           'calendar' => { 'ics' => "http://www.example.com/feeds/calendars/course_#{new_course.uuid}.ics" },
           'uuid' => new_course.uuid
         )
@@ -827,6 +835,7 @@ describe CoursesController, type: :request do
         expect(new_course.enrollment_term_id).to eql term.id
         course_response.merge!(
           'id' => new_course.id,
+          'created_at' => new_course.created_at.as_json,
           'calendar' => { 'ics' => "http://www.example.com/feeds/calendars/course_#{new_course.uuid}.ics" },
           'uuid' => new_course.uuid
         )
@@ -2443,8 +2452,8 @@ describe CoursesController, type: :request do
       @ta_enroll1 = @course1.enroll_user(@ta, 'TaEnrollment', :section => @section1)
       @ta_enroll2 = @course1.enroll_user(@ta, 'TaEnrollment', :section => @section2, :allow_multiple_enrollments => true)
 
-      @student1 = user_factory(:name => 'SSS1')
-      @student2 = user_factory(:name => 'SSS2')
+      @student1 = user_with_pseudonym(name: 'SSS1')
+      @student2 = user_with_pseudonym(name: 'SSS2')
       @student1_enroll = @course1.enroll_user(@student1, 'StudentEnrollment', :section => @section1)
       @student2_enroll = @course1.enroll_user(@student2, 'StudentEnrollment', :section => @section2)
 
@@ -2571,6 +2580,27 @@ describe CoursesController, type: :request do
         ]
       end
 
+      context "avatar_url" do
+        before(:once) do
+          @course1.root_account.set_service_availability(:avatars, true)
+          @course1.root_account.save!
+          @ta.avatar_image = { 'type' => 'gravatar', 'url' => 'http://www.gravatar.com/ta.jpg' }
+          @ta.save!
+        end
+
+        it "includes avatar_url if requested" do
+          json = api_call(:get, api_url, api_route, :include => ['avatar_url'])
+          expect(json.detect { |item| item['id'] == @ta.id }['avatar_url']).to eq 'http://www.gravatar.com/ta.jpg'
+          expect(json.detect { |item| item['id'] == @student.id }['avatar_url']).to eq 'http://www.example.com/images/messages/avatar-50.png'
+        end
+
+        it "omits fallbacks if requested" do
+          json = api_call(:get, api_url, api_route, :include => ['avatar_url'], :no_avatar_fallback => '1')
+          expect(json.detect { |item| item['id'] == @ta.id }['avatar_url']).to eq 'http://www.gravatar.com/ta.jpg'
+          expect(json.detect { |item| item['id'] == @student.id }['avatar_url']).to be_nil
+        end
+      end
+
       context "sharding" do
         specs_require_sharding
 
@@ -2624,8 +2654,27 @@ describe CoursesController, type: :request do
       it "returns a list of users" do
         json = api_call(:get, api_url, api_route)
         expected_users = @course1.users.to_a.uniq - [@test_student]
-        expect(json.sort_by {|x| x["id"]}).to eq api_json_response(expected_users,
-                                                                   only: user_api_fields).sort_by {|x| x["id"]}
+        expect(json.sort_by {|x| x["id"]}).to eq api_json_response(
+          expected_users,
+          only: user_api_fields
+        ).sort_by {|x| x["id"]}
+      end
+
+      it 'does not include the sis_user_id when not an admin' do
+        @student1.pseudonym.update!(sis_user_id: 'student1')
+        @student2.pseudonym.update!(sis_user_id: 'student2')
+        json = api_call_as_user(@student1, :get, api_url, api_route)
+        json.each do |user_json|
+          expect(user_json).not_to have_key 'sis_user_id'
+        end
+      end
+
+      it 'includes the sis_user_id as admin' do
+        @admin = account_admin_user
+        @student1.pseudonym.update!(sis_user_id: 'student1')
+        @student2.pseudonym.update!(sis_user_id: 'student2')
+        json = api_call_as_user(@admin, :get, api_url, api_route)
+        expect(json.map {|record| record['sis_user_id']}).to include 'student1', 'student2'
       end
 
       it "returns a list of users filtered by id if user_ids is given" do
@@ -3133,6 +3182,7 @@ describe CoursesController, type: :request do
         'integration_id' => nil,
         'calendar' => { 'ics' => "http://www.example.com/feeds/calendars/course_#{@course1.uuid}.ics" },
         'hide_final_grades' => @course1.hide_final_grades,
+        'created_at' => @course1.created_at.as_json,
         'start_at' => @course1.start_at,
         'end_at' => @course1.end_at,
         'default_view' => @course1.default_view,

@@ -31,6 +31,7 @@ exports[`renders the item to update if provided 1`] = `
         layout="stacked"
         messages={Array []}
         onChange={[Function]}
+        readOnly={false}
         size="medium"
         textAlign="start"
         type="text"
@@ -62,16 +63,27 @@ exports[`renders the item to update if provided 1`] = `
         value="2017-04-25T08:49:00.000Z"
       />
       <Select
-        disabled={false}
-        inline={false}
+        allowEmpty={true}
+        closeOnSelect={true}
+        constrain="scroll-parent"
+        editable={false}
+        emptyOption="---"
+        filter={[Function]}
+        formatSelectedOption={[Function]}
+        id="to-do-item-course-select"
+        inputRef={[Function]}
         label="Course"
-        layout="stacked"
-        messages={Array []}
+        loadingText={null}
         onChange={[Function]}
-        selectRef={[Function]}
+        optionsMaxWidth={null}
+        selectedOption={
+          Object {
+            "label": "a course",
+            "value": "1",
+          }
+        }
         size="medium"
-        type="text"
-        value="1"
+        visibleOptionsCount={8}
       >
         <option
           value="none"
@@ -93,6 +105,7 @@ exports[`renders the item to update if provided 1`] = `
         layout="stacked"
         messages={Array []}
         onChange={[Function]}
+        readOnly={false}
         resize="none"
         size="medium"
         textareaRef={[Function]}
@@ -108,6 +121,7 @@ exports[`renders the item to update if provided 1`] = `
       <Button
         as="button"
         buttonRef={[Function]}
+        cursor="pointer"
         fluidWidth={false}
         margin="0 x-small 0 0"
         onClick={[Function]}
@@ -120,6 +134,7 @@ exports[`renders the item to update if provided 1`] = `
       <Button
         as="button"
         buttonRef={[Function]}
+        cursor="pointer"
         disabled={false}
         fluidWidth={false}
         margin="0 0 0 x-small"
@@ -166,6 +181,7 @@ exports[`updates state when new note is passed in 1`] = `
         layout="stacked"
         messages={Array []}
         onChange={[Function]}
+        readOnly={false}
         size="medium"
         textAlign="start"
         type="text"
@@ -197,16 +213,27 @@ exports[`updates state when new note is passed in 1`] = `
         value="2017-04-28T11:00:00.000Z"
       />
       <Select
-        disabled={false}
-        inline={false}
+        allowEmpty={true}
+        closeOnSelect={true}
+        constrain="scroll-parent"
+        editable={false}
+        emptyOption="---"
+        filter={[Function]}
+        formatSelectedOption={[Function]}
+        id="to-do-item-course-select"
+        inputRef={[Function]}
         label="Course"
-        layout="stacked"
-        messages={Array []}
+        loadingText={null}
         onChange={[Function]}
-        selectRef={[Function]}
+        optionsMaxWidth={null}
+        selectedOption={
+          Object {
+            "label": "first course",
+            "value": "1",
+          }
+        }
         size="medium"
-        type="text"
-        value="1"
+        visibleOptionsCount={8}
       >
         <option
           value="none"
@@ -233,6 +260,7 @@ exports[`updates state when new note is passed in 1`] = `
         layout="stacked"
         messages={Array []}
         onChange={[Function]}
+        readOnly={false}
         resize="none"
         size="medium"
         textareaRef={[Function]}
@@ -248,6 +276,7 @@ exports[`updates state when new note is passed in 1`] = `
       <Button
         as="button"
         buttonRef={[Function]}
+        cursor="pointer"
         fluidWidth={false}
         margin="0 x-small 0 0"
         onClick={[Function]}
@@ -260,6 +289,7 @@ exports[`updates state when new note is passed in 1`] = `
       <Button
         as="button"
         buttonRef={[Function]}
+        cursor="pointer"
         disabled={false}
         fluidWidth={false}
         margin="0 0 0 x-small"
@@ -306,6 +336,7 @@ exports[`updates state when new note is passed in 2`] = `
         layout="stacked"
         messages={Array []}
         onChange={[Function]}
+        readOnly={false}
         size="medium"
         textAlign="start"
         type="text"
@@ -337,16 +368,27 @@ exports[`updates state when new note is passed in 2`] = `
         value="2017-04-28T11:00:00.000Z"
       />
       <Select
-        disabled={false}
-        inline={false}
+        allowEmpty={true}
+        closeOnSelect={true}
+        constrain="scroll-parent"
+        editable={false}
+        emptyOption="---"
+        filter={[Function]}
+        formatSelectedOption={[Function]}
+        id="to-do-item-course-select"
+        inputRef={[Function]}
         label="Course"
-        layout="stacked"
-        messages={Array []}
+        loadingText={null}
         onChange={[Function]}
-        selectRef={[Function]}
+        optionsMaxWidth={null}
+        selectedOption={
+          Object {
+            "label": "second course",
+            "value": "2",
+          }
+        }
         size="medium"
-        type="text"
-        value="2"
+        visibleOptionsCount={8}
       >
         <option
           value="none"
@@ -373,6 +415,7 @@ exports[`updates state when new note is passed in 2`] = `
         layout="stacked"
         messages={Array []}
         onChange={[Function]}
+        readOnly={false}
         resize="none"
         size="medium"
         textareaRef={[Function]}
@@ -388,6 +431,7 @@ exports[`updates state when new note is passed in 2`] = `
       <Button
         as="button"
         buttonRef={[Function]}
+        cursor="pointer"
         fluidWidth={false}
         margin="0 x-small 0 0"
         onClick={[Function]}
@@ -400,6 +444,7 @@ exports[`updates state when new note is passed in 2`] = `
       <Button
         as="button"
         buttonRef={[Function]}
+        cursor="pointer"
         disabled={false}
         fluidWidth={false}
         margin="0 0 0 x-small"

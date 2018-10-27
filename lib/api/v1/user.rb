@@ -47,7 +47,7 @@ module Api::V1::User
     excludes ||= []
     api_json(user, current_user, session, API_USER_JSON_OPTS).tap do |json|
       enrollment_json_opts = { current_grading_period_scores: includes.include?('current_grading_period_scores') }
-      if !excludes.include?('pseudonym') && user_json_is_admin?(context, current_user)
+      if includes.include?('sis_user_id') || (!excludes.include?('pseudonym') && user_json_is_admin?(context, current_user))
         include_root_account = @domain_root_account.trust_exists?
         sis_context = enrollment || @domain_root_account
         pseudonym = SisPseudonym.for(user, sis_context, type: :implicit, require_sis: false)
@@ -60,16 +60,19 @@ module Api::V1::User
           json.merge! :sis_user_id => pseudonym&.sis_user_id,
                       :integration_id => pseudonym&.integration_id
         end
-        json[:sis_import_id] = pseudonym&.sis_batch_id if @domain_root_account.grants_right?(current_user, session, :manage_sis)
-        json[:root_account] = HostUrl.context_host(pseudonym&.account) if include_root_account
 
-        if pseudonym && context.grants_right?(current_user, session, :view_user_logins)
-          json[:login_id] = pseudonym.unique_id
+        if !excludes.include?('pseudonym') && user_json_is_admin?(context, current_user)
+          json[:sis_import_id] = pseudonym&.sis_batch_id if @domain_root_account.grants_right?(current_user, session, :manage_sis)
+          json[:root_account] = HostUrl.context_host(pseudonym&.account) if include_root_account
+
+          if pseudonym && context.grants_right?(current_user, session, :view_user_logins)
+            json[:login_id] = pseudonym.unique_id
+          end
         end
       end
 
       if includes.include?('avatar_url') && user.account.service_enabled?(:avatars)
-        json[:avatar_url] = avatar_url_for_user(user, blank_fallback)
+        json[:avatar_url] = avatar_url_for_user(user)
       end
       if enrollments
         json[:enrollments] = enrollments.map do |enrollment|
@@ -113,7 +116,7 @@ module Api::V1::User
       if includes.include?('permissions')
         json[:permissions] = {
           :can_update_name => user.user_can_edit_name?,
-          :can_update_avatar => service_enabled?(:avatars)
+          :can_update_avatar => service_enabled?(:avatars) && !user.avatar_locked?
         }
       end
 
@@ -162,7 +165,7 @@ module Api::V1::User
   #
   # if parent_context is :profile, the html_url will always be the user's
   # public profile url, regardless of @current_user permissions
-  def user_display_json(user, parent_context = nil)
+  def user_display_json(user, parent_context = nil, includes = [])
     return {} unless user
     participant_url = case parent_context
       when :profile
@@ -175,11 +178,19 @@ module Api::V1::User
     hash = {
       id: user.id,
       display_name: user.short_name,
-      avatar_image_url: avatar_url_for_user(user, blank_fallback),
+      avatar_image_url: avatar_url_for_user(user),
       html_url: participant_url
     }
+    hash[:avatar_is_fallback] = user.avatar_image_url.nil? if includes.include?(:avatar_is_fallback) && avatars_enabled_for_user?(user)
     hash[:fake_student] = true if user.fake_student?
     hash
+  end
+
+  def anonymous_user_display_json(anonymous_id)
+    {
+     anonymous_id: anonymous_id,
+     avatar_image_url: User.default_avatar_fallback
+    }
   end
 
   # optimization hint, currently user only needs to pull pseudonyms from the db

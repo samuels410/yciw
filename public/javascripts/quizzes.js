@@ -59,6 +59,7 @@ import './supercalc'
 import './vendor/jquery.scrollTo'
 import 'jqueryui/sortable'
 import 'jqueryui/tabs'
+import AssignmentExternalTools from 'jsx/assignments/AssignmentExternalTools'
 
 var dueDateList, overrideView, quizModel, sectionList, correctAnswerVisibility, scoreValidation;
 
@@ -941,7 +942,7 @@ const lockedItems = lockManager.isChildContent() ? lockManager.getItemLocks() : 
       return null;
     },
 
-    parseInput: function($input, type) {
+    parseInput: function($input, type, precision = 10) {
       if ($input.val() == "") { return; }
 
       var val = $input.val().replace(/,/g, '');
@@ -960,17 +961,20 @@ const lockedItems = lockManager.isChildContent() ? lockManager.getItemLocks() : 
         val = parseFloat(val)
         if (isNaN(val)) { val = 0.0; }
 
-        // Round to precision 16 to handle floating point error
-        val = val.toPrecision(16);
-
-        // Truncate to specified precision
-        var precision = arguments[2] || 10;
-        if (precision < 16) {
-          var precision_shift = Math.pow(10, precision - Math.floor(Math.log(val) / Math.LN10) - 1);
-          val = Math.floor(val * precision_shift) / precision_shift;
-
-          // Format
+        if (val === 0) {
           val = val.toPrecision(precision)
+        } else {
+          // Round to precision 16 to handle floating point error
+          val = val.toPrecision(16);
+
+          // Truncate to specified precision
+          if (precision < 16) {
+            const precision_shift = 10 ** (precision - Math.floor(Math.log(Math.abs(val)) / Math.LN10) - 1);
+            val = Math.floor(val * precision_shift) / precision_shift;
+
+            // Format
+            val = val.toPrecision(precision)
+          }
         }
       }
 
@@ -1583,6 +1587,14 @@ const lockedItems = lockManager.isChildContent() ? lockManager.getItemLocks() : 
     ipFilterValidation.init();
     renderDueDates();
 
+    if ($('#assignment_external_tools').length) {
+      AssignmentExternalTools.attach(
+        $('#assignment_external_tools')[0],
+        "assignment_edit",
+        parseInt(ENV.COURSE_ID, 10),
+        parseInt(ENV.ASSIGNMENT_ID, 10));
+    }
+
     $('#quiz_tabs').tabs();
     $('#editor_tabs').show();
 
@@ -1848,7 +1860,7 @@ const lockedItems = lockManager.isChildContent() ? lockManager.getItemLocks() : 
         data.allowed_attempts = attempts;
         data['quiz[allowed_attempts]'] = attempts;
         var overrides = overrideView.getOverrides();
-        data['quiz[only_visible_to_overrides]'] = overrideView.containsSectionsWithoutOverrides();
+        data['quiz[only_visible_to_overrides]'] = !overrideView.overridesContainDefault()
         if (overrideView.containsSectionsWithoutOverrides() && !hasCheckedOverrides) {
           var sections = overrideView.sectionsWithoutOverrides();
           var missingDateView = new MissingDateDialog({
@@ -4293,4 +4305,3 @@ const lockedItems = lockManager.isChildContent() ? lockManager.getItemLocks() : 
       }
     }).triggerHandler('change');
   });
-

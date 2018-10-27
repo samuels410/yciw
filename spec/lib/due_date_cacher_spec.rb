@@ -44,7 +44,7 @@ describe DueDateCacher do
     it "queues a delayed job in an assignment-specific singleton in production" do
       expect(DueDateCacher).to receive(:new).and_return(@instance)
       expect(@instance).to receive(:send_later_if_production_enqueue_args).
-        with(:recompute, singleton: "cached_due_date:calculator:Assignment:#{@assignment.global_id}")
+        with(:recompute, strand: "cached_due_date:calculator:Course:Assignments:#{@assignment.context.global_id}")
       DueDateCacher.recompute(@assignment)
     end
 
@@ -210,6 +210,13 @@ describe DueDateCacher do
       @student
     end
 
+    describe "moderated grading" do
+      it 'creates moderated selections for students' do
+        expect(cacher).to receive(:create_moderation_selections_for_assignment).once.and_return(nil)
+        cacher.recompute
+      end
+    end
+
     describe "anonymous_id" do
       context 'given no existing submission' do
         before do
@@ -278,7 +285,7 @@ describe DueDateCacher do
           @assignment2.only_visible_to_overrides = true
           @assignment2.save!
 
-          Submission.destroy_all
+          Submission.delete_all
 
           expect { DueDateCacher.recompute_course(@course) }.to change {
             Submission.active.count

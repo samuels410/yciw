@@ -24,8 +24,10 @@ module Api::V1::Submission
   include Api::V1::Course
   include Api::V1::User
   include Api::V1::SubmissionComment
+  include CoursesHelper
 
-  def submission_json(submission, assignment, current_user, session, context = nil, includes = [], params)
+  # TODO: yikes
+  def submission_json(submission, assignment, current_user, session, context = nil, includes = [], params = {}, avatars = false)
     context ||= assignment.context
     hash = submission_attempt_json(submission, assignment, current_user, session, context, params)
 
@@ -50,7 +52,14 @@ module Api::V1::Submission
     end
 
     if current_user && assignment && includes.include?('provisional_grades') && assignment.moderated_grading?
-      hash['provisional_grades'] = submission_provisional_grades_json(submission, assignment, current_user, includes)
+      hash['provisional_grades'] = submission_provisional_grades_json(
+        course: context,
+        assignment: assignment,
+        submission: submission,
+        current_user: current_user,
+        avatars: avatars,
+        includes: includes
+      )
     end
 
     if includes.include?("submission_comments")
@@ -94,6 +103,10 @@ module Api::V1::Submission
       hash['grading_status'] = submission.grading_status
     end
 
+    if context.account_membership_allows(current_user)
+      hash['anonymous_id'] = submission.anonymous_id
+    end
+
     hash
   end
 
@@ -103,7 +116,7 @@ module Api::V1::Submission
   SUBMISSION_JSON_METHODS = %w(late missing seconds_late entered_grade entered_score).freeze
   SUBMISSION_OTHER_FIELDS = %w(attachments discussion_entries).freeze
 
-  def submission_attempt_json(attempt, assignment, user, session, context = nil, params)
+  def submission_attempt_json(attempt, assignment, user, session, context = nil, params = {})
     context ||= assignment.context
     includes = Array.wrap(params[:include])
 
@@ -136,8 +149,7 @@ module Api::V1::Submission
     unless params[:exclude_response_fields] && params[:exclude_response_fields].include?('preview_url')
       preview_args = { 'preview' => '1' }
       preview_args['version'] = attempt.quiz_submission_version || attempt.version_number
-      hash['preview_url'] = course_assignment_submission_url(
-        context, assignment, attempt[:user_id], preview_args)
+      hash['preview_url'] = course_assignment_submission_url(context, assignment, attempt[:user_id], preview_args)
     end
 
     unless attempt.media_comment_id.blank?
@@ -166,15 +178,18 @@ module Api::V1::Submission
       attachments = attempt.versioned_attachments.dup
       attachments << attempt.attachment if attempt.attachment && attempt.attachment.context_type == 'Submission' && attempt.attachment.context_id == attempt.id
       hash['attachments'] = attachments.map do |attachment|
-        attachment.skip_submission_attachment_lock_checks = true
         includes = includes.include?('canvadoc_document_id') ? ['preview_url', 'canvadoc_document_id'] : ['preview_url']
-        atjson = attachment_json(attachment, user, {},
-                                 submission_attachment: true,
-                                 include: includes,
-                                 enable_annotations: true, # we want annotations on submission's attachment preview_urls
-                                 moderated_grading_whitelist: attempt.moderated_grading_whitelist)
-        attachment.skip_submission_attachment_lock_checks = false
-        atjson
+        options = {
+          anonymous_instructor_annotations: assignment.anonymous_instructor_annotations?,
+          enable_annotations: true,
+          enrollment_type: user_type(context, user),
+          include: includes,
+          moderated_grading_whitelist: attempt.moderated_grading_whitelist(user),
+          skip_permission_checks: true,
+          submission_id: attempt.id
+        }
+
+        attachment_json(attachment, user, {}, options)
       end.compact unless attachments.blank?
     end
 
@@ -252,7 +267,7 @@ module Api::V1::Submission
     attachment = attachments.pop
     attachments.each(&:destroy_permanently_plus)
 
-    anonymous = assignment.context.feature_enabled?(:anonymous_grading)
+    anonymous = assignment.anonymize_students?
 
     # Remove the earlier attachment and re-create it if it's "stale"
     if attachment
@@ -290,18 +305,30 @@ module Api::V1::Submission
     hash
   end
 
-  def provisional_grade_json(provisional_grade, submission, assignment, current_user, includes = [])
+  def provisional_grade_json(course:, assignment:, submission:, provisional_grade:, current_user:, avatars: false, includes: [])
     json = provisional_grade.grade_attributes
-    json.merge!(speedgrader_url: speed_grader_url(submission, assignment, provisional_grade))
+    json.merge!(speedgrader_url: speed_grader_url(submission, assignment, provisional_grade, current_user))
     if includes.include?('submission_comments')
-      json['submission_comments'] = submission_comments_json(provisional_grade.submission_comments, current_user)
+      json['submission_comments'] = anonymous_moderated_submission_comments_json(
+        course: course,
+        assignment: assignment,
+        submissions: [submission],
+        submission_comments: provisional_grade.submission_comments,
+        current_user: current_user,
+        avatars: avatars
+      )
     end
-    if includes.include?('rubric_assessment')
-      json['rubric_assessments'] = provisional_grade.rubric_assessments.map do |ra|
-        ra.as_json(:methods => [:assessor_name], :include_root => false)
+    if assignment.can_view_other_grader_identities?(current_user)
+      if includes.include?('rubric_assessment')
+        json['rubric_assessments'] = provisional_grade.rubric_assessments.map do |ra|
+          ra.as_json(:methods => [:assessor_name], :include_root => false)
+        end
       end
+    else
+      json.merge!(anonymous_grader_id: assignment.grader_ids_to_anonymous_ids[json.delete(:scorer_id).to_s])
     end
-    if includes.include?('crocodoc_urls')
+
+    if includes.include?('crocodoc_urls') && assignment.can_view_student_names?(current_user)
       json['crocodoc_urls'] = submission.versioned_attachments.map do |a|
         provisional_grade.attachment_info(current_user, a)
       end
@@ -309,16 +336,24 @@ module Api::V1::Submission
     json
   end
 
-  def submission_provisional_grades_json(submission, assignment, current_user, includes)
+  def submission_provisional_grades_json(course:, assignment:, submission:, current_user:, avatars: false, includes: [])
     provisional_grades = submission.provisional_grades
-    if assignment.context.grants_right?(current_user, :moderate_grades)
+    if assignment.permits_moderation?(current_user)
       provisional_grades = provisional_grades.sort_by { |pg| pg.final ? CanvasSort::Last : pg.created_at }
     else
       provisional_grades = provisional_grades.select { |pg| pg.scorer_id == current_user.id }
     end
 
     provisional_grades.map do |provisional_grade|
-      provisional_grade_json(provisional_grade, submission, assignment, current_user, includes)
+      provisional_grade_json(
+        course: course,
+        assignment: assignment,
+        submission: submission,
+        provisional_grade: provisional_grade,
+        avatars: avatars,
+        current_user: current_user,
+        includes: includes
+      )
     end
   end
 
@@ -328,14 +363,17 @@ module Api::V1::Submission
     submission.originality_reports.present?
   end
 
-  def speed_grader_url(submission, assignment, provisional_grade)
+  def speed_grader_url(submission, assignment, provisional_grade, current_user)
+    anchor = { provisional_grade_id: provisional_grade.id }
+    if assignment.can_view_student_names?(current_user)
+      anchor[:student_id] = submission.user_id
+    else
+      anchor[:anonymous_id] = submission.anonymous_id
+    end
     speed_grader_course_gradebook_url(
-      :course_id => assignment.context.id,
-      :assignment_id => assignment.id,
-      :anchor => {
-        student_id: submission.user_id,
-        provisional_grade_id: provisional_grade.id
-      }.to_json
+      course_id: assignment.context.id,
+      assignment_id: assignment.id,
+      anchor: anchor.to_json
     )
   end
 end

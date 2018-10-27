@@ -25,7 +25,7 @@ define([
 ], (React, PropTypes, ReactDOM, { mount }, GradebookSelector) => {
   QUnit.module('GradebookSelector', {
     setup () {
-      this.setLocationStub = this.stub(GradebookSelector.prototype, 'setLocation');
+      this.setLocationStub = sandbox.stub(GradebookSelector.prototype, 'setLocation');
       this.wrapper = mount(
         <GradebookSelector
           courseUrl="http://someUrl/"
@@ -64,8 +64,8 @@ define([
         secondOnClick: PropTypes.func.isRequired,
       };
 
-      this.firstOnClickStub = this.stub();
-      this.secondOnClickStub = this.stub();
+      this.firstOnClickStub = sinon.stub();
+      this.secondOnClickStub = sinon.stub();
       const ICTabsProps = {
         firstOnClick: this.firstOnClickStub,
         secondOnClick: this.secondOnClickStub
@@ -99,19 +99,19 @@ define([
   });
 
   test('defaults to Individual View', function () {
-    equal(this.wrapper.find('select').node.value, 'individual-gradebook');
+    equal(this.wrapper.find('select').instance().value, 'individual-gradebook');
   });
 
   test('clicking on learning mastery changes the selected value to learning mastery', function () {
     this.wrapper.find('select').simulate('change', { target: { value: 'learning-mastery' } });
-    equal(this.wrapper.find('select').node.value, 'learning-mastery');
+    equal(this.wrapper.find('select').instance().value, 'learning-mastery');
   });
 
   test('clicking on individual view changes the selected value to individual view', function () {
     // by default individual-gradebook is selected
     this.wrapper.find('select').simulate('change', { target: { value: 'learning-mastery' } });
     this.wrapper.find('select').simulate('change', { target: { value: 'individual-gradebook' } });
-    equal(this.wrapper.find('select').node.value, 'individual-gradebook');
+    equal(this.wrapper.find('select').instance().value, 'individual-gradebook');
   });
 
 
@@ -124,7 +124,7 @@ define([
           navigate={() => {}}
         />
       );
-      this.menuItems = this.wrapper.find('option').nodes;
+      this.menuItems = this.wrapper.find('option').map(option => option.instance());
     },
     teardown () {
       this.wrapper.unmount();
@@ -157,7 +157,7 @@ define([
           navigate={() => {}}
         />
       );
-      this.menuItems = this.wrapper.find('option').nodes;
+      this.menuItems = this.wrapper.find('option').map(option => option.instance());
     },
     teardown () {
       this.wrapper.unmount();
@@ -172,7 +172,7 @@ define([
     equal(this.menuItems[1].textContent, 'Gradebook…');
   });
 
-  test('Gradebook History Menu Item is third in the PopoverMenu', function () {
+  test('Gradebook History Menu Item is third in the Menu', function () {
     equal(this.menuItems[2].textContent, 'Gradebook History…');
   });
 });

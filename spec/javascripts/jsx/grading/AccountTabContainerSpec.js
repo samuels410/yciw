@@ -39,16 +39,14 @@ define([
       };
       const mergedProps = _.defaults(props, defaults);
 
-      this.wrapper = mount(
-        React.createElement(AccountTabContainer, mergedProps)
-      );
+      this.wrapper = mount(<AccountTabContainer {...mergedProps} />)
     },
 
     setup () {
       const response = {};
       const successPromise = new Promise(resolve => resolve(response));
-      this.stub(axios, 'get').returns(successPromise);
-      this.stub($, 'ajax').returns({ done () {} });
+      sandbox.stub(axios, 'get').returns(successPromise);
+      sandbox.stub($, 'ajax').returns({ done () {} });
     },
 
     teardown () {
@@ -58,25 +56,26 @@ define([
 
   test('tabs are present', function () {
     this.renderComponent();
-    equal(this.wrapper.find('.ui-tabs').length, 1);
-    equal(this.wrapper.find('.ui-tabs ul.ui-tabs-nav li').length, 2);
-    equal(this.wrapper.find('#grading-periods-tab').getDOMNode().getAttribute('style'), 'display: block;');
-    equal(this.wrapper.find('#grading-standards-tab').getDOMNode().getAttribute('style'), 'display: none;')
+    const $el = this.wrapper.getDOMNode()
+    strictEqual($el.querySelectorAll('.ui-tabs').length, 1);
+    strictEqual($el.querySelectorAll('.ui-tabs ul.ui-tabs-nav li').length, 2);
+    equal($el.querySelector('#grading-periods-tab').getAttribute('style'), 'display: block;');
+    equal($el.querySelector('#grading-standards-tab').getAttribute('style'), 'display: none;')
   });
 
   test('jquery-ui tabs() is called', function () {
-    const tabsSpy = this.spy($.fn, 'tabs');
+    const tabsSpy = sandbox.spy($.fn, 'tabs');
     this.renderComponent();
     ok(tabsSpy.calledOnce);
   });
 
   test('renders the grading periods', function () {
     this.renderComponent();
-    ok(this.wrapper.node.gradingPeriods);
+    ok(this.wrapper.at(0).instance().gradingPeriods);
   });
 
   test('renders the grading standards', function () {
     this.renderComponent();
-    ok(this.wrapper.node.gradingStandards);
+    ok(this.wrapper.at(0).instance().gradingStandards);
   });
 });

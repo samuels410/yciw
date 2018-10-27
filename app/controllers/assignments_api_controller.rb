@@ -671,7 +671,7 @@ class AssignmentsApiController < ApplicationController
         end
         scope = scope.where(id: params[:assignment_ids])
       end
-      scope = scope.reorder("#{Assignment.best_unicode_collation_key('assignments.title')}, assignment_groups.position, assignments.position, assignments.id") if params[:order_by] == 'name'
+      scope = scope.reorder(Arel.sql("#{Assignment.best_unicode_collation_key('assignments.title')}, assignment_groups.position, assignments.position, assignments.id")) if params[:order_by] == 'name'
 
       assignments = Api.paginate(scope, self, api_v1_course_assignments_url(@context))
 
@@ -745,7 +745,7 @@ class AssignmentsApiController < ApplicationController
   # @argument include[] [String, "submission"|"assignment_visibility"|"overrides"|"observed_users"]
   #   Associations to include with the assignment. The "assignment_visibility" option
   #   requires that the Differentiated Assignments course feature be turned on. If
-  #  "observed_users" is passed, submissions for observed users will also be included.
+  #   "observed_users" is passed, submissions for observed users will also be included.
   # @argument override_assignment_dates [Boolean]
   #   Apply assignment overrides to the assignment, defaults to true.
   # @argument needs_grading_count_by_section [Boolean]
@@ -941,7 +941,8 @@ class AssignmentsApiController < ApplicationController
     @assignment.workflow_state = 'unpublished'
     if authorized_action(@assignment, @current_user, :create)
       @assignment.content_being_saved_by(@current_user)
-      result = create_api_assignment(@assignment, params.require(:assignment), @current_user, @context)
+      result = create_api_assignment(@assignment, params.require(:assignment), @current_user, @context,
+        calculate_grades: params.delete(:calculate_grades))
       render_create_or_update_result(result)
     end
   end

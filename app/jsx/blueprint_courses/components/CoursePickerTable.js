@@ -20,11 +20,11 @@ import I18n from 'i18n!blueprint_settings'
 import $ from 'jquery'
 import React from 'react'
 import PropTypes from 'prop-types'
-import Text from '@instructure/ui-core/lib/components/Text'
-import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent'
-import PresentationContent from '@instructure/ui-core/lib/components/PresentationContent'
-import Table from '@instructure/ui-core/lib/components/Table'
-import Checkbox from '@instructure/ui-core/lib/components/Checkbox'
+import Text from '@instructure/ui-elements/lib/components/Text'
+import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
+import PresentationContent from '@instructure/ui-a11y/lib/components/PresentationContent'
+import Table from '@instructure/ui-elements/lib/components/Table'
+import Checkbox from '@instructure/ui-forms/lib/components/Checkbox'
 import 'compiled/jquery.rails_flash_notifications'
 
 import propTypes from '../propTypes'
@@ -220,7 +220,7 @@ export default class CoursePickerTable extends React.Component {
             <tbody />
           </Table>
         </PresentationContent>
-        <p className="bca-table__select-all">
+        <div className="bca-table__select-all">
           <Checkbox
             onChange={this.onSelectAllToggle}
             value="all"
@@ -233,7 +233,7 @@ export default class CoursePickerTable extends React.Component {
               </Text>
             }
           />
-        </p>
+        </div>
       </div>
     )
   }

@@ -138,13 +138,13 @@ test('renders master course lock icon if masterCourseData is provided', (assert)
 
 test('renders reply button icon if is not locked', () => {
   const tree = mount(<AnnouncementRow {...makeProps({ announcement: { locked: false } })} />)
-  const node = tree.find('IconReplyLine')
+  const node = tree.find('IconReply')
   ok(node.exists())
 })
 
 test('does not render reply button icon if is locked', () => {
   const tree = mount(<AnnouncementRow {...makeProps({ announcement: { locked: true } })} />)
-  const node = tree.find('IconReplyLine')
+  const node = tree.find('IconReply')
   notOk(node.exists())
 })
 
@@ -155,7 +155,7 @@ test('removes non-text content from announcement message', () => {
     <p>foo bar</p>
   `
   const tree = mount(<AnnouncementRow {...makeProps({ announcement: { message: messageHtml } })} />)
-  const node = tree.find('.ic-announcement-row__content').getDOMNode()
+  const node = tree.find('.ic-announcement-row__content').instance()
   equal(node.childNodes.length, 1)
   equal(node.childNodes[0].nodeType, 3) // nodeType === 3 is text node type
   ok(node.textContent.includes('Hello World!'))

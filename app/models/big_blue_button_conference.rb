@@ -55,11 +55,18 @@ class BigBlueButtonConference < WebConference
       :logoutURL => (settings[:default_return_url] || "http://www.instructure.com"),
       :record => settings[:record] ? "true" : "false",
       :welcome => settings[:record] ? t("This conference may be recorded.") : "",
+      "meta_canvas-recording-ready-user" => recording_ready_user,
       "meta_canvas-recording-ready-url" => recording_ready_url(current_host)
     }) or return nil
     @conference_active = true
     save
     conference_key
+  end
+
+  def recording_ready_user
+    if self.grants_right?(self.user, :create)
+      "#{self.user['name']} <#{self.user.email}>"
+    end
   end
 
   def recording_ready_url(current_host = nil)
@@ -231,9 +238,10 @@ class BigBlueButtonConference < WebConference
   end
 
   def filter_duration(recording_formats)
-    # As not all the formats are the actual recording, identify the one that has :length
+    # This is a filter to take the duration from any of the playback formats that include a value in length.
+    # As not all the formats are the actual recording, identify the first one that has :length <> nil
     recording_formats.each do |recording_format|
-      return recording_format[:length].to_i if recording_format.key?(:length)
+      return recording_format[:length].to_i if recording_format[:length].present?
     end
   end
 end

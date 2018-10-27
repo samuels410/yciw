@@ -73,10 +73,6 @@ module PostgreSQLAdapterExtensions
     execute("ALTER TABLE #{quote_table_name(from_table)} VALIDATE CONSTRAINT #{quote_column_name(foreign_key_name)}") if options[:delay_validation]
   end
 
-  def rename_index(table_name, old_name, new_name)
-    return execute "ALTER INDEX #{quote_table_name(old_name)} RENAME TO #{quote_column_name(new_name)}";
-  end
-
   def set_standard_conforming_strings
     # not needed in PG 9.1+
   end
@@ -252,6 +248,37 @@ module PostgreSQLAdapterExtensions
     return super if nullness != false || default || open_transactions != 0
     execute("SELECT COUNT(*) FROM #{quote_table_name(table)} WHERE #{column} IS NULL")
     super
+  end
+
+  def initialize_type_map(m = type_map)
+    m.register_type "pg_lsn", ActiveRecord::ConnectionAdapters::PostgreSQL::OID::SpecializedString.new(:pg_lsn)
+
+    super
+  end
+
+  def column_definitions(table_name)
+    # migrations need to see any interstitial states; also, we don't
+    # want to pollute the cache with an interstitial state
+    return super if ActiveRecord::Base.in_migration
+
+    # be wary of error reporting inside of MultiCache triggering a
+    # separate model access
+    return super if @nested_column_definitions
+    @nested_column_definitions = true
+    begin
+      got_inside = false
+      MultiCache.fetch(["schema", table_name]) do
+        got_inside = true
+        super
+      end
+    rescue
+      raise if got_inside
+      # we never got inside, so something is wrong with the cache,
+      # just ignore it
+      super
+    ensure
+      @nested_column_definitions = false
+    end
   end
 end
 

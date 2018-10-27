@@ -24,6 +24,8 @@ define [
   '../assignments/PeerReviewsSelector'
   '../assignments/PostToSisSelector'
   'underscore'
+  'react'
+  'react-dom'
   'jst/DiscussionTopics/EditView'
   'jsx/shared/rce/RichContentEditor'
   'str/htmlEscape'
@@ -38,7 +40,9 @@ define [
   '../../util/deparam'
   '../../jquery.rails_flash_notifications' #flashMessage
   'jsx/shared/helpers/numberHelper'
+  'jsx/due_dates/DueDateCalendarPicker'
   '../../util/SisValidationHelper'
+  'jsx/assignments/AssignmentExternalTools'
 ], (
     I18n,
     ValidatedFormView,
@@ -48,6 +52,8 @@ define [
     PeerReviewsSelector,
     PostToSisSelector,
     _,
+    React,
+    ReactDOM,
     template,
     RichContentEditor,
     htmlEscape,
@@ -62,7 +68,9 @@ define [
     deparam,
     flashMessage,
     numberHelper,
-    SisValidationHelper) ->
+    DueDateCalendarPicker,
+    SisValidationHelper,
+    AssignmentExternalTools) ->
 
   RichContentEditor.preloadRemoteModule()
 
@@ -89,6 +97,7 @@ define [
       '#allow_todo_date': '$allowTodoDate'
       '#allow_user_comments': '$allowUserComments'
       '#require_initial_post' : '$requireInitialPost'
+      '#assignment_external_tools' : '$AssignmentExternalTools'
 
     events: _.extend(@::events,
       'click .removeAttachment' : 'removeAttachment'
@@ -120,6 +129,11 @@ define [
 
       @lockedItems = options.lockedItems || {}
       @announcementsLocked = options.announcementsLocked
+      todoDate = @model.get('todo_date')
+      @studentTodoAtDateValue = if todoDate
+        new Date(todoDate)
+      else
+        ''
 
     setRenderSectionsAutocomplete: (func) =>
       @renderSectionsAutocomplete = func
@@ -217,9 +231,21 @@ define [
 
       @$(".datetime_field").datetime_field()
 
-      @updateAllowComments()
+      if !@model.get('locked')
+        @updateAllowComments()
 
       this
+
+    afterRender: =>
+      @renderStudentTodoAtDate() if ENV.STUDENT_PLANNER_ENABLED && @$todoDateInput.length
+      [context, context_id] = ENV.context_asset_string.split("_")
+      if context == 'course'
+        @AssignmentExternalTools = AssignmentExternalTools.attach(
+          @$AssignmentExternalTools.get(0),
+          "assignment_edit",
+          parseInt(context_id),
+          parseInt(@assignment.id))
+
 
     attachKeyboardShortcuts: =>
         $('.rte_switch_views_link').first().before((new KeyboardShortcuts()).render().$el)
@@ -285,10 +311,30 @@ define [
         I18n.t('discussion topic'),
         ENV.CONDITIONAL_RELEASE_ENV)
 
+    renderStudentTodoAtDate: =>
+      @toggleTodoDateInput()
+      ReactDOM.render(React.createElement(DueDateCalendarPicker,
+        dateType: 'todo_date'
+        name: 'todo_date'
+        handleUpdate: @handleStudentTodoUpdate
+        rowKey: 'student_todo_at_date'
+        labelledBy: 'student_todo_at_date_label'
+        inputClasses: ''
+        disabled: false
+        isFancyMidnight: true
+        dateValue: @studentTodoAtDateValue
+        labelText: I18n.t('Discussion Topic will show on student to-do list for date')
+        labelClasses: 'screenreader-only'
+      ), @$todoDateInput[0])
+
+    handleStudentTodoUpdate: (newDate) =>
+      @studentTodoAtDateValue = newDate
+      @renderStudentTodoAtDate()
+
+
     getFormData: ->
       data = super
       dateFields = ['last_reply_at', 'posted_at', 'delayed_post_at', 'lock_at']
-      dateFields.push 'todo_date' if ENV.STUDENT_PLANNER_ENABLED
       for dateField in dateFields
         data[dateField] = $.unfudgeDateForProfileTimezone(data[dateField])
       data.title ||= I18n.t 'default_discussion_title', 'No Title'
@@ -297,6 +343,7 @@ define [
       data.only_graders_can_rate = false unless data.allow_rating is '1'
       data.sort_by_rating = false unless data.allow_rating is '1'
       data.allow_todo_date = '0' if data.assignment?.set_assignment is '1'
+      data.todo_date = @studentTodoAtDateValue if ENV.STUDENT_PLANNER_ENABLED
       data.todo_date = null unless data.allow_todo_date is '1'
 
       if @groupCategorySelector && !ENV?.IS_LARGE_ROSTER
@@ -340,7 +387,7 @@ define [
       data.unlock_at = defaultDate?.get('unlock_at') or null
       data.due_at = defaultDate?.get('due_at') or null
       data.assignment_overrides = @dueDateOverrideView.getOverrides()
-      data.only_visible_to_overrides = @dueDateOverrideView.containsSectionsWithoutOverrides()
+      data.only_visible_to_overrides = !@dueDateOverrideView.overridesContainDefault()
 
       assignment = @model.get('assignment')
       assignment or= @model.createAssignment()

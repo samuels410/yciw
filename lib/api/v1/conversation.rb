@@ -54,7 +54,16 @@ module Api::V1::Conversation
     result[:participants] = conversation_users_json(participants, current_user, session, options)
     result[:visible] = options.key?(:visible) ? options[:visible] : @set_visibility && infer_visibility(conversation)
     result[:context_name] = conversation.context_name if options[:include_context_name]
-    result[:context_code] = conversation.conversation.context_code
+
+    # Changing to account context means users can reply to admins, even if the admin messages from a
+    # course they aren't enrolled in
+    result[:context_code] =
+      if conversation.conversation.context_type.eql?("Course") && AccountUser.exists?(user_id: current_user.id)
+        "account_#{@domain_root_account.id}"
+      else
+        conversation.conversation.context_code
+      end
+
     if options[:include_reply_permission_check] && conversation.conversation.replies_locked_for?(current_user)
       result[:cannot_reply] = true
     end
@@ -134,7 +143,7 @@ module Api::V1::Conversation
       result[:common_courses] = current_user.address_book.common_courses(user)
       result[:common_groups] = current_user.address_book.common_groups(user)
     end
-    result[:avatar_url] = avatar_url_for_user(user, blank_fallback) if options[:include_participant_avatars]
+    result[:avatar_url] = avatar_url_for_user(user) if options[:include_participant_avatars]
     result
   end
 

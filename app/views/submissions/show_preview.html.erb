@@ -18,9 +18,11 @@
 
 <% css_bundle :submission %>
 
+<%
+  js_env ga_page_title: "Submission Preview"
+%>
 <% user_name = params[:hide_student_name] ? t(:anonymous_username, "This Student") : submission_author_name_for(@assessment_request) %>
 <% content_for :page_title do %><%= join_title @assignment.title, submission_author_name_for(@assessment_request) %><% end %>
-
 <% if @assignment.submission_types == 'discussion_topic' && @assignment.discussion_topic %>
   <div style="width: 600px; margin: 10px auto;">
     <p>
@@ -85,7 +87,26 @@
   </div>
   <div style="text-align: center;">
   <% if @submission.processed %>
-    <img src="<%= context_url(@context, :context_assignment_submission_url, @assignment.id, @submission.user_id, :download => image.id) %>" alt="<%= t('url_preview', 'URL Preview') %>"/>
+    <%
+      preview_url = if anonymize_students
+        context_url(
+          @context,
+          :context_assignment_anonymous_submission_url,
+          @assignment.id,
+          @submission.anonymous_id,
+          download: image.id
+        )
+      else
+        context_url(
+          @context,
+          :context_assignment_submission_url,
+          @assignment.id,
+          @submission.user_id,
+          download: image.id
+        )
+      end
+    %>
+    <img src="<%= preview_url %>" alt="<%= t('URL Preview') %>"/>
   <% end %>
   </div>
 <% elsif @submission.submission_type == "online_text_entry" %>
@@ -113,7 +134,25 @@
       <div class="file-upload-submission">
 
         <div class="file-upload-submission-info">
-          <% preview_url = context_url(@context, :context_assignment_submission_url, @assignment.id, @submission.user_id, :download => attachment.id) %>
+          <%
+            preview_url = if anonymize_students
+              context_url(
+                @context,
+                :context_assignment_anonymous_submission_url,
+                @assignment.id,
+                @submission.anonymous_id,
+                download: attachment.id
+              )
+            else
+              context_url(
+                @context,
+                :context_assignment_submission_url,
+                @assignment.id,
+                @submission.user_id,
+                download: attachment.id
+              )
+            end
+          %>
           <a href="<%= preview_url %>" class="<%= attachment.mime_class %> file-upload-submission-info__link">
             <%= attachment.display_name %>
           </a>
@@ -167,7 +206,27 @@
             %>
           <% end %>
           <% if attachment.crocodoc_available? || attachment.canvadocable? %>
-            <a href=<%= preview_url %> data-tooltip title="<%= preview_document %>" class="modal_preview_link Button--link" role="button" data-attachment_id="<%= attachment.id %>" data-submission_id="<%= @submission.id %>" data-dialog-title="<%= attachment.display_name %>" <%= doc_preview_attributes(attachment, enable_annotations: true, moderated_grading_whitelist: @moderated_grading_whitelist) %>><%= button_text %></a>
+            <a
+              href=<%= preview_url %>
+              data-tooltip title="<%= preview_document %>"
+              class="modal_preview_link Button--link"
+              role="button"
+              data-attachment_id="<%= attachment.id %>"
+              data-submission_id="<%= @submission.id %>"
+              data-dialog-title="<%= attachment.display_name %>"
+              <%=
+                doc_preview_attributes(
+                  attachment,
+                  anonymous_instructor_annotations: @anonymous_instructor_annotations,
+                  enable_annotations: true,
+                  enrollment_type: @enrollment_type,
+                  moderated_grading_whitelist: @moderated_grading_whitelist,
+                  submission_id: @submission.id
+                )
+              %>
+            >
+              <%= button_text %>
+            </a>
           <% end %>
         </div>
 

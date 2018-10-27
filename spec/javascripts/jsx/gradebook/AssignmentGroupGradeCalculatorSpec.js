@@ -79,6 +79,14 @@ test('include the sum of points possible', function () {
   equal(grades.final.possible, 1284);
 });
 
+test('avoids floating point rounding errors', function () {
+  const pointsPossibleValues = [7, 6.1, 7, 6.9, 6.27]
+  pointsPossibleValues.forEach((value, index) => { assignments[index].points_possible = value })
+  const grades = AssignmentGroupGradeCalculator.calculate(submissions, assignmentGroup);
+  // 7 + 6.1 + 7 + 6.9 + 6.27 === 33.269999999999996
+  strictEqual(grades.final.possible, 33.27);
+});
+
 QUnit.module('AssignmentGroupGradeCalculator.calculate with some assignments and submissions', {
   setup () {
     submissions = [
@@ -181,6 +189,16 @@ test('eliminates multiple submissions for the same assignment', function () {
   equal(grades.final.score, 159);
   equal(grades.current.possible, 284);
   equal(grades.final.possible, 1284);
+});
+
+test('avoids floating point rounding errors on submission percentages', function () {
+  submissions[0].score = 21.4
+  assignments[0].points_possible = 40
+
+  // 21.4 / 40 === 0.5349999999999999 (expected 0.535)
+  const grades = AssignmentGroupGradeCalculator.calculate(submissions, assignmentGroup);
+  strictEqual(grades.current.submissions[0].percent, 0.535);
+  strictEqual(grades.final.submissions[0].percent, 0.535);
 });
 
 QUnit.module('AssignmentGroupGradeCalculator.calculate with assignments having no points possible', {

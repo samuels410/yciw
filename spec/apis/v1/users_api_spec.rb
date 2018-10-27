@@ -320,21 +320,23 @@ describe Api::V1::User do
 
     def test_context(mock_context, context_to_pass)
       expect(mock_context).to receive(:account).and_return(mock_context)
-      expect(mock_context).to receive(:global_id).and_return(42)
+      expect(mock_context).to receive(:global_id).and_return(42).twice
       expect(mock_context).to receive(:grants_any_right?).with(@admin, :manage_students, :read_sis).and_return(true)
       expect(mock_context).to receive(:grants_right?).with(@admin, {}, :view_user_logins).and_return(true)
-      expect(if context_to_pass
+      json = if context_to_pass
         @test_api.user_json(@student, @admin, {}, [], context_to_pass)
       else
         @test_api.user_json(@student, @admin, {}, [])
-      end).to eq({ "name"=>"Student",
-                      "sortable_name"=>"Student",
-                      "id"=>@student.id,
-                      "short_name"=>"Student",
-                      "sis_user_id"=>"sis-user-id",
-                      "integration_id" => nil,
-                      "sis_import_id"=>@student.pseudonym.sis_batch_id,
-                      "login_id" => "pvuser@example.com"
+      end
+      expect(json).to eq({
+        "name"=>"Student",
+        "sortable_name"=>"Student",
+        "id"=>@student.id,
+        "short_name"=>"Student",
+        "sis_user_id"=>"sis-user-id",
+        "integration_id" => nil,
+        "sis_import_id"=>@student.pseudonym.sis_batch_id,
+        "login_id" => "pvuser@example.com"
       })
     end
 
@@ -556,6 +558,24 @@ describe "Users API", type: :request do
       expect(json['permissions']).to eq({'can_update_name' => false, 'can_update_avatar' => true})
     end
 
+    it "should retrieve the right avatar permissions" do
+      @user = @other_user
+      json = api_call(:get, "/api/v1/users/self",
+                      { :controller => 'users', :action => 'api_show', :id => 'self', :format => 'json' })
+      expect(json['permissions']['can_update_avatar']).to eq(false)
+
+      Account.default.tap { |a| a.enable_service(:avatars) }.save
+      json = api_call(:get, "/api/v1/users/self",
+                      { :controller => 'users', :action => 'api_show', :id => 'self', :format => 'json' })
+      expect(json['permissions']['can_update_avatar']).to eq(true)
+
+      @user.avatar_state = :locked
+      @user.save
+      json = api_call(:get, "/api/v1/users/self",
+                      { :controller => 'users', :action => 'api_show', :id => 'self', :format => 'json' })
+      expect(json['permissions']['can_update_avatar']).to eq(false)
+    end
+
     it "requires :read_roster or :manage_user_logins permission from the account" do
       account_admin_user_with_role_changes(:role_changes => {:read_roster => false, :manage_user_logins => false})
       api_call(:get, "/api/v1/users/#{@other_user.id}",
@@ -634,6 +654,21 @@ describe "Users API", type: :request do
       end
     end
 
+    it "doesn't kersplode when filtering by role and sorting" do
+      @account = Account.default
+      json = api_call(:get, "/api/v1/accounts/#{@account.id}/users",
+        { :controller => 'users', :action => "index", :format => 'json', :account_id => @account.id.to_param },
+        { :role_filter_id => student_role.id.to_s, :sort => "sis_id"})
+
+      expect(json.map{|r| r['id']}).to eq [@student.id]
+
+      json = api_call(:get, "/api/v1/accounts/#{@account.id}/users",
+        { :controller => 'users', :action => "index", :format => 'json', :account_id => @account.id.to_param },
+        { :role_filter_id => student_role.id.to_s, :sort => "email"})
+
+      expect(json.map{|r| r['id']}).to eq [@student.id]
+    end
+
     it "includes last login info" do
       @account = Account.default
       u = User.create!(name: 'test user')
@@ -644,6 +679,12 @@ describe "Users API", type: :request do
       json = api_call(:get, "/api/v1/accounts/#{@account.id}/users", { :controller => 'users', :action => "index", :format => 'json', :account_id => @account.id.to_param }, { include: ['last_login'], search_term: u.id.to_s })
 
       expect(json.count).to eq 1
+      expect(json.first['last_login']).to eq p.current_login_at.iso8601
+
+      # it should sort too
+      json = api_call(:get, "/api/v1/accounts/#{@account.id}/users",
+        { :controller => 'users', :action => "index", :format => 'json', :account_id => @account.id.to_param },
+        { include: ['last_login'], sort: "last_login", order: 'desc'})
       expect(json.first['last_login']).to eq p.current_login_at.iso8601
     end
   end
@@ -847,13 +888,16 @@ describe "Users API", type: :request do
           other_user = user_with_pseudonym(:active_all => true)
           @pseudonym.sis_user_id = "12345"
           @pseudonym.save!
+          @user.communication_channel.workflow_state = 'registered'
           other_user.remove_from_root_account(Account.default)
+          expect(other_user.communication_channel).to be_nil
 
           @user = @site_admin
           json = api_call(:post, "/api/v1/accounts/#{Account.default.id}/users",
             { :controller => 'users', :action => 'create', :format => 'json', :account_id => Account.default.id.to_s },
-            { :enable_sis_reactivation => '1', :user => { :name => "Test User" },
+            { :enable_sis_reactivation => '1', :user => { :name => "Test User", :skip_registration => true },
               :pseudonym => { :unique_id => "test@example.com", :password => "password123", :sis_user_id => "12345"},
+              :communication_channel => { :skip_confirmation => true}
             }
           )
 
@@ -863,6 +907,8 @@ describe "Users API", type: :request do
           expect(other_user).to be_registered
           expect(other_user.user_account_associations.where(:account_id => Account.default).first).to_not be_nil
           expect(@pseudonym).to be_active
+          expect(other_user.communication_channel).to be_present
+          expect(other_user.communication_channel.workflow_state).to eq('active')
         end
 
         it "should raise an error trying to reactivate an active section" do
@@ -1014,7 +1060,7 @@ describe "Users API", type: :request do
     end
 
     it "should send a confirmation if send_confirmation is set to 1" do
-      expect_any_instance_of(Pseudonym).to receive(:send_registration_notification!)
+      expect_any_instance_of(Pseudonym).to receive(:send_registration_done_notification!)
       api_call(:post, "/api/v1/accounts/#{@admin.account.id}/users",
         { :controller => 'users', :action => 'create', :format => 'json', :account_id => @admin.account.id.to_s },
         {
@@ -1064,7 +1110,7 @@ describe "Users API", type: :request do
           }
         }
       )
-      expect(response).to be_success
+      expect(response).to be_successful
       users = User.where(name: "Test User").to_a
       expect(users.size).to eq 1
       expect(users.first.pseudonyms.first.unique_id).to eq "test"
@@ -1165,7 +1211,7 @@ describe "Users API", type: :request do
                      }
                  }
                 )
-        expect(response).to be_success
+        expect(response).to be_successful
         users = User.where(name: "Test User").to_a
         expect(users.size).to eq 1
         expect(users.first.pseudonyms.first.unique_id).to eq "test@test.com"
@@ -2039,6 +2085,33 @@ describe "Users API", type: :request do
       expect(json.length).to eql 2
     end
 
+    it "should return assignments in order of the submission time for the user" do
+      assign = @course.assignments.create!(due_at: 5.days.ago, workflow_state: 'published', submission_types: "online_text_entry")
+      create_adhoc_override_for_assignment(assign, @student, due_at: 3.days.ago)
+      DueDateCacher.recompute(assign)
+
+      json = api_call(:get, @path, @params)
+      expect(json[0]['id']).to eq assign.id
+    end
+
+    it "paginates properly when multiple submissions have the same cached_due_date" do
+      id1 = api_call(:get, @path, @params.merge(per_page: 1, page: 1))[0]['id'].to_i
+      id2 = api_call(:get, @path, @params.merge(per_page: 1, page: 2))[0]['id'].to_i
+      expect([id1, id2]).to eq @course.assignments.pluck(:id).sort
+    end
+
+    it "should not return locked assignments if filter is set to 'submittable'" do
+      @course.assignments.create!(due_at: 3.days.ago,
+                                  workflow_state: 'published',
+                                  submission_types: 'online_text_entry',
+                                  lock_at: 2.days.ago)
+      json = api_call(:get, @path, @params)
+      expect(json.length).to eql 3
+
+      submittable_json = api_call(:get, @path, @params.merge(:filter => ["submittable"]))
+      expect(submittable_json.length).to eql 2
+    end
+
     it "should return course information if requested" do
       @params['include'] = ['course']
       json = api_call(:get, @path, @params)
@@ -2090,36 +2163,64 @@ describe "Users API", type: :request do
     end
   end
 
-  describe 'POST pandata_token' do
+  describe 'POST pandata_events_token' do
     let(:fake_secrets){
       {
-        "ios-pandata-key" => "IOS_pandata_key",
-        "ios-pandata-secret" => "teamrocketblastoffatthespeedoflight",
-        "android-pandata-key" => "ANDROID_pandata_key",
-        "android-pandata-secret" => "surrendernoworpreparetofight"
+        "url" => "https://example.com/pandata/events",
+        "ios-key" => "IOS_key",
+        "ios-secret" => "LS0tLS1CRUdJTiBFQyBQUklWQVRFIEtFWS0tLS0tCk1JSGJBZ0VCQkVFemZx\nZStiTjhEN2VRY0tKa3hHSlJpd0dqaHE0eXBsdFJ3aXNMUkx6ZXpBSmQ4QTlL\nRTdNY2YKbkorK0ptNGpwcjNUaFpybHRyN2dXQ2VJWWdvZDZPSmhzS0FIQmdV\ncmdRUUFJNkdCaVFPQmhnQUVBSmV5NCszeAp0UGlja2h1RFQ3QWFsTW1BWVdz\neU5IMnlEejRxRjhCamhHZzgwVkE2QWJPMHQ2YVE4TGQyaktMVEFrU1U5SFFW\nClkrMlVVeUp0Q3FTWEg4dVlBTEI0ZmFwbGhwVWNoQ1pSa3pMMXcrZzVDUUJY\nMlhFS25PdXJabU5ieEVSRzJneGoKb3hsbmxub0pwQjR5YUkvbWNpWkJOYlVz\nL0hTSGJtRzRFUFVxeVViQgotLS0tLUVORCBFQyBQUklWQVRFIEtFWS0tLS0t\nCg==\n",
+        "android-key" => "ANDROID_key",
+        "android-secret" => "surrendernoworpreparetofight"
       }
     }
 
     before do
-      allow(Canvas::DynamicSettings).to receive(:find).with(any_args).and_call_original
-      allow(Canvas::DynamicSettings).to receive(:find).with(service: 'pandata').and_return(fake_secrets)
+      allow(Canvas::DynamicSettings).to receive(:find).
+        with(any_args).and_call_original
+      allow(Canvas::DynamicSettings).to receive(:find).
+        with('events', service: 'pandata').and_return(fake_secrets)
     end
 
-    it 'should return token and expiration' do
-      json = api_call(:post, "/api/v1/users/#{@user.id}/pandata_token",
-          { controller: 'users', action: 'pandata_token', format:'json', id: @user.to_param },
-          { app_key: 'IOS_pandata_key'}
+    it 'returns token and expiration' do
+      Setting.set("pandata_events_token_allowed_developer_key_ids", DeveloperKey.default.global_id)
+      json = api_call(:post, "/api/v1/users/self/pandata_events_token",
+          { controller: 'users', action: 'pandata_events_token', format:'json', id: @user.to_param },
+          { app_key: 'IOS_key'}
       )
-      expect(json['token']).to be_present
+      expect(json['url']).to be_present
+      expect(json['auth_token']).to be_present
+      expect(json['props_token']).to be_present
       expect(json['expires_at']).to be_present
+
+      public_key = OpenSSL::PKey::EC.new(<<-PUBLIC)
+-----BEGIN PUBLIC KEY-----
+MIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQAl7Lj7fG0+JySG4NPsBqUyYBhazI0
+fbIPPioXwGOEaDzRUDoBs7S3ppDwt3aMotMCRJT0dBVj7ZRTIm0KpJcfy5gAsHh9
+qmWGlRyEJlGTMvXD6DkJAFfZcQqc66tmY1vEREbaDGOjGWeWegmkHjJoj+ZyJkE1
+tSz8dIduYbgQ9SrJRsE=
+-----END PUBLIC KEY-----
+PUBLIC
+      body = Canvas::Security.decode_jwt(json['auth_token'], [public_key])
+      expect(body[:iss]).to eq "IOS_key"
     end
 
-    it 'should return a bad request for incorrect app keys' do
-      json = raw_api_call(:post, "/api/v1/users/#{@user.id}/pandata_token",
-          { controller: 'users', action: 'pandata_token', format:'json', id: @user.to_param },
+    it 'returns bad_request for incorrect app keys' do
+      Setting.set("pandata_events_token_allowed_developer_key_ids", DeveloperKey.default.global_id)
+      json = api_call(:post, "/api/v1/users/self/pandata_events_token",
+          { controller: 'users', action: 'pandata_events_token', format:'json', id: @user.to_param },
           { app_key: 'IOS_not_right'}
       )
       assert_status(400)
+      expect(json['message']).to eq "Invalid app key"
+    end
+
+    it 'returns forbidden if the tokens key is not authorized' do
+      json = api_call(:post, "/api/v1/users/self/pandata_events_token",
+          { controller: 'users', action: 'pandata_events_token', format:'json', id: @user.to_param },
+          { app_key: 'IOS_key'}
+      )
+      assert_status(403)
+      expect(json['message']).to eq "Developer key not authorized"
     end
   end
 end

@@ -17,6 +17,7 @@
 
 class LiveEventsObserver < ActiveRecord::Observer
   observe :content_export,
+          :content_migration,
           :course,
           :discussion_entry,
           :discussion_topic,
@@ -34,6 +35,7 @@ class LiveEventsObserver < ActiveRecord::Observer
           :account_notification,
           :course_section,
           :context_module,
+          :context_module_progression,
           :content_tag
 
   NOP_UPDATE_FIELDS = [ "updated_at", "sis_batch_id" ].freeze
@@ -49,6 +51,10 @@ class LiveEventsObserver < ActiveRecord::Observer
           Canvas::LiveEvents.quiz_export_complete(obj)
         end
       end
+    when ContentMigration
+      if changes["workflow_state"] && obj.workflow_state == "imported"
+        Canvas::LiveEvents.content_migration_completed(obj)
+      end
     when Course
       if changes["syllabus_body"]
         Canvas::LiveEvents.course_syllabus_updated(obj, changes["syllabus_body"].first)
@@ -57,7 +63,9 @@ class LiveEventsObserver < ActiveRecord::Observer
     when Enrollment
       Canvas::LiveEvents.enrollment_updated(obj)
     when EnrollmentState
-      Canvas::LiveEvents.enrollment_state_updated(obj)
+      if (changes.keys - ["state_is_current", "lock_version", "access_is_current"]).any?
+        Canvas::LiveEvents.enrollment_state_updated(obj)
+      end
     when GroupCategory
       Canvas::LiveEvents.group_category_updated(obj)
     when Group
@@ -92,6 +100,10 @@ class LiveEventsObserver < ActiveRecord::Observer
       Canvas::LiveEvents.course_section_updated(obj)
     when ContextModule
       Canvas::LiveEvents.module_updated(obj)
+    when ContextModuleProgression
+      if changes["completed_at"] && CourseProgress.new(obj.context_module.course, obj.user, read_only: true).completed?
+        Canvas::LiveEvents.course_completed(obj)
+      end
     when ContentTag
       Canvas::LiveEvents.module_item_updated(obj) if obj.tag_type == "context_module"
     end

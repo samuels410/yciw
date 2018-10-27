@@ -28,7 +28,9 @@ QUnit.module('InstructureLinks Tinymce Plugin', {
     return (selection = {
       getContent() {
         return 'Selection Content'
-      }
+      },
+      getNode() {},
+      getRng() {}
     })
   },
   teardown() {
@@ -137,7 +139,7 @@ test('it prevents the event from propogating up the chain', function() {
 })
 
 test('it closes the dialog box', function() {
-  this.mock(this.box)
+  sandbox.mock(this.box)
     .expects('dialog')
     .once()
     .withArgs('close')
@@ -146,7 +148,7 @@ test('it closes the dialog box', function() {
 })
 
 test('it inserts the link properly', function() {
-  this.mock(this.editor)
+  sandbox.mock(this.editor)
     .expects('createLink')
     .once()
     .withArgs('promptValue', 'classes', {'preview-alt': 'preview alt text'})
@@ -192,7 +194,8 @@ QUnit.module("InstructureLinks Tinymce Plugin: renderDialog", {
       nodeChanged: () => null,
       selection: {
         getContent: () => null,
-        getNode: () => ({nodeName: 'SPAN'})
+        getNode: () => ({nodeName: 'SPAN'}),
+        getRng: () => {}
       }
     };
   },

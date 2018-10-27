@@ -340,6 +340,13 @@ describe UserObserveesController, type: :request do
 
       expect(student.reload.linked_students).to eq []
     end
+
+    it 'should add an observee with a pairing code' do
+      code = student.generate_observer_pairing_code
+
+      expect(create_call({ pairing_code: code.code }, api_user: parent)).to eq student.id
+      expect(parent.reload.linked_students).to eq [student]
+    end
   end
 
   context 'GET #show' do

@@ -24,6 +24,8 @@ class AccountNotification < ActiveRecord::Base
   validates_length_of :message, :maximum => maximum_text_length, :allow_nil => false, :allow_blank => false
   sanitize_field :message, CanvasSanitize::SANITIZE
 
+  after_save :create_alert
+
   ACCOUNT_SERVICE_NOTIFICATION_FLAGS = %w[account_survey_notifications]
   validates_inclusion_of :required_account_service, in: ACCOUNT_SERVICE_NOTIFICATION_FLAGS, allow_nil: true
 
@@ -35,13 +37,39 @@ class AccountNotification < ActiveRecord::Base
     end
   end
 
+  def create_alert
+    if self.start_at > Time.zone.now
+      self.send_later_enqueue_args(:create_alert, {
+        :run_at => self.start_at,
+        :on_conflict => :overwrite,
+        :singleton => "create_notification_alert:#{self.id}"
+      })
+      return
+    end
+
+    return unless self.account.root_account?
+
+    roles = self.account_notification_roles.map(&:role_name)
+    return if roles.count > 0 && (roles & ['StudentEnrollment', 'ObserverEnrollment']).none?
+
+    thresholds = ObserverAlertThreshold.active.where(observer: User.of_account(self.account), alert_type: 'institution_announcement')
+    thresholds.each do |threshold|
+      ObserverAlert.create(student: threshold.student, observer: threshold.observer,
+                           observer_alert_threshold: threshold, context: self,
+                           alert_type: 'institution_announcement', action_date: self.start_at,
+                           title: I18n.t('Institution announcement: "%{announcement_title}"', {
+                             announcement_title: self.subject
+                           }))
+    end
+  end
+
   def self.for_user_and_account(user, root_account)
     if root_account.site_admin?
       current = self.for_account(root_account)
     else
       course_ids = user.enrollments.active.shard(user).distinct.pluck(:course_id) # fetch sharded course ids
       # and then fetch account_ids separately - using pluck on a joined column doesn't give relative ids
-      all_account_ids = Course.where(:id => course_ids, :workflow_state => 'available').
+      all_account_ids = Course.where(:id => course_ids).not_deleted.
         distinct.pluck(:account_id, :root_account_id).flatten.uniq
       all_account_ids += user.account_users.active.shard(user).
         joins(:account).where(accounts: {workflow_state: 'active'}).
@@ -51,6 +79,7 @@ class AccountNotification < ActiveRecord::Base
     end
 
     user_role_ids = {}
+    sub_account_ids_map = {}
 
     current.select! do |announcement|
       # use role.id instead of role_id to trigger Role#id magic for built in
@@ -59,16 +88,19 @@ class AccountNotification < ActiveRecord::Base
       # users not enrolled in any courses
       role_ids = announcement.account_notification_roles.map { |anr| anr.role&.role_for_shard&.id }
 
-      announcement_root_account = announcement.account.root_account
-      unless role_ids.empty? || user_role_ids.key?(announcement_root_account.id)
+      unless role_ids.empty? || user_role_ids.key?(announcement.account_id)
         # choose enrollments and account users to inspect
         if announcement.account.site_admin?
-          enrollments = user.enrollments.shard(user).active.distinct.select(:role_id)
-          account_users = user.account_users.shard(user).distinct.select(:role_id)
+          enrollments = user.enrollments.shard(user).active.distinct.select(:role_id).to_a
+          account_users = user.account_users.shard(user).distinct.select(:role_id).to_a
         else
-          # TODO (probably): restrict sub-account notifications to roles within that sub-account (vs the whole root account)
-          enrollments = user.enrollments_for_account_and_sub_accounts(announcement_root_account).select(:role_id)
-          account_users = announcement_root_account.all_account_users_for(user)
+          announcement.shard.activate do
+            sub_account_ids_map[announcement.account_id] ||=
+              Account.sub_account_ids_recursive(announcement.account_id) + [announcement.account_id]
+            enrollments = Enrollment.where(user_id: user).active.joins(:course).
+              where(:courses => {:account_id => sub_account_ids_map[announcement.account_id]}).select(:role_id).to_a
+            account_users = announcement.account.root_account.all_account_users_for(user)
+          end
         end
 
         # preload role objects for those enrollments and account users
@@ -78,12 +110,12 @@ class AccountNotification < ActiveRecord::Base
         # map to role ids. user role.id instead of role_id to trigger Role#id
         # magic for built in roles. announcements intended for users not
         # enrolled in any courses have the NilEnrollment role type
-        user_role_ids[announcement_root_account.id] = enrollments.map{ |e| e.role.role_for_shard.id }
-        user_role_ids[announcement_root_account.id] = [nil] if user_role_ids[announcement_root_account.id].empty?
-        user_role_ids[announcement_root_account.id] |= account_users.map{ |au| au.role.role_for_shard.id }
+        user_role_ids[announcement.account_id] = enrollments.map{ |e| e.role.role_for_shard.id }
+        user_role_ids[announcement.account_id] = [nil] if user_role_ids[announcement.account_id].empty?
+        user_role_ids[announcement.account_id] |= account_users.map{ |au| au.role.role_for_shard.id }
       end
 
-      role_ids.empty? || (role_ids & user_role_ids[announcement_root_account.id]).present?
+      role_ids.empty? || (role_ids & user_role_ids[announcement.account_id]).present?
     end
 
     user.shard.activate do

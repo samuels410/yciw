@@ -64,7 +64,7 @@ module Api::V1::Quiz
     end
   end
 
-  def quiz_json(quiz, context, user, session, options={})
+  def quiz_json(quiz, context, user, session, options={}, serializer = nil)
     options.merge!(description_formatter: description_formatter(context, user)) unless options[:description_formatter]
     if accepts_jsonapi?
       Canvas::APIArraySerializer.new([quiz],
@@ -75,12 +75,12 @@ module Api::V1::Quiz
                          controller: self,
                          serializer_options: options).as_json
     else
-      Quizzes::QuizSerializer.new(quiz,
-                         scope: user,
-                         session: session,
-                         root: false,
-                         controller: self,
-                         serializer_options: options).as_json
+      (serializer || Quizzes::QuizSerializer).new(quiz,
+                                                  scope: user,
+                                                  session: session,
+                                                  root: false,
+                                                  controller: self,
+                                                  serializer_options: options).as_json
     end
   end
 
@@ -124,6 +124,10 @@ module Api::V1::Quiz
     quiz_params = accepts_jsonapi? ? Array(params[:quizzes]).first : params[:quiz]
     return nil unless quiz.is_a?(Quizzes::Quiz) && quiz_params.is_a?(ActionController::Parameters)
     update_params = filter_params(quiz_params)
+
+    if update_params.key?('description')
+      update_params['description'] = process_incoming_html_content(update_params['description'])
+    end
 
     # make sure assignment_group_id belongs to context
     if update_params.has_key?("assignment_group_id")

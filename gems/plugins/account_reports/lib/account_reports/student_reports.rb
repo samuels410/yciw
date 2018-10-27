@@ -110,6 +110,7 @@ module AccountReports
                INNER JOIN #{CourseSection.quoted_table_name} cs ON cs.id = e.course_section_id
                INNER JOIN #{Pseudonym.quoted_table_name} p ON e.user_id = p.user_id
                  AND courses.root_account_id = p.account_id
+                 AND p.workflow_state <> 'deleted'
                INNER JOIN #{User.quoted_table_name} u ON u.id = p.user_id").
         where("NOT EXISTS (SELECT s.user_id
                            FROM #{Submission.quoted_table_name} s
@@ -188,8 +189,31 @@ module AccountReports
 
       if start_at
         data = data.where("enrollments.last_activity_at < ? OR enrollments.last_activity_at IS NULL", start_at)
+        # Only select enrollments that have zero activity across an entire course.
+        # This makes it so that users that have enrollments in multiple sections
+        # don't get pulled up unless they have zero activity across
+        # all the sections they belong to.
+        data = data.where(%{NOT EXISTS (
+          SELECT 1 AS ONE
+          FROM #{Enrollment.quoted_table_name} AS other_ens
+          WHERE other_ens.id<>enrollments.id
+            AND other_ens.user_id=enrollments.user_id
+            AND other_ens.course_id=enrollments.course_id
+            AND (
+              other_ens.last_activity_at IS NOT NULL
+              AND other_ens.last_activity_at > ?
+            )
+        )}, start_at)
       else
         data = data.where("enrollments.last_activity_at IS NULL")
+        data = data.where(%{NOT EXISTS (
+          SELECT 1 AS ONE
+          FROM #{Enrollment.quoted_table_name} AS other_ens
+          WHERE other_ens.id<>enrollments.id
+            AND other_ens.user_id=enrollments.user_id
+            AND other_ens.course_id=enrollments.course_id
+            AND other_ens.last_activity_at IS NOT NULL
+        )})
       end
 
       data = data.where(:enrollments => {:course_id => course}) if course

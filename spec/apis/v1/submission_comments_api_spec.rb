@@ -31,7 +31,7 @@ describe 'Submissions Comment API', type: :request do
     end
 
     include_examples "file uploads api"
-    def has_query_exemption?; false; end
+    def has_query_exemption?; true; end
 
     def preflight(preflight_params)
       api_call :post,
@@ -58,7 +58,7 @@ describe 'Submissions Comment API', type: :request do
 
     it "creates an attachment with the right the user_id" do
       preflight(name: "blah blah blah")
-      expect(response).to be_success
+      expect(response).to be_successful
       a = @assignment.attachments.first
       expect(a).not_to be_nil
       expect(a.user_id).to eq @user.id

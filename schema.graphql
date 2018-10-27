@@ -3,15 +3,15 @@ type AdhocStudents {
   students: [User]
 }
 
-type Assignment implements Node, Timestamped {
+type Assignment implements Node & Timestamped {
   # legacy canvas id
   _id: ID!
   assignmentGroup: AssignmentGroup
   assignmentOverrides(
-    # Returns the elements in the list that come after the specified global ID.
+    # Returns the elements in the list that come after the specified cursor.
     after: String
 
-    # Returns the elements in the list that come before the specified global ID.
+    # Returns the elements in the list that come before the specified cursor.
     before: String
 
     # Returns the first _n_ elements from the list.
@@ -31,13 +31,14 @@ type Assignment implements Node, Timestamped {
   htmlUrl: URL
   id: ID!
   lockAt: DateTime
-  muted: Boolean
+  lockInfo: LockInfo
+  muted: Boolean!
   name: String
   needsGradingCount: Int
 
   # specifies that this assignment is only assigned to students for whom an
   #        `AssignmentOverride` applies.
-  onlyVisibleToOverrides: Boolean
+  onlyVisibleToOverrides: Boolean!
 
   # the assignment is out of this many points
   pointsPossible: Float
@@ -50,10 +51,10 @@ type Assignment implements Node, Timestamped {
 
   # submissions for this assignment
   submissionsConnection(
-    # Returns the elements in the list that come after the specified global ID.
+    # Returns the elements in the list that come after the specified cursor.
     after: String
 
-    # Returns the elements in the list that come before the specified global ID.
+    # Returns the elements in the list that come before the specified cursor.
     before: String
     filter: SubmissionFilter
 
@@ -72,6 +73,9 @@ type AssignmentConnection {
   # A list of edges.
   edges: [AssignmentEdge]
 
+  # A list of nodes.
+  nodes: [Assignment]
+
   # Information to aid in pagination.
   pageInfo: PageInfo!
 }
@@ -86,20 +90,29 @@ type AssignmentEdge {
 }
 
 input AssignmentFilter {
-  #     only return assignments for the given grading period. Defaults to the
-  # current grading period. Pass `null` to not filter by grading period.
+  # only return assignments for the given grading period. Defaults to
+  # the current grading period. Pass `null` to return all assignments
+  # (irrespective of the assignment's grading period)
   gradingPeriodId: ID
 }
 
-type AssignmentGroup implements Node, Timestamped {
+type AssignmentGroup implements AssignmentsConnectionInterface & Node & Timestamped {
   # legacy canvas id
   _id: ID!
+
+  # returns a list of assignments.
+  #
+  # **NOTE**: for courses with grading periods, this will only return grading
+  # periods in the current course; see `AssignmentFilter` for more info.
+  # In courses with grading periods that don't have students, it is necessary
+  # to *not* filter by grading period to list assignments.
   assignmentsConnection(
-    # Returns the elements in the list that come after the specified global ID.
+    # Returns the elements in the list that come after the specified cursor.
     after: String
 
-    # Returns the elements in the list that come before the specified global ID.
+    # Returns the elements in the list that come before the specified cursor.
     before: String
+    filter: AssignmentFilter
 
     # Returns the first _n_ elements from the list.
     first: Int
@@ -121,6 +134,9 @@ type AssignmentGroup implements Node, Timestamped {
 type AssignmentGroupConnection {
   # A list of edges.
   edges: [AssignmentGroupEdge]
+
+  # A list of nodes.
+  nodes: [AssignmentGroup]
 
   # Information to aid in pagination.
   pageInfo: PageInfo!
@@ -150,18 +166,16 @@ enum AssignmentGroupState {
   deleted
 }
 
-input AssignmentInput {
-  courseId: ID!
-  name: String!
-}
-
-type AssignmentOverride implements Timestamped {
+type AssignmentOverride implements Node & Timestamped {
   # legacy canvas id
   _id: ID!
   allDay: Boolean
   assignment: Assignment
   createdAt: DateTime
   dueAt: DateTime
+
+  # ID of the object.
+  id: ID!
   lockAt: DateTime
 
   # This object specifies what students this override applies to
@@ -175,6 +189,9 @@ type AssignmentOverride implements Timestamped {
 type AssignmentOverrideConnection {
   # A list of edges.
   edges: [AssignmentOverrideEdge]
+
+  # A list of nodes.
+  nodes: [AssignmentOverride]
 
   # Information to aid in pagination.
   pageInfo: PageInfo!
@@ -199,14 +216,37 @@ enum AssignmentState {
   unpublished
 }
 
-type Course implements Node, Timestamped {
+interface AssignmentsConnectionInterface {
+  # returns a list of assignments.
+  #
+  # **NOTE**: for courses with grading periods, this will only return grading
+  # periods in the current course; see `AssignmentFilter` for more info.
+  # In courses with grading periods that don't have students, it is necessary
+  # to *not* filter by grading period to list assignments.
+  assignmentsConnection(
+    # Returns the elements in the list that come after the specified cursor.
+    after: String
+
+    # Returns the elements in the list that come before the specified cursor.
+    before: String
+    filter: AssignmentFilter
+
+    # Returns the first _n_ elements from the list.
+    first: Int
+
+    # Returns the last _n_ elements from the list.
+    last: Int
+  ): AssignmentConnection
+}
+
+type Course implements AssignmentsConnectionInterface & Node & Timestamped {
   # legacy canvas id
   _id: ID!
   assignmentGroupsConnection(
-    # Returns the elements in the list that come after the specified global ID.
+    # Returns the elements in the list that come after the specified cursor.
     after: String
 
-    # Returns the elements in the list that come before the specified global ID.
+    # Returns the elements in the list that come before the specified cursor.
     before: String
 
     # Returns the first _n_ elements from the list.
@@ -215,11 +255,18 @@ type Course implements Node, Timestamped {
     # Returns the last _n_ elements from the list.
     last: Int
   ): AssignmentGroupConnection
+
+  # returns a list of assignments.
+  #
+  # **NOTE**: for courses with grading periods, this will only return grading
+  # periods in the current course; see `AssignmentFilter` for more info.
+  # In courses with grading periods that don't have students, it is necessary
+  # to *not* filter by grading period to list assignments.
   assignmentsConnection(
-    # Returns the elements in the list that come after the specified global ID.
+    # Returns the elements in the list that come after the specified cursor.
     after: String
 
-    # Returns the elements in the list that come before the specified global ID.
+    # Returns the elements in the list that come before the specified cursor.
     before: String
     filter: AssignmentFilter
 
@@ -234,10 +281,10 @@ type Course implements Node, Timestamped {
   courseCode: String
   createdAt: DateTime
   gradingPeriodsConnection(
-    # Returns the elements in the list that come after the specified global ID.
+    # Returns the elements in the list that come after the specified cursor.
     after: String
 
-    # Returns the elements in the list that come before the specified global ID.
+    # Returns the elements in the list that come before the specified cursor.
     before: String
 
     # Returns the first _n_ elements from the list.
@@ -247,10 +294,10 @@ type Course implements Node, Timestamped {
     last: Int
   ): GradingPeriodConnection
   groupsConnection(
-    # Returns the elements in the list that come after the specified global ID.
+    # Returns the elements in the list that come after the specified cursor.
     after: String
 
-    # Returns the elements in the list that come before the specified global ID.
+    # Returns the elements in the list that come before the specified cursor.
     before: String
 
     # Returns the first _n_ elements from the list.
@@ -265,10 +312,10 @@ type Course implements Node, Timestamped {
   # returns permission information for the current user in this course
   permissions: CoursePermissions
   sectionsConnection(
-    # Returns the elements in the list that come after the specified global ID.
+    # Returns the elements in the list that come after the specified cursor.
     after: String
 
-    # Returns the elements in the list that come before the specified global ID.
+    # Returns the elements in the list that come before the specified cursor.
     before: String
 
     # Returns the first _n_ elements from the list.
@@ -281,10 +328,10 @@ type Course implements Node, Timestamped {
 
   # all the submissions for assignments in this course
   submissionsConnection(
-    # Returns the elements in the list that come after the specified global ID.
+    # Returns the elements in the list that come after the specified cursor.
     after: String
 
-    # Returns the elements in the list that come before the specified global ID.
+    # Returns the elements in the list that come before the specified cursor.
     before: String
     filter: SubmissionFilter
 
@@ -293,17 +340,17 @@ type Course implements Node, Timestamped {
 
     # Returns the last _n_ elements from the list.
     last: Int
-    orderBy: [SubmissionOrderCriteria]
+    orderBy: [SubmissionOrderCriteria!]
 
     # Only return submissions for the given students.
     studentIds: [ID!]!
   ): SubmissionConnection
   updatedAt: DateTime
   usersConnection(
-    # Returns the elements in the list that come after the specified global ID.
+    # Returns the elements in the list that come after the specified cursor.
     after: String
 
-    # Returns the elements in the list that come before the specified global ID.
+    # Returns the elements in the list that come before the specified cursor.
     before: String
     filter: CourseUsersFilter
 
@@ -339,8 +386,8 @@ type CoursePermissions {
 }
 
 input CourseUsersFilter {
-  #       only return users with the given enrollment state. defaults
-  #       to `invited`, `creation_pending`, `active`
+  # only return users with the given enrollment state. defaults
+  # to `invited`, `creation_pending`, `active`
   enrollmentStates: [CourseFilterableEnrollmentState!]
 
   # only include users with the given ids
@@ -359,7 +406,7 @@ enum CourseWorkflowState {
 # an ISO8601 formatted time string
 scalar DateTime
 
-type Discussion implements Node, Timestamped {
+type Discussion implements Node & Timestamped {
   # legacy canvas id
   _id: ID!
   createdAt: DateTime
@@ -367,7 +414,7 @@ type Discussion implements Node, Timestamped {
   updatedAt: DateTime
 }
 
-type Enrollment implements Node, Timestamped {
+type Enrollment implements Node & Timestamped {
   # legacy canvas id
   _id: ID!
   course: Course
@@ -410,15 +457,17 @@ enum EnrollmentWorkflowState {
 type Grades {
   currentGrade: String
 
-  #     The current score includes all graded assignments
+  # The current score includes all graded assignments
   currentScore: Float
   finalGrade: String
 
-  #     The final score includes all assignments (ungraded assignments are counted as 0 points)
+  # The final score includes all assignments
+  # (ungraded assignments are counted as 0 points)
   finalScore: Float
+  gradingPeriod: GradingPeriod
 }
 
-type GradingPeriod implements Node, Timestamped {
+type GradingPeriod implements Node & Timestamped {
   # legacy canvas id
   _id: ID!
 
@@ -463,15 +512,18 @@ enum GradingType {
   points
 }
 
-type Group implements Timestamped {
+type Group implements Node & Timestamped {
   # legacy canvas id
   _id: ID!
   createdAt: DateTime
+
+  # ID of the object.
+  id: ID!
   membersConnection(
-    # Returns the elements in the list that come after the specified global ID.
+    # Returns the elements in the list that come after the specified cursor.
     after: String
 
-    # Returns the elements in the list that come before the specified global ID.
+    # Returns the elements in the list that come before the specified cursor.
     before: String
 
     # Returns the first _n_ elements from the list.
@@ -488,6 +540,9 @@ type Group implements Timestamped {
 type GroupConnection {
   # A list of edges.
   edges: [GroupEdge]
+
+  # A list of nodes.
+  nodes: [Group]
 
   # Information to aid in pagination.
   pageInfo: PageInfo!
@@ -537,8 +592,26 @@ enum GroupMembershipState {
   requested
 }
 
-type Mutation {
-  createAssignment(assignment: AssignmentInput!): Assignment
+type LockInfo {
+  canView: Boolean
+  isLocked: Boolean
+  lockAt: DateTime
+  lockedObject: Lockable
+  module: Module
+  unlockAt: DateTime
+}
+
+# Types that can be locked
+union Lockable = Assignment | Discussion | Module | Page | Quiz
+
+type Module implements Node & Timestamped {
+  # legacy canvas id
+  _id: ID!
+  createdAt: DateTime
+  id: ID!
+  name: String
+  unlockAt: DateTime
+  updatedAt: DateTime
 }
 
 # An object with an ID.
@@ -549,9 +622,13 @@ interface Node {
 
 enum NodeType {
   Assignment
+  AssignmentGroup
   Course
   Enrollment
   GradingPeriod
+  Group
+  Module
+  Page
   Section
   User
 }
@@ -559,6 +636,15 @@ enum NodeType {
 enum OrderDirection {
   ascending
   descending
+}
+
+type Page implements Node & Timestamped {
+  # legacy canvas id
+  _id: ID!
+  createdAt: DateTime
+  id: ID!
+  title: String
+  updatedAt: DateTime
 }
 
 # Information about pagination in a connection.
@@ -589,7 +675,7 @@ type PageViewAnalysis {
 
 type Query {
   # All courses viewable by the current user
-  allCourses: [Course]
+  allCourses: [Course!]
 
   # Fetches an object given its type and legacy ID
   legacyNode(_id: ID!, type: NodeType!): Node
@@ -601,7 +687,7 @@ type Query {
   ): Node
 }
 
-type Quiz implements Node, Timestamped {
+type Quiz implements Node & Timestamped {
   # legacy canvas id
   _id: ID!
   createdAt: DateTime
@@ -609,7 +695,7 @@ type Quiz implements Node, Timestamped {
   updatedAt: DateTime
 }
 
-type Section implements Node, Timestamped {
+type Section implements Node & Timestamped {
   # legacy canvas id
   _id: ID!
   createdAt: DateTime
@@ -643,7 +729,9 @@ type StudentSummaryAnalytics {
   tardinessBreakdown: TardinessBreakdown
 }
 
-type Submission implements Node, Timestamped {
+type Submission implements Node & Timestamped {
+  # legacy canvas id
+  _id: ID!
   assignment: Assignment
   createdAt: DateTime
 
@@ -663,7 +751,7 @@ type Submission implements Node, Timestamped {
   gradingStatus: String
   id: ID!
   score: Float
-  state: SubmissionState
+  state: SubmissionState!
   submissionStatus: String
   submittedAt: DateTime
   updatedAt: DateTime
@@ -674,6 +762,9 @@ type Submission implements Node, Timestamped {
 type SubmissionConnection {
   # A list of edges.
   edges: [SubmissionEdge]
+
+  # A list of nodes.
+  nodes: [Submission]
 
   # Information to aid in pagination.
   pageInfo: PageInfo!
@@ -742,16 +833,19 @@ interface Timestamped {
 
 scalar URL
 
-type User implements Node, Timestamped {
+type User implements Node & Timestamped {
   # legacy canvas id
   _id: ID!
-  avatarUrl: URL
+  avatarUrl(
+    # return a generic image if the user has no custom avatar image
+    useFallback: Boolean = true
+  ): URL
   createdAt: DateTime
   email: String
   enrollments(
     # only return enrollments for this course
     courseId: ID
-  ): [Enrollment]!
+  ): [Enrollment!]!
   id: ID!
   name: String
 
@@ -771,6 +865,9 @@ type User implements Node, Timestamped {
 type UserConnection {
   # A list of edges.
   edges: [UserEdge]
+
+  # A list of nodes.
+  nodes: [User]
 
   # Information to aid in pagination.
   pageInfo: PageInfo!

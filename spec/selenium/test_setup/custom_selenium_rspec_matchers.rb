@@ -243,6 +243,54 @@ RSpec::Matchers.define :contain_link do |text|
   end
 end
 
+# assert the presence (or absence) of a link with certain partial text inside the
+# element. will return as soon as the expectation is met, e.g.
+#
+# given <a href="...">Click Here/a>
+#   expect(f('#weird-ui')).to contain_link_partial_text("Here")
+#   f('#hide-things').click
+#   expect(f('#weird-ui')).not_to contain_link_partial_text("Here")
+#
+RSpec::Matchers.define :contain_link_partial_text do |text|
+  match do |element|
+    begin
+      # rely on implicit_wait
+      flnpt(text, element)
+      true
+    rescue Selenium::WebDriver::Error::NoSuchElementError
+      false
+    end
+  end
+
+  match_when_negated do |element|
+    wait_for_no_such_element(method: :contain_link) { flnpt(text, element) }
+  end
+end
+
+# assert whether or not an element meets the desired contrast ratio.
+# will wait up to TIMEOUTS[:finder] seconds
+require_relative '../helpers/color_common'
+RSpec::Matchers.define :meet_contrast_ratio do |ratio = 3.5|
+  match do |element|
+    wait_for(method: :be_displayed) do
+      LuminosityContrast.ratio(
+        ColorCommon.rgba_to_hex(element.style('background-color')),
+        ColorCommon.rgba_to_hex(element.style('color'))
+      ) >= ratio
+    end
+  end
+
+  match_when_negated do |element|
+    wait_for(method: :be_displayed) do
+      LuminosityContrast.ratio(
+        ColorCommon.rgba_to_hex(element.style('background-color')),
+        ColorCommon.rgba_to_hex(element.style('color'))
+      ) < ratio
+    end
+  end
+end
+
+
 # assert whether or not an element is displayed. will wait up to
 # TIMEOUTS[:finder] seconds
 RSpec::Matchers.define :be_displayed do

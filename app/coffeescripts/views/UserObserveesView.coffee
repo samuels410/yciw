@@ -19,11 +19,11 @@ define [
   'jquery'
   'underscore'
   'i18n!observees'
-  'jst/UserObservees'
+  'jst/PairingCodeUserObservees'
   'jst/ExternalAuthUserObservees'
   './UserObserveeView'
   './PaginatedCollectionView'
-], ($, _, I18n, template, extAuthTemplate, itemView, PaginatedCollectionView) ->
+], ($, _, I18n, pairingCodeTemplate, extAuthTemplate, itemView, PaginatedCollectionView) ->
 
   class UserObserveesView extends PaginatedCollectionView
     autoFetch: true
@@ -34,7 +34,7 @@ define [
       if ENV.AUTH_TYPE == 'saml'
         extAuthTemplate
       else
-        template
+        pairingCodeTemplate
 
     events:
       'submit .add-observee-form': 'addObservee'
@@ -51,8 +51,8 @@ define [
 
     addObservee: (ev) ->
       ev.preventDefault()
-      observee = @$form.getFormData()
-      d = $.post(@collection.url(), {observee: observee})
+      data = @$form.getFormData()
+      d = $.post(@collection.url(), data)
 
       d.done (model) =>
         if model.redirect

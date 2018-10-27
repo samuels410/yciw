@@ -42,13 +42,12 @@ module ActiveSupport::Cache
 
   unless CANVAS_RAILS5_1
     module AllowMocksInStore
-      def should_compress?(*args)
+      def compress!(*args)
         if @value && Rails.env.test?
           begin
-            marshaled_value
-            true
+            super
           rescue TypeError => e
-            false
+            return
           end
         else
           super
@@ -105,3 +104,13 @@ module RaiseErrorOnDurationCoercion
   end
 end
 ActiveSupport::Duration.prepend(RaiseErrorOnDurationCoercion)
+
+module Enumerable
+  def pluck(*keys)
+    if keys.many?
+      map { |o| keys.map { |key| o.is_a?(ActiveRecord::Base) ? o.send(key) : o[key] } }
+    else
+      map { |o| o.is_a?(ActiveRecord::Base) ? o.send(keys.first) : o[keys.first] }
+    end
+  end
+end

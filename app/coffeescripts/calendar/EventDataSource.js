@@ -17,7 +17,7 @@
  */
 
 import $ from 'jquery'
-import _ from 'underscore'
+import _ from 'lodash'
 import fcUtil from '../util/fcUtil'
 import commonEventFactory from '../calendar/commonEventFactory'
 import 'jquery.ajaxJSON'
@@ -402,9 +402,12 @@ export default class EventDataSource {
       if (!data) return
 
       const newEvents = []
-      // planner_notes are passing thru here too now
+      // planner_items and planner_notes are passing thru here too now
       // detect and add some missing fields the calendar code needs
-      if (data.length && 'todo_date' in data[0]) {
+      if (data.length && 'plannable' in data[0]) {
+        data = this.transformPlannerItems(data)
+        key = 'type_planner_item'
+      } else if (data.length && 'todo_date' in data[0]) {
         data = this.fillOutPlannerNotes(data, url)
         key = 'type_planner_note'
       } else {
@@ -488,11 +491,25 @@ export default class EventDataSource {
       return donecb(list)
     }
     const eventDataSources = [
-      ['/api/v1/calendar_events', this.indexParams(params)],
-      ['/api/v1/calendar_events', this.assignmentParams(params)]
+      ['/api/v1/calendar_events', this.indexParams(params)]
     ]
+    params.context_codes = params.context_codes.filter(context => !context.match(/^appointment_group_/))
+    eventDataSources.push(['/api/v1/calendar_events', this.assignmentParams(params)])
     if (ENV.STUDENT_PLANNER_ENABLED) {
       eventDataSources.push(['/api/v1/planner_notes', params])
+    }
+    if (ENV.PLANNER_ENABLED) {
+      const [admin_contexts, student_contexts] = _.partition(params.context_codes, (cc) => (
+        ENV.CALENDAR.MANAGE_CONTEXTS.indexOf(cc) >= 0
+      ))
+      if (student_contexts.length) {
+        const pparams = _.extend({filter: 'ungraded_todo_items'}, params, {context_codes: student_contexts})
+        eventDataSources.push(['/api/v1/planner/items', pparams])
+      }
+      if (admin_contexts.length) {
+        const pparams = _.extend({filter: 'all_ungraded_todo_items'}, params, {context_codes: admin_contexts})
+        eventDataSources.push(['/api/v1/planner/items', pparams])
+      }
     }
     return this.startFetch(eventDataSources, dataCB, doneCB, options)
   }
@@ -519,9 +536,7 @@ export default class EventDataSource {
   }
 
   assignmentParams(params) {
-    const p = {type: 'assignment', ...params}
-    p.context_codes = p.context_codes.filter(context => !context.match(/^appointment_group_/))
-    return p
+    return {type: 'assignment', ...params}
   }
 
   getParticipants(appointmentGroup, registrationStatus, cb) {
@@ -641,5 +656,23 @@ export default class EventDataSource {
       note.all_context_codes = note.context_code
     })
     return notes
+  }
+
+  // make planner items readable as calendar events
+  transformPlannerItems(items) {
+    items.forEach(item => {
+      /* eslint-disable no-param-reassign */
+      item.type = 'todo_item'
+      if (item.course_id) {
+        item.context_code = `course_${item.course_id}`
+      } else if (item.group_id) {
+        item.context_code = `group_${item.group_id}`
+      } else {
+        item.context_code = `user_${item.user_id}`
+      }
+      item.all_context_codes = item.context_code
+      /* eslint-enable no-param-reassign */
+    })
+    return items
   }
 }

@@ -27,16 +27,19 @@ class Login::SamlController < ApplicationController
 
   def new
     increment_saml_stat("login_attempt")
-    session[:saml2_processing] = true if params[:saml2_processing]
+    session[:saml2_processing] = false if Canvas::Plugin.value_to_boolean(params[:saml2_processing], ignore_unrecognized: true) == false
     redirect_to delegated_auth_redirect_uri(aac.generate_authn_request_redirect(host: request.host_with_port,
-                                                                                parent_registration: session[:parent_registration]))
+                                                                                parent_registration: session[:parent_registration],
+                                                                                relay_state: Rails.env.development? && params[:RelayState]))
   end
 
   def create
     login_error_message = t("There was a problem logging in at %{institution}",
                             institution: @domain_root_account.display_name)
 
-    saml2_processing = session[:saml2_processing] || @domain_root_account.settings[:process_saml_responses_with_saml2]
+    saml2_processing = true
+    saml2_processing = false if session[:saml2_processing] == false
+    saml2_processing = false if @domain_root_account.settings[:process_saml_responses_with_saml2] == false
 
     legacy_response = Onelogin::Saml::Response.new(params[:SAMLResponse])
     response, relay_state = SAML2::Bindings::HTTP_POST.decode(request.request_parameters)
@@ -66,36 +69,28 @@ class Login::SamlController < ApplicationController
 
     aac.sp_metadata(request.host_with_port).valid_response?(response,
                                                             aac.idp_metadata,
-                                                            allow_expired_certificate: @domain_root_account.settings[:allow_expired_saml_certificate])
+                                                            ignore_audience_condition: aac.settings['ignore_audience_condition'])
     legacy_response.process(settings) unless saml2_processing
-
-    if debugging
-      aac.debug_set(:debugging, t('debug.redirect_from_idp', "Received LoginResponse from IdP"))
-      aac.debug_set(:idp_response_encoded, params[:SAMLResponse])
-      aac.debug_set(:idp_response_xml_encrypted, encrypted_xml)
-      aac.debug_set(:idp_response_xml_decrypted, response.to_s)
-      aac.debug_set(:idp_in_response_to, response.in_response_to)
-      aac.debug_set(:idp_login_destination, response.destination)
-      aac.debug_set(:login_to_canvas_success, 'false')
-    end
 
     if debugging
       aac.debug_set(:debugging, t('debug.redirect_from_idp', "Received LoginResponse from IdP"))
       aac.debug_set(:idp_response_encoded, params[:SAMLResponse])
       aac.debug_set(:idp_response_xml_encrypted, saml2_processing ? encrypted_xml : legacy_response.xml)
       aac.debug_set(:idp_response_xml_decrypted, saml2_processing ? response.to_s : legacy_response.decrypted_document.to_s)
-      aac.debug_set(:idp_in_response_to, saml2_processing ? response.is_a?(Response) && response.in_response_to : legacy_response.in_response_to)
+      aac.debug_set(:idp_in_response_to, saml2_processing ? response.try(:in_response_to) : legacy_response.in_response_to)
       aac.debug_set(:idp_login_destination, saml2_processing ? response.destination : legacy_response.destination)
       aac.debug_set(:login_to_canvas_success, 'false')
-      if saml2_processing
-        aac.debug_set(:response_validation_result, response.errors)
-      else
+      unless saml2_processing
         aac.debug_set(:fingerprint_from_idp, legacy_response.fingerprint_from_idp)
       end
     end
 
     if !saml2_processing && legacy_response.is_valid? && !response.errors.empty?
-      logger.warn("Response valid via legacy SAML processing, but invalid according to SAML2 processing: #{response.errors.join("\n")}")
+      logger.warn("Response valid via legacy SAML processing from #{legacy_response.issuer}, but invalid according to SAML2 processing: #{response.errors.join("\n")}")
+      unless aac.settings['first_saml_error']
+        aac.settings['first_saml_error'] = response.errors.join("\n")
+        aac.save!
+      end
     end
 
     if saml2_processing
@@ -103,10 +98,11 @@ class Login::SamlController < ApplicationController
       # and it's easier to not interweave them so the legacy code can be easily stripped
       # in the future
       assertion = response.assertions.first
-      provider_attributes = assertion.attribute_statements.first&.to_h
-      subject_name_id = assertion.subject.name_id
+      # yes, they could be _that_ busted that we put a dangling rescue here.
+      provider_attributes = assertion&.attribute_statements&.first&.to_h || {} rescue {}
+      subject_name_id = assertion&.subject&.name_id
       unique_id = if aac.login_attribute == 'NameID'
-        subject_name_id.id
+        subject_name_id&.id
       else
         provider_attributes[aac.login_attribute]
       end
@@ -120,9 +116,9 @@ class Login::SamlController < ApplicationController
         increment_saml_stat("errors.invalid_response")
         if debugging
           aac.debug_set(:is_valid_login_response, 'false')
-          aac.debug_set(:login_response_validation_error, legacy_response.validation_error)
+          aac.debug_set(:login_response_validation_error, response.errors.join("\n"))
         end
-        logger.error "Failed to verify SAML signature: #{legacy_response.validation_error}"
+        logger.error "Failed to verify SAML signature: #{response.errors.join("\n")}"
         flash[:delegated_message] = login_error_message
         return redirect_to login_url
       end
@@ -161,14 +157,32 @@ class Login::SamlController < ApplicationController
         increment_saml_stat("normal.login_success")
 
         session[:saml_unique_id] = unique_id
-        session[:name_id] = subject_name_id.id
-        session[:name_identifier_format] = subject_name_id.format
-        session[:name_qualifier] = subject_name_id.name_qualifier
-        session[:sp_name_qualifier] = subject_name_id.sp_name_qualifier
+        session[:name_id] = subject_name_id&.id
+        session[:name_identifier_format] = subject_name_id&.format
+        session[:name_qualifier] = subject_name_id&.name_qualifier
+        session[:sp_name_qualifier] = subject_name_id&.sp_name_qualifier
         session[:session_index] = assertion.authn_statements.first&.session_index
-        session[:return_to] = relay_state if relay_state&.match(/\A\/(\z|[^\/])/)
         session[:login_aac] = aac.id
 
+        if relay_state.present? && (uri = URI.parse(relay_state) rescue nil)
+          if uri.absolute?
+            # allow relay_state's to other (trusted) domains, by tacking on a session token
+            target_account = Account.find_by_domain(uri.host)
+            if target_account &&
+              target_account != @domain_root_account &&
+              pseudonym.works_for_account?(target_account, true)
+              token = SessionToken.new(pseudonym.global_id,
+                                       current_user_id: pseudonym.global_user_id).to_s
+              uri.query.concat('&') if uri.query
+              uri.query ||= ''
+              uri.query.concat("session_token=#{token}")
+              session[:return_to] = uri.to_s
+            end
+          else
+            # otherwise, relative URIs are okay
+            session[:return_to] = relay_state
+          end
+        end
         successful_login(user, pseudonym)
       else
         unknown_user_url = @domain_root_account.unknown_user_url.presence || login_url

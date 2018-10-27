@@ -196,7 +196,7 @@ describe ContentMigration do
       attrs = [:turnitin_enabled, :vericite_enabled, :turnitin_settings, :peer_reviews,
           :automatic_peer_reviews, :anonymous_peer_reviews,
           :grade_group_students_individually, :allowed_extensions,
-          :position, :peer_review_count, :muted, :omit_from_final_grade, :post_to_sis]
+          :position, :peer_review_count, :omit_from_final_grade, :post_to_sis]
 
       run_course_copy
 
@@ -208,6 +208,7 @@ describe ContentMigration do
           expect(@assignment[attr]).to eq new_assignment[attr]
         end
       end
+      expect(new_assignment.muted).to be_falsey
       expect(new_assignment.only_visible_to_overrides).to be_falsey
     end
 
@@ -240,14 +241,6 @@ describe ContentMigration do
       new_assignment = @copy_to.assignments.where(migration_id: mig_id(@assignment)).first
       expect(new_assignment).to be_has_group_category
       expect(new_assignment.group_category.name).to eq "Project Groups"
-    end
-
-    it "should copy moderated_grading setting" do
-      assignment_model(:course => @copy_from, :points_possible => 40,
-                       :submission_types => 'file_upload', :grading_type => 'points', :moderated_grading => true)
-      run_course_copy
-      new_assignment = @copy_to.assignments.where(migration_id: mig_id(@assignment)).first
-      expect(new_assignment).to be_moderated_grading
     end
 
     it "should not copy peer_reviews_assigned" do

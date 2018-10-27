@@ -186,11 +186,6 @@ describe DiscussionTopicsController, type: :request do
     @user = user
   end
 
-  # need for user_display_json
-  def blank_fallback
-    nil
-  end
-
   describe "user_display_json" do
     it "should return a html_url based on parent_context" do
       expect(user_display_json(@user)[:html_url]).to eq "http://www.example.com/users/#{@user.id}"
@@ -382,6 +377,7 @@ describe DiscussionTopicsController, type: :request do
                           "url" => "http://www.example.com/files/#{@attachment.id}/download?download_frd=1&verifier=#{@attachment.uuid}",
                           "filename" => "content.txt",
                           "display_name" => "content.txt",
+                          "workflow_state" => "processed",
                           "id" => @attachment.id,
                           "uuid" => @attachment.uuid,
                           "folder_id" => @attachment.folder_id,
@@ -789,7 +785,6 @@ describe DiscussionTopicsController, type: :request do
       end
 
       it "should include sections if the discussion is section specific and they are asked for" do
-        @course.root_account.enable_feature!(:section_specific_discussions)
         section = @course.course_sections.create!
         @topic.is_section_specific = true
         @topic.discussion_topic_section_visibilities << DiscussionTopicSectionVisibility.new(
@@ -808,7 +803,6 @@ describe DiscussionTopicsController, type: :request do
       end
 
       it "should include section user accounts if they are asked for" do
-        @course.root_account.enable_feature!(:section_specific_discussions)
         section = @course.course_sections.create!
         @topic.is_section_specific = true
         @topic.discussion_topic_section_visibilities << DiscussionTopicSectionVisibility.new(
@@ -862,7 +856,6 @@ describe DiscussionTopicsController, type: :request do
       it "should return section count if section specific" do
         post_at = 1.month.from_now
         lock_at = 2.months.from_now
-        @course.root_account.enable_feature!(:section_specific_discussions)
         discussion_topic_model(:context => @course, :title => "Section Specific Topic", :user => @teacher)
         section1 = @course.course_sections.create!
         @course.course_sections.create! # just to make sure we only copy the right one
@@ -1509,6 +1502,7 @@ describe DiscussionTopicsController, type: :request do
           "url" => "http://www.example.com/files/#{attachment.id}/download?download_frd=1&verifier=#{attachment.uuid}",
           "filename" => "content.txt",
           "display_name" => "content.txt",
+          "workflow_state" => "processed",
           "id" => attachment.id,
           "uuid" => attachment.uuid,
           "folder_id" => attachment.folder_id,
@@ -2587,6 +2581,7 @@ describe DiscussionTopicsController, type: :request do
         "url" => "http://www.example.com/files/#{@attachment.id}/download?download_frd=1&verifier=#{@attachment.uuid}",
         "filename" => "unknown.loser",
         "display_name" => "unknown.loser",
+        "workflow_state" => "pending_upload",
         "id" => @attachment.id,
         "uuid" => @attachment.uuid,
         "folder_id" => @attachment.folder_id,
@@ -2862,6 +2857,7 @@ describe DiscussionTopicsController, type: :request do
   describe "duplicate" do
     before :once do
       course_with_teacher(:active_all => true)
+      @student = User.create!(:name => "foo", :short_name => "fo")
       student_in_course(:course => @course, :active_all => true)
       group_discussion_topic_model()
     end
@@ -2951,7 +2947,6 @@ describe DiscussionTopicsController, type: :request do
 
     it "duplicate carries sections over" do
       @user = @teacher
-      @course.root_account.enable_feature!(:section_specific_discussions)
       discussion_topic_model(:context => @course, :title => "Section Specific Topic", :user => @teacher)
       section1 = @course.course_sections.create!
       @course.course_sections.create! # just to make sure we only copy the right one
@@ -2974,6 +2969,48 @@ describe DiscussionTopicsController, type: :request do
       expect(json["title"]).to eq "Section Specific Topic Copy"
       expect(json["sections"].length).to eq 1
       expect(json["sections"][0]["id"]).to eq section1.id
+    end
+
+    it "duplicate publishes group context discussions if its a student duplicating" do
+      @user = @student
+      group_category = @course.group_categories.create!(:name => 'group category')
+      @course.enroll_student(@student, :active_all => true)
+      group = group_category.groups.create!(:name => "group", :context => @course)
+      group.add_user(@student)
+      topic = group.discussion_topics.create!(:title => "student topic", :user => @student,
+        :workflow_state => "active", :message => "hello")
+      json = api_call(:post, "/api/v1/groups/#{group.id}/discussion_topics/#{topic.id}/duplicate",
+        { :controller => "discussion_topics_api",
+          :action => "duplicate",
+          :format => "json",
+          :group_id => group.to_param,
+          :topic_id => topic.to_param },
+        {},
+        {},
+        :expected_status => 200)
+      duplicated_topic = DiscussionTopic.last
+      expect(duplicated_topic.published?).to be_truthy
+      expect(json["published"]).to be_truthy
+    end
+
+    it "duplicate does not publish group context discussions if its a teacher duplicating" do
+      @user = @teacher
+      group_category = @course.group_categories.create!(:name => 'group category')
+      group = group_category.groups.create!(:name => "group", :context => @course)
+      topic = group.discussion_topics.create!(:title => "teacher topic", :user => @teacher,
+        :workflow_state => "active", :message => "hello")
+      json = api_call(:post, "/api/v1/groups/#{group.id}/discussion_topics/#{topic.id}/duplicate",
+        { :controller => "discussion_topics_api",
+          :action => "duplicate",
+          :format => "json",
+          :group_id => group.to_param,
+          :topic_id => topic.to_param },
+        {},
+        {},
+        :expected_status => 200)
+      duplicated_topic = DiscussionTopic.last
+      expect(duplicated_topic.published?).to be_falsey
+      expect(json["published"]).to be_falsey
     end
 
     it "duplicate updates positions" do

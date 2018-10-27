@@ -77,7 +77,7 @@
     overflow-y: auto;
     position: relative;
     border: none;
-    border-radius: 0px 0px 5px 0px;
+    border-radius: 0px 0px 5px;
     background-color: $ic-color-light;
     .learning_outcome {
       label.span3 {
@@ -92,7 +92,7 @@
     }
     label {
       display: block;
-      padding: 5px 0 5px 0;
+      padding: 5px 0;
     }
     .outcome-calculation-method-form {
       .grid-row {
@@ -233,22 +233,23 @@ table.criterion td {
   }
 }
 
-.rating-wrap {
-  position: relative;
-}
-
-h5, .h5 {
+.criterion h3, .criterion .h3, .criterion h5, .criterion .h5 {
   margin-top: 0;
   margin-bottom: 10px;
   color: var(--ic-link-color);
   font-weight: normal;
   min-height: 1em;
+  font-size: 1rem;
   &.total {
     font-weight: bold;
     @if $use_high_contrast {
       color: $ic-font-color-dark;
     }
   }
+}
+
+.rating-wrap {
+  position: relative;
 }
 
 table.criterion .edit {
@@ -324,7 +325,7 @@ table.criterion .insert {
 }
 
 .no-outcomes-warning {
-  margin: 10px 40px 10px 40px;
+  margin: 10px 40px;
 }
 
 .outcomes_narrow_text_input {

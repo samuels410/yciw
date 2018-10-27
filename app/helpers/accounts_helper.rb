@@ -39,6 +39,7 @@ module AccountsHelper
 
   def turnitin_originality_options
     [
+      [I18n.t('Use parent account setting'), nil],
       [I18n.t('#turnitin_settings.originality_report_visible_immediately', "Immediately"), 'immediate'],
       [I18n.t('#turnitin_settings.originality_report_visible_after_grading', "After the assignment is graded"), 'after_grading'],
       [I18n.t('#turnitin_settings.originality_report_visible_after_due_date', "After the Due Date"), 'after_due_date'],
@@ -50,6 +51,6 @@ module AccountsHelper
     [
       [I18n.t('Card View'), 'cards'],
       [I18n.t('Recent Activity'), 'activity'],
-    ].tap { |opts| opts << [I18n.t('List View'), 'planner'] if account.feature_enabled?(:student_planner)}
+    ].tap { |opts| opts << [I18n.t('List View'), 'planner'] if account.root_account.feature_enabled?(:student_planner)}
   end
 end

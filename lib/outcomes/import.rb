@@ -83,8 +83,9 @@ module Outcomes
       model = find_prior_group(group)
       unless model.context == context
         raise InvalidDataError, I18n.t(
-          'Group "%{guid}" exists in incorrect context',
-          guid: group[:vendor_guid]
+          'Group with ID %{guid} already exists in another unrelated course or account (%{name})',
+          guid: group[:vendor_guid],
+          name: model.context.name
         )
       end
       if model.outcome_import_id == outcome_import_id
@@ -115,8 +116,9 @@ module Outcomes
       model.context = context if model.new_record?
       unless context_visible?(model.context)
         raise InvalidDataError, I18n.t(
-          'Outcome "%{guid}" not in visible context',
-          guid: outcome[:vendor_guid]
+          'Outcome with ID %{guid} already exists in another unrelated course or account (%{name})',
+          guid: outcome[:vendor_guid],
+          name: model.context.name
         )
       end
       if model.outcome_import_id == outcome_import_id
@@ -130,7 +132,7 @@ module Outcomes
       model.title = outcome[:title]
       model.description = infer_nil_value(model, :description, outcome)
       model.display_name = infer_nil_value(model, :display_name, outcome)
-      model.calculation_method = outcome[:calculation_method]
+      model.calculation_method = outcome[:calculation_method].presence || 'highest'
       model.calculation_int = outcome[:calculation_int]
       # let removing the outcome_links content tags delete the underlying outcome
       model.workflow_state = 'active' if outcome[:workflow_state] == 'active'

@@ -52,48 +52,48 @@ QUnit.module('GraderCountNumberInput', hooks => {
   test('initializes grader count to currentGraderCount', () => {
     props.currentGraderCount = 6
     mountComponent()
-    strictEqual(numberInput().node.value, '6')
+    strictEqual(numberInput().instance().value, '6')
   })
 
   test('initializes count to 2 if currentGraderCount is not present and maxGraderCount is > 1', () => {
     mountComponent()
-    strictEqual(numberInput().node.value, '2')
+    strictEqual(numberInput().instance().value, '2')
   })
 
   test('initializes count to maxGraderCount if currentGraderCount is not present and maxGraderCount is < 2', () => {
     props.maxGraderCount = 1
     mountComponent()
-    strictEqual(numberInput().node.value, '1')
+    strictEqual(numberInput().instance().value, '1')
   })
 
   test('accepts the entered value if it is a positive, whole number', () => {
     mountComponent()
     numberInput().simulate('change', { target: { value: '5' } })
-    strictEqual(numberInput().node.value, '5')
+    strictEqual(numberInput().instance().value, '5')
   })
 
   test('accepts the entered value if it is the empty string', () => {
     mountComponent()
     numberInput().simulate('change', { target: { value: '' } })
-    strictEqual(numberInput().node.value, '')
+    strictEqual(numberInput().instance().value, '')
   })
 
   test('ignores the negative sign if a negative number is entered', () => {
     mountComponent()
     numberInput().simulate('change', { target: { value: '-5' } })
-    strictEqual(numberInput().node.value, '5')
+    strictEqual(numberInput().instance().value, '5')
   })
 
   test('ignores the numbers after the decimal if a fractional number is entered', () => {
     mountComponent()
     numberInput().simulate('change', { target: { value: '5.8' } })
-    strictEqual(numberInput().node.value, '5')
+    strictEqual(numberInput().instance().value, '5')
   })
 
   test('ignores the input alltogether if the value entered is not numeric', () => {
     mountComponent()
     numberInput().simulate('change', { target: { value: 'a' } })
-    strictEqual(numberInput().node.value, '2')
+    strictEqual(numberInput().instance().value, '2')
   })
 
   test('shows an error message if the grader count is 0', () => {
@@ -108,10 +108,17 @@ QUnit.module('GraderCountNumberInput', hooks => {
     ok(numberInputContainer().text().includes('There are currently 10 available graders'))
   })
 
+  test('shows a message with correct grammar if the grader count is > the max and the max is 1', () => {
+    props.maxGraderCount = 1
+    mountComponent()
+    numberInput().simulate('change', { target: { value: '2' } })
+    ok(numberInputContainer().text().includes('There is currently 1 available grader'))
+  })
+
   test('shows an error message on blur if the grader count is the empty string', () => {
     mountComponent()
-    numberInput().simulate('change', { target: { value: '' } })
-    numberInput().simulate('blur')
+    numberInput().simulate('change', {target: {value: '' }})
+    numberInput().simulate('blur', {type: 'blur', target: {value: ''}})
     ok(numberInputContainer().text().includes('Must have at least 1 grader'))
   })
 

@@ -38,21 +38,15 @@ describe Login::SamlController do
 
     allow(Onelogin::Saml::Response).to receive(:new).and_return(
       double('response',
-           is_valid?: true,
-           success_status?: true,
-           name_id: unique_id,
-           name_identifier_format: nil,
-           name_qualifier: nil,
-           sp_name_qualifier: nil,
-           session_index: nil,
-           process: nil,
            issuer: "saml_entity",
-           saml_attributes: {},
-           used_key: nil
           )
     )
+    response = SAML2::Response.new
+    response.assertions << (assertion = SAML2::Assertion.new)
+    assertion.subject = SAML2::Subject.new
+    assertion.subject.name_id = SAML2::NameID.new(unique_id)
     allow(SAML2::Bindings::HTTP_POST).to receive(:decode).and_return(
-      [double('response2', errors: []), nil]
+      [response, nil]
     )
     allow_any_instance_of(SAML2::Entity).to receive(:valid_response?)
 
@@ -118,22 +112,14 @@ describe Login::SamlController do
     account = account_with_saml
 
     allow(Onelogin::Saml::Response).to receive(:new).and_return(
-      double('response',
-           is_valid?: true,
-           success_status?: true,
-           name_id: unique_id,
-           name_identifier_format: nil,
-           name_qualifier: nil,
-           sp_name_qualifier: nil,
-           session_index: nil,
-           process: nil,
-           issuer: "saml_entity",
-           saml_attributes: {},
-           used_key: nil
-          )
+      double('response', issuer: "saml_entity")
     )
+    response = SAML2::Response.new
+    response.assertions << (assertion = SAML2::Assertion.new)
+    assertion.subject = SAML2::Subject.new
+    assertion.subject.name_id = SAML2::NameID.new(unique_id)
     allow(SAML2::Bindings::HTTP_POST).to receive(:decode).and_return(
-      [double('response2', errors: []), nil]
+      [response, nil]
     )
     allow_any_instance_of(SAML2::Entity).to receive(:valid_response?)
 
@@ -175,21 +161,15 @@ describe Login::SamlController do
     ap.save!
 
     allow(Onelogin::Saml::Response).to receive(:new).and_return(
-      double('response',
-           is_valid?: true,
-           success_status?: true,
-           name_id: unique_id,
-           name_identifier_format: nil,
-           name_qualifier: nil,
-           sp_name_qualifier: nil,
-           session_index: nil,
-           process: nil,
-           issuer: "saml_entity",
-           saml_attributes: { 'eduPersonNickname' => 'Cody Cutrer' },
-           used_key: nil
-          ))
+      double('response', issuer: "saml_entity")
+    )
+    response = SAML2::Response.new
+    response.assertions << (assertion = SAML2::Assertion.new)
+    assertion.subject = SAML2::Subject.new
+    assertion.subject.name_id = SAML2::NameID.new(unique_id)
+    assertion.statements << SAML2::AttributeStatement.new([SAML2::Attribute.create('eduPersonNickname', "Cody Cutrer")])
     allow(SAML2::Bindings::HTTP_POST).to receive(:decode).and_return(
-      [double('response2', errors: []), nil]
+      [response, nil]
     )
     allow_any_instance_of(SAML2::Entity).to receive(:valid_response?)
 
@@ -215,21 +195,15 @@ describe Login::SamlController do
     ap.save!
 
     allow(Onelogin::Saml::Response).to receive(:new).and_return(
-      double('response',
-           is_valid?: true,
-           success_status?: true,
-           name_id: @pseudonym.unique_id,
-           name_identifier_format: nil,
-           name_qualifier: nil,
-           sp_name_qualifier: nil,
-           session_index: nil,
-           process: nil,
-           issuer: "saml_entity",
-           saml_attributes: { 'eduPersonNickname' => 'Cody Cutrer' },
-           used_key: nil)
+      double('response', issuer: "saml_entity")
     )
+    response = SAML2::Response.new
+    response.assertions << (assertion = SAML2::Assertion.new)
+    assertion.subject = SAML2::Subject.new
+    assertion.subject.name_id = SAML2::NameID.new(@pseudonym.unique_id)
+    assertion.statements << SAML2::AttributeStatement.new([SAML2::Attribute.create('eduPersonNickname', "Cody Cutrer")])
     allow(SAML2::Bindings::HTTP_POST).to receive(:decode).and_return(
-      [double('response2', errors: []), nil]
+      [response, nil]
     )
     allow_any_instance_of(SAML2::Entity).to receive(:valid_response?)
     allow(LoadAccount).to receive(:default_domain_root_account).and_return(account)
@@ -251,22 +225,14 @@ describe Login::SamlController do
     @pseudonym.save!
 
     allow(Onelogin::Saml::Response).to receive(:new).and_return(
-        double('response',
-             is_valid?: true,
-             success_status?: true,
-             name_id: unique_id,
-             name_identifier_format: nil,
-             name_qualifier: nil,
-             sp_name_qualifier: nil,
-             session_index: nil,
-             process: nil,
-             issuer: "saml_entity",
-             saml_attributes: {},
-             used_key: nil
-        )
+      double('response', issuer: "saml_entity" )
     )
+    saml_response = SAML2::Response.new
+    saml_response.assertions << (assertion = SAML2::Assertion.new)
+    assertion.subject = SAML2::Subject.new
+    assertion.subject.name_id = SAML2::NameID.new(unique_id)
     allow(SAML2::Bindings::HTTP_POST).to receive(:decode).and_return(
-      [double('response2', errors: []), nil]
+      [saml_response, nil]
     )
     allow_any_instance_of(SAML2::Entity).to receive(:valid_response?)
 
@@ -275,6 +241,83 @@ describe Login::SamlController do
     post :create, params: {:SAMLResponse => "foo"}
     expect(response).to be_redirect
     expect(response.location).to match(/example.com\/logout/)
+  end
+
+  it "appends a session token if we're redirecting to a trusted account" do
+    account = account_with_saml
+    user_with_pseudonym(active_all: 1, account: account)
+
+    allow(Onelogin::Saml::Response).to receive(:new).and_return(
+      double('response', issuer: "saml_entity")
+    )
+    saml_response = SAML2::Response.new
+    saml_response.assertions << (assertion = SAML2::Assertion.new)
+    assertion.subject = SAML2::Subject.new
+    assertion.subject.name_id = SAML2::NameID.new(@pseudonym.unique_id)
+    assertion.statements << SAML2::AttributeStatement.new([SAML2::Attribute.create('eduPersonNickname', "Cody Cutrer")])
+    allow(SAML2::Bindings::HTTP_POST).to receive(:decode).and_return(
+      [saml_response, "https://otheraccount/courses/1"]
+    )
+    allow_any_instance_of(SAML2::Entity).to receive(:valid_response?)
+    allow(LoadAccount).to receive(:default_domain_root_account).and_return(account)
+
+    account2 = double()
+    expect(Account).to receive(:find_by_domain).and_return(account2)
+    expect_any_instantiation_of(@pseudonym).to receive(:works_for_account?).with(account2, true).and_return(true)
+
+    post :create, params: {:SAMLResponse => "foo", :RelayState => "https://otheraccount/courses/1"}
+    expect(response).to be_redirect
+    expect(response.location).to match(%r{^https://otheraccount/courses/1\?session_token=})
+  end
+
+  it "ignores empty string relay state" do
+    account = account_with_saml
+    user_with_pseudonym(active_all: 1, account: account)
+
+    allow(Onelogin::Saml::Response).to receive(:new).and_return(
+      double('response', issuer: "saml_entity")
+    )
+    saml_response = SAML2::Response.new
+    saml_response.assertions << (assertion = SAML2::Assertion.new)
+    assertion.subject = SAML2::Subject.new
+    assertion.subject.name_id = SAML2::NameID.new(@pseudonym.unique_id)
+    assertion.statements << SAML2::AttributeStatement.new([SAML2::Attribute.create('eduPersonNickname', "Cody Cutrer")])
+    allow(SAML2::Bindings::HTTP_POST).to receive(:decode).and_return(
+      [saml_response, ""]
+    )
+    allow_any_instance_of(SAML2::Entity).to receive(:valid_response?)
+    allow(LoadAccount).to receive(:default_domain_root_account).and_return(account)
+
+    session[:return_to] = '/courses/1'
+    post :create, params: {:SAMLResponse => "foo", :RelayState => ""}
+    expect(response).to be_redirect
+    expect(response.location).to match(%r{/courses/1$})
+  end
+
+  it "disallows redirects to non-trusted accounts" do
+    account = account_with_saml
+    user_with_pseudonym(active_all: 1, account: account)
+
+    allow(Onelogin::Saml::Response).to receive(:new).and_return(
+      double('response', issuer: "saml_entity")
+    )
+    saml_response = SAML2::Response.new
+    saml_response.assertions << (assertion = SAML2::Assertion.new)
+    assertion.subject = SAML2::Subject.new
+    assertion.subject.name_id = SAML2::NameID.new(@pseudonym.unique_id)
+    assertion.statements << SAML2::AttributeStatement.new([SAML2::Attribute.create('eduPersonNickname', "Cody Cutrer")])
+    allow(SAML2::Bindings::HTTP_POST).to receive(:decode).and_return(
+      [saml_response, "https://otheraccount/courses/1"]
+    )
+    allow_any_instance_of(SAML2::Entity).to receive(:valid_response?)
+    allow(LoadAccount).to receive(:default_domain_root_account).and_return(account)
+
+    account2 = double()
+    expect(Account).to receive(:find_by_domain).and_return(nil)
+
+    post :create, params: {:SAMLResponse => "foo", :RelayState => "https://otheraccount/courses/1"}
+    expect(response).to be_redirect
+    expect(response.location).not_to match(/session_token/)
   end
 
   context "multiple authorization configs" do
@@ -306,8 +349,12 @@ describe Login::SamlController do
 
     it "should saml_consume login with multiple authorization configs" do
       allow(Onelogin::Saml::Response).to receive(:new).and_return(double('response', @stub_hash))
+      response = SAML2::Response.new
+      response.assertions << (assertion = SAML2::Assertion.new)
+      assertion.subject = SAML2::Subject.new
+      assertion.subject.name_id = SAML2::NameID.new(@unique_id)
       allow(SAML2::Bindings::HTTP_POST).to receive(:decode).and_return(
-        [double('response2', errors: []), nil]
+        [response, '/courses']
       )
       allow_any_instance_of(SAML2::Entity).to receive(:valid_response?)
 
@@ -374,8 +421,13 @@ describe Login::SamlController do
       it "finds the SAML config by entity_id" do
         expect_any_instantiation_of(@aac1).to receive(:saml_settings).never
         expect_any_instantiation_of(@aac2).to receive(:saml_settings)
+
+        response = SAML2::Response.new
+        response.assertions << (assertion = SAML2::Assertion.new)
+        assertion.subject = SAML2::Subject.new
+        assertion.subject.name_id = SAML2::NameID.new(@unique_id)
         allow(SAML2::Bindings::HTTP_POST).to receive(:decode).and_return(
-          [double('response2', errors: [], issuer: double(id: @aac2.idp_entity_id)), nil]
+          [response, '/courses']
         )
 
         post_create
@@ -553,24 +605,15 @@ SAML
       @aac.save
 
       allow(Onelogin::Saml::Response).to receive(:new).and_return(
-        double('response',
-             is_valid?: true,
-             success_status?: true,
-             name_id: nil,
-             name_identifier_format: nil,
-             name_qualifier: nil,
-             sp_name_qualifier: nil,
-             session_index: nil,
-             process: nil,
-             issuer: "saml_entity",
-             saml_attributes: {
-                 'eduPersonPrincipalName' => "#{@unique_id}@example.edu"
-             },
-             used_key: nil
-            )
+        double('response', issuer: "saml_entity")
       )
+      response = SAML2::Response.new
+      response.assertions << (assertion = SAML2::Assertion.new)
+      assertion.subject = SAML2::Subject.new
+      assertion.subject.name_id = SAML2::NameID.new(@unique_id)
+      assertion.statements << SAML2::AttributeStatement.new([SAML2::Attribute.create('eduPersonPrincipalName', "#{@unique_id}@example.edu")])
       allow(SAML2::Bindings::HTTP_POST).to receive(:decode).and_return(
-        [double('response2', errors: []), nil]
+        [response, '/courses']
       )
       allow_any_instance_of(SAML2::Entity).to receive(:valid_response?)
 
@@ -586,21 +629,15 @@ SAML
 
       allow(Onelogin::Saml::Response).to receive(:new).and_return(
         double('response',
-             is_valid?: true,
-             success_status?: true,
-             name_id: @unique_id,
-             name_identifier_format: nil,
-             name_qualifier: nil,
-             sp_name_qualifier: nil,
-             session_index: nil,
-             process: nil,
-             issuer: "saml_entity",
-             saml_attributes: {},
-             used_key: nil
-            )
+               issuer: "saml_entity",
+               )
       )
+      response = SAML2::Response.new
+      response.assertions << (assertion = SAML2::Assertion.new)
+      assertion.subject = SAML2::Subject.new
+      assertion.subject.name_id = SAML2::NameID.new(@unique_id)
       allow(SAML2::Bindings::HTTP_POST).to receive(:decode).and_return(
-        [double('response2', errors: []), nil]
+        [response, '/courses']
       )
       allow_any_instance_of(SAML2::Entity).to receive(:valid_response?)
 
@@ -625,23 +662,16 @@ SAML
 
     allow(Onelogin::Saml::Response).to receive(:new).and_return(
       double('response',
-           is_valid?: true,
-           success_status?: true,
-           name_id: nil,
-           name_identifier_format: nil,
-           name_qualifier: nil,
-           sp_name_qualifier: nil,
-           session_index: nil,
-           process: nil,
-           issuer: "saml_entity",
-           saml_attributes: {
-             'eduPersonPrincipalName' => "#{unique_id}@example.edu"
-           },
-           used_key: nil
-          )
+             issuer: "saml_entity",
+             )
     )
+    response = SAML2::Response.new
+    response.assertions << (assertion = SAML2::Assertion.new)
+    assertion.subject = SAML2::Subject.new
+    assertion.subject.name_id = SAML2::NameID.new(unique_id)
+    assertion.statements << SAML2::AttributeStatement.new([SAML2::Attribute.create('eduPersonPrincipalName', "#{unique_id}@example.edu")])
     allow(SAML2::Bindings::HTTP_POST).to receive(:decode).and_return(
-      [double('response2', errors: []), nil]
+      [response, '/courses']
     )
     allow_any_instance_of(SAML2::Entity).to receive(:valid_response?)
 
@@ -660,22 +690,14 @@ SAML
     @pseudonym.save!
 
     allow(Onelogin::Saml::Response).to receive(:new).and_return(
-      double('response',
-           is_valid?: true,
-           success_status?: true,
-           name_id: unique_id,
-           name_identifier_format: nil,
-           name_qualifier: nil,
-           sp_name_qualifier: nil,
-           session_index: nil,
-           process: nil,
-           issuer: "saml_entity",
-           saml_attributes: {},
-           used_key: nil
-          )
+      double('response', issuer: "saml_entity")
     )
+    response = SAML2::Response.new
+    response.assertions << (assertion = SAML2::Assertion.new)
+    assertion.subject = SAML2::Subject.new
+    assertion.subject.name_id = SAML2::NameID.new(unique_id)
     allow(SAML2::Bindings::HTTP_POST).to receive(:decode).and_return(
-      [double('response2', errors: []), '/courses']
+      [response, '/courses']
     )
     allow_any_instance_of(SAML2::Entity).to receive(:valid_response?)
 

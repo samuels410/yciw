@@ -50,7 +50,7 @@ test('disables the underlying select component if specified by props', function 
   const props = { ...defaultProps(), disabled: true };
   this.wrapper = mount(<GradebookFilter {...props} />);
 
-  strictEqual(this.wrapper.find('select').nodes[0].disabled, true)
+  strictEqual(this.wrapper.find('select').instance().disabled, true)
 });
 
 test('renders a screenreader-friendly label', function () {
@@ -62,7 +62,7 @@ test('the Select component has three options', function () {
 });
 
 test('the options are in the same order as they were sent in', function () {
-  const actualOptionIds = this.wrapper.find('option').map(opt => opt.node.value);
+  const actualOptionIds = this.wrapper.find('option').map(opt => opt.instance().value);
   const expectedOptionIds = ['0', '1', '2'];
 
   deepEqual(actualOptionIds, expectedOptionIds);
@@ -76,7 +76,7 @@ test('the options are displayed in the same order as they were sent in', functio
 });
 
 test('selecting an option calls the onSelect prop', function () {
-  const props = { ...defaultProps(), onSelect: this.stub() };
+  const props = { ...defaultProps(), onSelect: sinon.stub() };
   this.wrapper = mount(<GradebookFilter {...props} />);
   this.wrapper.find('select').simulate('change', { target: { value: '2' }});
 
@@ -84,7 +84,7 @@ test('selecting an option calls the onSelect prop', function () {
 });
 
 test('selecting an option calls the onSelect prop with the module id', function () {
-  const props = { ...defaultProps(), onSelect: this.stub() };
+  const props = { ...defaultProps(), onSelect: sinon.stub() };
   this.wrapper = mount(<GradebookFilter {...props} />);
   this.wrapper.find('select').simulate('change', { target: { value: '2' }});
 
@@ -92,7 +92,7 @@ test('selecting an option calls the onSelect prop with the module id', function 
 });
 
 test('selecting an option while the control is disabled does not call the onSelect prop', function () {
-  const props = { ...defaultProps(), onSelect: this.stub(), disabled: true };
+  const props = { ...defaultProps(), onSelect: sinon.stub(), disabled: true };
   this.wrapper = mount(<GradebookFilter {...props} />);
   this.wrapper.find('select').simulate('change', { target: { value: '2' }});
 

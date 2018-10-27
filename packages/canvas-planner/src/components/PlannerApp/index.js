@@ -21,20 +21,17 @@ import classnames from 'classnames';
 import moment from 'moment-timezone';
 import { connect } from 'react-redux';
 import View from '@instructure/ui-layout/lib/components/View';
-import Spinner from '@instructure/ui-core/lib/components/Spinner';
+import Spinner from '@instructure/ui-elements/lib/components/Spinner';
 import { arrayOf, oneOfType, shape, bool, object, string, number, func } from 'prop-types';
-import { momentObj } from 'react-moment-proptypes';
 import { userShape, sizeShape } from '../plannerPropTypes';
 import Day from '../Day';
 import EmptyDays from '../EmptyDays';
 import ShowOnFocusButton from '../ShowOnFocusButton';
-import StickyButton from '../StickyButton';
 import LoadingFutureIndicator from '../LoadingFutureIndicator';
 import LoadingPastIndicator from '../LoadingPastIndicator';
 import PlannerEmptyState from '../PlannerEmptyState';
 import formatMessage from '../../format-message';
-import {loadFutureItems, loadPastButtonClicked, loadPastUntilNewActivity, scrollToNewActivity, togglePlannerItemCompletion, updateTodo} from '../../actions';
-import {getFirstLoadedMoment} from '../../utilities/dateUtils';
+import {loadFutureItems, loadPastButtonClicked, loadPastUntilNewActivity, togglePlannerItemCompletion, updateTodo} from '../../actions';
 import {notifier} from '../../dynamic-ui';
 import {daysToDaysHash} from '../../utilities/daysUtils';
 import {formatDayKey} from '../../utilities/dateUtils';
@@ -55,22 +52,16 @@ export class PlannerApp extends Component {
     allPastItemsLoaded: bool,
     loadingFuture: bool,
     allFutureItemsLoaded: bool,
-    firstNewActivityDate: momentObj,
     loadPastButtonClicked: func,
     loadPastUntilNewActivity: func,
-    scrollToNewActivity: func,
     loadFutureItems: func,
     stickyOffset: number, // in pixels
-    stickyZIndex: number,
-    changeToDashboardCardView: func,
+    changeDashboardView: func,
     togglePlannerItemCompletion: func,
     updateTodo: func,
     triggerDynamicUiUpdates: func,
     preTriggerDynamicUiUpdates: func,
     plannerActive: func,
-    ui: shape({
-      naiAboveScreen: bool,
-    }),
     currentUser: shape(userShape),
     responsiveSize: sizeShape,
     appRef: func,
@@ -85,6 +76,7 @@ export class PlannerApp extends Component {
     responsiveSize: 'large',
     appRef: () => {},
     focusFallback: () => {},
+    isCompletelyEmpty: bool,
   };
 
   constructor (props) {
@@ -129,10 +121,6 @@ export class PlannerApp extends Component {
     this.fixedElement = elt;
   }
 
-  handleNewActivityClick = () => {
-    this.props.scrollToNewActivity();
-  }
-
   // when the planner changes layout, its contents move and the user gets lost.
   // let's help with that.
 
@@ -143,6 +131,11 @@ export class PlannerApp extends Component {
       this.resizeTimer = window.setTimeout(() => {this.resizeTimer = 0;}, 1000);
       this.beforeLayoutChange();
     }
+  }
+
+  onAddToDo = (event) => {
+    event.preventDefault();
+    this.props.updateTodo({updateTodoItem: {}});
   }
 
   // before we tell the responsive elements the size has changed, find the first
@@ -181,29 +174,8 @@ export class PlannerApp extends Component {
     </View>;
   }
 
-  renderNewActivity () {
-    if (this.props.isLoading) return;
-    if (!this.props.firstNewActivityDate) return;
-
-    const firstLoadedMoment = getFirstLoadedMoment(this.props.days, this.props.timeZone);
-    const firstNewActivityLoaded = firstLoadedMoment.isSame(this.props.firstNewActivityDate) || firstLoadedMoment.isBefore(this.props.firstNewActivityDate);
-    if (firstNewActivityLoaded && !this.props.ui.naiAboveScreen) return;
-
-    return (
-      <StickyButton
-        direction="up"
-        hidden={true}
-        onClick={this.handleNewActivityClick}
-        offset={this.props.stickyOffset + 'px'}
-        zIndex={this.props.stickyZIndex}
-        buttonRef={ref => this.newActivityButtonRef = ref}
-      >
-        {formatMessage("New Activity")}
-      </StickyButton>
-    );
-  }
-
   renderLoadingPast () {
+    if (this.props.isLoading) return;
     return <LoadingPastIndicator
       loadingPast={this.props.loadingPast}
       allPastItemsLoaded={this.props.allPastItemsLoaded}
@@ -236,7 +208,11 @@ export class PlannerApp extends Component {
 
   renderNoAssignments() {
     return (
-      <PlannerEmptyState changeToDashboardCardView={this.props.changeToDashboardCardView}/>
+      <PlannerEmptyState
+        changeDashboardView={this.props.changeDashboardView}
+        isCompletelyEmpty={this.props.isCompletelyEmpty}
+        onAddToDo={this.onAddToDo}
+      />
     );
   }
 
@@ -362,24 +338,25 @@ export class PlannerApp extends Component {
   // ending at the last props.days (or today, whichever is later)
   // step a day at a time.
   // if the day is before yesterday, emit a <Day> only it if it has items
-  // always render yesterday, today, and tomorrow
+  // always render yesterday (if loaded), today, and tomorrow
   // starting with the day after tomorrow:
   //    if a day has items, emit a <Day>
   //    if we find a string of < 3 empty days, emit a <Day> for each
   //    if we find a string of 3 or more empty days, emit an <EmptyDays> for the interval
   renderDays () {
     const children = [];
-    let workingDay = moment.tz(this.props.days[0][0], this.props.timeZone);
-    let lastDay = moment.tz(this.props.days[this.props.days.length-1][0], this.props.timeZone);
     const today = moment.tz(this.props.timeZone).startOf('day');
+    let workingDay = moment.tz(this.props.days[0][0], this.props.timeZone);
+    if (workingDay.isAfter(today)) workingDay = today.clone();
+    let lastDay = moment.tz(this.props.days[this.props.days.length-1][0], this.props.timeZone);
     let tomorrow = today.clone().add(1, 'day');
     const dayBeforeYesterday = today.clone().add(-2, 'day');
-    if (lastDay.isBefore(today)) lastDay = today;
+    if (lastDay.isBefore(today)) lastDay = today.clone();
     // We don't want to render an empty tomorrow if we don't know it's actually empty.
     // It might just not be loaded yet. If so, sneak it back to today so it isn't displayed.
-    if (tomorrow.isAfter(lastDay)) tomorrow = today;
+    if (tomorrow.isAfter(lastDay)) tomorrow = today.clone();
     const dayHash = daysToDaysHash(this.props.days);
-    let dayIndex = 0;
+    let dayIndex = 1;
 
     const pastChildren = this.renderPast(workingDay, dayBeforeYesterday, dayHash, dayIndex);
     dayIndex += pastChildren.length;
@@ -398,14 +375,12 @@ export class PlannerApp extends Component {
     const loading = this.props.loadingPast || this.props.loadingFuture || this.props.isLoading;
     if (children.length === 0 && !loading) {
       return <div className={classes}>
-        {this.renderNewActivity()}
         {this.renderLoadPastButton()}
         {this.renderNoAssignments()}
       </div>;
     }
 
     return <div className={classes} ref={el => this._plannerElem = el}>
-      {this.renderNewActivity()}
       {this.renderLoadPastButton()}
       {this.renderLoadingPast()}
       {children}
@@ -426,21 +401,23 @@ export class PlannerApp extends Component {
   }
 }
 
-const mapStateToProps = (state) => {
+export const mapStateToProps = (state) => {
   return {
     days: state.days,
-    isLoading: state.loading.isLoading,
+    isLoading: state.loading.isLoading || state.loading.hasSomeItems === null,
     loadingPast: state.loading.loadingPast,
     allPastItemsLoaded: state.loading.allPastItemsLoaded,
     loadingFuture: state.loading.loadingFuture,
     allFutureItemsLoaded: state.loading.allFutureItemsLoaded,
     loadingError: state.loading.loadingError,
-    firstNewActivityDate: state.firstNewActivityDate,
     timeZone: state.timeZone,
-    ui: state.ui,
+    isCompletelyEmpty:  state.loading.hasSomeItems === false &&
+                        state.days.length === 0 &&
+                        state.loading.partialPastDays.length === 0 &&
+                        state.loading.partialFutureDays.length === 0,
   };
 };
 
 const ResponsivePlannerApp = responsiviser()(PlannerApp);
-const mapDispatchToProps = {loadFutureItems, loadPastButtonClicked, loadPastUntilNewActivity, scrollToNewActivity, togglePlannerItemCompletion, updateTodo};
+const mapDispatchToProps = {loadFutureItems, loadPastButtonClicked, loadPastUntilNewActivity, togglePlannerItemCompletion, updateTodo};
 export default notifier(connect(mapStateToProps, mapDispatchToProps)(ResponsivePlannerApp));

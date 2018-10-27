@@ -179,6 +179,22 @@ describe ContentMigration do
       expect(page_to.body).to eq body % [@copy_to.id, tag_to.id]
     end
 
+    it "should translate links to assignments with module item id" do
+      mod1 = @copy_from.context_modules.create!(:name => "some module")
+      asmnt1 = @copy_from.assignments.create!(:title => "some assignment")
+      tag = mod1.add_item({:id => asmnt1.id, :type => 'assignment', :indent => 1})
+      body = %{<p>Link to module item: <a href="/courses/%s/assignments/%s?module_item_id=%s">some assignment</a></p>}
+      page = @copy_from.wiki_pages.create!(:title => "some page", :body => body % [@copy_from.id, asmnt1.id, tag.id])
+
+      run_course_copy
+
+      mod1_to = @copy_to.context_modules.where(migration_id: mig_id(mod1)).first
+      asmnt_to = @copy_to.assignments.where(migration_id: mig_id(asmnt1)).first
+      tag_to = mod1_to.content_tags.first
+      page_to = @copy_to.wiki_pages.where(migration_id: mig_id(page)).first
+      expect(page_to.body).to eq body % [@copy_to.id, asmnt_to.id, tag_to.id]
+    end
+
     it "should translate links to modules in quiz content" do
       skip unless Qti.qti_enabled?
 
@@ -404,6 +420,7 @@ describe ContentMigration do
       #set all the possible values to non-default values
       @copy_from.start_at = 5.minutes.ago
       @copy_from.conclude_at = 1.month.from_now
+      @copy_from.restrict_enrollments_to_course_dates = true
       @copy_from.is_public = false
       @copy_from.name = "haha copy from test &amp;"
       @copy_from.course_code = 'something funny'
@@ -444,6 +461,7 @@ describe ContentMigration do
       #compare settings
       expect(@copy_to.conclude_at).to eq nil
       expect(@copy_to.start_at).to eq nil
+      expect(@copy_to.restrict_enrollments_to_course_dates).to eq true
       expect(@copy_to.storage_quota).to eq 444
       expect(@copy_to.hide_final_grades).to eq true
       expect(@copy_to.grading_standard_enabled).to eq true
@@ -588,6 +606,17 @@ describe ContentMigration do
 
       att2 = @copy_to.attachments.where(:migration_id => mig_id(att)).first
       expect(@copy_to.reload.syllabus_body).to include "/courses/#{@copy_to.id}/files/#{att2.id}/download"
+    end
+
+    it "should copy weird longdesc things" do
+      page = @copy_from.wiki_pages.create!(:title => "page")
+      @copy_from.syllabus_body = "<img longdesc=\"/courses/#{@copy_from.id}/pages/#{page.url}/>"
+      @copy_from.save!
+
+      run_course_copy
+
+      page2 = @copy_to.wiki_pages.where(:migration_id => mig_id(page)).first
+      expect(@copy_to.reload.syllabus_body).to include "/courses/#{@copy_to.id}/pages/#{page2.url}"
     end
 
     it "should re-use kaltura media objects" do

@@ -47,9 +47,8 @@ QUnit.module('DashboardCard', {
       id: '1',
       backgroundColor: '#EF4437',
       image: null,
-      imagesEnabled: false
     }
-    return this.stub(CourseActivitySummaryStore, 'getStateForCourse').returns({})
+    return sandbox.stub(CourseActivitySummaryStore, 'getStateForCourse').returns({})
   },
   teardown() {
     localStorage.clear()
@@ -65,7 +64,7 @@ test('render', function() {
   this.component = TestUtils.renderIntoDocument(DashCard)
   const $html = $(ReactDOM.findDOMNode(this.component))
   ok($html.attr('class').match(/DashboardCard/))
-  const renderSpy = this.spy(this.component, 'render')
+  const renderSpy = sandbox.spy(this.component, 'render')
   ok(!renderSpy.called, 'precondition')
   CourseActivitySummaryStore.setState({streams: {1: {stream: this.stream}}})
   ok(renderSpy.called, 'should re-render on state update')
@@ -92,7 +91,6 @@ test('unreadCount', function() {
 })
 
 test('does not have image attribute when a url is not provided', function() {
-  this.props.imagesEnabled = true
   const DashCard = <DashboardCard {...this.props} />
   this.component = TestUtils.renderIntoDocument(DashCard)
   ok(
@@ -103,7 +101,6 @@ test('does not have image attribute when a url is not provided', function() {
 })
 
 test('has image attribute when url is provided', function() {
-  this.props.imagesEnabled = true
   this.props.image = 'http://coolUrl'
   const DashCard = <DashboardCard {...this.props} />
   this.component = TestUtils.renderIntoDocument(DashCard)

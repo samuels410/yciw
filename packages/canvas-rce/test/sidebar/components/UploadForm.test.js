@@ -77,12 +77,12 @@ describe("UploadForm", () => {
       upload.formExpanded = true;
       let uploadComp = sd.shallowRender(<UploadForm {...defaultProps} />);
       let button = uploadComp.subTree("Button");
-      assert.ok(/aria-expanded="true"/.test(button.toString()));
+      assert.ok(/aria-expanded={true}/.test(button.toString()));
 
       upload.formExpanded = false;
       uploadComp = sd.shallowRender(<UploadForm {...defaultProps} />);
       button = uploadComp.subTree("Button");
-      assert.ok(/aria-expanded="false"/.test(button.toString()));
+      assert.ok(/aria-expanded={false}/.test(button.toString()));
     });
 
     it("calls for folders on mounting", () => {
@@ -101,6 +101,16 @@ describe("UploadForm", () => {
       let vdom = uploadComp.getRenderOutput();
       vdom.props.children[0].props.onClick(fakeEvent);
       assert.ok(toggleSpy.called);
+    });
+
+    it("renders a Loading folders options when upload.loadingFolders is true", () => {
+      upload.loadingFolders = true;
+      let uploadComp = sd.shallowRender(<UploadForm {...defaultProps} />);
+      let instance = uploadComp.getMountedInstance();
+      let uploadForm = sd.shallowRender(instance.renderForm());
+      let options = uploadForm.subTree("Select").everySubTree("option");
+      assert(options.length === 1);
+      assert(options[0].text() === "Loading folders...");
     });
 
     it("renders an option per folder", () => {
@@ -134,15 +144,15 @@ describe("UploadForm", () => {
       let options = uploadForm.subTree("Select").everySubTree("option");
       assert.equal(
         options[0].toString(),
-        '<option value="1">folder 1</option>'
+        "<option value={1}>\n  folder 1\n</option>"
       );
       assert.equal(
         options[1].toString(),
-        '<option value="2">\u00A0\u00A0folder 2</option>'
+        "<option value={2}>\n  \n  folder 2\n</option>"
       );
       assert.equal(
         options[2].toString(),
-        '<option value="3">\u00A0\u00A0\u00A0\u00A0folder 3</option>'
+        "<option value={3}>\n    \n  folder 3\n</option>"
       );
     });
 

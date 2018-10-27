@@ -18,22 +18,22 @@
 import React from 'react';
 import { shallow, mount } from 'enzyme';
 import { Opportunity } from '../index';
-import Pill from '@instructure/ui-core/lib/components/Pill';
+import Pill from '@instructure/ui-elements/lib/components/Pill';
 
-function defaultProps (options) {
+function defaultProps (options = {}) {
   return {
     id: "1",
     dueAt: "2017-03-09T20:40:35Z",
     courseName: "course about stuff",
     opportunityTitle: "this is a description about the opportunity",
     points: 20,
-    showPill: true,
     url: "http://www.non_default_url.com",
     timeZone: 'America/Denver',
     dismiss: () => {},
     registerAnimatable: () => {},
     deregisterAnimatable: () => {},
     animatableIndex: 1,
+    ...options
   };
 }
 
@@ -63,17 +63,17 @@ it('renders the base component correctly without points', () => {
   expect(wrapper).toMatchSnapshot();
 });
 
-it('renders a Pill if passed showPill: true', () => {
+// to distinguish between no point and 0 points
+it('renders the base component correctly with 0 points', () => {
+  const props = defaultProps({points: 0});
+  const wrapper = shallow(<Opportunity {...props} />);
+  expect(wrapper).toMatchSnapshot();
+});
+
+it('renders a Pill if in the past', () => {
   const props = defaultProps();
   const wrapper = shallow(<Opportunity {...props} />);
   expect(wrapper.find(Pill).length).toEqual(1);
-});
-
-it('does not render a Pill if passed showPill: false', () => {
-  const props = defaultProps();
-  props.showPill = false;
-  const wrapper = shallow(<Opportunity {...props} />);
-  expect(wrapper.find(Pill).length).toEqual(0);
 });
 
 it('registers itself as animatable', () => {
@@ -98,3 +98,10 @@ it('registers itself as animatable', () => {
   wrapper.unmount();
   expect(fakeDeregister).toHaveBeenCalledWith('opportunity', instance, ['2']);
 });
+
+it('renders no close icon if dismissed', () => {
+  const props = defaultProps({plannerOverride: {dismissed: true}});
+  const wrapper = shallow(<Opportunity {...props} />);
+  expect(wrapper.find('Button').length).toEqual(0)
+})
+

@@ -156,10 +156,10 @@ describe "assignment rubrics" do
       full_rubric_button = f('.toggle_full_rubric')
       expect(full_rubric_button).to be_displayed
       full_rubric_button.click
-      set_value(fj('#rubric_holder .criterion:visible .criterion_points'), '2.5')
+      set_value(f('td.criterion_points input'), '2.5')
       f('#rubric_holder .save_rubric_button').click
 
-      expect(f('#rubric_summary_container .rubric_total')).to include_text '2.5'
+      expect(f("span[data-selenium='rubric_total']")).to include_text '2.5'
     end
 
     it "should import rubric to assignment", priority: "1", test_id: 220317 do
@@ -201,8 +201,6 @@ describe "assignment rubrics" do
       wait_for_ajaximations
       # click on the Import button
       f('.ui-dialog .btn-primary').click
-      # confirm the import
-      driver.switch_to.alert.accept
       wait_for_ajaximations
       # pts should not be editable
       expect(f('#rubric_new .learning_outcome_criterion .points_form .editing').displayed?).to be_falsey
@@ -282,8 +280,8 @@ describe "assignment rubrics" do
 
       f(".toggle_full_rubric").click
       wait_for_ajaximations
-      f(".criterion_description .long_description_link").click
-      expect(f(".ui-dialog div.long_description").text).to eq "<b>This text should not be bold</b>"
+      fj("span:contains('view longer description')").find_element(:xpath, './parent::button').click
+      expect(f("span[aria-label='Criterion Long Description']")).to include_text("This text should not be bold")
     end
 
     it "should follow learning outcome ignore_for_scoring", priority: "2", test_id: 220328 do
@@ -301,9 +299,9 @@ describe "assignment rubrics" do
       get "/courses/#{@course.id}/assignments/#{@assignment.id}/submissions/#{@student.id}"
       f('.assess_submission_link').click
       wait_for_animations
-      expect(f('.total_points_holder .assessing')).to include_text "out of 5"
-      f("#rubric_#{@rubric.id} tbody tr:nth-child(2) .ratings td:nth-child(1)").click
-      expect(f('.rubric_total')).to include_text "5"
+      expect(f("span[data-selenium='rubric_total']")).to include_text "0 out of 5"
+      fj("span:contains('Amazing'):visible").click
+      expect(f("span[data-selenium='rubric_total']")).to include_text "5 out of 5"
       scroll_into_view('.save_rubric_button')
       f('.save_rubric_button').click
       expect(f('.grading_value')).to have_attribute(:value, '5')
@@ -540,6 +538,60 @@ describe "assignment rubrics" do
       end
     end
 
+    context "non-scoring rubrics" do
+      before(:each) do
+        @assignment = @course.assignments.create(name: 'NSR assignment')
+        outcome_with_rubric
+        @rubric.associate_with(@assignment, @course, purpose: 'grading')
+      end
+
+      it "should create and edit a non-scoring rubric" do
+        get "/courses/#{@course.id}/assignments/#{@assignment.id}"
+
+        f(' .rubric_title .icon-edit').click
+        wait_for_ajaximations
+
+        # Hide points on rubric
+        f('#hide_points').click
+        wait_for_ajaximations
+        rating_points_elements = ff('.points')
+        rating_points_elements.each do |points|
+          expect(points).not_to be_displayed
+        end
+        total_points_elements = ff('[class="total_points_holder toggle_for_hide_points "]')
+        total_points_elements.each do |total_points|
+          expect(total_points).not_to be_displayed
+        end
+
+        # Add rating
+        ff('.add_rating_link_after')[4].click
+        expect(fj('span:contains("Edit Rating")')).to be_present
+        rating_score_fields = ff('#rating_form_score_label')
+        rating_score_fields.each do |rating_score_field|
+          expect(rating_score_field).not_to be_displayed
+        end
+        wait_for_ajaximations
+        set_value(ff('#rating_form_title')[0], 'Test rating 1')
+        set_value(ff('#rating_form_description')[0], 'Test description 1')
+        fj('span:contains("Update Rating")').click
+        wait_for_ajaximations
+
+        expect(ff('[class="description rating_description_value"]')[11].text).to eq "Test rating 1"
+        expect(ff('[class="rating_long_description small_description"]')[11].text).to eq "Test description 1"
+
+        # Save rubric
+        find_button("Update Rubric").click
+        wait_for_ajaximations
+
+        expect(ff('[class="description rating_description_value"]')[6].text).to eq "Test rating 1"
+        expect(ff('[class="rating_long_description small_description"]')[6].text).to eq "Test description 1"
+        rating_points_elements = ff('.points')
+        rating_points_elements.each do |points|
+          expect(points).not_to be_displayed
+        end
+      end
+    end
+
     context "criterion copy" do
       before(:each) do
         @course.account.root_account.enable_feature!(:rubric_criterion_range)
@@ -619,9 +671,9 @@ describe "assignment rubrics" do
       get "/courses/#{@course.id}/assignments/#{assignment.id}/submissions/#{@student.id}"
       f('.assess_submission_link').click
       # expect
-      ee = ff('.criterion_comments')
-      expect(ee.first).to be_displayed
-      expect(ee.last).not_to be_displayed
+      comments = ff('.description-header')
+      expect(comments.first).to include_text('Instructor Comments').and include_text(comment)
+      expect(comments.second).not_to include_text('Instructor Comments')
     end
 
     it "shouldn't show 'update description' button in long description dialog", priority: "2", test_id: 220334 do

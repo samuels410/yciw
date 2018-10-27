@@ -59,9 +59,9 @@ describe 'Student reports' do
       :sortable_name => 'Astley, Rick', :username => 'rick@roll.com',
       :sis_user_id => 'user_sis_id_03')
 
-    enrollment_params = {enrollment_state: 'active', type: 'StudentEnrollment'}
-    @e_u1_c1, @e_u2_c1 = Enrollment.find(create_enrollments(@course1, [@user1, @user2], enrollment_params))
-    @e_u1_c2, @e_u2_c2 = Enrollment.find(create_enrollments(@course2, [@user1, @user2], enrollment_params))
+    enrollment_params = {enrollment_state: 'active', type: 'StudentEnrollment', return_type: :record}
+    @e_u1_c1, @e_u2_c1 = create_enrollments(@course1, [@user1, @user2], enrollment_params)
+    @e_u1_c2, @e_u2_c2 = create_enrollments(@course2, [@user1, @user2], enrollment_params)
 
     @section1 = @course1.course_sections.first
     @section2 = @course2.course_sections.first
@@ -365,6 +365,21 @@ describe 'Student reports' do
          @section1.name, @course1.id, 'SIS_COURSE_ID_1', 'English 101'],
         [@user4.id, 'user_sis_id_04', '4, User', @course4.default_section.id, nil,
          'Course 4', @course4.id, nil, 'Course 4']
+      ]
+    end
+
+    it 'should exclude multi-section users who have activity in at least one section' do
+      lonely_section = @course1.course_sections.create!(name: "forever alone")
+      active_enrollment = lonely_section.enroll_user(@user2, 'StudentEnrollment', 'active')
+      active_enrollment.update_attribute(:last_activity_at, 1.day.ago)
+
+      param = {}
+      param['course'] = @course1.id
+      parsed = read_report(@type, {params: param, order: 1})
+
+      expect(parsed).to eq_stringified_array [
+        [@user3.id, 'user_sis_id_03', @user3.sortable_name, @section1.id, @section1.sis_source_id,
+         @section1.name, @course1.id, 'SIS_COURSE_ID_1', 'English 101']
       ]
     end
   end

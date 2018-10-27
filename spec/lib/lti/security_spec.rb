@@ -20,7 +20,6 @@ require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper.rb')
 require 'simple_oauth'
 
 describe Lti::Security do
-
   describe '.signed_post_params' do
     let(:params) { {custom_a: 1, custom_b:2} }
     let(:consumer_key) { 'test' }
@@ -177,7 +176,6 @@ describe Lti::Security do
         nonce: nonce,
         timestamp: timestamp
       )
-      puts header.send(:signature_base)
       expect(header.valid?(signature: signed_params['oauth_signature'])).to eq true
 
     end

@@ -41,7 +41,7 @@ function mountComponent (customProps) {
 
 QUnit.module('SubmissionTrayRadioInputGroup', {
   getRadioOption (value) {
-    return this.wrapper.find(`input[type="radio"][value="${value}"]`).node;
+    return this.wrapper.find(`input[type="radio"][value="${value}"]`).instance();
   },
 
   teardown () {

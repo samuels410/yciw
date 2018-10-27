@@ -18,9 +18,9 @@
 
 import React from 'react'
 import {node} from 'prop-types'
-import Button from '@instructure/ui-core/lib/components/Button'
-import FormFieldGroup from '@instructure/ui-core/lib/components/FormFieldGroup'
-import TextInput from '@instructure/ui-core/lib/components/TextInput'
+import Button from '@instructure/ui-buttons/lib/components/Button'
+import FormFieldGroup from '@instructure/ui-forms/lib/components/FormFieldGroup'
+import TextInput from '@instructure/ui-forms/lib/components/TextInput'
 import Select from '@instructure/ui-core/lib/components/Select'
 import InstuiModal, {ModalBody, ModalFooter} from '../../shared/components/InstuiModal'
 
@@ -102,7 +102,7 @@ export default class NewCourseModal extends React.Component {
           size="small"
           label={I18n.t('Add a New Course')}
         >
-          <form onSubmit={preventDefault(this.onSubmit)} style={{margin:0}}>
+          <form onSubmit={preventDefault(this.onSubmit)} style={{margin: 0}}>
             <ModalBody>
               <FormFieldGroup layout="stacked" rowSpacing="small" description="">
                 <TextInput
@@ -142,9 +142,7 @@ export default class NewCourseModal extends React.Component {
                       {term.name}
                     </option>
                   ))}
-                  {terms.loading && (
-                    <option disabled>{I18n.t('Loading more terms...')}</option>
-                  )}
+                  {terms.loading && <option disabled>{I18n.t('Loading more terms...')}</option>}
                 </Select>
               </FormFieldGroup>
             </ModalBody>

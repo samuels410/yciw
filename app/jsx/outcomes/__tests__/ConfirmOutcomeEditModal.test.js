@@ -15,10 +15,10 @@
  * You should have received a copy of the GNU Affero General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
+import sinon from 'sinon'
 import React from 'react'
 import ReactDOM from 'react-dom'
-import { shallow } from 'enzyme'
+import { shallow } from 'old-enzyme-2.x-you-need-to-upgrade-this-spec-to-enzyme-3.x-by-importing-just-enzyme'
 import { merge } from 'lodash'
 import ConfirmOutcomeEditModal, { showConfirmOutcomeEdit } from '../ConfirmOutcomeEditModal'
 import { ModalBody, ModalFooter } from '../../shared/components/InstuiModal'
@@ -81,8 +81,10 @@ describe('showConfirmOutcomeEdit', () => {
   afterEach(() => {
     const parent = document.querySelector('.confirm-outcome-edit-modal-container')
     if (parent) {
+      const skipScroll = sinon.stub(window, 'scroll').callsFake(() => {})
       ReactDOM.unmountComponentAtNode(parent)
       parent.remove()
+      skipScroll.restore()
     }
   })
 

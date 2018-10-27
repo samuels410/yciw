@@ -18,17 +18,17 @@
 
 import I18n from 'i18n!discussions_v2'
 import React, {Component} from 'react'
-import {func, bool, string, arrayOf} from 'prop-types'
+import {func, bool, string} from 'prop-types'
 import {connect} from 'react-redux'
 import {bindActionCreators} from 'redux'
 import {DragDropContext} from 'react-dnd'
 import HTML5Backend from 'react-dnd-html5-backend'
 
-import Container from '@instructure/ui-core/lib/components/Container'
-import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent'
-import Spinner from '@instructure/ui-core/lib/components/Spinner'
-import Heading from '@instructure/ui-core/lib/components/Heading'
-import Text from '@instructure/ui-core/lib/components/Text'
+import View from '@instructure/ui-layout/lib/components/View'
+import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
+import Spinner from '@instructure/ui-elements/lib/components/Spinner'
+import Heading from '@instructure/ui-elements/lib/components/Heading'
+import Text from '@instructure/ui-elements/lib/components/Text'
 import {
   ConnectedDiscussionsContainer,
   DroppableConnectedDiscussionsContainer
@@ -61,7 +61,7 @@ export default class DiscussionsIndex extends Component {
     isLoadingDiscussions: bool.isRequired,
     permissions: propTypes.permissions.isRequired,
     pinnedDiscussions: discussionList.isRequired,
-    unpinnedDiscussions: discussionList.isRequired,
+    unpinnedDiscussions: discussionList.isRequired
   }
 
   state = {
@@ -80,7 +80,7 @@ export default class DiscussionsIndex extends Component {
   //      can interact with this from the connected store instaed of passing
   //      it down as a nested prop through multiple components
   onDeleteConfirm = (discussion, isConfirm) => {
-    if(isConfirm) {
+    if (isConfirm) {
       this.props.deleteDiscussion(discussion)
     }
     this.setState({showDelete: false, deleteFunction: () => {}})
@@ -91,7 +91,7 @@ export default class DiscussionsIndex extends Component {
   }
 
   openDeleteDiscussionsModal = discussion => {
-    const deleteFunction = ({ isConfirm }) => this.onDeleteConfirm(discussion, isConfirm)
+    const deleteFunction = ({isConfirm}) => this.onDeleteConfirm(discussion, isConfirm)
     this.setState({showDelete: true, deleteFunction})
   }
 
@@ -132,7 +132,7 @@ export default class DiscussionsIndex extends Component {
 
   renderStudentView() {
     return (
-      <Container margin="medium">
+      <View margin="medium">
         {this.props.pinnedDiscussions.length ? (
           <div className="pinned-discussions-v2__wrapper">
             <ConnectedDiscussionsContainer
@@ -173,19 +173,20 @@ export default class DiscussionsIndex extends Component {
             }
           />
         </div>
-        {this.state.showDelete && (<DiscussionsDeleteModal
-          onSubmit={this.state.deleteFunction}
-          defaultOpen
-          selectedCount={1}
-          applicationElement={() => document.getElementById('application')}
-        />)}
-      </Container>
+        {this.state.showDelete && (
+          <DiscussionsDeleteModal
+            onSubmit={this.state.deleteFunction}
+            defaultOpen
+            selectedCount={1}
+          />
+        )}
+      </View>
     )
   }
 
   renderTeacherView() {
     return (
-      <Container margin="medium">
+      <View margin="medium">
         <div className="pinned-discussions-v2__wrapper">
           <DroppableConnectedDiscussionsContainer
             title={I18n.t('Pinned Discussions')}
@@ -195,7 +196,7 @@ export default class DiscussionsIndex extends Component {
             pinned
             renderContainerBackground={() =>
               pinnedDiscussionBackground({
-                permissions: this.props.permissions,
+                permissions: this.props.permissions
               })
             }
           />
@@ -230,12 +231,14 @@ export default class DiscussionsIndex extends Component {
             }
           />
         </div>
-        {this.state.showDelete && (<DiscussionsDeleteModal
-          onSubmit={this.state.deleteFunction}
-          defaultOpen
-          selectedCount={1}
-          applicationElement={() => document.getElementById('application')}
-        />)} </Container>
+        {this.state.showDelete && (
+          <DiscussionsDeleteModal
+            onSubmit={this.state.deleteFunction}
+            defaultOpen
+            selectedCount={1}
+          />
+        )}{' '}
+      </View>
     )
   }
 
@@ -246,20 +249,24 @@ export default class DiscussionsIndex extends Component {
           <Heading level="h1">{I18n.t('Discussions')}</Heading>
         </ScreenReaderContent>
         <ConnectedIndexHeader />
-        {this.props.isLoadingDiscussions ?
-            this.renderSpinner(I18n.t('Loading Discussions')) :
-            this.props.permissions.moderate ? this.renderTeacherView() : this.renderStudentView()
-        }
+        {this.props.isLoadingDiscussions
+          ? this.renderSpinner(I18n.t('Loading Discussions'))
+          : this.props.permissions.moderate
+            ? this.renderTeacherView()
+            : this.renderStudentView()}
       </div>
     )
   }
 }
 
-
 const connectState = (state, ownProps) => {
   const fromPagination = selectPaginationState(state, 'discussions')
-  const { allDiscussions, closedForCommentsDiscussionIds, pinnedDiscussionIds,
-          unpinnedDiscussionIds } = state
+  const {
+    allDiscussions,
+    closedForCommentsDiscussionIds,
+    pinnedDiscussionIds,
+    unpinnedDiscussionIds
+  } = state
 
   const fromState = {
     closedForCommentsDiscussions: closedForCommentsDiscussionIds.map(id => allDiscussions[id]),
@@ -267,7 +274,7 @@ const connectState = (state, ownProps) => {
     contextType: state.contextType,
     permissions: state.permissions,
     pinnedDiscussions: pinnedDiscussionIds.map(id => allDiscussions[id]),
-    unpinnedDiscussions: unpinnedDiscussionIds.map(id => allDiscussions[id]),
+    unpinnedDiscussions: unpinnedDiscussionIds.map(id => allDiscussions[id])
   }
   return Object.assign({}, ownProps, fromPagination, fromState)
 }
@@ -277,10 +284,13 @@ const connectActions = dispatch =>
       'arrangePinnedDiscussions',
       'deleteDiscussion',
       'deleteFocusDone',
-      'getDiscussions',
+      'getDiscussions'
     ]),
     dispatch
   )
 export const ConnectedDiscussionsIndex = DragDropContext(HTML5Backend)(
-  connect(connectState, connectActions)(DiscussionsIndex)
+  connect(
+    connectState,
+    connectActions
+  )(DiscussionsIndex)
 )

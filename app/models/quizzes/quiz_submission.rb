@@ -22,6 +22,7 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
   self.table_name = 'quiz_submissions'
 
   include Workflow
+  include PlannerHelper
 
   attr_readonly :quiz_id, :user_id
   attr_accessor :grader_id
@@ -65,6 +66,14 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
 
   def grade_submission!
     submission.update_attribute(:workflow_state, "graded")
+  end
+
+  after_update :update_planner_override
+
+  def update_planner_override
+    return unless self.saved_change_to_workflow_state?
+    return unless self.workflow_state == "complete"
+    complete_planner_override_for_quiz_submission(self)
   end
 
   serialize :quiz_data
@@ -852,7 +861,7 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
   def due_at
     return quiz.due_at if submission.blank?
 
-    quiz.overridden_for(submission.user, skip_clone: true).due_at
+    submission.cached_due_date
   end
 
   # same as the instance method, but with a hash of attributes, instead
@@ -864,7 +873,7 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
     due_at = if submission.blank?
       quiz.due_at
     else
-      quiz.overridden_for(submission.user, skip_clone: true).due_at
+      submission.cached_due_date
     end
     return false if due_at.blank?
 

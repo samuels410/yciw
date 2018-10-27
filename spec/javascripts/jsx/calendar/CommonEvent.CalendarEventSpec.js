@@ -106,8 +106,4 @@ define([
     calendarEvent.calendarEvent.parent_event_id = 30;
     ok(calendarEvent.consideredReserved(), 'true with appointment_group_url and parent_event_id');
   });
-
-
-
-
 })

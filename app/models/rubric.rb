@@ -110,12 +110,15 @@ class Rubric < ActiveRecord::Base
   # of rubrics.  The two main values for the 'purpose' field on
   # a rubric_association are 'grading' and 'bookmark'.  Confusing,
   # I know.
-  def destroy_for(context)
+  def destroy_for(context, current_user: nil)
     ras = rubric_associations.where(:context_id => context, :context_type => context.class.to_s)
     if context.class.to_s == 'Course'
       # if rubric is removed at the course level, we want to destroy any
       # assignment associations found in the context of the course
-      ras.each(&:destroy)
+      ras.each do |association|
+        association.updating_user = current_user
+        association.destroy
+      end
     else
       ras.update_all(:bookmarked => false, :updated_at => Time.now.utc)
     end
@@ -183,7 +186,12 @@ class Rubric < ActiveRecord::Base
                                    :use_for_grading => !!opts[:use_for_grading],
                                    :purpose => purpose
     ra.skip_updating_points_possible = opts[:skip_updating_points_possible] || @skip_updating_points_possible
-    ra.tap &:save
+    ra.updating_user = opts[:current_user]
+    if ra.save
+      association.mark_downstream_changes(["rubric"]) if association.is_a?(Assignment)
+    end
+    ra.updating_user = nil
+    ra
   end
 
   def update_with_association(current_user, rubric_params, context, association_params)
@@ -242,7 +250,7 @@ class Rubric < ActiveRecord::Base
 
   def criterion_rating(rating_data, criterion_id)
     {
-      description: (rating_data[:description] || t("No Description")).strip,
+      description: (rating_data[:description].presence || t("No Description")).strip,
       long_description: (rating_data[:long_description] || "").strip,
       points: rating_data[:points].to_f || 0,
       criterion_id: criterion_id,
@@ -270,7 +278,7 @@ class Rubric < ActiveRecord::Base
     criteria = []
     (params[:criteria] || {}).each do |idx, criterion_data|
       criterion = {}
-      criterion[:description] = (criterion_data[:description] || t('no_description', "No Description")).strip
+      criterion[:description] = (criterion_data[:description].presence || t('no_description', "No Description")).strip
       criterion[:long_description] = (criterion_data[:long_description] || "").strip
       criterion[:points] = criterion_data[:points].to_f || 0
       criterion_data[:id].strip! if criterion_data[:id]

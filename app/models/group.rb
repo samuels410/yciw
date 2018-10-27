@@ -57,7 +57,7 @@ class Group < ActiveRecord::Base
   belongs_to :wiki
   has_many :wiki_pages, as: :context, inverse_of: :context
   has_many :web_conferences, :as => :context, :inverse_of => :context, :dependent => :destroy
-  has_many :collaborations, -> { order("#{Collaboration.quoted_table_name}.title, #{Collaboration.quoted_table_name}.created_at") }, as: :context, inverse_of: :context, dependent: :destroy
+  has_many :collaborations, -> { order(Arel.sql("collaborations.title, collaborations.created_at")) }, as: :context, inverse_of: :context, dependent: :destroy
   has_many :media_objects, :as => :context, :inverse_of => :context
   has_many :content_migrations, :as => :context, :inverse_of => :context
   has_many :content_exports, :as => :context, :inverse_of => :context
@@ -491,6 +491,7 @@ class Group < ActiveRecord::Base
       can :manage_files and
       can :manage_wiki and
       can :post_to_forum and
+      can :create_forum and
       can :read and
       can :read_forum and
       can :read_announcements and
@@ -539,6 +540,7 @@ class Group < ActiveRecord::Base
       can :manage_wiki and
       can :moderate_forum and
       can :post_to_forum and
+      can :create_forum and
       can :read and
       can :read_forum and
       can :read_announcements and
@@ -550,6 +552,9 @@ class Group < ActiveRecord::Base
 
       given { |user, session| self.context && self.context.grants_all_rights?(user, session, :read_as_admin, :post_to_forum) }
       can :post_to_forum
+
+      given { |user, session| self.context && self.context.grants_all_rights?(user, session, :read_as_admin, :create_forum) }
+      can :create_forum
 
       given { |user, session| self.context && self.context.grants_right?(user, session, :view_group_pages) }
       can :read and can :read_forum and can :read_announcements and can :read_roster

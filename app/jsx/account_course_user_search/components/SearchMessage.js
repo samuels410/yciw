@@ -16,28 +16,25 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import React, { Component } from 'react'
-import Pagination, {PaginationButton} from '@instructure/ui-core/lib/components/Pagination'
-import Spinner from '@instructure/ui-core/lib/components/Spinner'
-import { array, func, string, shape, oneOf } from 'prop-types'
+import React, {Component} from 'react'
+import Billboard from '@instructure/ui-billboard/lib/components/Billboard'
+import Pagination, {PaginationButton} from '@instructure/ui-pagination/lib/components/Pagination'
+import Spinner from '@instructure/ui-elements/lib/components/Spinner'
+import {array, func, string, shape, oneOf} from 'prop-types'
 import I18n from 'i18n!account_course_user_search'
-import Alert from '@instructure/ui-alerts/lib/components/Alert'
+import View from '@instructure/ui-layout/lib/components/View'
+import EmptyDesert from './EmptyDesert'
 
 const linkPropType = shape({
   url: string.isRequired,
   page: string.isRequired
 }).isRequired
 
-
 export default class SearchMessage extends Component {
-
   static propTypes = {
     collection: shape({
       data: array.isRequired,
-      links: shape({
-        current: linkPropType,
-        last: linkPropType
-      })
+      links: shape({current: linkPropType})
     }).isRequired,
     setPage: func.isRequired,
     noneFoundMessage: string.isRequired,
@@ -46,140 +43,117 @@ export default class SearchMessage extends Component {
   }
 
   static defaultProps = {
-    getLiveAlertRegion () {
+    getLiveAlertRegion() {
       return document.getElementById('flash_screenreader_holder')
     }
   }
 
-  constructor (props) {
-    super(props);
-    this.state = {
-      pageNumbers: []
-    }
+  state = {}
 
-  }
-
-  componentWillReceiveProps (nextProps) {
+  componentWillReceiveProps(nextProps) {
     if (!nextProps.collection.loading) {
-      const newState = {
-        hasLoaded: true
-      };
-
-      if (nextProps.collection.links.last) {
-        newState.lastKnownPage = nextProps.collection.links.last;
-      } else {
-        newState.lastKnownPage = nextProps.collection.links.next;
-        newState.lastUnknown = true
-      }
-      if (this.state.pageNumbers.length !== Number(newState.lastKnownPage.page)) {
-        newState.pageNumbers = Array.from(Array(Number(newState.lastKnownPage.page)))
-      }
-      newState.currentPage = this.state.pageBecomingCurrent || Number(nextProps.collection.links.current.page)
-
-      if (this.state.pageBecomingCurrent) {
-        newState.pageBecomingCurrent = null
-      }
-
+      const newState = {}
+      if (this.state.pageBecomingCurrent) newState.pageBecomingCurrent = null
       this.setState(newState)
     }
-
-
   }
 
-  handleSetPage = (page) => {
-    this.setState({
-      pageBecomingCurrent: page,
-    }, () => {
-      this.props.setPage(page);
-    });
+  handleSetPage = page => {
+    this.setState({pageBecomingCurrent: page}, () => this.props.setPage(page))
   }
 
-  renderSearchDoneAlert = (isLoading, message) => {
-    if (isLoading) {
-      return null;
-    }
+  isLastPageUnknown() {
+    return !this.props.collection.links.last
+  }
+
+  currentPage() {
+    return this.state.pageBecomingCurrent || Number(this.props.collection.links.current.page)
+  }
+
+  lastKnownPageNumber() {
+    const link =
+      this.props.collection.links &&
+      (this.props.collection.links.last || this.props.collection.links.next)
+
+    if (!link) return 0
+    return Number(link.page)
+  }
+
+  renderPaginationButton(pageIndex) {
+    const pageNumber = pageIndex + 1
+    const isCurrent = this.state.pageBecomingCurrent
+      ? pageNumber === this.state.pageBecomingCurrent
+      : pageNumber === this.currentPage()
     return (
-      <Alert screenReaderOnly liveRegion={this.props.getLiveAlertRegion}>
-        {message}
-      </Alert>
-    );
-  };
+      <PaginationButton
+        key={pageNumber}
+        onClick={() => this.handleSetPage(pageNumber)}
+        current={isCurrent}
+        aria-label={I18n.t('Page %{pageNum}', {pageNum: pageNumber})}
+      >
+        {isCurrent && this.state.pageBecomingCurrent ? (
+          <Spinner size="x-small" title={I18n.t('Loading...')} />
+        ) : (
+          I18n.n(pageNumber)
+        )}
+      </PaginationButton>
+    )
+  }
 
-
-  render () {
-    const { collection, noneFoundMessage } = this.props
-    let resultsFoundMessage = ''
-    switch (this.props.dataType) {
-      case 'User':
-        resultsFoundMessage = I18n.t('User results updated.')
-        break;
-      case 'Course':
-        resultsFoundMessage = I18n.t('Course results updated.');
-        break;
-      default:
-        break;
-    }
-    const errorLoadingMessage = I18n.t('There was an error with your query; please try a different search')
+  render() {
+    const {collection, noneFoundMessage} = this.props
+    const errorLoadingMessage = I18n.t(
+      'There was an error with your query; please try a different search'
+    )
 
     if (collection.error) {
       return (
         <div className="text-center pad-box">
-          <div className="alert alert-error">
-            {this.renderSearchDoneAlert(collection.loading, errorLoadingMessage)}
-            {errorLoadingMessage}
-          </div>
+          <div className="alert alert-error">{errorLoadingMessage}</div>
         </div>
+      )
+    } else if (collection.loading) {
+      return (
+        <View display="block" textAlign="center" padding="medium">
+          <Spinner size="medium" title={I18n.t('Loading...')} />
+        </View>
       )
     } else if (!collection.data.length) {
       return (
-        <div className="text-center pad-box">
-          {this.renderSearchDoneAlert(collection.loading, noneFoundMessage)}
-          <div className="alert alert-info">{noneFoundMessage}</div>
-        </div>
+        <Billboard size="large" heading={noneFoundMessage} headingAs="h2" hero={<EmptyDesert />} />
       )
     } else if (collection.links) {
+      const lastPageNumber = this.lastKnownPageNumber()
+      const lastIndex = lastPageNumber - 1
+      const paginationButtons = Array.from(Array(lastPageNumber))
+      paginationButtons[0] = this.renderPaginationButton(0)
+      paginationButtons[lastIndex] = this.renderPaginationButton(lastIndex)
+      const visiblePageRangeStart = Math.max(this.currentPage() - 10, 0)
+      const visiblePageRangeEnd = Math.min(this.currentPage() + 10, lastIndex)
+      for (let i = visiblePageRangeStart; i < visiblePageRangeEnd; i++) {
+        paginationButtons[i] = this.renderPaginationButton(i)
+      }
+
       return (
-        <div>
-          {this.renderSearchDoneAlert(collection.loading, resultsFoundMessage)}
-          <Pagination
-            variant="compact"
-            labelNext={I18n.t('Next Page')}
-            labelPrev={I18n.t('Previous Page')}
-          >
-            {this.state.pageNumbers.map((v, i) => {
-              const pageNumber = i + 1
-              const isCurrent = (this.state.pageBecomingCurrent) ?
-                              pageNumber === this.state.pageBecomingCurrent :
-                              pageNumber === this.state.currentPage;
-              return (
-                <PaginationButton
-                  key={pageNumber}
-                  onClick={() => this.handleSetPage(pageNumber)}
-                  current={isCurrent}
-                >
-                    { isCurrent && this.state.pageBecomingCurrent ? (
-                      <Spinner size="x-small" title={I18n.t('Loading...')} />
-                    ) : (
-                      I18n.n(pageNumber)
-                    )}
-                </PaginationButton>
-              )
-            }).concat(this.state.lastUnknown
-              ? <span key="page-count-is-unknown-indicator" aria-hidden>...</span>
-              : []
-            )}
-          </Pagination>
-        </div>
+        <Pagination
+          as="nav"
+          variant="compact"
+          labelNext={I18n.t('Next Page')}
+          labelPrev={I18n.t('Previous Page')}
+        >
+          {paginationButtons.concat(
+            this.isLastPageUnknown() ? (
+              <span key="page-count-is-unknown-indicator" aria-hidden>
+                ...
+              </span>
+            ) : (
+              []
+            )
+          )}
+        </Pagination>
       )
     } else {
-      return (
-        <div>
-          {this.renderSearchDoneAlert(collection.loading, resultsFoundMessage)}
-        </div>
-      )
+      return <div />
     }
   }
 }
-
-
-

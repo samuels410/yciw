@@ -48,6 +48,7 @@ shared_examples_for "file uploads api" do
       'content-type' => attachment.content_type,
       'display_name' => attachment.display_name,
       'filename' => attachment.filename,
+      'workflow_state' => "processed",
       'size' => attachment.size,
       'unlock_at' => attachment.unlock_at ? attachment.unlock_at.as_json : nil,
       'locked' => !!attachment.locked,
@@ -102,7 +103,7 @@ shared_examples_for "file uploads api" do
 
     # step 3, confirmation
     post response['Location'], headers: { 'Authorization' => "Bearer #{access_token_for_user @user}" }
-    expect(response).to be_success
+    expect(response).to be_successful
     attachment.reload
     json = json_parse(response.body)
     expected_json = {
@@ -113,6 +114,7 @@ shared_examples_for "file uploads api" do
         'content-type' => attachment.content_type,
         'display_name' => attachment.display_name,
         'filename' => attachment.filename,
+        'workflow_state' => "processed",
         'size' => tmpfile.size,
         'unlock_at' => nil,
         'locked' => false,
@@ -166,7 +168,7 @@ shared_examples_for "file uploads api" do
 
     # step 3, confirmation
     post redir, headers: { 'Authorization' => "Bearer #{access_token_for_user @user}" }
-    expect(response).to be_success
+    expect(response).to be_successful
     attachment.reload
     json = json_parse(response.body)
     expect(json).to eq attachment_json(attachment, { include: %w(enhanced_preview_url) })
@@ -312,7 +314,7 @@ shared_examples_for "file uploads api" do
   end
 
   def run_download_job
-    expect(Delayed::Job.strand_size('file_download')).to be > 0
+    expect(Delayed::Job.list_jobs(:tag, 10, 0, 'Attachment#clone_url').length).to be > 0
     run_jobs
   end
 
@@ -362,7 +364,7 @@ shared_examples_for "file uploads api with folders" do
     post_params = json["upload_params"].merge({"file" => tmpfile})
     send_multipart(json["upload_url"], post_params)
     post response['Location'], headers: { 'Authorization' => "Bearer #{access_token_for_user @user}" }
-    expect(response).to be_success
+    expect(response).to be_successful
     attachment = Attachment.order(:id).last
     expect(a1.reload).to be_deleted
     expect(attachment.reload).to be_available
@@ -399,7 +401,7 @@ shared_examples_for "file uploads api with folders" do
     post_params = json["upload_params"].merge({"file" => tmpfile})
     send_multipart(json["upload_url"], post_params)
     post response['Location'], headers: { 'Authorization' => "Bearer #{access_token_for_user @user}" }
-    expect(response).to be_success
+    expect(response).to be_successful
     attachment = Attachment.order(:id).last
     expect(a1.reload).to be_available
     expect(attachment.reload).to be_available
@@ -438,7 +440,7 @@ shared_examples_for "file uploads api with folders" do
                                     })
 
     post redir, headers: { 'Authorization' => "Bearer #{access_token_for_user @user}" }
-    expect(response).to be_success
+    expect(response).to be_successful
     expect(a1.reload).to be_available
     expect(attachment.reload).to be_available
     expect(attachment.display_name).to eq "test-1.txt"

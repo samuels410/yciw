@@ -122,6 +122,21 @@ describe LoginController do
                             controller.url_for(controller: 'login/canvas', action: :new)+'?pseudonym_session%5Bunique_id%5D=test')
     end
 
+    context 'given an html request' do
+      before { get :new, format: :html }
+
+      it 'response with an html content type' do
+        expect(response.headers.fetch('Content-Type')).to match(/\Atext\/html/)
+      end
+    end
+
+    context 'given a pdf request' do
+      before { get :new, format: :pdf }
+
+      it 'response with an html content type' do
+        expect(response.headers.fetch('Content-Type')).to match(/\Atext\/html/)
+      end
+    end
   end
 
   describe "#logout" do
@@ -129,7 +144,7 @@ describe LoginController do
       enable_forgery_protection do
         delete 'destroy'
         # it could be a 422, or 0 if error handling isn't enabled properly in specs
-        expect(response).to_not be_success
+        expect(response).to_not be_successful
         expect(response).to_not be_redirect
       end
     end
@@ -179,7 +194,7 @@ describe LoginController do
     it "renders if you are logged in" do
       user_session(user_factory)
       get 'logout_landing'
-      expect(response).to be_success
+      expect(response).to be_successful
       expect(response).to render_template(:logout_confirm)
     end
   end

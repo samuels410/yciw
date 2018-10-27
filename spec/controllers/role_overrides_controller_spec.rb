@@ -207,5 +207,14 @@ describe RoleOverridesController do
         expect(json['message']).to be
       end
     end
+
+    describe "GET index" do
+      it "loads new bundle for new permissions flag" do
+        get 'index', params: {:account_id => @account.id}
+        expect(response).to be_successful
+        expect(assigns[:js_bundles].length).to eq 1
+        expect(assigns[:js_bundles].first).to include :permissions_index
+      end
+    end
   end
 end

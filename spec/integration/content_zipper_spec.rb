@@ -25,7 +25,7 @@ describe ContentZipper do
   # This really needs to get refactored at some point.
   def grab_zip
     expect { yield }.to change(Delayed::Job, :count).by(1)
-    expect(response).to be_success
+    expect(response).to be_successful
     attachment_id = json_parse['attachment']['id']
     expect(attachment_id).to be_present
 
@@ -34,7 +34,7 @@ describe ContentZipper do
 
     # a second query should just return status
     expect { yield }.to change(Delayed::Job, :count).by(0)
-    expect(response).to be_success
+    expect(response).to be_successful
     expect(json_parse['attachment']['id']).to eq a.id
   end
 
@@ -56,7 +56,7 @@ describe ContentZipper do
       get "/courses/#{@course.id}/assignments/#{@assignment.id}/submissions.json?zip=1&compile=1"
       att0 = json_parse['attachment']['id']
 
-      @course.enable_feature! :anonymous_grading
+      @assignment.update!(anonymous_grading: true)
       get "/courses/#{@course.id}/assignments/#{@assignment.id}/submissions.json?zip=1&compile=1"
       att1 = json_parse['attachment']['id']
 

@@ -63,13 +63,17 @@ import regularizePathname from '../external_apps/lib/regularizePathname'
   };
 
   const renderConfigurations = (ctx) => {
-    ReactDOM.render(
-      <Root>
-        <Configurations
-          pathname={ctx.pathname}
-          env={window.ENV} />
-      </Root>
-    , targetNodeToRenderIn);
+    // router.start is only called when loading the Apps tab
+    // so we don't want to try anything here that hasn't happened.
+    if (targetNodeToRenderIn) {
+      ReactDOM.render(
+        <Root>
+          <Configurations
+            pathname={ctx.pathname}
+            env={window.ENV} />
+        </Root>
+      , targetNodeToRenderIn);
+    }
   }
 
   /**
@@ -87,7 +91,8 @@ export default {
       page.start();
     },
     stop () {
-      page.stop();
+      // we may not be the only thing using page on this page. 
+      // page.stop();
     },
     regularizePathname
   };

@@ -200,7 +200,7 @@ test('render hides date picker and points_possible for pages', function() {
 })
 
 test('onSaveSuccess adds model to assignment group for creation', function() {
-  this.stub(DialogFormView.prototype, 'close')
+  sandbox.stub(DialogFormView.prototype, 'close')
   equal(this.group.get('assignments').length, 2)
   const view = createView(this.group)
   view.onSaveSuccess()
@@ -208,7 +208,7 @@ test('onSaveSuccess adds model to assignment group for creation', function() {
 })
 
 test('the form is cleared after adding an assignment', function() {
-  this.stub(DialogFormView.prototype, 'close')
+  sandbox.stub(DialogFormView.prototype, 'close')
   const view = createView(this.group)
   view.onSaveSuccess()
   equal(view.$(`#ag_${this.group.id}_assignment_name`).val(), '')
@@ -216,15 +216,15 @@ test('the form is cleared after adding an assignment', function() {
 })
 
 test('moreOptions redirects to new page for creation', function() {
-  this.stub(CreateAssignmentView.prototype, 'newAssignmentUrl')
-  this.stub(CreateAssignmentView.prototype, 'redirectTo')
+  sandbox.stub(CreateAssignmentView.prototype, 'newAssignmentUrl')
+  sandbox.stub(CreateAssignmentView.prototype, 'redirectTo')
   const view = createView(this.group)
   view.moreOptions()
   ok(view.redirectTo.called)
 })
 
 test('moreOptions redirects to edit page for editing', function() {
-  this.stub(CreateAssignmentView.prototype, 'redirectTo')
+  sandbox.stub(CreateAssignmentView.prototype, 'redirectTo')
   const view = createView(this.assignment1)
   view.moreOptions()
   ok(view.redirectTo.called)
@@ -233,11 +233,11 @@ test('moreOptions redirects to edit page for editing', function() {
 test('moreOptions creates a quiz if submission_types is online_quiz', function() {
   const newQuizUrl = 'http://example.com/course/1/quizzes/new'
   const formData = {submission_types: 'online_quiz'}
-  this.stub(CreateAssignmentView.prototype, 'getFormData').returns(formData)
-  this.stub(CreateAssignmentView.prototype, 'newQuizUrl').returns(newQuizUrl)
-  this.stub(CreateAssignmentView.prototype, 'redirectTo')
+  sandbox.stub(CreateAssignmentView.prototype, 'getFormData').returns(formData)
+  sandbox.stub(CreateAssignmentView.prototype, 'newQuizUrl').returns(newQuizUrl)
+  sandbox.stub(CreateAssignmentView.prototype, 'redirectTo')
   const quizEditUrl = 'http://example.com/course/1/quizzes/42/edit'
-  this.stub($, 'post').returns($.Deferred().resolve({url: quizEditUrl}))
+  sandbox.stub($, 'post').returns($.Deferred().resolve({url: quizEditUrl}))
   const view = createView(this.assignment1)
   view.moreOptions()
   ok($.post.calledWith(newQuizUrl, formData))
@@ -286,34 +286,34 @@ test('toJSON includes key for isInClosedPeriod', function() {
 
 test('disableDueAt returns true if due_at is a frozen attribute', function() {
   const view = createView(this.assignment1)
-  this.stub(view.model, 'frozenAttributes').returns(['due_at'])
+  sandbox.stub(view.model, 'frozenAttributes').returns(['due_at'])
   equal(view.disableDueAt(), true)
 })
 
 test('disableDueAt returns false if the user is an admin', function() {
   const view = createView(this.assignment1)
-  this.stub(view, 'currentUserIsAdmin').returns(true)
+  sandbox.stub(view, 'currentUserIsAdmin').returns(true)
   equal(view.disableDueAt(), false)
 })
 
 test('disableDueAt returns true if the user is not an admin and the assignment has a due date in a closed grading period', function() {
   const view = createView(this.assignment1)
-  this.stub(view, 'currentUserIsAdmin').returns(false)
-  this.stub(view.model, 'inClosedGradingPeriod').returns(true)
+  sandbox.stub(view, 'currentUserIsAdmin').returns(false)
+  sandbox.stub(view.model, 'inClosedGradingPeriod').returns(true)
   equal(view.disableDueAt(), true)
 })
 
 test("openAgain doesn't add datetime for multiple dates", function() {
-  this.stub(DialogFormView.prototype, 'openAgain')
-  this.spy($.fn, 'datetime_field')
+  sandbox.stub(DialogFormView.prototype, 'openAgain')
+  sandbox.spy($.fn, 'datetime_field')
   const view = createView(this.assignment1)
   view.openAgain()
   ok($.fn.datetime_field.notCalled)
 })
 
 test('openAgain adds datetime picker', function() {
-  this.stub(DialogFormView.prototype, 'openAgain')
-  this.spy($.fn, 'datetime_field')
+  sandbox.stub(DialogFormView.prototype, 'openAgain')
+  sandbox.spy($.fn, 'datetime_field')
   I18nStubber.setLocale('fr_FR')
   I18nStubber.stub('fr_FR', {
     'date.formats.medium': '%a %-d %b %Y %-k:%M',
@@ -326,10 +326,10 @@ test('openAgain adds datetime picker', function() {
 })
 
 test("openAgain doesn't add datetime picker if disableDueAt is true", function() {
-  this.stub(DialogFormView.prototype, 'openAgain')
-  this.spy($.fn, 'datetime_field')
+  sandbox.stub(DialogFormView.prototype, 'openAgain')
+  sandbox.spy($.fn, 'datetime_field')
   const view = createView(this.assignment2)
-  this.stub(view, 'disableDueAt').returns(true)
+  sandbox.stub(view, 'disableDueAt').returns(true)
   view.openAgain()
   ok($.fn.datetime_field.notCalled)
 })
@@ -357,7 +357,7 @@ test('requires due_at to be in an open grading period if it is being changed and
     }
   ]
   const view = createView(this.assignment1)
-  this.stub(view, 'currentUserIsAdmin').returns(false)
+  sandbox.stub(view, 'currentUserIsAdmin').returns(false)
   const data = {
     name: 'Foo',
     due_at: '2103-08-15T06:00:00Z'
@@ -379,7 +379,7 @@ test('does not require due_at to be in an open grading period if it is being cha
     }
   ]
   const view = createView(this.assignment1)
-  this.stub(view, 'currentUserIsAdmin').returns(true)
+  sandbox.stub(view, 'currentUserIsAdmin').returns(true)
   const data = {
     name: 'Foo',
     due_at: '2103-08-15T06:00:00Z'
@@ -547,4 +547,63 @@ test('renders due dates in appropriate time zone', function() {
       .trim(),
     'Aug 27'
   )
+})
+
+QUnit.module('due_at', (hooks) => {
+  const date = '2000-08-28T11:59:23'
+  const assignment = {
+    id: 1,
+    name: 'Charlie Brown Quiz',
+    due_at: $.unfudgeDateForProfileTimezone(new Date(date).toISOString())
+  }
+  let view
+
+  hooks.beforeEach(() => {
+    view = createView(new Assignment(buildAssignment(assignment)))
+  })
+
+  hooks.afterEach(() => {
+    view.$el.toJSON.restore()
+  })
+
+  test('sets due_at seconds to 59 if the year has changed', function() {
+    sinon.stub(view.$el, 'toJSON').returns({due_at: new Date('2001-08-28T11:59:00').toISOString()})
+    strictEqual(view.getFormData().due_at, '2001-08-28T11:59:59.000Z')
+  })
+
+  test('sets due_at seconds to 59 if the month has changed', function() {
+    sinon.stub(view.$el, 'toJSON').returns({due_at: new Date('2000-09-28T11:59:00').toISOString()})
+    strictEqual(view.getFormData().due_at, '2000-09-28T11:59:59.000Z')
+  })
+
+  test('sets due_at seconds to 59 if the day has changed', function() {
+    sinon.stub(view.$el, 'toJSON').returns({due_at: new Date('2000-08-29T11:59:00').toISOString()})
+    strictEqual(view.getFormData().due_at, '2000-08-29T11:59:59.000Z')
+  })
+
+  test('sets due_at seconds to 59 if the hour has changed', function() {
+    sinon.stub(view.$el, 'toJSON').returns({due_at: new Date('2000-08-28T10:59:00').toISOString()})
+    strictEqual(view.getFormData().due_at, '2000-08-28T10:59:59.000Z')
+  })
+
+  test('sets due_at seconds to 59 if the minute has changed', function() {
+    sinon.stub(view.$el, 'toJSON').returns({due_at: new Date('2000-08-28T11:58:00').toISOString()})
+    strictEqual(view.getFormData().due_at, '2000-08-28T11:58:59.000Z')
+  })
+
+  test('keeps original due_at seconds if the date has not changed', function() {
+    sinon.stub(view.$el, 'toJSON').returns({due_at: new Date(date).toISOString()})
+    strictEqual(view.getFormData().due_at, '2000-08-28T11:59:23.000Z')
+  })
+
+  // Seems counterintuitive, but the UI doesn't allow updating the seconds
+  // value, but the form will always return a seconds value of 00. In the case
+  // that the due_at had seconds set to non-00, we should ignore that.
+  test('keeps the original due_at seconds even if the seconds value has changed', function() {
+    const expectedDate = $.unfudgeDateForProfileTimezone(new Date(date))
+    const changedSecondsDate = new Date(date)
+    changedSecondsDate.setSeconds((changedSecondsDate.getSeconds() + 1) % 60)
+    sinon.stub(view.$el, 'toJSON').returns({due_at: changedSecondsDate.toISOString()})
+    strictEqual(view.getFormData().due_at, expectedDate.toISOString())
+  })
 })

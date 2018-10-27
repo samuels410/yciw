@@ -17,6 +17,9 @@
 %>
 
 <%
+  js_env ga_page_title: "#{@context.name} People"
+%>
+<%
   add_crumb(t('#crumbs.people', "People"), context_url(@context, :context_users_url))
   add_crumb(context_user_name(@context, @user), context_url(@context, :context_user_url, @user))
   @active_tab="people"
@@ -74,12 +77,17 @@
         <%= link[:text] %>
       </a>
     <% end %>
+    <% if @user.grants_right?(@current_user, :generate_observer_pairing_code) &&
+          @user.has_student_enrollment? &&
+          @domain_root_account.self_registration? %>
+      <div id="pairing-code"></div>
+    <% end %>
   </div>
   <a href="<%= user_profile_path(@current_user) %>" class="profile_url" style="display: none;">&nbsp;</a>
 <% end %>
 
 <% js_bundle :user_name %>
-<% css_bundle :roster_user %>
+<% css_bundle :roster_user, :pairing_code %>
 
 <%= render :partial => 'shared/profile' %>
 
@@ -156,6 +164,9 @@
           </tr>
         <% end %>
       </table>
+      <% if @context.is_a?(Course) && can_do(@context, @current_user, :manage_admin_users) %>
+        <div id="student_last_attended__component"></div>
+      <% end %>
     </fieldset>
     <%= render :partial => 'courses/link_enrollment' %>
   <% end %>

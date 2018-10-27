@@ -15,9 +15,9 @@
  * You should have received a copy of the GNU Affero General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-import Autocomplete from '@instructure/ui-core/lib/components/Autocomplete'
-import Container from '@instructure/ui-core/lib/components/Container'
-import AccessibleContent from '@instructure/ui-core/lib/components/AccessibleContent'
+import Select from '@instructure/ui-forms/lib/components/Select'
+import View from '@instructure/ui-layout/lib/components/View'
+import AccessibleContent from '@instructure/ui-a11y/lib/components/AccessibleContent'
 import React from 'react'
 import I18n from 'i18n!sections_autocomplete'
 import PropTypes from 'prop-types'
@@ -27,6 +27,12 @@ const ALL_SECTIONS_OBJ = {id: 'all', name: I18n.t('All Sections')}
 
 function extractIds(arr) {
   return arr.map((element) => element.id)
+}
+
+function sortSectionName(a,b) {
+  if(a.name.toLowerCase() < b.name.toLowerCase()) return -1;
+  if(a.name.toLowerCase() > b.name.toLowerCase()) return 1;
+  return 0;
 }
 
 export default class SectionsAutocomplete extends React.Component {
@@ -45,7 +51,7 @@ export default class SectionsAutocomplete extends React.Component {
   }
 
   state = {
-    sections: this.props.sections.concat([ALL_SECTIONS_OBJ]),
+    sections: this.props.sections.concat([ALL_SECTIONS_OBJ]).sort(sortSectionName),
     selectedSectionsValue: extractIds(this.props.selectedSections),
     messages: []
   }
@@ -82,8 +88,23 @@ export default class SectionsAutocomplete extends React.Component {
   }
 
   render () {
+    // NOTE: the hidden input is used by the erb that this component is rendered in
+    // If we do not have the hidden component then the erb tries to grab the element
+    // and will block the submission because it does not exist
+    // One day we should probably try to decouple this
+    if(this.props.disabled) {
+      return(
+        <div id="disabled_sections_autocomplete">
+          <input
+            name="specific_sections"
+            type="hidden"
+            value={this.state.selectedSectionsValue}/>
+        </div>
+      );
+    }
+
     return (
-      <Container
+      <View
         display="block"
         margin="0 0 large 0"
       >
@@ -91,7 +112,8 @@ export default class SectionsAutocomplete extends React.Component {
           name="specific_sections"
           type="hidden"
           value={this.state.selectedSectionsValue}/>
-        <Autocomplete
+        <Select
+          editable
           label={I18n.t('Post to')}
           selectedOption={this.state.selectedSectionsValue}
           messages={this.state.messages}
@@ -107,8 +129,8 @@ export default class SectionsAutocomplete extends React.Component {
               {section.name}
             </option>
           ))}
-        </Autocomplete>
-      </Container>
+        </Select>
+      </View>
     )
   }
 }

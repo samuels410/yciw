@@ -20,32 +20,48 @@ import React, {Component} from 'react'
 import PropTypes from 'prop-types'
 import ReactDOM from 'react-dom'
 import I18n from 'i18n!outcomes'
-import Spinner from '@instructure/ui-core/lib/components/Spinner'
-import Heading from '@instructure/ui-core/lib/components/Heading'
-import Text from '@instructure/ui-core/lib/components/Text'
+import Spinner from '@instructure/ui-elements/lib/components/Spinner'
+import Heading from '@instructure/ui-elements/lib/components/Heading'
+import Text from '@instructure/ui-elements/lib/components/Text'
 import { showFlashAlert } from '../shared/FlashAlert'
 import * as apiClient from './apiClient'
 
-export function showOutcomesImporterIfInProgress (props, userId) {
+const unmount = (mount) => () => ReactDOM.unmountComponentAtNode(mount)
+export function showOutcomesImporterIfInProgress ({ mount, ...props }, userId) {
   return apiClient.queryImportStatus(props.contextUrlRoot, 'latest').
     then((response) => {
       if (response.status === 200 && response.data.workflow_state === 'importing') {
         const importId = response.data.id
         const invokedImport = userId === response.data.user.id
-        ReactDOM.render(<OutcomesImporter {...props} importId={importId} invokedImport={invokedImport} />, props.mount)
+        ReactDOM.render(
+          <OutcomesImporter
+            {...props}
+            hide={unmount(mount)}
+            importId={importId}
+            invokedImport={invokedImport}
+          />,
+          mount
+        )
       }
     }).
     catch(() => {
     })
 }
 
-export function showOutcomesImporter (props) {
-  ReactDOM.render(<OutcomesImporter {...props} invokedImport/>, props.mount)
+export function showOutcomesImporter ({ mount, ...props }) {
+  ReactDOM.render(
+    <OutcomesImporter
+      {...props}
+      hide={unmount(mount)}
+      invokedImport
+    />,
+    mount
+  )
 }
 
 export default class OutcomesImporter extends Component {
   static propTypes = {
-    mount: PropTypes.instanceOf(Element).isRequired,
+    hide: PropTypes.func.isRequired,
     disableOutcomeViews: PropTypes.func.isRequired,
     resetOutcomeViews: PropTypes.func.isRequired,
     file: PropTypes.instanceOf(File),
@@ -92,8 +108,8 @@ export default class OutcomesImporter extends Component {
   }
 
   completeUpload (count, succeeded) {
-    const {mount, resetOutcomeViews, invokedImport} = this.props
-    if (mount) ReactDOM.unmountComponentAtNode(mount)
+    const {hide, resetOutcomeViews, invokedImport} = this.props
+    if (hide) hide()
     resetOutcomeViews()
     if (!invokedImport) {
       return

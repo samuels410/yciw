@@ -33,6 +33,7 @@ if ENV['COVERAGE'] == "1"
 end
 
 require File.expand_path('../../config/environment', __FILE__) unless defined?(Rails)
+
 require 'rspec/rails'
 
 require 'webmock'
@@ -191,9 +192,8 @@ require File.expand_path(File.dirname(__FILE__) + '/ams_spec_helper')
 
 require 'i18n_tasks'
 
-factories = "#{File.dirname(__FILE__).gsub(/\\/, "/")}/factories/*.rb"
 legit_global_methods = Object.private_methods
-Dir.glob(factories).each { |file| require file }
+Dir[File.dirname(__FILE__) + "/factories/**/*.rb"].each {|f| require f }
 crap_factories = (Object.private_methods - legit_global_methods)
 if crap_factories.present?
   $stderr.puts "\e[31mError: Don't create global factories/helpers"
@@ -203,8 +203,7 @@ if crap_factories.present?
   exit! 1
 end
 
-examples = "#{File.dirname(__FILE__).gsub(/\\/, "/")}/shared_examples/*.rb"
-Dir.glob(examples).each { |file| require file }
+Dir[File.dirname(__FILE__) + "/shared_examples/**/*.rb"].each {|f| require f }
 
 # rspec aliases :describe to :context in a way that it's pretty much defined
 # globally on every object. :context is already heavily used in our application,
@@ -216,6 +215,8 @@ if defined?(Spec::DSL::Main)
     remove_method :context if respond_to? :context
   end
 end
+
+RSpec::Mocks.configuration.allow_message_expectations_on_nil = false
 
 RSpec::Matchers.define_negated_matcher :not_eq, :eq
 RSpec::Matchers.define_negated_matcher :not_have_key, :have_key
@@ -239,6 +240,27 @@ RSpec::Matchers.define :match_ignoring_whitespace do |expected|
 
   match do |actual|
     whitespaceless(actual) == whitespaceless(expected)
+  end
+end
+
+RSpec::Matchers.define :match_path do |expected|
+  match do |actual|
+    path = URI(actual).path
+    values_match?(expected, path)
+  end
+end
+
+RSpec::Matchers.define :and_query do |expected|
+  match do |actual|
+    query = Rack::Utils.parse_query(URI(actual).query)
+    values_match?(expected, query)
+  end
+end
+
+RSpec::Matchers.define :and_fragment do |expected|
+  match do |actual|
+    fragment = JSON.parse(URI.decode_www_form_component(URI(actual).fragment))
+    values_match?(expected, fragment)
   end
 end
 
@@ -293,18 +315,26 @@ RSpec::Expectations.configuration.on_potential_false_positives = :raise
 RSpec.configure do |config|
   config.use_transactional_fixtures = true
   config.use_instantiated_fixtures = false
-  config.fixture_path = Rails.root+'spec/fixtures/'
+  config.fixture_path = Rails.root.join('spec', 'fixtures')
   config.infer_spec_type_from_file_location!
   config.raise_errors_for_deprecations!
   config.color = true
   config.order = :random
-  config.filter_run_excluding :pact
+
+  # The Pact specs have prerequisite setup steps so we exclude them by default
+  config.filter_run_excluding :pact_live_events if ENV.fetch('RUN_LIVE_EVENTS_CONTRACT_TESTS', '0') == '0'
 
   config.include Helpers
   config.include Factories
   config.include RequestHelper, type: :request
   config.include Onceler::BasicHelpers
   config.project_source_dirs << "gems" # so that failures here are reported properly
+
+  if ENV['RAILS_LOAD_ALL_LOCALES'] && RSpec.configuration.filter.rules[:i18n]
+    config.around :each do |example|
+      SpecMultipleLocales.run(example)
+    end
+  end
 
   config.around(:each) do |example|
     Rails.logger.info "STARTING SPEC #{example.full_description}"
@@ -448,6 +478,44 @@ RSpec.configure do |config|
     Canvas.redis_used = false
   end
 
+  if Bullet.enable?
+    config.before(:each) do |example|
+      Bullet.start_request
+      # we walk the example group chain until we reach one that actually recorded something
+      oncie = example.example_group
+      oncie = oncie.superclass while oncie && !oncie.onceler&.tape && oncie.superclass.respond_to?(:onceler)
+
+      possible_objects, impossible_objects = oncie.onceler.instance_variable_get(:@bullet_state)
+      possible_objects&.each { |object| Bullet::Detector::NPlusOneQuery.possible_objects.add(object) }
+      impossible_objects&.each { |object| Bullet::Detector::NPlusOneQuery.impossible_objects.add(object) }
+    end
+
+    config.after(:each) do
+      Bullet.perform_out_of_channel_notifications if Bullet.notification?
+      Bullet.end_request
+    end
+
+    Onceler.configure do |config|
+      config.before(:record) do
+        Bullet.start_request
+        possible_objects, impossible_objects =
+          onceler.parent&.instance_variable_get(:@bullet_state)
+        possible_objects&.each { |object| Bullet::Detector::NPlusOneQuery.possible_objects.add(object) }
+        impossible_objects&.each { |object| Bullet::Detector::NPlusOneQuery.impossible_objects.add(object) }
+      end
+
+      config.after(:record) do |tape|
+        tape.onceler.instance_variable_set(:@bullet_state, [
+          Bullet::Detector::NPlusOneQuery.possible_objects.registry.values.map(&:to_a).flatten,
+          Bullet::Detector::NPlusOneQuery.impossible_objects.registry.values.map(&:to_a).flatten,
+        ])
+
+        Bullet.perform_out_of_channel_notifications if Bullet.notification?
+        Bullet.end_request
+      end
+    end
+  end
+
   #****************************************************************
   # There used to be a lot of factory methods here!
   # In an effort to move us toward a nicer test factory solution,
@@ -537,9 +605,7 @@ RSpec.configure do |config|
     path = generate_csv_file(lines)
     opts[:files] = [path]
 
-    use_parallel = SisBatch.use_parallel_importers?(account)
-    import_class = use_parallel ? SIS::CSV::ImportRefactored : SIS::CSV::Import
-    importer = import_class.process(account, opts)
+    importer = SIS::CSV::ImportRefactored.process(account, opts)
     run_jobs
 
     File.unlink path
@@ -818,9 +884,15 @@ RSpec.configure do |config|
       klass.connection.bulk_insert klass.table_name, records
       return if return_type == :nil
       scope = klass.order("id DESC").limit(records.size)
-      return_type == :record ?
-        scope.to_a.reverse :
+      if return_type == :record
+        records = scope.to_a.reverse
+        if Bullet.enable?
+          records.each { |record| Bullet::Detector::NPlusOneQuery.add_impossible_object(record) }
+        end
+        records
+      else
         scope.pluck(:id).reverse
+      end
     end
   end
 end
@@ -854,16 +926,11 @@ class I18n::Backend::Simple
   alias_method :available_locales_without_stubs, :available_locales
 end
 
-Dir[Rails.root+'{gems,vendor}/plugins/*/spec_canvas/spec_helper.rb'].each do |f|
-  require f
-end
+Dir[Rails.root+'{gems,vendor}/plugins/*/spec_canvas/spec_helper.rb'].each { |file| require file }
 
 Shoulda::Matchers.configure do |config|
   config.integrate do |with|
-    # Choose a test framework:
     with.test_framework :rspec
-
-    # Choose one or more libraries:
     with.library :active_record
     with.library :active_model
     # Disable the action_controller matchers until shoulda-matchers supports new compound matchers

@@ -306,11 +306,18 @@ describe "Outcome Reports" do
           expect(first_outcome[RATING_INDEX + 12]).to be_nil
           expect(first_outcome[RATING_INDEX + 13]).to be_nil
         end
+
+        it 'exports successfully with no ratings' do
+          @root_outcome_1.data = nil
+          @root_outcome_1.save!
+          default_count = LearningOutcome.default_rubric_criterion[:ratings].length
+          expect(first_outcome.length).to eq RATING_INDEX + (default_count * 2)
+        end
       end
 
       context 'in a different locale' do
         before do
-          account.update(default_locale: :sv)
+          account.update(default_locale: :de)
         end
 
         it 'formats mastery points' do

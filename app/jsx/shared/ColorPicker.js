@@ -21,30 +21,30 @@ import React from 'react'
 import ReactDOM from 'react-dom'
 import PropTypes from 'prop-types'
 import ReactModal from 'react-modal'
-import Button from '@instructure/ui-core/lib/components/Button'
-import TextInput from '@instructure/ui-core/lib/components/TextInput'
-import ScreenReaderContent from '@instructure/ui-core/lib/components/ScreenReaderContent'
+import Button from '@instructure/ui-buttons/lib/components/Button'
+import TextInput from '@instructure/ui-forms/lib/components/TextInput'
+import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
 import I18n from 'i18n!calendar_color_picker'
 import CourseNicknameEdit from './CourseNicknameEdit'
 import classnames from 'classnames'
 import 'compiled/jquery.rails_flash_notifications'
 
-  var PREDEFINED_COLORS = [
-    {hexcode: '#EF4437', name: I18n.t('Red')},
-    {hexcode: '#E71F63', name: I18n.t('Pink')},
+  export const PREDEFINED_COLORS = [
+    {hexcode: '#BD3C14', name: I18n.t('Brick')},
+    {hexcode: '#FF2717', name: I18n.t('Red')},
+    {hexcode: '#E71F63', name: I18n.t('Magenta')},
     {hexcode: '#8F3E97', name: I18n.t('Purple')},
     {hexcode: '#65499D', name: I18n.t('Deep Purple')},
     {hexcode: '#4554A4', name: I18n.t('Indigo')},
-    {hexcode: '#2083C5', name: I18n.t('Blue')},
-    {hexcode: '#35A4DC', name: I18n.t('Light Blue')},
-    {hexcode: '#09BCD3', name: I18n.t('Cyan')},
+    {hexcode: '#1770AB', name: I18n.t('Blue')},
+    {hexcode: '#0B9BE3', name: I18n.t('Light Blue')},
+    {hexcode: '#06A3B7', name: I18n.t('Cyan')},
     {hexcode: '#009688', name: I18n.t('Teal')},
-    {hexcode: '#43A047', name: I18n.t('Green')},
-    {hexcode: '#8BC34A', name: I18n.t('Light Green')},
-    {hexcode: '#FDC010', name: I18n.t('Yellow')},
-    {hexcode: '#F8971C', name: I18n.t('Orange')},
-    {hexcode: '#F0592B', name: I18n.t('Deep Orange')},
-    {hexcode: '#F06291', name: I18n.t('Light Pink')}
+    {hexcode: '#009606', name: I18n.t('Green')},
+    {hexcode: '#8D9900', name: I18n.t('Olive')},
+    {hexcode: '#D97900', name: I18n.t('Pumpkin')},
+    {hexcode: '#FD5D10', name: I18n.t('Orange')},
+    {hexcode: '#F06291', name: I18n.t('Pink')}
   ];
 
   function shouldApplySwatchBorderColor (color) {
@@ -259,7 +259,8 @@ import 'compiled/jquery.rails_flash_notifications'
         this.setState({ saveInProgress: true }, () => {
           // this is pretty hacky, however until ColorPicker is extracted into an instructure-ui
           // component this is the simplest way to avoid extracting Course Color specific code
-          if (this.props.parentComponent === 'StatusColorListItem') {
+          if (this.props.parentComponent === 'StatusColorListItem' ||
+              this.props.parentComponent === 'ProficiencyRating') {
             this.props.setStatusColor(this.state.currentColor, handleSuccess, handleFailure);
           } else {
             // both API calls update the same User model and thus need to be performed serially

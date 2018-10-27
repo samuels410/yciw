@@ -486,11 +486,24 @@ class ExternalToolsController < ApplicationController
     opts = default_opts.merge(opts)
 
     assignment = @context.assignments.active.find(params[:assignment_id]) if params[:assignment_id]
-    adapter = Lti::LtiOutboundAdapter.new(tool, @current_user, @context).prepare_tool_launch(
-      @return_url,
-      variable_expander(assignment: assignment, tool: tool, launch: lti_launch, post_message_token: opts[:launch_token]),
-      opts
-    )
+    expander = variable_expander(assignment: assignment, tool: tool, launch: lti_launch, post_message_token: opts[:launch_token])
+
+    adapter = if tool.settings.fetch('use_1_3', false)
+      Lti::LtiAdvantageAdapter.new(
+        tool: tool,
+        user: @current_user,
+        context: @context,
+        return_url: @return_url,
+        expander: expander,
+        opts: opts
+      )
+    else
+       Lti::LtiOutboundAdapter.new(tool, @current_user, @context).prepare_tool_launch(
+         @return_url,
+         expander,
+         opts
+       )
+    end
 
     lti_launch.params = if selection_type == 'homework_submission' && assignment
                           adapter.generate_post_payload_for_homework_submission(assignment)
@@ -874,7 +887,7 @@ class ExternalToolsController < ApplicationController
   #   URL.
   def create_tool_with_verification
     if authorized_action(@context, @current_user, :update)
-      app_api = AppCenter::AppApi.new
+      app_api = AppCenter::AppApi.new(@context)
 
       required_params = [
         :consumer_key,
@@ -1053,9 +1066,14 @@ class ExternalToolsController < ApplicationController
       return unless find_tool(tool_id, launch_type)
     end
 
-    if @tool&.url.blank? && @tool&.extension_setting(launch_type, :url).blank?
-      flash[:error] = t "#application.errors.invalid_external_tool", "Couldn't find valid settings for this link"
-      return redirect_to named_context_url(@context, :context_url)
+    if @tool.blank? || (@tool.url.blank? && @tool&.extension_setting(launch_type, :url).blank? && launch_url.blank?)
+      respond_to do |format|
+        format.html do
+          flash[:error] = t "#application.errors.invalid_external_tool", "Couldn't find valid settings for this link"
+          return redirect_to named_context_url(@context, :context_url)
+        end
+        format.json { render json: {errors: {external_tool: "Unable to find a matching external tool"}} and return }
+      end
     end
 
     # generate the launch
@@ -1118,9 +1136,19 @@ class ExternalToolsController < ApplicationController
               :custom_fields, :custom_fields_string, :text, :config_type, :config_url, :config_xml, :not_selectable, :app_center_id,
               :oauth_compliant]
     attrs += [:allow_membership_service_access] if @context.root_account.feature_enabled?(:membership_service_for_lti_tools)
+    attrs += [:developer_key_id] if set_developer_key?(params)
+
     attrs.each do |prop|
       tool.send("#{prop}=", params[prop]) if params.has_key?(prop)
     end
+  end
+
+  def set_developer_key?(external_tool_params)
+    developer_key_id = external_tool_params[:developer_key_id]
+    return false if developer_key_id.blank?
+    return false unless DeveloperKey.find(developer_key_id).owner_account == @context
+    return false unless @context.grants_right?(@current_user, session, :manage_developer_keys)
+    true
   end
 
   def invalidate_nav_tabs_cache(tool)

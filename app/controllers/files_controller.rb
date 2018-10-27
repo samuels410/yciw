@@ -27,9 +27,25 @@ require 'securerandom'
 #       "id": "File",
 #       "description": "",
 #       "properties": {
-#         "size": {
-#           "example": 4,
+#         "id": {
+#           "example": 569,
 #           "type": "integer"
+#         },
+#         "uuid": {
+#           "example": "SUj23659sdfASF35h265kf352YTdnC4",
+#           "type": "string"
+#         },
+#         "folder_id": {
+#           "example": 4207,
+#           "type": "integer"
+#         },
+#         "display_name": {
+#           "example": "file.txt",
+#           "type": "string"
+#         },
+#         "filename": {
+#           "example": "file.txt",
+#           "type": "string"
 #         },
 #         "content-type": {
 #           "example": "text/plain",
@@ -39,13 +55,10 @@ require 'securerandom'
 #           "example": "http://www.example.com/files/569/download?download_frd=1&verifier=c6HdZmxOZa0Fiin2cbvZeI8I5ry7yqD7RChQzb6P",
 #           "type": "string"
 #         },
-#         "id": {
-#           "example": 569,
-#           "type": "integer"
-#         },
-#         "display_name": {
-#           "example": "file.txt",
-#           "type": "string"
+#         "size": {
+#           "example": 43451,
+#           "type": "integer",
+#           "description": "file size in bytes"
 #         },
 #         "created_at": {
 #           "example": "2012-07-06T14:58:50Z",
@@ -56,10 +69,7 @@ require 'securerandom'
 #           "type": "datetime"
 #         },
 #         "unlock_at": {
-#           "type": "datetime"
-#         },
-#         "modified_at": {
-#           "example": "2012-07-06T14:58:50Z",
+#           "example": "2012-07-07T14:58:50Z",
 #           "type": "datetime"
 #         },
 #         "locked": {
@@ -71,7 +81,29 @@ require 'securerandom'
 #           "type": "boolean"
 #         },
 #         "lock_at": {
+#           "example": "2012-07-20T14:58:50Z",
 #           "type": "datetime"
+#         },
+#         "hidden_for_user": {
+#           "example": false,
+#           "type": "boolean"
+#         },
+#         "thumbnail_url": {
+#           "type": "string"
+#         },
+#         "modified_at": {
+#           "example": "2012-07-06T14:58:50Z",
+#           "type": "datetime"
+#         },
+#         "mime_class": {
+#           "type": "string",
+#           "example": "html",
+#           "description": "simplified content-type mapping"
+#         },
+#         "media_entry_id": {
+#           "type": "string",
+#           "example": "m-3z31gfpPf129dD3sSDF85SwSDFnwe",
+#           "description": "identifier for file in third-party transcoding service"
 #         },
 #         "locked_for_user": {
 #           "example": false,
@@ -83,21 +115,6 @@ require 'securerandom'
 #         "lock_explanation": {
 #           "example": "This assignment is locked until September 1 at 12:00am",
 #           "type": "string"
-#         },
-#         "hidden_for_user": {
-#           "example": false,
-#           "type": "boolean"
-#         },
-#         "thumbnail_url": {
-#           "type": "string"
-#         },
-#         "mime_class": {
-#           "type": "string",
-#           "description": "simplified content-type mapping"
-#         },
-#         "media_entry_id": {
-#           "type": "string",
-#           "description": "identifier for file in third-party transcoding service"
 #         },
 #         "preview_url": {
 #           "type": "string",
@@ -175,16 +192,23 @@ class FilesController < ApplicationController
   end
 
   def check_file_access_flags
-    if params[:user_id] && params[:ts] && params[:sf_verifier]
-      user = api_find(User, params[:user_id]) if params[:user_id].present?
-      if user && user.valid_access_verifier?(params[:ts], params[:sf_verifier])
-        # attachment.rb checks for this session attribute when determining
-        # permissions, but it should be ignored by the rest of the models'
-        # permission checks
-        session['file_access_user_id'] = user.id
-        session['file_access_expiration'] = 1.hour.from_now.to_i
-        session[:permissions_key] = SecureRandom.uuid
-      end
+    begin
+      access_verifier = validate_access_verifier
+    rescue Users::AccessVerifier::InvalidVerifier
+      access_verifier = {}
+    end
+
+    if access_verifier[:user]
+      # attachment.rb checks for this session attribute when determining
+      # permissions, but it should be ignored by the rest of the models'
+      # permission checks
+      session['file_access_user_id'] = access_verifier[:user].global_id
+      session['file_access_real_user_id'] = access_verifier[:real_user]&.global_id
+      session['file_access_developer_key_id'] = access_verifier[:developer_key]&.global_id
+      session['file_access_root_acocunt_id'] = access_verifier[:root_account]&.global_id
+      session['file_access_oauth_host'] = access_verifier[:oauth_host]
+      session['file_access_expiration'] = 1.hour.from_now.to_i
+      session[:permissions_key] = SecureRandom.uuid
     end
     # These sessions won't get deleted when the user logs out since this
     # is on a separate domain, so we've added our own (stricter) timeout.
@@ -205,7 +229,7 @@ class FilesController < ApplicationController
         if authorized_action(root_folder, @current_user, :read)
           file_structure = {
             :folders => @context.active_folders.
-              reorder("COALESCE(parent_folder_id, 0), COALESCE(position, 0), COALESCE(name, ''), created_at").
+              reorder(Arel.sql("COALESCE(parent_folder_id, 0), COALESCE(position, 0), COALESCE(name, ''), created_at")).
               select(:id, :parent_folder_id, :name)
           }
 
@@ -286,7 +310,7 @@ class FilesController < ApplicationController
           Attachment.display_name_order_by_clause('attachments')
       end
       order_clause += ' DESC' if params[:order] == 'desc'
-      scope = scope.order(order_clause)
+      scope = scope.order(Arel.sql(order_clause))
 
       if params[:content_types].present?
         scope = scope.by_content_types(Array(params[:content_types]))
@@ -427,8 +451,11 @@ class FilesController < ApplicationController
   # @returns File
   def api_show
     get_context
-    @attachment = @context ? @context.attachments.find(params[:id]) : Attachment.find(params[:id])
-    raise ActiveRecord::RecordNotFound if @attachment.deleted?
+    @attachment = @context ? @context.attachments.not_deleted.find_by(id: params[:id]) : Attachment.not_deleted.find_by(id: params[:id])
+    unless @attachment
+      render json: { errors: [{message: "The specified resource does not exist."}] }, status: 404
+      return
+    end
     params[:include] = Array(params[:include])
     if authorized_action(@attachment,@current_user,:read)
       render :json => attachment_json(@attachment, @current_user, {}, { include: params[:include], omit_verifier_in_app: !value_to_boolean(params[:use_verifiers]) })
@@ -644,7 +671,7 @@ class FilesController < ApplicationController
 
   def send_stored_file(attachment, inline=true)
     user = @current_user
-    user ||= api_find(User, params[:user_id]) if params[:user_id].present?
+    user ||= api_find(User, session['file_access_user_id']) if session['file_access_user_id'].present?
     attachment.context_module_action(user, :read) if user && !params[:preview]
     log_asset_access(@attachment, "files", "files") unless params[:preview]
     render_or_redirect_to_stored_file(
@@ -813,7 +840,7 @@ class FilesController < ApplicationController
 
     model = Object.const_get(params[:context_type])
     @context = model.where(id: params[:context_id]).first
-    @attachment = Attachment.where(context: @context).build
+    @attachment = @context.shard.activate{ Attachment.where(context: @context).build }
 
     # service metadata
     @attachment.filename = params[:name]
@@ -843,20 +870,45 @@ class FilesController < ApplicationController
     if params[:progress_id]
       progress = Progress.find(params[:progress_id])
 
-      json = { "id" => @attachment.id }
-      progress.set_results(json)
-      progress.complete!
+      # TODO: The `submit_assignment` param is used to help in backwards compat for fixing auto submissions,
+      # can be removed in the next release.
+      if params[:submit_assignment].to_s == 'true'
+        if progress.tag == 'upload_via_url'
+          assignment = progress.context
+          homework_service = Services::SubmitHomeworkService.new(@attachment, assignment)
+          begin
+            homework_service.submit(progress.created_at, params[:eula_agreement_timestamp])
+            homework_service.deliver_email
+
+            progress.complete unless progress.failed?
+          rescue => error
+            error_id = Canvas::Errors.capture_exception(self.class.name, error)[:error_report]
+            progress.message = "Unexpected error, ID: #{error_id || 'unknown'}"
+            progress.save
+            progress.fail
+            logger.error "Error submitting a file: #{error} - #{error.backtrace}"
+            homework_service.failure_email
+          end
+        end
+      end
+
+      if progress.running?
+        progress.set_results('id' => @attachment.id)
+        progress.complete!
+      end
     end
 
-    url_params = { include: [] }
-    includes = Array(params[:include])
-    if includes.include?('preview_url')
-      url_params[:include] << 'preview_url'
+    includes = []
+    if Array(params[:include]).include?('preview_url')
+      includes << 'preview_url'
     # only use implicit enhanced_preview_url if there is no explicit preview_url
     elsif @context.is_a?(User) || @context.is_a?(Course)
-      url_params[:include] << 'enhanced_preview_url'
+      includes << 'enhanced_preview_url'
     end
-    render json: {}, status: :created, location: api_v1_attachment_url(@attachment, url_params)
+
+    render status: :created,
+      json: attachment_json(@attachment, @attachment.user, {}, include: includes),
+      location: api_v1_attachment_url(@attachment, include: includes)
   end
 
   def api_create_success

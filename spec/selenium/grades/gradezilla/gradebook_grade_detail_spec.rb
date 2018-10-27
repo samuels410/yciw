@@ -60,7 +60,7 @@ describe 'Grade Detail Tray:' do
 
     it 'updates status when excused-option is selected', priority: "1", test_id: 3337207 do
       Gradezilla::Cells.open_tray(@course.students.first, @a2)
-      Gradezilla::GradeDetailTray.change_status_to('excused')
+      Gradezilla::GradeDetailTray.change_status_to('Excused')
 
       excuse_status = @course.students.first.submissions.find_by(assignment_id:@a2.id).excused
 
@@ -69,7 +69,7 @@ describe 'Grade Detail Tray:' do
 
     it 'updates status when none-option is selected', priority: "2", test_id: 3337208 do
       Gradezilla::Cells.open_tray(@course.students.first, @a2)
-      Gradezilla::GradeDetailTray.change_status_to('none')
+      Gradezilla::GradeDetailTray.change_status_to('None')
 
       late_policy_status = @course.students.first.submissions.find_by(assignment_id:@a2.id).late_policy_status
 
@@ -118,7 +118,6 @@ describe 'Grade Detail Tray:' do
     it 'updates score when late_by value changes', test_id: 3337212, priority: '1' do
       Gradezilla::GradeDetailTray.edit_late_by_input(3)
       final_grade_value = @course.students.first.submissions.find_by(assignment_id:@a1.id).published_grade
-
       expect(final_grade_value).to eq "60"
       expect(Gradezilla::GradeDetailTray.final_grade_text).to eq "60"
       expect(Gradezilla::GradeDetailTray.late_penalty_text).to eq "-30"
@@ -151,7 +150,8 @@ describe 'Grade Detail Tray:' do
 
       it 'assignment right arrow loads the next assignment in the tray', test_id: 3337216, priority: '1' do
         Gradezilla::Cells.open_tray(@course.students.first, @a1)
-        Gradezilla::GradeDetailTray.next_assignment_button.click
+        button = Gradezilla::GradeDetailTray.next_assignment_button
+        keep_trying_until { button.click; true } # have to wait for InstUI animations
 
         expect(Gradezilla::GradeDetailTray.assignment_link(@a2.name)).to be_displayed
       end
@@ -167,26 +167,27 @@ describe 'Grade Detail Tray:' do
         Gradezilla::Cells.open_tray(@course.students.first, @a1)
 
         expect(Gradezilla::GradeDetailTray.submission_tray_full_content).
-          not_to contain_css(Gradezilla::GradeDetailTray.assignment_left_arrow_selector)
+          not_to contain_css('#assignment-carousel .left-arrow-button-container button')
       end
 
       it 'right arrow button is not present when rightmost assignment is selected', test_id: 3337218, priority: '2' do
         Gradezilla::Cells.open_tray(@course.students.first, @a4)
 
         expect(Gradezilla::GradeDetailTray.submission_tray_full_content).
-          not_to contain_css(Gradezilla::GradeDetailTray.assignment_right_arrow_selector)
+          not_to contain_css('#assignment-carousel .right-arrow-button-container button')
       end
 
       it 'student right arrow navigates to next student', test_id: 3337223, priority: '1' do
         Gradezilla::Cells.open_tray(@course.students.first, @a1)
-        Gradezilla::GradeDetailTray.next_student_button.click
-
+        button = Gradezilla::GradeDetailTray.next_student_button
+        keep_trying_until { button.click; true } # have to wait for instUI Tray animation
         expect(Gradezilla::GradeDetailTray.student_link(@course.students.second.name)).to be_displayed
       end
 
       it 'student left arrow navigates to previous student', test_id: 3337224, priority: '1' do
         Gradezilla::Cells.open_tray(@course.students.second, @a1)
-        Gradezilla::GradeDetailTray.previous_student_button.click
+        button = Gradezilla::GradeDetailTray.previous_student_button
+        keep_trying_until { button.click; true } # have to wait for instUI Tray animation
 
         expect(Gradezilla::GradeDetailTray.student_link(@course.students.first.name)).to be_displayed
       end
@@ -229,7 +230,9 @@ describe 'Grade Detail Tray:' do
 
       it 'clicking the left arrow loads the previous assignment in the tray', test_id: 3337220, priority: '2' do
         Gradezilla::Cells.open_tray(@course.students.first, @a4)
-        Gradezilla::GradeDetailTray.previous_assignment_button.click
+        button = Gradezilla::GradeDetailTray.previous_assignment_button
+        keep_trying_until { button.click; true } # have to wait for instUI Tray animation
+
 
         expect(Gradezilla::GradeDetailTray.assignment_link(@a3.name)).to be_displayed
       end

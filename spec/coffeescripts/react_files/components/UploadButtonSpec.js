@@ -29,13 +29,13 @@ QUnit.module('UploadButton', {
     this.button = ReactDOM.render(<UploadButton {...props} />, $('<div>').appendTo('#fixtures')[0])
   },
   teardown() {
-    ReactDOM.unmountComponentAtNode(this.button.getDOMNode().parentNode)
+    ReactDOM.unmountComponentAtNode(ReactDOM.findDOMNode(this.button).parentNode)
     $('#fixtures').empty()
   }
 })
 
 test('hides actual file input form', function() {
-  const form = this.button.refs.form.getDOMNode()
+  const form = this.button.refs.form
   ok(
     $(form)
       .attr('class')
@@ -45,7 +45,7 @@ test('hides actual file input form', function() {
 })
 
 test('only enques uploads when state.newUploads is true', function() {
-  this.spy(this.button, 'queueUploads')
+  sandbox.spy(this.button, 'queueUploads')
   this.button.state.nameCollisions.length = 0
   this.button.state.resolvedNames.length = 1
   FileOptionsCollection.state.newOptions = false

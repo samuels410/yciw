@@ -423,7 +423,7 @@ class EnrollmentsApiController < ApplicationController
       user_index_enrollments
 
     enrollments = enrollments.joins(:user).select("enrollments.*").
-      order("enrollments.type, #{User.sortable_name_order_by_clause("users")}, enrollments.id")
+      order(:type, User.sortable_name_order_by_clause("users"), :id)
 
     has_courses = enrollments.where_clause.instance_variable_get(:@predicates).
       any? { |cond| cond.is_a?(String) && cond =~ /courses\./ }
@@ -629,7 +629,7 @@ class EnrollmentsApiController < ApplicationController
     end
     params[:enrollment][:course_section_id] = @section.id if @section.present?
     if params[:enrollment][:course_section_id].present?
-      @section = @context.course_sections.active.find params[:enrollment].delete(:course_section_id)
+      @section = api_find(@context.course_sections.active, params[:enrollment].delete(:course_section_id))
       params[:enrollment][:section] = @section
     end
     api_user_id = params[:enrollment].delete(:user_id)
@@ -960,6 +960,6 @@ class EnrollmentsApiController < ApplicationController
   end
 
   def render_create_errors(errors)
-    render json: {message: errors.join(', ')}, status: 403
+    render json: {message: errors.join(', ')}, status: :bad_request
   end
 end

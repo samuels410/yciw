@@ -30,7 +30,9 @@ describe("Upload reducer", () => {
       formExpanded: false,
       folders: {},
       rootFolderId: null,
-      folderTree: {}
+      folderTree: {},
+      error: {},
+      loadingFolders: false
     };
   });
 
@@ -67,6 +69,11 @@ describe("Upload reducer", () => {
       state.formExpanded = true;
       assert.equal(false, upload(state, action).formExpanded);
     });
+
+    it("resets the error state", () => {
+      state.error = { type: "SOME_ERROR" };
+      assert.deepEqual({}, upload(state, action).error);
+    });
   });
 
   describe("FAIL_FILE_UPLOAD", () => {
@@ -80,6 +87,20 @@ describe("Upload reducer", () => {
 
     it("leaves the form state as it is", () => {
       assert.equal(state.formExpanded, upload(state, action).formExpanded);
+    });
+  });
+
+  describe("QUOTA_EXCEEDED_UPLOAD", () => {
+    beforeEach(() => {
+      action = { type: actions.QUOTA_EXCEEDED_UPLOAD };
+    });
+
+    it("sets the error state type to QUOTA_EXCEEDED_UPLOAD", () => {
+      assert.equal(upload(state, action).error.type, "QUOTA_EXCEEDED_UPLOAD");
+    });
+
+    it("sets the uploading state the false", () => {
+      assert.equal(false, upload(state, action).uploading);
     });
   });
 
@@ -122,6 +143,10 @@ describe("Upload reducer", () => {
 
     it("empties the folders data", () => {
       assert.equal(0, Object.keys(upload(state, action).folders).length);
+    });
+
+    it("sets loadingFolders to false", () => {
+      assert.equal(false, upload(state, action).loadingFolders);
     });
   });
 
@@ -169,6 +194,26 @@ describe("Upload reducer", () => {
         [9]: []
       };
       assert.deepEqual(upload(state, action).folderTree, desiredTree);
+    });
+  });
+
+  describe("START_LOADING", () => {
+    beforeEach(() => {
+      action = { type: actions.START_LOADING };
+    });
+
+    it("sets loadingFolders to true", () => {
+      assert.equal(true, upload(state, action).loadingFolders);
+    });
+  });
+
+  describe("STOP_LOADING", () => {
+    beforeEach(() => {
+      action = { type: actions.STOP_LOADING };
+    });
+
+    it("sets loadingFolders to false", () => {
+      assert.equal(false, upload(state, action).loadingFolders);
     });
   });
 });

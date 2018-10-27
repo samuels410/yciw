@@ -16,18 +16,18 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import IconMiniArrowUpSolid from 'instructure-icons/lib/Solid/IconMiniArrowUpSolid'
-import IconMiniArrowDownSolid from 'instructure-icons/lib/Solid/IconMiniArrowDownSolid'
-import ApplyTheme from '@instructure/ui-core/lib/components/ApplyTheme'
-import Link from '@instructure/ui-core/lib/components/Link'
-import Tooltip from '@instructure/ui-core/lib/components/Tooltip'
+import IconMiniArrowUp from '@instructure/ui-icons/lib/Solid/IconMiniArrowUp'
+import IconMiniArrowDown from '@instructure/ui-icons/lib/Solid/IconMiniArrowDown'
+import ApplyTheme from '@instructure/ui-themeable/lib/components/ApplyTheme'
+import Link from '@instructure/ui-elements/lib/components/Link'
+import Tooltip from '@instructure/ui-overlays/lib/components/Tooltip'
 import React from 'react'
 import {string} from 'prop-types'
 import {pick} from 'lodash'
 import preventDefault from 'compiled/fn/preventDefault'
 import CoursesList from './CoursesList'
 
-export default function CourseListHeader ({sort, order, onChangeSort, id, label, tipDesc, tipAsc}) {
+export default function CourseListHeader({sort, order, onChangeSort, id, label, tipDesc, tipAsc}) {
   return (
     <ApplyTheme theme={{[Link.theme]: {fontWeight: 'bold'}}}>
       <Tooltip
@@ -36,10 +36,7 @@ export default function CourseListHeader ({sort, order, onChangeSort, id, label,
         onClick={preventDefault(() => onChangeSort(id))}
       >
         {label}
-        {sort === id
-          ? (order === 'asc' ? <IconMiniArrowDownSolid /> : <IconMiniArrowUpSolid />)
-          : ''
-        }
+        {sort === id ? order === 'asc' ? <IconMiniArrowDown /> : <IconMiniArrowUp /> : ''}
       </Tooltip>
     </ApplyTheme>
   )

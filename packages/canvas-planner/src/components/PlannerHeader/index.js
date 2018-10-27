@@ -18,22 +18,29 @@
 import React, { Component } from 'react';
 import { connect } from 'react-redux';
 import themeable from '@instructure/ui-themeable/lib';
-import Button from '@instructure/ui-core/lib/components/Button';
+import Button from '@instructure/ui-buttons/lib/components/Button';
 import CloseButton from '@instructure/ui-buttons/lib/components/CloseButton';
+import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent';
+import AccessibleContent from '@instructure/ui-a11y/lib/components/AccessibleContent'
 import View from '@instructure/ui-layout/lib/components/View';
-import IconPlusLine from 'instructure-icons/lib/Line/IconPlusLine';
-import IconAlertsLine from 'instructure-icons/lib/Line/IconAlertsLine';
-import IconGradebookLine from 'instructure-icons/lib/Line/IconGradebookLine';
-import Popover, {PopoverTrigger, PopoverContent} from '@instructure/ui-core/lib/components/Popover';
+import Portal from '@instructure/ui-portal/lib/components/Portal';
+import IconPlusLine from '@instructure/ui-icons/lib/Line/IconPlus';
+import IconAlertsLine from '@instructure/ui-icons/lib/Line/IconAlerts';
+import IconGradebookLine from '@instructure/ui-icons/lib/Line/IconGradebook';
+import Popover, {PopoverTrigger, PopoverContent} from '@instructure/ui-overlays/lib/components/Popover';
 import PropTypes from 'prop-types';
 import UpdateItemTray from '../UpdateItemTray';
-import Tray from '@instructure/ui-core/lib/components/Tray';
-import Badge from '@instructure/ui-core/lib/components/Badge';
+import Tray from '@instructure/ui-overlays/lib/components/Tray';
+import Badge from '@instructure/ui-elements/lib/components/Badge';
 import Opportunities from '../Opportunities';
 import GradesDisplay from '../GradesDisplay';
+import StickyButton from '../StickyButton';
+import { isFutureEmpty } from '../../utilities/statusUtils';
+
 import {
   addDay, savePlannerItem, deletePlannerItem, cancelEditingPlannerItem, openEditingPlannerItem, getNextOpportunities,
-  getInitialOpportunities, dismissOpportunity, clearUpdateTodo, startLoadingGradesSaga, scrollToToday
+  getInitialOpportunities, dismissOpportunity, clearUpdateTodo, startLoadingGradesSaga, scrollToToday,
+  scrollToNewActivity
 } from '../../actions';
 
 import { courseShape, opportunityShape } from '../plannerPropTypes';
@@ -41,6 +48,8 @@ import styles from './styles.css';
 import theme from './theme.js';
 import formatMessage from '../../format-message';
 import {notifier} from '../../dynamic-ui';
+import {getFirstLoadedMoment} from "../../utilities/dateUtils";
+import {momentObj} from "react-moment-proptypes";
 
 export class PlannerHeader extends Component {
 
@@ -54,6 +63,7 @@ export class PlannerHeader extends Component {
     triggerDynamicUiUpdates: PropTypes.func,
     preTriggerDynamicUiUpdates: PropTypes.func,
     scrollToToday: PropTypes.func,
+    scrollToNewActivity: PropTypes.func,
     locale: PropTypes.string.isRequired,
     timeZone: PropTypes.string.isRequired,
     opportunities: PropTypes.shape(opportunityShape).isRequired,
@@ -62,12 +72,23 @@ export class PlannerHeader extends Component {
     dismissOpportunity: PropTypes.func.isRequired,
     clearUpdateTodo: PropTypes.func.isRequired,
     startLoadingGradesSaga: PropTypes.func.isRequired,
+    firstNewActivityDate: momentObj,
+    days: PropTypes.arrayOf(
+      PropTypes.arrayOf(
+        PropTypes.oneOfType([/* date */ PropTypes.string, PropTypes.arrayOf(/* items */ PropTypes.object)])
+      )
+    ),
+    ui: PropTypes.shape({
+      naiAboveScreen: PropTypes.bool,
+    }),
     todo: PropTypes.shape({
       updateTodoItem: PropTypes.shape({
         title: PropTypes.string,
       }),
     }),
+    stickyZIndex: PropTypes.number,
     loading: PropTypes.shape({
+      isLoading: PropTypes.bool,
       allPastItemsLoaded: PropTypes.bool,
       allFutureItemsLoaded: PropTypes.bool,
       allOpportunitiesLoaded: PropTypes.bool,
@@ -81,23 +102,27 @@ export class PlannerHeader extends Component {
       gradesLoaded: PropTypes.bool,
       gradesLoadingError: PropTypes.string,
     }).isRequired,
-    ariaHideElement: PropTypes.instanceOf(Element).isRequired
+    ariaHideElement: PropTypes.instanceOf(Element).isRequired,
+    auxElement: PropTypes.instanceOf(Element).isRequired
   };
 
   static defaultProps = {
     triggerDynamicUiUpdates: () => {},
     preTriggerDynamicUiUpdates: () => {},
+    stickyZIndex: 0
   }
 
   constructor (props) {
     super(props);
 
+    const [newOpportunities, dismissedOpportunities] = this.segregateOpportunities(props.opportunities)
+
     this.state = {
-      opportunities: props.opportunities.items,
+      newOpportunities,
+      dismissedOpportunities,
       trayOpen: false,
       gradesTrayOpen: false,
       opportunitiesOpen: false,
-      dismissedTabSelected: false
     };
   }
 
@@ -106,15 +131,17 @@ export class PlannerHeader extends Component {
   }
 
   componentWillReceiveProps(nextProps) {
-    let opportunities = nextProps.opportunities.items.filter((opportunity) => this.isOpportunityVisible(opportunity));
+    let [newOpportunities, dismissedOpportunities] = this.segregateOpportunities(nextProps.opportunities);
 
-    if (!nextProps.loading.allOpportunitiesLoaded && !nextProps.loading.loadingOpportunities && opportunities.length < 10) {
+    if (!nextProps.loading.allOpportunitiesLoaded &&
+        !nextProps.loading.loadingOpportunities) {
       nextProps.getNextOpportunities();
     }
 
-    opportunities = opportunities.slice(0, 10);
-    this.setUpdateItemTray(!!nextProps.todo.updateTodoItem || this.state.trayOpen);
-    this.setState({opportunities});
+    if (this.props.todo.updateTodoItem !== nextProps.todo.updateTodoItem) {
+      this.setUpdateItemTray(!!nextProps.todo.updateTodoItem);
+    }
+    this.setState({newOpportunities, dismissedOpportunities});
   }
 
   componentWillUpdate () {
@@ -129,29 +156,58 @@ export class PlannerHeader extends Component {
   }
 
   handleSavePlannerItem = (plannerItem) => {
-    this.toggleUpdateItemTray();
+    this.handleCloseTray();
     this.props.savePlannerItem(plannerItem);
   }
 
-  isOpportunityVisible = (opportunity) => {
-    if(this.state.dismissedTabSelected) {
-      return opportunity.planner_override ? opportunity.planner_override.dismissed : false;
-    } else {
-      return opportunity.planner_override ? !opportunity.planner_override.dismissed : true;
-    }
-  }
-
   handleDeletePlannerItem = (plannerItem) => {
-    this.toggleUpdateItemTray();
+    this.handleCloseTray();
     this.props.deletePlannerItem(plannerItem);
   }
 
-  handleCancelPlannerItem = () => {
-    this.toggleUpdateItemTray();
-    // let the dynamic ui manager manage focus on cancel.
-    if (this.props.cancelEditingPlannerItem) {
-      this.props.cancelEditingPlannerItem();
+  handleCloseTray = () => {
+    this.setUpdateItemTray(false);
+  }
+
+  handleToggleTray = () => {
+    if(this.state.trayOpen) {
+      this.handleCloseTray();
+    } else {
+      this.setUpdateItemTray(true);
     }
+  }
+
+  // segregate new and dismissed opportunities
+  segregateOpportunities (opportunities) {
+    const newOpportunities = []; 
+    const dismissedOpportunities = [];
+    
+    opportunities.items.forEach(opportunity => {
+      if (opportunity.planner_override && opportunity.planner_override.dismissed) {
+        dismissedOpportunities.push(opportunity)
+      } else {
+        newOpportunities.push(opportunity)
+      }
+    });
+    return [newOpportunities, dismissedOpportunities];
+  }
+
+  // sets the tray open state and tells dynamic-ui what just happened
+  // via open/cancelEditingPlannerItem
+  setUpdateItemTray (trayOpen) {
+    if (trayOpen) {
+      if (this.props.openEditingPlannerItem) {
+        this.props.openEditingPlannerItem();  // tell dynamic-ui we've started editing
+      }
+    } else {
+      if (this.props.cancelEditingPlannerItem) {
+        this.props.cancelEditingPlannerItem();
+      }
+    }
+
+    this.setState({ trayOpen }, () => {
+      this.toggleAriaHiddenStuff(this.state.trayOpen);
+    });
   }
 
   toggleAriaHiddenStuff = (hide) => {
@@ -160,10 +216,6 @@ export class PlannerHeader extends Component {
     } else {
       this.props.ariaHideElement.removeAttribute('aria-hidden');
     }
-  }
-
-  toggleUpdateItemTray = () => {
-    this.setUpdateItemTray(!this.state.trayOpen);
   }
 
   toggleGradesTray = () => {
@@ -175,19 +227,14 @@ export class PlannerHeader extends Component {
     this.setState({gradesTrayOpen: !this.state.gradesTrayOpen});
   }
 
-  setUpdateItemTray (trayOpen) {
-    if (trayOpen && this.props.openEditingPlannerItem) {
-      this.props.openEditingPlannerItem();
-    }
-    this.setState({ trayOpen }, () => {
-      this.toggleAriaHiddenStuff(this.state.trayOpen);
-    });
-  }
-
   handleTodayClick = () => {
     if (this.props.scrollToToday) {
       this.props.scrollToToday();
     }
+  }
+
+  handleNewActivityClick = () => {
+    this.props.scrollToNewActivity();
   }
 
   _doToggleOpportunitiesDropdown (openOrClosed) {
@@ -209,10 +256,6 @@ export class PlannerHeader extends Component {
     this._doToggleOpportunitiesDropdown(!this.state.opportunitiesOpen);
   }
 
-  noteBtnOnClose = () => {
-    this.props.clearUpdateTodo();
-  }
-
   opportunityTitle = () => {
     return (
       formatMessage(`{
@@ -220,12 +263,12 @@ export class PlannerHeader extends Component {
         =0 {# opportunities}
         one {# opportunity}
         other {# opportunities}
-      }`, { count: this.state.opportunities.length })
+      }. Click to open Opportunity Center popup.`, { count: this.state.newOpportunities.length })
     );
   }
 
   getTrayLabel = () => {
-    if (this.props.todo.updateTodoItem) {
+    if (this.props.todo.updateTodoItem && this.props.todo.updateTodoItem.title) {
       return formatMessage('Edit {title}', { title: this.props.todo.updateTodoItem.title });
     }
     return formatMessage("Add To Do");
@@ -244,32 +287,99 @@ export class PlannerHeader extends Component {
     return 'none';
   }
 
-  render () {
-    const verticalRoom = this.getPopupVerticalRoom();
+  newActivityAboveView () {
+    if (this.props.loading.isLoading) return false;
+    if (!this.props.firstNewActivityDate) return false;
 
+    const firstLoadedMoment = getFirstLoadedMoment(this.props.days, this.props.timeZone);
+    const firstNewActivityLoaded = firstLoadedMoment.isSame(this.props.firstNewActivityDate) || firstLoadedMoment.isBefore(this.props.firstNewActivityDate);
+    return (!(firstNewActivityLoaded && !this.props.ui.naiAboveScreen));
+  }
+
+  renderNewActivity () {
     return (
-      <div className={styles.root}>
+      <Portal mountNode={this.props.auxElement} open={this.newActivityAboveView()}>
+        <StickyButton
+          id="new_activity_button"
+          direction="up"
+          onClick={this.handleNewActivityClick}
+          zIndex={this.props.stickyZIndex}
+          buttonRef={ref => this.newActivityButtonRef = ref}
+          className="StickyButton-styles__newActivityButton"
+          description={formatMessage("Scrolls up to the previous item with new activity.")}
+        >
+          {formatMessage("New Activity")}
+        </StickyButton>
+      </Portal>
+    );
+  }
+
+  renderToday () {
+    // if we're not displaying any items, don't show the today button
+    // this is true if the planner is completely empty, or showing the balloons
+    // because everything is in the past when first loaded
+    if (this.props.days.length > 0) {
+      return (
         <Button
+          id="planner-today-btn"
           variant="light"
           margin="0 medium 0 0"
           onClick={this.handleTodayClick}
         >
           {formatMessage("Today")}
         </Button>
+      );
+    }
+    return null;
+  }
+
+  renderOpportunitiesBadge () {
+    const props = {}
+    if (this.props.loading.allOpportunitiesLoaded && this.state.newOpportunities.length) {
+      props.count = this.state.newOpportunities.length;
+      props.formatOutput=(formattedCount) => {
+        return (
+          <AccessibleContent alt={this.opportunityTitle()}>
+            {formattedCount}
+          </AccessibleContent>
+        );
+      };
+    } else {
+      props.formatOutput=() => {
+        return <AccessibleContent alt={this.opportunityTitle()}/>;
+      }
+    }
+    return (
+      <Badge {...props}>
+        <View>
+          <IconAlertsLine/>
+        </View>
+      </Badge>
+    );
+  }
+
+  render () {
+    const verticalRoom = this.getPopupVerticalRoom();
+
+    return (
+      <div className={`${styles.root} PlannerHeader`}>
+        {this.renderToday()}
         <Button
           variant="icon"
+          icon={IconPlusLine}
           margin="0 medium 0 0"
-          onClick={this.toggleUpdateItemTray}
+          onClick={this.handleToggleTray}
           ref={(b) => { this.addNoteBtn = b; }}
         >
-          <IconPlusLine title={formatMessage("Add To Do")} />
+          <ScreenReaderContent>{formatMessage("Add To Do")}</ScreenReaderContent>
         </Button>
         <Button
           variant="icon"
+          icon={IconGradebookLine}
           margin="0 medium 0 0"
           onClick={this.toggleGradesTray}
         >
-          <IconGradebookLine title={formatMessage("Show My Grades")} />
+          <ScreenReaderContent>{formatMessage("Show My Grades")}</ScreenReaderContent>
         </Button>
         <Popover
           onDismiss={this.closeOpportunitiesDropdown}
@@ -286,15 +396,14 @@ export class PlannerHeader extends Component {
               ref={(b) => { this.opportunitiesButton = b; }}
               buttonRef={(b) => { this.opportunitiesHtmlButton = b; }}
             >
-              <Badge {...this.state.opportunities.length ? {count :this.state.opportunities.length} : {}}>
-                <IconAlertsLine title={this.opportunityTitle()} />
-              </Badge>
+              {this.renderOpportunitiesBadge()}
             </Button>
           </PopoverTrigger>
           <PopoverContent>
             <Opportunities
               togglePopover={this.closeOpportunitiesDropdown}
-              opportunities={this.state.opportunities}
+              newOpportunities={this.state.newOpportunities}
+              dismissedOpportunities={this.state.dismissedOpportunities}
               courses={this.props.courses}
               timeZone={this.props.timeZone}
               dismiss={this.props.dismissOpportunity}
@@ -303,16 +412,16 @@ export class PlannerHeader extends Component {
           </PopoverContent>
         </Popover>
         <Tray
-          closeButtonLabel={formatMessage("Close")}
           open={this.state.trayOpen}
           label={this.getTrayLabel()}
           placement="end"
           shouldContainFocus={true}
           shouldReturnFocus={false}
-          applicationElement={() => document.getElementById('application') }
-          onExited={this.noteBtnOnClose}
-          onDismiss={this.handleCancelPlannerItem}
+          onDismiss={this.handleCloseTray}
         >
+          <CloseButton placement="start" variant="icon" onClick={this.handleCloseTray}>
+            {formatMessage("Close")}
+          </CloseButton>
           <UpdateItemTray
             locale={this.props.locale}
             timeZone={this.props.timeZone}
@@ -328,7 +437,6 @@ export class PlannerHeader extends Component {
           placement="end"
           shouldContainFocus
           shouldReturnFocus
-          applicationElement={() => document.getElementById('application') }
           onDismiss={this.toggleGradesTray}
         >
           <View as="div" padding="large large medium">
@@ -342,6 +450,7 @@ export class PlannerHeader extends Component {
             />
           </View>
         </Tray>
+        {this.renderNewActivity()}
       </div>
     );
   }
@@ -350,10 +459,12 @@ export class PlannerHeader extends Component {
 export const ThemedPlannerHeader = themeable(theme, styles)(PlannerHeader);
 export const NotifierPlannerHeader = notifier(ThemedPlannerHeader);
 
-const mapStateToProps = ({opportunities, loading, courses, todo}) => ({opportunities, loading, courses, todo});
+const mapStateToProps = ({opportunities, loading, courses, todo, days, timeZone, ui, firstNewActivityDate}) =>
+  ({opportunities, loading, courses, todo, days, timeZone, ui, firstNewActivityDate});
 const mapDispatchToProps = {
   addDay, savePlannerItem, deletePlannerItem, cancelEditingPlannerItem, openEditingPlannerItem,
-  getInitialOpportunities, getNextOpportunities, dismissOpportunity, clearUpdateTodo, startLoadingGradesSaga, scrollToToday
+  getInitialOpportunities, getNextOpportunities, dismissOpportunity, clearUpdateTodo,
+  startLoadingGradesSaga, scrollToToday, scrollToNewActivity
 };
 
 export default connect(mapStateToProps, mapDispatchToProps)(NotifierPlannerHeader);

@@ -450,7 +450,7 @@ class ActiveRecord::Base
         max_date.advance(:days => 1)
       ).
       group(expression).
-      order(expression).
+      order(Arel.sql(expression)).
       count
 
     return result if result.keys.first.is_a?(Date)
@@ -506,9 +506,9 @@ class ActiveRecord::Base
                elsif first_or_last == :last && direction == :desc
                  " NULLS LAST"
                end
-      "#{column} #{direction.to_s.upcase}#{clause}".strip
+      Arel.sql("#{column} #{direction.to_s.upcase}#{clause}".strip)
     else
-      "#{column} IS#{" NOT" unless first_or_last == :last} NULL, #{column} #{direction.to_s.upcase}".strip
+      Arel.sql("#{column} IS#{" NOT" unless first_or_last == :last} NULL, #{column} #{direction.to_s.upcase}".strip)
     end
   end
 
@@ -631,8 +631,8 @@ class ActiveRecord::Base
     end
   end
 
-  def self.wait_for_replication(start: nil)
-    return unless Shackles.activate(:slave) { connection.readonly? }
+  def self.wait_for_replication(start: nil, timeout: nil)
+    return true unless Shackles.activate(:slave) { connection.readonly? }
 
     start ||= current_xlog_location
     Shackles.activate(:slave) do
@@ -644,10 +644,13 @@ class ActiveRecord::Base
         "pg_last_xlog_replay_location()"
       # positive == first value greater, negative == second value greater
       # SELECT pg_xlog_location_diff(<START>, pg_last_xlog_replay_location())
+      start_time = Time.now
       while connection.select_value("SELECT #{diff_fn}(#{connection.quote(start)}, #{fn})").to_i >= 0
+        return false if timeout && Time.now > start_time + timeout
         sleep 0.1
       end
     end
+    true
   end
 
   def self.bulk_insert(records)
@@ -671,7 +674,7 @@ module UsefulFindInBatches
     # prefer copy unless we're in a transaction (which would be bad,
     # because we might open a separate connection in the block, and not
     # see the contents of our current transaction)
-    if connection.open_transactions == 0 && !options[:start] && eager_load_values.empty?
+    if connection.open_transactions == 0 && !options[:start] && eager_load_values.empty? && !ActiveRecord::Base.in_migration
       self.activate { |r| r.find_in_batches_with_copy(options, &block) }
     elsif should_use_cursor? && !options[:start] && eager_load_values.empty?
       self.activate { |r| r.find_in_batches_with_cursor(options, &block) }
@@ -892,11 +895,11 @@ ActiveRecord::Relation.class_eval do
         quoted_plucks = pluck && pluck.map do |column_name|
           # Rails 4.2 is going to try to quote them anyway but unfortunately not to the temp table, so just make it explicit
           column_names.include?(column_name) ?
-            "#{connection.quote_local_table_name(table)}.#{connection.quote_column_name(column_name)}" : column_name
+            Arel.sql("#{connection.quote_local_table_name(table)}.#{connection.quote_column_name(column_name)}") : column_name
         end
 
         if pluck
-          batch = klass.from(table).order(index).limit(batch_size).pluck(*quoted_plucks)
+          batch = klass.from(table).order(Arel.sql(index)).limit(batch_size).pluck(*quoted_plucks)
         else
           sql = "SELECT * FROM #{table} ORDER BY #{index} LIMIT #{batch_size}"
           batch = klass.find_by_sql(sql)
@@ -908,7 +911,7 @@ ActiveRecord::Relation.class_eval do
 
           if pluck
             last_value = pluck.length == 1 ? batch.last : batch.last[pluck.index(index)]
-            batch = klass.from(table).order(index).where("#{index} > ?", last_value).limit(batch_size).pluck(*quoted_plucks)
+            batch = klass.from(table).order(Arel.sql(index)).where("#{index} > ?", last_value).limit(batch_size).pluck(*quoted_plucks)
           else
             last_value = batch.last[index]
             sql = "SELECT *
@@ -1432,9 +1435,7 @@ end
 
 module UnscopeCallbacks
   def run_callbacks(*args)
-    # workaround for a rails 5.2.0 problem where .all sometimes tries to merge in a current_scope with a `skip_query_cache_value` and explodes
-    # TODO: can undo it when this is fixed https://github.com/rails/rails/issues/32640
-    scope = (self.class.current_scope || self.class.all).klass.unscoped
+    scope = self.class.all.klass.unscoped
     scope.scoping { super }
   end
 end
@@ -1624,3 +1625,43 @@ module TableRename
 end
 
 ActiveRecord::ConnectionAdapters::SchemaCache.prepend(TableRename)
+
+
+if CANVAS_RAILS5_1
+  module EnforceRawSqlWhitelist
+    COLUMN_NAME_ORDER_WHITELIST = /
+        \A
+        (?:\w+\.)?
+        \w+
+        (?:\s+asc|\s+desc)?
+        (?:\s+nulls\s+(?:first|last))?
+        \z
+      /ix
+
+    def enforce_raw_sql_whitelist(args, whitelist: COLUMN_NAME_WHITELIST) # :nodoc:
+      unexpected = args.reject do |arg|
+        arg.kind_of?(Arel::Node) ||
+          arg.is_a?(Arel::Nodes::SqlLiteral) ||
+          arg.is_a?(Arel::Attributes::Attribute) ||
+          arg.to_s.split(/\s*,\s*/).all? { |part| whitelist.match?(part) }
+      end
+
+      return if unexpected.none?
+
+      raise(
+            "Query method called with non-attribute argument(s): " +
+              unexpected.map(&:inspect).join(", ")
+      )
+    end
+
+    def validate_order_args(order_args)
+      enforce_raw_sql_whitelist(
+        order_args.flat_map { |a| a.is_a?(Hash) ? a.keys : a },
+        whitelist: COLUMN_NAME_ORDER_WHITELIST
+      )
+      super
+    end
+  end
+
+  ActiveRecord::Relation.prepend(EnforceRawSqlWhitelist)
+end

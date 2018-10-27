@@ -44,7 +44,7 @@ QUnit.module('GradebookSettingsModal', {
     };
     const props = { ...defaultProps, ...customProps };
     this.wrapper = mount(<GradebookSettingsModal {...props} />);
-    return this.wrapper.get(0);
+    return this.wrapper.instance();
   },
 
   stubLatePolicyFetchSuccess (component, customData) {
@@ -64,7 +64,7 @@ QUnit.module('GradebookSettingsModal', {
 
     const fetchSuccess = Promise.resolve({ data });
     const promise = fetchSuccess.then(component.onFetchLatePolicySuccess)
-    this.stub(component, 'fetchLatePolicy').returns(promise);
+    sandbox.stub(component, 'fetchLatePolicy').returns(promise);
     return promise;
   },
 
@@ -87,6 +87,7 @@ test('calling open causes the modal to be rendered', function () {
   const fetchLatePolicy = this.stubLatePolicyFetchSuccess(component);
   component.open();
   return fetchLatePolicy.then(() => {
+    this.wrapper.update()
     equal(this.wrapper.find('Modal').prop('open'), true);
   });
 });
@@ -96,8 +97,10 @@ test('calling close closes the modal', function () {
   const fetchLatePolicy = this.stubLatePolicyFetchSuccess(component);
   component.open();
   return fetchLatePolicy.then(() => {
+    this.wrapper.update()
     equal(this.wrapper.find('Modal').prop('open'), true, 'modal is open');
     component.close();
+    this.wrapper.update()
     equal(this.wrapper.find('Modal').prop('open'), false, 'modal is closed');
   });
 });
@@ -108,8 +111,10 @@ test('clicking cancel closes the modal', function () {
   component.open();
   clock.tick(50); // wait for Modal to transition open
   return fetchLatePolicy.then(() => {
+    this.wrapper.update()
     equal(this.wrapper.find('Modal').prop('open'), true);
     document.getElementById('gradebook-settings-cancel-button').click();
+    this.wrapper.update()
     equal(this.wrapper.find('Modal').prop('open'), false);
   });
 });
@@ -120,6 +125,7 @@ test('the "Update" button is disabled when the modal opens', function () {
   component.open();
   clock.tick(50); // wait for Modal to transition open
   return fetchLatePolicy.then(() => {
+    this.wrapper.update()
     const updateButton = document.getElementById('gradebook-settings-update-button')
     ok(updateButton.getAttribute('aria-disabled'));
   });
@@ -131,6 +137,7 @@ test('the "Update" button is enabled if a setting is changed', function () {
   component.open();
   clock.tick(50); // wait for Modal to transition open
   return fetchLatePolicy.then(() => {
+    this.wrapper.update()
     component.changeLatePolicy({ ...component.state.latePolicy, changes: { lateSubmissionDeductionEnabled: true } });
     const updateButton = document.getElementById('gradebook-settings-update-button');
     notOk(updateButton.getAttribute('aria-disabled'));
@@ -143,6 +150,7 @@ test('the "Update" button is disabled if a setting is changed, but there are val
   component.open();
   clock.tick(50); // wait for Modal to transition open
   return fetchLatePolicy.then(() => {
+    this.wrapper.update()
     component.changeLatePolicy({
       ...component.state.latePolicy,
       changes: { lateSubmissionDeductionEnabled: true },
@@ -154,12 +162,13 @@ test('the "Update" button is disabled if a setting is changed, but there are val
 });
 
 test('clicking "Update" sends a request to update the late policy', function () {
-  this.stub(GradebookSettingsModalApi, 'updateLatePolicy').returns(Promise.resolve());
+  sandbox.stub(GradebookSettingsModalApi, 'updateLatePolicy').returns(Promise.resolve());
   const component = this.mountComponent();
   const fetchLatePolicy = this.stubLatePolicyFetchSuccess(component);
   component.open();
   clock.tick(50); // wait for Modal to transition open
   return fetchLatePolicy.then(() => {
+    this.wrapper.update()
     const changes = { lateSubmissionDeductionEnabled: true };
     component.changeLatePolicy({ ...component.state.latePolicy, changes });
     const button = document.getElementById('gradebook-settings-update-button');
@@ -171,7 +180,7 @@ test('clicking "Update" sends a request to update the late policy', function () 
 });
 
 test('clicking "Update" sends a post request to create a late policy if one does not yet exist', function () {
-  this.stub(GradebookSettingsModalApi, 'createLatePolicy').returns(Promise.resolve());
+  sandbox.stub(GradebookSettingsModalApi, 'createLatePolicy').returns(Promise.resolve());
   // When a late policy does not exist, the API call returns 'Not Found'
   const component = this.mountComponent();
   const fetchLatePolicy = this.stubLatePolicyFetchSuccess(component, { newRecord: true });
@@ -179,6 +188,7 @@ test('clicking "Update" sends a post request to create a late policy if one does
   clock.tick(50); // wait for Modal to transition open
 
   return fetchLatePolicy.then(() => {
+    this.wrapper.update()
     const changes = { lateSubmissionDeductionEnabled: true };
     component.changeLatePolicy({ ...component.state.latePolicy, changes});
     document.getElementById('gradebook-settings-update-button').click();
@@ -189,7 +199,7 @@ test('clicking "Update" sends a post request to create a late policy if one does
 });
 
 test('onUpdateLatePolicySuccess calls the onLatePolicyUpdate prop', function () {
-  const onLatePolicyUpdate = this.stub();
+  const onLatePolicyUpdate = sinon.stub();
   const component = this.mountComponent({ onLatePolicyUpdate });
   component.onUpdateLatePolicySuccess();
   strictEqual(onLatePolicyUpdate.callCount, 1);

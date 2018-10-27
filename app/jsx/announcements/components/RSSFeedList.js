@@ -22,13 +22,13 @@ import {func, arrayOf, bool} from 'prop-types'
 import {connect} from 'react-redux'
 import {bindActionCreators} from 'redux'
 
-import Button from '@instructure/ui-core/lib/components/Button'
-import Container from '@instructure/ui-core/lib/components/Container'
-import Grid, {GridRow, GridCol} from '@instructure/ui-core/lib/components/Grid'
-import Link from '@instructure/ui-core/lib/components/Link'
-import Spinner from '@instructure/ui-core/lib/components/Spinner'
-import Text from '@instructure/ui-core/lib/components/Text'
-import IconXLine from 'instructure-icons/lib/Line/IconXLine'
+import Button from '@instructure/ui-buttons/lib/components/Button'
+import View from '@instructure/ui-layout/lib/components/View'
+import Grid, {GridRow, GridCol} from '@instructure/ui-layout/lib/components/Grid'
+import Link from '@instructure/ui-elements/lib/components/Link'
+import Spinner from '@instructure/ui-elements/lib/components/Spinner'
+import Text from '@instructure/ui-elements/lib/components/Text'
+import IconXLine from '@instructure/ui-icons/lib/Line/IconX'
 
 import actions from '../actions'
 import propTypes from '../propTypes'
@@ -56,8 +56,12 @@ export default class RSSFeedList extends React.Component {
 
   deleteExternalFeed = (id, index) => {
     this.props.deleteExternalFeed({feedId: id})
-    const previousIndex = index - 1;
-    const elFocus = index ? () => { document.getElementById(`feed-row-${previousIndex}`).focus() } : this.props.focusLastElement
+    const previousIndex = index - 1
+    const elFocus = index
+      ? () => {
+          document.getElementById(`feed-row-${previousIndex}`).focus()
+        }
+      : this.props.focusLastElement
 
     setTimeout(() => {
       elFocus()
@@ -75,11 +79,17 @@ export default class RSSFeedList extends React.Component {
     )
   }
 
-  renderFeedRow({ display_name, id, external_feed_entries_count = 0, url }, index) {
+  renderFeedRow({display_name, id, external_feed_entries_count = 0, url}, index) {
     return (
       <div key={id} className="announcements-tray-feed-row">
-        <Container margin="small 0" display="block">
-          <Grid startAt="medium" vAlign="middle" colSpacing="small" hAlign="space-around" rowSpacing="small">
+        <View margin="small 0" display="block">
+          <Grid
+            startAt="medium"
+            vAlign="middle"
+            colSpacing="small"
+            hAlign="space-around"
+            rowSpacing="small"
+          >
             <GridRow>
               <GridCol>
                 <Link margin="0 small" href={url}>
@@ -101,12 +111,12 @@ export default class RSSFeedList extends React.Component {
                   size="small"
                   placement="end"
                 >
-                  <IconXLine title={I18n.t('Delete %{feedName}', { feedName: display_name })} />
+                  <IconXLine title={I18n.t('Delete %{feedName}', {feedName: display_name})} />
                 </Button>
               </GridCol>
             </GridRow>
           </Grid>
-        </Container>
+        </View>
       </div>
     )
   }
@@ -120,12 +130,10 @@ export default class RSSFeedList extends React.Component {
       )
     } else {
       return (
-        <Container id="external_rss_feed__rss-list" display="block" textAlign="start">
-          {this.props.feeds.map((feed, index) =>
-            this.renderFeedRow(feed, index)
-          )}
+        <View id="external_rss_feed__rss-list" display="block" textAlign="start">
+          {this.props.feeds.map((feed, index) => this.renderFeedRow(feed, index))}
           <div className="announcements-tray-row" />
-        </Container>
+        </View>
       )
     }
   }
@@ -141,4 +149,7 @@ const connectActions = dispatch =>
     Object.assign(select(actions, ['getExternalFeeds', 'deleteExternalFeed'])),
     dispatch
   )
-export const ConnectedRSSFeedList = connect(connectState, connectActions)(RSSFeedList)
+export const ConnectedRSSFeedList = connect(
+  connectState,
+  connectActions
+)(RSSFeedList)

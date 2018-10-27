@@ -39,18 +39,10 @@ module Lti
       def jwt
         @_jwt ||= begin
           validated_jwt = JSON::JWT.decode @raw_jwt, jwt_secret
-          check_required_assertions(validated_jwt.keys)
-          if validated_jwt['aud'] != @authorization_url
-            raise InvalidAuthJwt, "the 'aud' must be the LTI Authorization endpoint"
+          validator = Canvas::Security::JwtValidator.new jwt: validated_jwt, expected_aud: @authorization_url, override_sub: sub
+          unless validator.valid?
+            raise InvalidAuthJwt, validator.error_message
           end
-          validate_exp(validated_jwt['exp'])
-          validate_iat(validated_jwt['iat'])
-          validate_jti(
-            jti: validated_jwt['jti'],
-            sub: validated_jwt['sub'],
-            exp: validated_jwt['exp'],
-            iat: validated_jwt['iat']
-          )
           validated_jwt
         end
       end
@@ -62,7 +54,7 @@ module Lti
           tp = ToolProxy.where(guid: unverified_jwt[:sub], workflow_state: 'active').first
           return nil unless tp.present?
           developer_key = tp.product_family.developer_key
-          raise InvalidAuthJwt, "the Developer Key is not active" if developer_key.present? && !developer_key.active?
+          raise InvalidAuthJwt, "the Developer Key is not active or available in this environment" if developer_key.present? && !developer_key.usable?
           ims_tool_proxy = IMS::LTI::Models::ToolProxy.from_json(tp.raw_data)
           if (ims_tool_proxy.enabled_capabilities & ['Security.splitSecret', 'OAuth.splitSecret']).blank?
             raise InvalidAuthJwt, "the Tool Proxy must be using a split secret"
@@ -95,42 +87,12 @@ module Lti
         raise SecretNotFound, "either the tool proxy or developer key were not found"
       end
 
-      def check_required_assertions(assertion_keys)
-        missing_assertions = (%w(sub aud exp iat jti) - assertion_keys)
-        if missing_assertions.present?
-          raise InvalidAuthJwt, "the following assertions are missing: #{missing_assertions.join(',')}"
-        end
-      end
-
       def unverified_jwt
         @_unverified_jwt ||= begin
           decoded_jwt = JSON::JWT.decode(@raw_jwt, :skip_verification)
           decoded_jwt
         end
       end
-
-      def validate_exp(exp)
-        exp_time = Time.zone.at(exp)
-        raise InvalidAuthJwt, "the JWT has expired" if exp_time < Time.zone.now
-      end
-
-      def validate_iat(iat)
-        iat_time = Time.zone.at(iat)
-        max_iat_age = Setting.get('lti.oauth2.authorize.max_iat_age', 5.minutes.to_s).to_i.seconds
-        if iat_time < max_iat_age.ago
-          raise Lti::Oauth2::AuthorizationValidator::InvalidAuthJwt, "the 'iat' must be less than #{5.minutes} seconds old"
-        end
-        raise Lti::Oauth2::AuthorizationValidator::InvalidAuthJwt, "the 'iat' must not be in the future" if iat_time > Time.zone.now
-      end
-
-      def validate_jti(jti:, sub:, exp:, iat:)
-        nonce_duration = (exp.to_i - iat.to_i).seconds
-        nonce_key = "nonce:#{sub}:#{jti}"
-        unless Lti::Security.check_and_store_nonce(nonce_key, iat, nonce_duration)
-          raise Lti::Oauth2::AuthorizationValidator::InvalidAuthJwt, "the 'jti' is invalid"
-        end
-      end
-
     end
   end
 end

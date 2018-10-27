@@ -268,6 +268,7 @@ class CalendarEventsApiController < ApplicationController
 
   before_action :require_user, :except => %w(public_feed index)
   before_action :get_calendar_context, :only => :create
+  before_action :require_context, :only => [:user_index]
   before_action :require_user_or_observer, :only => [:user_index]
   before_action :require_authorization, :only => %w(index user_index)
 
@@ -372,6 +373,11 @@ class CalendarEventsApiController < ApplicationController
     end
 
     if @errors.empty?
+      calendar_events, assignments = events.partition { |e| e.is_a?(CalendarEvent) }
+      ActiveRecord::Associations::Preloader.new.preload(calendar_events, [:context, :parent_event])
+      ActiveRecord::Associations::Preloader.new.preload(assignments, Api::V1::Assignment::PRELOADS)
+      ActiveRecord::Associations::Preloader.new.preload(assignments.map(&:context), [:account, :grading_period_groups, :enrollment_term])
+
       json = events.map do |event|
         subs = submissions[event.id] if submissions
         sub = subs.sort_by(&:submitted_at).last if subs
@@ -436,6 +442,10 @@ class CalendarEventsApiController < ApplicationController
   #        -F 'calendar_event[end_at]=2012-07-19T22:00:00Z' \
   #        -H "Authorization: Bearer <token>"
   def create
+    if @context.is_a?(Course) && @context.deleted?
+      return render json: { error: t('cannot create event for deleted course') }, status: :bad_request
+    end
+
     params_for_create = calendar_event_params
     if params_for_create[:description].present?
       params_for_create[:description] = process_incoming_html_content(params_for_create[:description])
@@ -663,6 +673,7 @@ class CalendarEventsApiController < ApplicationController
   def public_feed
     return unless get_feed_context
     @events = []
+    appointments = []
 
     if @current_user
       # if the feed url included the information on the requesting user,
@@ -680,11 +691,35 @@ class CalendarEventsApiController < ApplicationController
 
         # Add in any appointment groups this user can manage and someone has reserved
         appointment_codes = manageable_appointment_groups(@current_user).map(&:asset_string)
-        @events.concat CalendarEvent.active.
+        appointment_groups = CalendarEvent.active.
                          for_user_and_context_codes(@current_user, appointment_codes).
                          send(*date_scope_and_args).
                          events_with_child_events.
                          to_a
+
+        student_events = appointment_groups.map(&:child_events).flatten
+
+        student_events.each do |appointment|
+          # find the context associated with the appointment..
+          event_context = @contexts.find do |context|
+            effective_context_code =
+              if context.is_a?(Course)
+                "course_" + context.id.to_s
+              elsif context.is_a?(Group)
+                "group_" + context.id.to_s
+              end
+            !effective_context_code.nil? && appointment.effective_context_code.eql?(effective_context_code)
+          end
+
+          # and then find the user in that context who is associated with the event
+          next if event_context.nil?
+          appointment_user = event_context.users.find { |user| user.id == appointment.user_id }
+          unless appointment_user.nil?
+            appointments.push({user: appointment_user.name, comments: appointment.comments,
+                               parent_id: appointment.parent_calendar_event_id, course_name: event_context.name})
+          end
+        end
+        @events.concat appointment_groups
       end
     else
       # if the feed url doesn't give us the requesting user,
@@ -730,7 +765,12 @@ class CalendarEventsApiController < ApplicationController
         # scan the descriptions for attachments
         preloaded_attachments = api_bulk_load_user_content_attachments(@events.map(&:description))
         @events.each do |event|
-          ics_event = event.to_ics(in_own_calendar: false, preloaded_attachments: preloaded_attachments, user: @current_user)
+          ics_event =
+            if event.is_a?(CalendarEvent)
+              event.to_ics(in_own_calendar: false, preloaded_attachments: preloaded_attachments, user: @current_user, user_events: appointments)
+            else
+              event.to_ics(in_own_calendar: false, preloaded_attachments: preloaded_attachments, user: @current_user)
+            end
           calendar.add_event(ics_event) if ics_event
         end
 
@@ -1058,6 +1098,7 @@ class CalendarEventsApiController < ApplicationController
 
       scope = scope.active.order(:due_at, :id)
       scope = scope.send(*date_scope_and_args(:due_between_with_overrides)) unless @all_events
+
       last_scope = scope
       collections << [Shard.current.id, BookmarkedCollection.wrap(bookmarker, scope)]
     end
@@ -1112,7 +1153,7 @@ class CalendarEventsApiController < ApplicationController
       }
 
     # in courses with diff assignments on, only show the visible assignments
-    scope = scope.filter_by_visibilities_in_given_courses(student_ids, courses_to_filter_assignments.map(&:id))
+    scope = scope.filter_by_visibilities_in_given_courses(student_ids, courses_to_filter_assignments.map(&:id)).group('assignments.id')
     scope
   end
 

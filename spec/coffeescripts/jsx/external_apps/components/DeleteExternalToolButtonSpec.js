@@ -26,14 +26,11 @@ import store from 'jsx/external_apps/lib/ExternalAppsStore'
 const {Simulate} = TestUtils
 const wrapper = document.getElementById('fixtures')
 Modal.setAppElement(wrapper)
-const createElement = data => <DeleteExternalToolButton tool={data.tool} canAddEdit />
+const createElement = data => <DeleteExternalToolButton tool={data.tool} canAddEdit={data.canAddEdit} />
 const renderComponent = data => ReactDOM.render(createElement(data), wrapper)
 const getDOMNodes = function(data) {
   const component = renderComponent(data)
-  const btnTriggerDelete =
-    component.refs.btnTriggerDelete != null
-      ? component.refs.btnTriggerDelete.getDOMNode()
-      : undefined
+  const btnTriggerDelete = component.refs.btnTriggerDelete
   return [component, btnTriggerDelete]
 }
 
@@ -67,14 +64,21 @@ QUnit.module('ExternalApps.DeleteExternalToolButton', {
   }
 })
 
+test('does not render when the canAddEdit permission is false', () => {
+  const tool = {name: 'test tool'}
+  const component = renderComponent({tool, canAddEdit: false})
+  const node = ReactDOM.findDOMNode(component)
+  notOk(node)
+})
+
 test('open and close modal', function() {
-  const data = {tool: this.tools[1]}
+  const data = {tool: this.tools[1], canAddEdit: true}
   const [component, btnTriggerDelete] = Array.from(getDOMNodes(data))
   Simulate.click(btnTriggerDelete)
   ok(component.state.modalIsOpen, 'modal is open')
   ok(component.refs.btnClose)
   ok(component.refs.btnDelete)
-  Simulate.click(component.refs.btnClose.getDOMNode())
+  Simulate.click(component.refs.btnClose)
   ok(!component.state.modalIsOpen, 'modal is not open')
   ok(!component.refs.btnClose)
   ok(!component.refs.btnDelete)

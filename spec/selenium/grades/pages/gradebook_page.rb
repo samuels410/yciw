@@ -19,7 +19,7 @@
 require_relative '../../common'
 
 module Gradebook
-  class MultipleGradingPeriods
+  class << self
     include SeleniumDependencies
 
     private
@@ -93,6 +93,10 @@ module Gradebook
 
     public
 
+    def student_name_link(student_id)
+      f("a[data-student_id='#{student_id}']")
+    end
+
     def assignment_header_label(name)
       assignment_header(name).find('.assignment-name')
     end
@@ -101,19 +105,25 @@ module Gradebook
       f(assignment_header_selector(name))
     end
 
+    def submission_detail_speedgrader_link
+      fj("a:contains('More details in the SpeedGrader')")
+    end
+
+    def grade_grid
+      f('#gradebook_grid .container_1')
+    end
+
+    def flash_message_holder
+      f('#flash_screenreader_holder')
+    end
+
     # actions
-    def visit_gradebook(course, user = nil)
-      if user
-        user.preferences[:gradebook_version] = '2'
-      end
+    def visit_gradebook(course)
       get "/courses/#{course.id}/gradebook"
     end
 
     def total_score_for_row(row)
-      grade_grid = f('#gradebook_grid .container_1')
-      rows = grade_grid.find_elements(:css, '.slick-row')
-      total = f('.total-cell', rows[row])
-      total.text
+      f('.total-cell', grade_grid.find_elements(:css, '.slick-row')[row]).text
     end
 
     def select_grading_period(grading_period_id)
@@ -190,5 +200,35 @@ module Gradebook
     def grading_cell_attributes(x, y)
       grading_cell(x, y)
     end
+
+    def open_comment_dialog(x=0, y=0)
+      cell = f("#gradebook_grid .container_1 .slick-row:nth-child(#{y+1}) .slick-cell:nth-child(#{x+1})")
+      hover cell
+      fj('.gradebook-cell-comment:visible', cell).click
+      # the dialog fetches the comments async after it displays and then innerHTMLs the whole
+      # thing again once it has fetched them from the server, completely replacing it
+      wait_for_ajax_requests
+      fj('.submission_details_dialog:visible')
+    end
+
+    def student_grid
+      f('#gradebook_grid .container_0')
+    end
+
+    def student_row(student)
+      rows = student_grid.find_elements(:css, '.slick-row')
+      rows.index{|row| row.text.include?(student.name)}
+    end
+
+    def grading_cell_content(x,y)
+      grading_cell(x, y).find(".cell-content")
+    end
+
+    def student_total_grade(student)
+      total_score_for_row(student_row(student))
+    end
   end
 end
+
+
+

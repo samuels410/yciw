@@ -24,7 +24,7 @@ import CourseActivitySummaryStore from 'jsx/dashboard_card/CourseActivitySummary
 
 QUnit.module('DashboardCardBox', {
   setup() {
-    this.stub(CourseActivitySummaryStore, 'getStateForCourse').returns({})
+    sandbox.stub(CourseActivitySummaryStore, 'getStateForCourse').returns({})
     this.courseCards = [
       {
         id: 1,
@@ -39,7 +39,7 @@ QUnit.module('DashboardCardBox', {
   teardown() {
     localStorage.clear()
     if (this.component) {
-      ReactDOM.unmountComponentAtNode(this.component.getDOMNode().parentNode)
+      ReactDOM.unmountComponentAtNode(ReactDOM.findDOMNode(this.component).parentNode)
     }
   }
 })
@@ -47,6 +47,6 @@ QUnit.module('DashboardCardBox', {
 test('should render div.ic-DashboardCard per provided courseCard', function() {
   const CardBox = <DashboardCardBox courseCards={this.courseCards} />
   this.component = TestUtils.renderIntoDocument(CardBox)
-  const $html = $(this.component.getDOMNode())
+  const $html = $(ReactDOM.findDOMNode(this.component))
   equal($html.children('div.ic-DashboardCard').length, this.courseCards.length)
 })

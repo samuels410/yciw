@@ -17,6 +17,9 @@
 %>
 
 <%
+  js_env ga_page_title: "#{@assignment.title} Submission Details"
+%>
+<%
   currently_peer_reviewing = @assessment_request.try(:assigned?)
   js_bundle :submissions
   css_bundle :submission
@@ -118,7 +121,8 @@
             </span>
           <% end %>
         <% end %>
-        <% elsif @submission.can_view_plagiarism_report('vericite', @current_user, session) && !@assignment.muted? %>
+        <% end %>
+        <% if @submission.can_view_plagiarism_report('vericite', @current_user, session) && !@assignment.muted? %>
           <% if (vericite_score = @submission.vericite_data(true)[@submission.asset_string]) && @submission.turnitin_data[:provider] == :vericite && vericite_score[:similarity_score] %>
             <span class="turnitin_score_container">
               <span class="vericite_score_container_caret <%= vericite_score[:state] %>_score"></span>
@@ -134,6 +138,7 @@
         <% if @assignment.rubric_association && (
              @submission.user_can_read_grade?(@current_user, session) ||
              @assignment.rubric_association.user_can_assess_for?(assessor: @current_user, assessee: @submission.user) ||
+             @assignment.rubric_association.user_did_assess_for?(assessor: @current_user, assessee: @submission.user) ||
              can_do(@assignment.rubric, @current_user, :read)
            )
         %>
@@ -268,11 +273,11 @@
               <% end %>
               <br/><br/>
             <% end %>
-            <% @submission.visible_submission_comments.each do |comment| %>
+            <% @submission.submission_comments.each do |comment| %>
               <% if can_do(comment, @current_user, :read) %>
               <div class="comment <%= 'draft' if comment.draft? %>" id="submission_comment_<%= comment.id %>" style="margin-bottom: 10px;">
                 <div class="comment" style="color: #444;">
-                  <% if comment.media_comment_id && comment.media_comment_type %>
+                  <% if comment.media_comment_id %>
                     <div class="comment_media">
                       <%= t('media_comment_link', "This is a media comment, *click here to view*.", :wrapper => '<br/><a href="#" class="play_comment_link media-comment">\1</a>.') %>
                       <span class="media_comment_id" style="display: none;"><%= comment.media_comment_id %></span>

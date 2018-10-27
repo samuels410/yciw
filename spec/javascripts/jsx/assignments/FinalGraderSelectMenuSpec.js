@@ -31,12 +31,15 @@ QUnit.module('FinalGraderSelectMenu', hooks => {
   function selectMenuOptions() {
     return selectMenu()
       .find('option')
-      .map(({node: option}) => ({
-        hidden: option.hidden,
-        selected: option.selected,
-        text: option.innerText,
-        value: option.value
-      }))
+      .map(option => {
+        const $option = option.instance()
+        return {
+          hidden: $option.hidden,
+          selected: $option.selected,
+          text: $option.innerText,
+          value: $option.value
+        }
+      })
   }
 
   function mountComponent() {
