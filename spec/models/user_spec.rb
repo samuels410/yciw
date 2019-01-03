@@ -2468,6 +2468,13 @@ describe User do
         expect(@student.grants_right?(@sub_admin, :manage_user_details)).to eq false
       end
 
+      it "is not granted to custom sub-account admins with inherited roles" do
+        custom_role = custom_account_role("somerole", :account => @root_account)
+        @root_account.role_overrides.create!(role: custom_role, enabled: true, permission: :manage_user_logins)
+        @custom_sub_admin = account_admin_user(account: @sub_account, role: custom_role)
+        expect(@student.grants_right?(@custom_sub_admin, :manage_user_details)).to eq false
+      end
+
       it "is not granted to root account admins on other root account admins who are invited as students" do
         other_admin = account_admin_user account: Account.create!
         course_with_student account: @root_account, user: other_admin, enrollment_state: 'invited'
@@ -2504,60 +2511,6 @@ describe User do
       it "is not granted to sub-account admins w/o :generate_observer_pairing_code" do
         @root_account.role_overrides.create!(role: admin_role, enabled: false, permission: :generate_observer_pairing_code)
         expect(@student.grants_right?(@sub_admin, :generate_observer_pairing_code)).to eq false
-      end
-    end
-  end
-
-  describe ":read_as_parent" do
-    before :once do
-      @student = course_with_student(active_all: true).user
-    end
-
-    context "as manually enrolled observer" do
-      before :once do
-        course_with_observer(course: @course, active_enrollment: true, associated_user_id: @student.id)
-      end
-
-      it "is granted" do
-        expect(@student.grants_right?(@observer, :read_as_parent)).to eq true
-      end
-    end
-
-    context "as super observer" do
-      before :once do
-        @observer = user_model
-        UserObservationLink.create(student: @student, observer: @observer)
-      end
-
-      it "is granted" do
-        expect(@student.grants_right?(@observer, :read_as_parent)).to eq true
-      end
-    end
-  end
-
-  describe ":read" do
-    before :once do
-      @student = course_with_student(active_all: true).user
-    end
-
-    context "as manually enrolled observer" do
-      before :once do
-        course_with_observer(course: @course, active_enrollment: true, associated_user_id: @student.id)
-      end
-
-      it "is granted" do
-        expect(@student.grants_right?(@observer, :read)).to eq true
-      end
-    end
-
-    context "as super observer" do
-      before :once do
-        @observer = user_model
-        UserObservationLink.create(student: @student, observer: @observer)
-      end
-
-      it "is granted" do
-        expect(@student.grants_right?(@observer, :read)).to eq true
       end
     end
   end

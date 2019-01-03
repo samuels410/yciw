@@ -69,7 +69,7 @@ class SisBatch < ActiveRecord::Base
       batch.user = user
       batch.save
 
-      att = create_data_attachment(batch, attachment, t(:upload_filename, "sis_upload_%{id}.zip", :id => batch.id))
+      att = create_data_attachment(batch, attachment)
       batch.attachment = att
 
       yield batch if block_given?
@@ -80,12 +80,12 @@ class SisBatch < ActiveRecord::Base
     end
   end
 
-  def self.create_data_attachment(batch, data, display_name)
+  def self.create_data_attachment(batch, data, display_name=nil)
     batch.shard.activate do
       Attachment.new.tap do |att|
         Attachment.skip_3rd_party_submits(true)
         att.context = batch
-        att.display_name = display_name
+        att.display_name = display_name if display_name
         Attachments::Storage.store_for_attachment(att, data)
         att.save!
       end
@@ -378,7 +378,7 @@ class SisBatch < ActiveRecord::Base
     @has_errors = self.sis_batch_errors.exists?
     import_finished = !(@has_errors && self.sis_batch_errors.failed.exists?) if import_finished
     finalize_workflow_state(import_finished)
-    write_errors_to_file
+    self.send_later_if_production_enqueue_args(:write_errors_to_file, {max_attempts: 5}) if @has_errors
     populate_old_warnings_and_errors
     statistics
     self.progress = 100 if import_finished
@@ -640,7 +640,6 @@ class SisBatch < ActiveRecord::Base
   end
 
   def write_errors_to_file
-    return unless @has_errors
     file = temp_error_file_path
     CSV.open(file, "w") do |csv|
       csv << %w(sis_import_id file message row)
@@ -658,6 +657,7 @@ class SisBatch < ActiveRecord::Base
       Rack::Test::UploadedFile.new(file, 'csv', true),
       "sis_errors_attachment_#{id}.csv"
     )
+    self.save! if Rails.env.production?
   end
 
   def temp_error_file_path
@@ -727,7 +727,9 @@ class SisBatch < ActiveRecord::Base
               # restore the items and return the ids of the items that changed
               ids = type.constantize.connection.select_values(restore_sql(type, data.map(&:to_restore_array)))
               if type == 'Enrollment'
-                ids.each_slice(1000) {|slice| Enrollment::BatchStateUpdater.send_later(:run_call_backs_for, slice)}
+                ids.each_slice(1000) do |slice|
+                  Enrollment::BatchStateUpdater.send_later_enqueue_args(:run_call_backs_for, {n_strand: "restore_states_batch_updater:#{account.global_id}}"}, slice)
+                end
               end
               count += update_restore_progress(restore_progress, data, count, total)
             else
@@ -744,7 +746,9 @@ class SisBatch < ActiveRecord::Base
                   end
                 end
               end
-              successful_ids.each_slice(1000) {|slice| Enrollment::BatchStateUpdater.send_later(:run_call_backs_for, slice)}
+              successful_ids.each_slice(1000) do |slice|
+                Enrollment::BatchStateUpdater.send_later_enqueue_args(:run_call_backs_for, {n_strand: "restore_states_batch_updater:#{account.global_id}}"}, slice)
+              end
               count += update_restore_progress(restore_progress, data - failed_data, count, total)
               roll_back_data.active.where(id: failed_data).update_all(workflow_state: 'failed', updated_at: Time.zone.now)
             end

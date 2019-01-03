@@ -20,7 +20,7 @@ module Types
   class AssignmentType < ApplicationObjectType
     graphql_name "Assignment"
 
-    implements GraphQL::Relay::Node.interface
+    implements GraphQL::Types::Relay::Node
     implements Interfaces::TimestampInterface
 
     alias :assignment :object
@@ -119,7 +119,7 @@ module Types
 
     field :html_url, UrlType, null: true
     def html_url
-      Rails.application.routes.url_helpers.course_assignment_url(
+      GraphQLHelpers::UrlHelpers.course_assignment_url(
         course_id: assignment.context_id,
         id: assignment.id,
         host: context[:request].host_with_port
@@ -175,6 +175,11 @@ module Types
         # assignment_overrides_json. they may not return the same results?
         # ¯\_(ツ)_/¯
         AssignmentOverrideApplicator.overrides_for_assignment_and_user(assignment, current_user)
+    end
+
+    field :group_set, GroupSetType, null: true
+    def group_set
+      load_association(:group_category)
     end
 
     field :submissions_connection, SubmissionType.connection_type, null: true do

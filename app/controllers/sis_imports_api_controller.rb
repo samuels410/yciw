@@ -149,14 +149,18 @@
 #           "type": "string",
 #           "allowableValues": {
 #             "values": [
+#               "initializing",
 #               "created",
 #               "importing",
 #               "cleanup_batch",
 #               "imported",
 #               "imported_with_messages",
 #               "aborted",
+#               "failed",
 #               "failed_with_messages",
-#               "failed"
+#               "restoring",
+#               "partially_restored",
+#               "restored"
 #             ]
 #           }
 #         },
@@ -270,6 +274,9 @@ class SisImportsApiController < ApplicationController
   # @argument created_since [Optional, DateTime]
   #   If set, only shows imports created after the specified date (use ISO8601 format)
   #
+  # @argument workflow_state[] [String, "initializing"|"created"|"importing"|"cleanup_batch"|"imported"|"imported_with_messages"|"aborted"|"failed"|"failed_with_messages"|"restoring"|"partially_restored"|"restored"]
+  #   If set, only returns imports that are in the given state.
+  #
   # Example:
   #   curl https://<canvas>/api/v1/accounts/<account_id>/sis_imports \
   #     -H 'Authorization: Bearer <token>'
@@ -281,9 +288,31 @@ class SisImportsApiController < ApplicationController
       if (created_since = CanvasTime.try_parse(params[:created_since]))
         scope = scope.where("created_at > ?", created_since)
       end
+
+      state = Array(params[:workflow_state])&['initializing', 'created', 'importing', 'cleanup_batch', 'imported', 'imported_with_messages',
+                                              'aborted', 'failed', 'failed_with_messages', 'restoring', 'partially_restored', 'restored']
+      scope = scope.where(workflow_state: state) if state.present?
+
       # we don't need to know how many there are
       @batches = Api.paginate(scope, self, api_v1_account_sis_imports_url, total_entries: nil)
       render json: {sis_imports: sis_imports_json(@batches, @current_user, session)}
+    end
+  end
+
+  # @API Get the current importing SIS import
+  #
+  # Returns the SIS imports that are currently processing for an account. If no
+  # imports are running, will return an empty array.
+  #
+  # Example:
+  #   curl https://<canvas>/api/v1/accounts/<account_id>/sis_imports/importing \
+  #     -H 'Authorization: Bearer <token>'
+  #
+  # @returns SisImport
+  def importing
+    if authorized_action(@account, @current_user, [:import_sis, :manage_sis])
+      batches = @account.sis_batches.importing
+      render json: {sis_imports: sis_imports_json(batches, @current_user, session)}
     end
   end
 
@@ -572,6 +601,10 @@ class SisImportsApiController < ApplicationController
   # @API Abort SIS import
   #
   # Abort a SIS import that has not completed.
+  #
+  # Aborting a sis batch that is running can take some time for every process to
+  # see the abort event. Subsequent sis batches begin to process 10 minutes
+  # after the abort to allow each process to clean up properly.
   #
   # @example_request
   #   curl https://<canvas>/api/v1/accounts/<account_id>/sis_imports/<sis_import_id>/abort \

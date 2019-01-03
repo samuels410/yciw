@@ -44,14 +44,17 @@ class RubricAssociation < ActiveRecord::Base
   before_save :update_old_rubric
   after_destroy :update_rubric
   after_destroy :update_alignments
-  before_save :record_save_audit_event
-  before_destroy :record_deletion_audit_event
   after_save :assert_uniqueness
   after_save :update_alignments
 
   before_create :touch_association
   before_destroy :touch_association
   serialize :summary_data
+
+  with_options if: -> { auditable? && @updating_user.present? } do
+    before_save :record_save_audit_event
+    before_destroy :record_deletion_audit_event
+  end
 
   ValidAssociationModels = {
     'Course' => ::Course,
@@ -130,8 +133,10 @@ class RubricAssociation < ActiveRecord::Base
   end
 
   def context_name
-    @cached_context_name ||= Rails.cache.fetch(['short_name_lookup', self.context_code].cache_key) do
-      self.context.short_name rescue ""
+    @cached_context_name ||= self.shard.activate do
+      Rails.cache.fetch(['short_name_lookup', self.context_code].cache_key) do
+        self.context.short_name rescue ""
+      end
     end
   end
 
@@ -316,7 +321,8 @@ class RubricAssociation < ActiveRecord::Base
         if !rating[:description] || rating[:description].empty?
           rating[:description] = cached_description
         end
-        if rating[:comments] && !rating[:comments].empty? && data[:save_comment] == '1'
+        save_comment = data[:save_comment] == '1' && params[:assessment_type] != 'peer_review'
+        if rating[:comments] && !rating[:comments].empty? && save_comment
           self.summary_data ||= {}
           self.summary_data[:saved_comments] ||= {}
           self.summary_data[:saved_comments][criterion.id.to_s] ||= []
@@ -356,11 +362,13 @@ class RubricAssociation < ActiveRecord::Base
     assessment_to_return
   end
 
+  def auditable?
+    assignment&.auditable?
+  end
+
   private
 
   def record_save_audit_event
-    return unless @updating_user.present? && assignment&.auditable?
-
     existing_association = assignment.rubric_association
     event_type = existing_association.present? ? 'rubric_updated' : 'rubric_created'
     payload = if event_type == 'rubric_created'
@@ -378,8 +386,6 @@ class RubricAssociation < ActiveRecord::Base
   end
 
   def record_deletion_audit_event
-    return unless @updating_user.present? && assignment&.auditable?
-
     AnonymousOrModerationEvent.create!(
       assignment: assignment,
       event_type: 'rubric_deleted',

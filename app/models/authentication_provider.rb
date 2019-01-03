@@ -43,7 +43,7 @@ class AuthenticationProvider < ActiveRecord::Base
     case type_name
     when 'cas', 'ldap', 'saml'
       const_get(type_name.upcase)
-    when 'clever', 'facebook', 'google', 'microsoft', 'twitter'
+    when 'clever', 'facebook', 'google', 'microsoft', 'saml_idp_discovery', 'twitter'
       const_get(type_name.classify)
     when 'canvas'
       Canvas
@@ -66,8 +66,12 @@ class AuthenticationProvider < ActiveRecord::Base
     false
   end
 
-  def self.enabled?
+  def self.enabled?(_account = nil)
     true
+  end
+
+  def self.supports_debugging?
+    false
   end
 
   def self.display_name
@@ -93,10 +97,13 @@ class AuthenticationProvider < ActiveRecord::Base
   has_many :pseudonyms, foreign_key: :authentication_provider_id, inverse_of: :authentication_provider
   acts_as_list scope: { account: self, workflow_state: [nil, 'active'] }
 
-  VALID_AUTH_TYPES = %w[canvas cas clever facebook github google ldap linkedin microsoft openid_connect saml twitter].freeze
+  def self.valid_auth_types
+    %w[canvas cas clever facebook github google ldap linkedin microsoft openid_connect saml saml_idp_discovery twitter].freeze
+  end
+
   validates :auth_type,
-            inclusion: { in: VALID_AUTH_TYPES,
-                         message: "invalid auth_type, must be one of #{VALID_AUTH_TYPES.join(',')}" }
+            inclusion: { in: ->(_) { valid_auth_types },
+                         message: -> { "invalid auth_type, must be one of #{valid_auth_types.join(',')}" } }
   validates :account_id, presence: true
   validate :validate_federated_attributes
 
@@ -104,7 +111,7 @@ class AuthenticationProvider < ActiveRecord::Base
   # type
   module FindWithType
     def find(*args)
-      if VALID_AUTH_TYPES.include?(args.first)
+      if AuthenticationProvider.valid_auth_types.include?(args.first)
         where(auth_type: args.first).first!
       else
         super
@@ -297,6 +304,31 @@ class AuthenticationProvider < ActiveRecord::Base
     end
   end
 
+  def debugging?
+    unless instance_variable_defined?(:@debugging)
+      @debugging = !!debug_get(:debugging)
+    end
+    @debugging
+  end
+
+  def stop_debugging
+    self.class.debugging_keys.map(&:keys).flatten.each { |key| ::Canvas.redis.del(debug_key(key)) }
+  end
+
+  def start_debugging
+    stop_debugging # clear old data
+    debug_set(:debugging, t("Waiting for attempted login"))
+    @debugging = true
+  end
+
+  def debug_get(key)
+    ::Canvas.redis.get(debug_key(key))
+  end
+
+  def debug_set(key, value, overwrite: true)
+    ::Canvas.redis.set(debug_key(key), value, ex: debug_expire.to_i, nx: overwrite ? nil : true)
+  end
+
   protected
 
   def statsd_prefix
@@ -359,6 +391,15 @@ class AuthenticationProvider < ActiveRecord::Base
     return if account.non_canvas_auth_configured?
     account.enable_canvas_authentication
   end
+
+  def debug_key(key)
+    ['auth_provider_debugging', self.global_id, key.to_s].cache_key
+  end
+
+  def debug_expire
+    Setting.get('auth_provider_debug_expire_minutes', 30).to_i.minutes
+  end
+
 end
 
 # so it doesn't get mixed up with ::CAS, ::LinkedIn and ::Twitter

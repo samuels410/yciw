@@ -550,7 +550,7 @@ nn:
         Anonymous: Anonym
         Assignment: Oppgåve
         Course: Emne
-        Grader: Karaktersetjing
+        Grader: Karaktersetjar
         Student: Student
         To: Til
         date: Dato
@@ -2430,7 +2430,7 @@ nn:
     submit_assignment: 
       additional_comments: Tilleggskommentarar
       buttons: 
-        record_media: "Opptak / opplasting på media"
+        record_media: "Ta opp / last opp media"
         submit_assignment: "Lever oppgåve"
       comments_placeholder: Kommentarar...
       errors: 
@@ -2439,7 +2439,7 @@ nn:
       instructions: 
         from_external_tool: "Vel eit verktøy frå lista nedanfor for å laste og levere ein ressurs frå det same verktøyet."
         google_docs: "Vel fila frå lista nedanfor."
-        media_recording: "Bruk lenka nedanfor for å registrere innleveringa. Klikk på \"Lagre\" når du er ferdig og klar til å sende inn."
+        media_recording: "Bruk lenka nedanfor for å ta opp innleveringa. Klikk på \"Lagre\" når du er ferdig og klar til å sende inn."
         online_text_entry: "Kopier og lim inn eller skriv oppgåvesvaret ditt her."
         online_url: "Kopier og lim inn lenka til nettstaden du vil levere for denne oppgåva."
       invalid_google_docs_domain: "Ugyldig domene"
@@ -2461,7 +2461,7 @@ nn:
       messages: 
         google_drives_auth_required: "Du må gi Canvas tilgang til Google Drive-kontoen din før du kan levere oppgåver direkte frå Google Drive:"
         media_recording_ready: "Klar til å levere. Klikk på knappen 'Lever oppgåve' for å fullføre."
-        media_recordings_disabled: "Medieopptak er ikkje aktivert for dette Canvas-området og du kan ikkje levere denne type oppgåver. Ta kontakt med faglæraren om endring av innstillingar for denne oppgåva eller med systemadministrator om aktivering av medieopptak."
+        media_recordings_disabled: "Medieopptak er ikkje aktivert for dette Canvas-området og du kan ikkje levere denne type oppgåver. Ta kontakt med faglæraren din om endring av innstillingar for denne oppgåva eller med systemadministrator om aktivering av medieopptak."
         submitting: Leverer...
         uploading: "Hentar eit eksemplar av Google Doc for å levere oppgåva. Dette kan ta litt tid, avhengig av storleiken på fila..."
       no_files: "Ingen filer"
@@ -4463,7 +4463,7 @@ nn:
         subject: Emne
         to: Til
       links: 
-        media_comment: Opptak
+        media_comment: "Spel inn"
       media_comment: Mediekommentar
       no_course: "Ingen emne"
       no_subject: "Utan emne"
@@ -6019,7 +6019,7 @@ nn:
       available_from: "Tilgjengeleg frå"
       buttons: 
         save_and_publish: "Lagre og publiser"
-      delay_posting: "Utsett oppføring"
+      delay_posting: "Utsett utsending"
       enable_podcast_feed: "Aktiver podkaststraum"
       include_replies_in_podcast_feed: "Inkluder studentsvar i podkaststraumen"
       only_graders_can_like: "Berre dei som set karakterar kan like"
@@ -6137,7 +6137,7 @@ nn:
       topic_subscribed_tooltip: "Du abonnerer og vil bli varsla om nye kommentarar"
       topic_time_locked: "Emnet er låst til %{time}."
       topic_unsubscribe: Abonnerer
-      unlock_topic: "Open for kommentarar"
+      unlock_topic: "Opne for kommentarar"
       unread: "Ikkje lest"
     sub_entry: 
       authors_name: "Forfattaren sitt namn"
@@ -6486,7 +6486,7 @@ nn:
       font_size: "Skriftstorleik, trykk ned for å velje"
       formatting: "Formatering, trykk ned for å velje"
       rte_help: "Område for rikt tekstformat. Trykk ALT+F8 for hjelp"
-  editor_button_6647db9c: Redigeringsknapp
+  editor_button_6647db9c: Editorknapp
   either_the_url_or_domain_should_be_set_c29cf8c1: "Du må oppgi anten URL-en eller domenet."
   either_you_re_a_new_user_or_the_terms_of_use_have__14f0d0d0: "Enten er du ny brukar eller så er *vilkår for bruk* endra sidan siste du godtok dei. Du må samtykke i *vilkår for bruk* og **retningslinjer for personvern** før du kan halde fram."
   el_salvador_503_b0907d30: "El Salvador (+503)"
@@ -6957,7 +6957,7 @@ nn:
   export_de71cd8e: Eksporter
   export_failed_5d615d6d: "Eksport mislukkast"
   export_in_progress_70db262a: "Eksport i gang"
-  export_report_7c5899e: Eksportrapport
+  export_report_7c5899e: "Eksporter rapport"
   export_to_quizzes_2_format_45b3ec25: "Eksporter til Quizzes 2-format"
   exported_package_history_bfca44b9: "Historie for eksportert pakke"
   exporting_b1eab154: Eksporterer
@@ -7011,7 +7011,7 @@ nn:
       course_navigation_configured: "Emnenavigasjon er konfigurert"
       delete_tool: "Slett verktøy"
       edit_tool: "Rediger verktøy"
-      editor_button_configured: "Redigeringsknapp er konfigurert"
+      editor_button_configured: "Editorknapp er konfigurert"
       homework_submission_configured: "Innlevering av heimeoppgåve er konfigurert"
       labels: 
         consumer_key: Forbrukarnøkkel
@@ -7358,7 +7358,7 @@ nn:
     dialog_button: 
       aria_record: "Klikk for å spele inn"
       aria_record_reset: "Klikk for å spele inn"
-      aria_stop: "Treff\"Stopp\" avslutte innspeling."
+      aria_stop: "Klikk \"Stopp\" for å avslutte innspeling."
     edit_view_rubric: "Vis vurderingsskjema"
     errors: 
       no_points_possible: "Kan ikkje justere utan moglege poeng"
@@ -9422,7 +9422,7 @@ nn:
       file_too_large: "*Fila er for stor.* Maksimal storleik er %{size}MB."
       load_failed: "Applikasjonen for mediekommentarar lastar ikkje.  Prøv på nytt seinare."
       media_comment_installation_broken: "Opplasting av mediekommentarar er ikkje rett installert. Kontakt administrator."
-      must_be_logged_in: "Du må vere pålogga for medieopptak."
+      must_be_logged_in: "Du må vere pålogga for å gjere medieinnspelingar."
       persistent_problem: "Dersom problemet held fram, kan du prøve å spele inn mediefila lokalt og deretter laste opp den lagra fila."
       save_failed: "Lagring er mislukka.  Lukk dette popup-vindauget og prøv på nytt seinare."
       save_failed_try_again: "Oppføring blei ikkje lagra.  Prøv på nytt seinare."
@@ -9443,13 +9443,13 @@ nn:
     titles: 
       media_contribution: Mediebidrag
       play_comment: "Spel mediekommentar"
-      record_upload_media_comment: "Ta opp / last opp mediekommentar"
+      record_upload_media_comment: "Spel inn / last opp mediekommentar"
     track_uploaded_successfully: "Spor er lasta opp.Oppdater nettlesaren."
     upload: "Last opp"
     uploading: "Lastar opp..."
   media_has_been_queued_for_conversion_please_try_ag_74343bbd: "Media står i kø for konvertering, prøv på nytt seinare."
-  media_recording_77cddc52: Medieinnspelingar
-  media_recording_submission_b7fd1491: "Innsending av medieopptak"
+  media_recording_77cddc52: Medieinnspeling
+  media_recording_submission_b7fd1491: "Innsending av medieinnspeling"
   media_recordings_749aef6d: Medieinnspelingar
   median_ed291842: Median
   median_score_4657e907: "Median: %{score}"
@@ -11153,7 +11153,7 @@ nn:
   model_is_already_located_in_newgroup_e5cea361: "%{model} er allereie plassert i %{newGroup}"
   moderate_assignment_ccb00173: "Moderer %{assignment}"
   moderate_assignment_name_cf59e0a7: "Moderer %{assignment_name}"
-  moderate_d0c85e92: Moderer
+  moderate_d0c85e92: Moderat
   moderate_grades_4f43f85d: "Moderer karakterar"
   moderated_grading_cannot_be_enabled_for_group_assi_7e947ab7: "Moderert karaktersetjing kan ikkje aktiverast for gruppeoppgåver"
   moderated_grading_cannot_be_enabled_for_peer_revie_6b7eedc1: "Moderert karaktersetjing kan ikkje aktiverast for fagfellevurderte oppgåver"
@@ -11580,7 +11580,7 @@ nn:
       migration: Overføring
       one: Anna
       other: Anna
-      recording_ready: "Opptak er klart"
+      recording_ready: "Opptaket er klart"
       registration: Registrering
       reminder: Påminning
       student_appointment_signups: "Påmeldingar til studentavtalar"
@@ -11718,7 +11718,7 @@ nn:
         * Ny kontobrukar
         * Ny studentgruppe
     other_display: "Administrative varsel"
-    recording_ready_display: "Opptak er klart"
+    recording_ready_display: "Opptaket er klart"
     reminder_display: Påminning
     student_appointment_description: |-
         *Berre faglærar og administrator:*
@@ -11874,7 +11874,7 @@ nn:
   one_per_line_format_name_value_79647700: "Ein per linje. Format: namn=verdi"
   online_submission_type_file_uploads_24910d74: "Innlevering på nettet – filopplasting"
   online_submission_type_file_uploads_restrict_uploa_5ec7b263: "Innlevering på nettet – filopplasting – vel filtypar som kan leverast"
-  online_submission_type_media_recordings_9424bf34: "Innlevering på nettet – medieopptak"
+  online_submission_type_media_recordings_9424bf34: "Innleveringstype – medieopptak"
   online_submission_type_text_entry_ac56d100: "Innlevering på nettet – tekstinnlegging i editor"
   online_submission_type_website_url_2c9df33d: "Innlevering på nettet – nettstad"
   online_text_entry_1d893ce: "Nettbasert tekstinnlegging i editor"
@@ -11889,7 +11889,7 @@ nn:
   only_teachers_can_see_this_course_until_it_is_publ_6fac97a7: "Berre faglærarar kan sjå dette emnet før det er publisert"
   open_color_picker_f117df0a: "Opne fargeveljar"
   open_event_menu_e9a21e39: "Opne hendingsmenyen"
-  open_for_comments_f8f7641e: "Open for kommentarar"
+  open_for_comments_f8f7641e: "Opne for kommentarar"
   open_in_theme_editor_156028e2: "Opne i temaredigeringsprogrammet"
   open_message_d7b12975: "Opne melding"
   open_name_color_picker_a2646a33: "Opne %{name} fargeveljar"
@@ -14384,7 +14384,7 @@ nn:
     sections_count: 
       one: "1 klasse"
       other: "%{count} seksjonar"
-  record_media_6637ff19: Medieopptak
+  record_media_6637ff19: Medieinnspeling
   record_with_microphone_only_e4ee07aa: "Ta opp berre med mikrofon"
   record_with_webcam_af21e07c: "Ta opp berre med nettkamera"
   recurring_calendar_events_c940b6b8: "Regelmessige kalenderhendingar"
@@ -14750,7 +14750,7 @@ nn:
   saving_associations_complete_e4b9634d: "Lagring av forbindelsane er ferdig"
   saving_associations_started_8ac85360: "Lagring av forbindelsane er starta"
   saving_d55dd90e: Lagrar...
-  saving_recording_e111cb05: "Lagrar opptak..."
+  saving_recording_e111cb05: "Lagrar innspeling..."
   schedule_student_availability_332154a: "Planlegg tilgjenge studentar"
   scheduler_shown_df77ca6f: "Planleggar vist"
   school_of_rock_4b7b1fd0: "School of Rock"
@@ -17043,7 +17043,7 @@ nn:
   to_do_1d554f36: Gjeremål
   to_do_5526f10a: "Gjeremål: "
   to_do_items_loading_d1cdfcd5: "Lastar innhald i gjeremålslista"
-  to_do_list_dashboard_d741f64e: "Dashbord for gjeremål"
+  to_do_list_dashboard_d741f64e: "Dashbord med gjeremålsliste"
   to_link_the_course_observer_name_to_a_student_star_f993c826: "Om du vil lenke emneobservatøren *%{name}* til ein student, kan du skrive og finne studenten sitt namn nedanfor og deretter klikke på Oppdater."
   to_minscore_43e5452e: "to %{minScore}%"
   to_preview_theme_editor_branding_you_will_need_to__462dda1a: "For å førehandvise endringar i temaredigeringsprogrammet, må du *slå av høgkontrast-UI*."
@@ -17234,7 +17234,7 @@ nn:
       Last opp emnefiler, pensum, litteraturlister eller andre dokument.
       Lås mapper så dei er skjult for studentane. Legg til filer i modular,
       oppgåver, diskusjonar eller emnesider.
-  upload_data_dc4fa4cb: "Lat opp data"
+  upload_data_dc4fa4cb: "Last opp data"
   upload_drop_zone: 
     drop_to_upload: "Slepp element for opplasting"
   upload_failed_quota_exceeded_ff3af659: "Opplastinga mislukkast, lagringskvote er overskriden"

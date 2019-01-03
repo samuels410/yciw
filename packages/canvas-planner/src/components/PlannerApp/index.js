@@ -55,7 +55,6 @@ export class PlannerApp extends Component {
     loadPastButtonClicked: func,
     loadPastUntilNewActivity: func,
     loadFutureItems: func,
-    stickyOffset: number, // in pixels
     changeDashboardView: func,
     togglePlannerItemCompletion: func,
     updateTodo: func,
@@ -69,7 +68,6 @@ export class PlannerApp extends Component {
   };
   static defaultProps = {
     isLoading: false,
-    stickyOffset: 0,
     triggerDynamicUiUpdates: () => {},
     preTriggerDynamicUiUpdates: () => {},
     plannerActive: () => {return false;},
@@ -101,10 +99,7 @@ export class PlannerApp extends Component {
   }
 
   componentDidUpdate (prevProps) {
-    const additionalOffset = this.newActivityButtonRef ?
-      this.newActivityButtonRef.getBoundingClientRect().height :
-      0;
-    this.props.triggerDynamicUiUpdates(additionalOffset);
+    this.props.triggerDynamicUiUpdates();
     if (this.props.responsiveSize !== prevProps.responsiveSize) {
       this.afterLayoutChange();
     }
@@ -212,6 +207,7 @@ export class PlannerApp extends Component {
         changeDashboardView={this.props.changeDashboardView}
         isCompletelyEmpty={this.props.isCompletelyEmpty}
         onAddToDo={this.onAddToDo}
+        responsiveSize={this.props.responsiveSize}
       />
     );
   }
@@ -273,6 +269,7 @@ export class PlannerApp extends Component {
         key={workingDayKey}
         updateTodo={this.props.updateTodo}
         currentUser={this.props.currentUser}
+        responsiveSize={this.props.responsiveSize}
       />
     );
     workingDay.add(1, 'days');  // step to the next day

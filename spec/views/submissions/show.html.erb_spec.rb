@@ -71,6 +71,30 @@ describe "/submissions/show" do
       expect(checkbox.attr('checked').value).to eq 'checked'
       expect(checkbox.attr('style').value).to include('display:none')
     end
+
+    it "peer reviewers are allowed to make group comments" do
+      @assignment.update!(grade_group_students_individually: false, peer_reviews: true)
+      peer = @course.enroll_student(User.create, enrollment_state: "active").user
+      peer_submission = @assignment.submissions.find_by(user: peer)
+      AssessmentRequest.create!(assessor: peer, assessor_asset: peer_submission, asset: @submission, user: @user)
+      view_context(@course, peer)
+      assign(:assignment, @assignment)
+      assign(:submission, @submission)
+      render "submissions/show"
+      html = Nokogiri::HTML.fragment(response.body)
+      expect(html.css("#submission_group_comment").attr("checked").value).to eq "checked"
+    end
+
+    it "students that are not peer reviewers are not allowed to make group comments" do
+      @assignment.update!(grade_group_students_individually: false, peer_reviews: true)
+      student2 = @course.enroll_student(User.create, enrollment_state: "active").user
+      view_context(@course, student2)
+      assign(:assignment, @assignment)
+      assign(:submission, @submission)
+      render "submissions/show"
+      html = Nokogiri::HTML.fragment(response.body)
+      expect(html.css("#submission_group_comment")).to be_empty
+    end
   end
 
   context 'when assignment has deducted points' do
@@ -296,6 +320,48 @@ describe "/submissions/show" do
           render 'submissions/show'
           expect(comment_contents).to match_array ['I did a great job!']
         end
+
+        context "for a moderated assignment" do
+          let(:moderated_assignment) do
+            course.assignments.create!(
+              name: "moderated",
+              moderated_grading: true,
+              final_grader: teacher,
+              grader_count: 2
+            )
+          end
+          let(:moderated_submission) { moderated_assignment.submission_for_student(student) }
+          let(:first_ta) { course_with_user("TaEnrollment", course: course, active_all: true).user }
+          let(:second_ta) { course_with_user("TaEnrollment", course: course, active_all: true).user }
+
+          before(:each) do
+            moderated_submission.add_comment(author: student, comment: "I did a great job!")
+            moderated_submission.add_comment(author: teacher, comment: "No, you did not.")
+            moderated_submission.add_comment(author: first_ta, comment: "Maybe they did?")
+            moderated_submission.add_comment(author: second_ta, comment: "Who cares?")
+            moderated_assignment.grade_student(student, grade: 1, grader: second_ta, provisional: true)
+            assign(:assignment, moderated_assignment)
+            assign(:submission, moderated_submission)
+          end
+
+          it "shows only the student's comments while muted" do
+            render "submissions/show"
+            expect(comment_contents).to match_array(["I did a great job!"])
+          end
+
+          it "shows the student's, chosen grader's, and final grader's comments when unmuted" do
+            ModeratedGrading::ProvisionalGrade.find_by(submission: moderated_submission, scorer: second_ta).publish!
+            moderated_assignment.update!(grades_published_at: 1.hour.ago, muted: false)
+            moderated_submission.reload
+
+            render "submissions/show"
+            expect(comment_contents).to match_array([
+              "I did a great job!",
+              "No, you did not.",
+              "Who cares?"
+            ])
+          end
+        end
       end
     end
   end
@@ -383,6 +449,40 @@ describe "/submissions/show" do
         classes = html.css('div.rubric_container').attribute('class').value.split(' ')
         expect(classes).to include('assessing')
       end
+    end
+  end
+
+  describe "media comments" do
+    let_once(:assignment) { @course.assignments.create! }
+    let_once(:student) { course_with_user("StudentEnrollment", course: @course, name: "Stu", active_all: true).user }
+    let_once(:sub) { assignment.submit_homework(student, body: "i did a thing") }
+    let_once(:teacher) { course_with_user("TeacherEnrollment", course: @course, name: "Tom", active_all: true).user }
+
+    before(:once) do
+      @comment = sub.add_comment(author: teacher, comment: "comment", media_comment_id: 1, media_comment_type: "video")
+    end
+
+    before(:each) do
+      assign(:assignment, assignment)
+      assign(:context, @course)
+      assign(:current_user, teacher)
+      assign(:submission, sub)
+    end
+
+    it "passes comment author for the thumbnail" do
+      render "submissions/show"
+      html = Nokogiri::HTML.fragment(response.body)
+      anchor = html.at_css("div#submission_comment_#{@comment.id} div.comment_media a")
+      author = anchor.attributes.fetch("data-author").value
+      expect(author).to eq "Tom"
+    end
+
+    it "passes comment creation time for the thumbnail" do
+      render "submissions/show"
+      html = Nokogiri::HTML.fragment(response.body)
+      anchor = html.at_css("div#submission_comment_#{@comment.id} div.comment_media a")
+      created_at = anchor.attributes.fetch("data-created_at").value
+      expect(created_at).to eq datetime_string(@comment.created_at)
     end
   end
 end

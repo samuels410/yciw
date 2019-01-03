@@ -44,8 +44,7 @@ describe "course settings" do
       fj('.grading_standard_select:visible a').click
       fj('button.select_grading_standard_link:visible').click
       f('.done_button').click
-      submit_form('#course_form')
-      wait_for_ajaximations
+      wait_for_new_page_load(submit_form('#course_form'))
 
       @course.reload
       expect(@course.grading_standard).to eq(@standard)
@@ -106,8 +105,7 @@ describe "course settings" do
       wait_for_ajaximations
       f('#course_self_enrollment').click
       wait_for_ajaximations
-      submit_form('#course_form')
-      wait_for_ajaximations
+      wait_for_new_page_load { submit_form('#course_form') }
 
       code = @course.reload.self_enrollment_code
       expect(code).not_to be_nil
@@ -146,6 +144,17 @@ describe "course settings" do
 
   describe "course items" do
 
+    def admin_cog(id)
+      f(id).find_element(:css, '.admin-links').displayed?
+      rescue Selenium::WebDriver::Error::NoSuchElementError
+        false
+    end
+
+    it 'should not show cog menu for disabling or moving on home nav item' do
+      get "/courses/#{@course.id}/settings#tab-navigation"
+      expect(admin_cog('#nav_edit_tab_id_0')).to be_falsey
+    end
+
     it "should change course details" do
       course_name = 'new course name'
       course_code = 'new course-101'
@@ -164,8 +173,7 @@ describe "course settings" do
       f('.course_form_more_options_link').click
       wait_for_ajaximations
       expect(f('.course_form_more_options')).to be_displayed
-      submit_form(course_form)
-      wait_for_ajaximations
+      wait_for_new_page_load { submit_form(course_form) }
 
       @course.reload
       expect(@course.name).to eq course_name

@@ -25,9 +25,9 @@ import IconBlueprintLine from '@instructure/ui-icons/lib/Line/IconBlueprint'
 import IconPlusLine from '@instructure/ui-icons/lib/Line/IconPlus'
 import IconSettingsLine from '@instructure/ui-icons/lib/Line/IconSettings'
 import IconStatsLine from '@instructure/ui-icons/lib/Line/IconStats'
-import {get} from 'axios'
+import axios from 'axios'
 import {uniqBy} from 'lodash'
-import {flashMessage} from 'compiled/jquery.rails_flash_notifications'
+import $ from 'compiled/jquery.rails_flash_notifications'
 import I18n from 'i18n!account_course_user_search'
 import UserLink from './UserLink'
 import AddPeopleApp from '../../add_people/add_people_app'
@@ -65,7 +65,7 @@ export default class CoursesListRow extends React.Component {
 
   getSections = () =>
     this.promiseToGetSections ||
-    (this.promiseToGetSections = get(
+    (this.promiseToGetSections = axios.get(
       `/api/v1/courses/${this.props.id}/sections?per_page=100`
     )).then(resp => resp.data)
 
@@ -73,7 +73,7 @@ export default class CoursesListRow extends React.Component {
 
   handleNewEnrollments = newEnrollments => {
     if (newEnrollments && newEnrollments.length) {
-      flashMessage({
+      $.flashMessage({
         html: I18n.t(
           {
             one: '%{user_name} successfully enrolled into *%{course_name}*.',
@@ -116,6 +116,24 @@ export default class CoursesListRow extends React.Component {
     this.setState({teachersToShow: this.uniqueTeachers()})
   }
 
+  allowAddingEnrollments() {
+    return this.props.can_create_enrollments && this.props.workflow_state !== 'completed'
+  }
+
+  renderAddEnrollments() {
+    if (this.allowAddingEnrollments()) {
+      const {name} = this.props
+      const addUsersTip = I18n.t('Add Users to %{name}', {name})
+      return (
+        <Tooltip tip={addUsersTip}>
+          <Button variant="icon" size="small" onClick={this.openAddUsersToCourseDialog}>
+            <IconPlusLine title={addUsersTip} />
+          </Button>
+        </Tooltip>
+      )
+    }
+  }
+
   render() {
     const {
       id,
@@ -127,15 +145,13 @@ export default class CoursesListRow extends React.Component {
       subaccount_name,
       showSISIds,
       term,
-      blueprint,
-      can_create_enrollments
+      blueprint
     } = this.props
     const {teachersToShow, newlyEnrolledStudents} = this.state
     const url = `/courses/${id}`
     const isPublished = workflow_state !== 'unpublished'
 
     const blueprintTip = I18n.t('This is a blueprint course')
-    const addUsersTip = I18n.t('Add Users to %{name}', {name})
     const statsTip = I18n.t('Statistics for %{name}', {name})
     const settingsTip = I18n.t('Settings for %{name}', {name})
 
@@ -166,7 +182,7 @@ export default class CoursesListRow extends React.Component {
         <td>{term.name}</td>
         <td>
           {(teachersToShow || []).map(teacher => (
-            <div>
+            <div key={teacher.id}>
               <UserLink
                 key={teacher.id}
                 href={teacher.html_url}
@@ -186,13 +202,7 @@ export default class CoursesListRow extends React.Component {
         <td>{subaccount_name}</td>
         <td>{I18n.n(total_students + newlyEnrolledStudents)}</td>
         <td style={{whiteSpace: 'nowrap'}}>
-          {can_create_enrollments && (
-            <Tooltip tip={addUsersTip}>
-              <Button variant="icon" size="small" onClick={this.openAddUsersToCourseDialog}>
-                <IconPlusLine title={addUsersTip} />
-              </Button>
-            </Tooltip>
-          )}
+          {this.renderAddEnrollments()}
           <Tooltip tip={statsTip}>
             <Button variant="icon" size="small" href={`${url}/statistics`}>
               <IconStatsLine title={statsTip} />

@@ -117,6 +117,14 @@ class Feature
   # TODO: register built-in features here
   # (plugins may register additional features during application initialization)
   register(
+    'integrate_arc_rce' =>
+    {
+      display_name: -> { I18n.t('HTML5 Media Recorder in RCE') },
+      description: -> { I18n.t('Use HTML5 Recorder in Content Editor instead of Flash') },
+      applies_to: 'RootAccount',
+      state: 'allowed',
+      root_opt_in: true
+    },
     'google_docs_domain_restriction' =>
     {
       display_name: -> { I18n.t('features.google_docs_domain_restriction', 'Google Docs Domain Restriction') },
@@ -433,15 +441,6 @@ END
       development: false,
       root_opt_in: true
     },
-    'use_new_tree' =>
-    {
-      display_name: -> { I18n.t('Use New Folder Tree in Files')},
-      description: -> {I18n.t('Replaces the current folder tree with a new accessible and more feature rich folder tree.')},
-      applies_to: 'Course',
-      state: 'hidden',
-      development: true,
-      root_opt_in: true
-    },
     'course_card_images' =>
     {
       display_name: -> { I18n.t('Enable Dashboard Images for Courses')},
@@ -450,16 +449,6 @@ END
       state: 'allowed',
       root_opt_in: true,
       beta: true
-    },
-    'dashcard_reordering' =>
-    {
-      display_name: -> { I18n.t('Allow Reorder Dashboard Cards') },
-      description: -> { I18n.t('Allow dashboard cards to be reordered for each user.') },
-      applies_to: 'RootAccount',
-      state: 'hidden',
-      beta: true,
-      development: true,
-      root_opt_in: true
     },
     'responsive_layout' =>
     {
@@ -577,7 +566,7 @@ END
       display_name: -> { I18n.t('Blueprint Courses') }, # this won't be confusing at all
       description: -> { I18n.t('Enable the creation of Blueprint Courses') },
       applies_to: 'RootAccount',
-      state: 'allowed',
+      state: 'on',
       beta: false,
       root_opt_in: true,
     },
@@ -602,7 +591,7 @@ END
       display_name: -> { I18n.t('To Do List Dashboard')},
       description: -> { I18n.t('Provides users with a To Do List Dashboard option.')},
       applies_to: "RootAccount",
-      state: "hidden"
+      state: "on"
     },
     'rubric_criterion_range' =>
     {
@@ -637,6 +626,12 @@ END
         is_provisioned
       end
     },
+    'quizzes_next_submission_history' => {
+      display_name: -> { I18n.t('Quizzes.Next submission history') },
+      description: -> { I18n.t('If enabled, submission history for Quizzes.Next quizzes is dealt with separately.') },
+      applies_to: 'RootAccount',
+      state: 'on'
+    },
     'import_to_quizzes_next' =>
     {
       display_name: -> { I18n.t('Quizzes.Next Importing') },
@@ -651,17 +646,57 @@ END
       state: 'hidden',
       beta: true
     },
-    'developer_key_management_and_scoping' => {
-      display_name: -> { I18n.t('Developer key management and scoping')},
-      description: -> { I18n.t('If enabled, developer key management options and token scoping will be used.') },
-      applies_to: 'RootAccount',
-      state: 'allowed'
-    },
     'non_scoring_rubrics' => {
       display_name: -> { I18n.t('Non-scoring Rubrics')},
       description: -> { I18n.t('If enabled, the option will be presented to have non-scoring rubrics.') },
       applies_to: 'RootAccount',
       state: 'on'
+    },
+    'lti_1_3' => {
+      display_name: -> { I18n.t('LTI 1.3 and LTI Advantage')},
+      description: -> { I18n.t('If enabled, access to LTI 1.3 and LTI Advantage will be enabled.') },
+      applies_to: 'RootAccount',
+      development: true,
+      state: 'allowed'
+    },
+    'assignments_2' => {
+      display_name: -> { I18n.t('Assignments 2') },
+      description: -> { I18n.t('Allow switching to the new assignments page') },
+      applies_to: 'RootAccount',
+      state: 'hidden',
+      development: true,
+      beta: true
+    },
+    'javascript_csp' => {
+      display_name: -> { I18n.t('Content Security Policy')},
+      description: -> { I18n.t('Enable the Security tab on the settings page to adjust CSP settings')},
+      applies_to: 'RootAccount',
+      state: 'hidden',
+      development: true,
+      beta: true
+    },
+    'restrict_students_from_annotating' => {
+      display_name: -> { I18n.t('Restrict Students from Annotating') },
+      description: -> {
+        I18n.t <<~DESCRIPTION
+          Prevents students from leaving annotations in assignments. Does not apply to peer-reviewed assignments.
+        DESCRIPTION
+      },
+      applies_to: 'Course',
+      state: 'allowed',
+      development: true
+    },
+    'final_grades_override' => {
+      display_name: -> { I18n.t('Final Grade Override') },
+      description: -> {
+        I18n.t <<~DESCRIPTION
+          Enable ability to alter the final grade for the entire course without changing scores for assignments.
+        DESCRIPTION
+      },
+      applies_to: 'Course',
+      state: 'hidden',
+      development: true,
+      beta: true
     }
   )
 

@@ -211,6 +211,46 @@ describe Submission do
           end
         end
       end
+
+      describe "make_group_comment" do
+        let_once(:course) { Course.create! }
+        let_once(:student) { course.enroll_user(User.create!, "StudentEnrollment", enrollment_state: "active").user }
+        let_once(:student2) { course.enroll_user(User.create!, "StudentEnrollment", enrollment_state: "active").user }
+        let_once(:teacher) { course.enroll_user(User.create!, "TeacherEnrollment", enrollment_state: "active").user }
+
+        before(:once) do
+          all_groups = @course.group_categories.create!(name: "all groups")
+          all_groups.groups.create!(context: @course, name: "group 1").add_user(student)
+          all_groups.groups.create!(context: @course, name: "group 2").add_user(student2)
+
+          @group_assignment = course.assignments.create!(
+            grade_group_students_individually: false,
+            group_category: all_groups,
+            name: "group assignment"
+          )
+          @submission = @group_assignment.submissions.find_by(user: student)
+        end
+
+        it "allows a student to make a group comment for their own submission" do
+          expect(@submission.grants_right?(student, :make_group_comment)).to be true
+        end
+
+        it "allows a teacher to make a group comment" do
+          expect(@submission.grants_right?(teacher, :make_group_comment)).to be true
+        end
+
+        it "allows a peer reviewer to make a group comment for their assigned submission" do
+          @group_assignment.update!(peer_reviews: true)
+          peer_submission = @group_assignment.submissions.find_by(user: student2)
+          AssessmentRequest.create!(assessor: student2, assessor_asset: peer_submission, asset: @submission, user: student)
+          expect(@submission.grants_right?(student2, :make_group_comment)).to be true
+        end
+
+        it "does not allow a student not peer reviewing to make a group comment" do
+          @group_assignment.update!(peer_reviews: true)
+          expect(@submission.grants_right?(student2, :make_group_comment)).to be false
+        end
+      end
     end
   end
 
@@ -3837,6 +3877,19 @@ describe Submission do
           "Cannot give a final mark for a student with no other provisional grades")
     end
 
+    it "raises an exception if the grade has been selected" do
+      pg = @submission.find_or_create_provisional_grade!(@teacher, grade: "2", score: 2)
+      selection = @assignment.moderated_grading_selections.where(student: @submission.user).first
+      selection.provisional_grade = pg
+      selection.save!
+
+      expect{
+        @submission.find_or_create_provisional_grade!(@teacher, grade: "3", score: 3)
+      }.to raise_error(Assignment::GradeError) do |error|
+        expect(error.error_code).to eq Assignment::GradeError::PROVISIONAL_GRADE_MODIFY_SELECTED
+      end
+    end
+
     it 'sets the source provisional grade if one is provided' do
       new_source = ModeratedGrading::ProvisionalGrade.new
       provisional_grade = @submission.find_or_create_provisional_grade!(@teacher, source_provisional_grade: new_source)
@@ -4584,8 +4637,9 @@ describe Submission do
       end
 
       it 'does not create audit events when the assignment is not auditable' do
-        assignment.update!(anonymous_grading: false)
-        expect { submission.add_comment(comment_params) }.not_to change(audit_events, :count)
+        assignment1 = course.assignments.create!(title: 'ok', anonymous_grading: false)
+        submission1 = assignment1.submission_for_student(student)
+        expect { submission1.add_comment(comment_params) }.not_to change(audit_events, :count)
       end
     end
   end
@@ -4712,6 +4766,339 @@ describe Submission do
 
       sub = Submission.find(Submission.connection.create(create_sql))
       expect(sub.submission_history).to eq([sub])
+    end
+  end
+
+  describe "#visible_submission_comments_for" do
+    before(:once) do
+      @teacher = course_with_user("TeacherEnrollment", course: @course, name: "Teacher", active_all: true).user
+      @first_ta = course_with_user("TaEnrollment", course: @course, name: "First Ta", active_all: true).user
+      @second_ta = course_with_user("TaEnrollment", course: @course, name: "Second Ta", active_all: true).user
+      @third_ta = course_with_user("TaEnrollment", course: @course, name: "Third Ta", active_all: true).user
+      @student = course_with_user("StudentEnrollment", course: @course, name: "Student", active_all: true).user
+      @admin = account_admin_user(account: @course.account)
+      @assignment = @course.assignments.create!(name: "plain assignment")
+      @submission = @assignment.submissions.find_by(user: @student)
+      @student_comment = @submission.add_comment(author: @student, comment: "Student comment")
+      @teacher_comment = @submission.add_comment(author: @teacher, comment: "Teacher comment")
+      @first_ta_comment = @submission.add_comment(author: @first_ta, comment: "First Ta comment")
+    end
+
+    it "shows teacher all comments" do
+      comments = @submission.visible_submission_comments_for(@teacher)
+      expect(comments).to match_array([@student_comment, @teacher_comment, @first_ta_comment])
+    end
+
+    it "shows ta all comments" do
+      comments = @submission.visible_submission_comments_for(@first_ta)
+      expect(comments).to match_array([@student_comment, @teacher_comment, @first_ta_comment])
+    end
+
+    it "shows student all comments" do
+      comments = @submission.visible_submission_comments_for(@student)
+      expect(comments).to match_array([@student_comment, @teacher_comment, @first_ta_comment])
+    end
+
+    it "shows student only their own comment, when assignment is muted" do
+      @assignment.update!(muted: true)
+      comments = @submission.visible_submission_comments_for(@student)
+      expect(comments).to match_array([@student_comment])
+    end
+
+    context "peer review assignments" do
+      before(:once) do
+        assignment = @course.assignments.create!(name: "peer review assignment", peer_reviews: true)
+        @submission = assignment.submissions.find_by(user: @student)
+        @student2 = course_with_user("StudentEnrollment", course: @course, name: "Student2", active_all: true).user
+        student2_sub = assignment.submissions.find_by(user: @student2)
+        AssessmentRequest.create!(assessor: @student2, assessor_asset: student2_sub, asset: @submission, user: @student)
+        @submission.add_comment(author: @teacher, comment: "This teacher's comment should not appear")
+        @peer_review_comment = @submission.add_comment(author: @student2, comment: "A peer review's comment")
+      end
+
+      it "returns submission comments created by the peer reviewer" do
+        comments = @submission.visible_submission_comments_for(@student2)
+        expect(comments).to match_array([@peer_review_comment])
+      end
+    end
+
+    context "when assignment is graded as a group" do
+      let_once(:all_groups) { @course.group_categories.create!(name: "all groups") }
+
+      before(:once) do
+        student2 = course_with_user("StudentEnrollment", course: @course, name: "Student2", active_all: true).user
+        group1 = all_groups.groups.create!(context: @course)
+        group1.add_user(@student)
+        group1.add_user(student2)
+        assignment = @course.assignments.create!(
+          grade_group_students_individually: false,
+          group_category: all_groups,
+          name: "group assignment"
+        )
+        @submission = assignment.submissions.find_by(user: @student)
+        @student_comment = @submission.add_comment(author: @student, comment: "Student comment", group_comment_id: group1.id)
+        @student2_comment = @submission.add_comment(author: student2, comment: "Student2 comment", group_comment_id: group1.id)
+      end
+
+      it "returns comments scoped to that group" do
+        comments = @submission.visible_submission_comments_for(@teacher)
+        expect(comments).to match_array([@student_comment, @student2_comment])
+      end
+
+      context "has peer reviews" do
+        before(:once) do
+          @student = @course.enroll_student(User.create!, enrollment_state: "active").user
+          @student2 = @course.enroll_student(User.create!, enrollment_state: "active").user
+          all_groups.groups.create!(context: @course).add_user(@student)
+          all_groups.groups.create!(context: @course).add_user(@student2)
+          assignment = @course.assignments.create!(
+            grade_group_students_individually: false,
+            group_category: all_groups,
+            name: "group assignment",
+            peer_reviews: true
+          )
+          @submission = assignment.submissions.find_by(user: @student)
+          student2_sub = assignment.submissions.find_by(user: @student2)
+          AssessmentRequest.create!(
+            assessor: @student2,
+            assessor_asset: student2_sub,
+            asset: @submission,
+            user: @student
+          )
+          @peer_review_comment = @submission.add_comment(author: @student2, comment: "Student2", group_comment_id: "ab")
+          @student_comment = @submission.add_comment(author: @student, comment: "Student", group_comment_id: "ac")
+          @teacher_comment = @submission.add_comment(author: @teacher, comment: "Teacher", group_comment_id: "ad")
+        end
+
+        it "peer reviewers can see only their own comments" do
+          comments = @submission.visible_submission_comments_for(@student2)
+          expect(comments).to match_array([@peer_review_comment])
+        end
+
+        it "students see all comments" do
+          comments = @submission.visible_submission_comments_for(@student)
+          expect(comments).to match_array([@peer_review_comment, @student_comment, @teacher_comment])
+        end
+
+        it "teachers see all comments" do
+          comments = @submission.visible_submission_comments_for(@teacher)
+          expect(comments).to match_array([@peer_review_comment, @student_comment, @teacher_comment])
+        end
+      end
+
+    end
+
+    context "for a moderated assignment" do
+      before(:once) do
+        @assignment = @course.assignments.create!(
+          name: "moderated assignment",
+          moderated_grading: true,
+          grader_count: 2,
+          final_grader: @teacher
+        )
+        @assignment.grade_student(@student, grade: 1, grader: @first_ta, provisional: true)
+        @assignment.grade_student(@student, grade: 1, grader: @second_ta, provisional: true)
+        @assignment.grade_student(@student, grade: 1, grader: @teacher, provisional: true)
+        @submission = @assignment.submissions.find_by(user: @student)
+        @student_comment = @submission.add_comment(author: @student, comment: "Student comment")
+        @first_ta_comment = @submission.add_comment(author: @first_ta, comment: "First Ta comment")
+        @second_ta_comment = @submission.add_comment(author: @second_ta, comment: "Second Ta comment")
+        @third_ta_comment = @submission.add_comment(author: @third_ta, comment: "Third Ta comment")
+        @final_grader_comment = @submission.add_comment(author: @teacher, comment: "Final Grader comment")
+      end
+
+      context "graders can view other graders' comments" do
+        context "grades are unpublished" do
+          it "shows final grader all submission comments" do
+            comments = @submission.visible_submission_comments_for(@teacher)
+            expect(comments).to match_array([
+              @student_comment,
+              @first_ta_comment,
+              @second_ta_comment,
+              @third_ta_comment,
+              @final_grader_comment
+            ])
+          end
+
+          it "shows provisional grader all submission comments" do
+            comments = @submission.visible_submission_comments_for(@first_ta)
+            expect(comments).to match_array([
+              @student_comment,
+              @first_ta_comment,
+              @second_ta_comment,
+              @third_ta_comment,
+              @final_grader_comment
+            ])
+          end
+
+          it "shows student only their own comments" do
+            comments = @submission.visible_submission_comments_for(@student)
+            expect(comments).to match_array([@student_comment])
+          end
+
+          it "shows admins all submission comments" do
+            comments = @submission.visible_submission_comments_for(@admin)
+            expect(comments).to match_array([
+              @student_comment,
+              @first_ta_comment,
+              @second_ta_comment,
+              @third_ta_comment,
+              @final_grader_comment
+            ])
+          end
+        end
+
+        context "grades are published" do
+          before(:once) do
+            ModeratedGrading::ProvisionalGrade.find_by(submission: @submission, scorer: @first_ta).publish!
+            @assignment.update!(grades_published_at: Time.zone.now)
+            @submission.reload
+          end
+
+          it "shows final grader all submission comments" do
+            comments = @submission.visible_submission_comments_for(@teacher)
+            expect(comments).to match_array([
+              @student_comment,
+              @first_ta_comment,
+              @second_ta_comment,
+              @third_ta_comment,
+              @final_grader_comment
+            ])
+          end
+
+          it "shows provisional grader all submission comments" do
+            comments = @submission.visible_submission_comments_for(@first_ta)
+            expect(comments).to match_array([
+              @student_comment,
+              @first_ta_comment,
+              @second_ta_comment,
+              @third_ta_comment,
+              @final_grader_comment
+            ])
+          end
+
+          it "shows student only their own comments" do
+            comments = @submission.visible_submission_comments_for(@student)
+            expect(comments).to match_array([@student_comment])
+          end
+
+          it "when unmuted, shows student their own, chosen grader's, and final grader's comments" do
+            @assignment.update!(muted: false)
+            comments = @submission.visible_submission_comments_for(@student)
+            expect(comments).to match_array([
+              @student_comment,
+              @first_ta_comment,
+              @final_grader_comment
+            ])
+          end
+
+          it "shows admins all submission comments" do
+            comments = @submission.visible_submission_comments_for(@admin)
+            expect(comments).to match_array([
+              @student_comment,
+              @first_ta_comment,
+              @second_ta_comment,
+              @third_ta_comment,
+              @final_grader_comment
+            ])
+          end
+        end
+      end
+
+      context "graders cannot view other graders' comments" do
+        before(:once) do
+          @assignment.update!(grader_comments_visible_to_graders: false)
+        end
+
+        context "grades are unpublished" do
+          it "shows final grader all submission comments" do
+            comments = @submission.visible_submission_comments_for(@teacher)
+            expect(comments).to match_array([
+              @student_comment,
+              @first_ta_comment,
+              @second_ta_comment,
+              @third_ta_comment,
+              @final_grader_comment
+            ])
+          end
+
+          it "shows provisional grader their own and student's" do
+            comments = @submission.visible_submission_comments_for(@second_ta)
+            expect(comments).to match_array([@student_comment, @second_ta_comment])
+          end
+
+          it "shows student only their own comments" do
+            comments = @submission.visible_submission_comments_for(@student)
+            expect(comments).to match_array([@student_comment])
+          end
+
+          it "shows admins all submission comments" do
+            comments = @submission.visible_submission_comments_for(@admin)
+            expect(comments).to match_array([
+              @student_comment,
+              @first_ta_comment,
+              @second_ta_comment,
+              @third_ta_comment,
+              @final_grader_comment
+            ])
+          end
+        end
+
+        context "grades are published" do
+          before(:once) do
+            ModeratedGrading::ProvisionalGrade.find_by(submission: @submission, scorer: @first_ta).publish!
+            @assignment.update!(grades_published_at: Time.zone.now)
+            @submission.reload
+          end
+
+          it "shows final grader all submission comments" do
+            comments = @submission.visible_submission_comments_for(@teacher)
+            expect(comments).to match_array([
+              @student_comment,
+              @first_ta_comment,
+              @second_ta_comment,
+              @third_ta_comment,
+              @final_grader_comment
+            ])
+          end
+
+          it "shows provisional grader their own, student's, chosen grader's, and final grader's comments" do
+            comments = @submission.visible_submission_comments_for(@second_ta)
+            expect(comments).to match_array([
+              @student_comment,
+              @first_ta_comment,
+              @second_ta_comment,
+              @final_grader_comment
+            ])
+          end
+
+          it "shows student only their own comments" do
+            comments = @submission.visible_submission_comments_for(@student)
+            expect(comments).to match_array([@student_comment])
+          end
+
+          it "when unmuted, shows student own, chosen grader's, and final grader's comments" do
+            @assignment.update!(muted: false)
+            comments = @submission.visible_submission_comments_for(@student)
+            expect(comments).to match_array([
+              @student_comment,
+              @first_ta_comment,
+              @final_grader_comment
+            ])
+          end
+
+          it "shows admins all submission comments" do
+            comments = @submission.visible_submission_comments_for(@admin)
+            expect(comments).to match_array([
+              @student_comment,
+              @first_ta_comment,
+              @second_ta_comment,
+              @third_ta_comment,
+              @final_grader_comment
+            ])
+          end
+        end
+      end
     end
   end
 

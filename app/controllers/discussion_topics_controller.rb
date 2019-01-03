@@ -517,7 +517,7 @@ class DiscussionTopicsController < ApplicationController
       HAS_GRADING_PERIODS: @context.grading_periods?,
       SECTION_LIST: sections.map { |section| { id: section.id, name: section.name } },
       ANNOUNCEMENTS_LOCKED: announcements_locked?,
-      CREATE_ANNOUNCEMENTS_UNLOCKED: @current_user.create_announcements_unlocked?
+      CREATE_ANNOUNCEMENTS_UNLOCKED: @current_user.create_announcements_unlocked?,
     }
 
     post_to_sis = Assignment.sis_grade_export_enabled?(@context)
@@ -666,6 +666,7 @@ class DiscussionTopicsController < ApplicationController
               :APP_URL => named_context_url(@context, :context_discussion_topic_url, @topic),
               :TOPIC => {
                 :ID => @topic.id,
+                :TITLE => @topic.title,
                 :IS_SUBSCRIBED => @topic.subscribed?(@current_user),
                 :IS_PUBLISHED  => @topic.published?,
                 :CAN_UNPUBLISH => @topic.can_unpublish?,
@@ -706,7 +707,7 @@ class DiscussionTopicsController < ApplicationController
               :TODO_DATE => @topic.todo_date,
               :IS_ASSIGNMENT => @topic.assignment_id?,
               :ASSIGNMENT_ID => @topic.assignment_id,
-              :IS_GROUP => @topic.group_category_id?
+              :IS_GROUP => @topic.group_category_id?,
             }
             if params[:hide_student_names]
               env_hash[:HIDE_STUDENT_NAMES] = true

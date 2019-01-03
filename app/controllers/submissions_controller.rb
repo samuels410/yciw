@@ -287,6 +287,53 @@ class SubmissionsController < SubmissionsBaseController
     super
   end
 
+  def audit_events
+    return render_unauthorized_action unless @context.grants_right?(@current_user, :view_audit_trail)
+    audit_events = AnonymousOrModerationEvent.events_for_submission(
+      assignment_id: params[:assignment_id],
+      submission_id: params[:submission_id]
+    )
+
+    submission = Submission.find(params[:submission_id])
+
+    respond_to do |format|
+      format.json do
+        render json: {
+          audit_events: audit_events.as_json(include_root: false),
+          users: audit_event_user_data(audit_events: audit_events, submission: submission)
+        }, status: :ok
+      end
+    end
+  end
+
+  def audit_event_user_data(audit_events:, submission:)
+    auditing_users = User.find(audit_events.pluck(:user_id))
+
+    auditing_users.map do |user|
+      {
+        id: user.id,
+        name: user.name,
+        role: auditing_user_role(user: user, submission: submission)
+      }
+    end
+  end
+  private :audit_event_user_data
+
+  def auditing_user_role(user:, submission:)
+    assignment = submission.assignment
+
+    if submission.user == user
+      "student"
+    elsif assignment.moderated_grading? && assignment.final_grader == user
+      "final_grader"
+    elsif assignment.course.account_membership_allows(user)
+      "admin"
+    else
+      "grader"
+    end
+  end
+  private :auditing_user_role
+
   def lookup_existing_attachments
     if params[:submission][:file_ids].is_a?(Array)
       attachment_ids = params[:submission][:file_ids]
@@ -476,109 +523,11 @@ class SubmissionsController < SubmissionsBaseController
     Attachments::Storage.store_for_attachment(attachment, uploaded_data)
   end
 
-  def turnitin_report
-    plagiarism_report('turnitin')
-  end
-
-  def resubmit_to_turnitin
-    resubmit_to_plagiarism('turnitin')
-  end
-
-  def vericite_report
-    plagiarism_report('vericite')
-  end
-
-  def resubmit_to_vericite
-    resubmit_to_plagiarism('vericite')
-  end
-
-  def originality_report
-    plagiarism_report('originality_report')
-  end
-
-  def legacy_plagiarism_report(submission, asset_string, type)
-    plag_data = submission.turnitin_data
-    url = nil
-    if type == 'vericite'
-      plag_data = submission.vericite_data
-    end
-    if (report_url = plag_data[asset_string] && plag_data[asset_string][:report_url])
-      url = polymorphic_url([:retrieve, @context, :external_tools], url:report_url, display:'borderless')
-    else
-      if type == 'vericite'
-        # VeriCite URL
-        url = submission.vericite_report_url(asset_string, @current_user, session) rescue nil
-      else
-        # Turnitin URL
-        url = submission.turnitin_report_url(asset_string, @current_user) rescue nil
-      end
-    end
-    url
-  end
-  private :legacy_plagiarism_report
-
-  def plagiarism_report(type)
-    return head(:bad_request) unless params_are_integers?(:assignment_id, :submission_id)
-
-    @assignment = @context.assignments.active.find(params[:assignment_id])
-    @submission = @assignment.submissions.where(user_id: params[:submission_id]).first
-    @asset_string = params[:asset_string]
-    if authorized_action(@submission, @current_user, :read)
-      if type == 'originality_report'
-        url = @submission.originality_report_url(@asset_string, @current_user)
-      else
-        url = legacy_plagiarism_report(@submission, @asset_string, type)
-      end
-
-      if url
-        redirect_to url
-      else
-        flash[:notice] = t('errors.no_report', "Couldn't find a report for that submission item")
-        redirect_to named_context_url(@context, :context_assignment_submission_url, @assignment.id, @submission.user_id)
-      end
-    end
-  end
-  private :plagiarism_report
-
-  def resubmit_to_plagiarism(type)
-    return head 400 unless params_are_integers?(:assignment_id)
-
-    if authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
-      @assignment = @context.assignments.active.find(params[:assignment_id])
-      @submission = plagiarism_resubmit_submission(@assignment)
-      Canvas::LiveEvents.plagiarism_resubmit(@submission)
-
-      if type == 'vericite'
-        # VeriCite
-        @submission.resubmit_to_vericite
-        message = t("Successfully resubmitted to VeriCite.")
-      else
-        # turnitin
-        @submission.resubmit_to_turnitin
-        message = t("Successfully resubmitted to turnitin.")
-      end
-      respond_to do |format|
-        format.html {
-          flash[:notice] = message
-          redirect_to named_context_url(@context, :context_assignment_submission_url, @assignment.id, @submission.user_id)
-        }
-        format.json { head :no_content }
-      end
-    end
-  end
-  private :resubmit_to_plagiarism
-
   def always_permitted_create_params
     always_permitted_params = [:eula_agreement_timestamp].freeze
     params.require(:submission).permit(always_permitted_params)
   end
   private :always_permitted_create_params
-
-  def plagiarism_resubmit_submission(assignment)
-    return assignment.submissions.find_by(user_id: params[:submission_id]) unless params[:anonymous]
-    assignment.submissions.find_by(anonymous_id: params[:submission_id])
-  end
-  private :plagiarism_resubmit_submission
 
   protected
 
@@ -623,5 +572,23 @@ class SubmissionsController < SubmissionsBaseController
         format.json { render :json => attachment }
       end
     end
+  end
+
+  def plagiarism_report(type)
+    return head(:bad_request) unless params_are_integers?(:assignment_id, :submission_id)
+
+    @assignment = @context.assignments.active.find(params.require(:assignment_id))
+    @submission = @assignment.submissions.find_by(user_id: params.require(:submission_id))
+
+    super(type)
+  end
+
+  def resubmit_to_plagiarism(type)
+    return head(:bad_request) unless params_are_integers?(:assignment_id)
+
+    @assignment = @context.assignments.active.find(params.require(:assignment_id))
+    @submission = @assignment.submissions.find_by(user_id: params.require(:submission_id))
+
+    super(type)
   end
 end

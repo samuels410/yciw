@@ -673,6 +673,14 @@ RSpec.configure do |config|
                                              })
   end
 
+  def override_dynamic_settings(data)
+    original_fallback = Canvas::DynamicSettings.fallback_data
+    Canvas::DynamicSettings.fallback_data = data
+    yield
+  ensure
+    Canvas::DynamicSettings.fallback_data = original_fallback
+  end
+
   def json_parse(json_string = response.body)
     JSON.parse(json_string.sub(%r{^while\(1\);}, ''))
   end
@@ -938,4 +946,14 @@ Shoulda::Matchers.configure do |config|
     # Or, choose the following (which implies all of the above):
     # with.library :rails
   end
+end
+
+def enable_developer_key_account_binding!(developer_key)
+  developer_key.developer_key_account_bindings.first.update!(
+    workflow_state: 'on'
+  )
+end
+
+def enable_default_developer_key!
+  enable_developer_key_account_binding!(DeveloperKey.default)
 end

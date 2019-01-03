@@ -22,8 +22,10 @@ import {
   getFriendlyDate, getFullDate,
   getFirstLoadedMoment, getLastLoadedMoment,
   getFullDateAndTime,
-  isMidnight, makeEndOfDayIfMidnight,
+  dateRangeString, timeString, dateTimeString,
 } from '../dateUtils';
+
+const TZ = 'Asia/Tokyo';
 
 describe('isToday', () => {
   it('returns true when the date passed in is the current date', () => {
@@ -169,23 +171,26 @@ describe('getLastLoadedMoment', () => {
     ], 'Asia/Tokyo');
     expect(result === expected).toBeFalsy();
   });
+});
 
-  it('returns true if at midnight, false if not', () => {
-    const TZ = 'Asia/Tokyo';
-    const midnight = moment.tz(TZ).startOf('day');
-    expect(isMidnight(midnight, TZ)).toBeTruthy();
-    const now = moment.tz(TZ).seconds(1); // just in case the test runs exactly at midnight
-    expect(isMidnight(now, TZ)).toBeFalsy();
+describe('dateRangeString', () => {
+  it('shows just the date if start == end', () => {
+    const date = moment.tz('2018-10-04T12:42:00', 'UTC');
+    const result = dateRangeString(date, date.clone(), 'UTC');
+    expect(result).toBe(dateTimeString(date));
   });
 
-  it('sets time to 11:59pm if at midnight', () => {
-    const TZ = 'Asia/Tokyo';
-    const now = moment.tz(TZ).seconds(1);
-    let result = makeEndOfDayIfMidnight(now, TZ);
-    expect(result).toEqual(now);
-    const midnight = moment.tz(TZ).startOf('day');
-    result = makeEndOfDayIfMidnight(midnight, TZ);
-    expect(result.hours()).toEqual(23);
-    expect(result.minutes()).toEqual(59);
+  it('shows date t1 - t2 if dates are on the same day', () => {
+    const start = moment.tz('2018-10-04T12:42:00', 'UTC');
+    const end = start.clone().add(1, 'hour');
+    const result = dateRangeString(start, end, 'UTC');
+    expect(result).toBe(`${dateTimeString(start)} - ${timeString(end)}`);
+  });
+
+  it('shows full dates if start and end are on separate days', () => {
+    const start = moment.tz('2018-10-04T12:42:00', 'UTC');
+    const end = start.clone().add(1, 'day');
+    const result = dateRangeString(start, end, 'UTC');
+    expect(result).toBe(`${dateTimeString(start)} - ${dateTimeString(end)}`);
   });
 });

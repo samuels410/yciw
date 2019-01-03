@@ -5,6 +5,9 @@
   "add_to_do_7def3c37": {
     "message": "Bæta við Verkefni"
   },
+  "address_3159962f": {
+    "message": "Aðsetur:"
+  },
   "all_day_fb42c4fc": {
     "message": "Allan dag"
   },
@@ -50,8 +53,14 @@
   "assignmenttype_title_posted_datetime_cab69444": {
     "message": "{ assignmentType } { title } birti { datetime }."
   },
+  "assignmenttype_title_reminder_datetime_33fa66d5": {
+    "message": "{ assignmentType } { title }, áminning { datetime }."
+  },
   "beginning_of_your_to_do_history_61ef2dce": {
     "message": "Upphaf verkefnasögu þinnar"
+  },
+  "calendar_a8563bb2": {
+    "message": "Dagatal:"
   },
   "calendar_event_89aadc1c": {
     "message": "Dagatalsviðburður"
@@ -61,6 +70,12 @@
   },
   "close_d634289d": {
     "message": "Loka"
+  },
+  "close_opportunity_center_popup_9907d981": {
+    "message": "Loka sprettiglugga Tækifærismiðstöðvar"
+  },
+  "count_plural_0_opportunities_one_opportunity_other_bb1698f6": {
+    "message": "{ count, plural,\n     =0 {# tækifæri}\n    one {# tækifæri}\n  other {# tækifæri}\n}. Smelltu til að opna sprettiglugga Tækifærismiðstöðvar"
   },
   "count_plural_one_show_completed_item_other_show_co_8d0d0ae5": {
     "message": "{ count, plural,\n    one {Sýna # fullklárað atriði}\n  other {Sýna # fullkláruð atriði}\n}"
@@ -83,11 +98,17 @@
   "date_is_required_8660ec22": {
     "message": "Dagsetningar er krafist"
   },
+  "date_time_d9fbf2d7": {
+    "message": "Dagsetning og tími:"
+  },
   "delete_a6efa79d": {
     "message": "Eyða"
   },
   "details_98a31b68": {
     "message": "Upplýsingar"
+  },
+  "details_a6f427c3": {
+    "message": "Upplýsingar:"
   },
   "discussion_6719c51d": {
     "message": "Umræða"
@@ -97,6 +118,12 @@
   },
   "dismiss_opportunityname_5995176f": {
     "message": "Hafna { opportunityName }"
+  },
+  "dismissed_8b0b1fc9": {
+    "message": "Vísað frá"
+  },
+  "dismissed_opportunities_f0826640": {
+    "message": "Tækifæri sem voru vísuð frá"
   },
   "due_5d7267be": {
     "message": "Skil:"
@@ -179,6 +206,9 @@
   "loading_planner_items_947a813d": {
     "message": "Hleður skipulögðum atriðum"
   },
+  "location_3b6ff307": {
+    "message": "Staðsetning:"
+  },
   "looks_like_there_isn_t_anything_here_d9bcef49": {
     "message": "Lítur út fyrir að vera autt"
   },
@@ -191,11 +221,17 @@
   "my_grades_98834476": {
     "message": "Einkunnir mínar"
   },
+  "new_13daf639": {
+    "message": "Nýtt"
+  },
   "new_activity_8b84847d": {
     "message": "Ný virkni"
   },
   "new_activity_for_title_14c9c3af": {
     "message": "Ný virkni fyrir { title }"
+  },
+  "new_opportunities_7d349c4d": {
+    "message": "Ný tækifæri"
   },
   "next_month_749b1778": {
     "message": "Næsti mánuður"
@@ -208,6 +244,9 @@
   },
   "nothing_for_now_e3e3ce2a": {
     "message": "Ekkert núna"
+  },
+  "nothing_here_needs_attention_c4eaded6": {
+    "message": "Ekkert hérna þarfnast athygli"
   },
   "nothing_more_to_do_b665da42": {
     "message": "Ekkert annað á dagskrá"
@@ -236,6 +275,12 @@
   "page_50c4823d": {
     "message": "Síða"
   },
+  "peer_review_74f26a13": {
+    "message": "Jafningjamat"
+  },
+  "peer_review_for_itemtitle_358cb413": {
+    "message": "Jafningjamat fyrir { itemTitle }"
+  },
   "points_bceb5005": {
     "message": "punktar"
   },
@@ -250,6 +295,9 @@
   },
   "quiz_e0dcce8f": {
     "message": "Próf"
+  },
+  "reminder_date_4564d12d": {
+    "message": "Áminning: { date }"
   },
   "replies_4a8577c8": {
     "message": "Svör"
@@ -272,6 +320,12 @@
   "startdate_to_enddate_d245175b": {
     "message": "{ startDate } til { endDate }"
   },
+  "startdatetime_enddatetime_20abc10e": {
+    "message": "{ startDateTime } - { endDateTime }"
+  },
+  "startdatetime_endtime_49741bbe": {
+    "message": "{ startDateTime } - { endTime }"
+  },
   "starttime_to_endtime_d7cc249d": {
     "message": "{ startTime } til { endTime }"
   },
@@ -286,6 +340,9 @@
   },
   "the_date_and_time_this_to_do_is_due_74c823d4": {
     "message": "Dagsetning og tími skilafrests þessa verkefnis"
+  },
+  "there_are_no_points_associated_with_this_item_449c712a": {
+    "message": "Það eru engin atriði tengd við þennan hlut"
   },
   "time_2b5aac58": {
     "message": "Tími"

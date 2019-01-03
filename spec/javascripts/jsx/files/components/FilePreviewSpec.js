@@ -19,13 +19,10 @@
 import React from 'react'
 import ReactDOM from 'react-dom'
 import {mount} from 'enzyme'
-import TestUtils from 'react-addons-test-utils'
-import ReactModal from 'react-modal'
 import FilePreview from 'jsx/files/FilePreview'
 import Folder from 'compiled/models/Folder'
 import File from 'compiled/models/File'
 import FilesCollection from 'compiled/collections/FilesCollection'
-import FoldersCollection from 'compiled/collections/FoldersCollection'
 
 let filesCollection = {}
 let folderCollection = {}
@@ -81,8 +78,6 @@ QUnit.module('File Preview Rendering', {
     filesCollection.add(file3)
     currentFolder = new Folder()
     currentFolder.files = filesCollection
-
-    ReactModal.setAppElement(document.getElementById('fixtures'))
   },
   teardown() {
     let filesCollection = {}

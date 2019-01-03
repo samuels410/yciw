@@ -101,6 +101,10 @@ class Assignment < ActiveRecord::Base
   has_many :moderation_graders, inverse_of: :assignment
   has_many :moderation_grader_users, through: :moderation_graders, source: :user
 
+  scope :anonymous, -> { where(anonymous_grading: true) }
+  scope :moderated, -> { where(moderated_grading: true) }
+  scope :auditable, -> { anonymous.or(moderated) }
+
   validates_associated :external_tool_tag, :if => :external_tool?
   validate :group_category_changes_ok?
   validate :anonymous_grading_changes_ok?
@@ -110,7 +114,7 @@ class Assignment < ActiveRecord::Base
   validate :discussion_group_ok?
   validate :positive_points_possible?
   validate :moderation_setting_ok?
-  validate :assignment_name_length_ok?
+  validate :assignment_name_length_ok?, :unless => :deleted?
   validates :lti_context_id, presence: true, uniqueness: true
   validates :grader_count, numericality: true
 
@@ -178,7 +182,8 @@ class Assignment < ActiveRecord::Base
 
   # The relevant associations that are copied are:
   #
-  # learning_outcome_alignments, rubric_association, wiki_page
+  # learning_outcome_alignments, rubric_association, wiki_page,
+  # assignment_configuration_tool_lookups
   #
   # In the case of wiki_page, a new wiki_page will be created.  The underlying
   # rubric association, however, will simply point to the original rubric
@@ -199,6 +204,7 @@ class Assignment < ActiveRecord::Base
     default_opts = {
       :duplicate_wiki_page => true,
       :duplicate_discussion_topic => true,
+      :duplicate_plagiarism_tool_association => true,
       :copy_title => nil,
       :user => nil
     }
@@ -209,8 +215,9 @@ class Assignment < ActiveRecord::Base
     result.attachments.clear
     result.ignores.clear
     result.moderated_grading_selections.clear
+    result.grades_published_at = nil
     [:migration_id, :lti_context_id, :turnitin_id,
-      :discussion_topic, :integration_id, :integration_data].each do |attr|
+     :discussion_topic, :integration_id, :integration_data].each do |attr|
       result.send(:"#{attr}=", nil)
     end
     result.peer_review_count = 0
@@ -236,6 +243,12 @@ class Assignment < ActiveRecord::Base
     end
 
     result.discussion_topic&.assignment = result
+
+    if self.assignment_configuration_tool_lookups.present? && opts_with_default[:duplicate_plagiarism_tool_association]
+      result.assignment_configuration_tool_lookups = [
+        self.assignment_configuration_tool_lookups.first.dup
+      ]
+    end
 
     # Learning outcome alignments seem to get copied magically, possibly
     # through the rubric
@@ -463,8 +476,6 @@ class Assignment < ActiveRecord::Base
     write_attribute(:allowed_extensions, new_value)
   end
 
-  after_create :create_assignment_created_audit_event!
-
   before_save :ensure_post_to_sis_valid,
               :process_if_quiz,
               :default_values,
@@ -484,9 +495,11 @@ class Assignment < ActiveRecord::Base
               :delete_empty_abandoned_children,
               :update_cached_due_dates,
               :apply_late_policy,
-              :touch_submissions_if_muted_changed
+              :touch_submissions_if_muted_changed,
+              :update_line_items
 
-  with_options if: :auditable? do
+  with_options if: -> { auditable? && @updating_user.present? } do
+    after_create :create_assignment_created_audit_event!
     after_update :create_assignment_updated_audit_event!
     after_save :create_grades_posted_audit_event!, if: :saved_change_to_grades_published_at
   end
@@ -494,9 +507,6 @@ class Assignment < ActiveRecord::Base
   has_a_broadcast_policy
 
   def create_assignment_created_audit_event!
-    return if @updating_user.nil?
-    return unless auditable?
-
     auditable_changes = AUDITABLE_ATTRIBUTES.each_with_object({}) do |attribute, map|
       map[attribute] = attributes[attribute] unless attributes[attribute].nil?
     end
@@ -506,8 +516,6 @@ class Assignment < ActiveRecord::Base
   private :create_assignment_created_audit_event!
 
   def create_assignment_updated_audit_event!
-    return if @updating_user.nil?
-
     auditable_changes = if became_auditable?
       AUDITABLE_ATTRIBUTES.each_with_object({}) do |attribute, map|
         next if attributes[attribute].nil?
@@ -990,6 +998,46 @@ class Assignment < ActiveRecord::Base
       end
     end
   end
+
+  def update_line_items
+    # TODO: Edits to existing Assignment<->Tool associations are (mostly) ignored
+    #
+    # A few key points as a result:
+    #
+    # - Adding a 1.3 Tool to an Assignment which did not _ever_ have one previously _is_ supported and will result
+    # in LineItem+ResourceLink creation. But otherwise any attempt to add/edit/delete the Tool binding will have no
+    # impact on associated LineItems and ResourceLinks, even if it means those associations are now stale.
+    #
+    # - Associated LineItems and ResourceLinks are never deleted b/c this could possibly result in grade loss (cascaded
+    # delete from ResourceLink->LineItem->Result)
+    #
+    # - So in the case where a Tool association is abandoned or re-pointed to a different Tool, the Assignment's
+    # previously created LineItems and ResourceLinks will still exist and will be anomalous. I.e. they will be bound to
+    # a different tool than the Assignment.
+    #
+    # - Until this is resolved, clients trying to resolve an Assignment via ResourceLink->LineItem->Assignment chains
+    # have to remember to also check that the Assignment's ContentTag is still associated with the same
+    # ContextExternalTool as the ResourceLink. Also check Assignment.external_tool?.
+    #
+    # - Edits to assignment title and points_possible always propagate to the primary associated LineItem, even if the
+    # currently bound Tool doesn't support LTI 1.3 or if the LineItem's ResourceLink doesn't agree with Assignment's
+    # ContentTag on the currently bound tool. Presumably you always want correct data in the LineItem, regardless of
+    # which Tool it's bound to.
+    if lti_1_3_external_tool_tag? && line_items.empty?
+      rl = Lti::ResourceLink.create!(resource_link_id: lti_context_id, context_external_tool: external_tool_tag.content)
+      line_items.create!(label: title, score_maximum: points_possible, resource_link: rl)
+    elsif saved_change_to_title? || saved_change_to_points_possible?
+      line_items.
+        find(&:assignment_line_item?)&.
+        update!(label: title, score_maximum: points_possible)
+    end
+  end
+  protected :update_line_items
+
+  def lti_1_3_external_tool_tag?
+    external_tool? && external_tool_tag&.content_type == "ContextExternalTool" && external_tool_tag&.content&.use_1_3?
+  end
+  private :lti_1_3_external_tool_tag?
 
   # call this to perform notifications on an Assignment that is not being saved
   # (useful when a batch of overrides associated with a new assignment have been saved)
@@ -1597,6 +1645,8 @@ class Assignment < ActiveRecord::Base
   end
 
   def compute_grade_and_score(grade, score)
+    grade = nil if grade == ''
+
     if grade
       score = self.grade_to_score(grade)
     end
@@ -1664,7 +1714,6 @@ class Assignment < ActiveRecord::Base
     assignment_configuration_tool_lookups.where(tool_type: 'Lti::MessageHandler').each(&:destroy_subscription)
     assignment_configuration_tool_lookups.clear
   end
-  private :clear_tool_settings_tools
 
   def tool_settings_tools=(tools)
     clear_tool_settings_tools
@@ -1713,8 +1762,11 @@ class Assignment < ActiveRecord::Base
     did_grade = false
     submission.attributes = opts.slice(:submission_type, :url, :body)
 
-    # Only moderators or admins may excuse an assignment under moderation
+    # A moderated assignment cannot be assigned a score directly, but may be
+    # (un)excused by a moderator or admin. Even though this isn't *really*
+    # a grading action, it needs to be captured for auditing purposes.
     if !opts[:provisional] || permits_moderation?(grader)
+      submission.grader = grader
       submission.excused = opts[:excused] && score.blank?
     end
 
@@ -1735,6 +1787,7 @@ class Assignment < ActiveRecord::Base
       submission.grade_matches_current_submission = true
       submission.regraded = true
     end
+    submission.audit_grade_changes = did_grade || submission.excused_changed?
 
     if (submission.score_changed? ||
         submission.grade_matches_current_submission) &&
@@ -1744,11 +1797,15 @@ class Assignment < ActiveRecord::Base
     submission.group = group
     submission.graded_at = Time.zone.now if did_grade
     previously_graded ? submission.with_versioning(:explicit => true) { submission.save! } : submission.save!
+    submission.audit_grade_changes = false
 
     if opts[:provisional]
-      raise GradeError, error_code: 'PROVISIONAL_GRADE_INVALID_SCORE' unless score.present? || submission.excused
+      unless score.present? || submission.excused
+        raise GradeError, error_code: GradeError::PROVISIONAL_GRADE_INVALID_SCORE unless opts[:grade] == ""
+      end
 
-      submission.find_or_create_provisional_grade!(grader,
+      submission.find_or_create_provisional_grade!(
+        grader,
         grade: grade,
         score: score,
         force_save: true,
@@ -2832,7 +2889,7 @@ class Assignment < ActiveRecord::Base
       Lti::AppLaunchCollator.any?(context, [:post_grades])
   end
 
-  def run_if_overrides_changed!(student_ids=nil)
+  def run_if_overrides_changed!(student_ids=nil, updating_user=nil)
     relocked_modules = []
     self.relock_modules!(relocked_modules, student_ids)
     each_submission_type { |submission| submission&.relock_modules!(relocked_modules, student_ids)}
@@ -2844,10 +2901,10 @@ class Assignment < ActiveRecord::Base
       false
     end
 
-    DueDateCacher.recompute(self, update_grades: update_grades)
+    DueDateCacher.recompute(self, update_grades: update_grades, executing_user: updating_user)
   end
 
-  def run_if_overrides_changed_later!(student_ids=nil)
+  def run_if_overrides_changed_later!(student_ids: nil, updating_user: nil)
     return if self.class.suspended_callback?(:update_cached_due_dates, :save)
 
     enqueuing_args = if student_ids
@@ -2856,7 +2913,7 @@ class Assignment < ActiveRecord::Base
       { singleton: "assignment_overrides_changed_#{self.global_id}" }
     end
 
-    self.send_later_if_production_enqueue_args(:run_if_overrides_changed!, enqueuing_args, student_ids)
+    self.send_later_if_production_enqueue_args(:run_if_overrides_changed!, enqueuing_args, student_ids, updating_user)
   end
 
   def validate_overrides_for_sis(overrides)
@@ -2941,7 +2998,12 @@ class Assignment < ActiveRecord::Base
   end
 
   def can_view_speed_grader?(user)
-    context.allows_speed_grader? && can_be_moderated_grader?(user)
+    context.allows_speed_grader? && context.grants_any_right?(user, :manage_grades, :view_all_grades)
+  end
+
+  def can_view_audit_trail?(user)
+    return false unless context.account.feature_enabled?(:anonymous_moderated_marking_audit_trail)
+    auditable? && !muted? && grades_published? && context.grants_right?(user, :view_audit_trail)
   end
 
   def can_view_other_grader_identities?(user)

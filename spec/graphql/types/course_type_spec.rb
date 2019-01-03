@@ -33,11 +33,21 @@ describe Types::CourseType do
     expect(course_type.resolve("name")).to eq course.name
   end
 
-  it "needs read permission" do
-    course_with_student
-    @course2, @student2 = @course, @student
+  context "top-level permissions" do
+    it "needs read permission" do
+      course_with_student
+      @course2, @student2 = @course, @student
 
-    expect(course_type.resolve("_id", current_user: @student2)).to be_nil
+      # node / legacy node
+      expect(course_type.resolve("_id", current_user: @student2)).to be_nil
+
+      # course
+      expect(
+        CanvasSchema.execute(<<~GQL, context: {current_user: @student2}).dig("data", "course")
+          query { course(id: "#{course.id.to_s}") { id } }
+        GQL
+      ).to be_nil
+    end
   end
 
   describe "assignmentsConnection" do
@@ -103,12 +113,12 @@ describe Types::CourseType do
       section1 = course.course_sections.create!(name: "Delete Me")
       expect(
         course_type.resolve("sectionsConnection { edges { node { _id } } }")
-      ).to match course.course_sections.map(&:to_param)
+      ).to match_array course.course_sections.map(&:to_param)
 
       section1.destroy
       expect(
         course_type.resolve("sectionsConnection { edges { node { _id } } }")
-      ).to eq course.course_sections.active.map(&:to_param)
+      ).to match_array course.course_sections.active.map(&:to_param)
     end
   end
 
@@ -280,6 +290,38 @@ describe Types::CourseType do
       expect(
         course_type.resolve("groupsConnection { edges { node { _id } } }")
       ).to eq course.groups.map(&:to_param)
+    end
+  end
+
+  describe "GroupSetsConnection" do
+    before(:once) do
+      @project_groups = course.group_categories.create! name: "Project Groups"
+      @student_groups = GroupCategory.student_organized_for(course)
+    end
+
+    it "returns project groups" do
+      expect(
+        course_type.resolve("groupSetsConnection { edges { node { _id } } }",
+                            current_user: @teacher)
+      ).to eq [@project_groups.id.to_s]
+    end
+  end
+
+  describe "term" do
+    before(:once) do
+      course.enrollment_term.update_attributes(start_at: 1.month.ago)
+    end
+
+    it "works" do
+      expect(
+        course_type.resolve("term { _id }")
+      ).to eq course.enrollment_term.id.to_s
+      expect(
+        course_type.resolve("term { name }")
+      ).to eq course.enrollment_term.name
+      expect(
+        course_type.resolve("term { startAt }")
+      ).to eq course.enrollment_term.start_at.iso8601
     end
   end
 end

@@ -22,6 +22,19 @@ class TokenScopes
     verb: "GET",
     scope: "#{OAUTH2_SCOPE_NAMESPACE}userinfo"
   }.freeze
+  LTI_AGS_LINE_ITEM_SCOPE = "https://purl.imsglobal.org/spec/lti-ags/scope/lineitem".freeze
+  LTI_AGS_LINE_ITEM_READ_ONLY_SCOPE = "https://purl.imsglobal.org/spec/lti-ags/scope/lineitem.readonly".freeze
+  LTI_AGS_RESULT_READ_ONLY_SCOPE = "https://purl.imsglobal.org/spec/lti-ags/scope/result.readonly".freeze
+  LTI_AGS_SCORE_SCOPE = "https://purl.imsglobal.org/spec/lti-ags/scope/score".freeze
+  LTI_NRPS_V2_SCOPE = "https://purl.imsglobal.org/spec/lti-nrps/scope/contextmembership.readonly".freeze
+  LTI_SCOPES = {
+    LTI_AGS_LINE_ITEM_SCOPE => I18n.t("Manage Line Items"),
+    LTI_AGS_LINE_ITEM_READ_ONLY_SCOPE => I18n.t("Read Line Items"),
+    LTI_AGS_RESULT_READ_ONLY_SCOPE => I18n.t("Read Line Item Results"),
+    LTI_AGS_SCORE_SCOPE => I18n.t("Create/Edit Line Item Scores"),
+    LTI_NRPS_V2_SCOPE => I18n.t("Read Context Membership")
+  }.freeze
+  LTI_AGS_SCOPES = [ LTI_AGS_LINE_ITEM_SCOPE, LTI_AGS_LINE_ITEM_READ_ONLY_SCOPE, LTI_AGS_RESULT_READ_ONLY_SCOPE, LTI_AGS_SCORE_SCOPE ].freeze
 
   def self.named_scopes
     return @_named_scopes if @_named_scopes
@@ -37,7 +50,7 @@ class TokenScopes
   end
 
   def self.all_scopes
-    @_all_scopes ||= [USER_INFO_SCOPE[:scope], *api_routes.map {|route| route[:scope]}].freeze
+    @_all_scopes ||= [USER_INFO_SCOPE[:scope], *api_routes.map {|route| route[:scope]}, *LTI_SCOPES.keys].freeze
   end
 
   def self.detailed_scopes

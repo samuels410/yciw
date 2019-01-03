@@ -381,6 +381,7 @@ class Attachment < ActiveRecord::Base
     text/plain
     text/html
     application/rtf
+    text/rtf
     text/richtext
     application/vnd.wordperfect
     application/vnd.ms-powerpoint
@@ -861,12 +862,22 @@ class Attachment < ActiveRecord::Base
     end
   end
 
+  class FailedResponse < StandardError; end
   # GETs this attachment's public_url and streams the response to the
   # passed block; this is a helper function for #open
   # (you should call #open instead of this)
   private def streaming_download(dest=nil, &block)
+    retries ||= 0
     CanvasHttp.get(public_url) do |response|
+      raise FailedResponse.new("Expected 200, got #{response.code}: #{response.body}") unless response.code.to_i == 200
       response.read_body(dest, &block)
+    end
+  rescue FailedResponse, Net::ReadTimeout => e
+    if (retries += 1) < Setting.get(:streaming_download_retries, '5').to_i
+      Canvas::Errors.capture_exception(:attachment, e)
+      retry
+    else
+      raise e
     end
   end
 
@@ -1476,6 +1487,7 @@ class Attachment < ActiveRecord::Base
     return unless root
     self.root_attachment_id = nil
     root.copy_attachment_content(self)
+    self.run_after_attachment_saved
   end
 
   def restore
@@ -1825,19 +1837,14 @@ class Attachment < ActiveRecord::Base
     canvadoc.try(:available?)
   end
 
-  def view_inline_ping_url
-    "/#{context_url_prefix}/files/#{self.id}/inline_view"
-  end
-
   def canvadoc_url(user, opts={})
     return unless canvadocable?
     "/api/v1/canvadoc_session?#{preview_params(user, 'canvadoc', opts)}"
   end
 
   def crocodoc_url(user, opts={})
-    opts[:enable_annotations] = true
     return unless crocodoc_available?
-    "/api/v1/crocodoc_session?#{preview_params(user, 'crocodoc', opts)}"
+    "/api/v1/crocodoc_session?#{preview_params(user, 'crocodoc', opts.merge(enable_annotations: true))}"
   end
 
   def previewable_media?

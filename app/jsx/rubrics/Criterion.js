@@ -115,6 +115,7 @@ export default class Criterion extends React.Component {
   render () {
     const {
       allowExtraCredit,
+      allowSavedComments,
       assessment,
       criterion,
       customRatings,
@@ -164,6 +165,7 @@ export default class Criterion extends React.Component {
 
     const commentRating = (
       <Comments
+        allowSaving={allowSavedComments}
         assessing={assessing}
         assessment={assessment}
         footer={isSummary ? pointsElement() : null}
@@ -192,7 +194,12 @@ export default class Criterion extends React.Component {
     const finalize = (update) => {
       const common = { commentsOpen: false }
       if (update) {
-        onAssessmentChange({ ...common, comments: assessment.partialComments })
+        const { comments, partialComments } = assessment
+        const saved = _.isNil(partialComments) ? comments : partialComments
+        onAssessmentChange({
+          ...common,
+          comments: saved
+        })
       } else {
         onAssessmentChange({ ...common, partialComments: undefined })
       }
@@ -267,6 +274,7 @@ export default class Criterion extends React.Component {
 }
 Criterion.propTypes = {
   allowExtraCredit: PropTypes.bool,
+  allowSavedComments: PropTypes.bool,
   assessment: PropTypes.shape(assessmentShape),
   customRatings: PropTypes.arrayOf(PropTypes.object),
   criterion: PropTypes.shape(criterionShape).isRequired,
@@ -280,6 +288,7 @@ Criterion.propTypes = {
 
 Criterion.defaultProps = {
   allowExtraCredit: false,
+  allowSavedComments: true,
   assessment: null,
   customRatings: [],
   onAssessmentChange: null,

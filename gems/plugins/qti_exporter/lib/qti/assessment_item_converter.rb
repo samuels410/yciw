@@ -143,6 +143,7 @@ class AssessmentItemConverter
       elsif !%w(text_only_question file_upload_question).include?(@migration_type)
         self.parse_question_data
       else
+        self.get_feedback if @migration_type == 'file_upload_question'
         @question[:question_type] ||= @migration_type
       end
     rescue => e
@@ -220,6 +221,10 @@ class AssessmentItemConverter
         end
       end
     end
+  end
+
+  def get_or_generate_answer_id(response_identifier)
+    (@flavor == Qti::Flavors::CANVAS && response_identifier.to_s.sub(/response_/i, "").presence&.to_i) || unique_local_id
   end
 
   def unique_local_id

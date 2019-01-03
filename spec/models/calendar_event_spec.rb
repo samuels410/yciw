@@ -115,6 +115,32 @@ describe CalendarEvent do
     end
   end
 
+  describe "default_values during update" do
+    before(:once) do
+      course_model
+      @original_start_at = Time.at(1220443500) # 3 Sep 2008 12:05pm (UTC)
+      @original_end_at = @original_start_at + 2.hours
+      @midnight = Time.at(1220421600)
+      @event = calendar_event_model(
+        :start_at => @original_start_at,
+        :end_at => @original_end_at,
+        :time_zone_edited => "Mountain Time (US & Canada)"
+      )
+    end
+
+    it "should not retain all day flag when times are changed (calls :default_values)" do
+      # set the start and end to midnight and make sure all_day is automatically set
+      @event.update_attributes({ :start_at => @midnight, :end_at => @midnight })
+      expect(@event.all_day?).to be_truthy
+      expect(@event.all_day_date.strftime("%Y-%m-%d")).to eq "2008-09-03"
+
+      # set the start and end to different times and then make sure all_day is automatically unset
+      @event.update_attributes({ :start_at => @original_start_at, :end_at => @original_end_at })
+      expect(@event.all_day?).to be_falsey
+    end
+  end
+
+
   context "ical" do
     describe "to_ics" do
       it "should not fail for null times" do
@@ -161,11 +187,11 @@ describe CalendarEvent do
         @event.updated_at = Time.at(1220443500) # 3 Sep 2008 12:05pm (UTC)
         res = @event.to_ics(in_own_calendar: false)
         expect(res).not_to be_nil
-        expect(res.start.icalendar_tzid).to eq 'UTC'
-        expect(res.start.strftime('%Y-%m-%dT%H:%M:%S')).to eq Time.zone.parse("Sep 3 2008 11:55am").in_time_zone('UTC').strftime('%Y-%m-%dT%H:%M:00')
-        expect(res.end.icalendar_tzid).to eq 'UTC'
-        expect(res.end.strftime('%Y-%m-%dT%H:%M:%S')).to eq Time.zone.parse("Sep 3 2008 12:00pm").in_time_zone('UTC').strftime('%Y-%m-%dT%H:%M:00')
-        expect(res.dtstamp.icalendar_tzid).to eq 'UTC'
+        expect(res.dtstart.tz_utc).to eq true
+        expect(res.dtstart.strftime('%Y-%m-%dT%H:%M:%S')).to eq Time.zone.parse("Sep 3 2008 11:55am").in_time_zone('UTC').strftime('%Y-%m-%dT%H:%M:00')
+        expect(res.dtend.tz_utc).to eq true
+        expect(res.dtend.strftime('%Y-%m-%dT%H:%M:%S')).to eq Time.zone.parse("Sep 3 2008 12:00pm").in_time_zone('UTC').strftime('%Y-%m-%dT%H:%M:00')
+        expect(res.dtstamp.tz_utc).to eq true
         expect(res.dtstamp.strftime('%Y-%m-%dT%H:%M:%S')).to eq Time.zone.parse("Sep 3 2008 12:05pm").in_time_zone('UTC').strftime('%Y-%m-%dT%H:%M:00')
       end
 
@@ -176,11 +202,11 @@ describe CalendarEvent do
         @event.updated_at = Time.at(1220472300) # 3 Sep 2008 12:05pm (AKDT)
         res = @event.to_ics(in_own_calendar: false)
         expect(res).not_to be_nil
-        expect(res.start.icalendar_tzid).to eq 'UTC'
-        expect(res.start.strftime('%Y-%m-%dT%H:%M:%S')).to eq Time.zone.parse("Sep 3 2008 11:55am").in_time_zone('UTC').strftime('%Y-%m-%dT%H:%M:00')
-        expect(res.end.icalendar_tzid).to eq 'UTC'
-        expect(res.end.strftime('%Y-%m-%dT%H:%M:%S')).to eq Time.zone.parse("Sep 3 2008 12:00pm").in_time_zone('UTC').strftime('%Y-%m-%dT%H:%M:00')
-        expect(res.end.icalendar_tzid).to eq 'UTC'
+        expect(res.dtstart.tz_utc).to eq true
+        expect(res.dtstart.strftime('%Y-%m-%dT%H:%M:%S')).to eq Time.zone.parse("Sep 3 2008 11:55am").in_time_zone('UTC').strftime('%Y-%m-%dT%H:%M:00')
+        expect(res.dtend.tz_utc).to eq true
+        expect(res.dtend.strftime('%Y-%m-%dT%H:%M:%S')).to eq Time.zone.parse("Sep 3 2008 12:00pm").in_time_zone('UTC').strftime('%Y-%m-%dT%H:%M:00')
+        expect(res.dtend.tz_utc).to eq true
         expect(res.dtstamp.strftime('%Y-%m-%dT%H:%M:%S')).to eq Time.zone.parse("Sep 3 2008 12:05pm").in_time_zone('UTC').strftime('%Y-%m-%dT%H:%M:00')
       end
 
@@ -211,7 +237,7 @@ describe CalendarEvent do
 
 
 [link!](www.example.com)")
-        expect(ev.x_alt_desc).to eq @event.description
+        expect(ev.x_alt_desc.first).to eq @event.description
       end
 
       it "should not add verifiers to files unless course or attachment is public" do

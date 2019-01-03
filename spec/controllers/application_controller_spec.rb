@@ -26,7 +26,8 @@ RSpec.describe ApplicationController do
       host: "www.example.com",
       headers: {},
       format: double(:html? => true),
-      user_agent: nil
+      user_agent: nil,
+      remote_ip: '0.0.0.0'
     )
     allow(controller).to receive(:request).and_return(request_double)
   end
@@ -242,7 +243,7 @@ RSpec.describe ApplicationController do
 
     before :each do
       # safe_domain_file_url wants to use request.protocol
-      allow(controller).to receive(:request).and_return(double(:protocol => '', :host_with_port => ''))
+      allow(controller).to receive(:request).and_return(double("request", :protocol => '', :host_with_port => ''))
 
       @common_params = { :only_path => true }
     end
@@ -276,6 +277,15 @@ RSpec.describe ApplicationController do
         with(@attachment, @common_params.merge(:download_frd => 1)).
         and_return('')
       controller.send(:safe_domain_file_url, @attachment, nil, nil, true)
+    end
+
+    it "prepends a unique file subdomain if configured" do
+      override_dynamic_settings(private: { canvas: { attachment_specific_file_domain: true } }) do
+        expect(controller).to receive(:file_download_url).
+          with(@attachment, @common_params.merge(:inline => 1)).
+          and_return("/files/#{@attachment.id}")
+        expect(controller.send(:safe_domain_file_url, @attachment, ['canvasfiles.com', Shard.default], nil, false)).to eq "a#{@attachment.shard.id}-#{@attachment.id}.canvasfiles.com/files/#{@attachment.id}"
+      end
     end
   end
 
@@ -316,12 +326,6 @@ RSpec.describe ApplicationController do
       acct.default_locale = "es"
       acct.save!
       controller.instance_variable_set(:@domain_root_account, acct)
-      req = double()
-
-      allow(req).to receive(:host).and_return('www.example.com')
-      allow(req).to receive(:headers).and_return({})
-      allow(req).to receive(:format).and_return(double(:html? => true))
-      allow(controller).to receive(:request).and_return(req)
       controller.send(:assign_localizer)
       I18n.set_locale_with_localizer # this is what t() triggers
       expect(I18n.locale.to_s).to eq "es"
@@ -353,6 +357,38 @@ RSpec.describe ApplicationController do
       expect(controller.send(:require_course_context)).to be_truthy
       controller.instance_variable_set(:@context, Account.default)
       expect{controller.send(:require_course_context)}.to raise_error(ActiveRecord::RecordNotFound)
+    end
+  end
+
+  describe 'log_participation' do
+    before :once do
+      course_model
+      student_in_course
+      attachment_model(context: @course)
+    end
+
+    it "should find file's context instead of user" do
+      controller.instance_variable_set(:@domain_root_account, Account.default)
+      controller.instance_variable_set(:@context, @student)
+      controller.instance_variable_set(:@accessed_asset, {level: 'participate', code: @attachment.asset_string, category: 'files'})
+      allow(controller).to receive(:named_context_url).with(@attachment, :context_url).and_return("/files/#{@attachment.id}")
+      allow(controller).to receive(:params).and_return({file_id: @attachment.id, id: @attachment.id})
+      allow(controller.request).to receive(:path).and_return("/files/#{@attachment.id}")
+      controller.send(:log_participation, @student)
+      expect(AssetUserAccess.where(user: @student, asset_code: @attachment.asset_string).take.context).to eq @course
+    end
+
+    it 'should not error on non-standard context for file' do
+      controller.instance_variable_set(:@domain_root_account, Account.default)
+      controller.instance_variable_set(:@context, @student)
+      controller.instance_variable_set(:@accessed_asset, {level: 'participate', code: @attachment.asset_string, category: 'files'})
+      allow(controller).to receive(:named_context_url).with(@attachment, :context_url).and_return("/files/#{@attachment.id}")
+      allow(controller).to receive(:params).and_return({file_id: @attachment.id, id: @attachment.id})
+      allow(controller.request).to receive(:path).and_return("/files/#{@attachment.id}")
+      assignment_model(course: @course)
+      @attachment.context = @assignment
+      @attachment.save!
+      expect {controller.send(:log_participation, @student)}.not_to raise_error
     end
   end
 
@@ -545,7 +581,7 @@ RSpec.describe ApplicationController do
       end
 
       context 'lti version' do
-        let(:user) { User.new }
+        let_once(:user) { user_model }
 
         before do
           allow(controller).to receive(:named_context_url).and_return('wrong_url')
@@ -564,31 +600,62 @@ RSpec.describe ApplicationController do
         end
 
         describe 'LTI 1.3' do
-          let_once(:developer_key) { DeveloperKey.create! }
+          let_once(:developer_key) do
+            d = DeveloperKey.create!
+            enable_developer_key_account_binding! d
+            d
+          end
+          let_once(:account) { Account.default }
+
           include_context 'lti_1_3_spec_helper'
 
           before do
             tool.developer_key = developer_key
-            tool.settings['use_1_3'] = true
+            tool.use_1_3 = true
             tool.save!
+
+            assignment = assignment_model(submission_types: 'external_tool', external_tool_tag: content_tag)
+            content_tag.update_attributes!(context: assignment)
+          end
+
+          shared_examples_for 'a placement that caches the launch' do
+            let(:verifier) { "e5e774d015f42370dcca2893025467b414d39009dfe9a55250279cca16f5f3c2704f9c56fef4cea32825a8f72282fa139298cf846e0110238900567923f9d057" }
+            let(:redis_key) { "#{course.class.name}:#{Lti::RedisMessageClient::LTI_1_3_PREFIX}#{verifier}" }
+            let(:cached_launch) { JSON.parse(Canvas.redis.get(redis_key)) }
+
+            before do
+              allow(SecureRandom).to receive(:hex).and_return(verifier)
+              controller.send(:content_tag_redirect, course, content_tag, nil)
+            end
+
+            it 'caches the LTI 1.3 launch' do
+              expect(cached_launch["https://purl.imsglobal.org/spec/lti/claim/message_type"]).to eq "LtiResourceLinkRequest"
+            end
+
+            it 'creates a login message' do
+              expect(assigns[:lti_launch].params.keys).to match_array [
+                "iss",
+                "login_hint",
+                "target_link_uri",
+                "lti_message_hint"
+              ]
+            end
+
+            it 'sets the "login_hint" to the current user lti id' do
+              expect(assigns[:lti_launch].params['login_hint']).to eq Lti::Asset.opaque_identifier_for(user)
+            end
           end
 
           context 'assignments' do
-            it 'creates a resource link request when tool is configured to use LTI 1.3' do
-              controller.send(:content_tag_redirect, course, content_tag, nil)
-              jwt = JSON::JWT.decode(assigns[:lti_launch].params[:id_token], :skip_verification)
-              expect(jwt["https://purl.imsglobal.org/spec/lti/claim/message_type"]).to eq "LtiResourceLinkRequest"
-            end
+            it_behaves_like 'a placement that caches the launch'
           end
 
           context 'module items' do
-            it 'creates a resource link request when tool is configured to use LTI 1.3' do
-              content_tag.update!(context: course.account)
-              controller.send(:content_tag_redirect, course, content_tag, nil)
-              jwt = JSON::JWT.decode(assigns[:lti_launch].params[:id_token], :skip_verification)
-              expect(jwt["https://purl.imsglobal.org/spec/lti/claim/message_type"]).to eq "LtiResourceLinkRequest"
-            end
+            before { content_tag.update!(context: course.account) }
+
+            it_behaves_like 'a placement that caches the launch'
           end
+          # rubocop:enable RSpec/NestedGroups
         end
 
         it 'creates a basic lti launch request when tool is not configured to use LTI 1.3' do
@@ -964,6 +1031,7 @@ describe ApplicationController do
       {
         hostname: 'test.host',
         user_agent: 'Rails Testing',
+        client_ip: '0.0.0.0',
         producer: 'canvas'
       }
     end
@@ -1198,7 +1266,6 @@ describe CoursesController do
 
   describe "set_master_course_js_env_data" do
     before :each do
-      Account.default.enable_feature!(:master_courses)
       controller.instance_variable_set(:@domain_root_account, Account.default)
       account_admin_user(:active_all => true)
       controller.instance_variable_set(:@current_user, @user)
@@ -1250,57 +1317,48 @@ describe CoursesController do
   end
 
   context 'validate_scopes' do
-    let(:account_with_feature_enabled) do
-      account = double()
-      allow(account).to receive(:feature_enabled?).with(:developer_key_management_and_scoping).and_return(true)
-      account
+    let(:account) { double() }
+
+    before do
+      controller.instance_variable_set(:@domain_root_account, account)
     end
 
-    let(:account_with_feature_disabled) do
-      account = double()
-      allow(account).to receive(:feature_enabled?).with(:developer_key_management_and_scoping).and_return(false)
-      account
+    it 'does not affect session based api requests' do
+      allow(controller).to receive(:request).and_return(double({
+        params: {}
+      }))
+      expect(controller.send(:validate_scopes)).to be_nil
     end
 
-    context 'developer_key_management_and_scoping feature enabled' do
-      before do
-        controller.instance_variable_set(:@domain_root_account, account_with_feature_enabled)
-      end
+    it 'does not affect api requests that use an access token with an unscoped developer key' do
+      user = user_model
+      developer_key = DeveloperKey.create!
+      token = AccessToken.create!(user: user, developer_key: developer_key)
+      controller.instance_variable_set(:@access_token, token)
+      allow(controller).to receive(:request).and_return(double({
+        params: {},
+        method: 'GET'
+      }))
+      expect(controller.send(:validate_scopes)).to be_nil
+    end
 
-      it 'does not affect session based api requests' do
-        allow(controller).to receive(:request).and_return(double({
-          params: {}
-        }))
-        expect(controller.send(:validate_scopes)).to be_nil
-      end
+    it 'raises AccessTokenScopeError if scopes do not match' do
+      user = user_model
+      developer_key = DeveloperKey.create!(require_scopes: true)
+      token = AccessToken.create!(user: user, developer_key: developer_key)
+      controller.instance_variable_set(:@access_token, token)
+      allow(controller).to receive(:request).and_return(double({
+        params: {},
+        method: 'GET'
+      }))
+      expect { controller.send(:validate_scopes) }.to raise_error(AuthenticationMethods::AccessTokenScopeError)
+    end
 
-      it 'does not affect api requests that use an access token with an unscoped developer key' do
-        user = user_model
-        developer_key = DeveloperKey.create!
-        token = AccessToken.create!(user: user, developer_key: developer_key)
-        controller.instance_variable_set(:@access_token, token)
-        allow(controller).to receive(:request).and_return(double({
-          params: {},
-          method: 'GET'
-        }))
-        expect(controller.send(:validate_scopes)).to be_nil
-      end
-
-      it 'raises AccessTokenScopeError if scopes do not match' do
-        user = user_model
-        developer_key = DeveloperKey.create!(require_scopes: true)
-        token = AccessToken.create!(user: user, developer_key: developer_key)
-        controller.instance_variable_set(:@access_token, token)
-        allow(controller).to receive(:request).and_return(double({
-          params: {},
-          method: 'GET'
-        }))
-        expect { controller.send(:validate_scopes) }.to raise_error(AuthenticationMethods::AccessTokenScopeError)
-      end
+    context 'with valid scopes on dev key' do
+      let(:developer_key) { DeveloperKey.create!(require_scopes: true, scopes: ['url:GET|/api/v1/accounts']) }
 
       it 'allows adequately scoped requests through' do
         user = user_model
-        developer_key = DeveloperKey.create!(require_scopes: true)
         token = AccessToken.create!(user: user, developer_key: developer_key, scopes: ['url:GET|/api/v1/accounts'])
         controller.instance_variable_set(:@access_token, token)
         allow(controller).to receive(:request).and_return(double({
@@ -1313,7 +1371,6 @@ describe CoursesController do
 
       it 'allows HEAD requests' do
         user = user_model
-        developer_key = DeveloperKey.create!(require_scopes: true)
         token = AccessToken.create!(user: user, developer_key: developer_key, scopes: ['url:GET|/api/v1/accounts'])
         controller.instance_variable_set(:@access_token, token)
         allow(controller).to receive(:request).and_return(double({
@@ -1326,7 +1383,6 @@ describe CoursesController do
 
       it 'strips includes for adequately scoped requests' do
         user = user_model
-        developer_key = DeveloperKey.create!(require_scopes: true)
         token = AccessToken.create!(user: user, developer_key: developer_key, scopes: ['url:GET|/api/v1/accounts'])
         controller.instance_variable_set(:@access_token, token)
         allow(controller).to receive(:request).and_return(double({
@@ -1337,21 +1393,6 @@ describe CoursesController do
         expect(params).to receive(:delete).with(:include)
         expect(params).to receive(:delete).with(:includes)
         allow(controller).to receive(:params).and_return(params)
-        controller.send(:validate_scopes)
-      end
-    end
-
-    context 'developer_key_management_and_scoping feature disabled' do
-      before do
-        controller.instance_variable_set(:@domain_root_account, account_with_feature_disabled)
-      end
-
-      after do
-        controller.instance_variable_set(:@domain_root_account, nil)
-      end
-
-      it "does nothing" do
-        expect(controller).not_to receive(:api_request?)
         controller.send(:validate_scopes)
       end
     end

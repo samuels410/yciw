@@ -404,7 +404,7 @@ describe Api::V1::Course do
 end
 
 describe CoursesController, type: :request do
-  let(:user_api_fields) { %w(id name sortable_name short_name) }
+  let(:user_api_fields) {%w(id name sortable_name short_name created_at)}
 
   before :once do
     course_with_teacher(:active_all => true, :user => user_with_pseudonym(:name => 'UWP'))
@@ -590,7 +590,13 @@ describe CoursesController, type: :request do
     c1 = course_with_student(course_name: 'def', active_all: true).course
 
     json = api_call(:get, "/api/v1/courses.json?include[]=tabs", controller: 'courses', action: 'index', format: 'json', include: ['tabs'])
-    expect(json.first['tabs']).to be_present
+    expect(json.first['tabs']).to match_array([
+      a_hash_including({"id" => "home"}),
+      a_hash_including({"id" => "discussions"}),
+      a_hash_including({"id" => "grades"}),
+      a_hash_including({"id" => "people"}),
+      a_hash_including({"id" => "syllabus"}),
+    ])
   end
 
   describe "user index" do
@@ -783,7 +789,8 @@ describe CoursesController, type: :request do
           'id' => new_course.id,
           'created_at' => new_course.created_at.as_json,
           'calendar' => { 'ics' => "http://www.example.com/feeds/calendars/course_#{new_course.uuid}.ics" },
-          'uuid' => new_course.uuid
+          'uuid' => new_course.uuid,
+          'blueprint' => false
         )
         course_response.delete 'term_id' #not included in the response
         expect(json).to eql course_response
@@ -837,7 +844,8 @@ describe CoursesController, type: :request do
           'id' => new_course.id,
           'created_at' => new_course.created_at.as_json,
           'calendar' => { 'ics' => "http://www.example.com/feeds/calendars/course_#{new_course.uuid}.ics" },
-          'uuid' => new_course.uuid
+          'uuid' => new_course.uuid,
+          'blueprint' => false
         )
         expect(json).to eql course_response
       end
@@ -1904,17 +1912,57 @@ describe CoursesController, type: :request do
       end
     end
 
-    context "include current grading period scores" do
-      let(:grading_period_keys) do
-        [ 'multiple_grading_periods_enabled',
+    context "grading period info" do
+      let(:grading_period_info_keys) do
+        [
+          'current_grading_period_id',
+          'current_grading_period_title',
           'has_grading_periods',
+          'multiple_grading_periods_enabled'
+        ]
+      end
+
+      before(:once) do
+        create_grading_periods_for(
+          @course2, grading_periods: [:old, :current, :future]
+        )
+      end
+
+      it "includes the grading period info if total_scores and current_grading_period_scores are included" do
+        json_response = courses_api_index_call(includes: ['total_scores', 'current_grading_period_scores'])
+        enrollment_json = enrollment(json_response)
+        expect(enrollment_json).to include(*grading_period_info_keys)
+      end
+
+      it "includes grading period info even if final grades are hidden" do
+        @course2.update!(hide_final_grades: true)
+        json_response = courses_api_index_call(includes: ['current_grading_period_scores', 'total_scores'])
+        enrollment_json = enrollment(json_response)
+        expect(enrollment_json).to include(*grading_period_info_keys)
+      end
+
+      it "does not include grading period info if total_scores but not current_grading_period_scores are included" do
+        json_response = courses_api_index_call(includes: ['total_scores'])
+        enrollment_json = enrollment(json_response)
+        expect(enrollment_json).not_to include(*grading_period_info_keys)
+      end
+
+      it "does not include grading period info if current_grading_period_scores but not total_scores are included" do
+        json_response = courses_api_index_call(includes: ['current_grading_period_scores'])
+        enrollment_json = enrollment(json_response)
+        expect(enrollment_json).not_to include(*grading_period_info_keys)
+      end
+    end
+
+    context "include current grading period scores" do
+      let(:grading_period_score_keys) do
+        [
           'totals_for_all_grading_periods_option',
           'current_period_computed_current_score',
           'current_period_computed_final_score',
           'current_period_computed_current_grade',
-          'current_period_computed_final_grade',
-          'current_grading_period_title',
-          'current_grading_period_id' ]
+          'current_period_computed_final_grade'
+        ]
       end
 
       before(:once) do
@@ -1927,7 +1975,7 @@ describe CoursesController, type: :request do
       "and 'current_grading_period_scores' are requested" do
         json_response = courses_api_index_call(includes: ['total_scores', 'current_grading_period_scores'])
         enrollment_json = enrollment(json_response)
-        expect(enrollment_json).to include(*grading_period_keys)
+        expect(enrollment_json).to include(*grading_period_score_keys)
         current_grading_period_title = 'Course Period 2: current period'
         expect(enrollment_json['current_grading_period_title']).to eq(current_grading_period_title)
       end
@@ -1943,7 +1991,7 @@ describe CoursesController, type: :request do
       "not requested, even if 'current_grading_period_scores' are requested" do
         json_response = courses_api_index_call(includes: ['current_grading_period_scores'])
         enrollment_json = enrollment(json_response)
-        expect(enrollment_json).to_not include(*grading_period_keys)
+        expect(enrollment_json).to_not include(*grading_period_score_keys)
       end
 
       it "does not include current grading period scores if final grades are hidden, " \
@@ -1952,7 +2000,7 @@ describe CoursesController, type: :request do
         @course2.save
         json_response = courses_api_index_call(includes: ['total_scores', 'current_grading_period_scores'])
         enrollment_json = enrollment(json_response)
-        expect(enrollment_json).not_to include(*grading_period_keys)
+        expect(enrollment_json).not_to include(*grading_period_score_keys)
       end
 
       it "returns true for 'has_grading_periods' on the enrollment " \
@@ -2564,11 +2612,12 @@ describe CoursesController, type: :request do
         @course1.root_account.settings[:enable_profiles] = true
         @course1.root_account.save!
 
-        json = api_call(:get, api_url, api_route, :search_term => "TAPerson", :include => ['email', 'bio'])
+        json = api_call(:get, api_url, api_route, :search_term => "TAPerson", :include => ['bio'])
 
         expect(json).to eq [
           {
             'id' => @ta.id,
+            'created_at' => @ta.created_at.iso8601,
             'name' => 'TAPerson',
             'sortable_name' => 'TAPerson',
             'short_name' => 'TAPerson',
@@ -3196,7 +3245,8 @@ describe CoursesController, type: :request do
         'enrollment_term_id' => @course.enrollment_term_id,
         'restrict_enrollments_to_course_dates' => false,
         'time_zone' => 'America/Los_Angeles',
-        'uuid' => @course1.uuid
+        'uuid' => @course1.uuid,
+        'blueprint' => false
       })
     end
 

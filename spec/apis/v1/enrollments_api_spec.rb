@@ -1005,6 +1005,7 @@ describe EnrollmentsApiController, type: :request do
               'integration_id' =>nil,
               'sis_import_id' =>nil,
               'id' => e.user.id,
+              'created_at' => e.user.created_at.iso8601,
               'login_id' => e.user.pseudonym ? e.user.pseudonym.unique_id : nil
             },
             'html_url' => course_user_url(e.course_id, e.user_id),
@@ -1216,6 +1217,7 @@ describe EnrollmentsApiController, type: :request do
               'integration_id' => e.user.pseudonym ? e.user.pseudonym&.integration_id : nil,
               'sis_import_id' => e.user.pseudonym ? e.user.pseudonym.sis_batch_id : nil,
               'id' => e.user.id,
+              'created_at' => e.user.created_at.iso8601,
               'login_id' => e.user.pseudonym ? e.user.pseudonym.unique_id : nil
             },
             'html_url' => course_user_url(e.course_id, e.user_id),
@@ -1439,7 +1441,8 @@ describe EnrollmentsApiController, type: :request do
               'name' => e.user.name,
               'sortable_name' => e.user.sortable_name,
               'short_name' => e.user.short_name,
-              'id' => e.user.id
+              'id' => e.user.id,
+              'created_at' => e.user.created_at.iso8601
             }
           }
           # should display the user's own grades
@@ -1517,7 +1520,8 @@ describe EnrollmentsApiController, type: :request do
               'name' => e.user.name,
               'sortable_name' => e.user.sortable_name,
               'short_name' => e.user.short_name,
-              'id' => e.user.id
+              'id' => e.user.id,
+              'created_at' => e.user.created_at.iso8601
             },
             'html_url' => course_user_url(e.course_id, e.user_id),
             'grades' => {
@@ -1624,6 +1628,7 @@ describe EnrollmentsApiController, type: :request do
                         'sortable_name' => e.user.sortable_name,
                         'short_name' => e.user.short_name,
                         'id' => e.user.id,
+                        'created_at' => e.user.created_at.iso8601,
                         'login_id' => e.user.pseudonym ? e.user.pseudonym.unique_id : nil
                       }
           user_json.merge!({
@@ -1664,10 +1669,10 @@ describe EnrollmentsApiController, type: :request do
             'current_score' => nil,
             'final_grade' => nil,
             'current_grade' => nil,
-            "unposted_current_score"=>nil,
-            "unposted_current_grade"=>nil,
-            "unposted_final_score"=>nil,
-            "unposted_final_grade"=>nil
+            "unposted_current_score" => nil,
+            "unposted_current_grade" => nil,
+            "unposted_final_score" => nil,
+            "unposted_final_grade" => nil
           } if e.student?
           h
         end)
@@ -1758,7 +1763,7 @@ describe EnrollmentsApiController, type: :request do
       end
 
       context "when scoped by a user" do
-        it "returns enrollments from all of a user's associated shards" do
+        it "returns enrollments from all of the current user's associated shards" do
           # create a user on a different shard
           @shard1.activate { @user = User.create!(name: 'outofshard') }
 
@@ -1773,6 +1778,21 @@ describe EnrollmentsApiController, type: :request do
           expect(json.length).to eq 1
           expect(json.first['course_id']).to eq(@course.id)
           expect(json.first['user_id']).to eq(@user.global_id)
+        end
+
+        it "returns enrollments from all of another user's associated shards" do
+          @shard1.activate { @other_course = Course.create! account: Account.create! }
+          @course.enroll_student(@user, enrollment_state: 'active')
+          @other_course.enroll_student(@user, enrollment_state: 'active')
+          @student = @user
+          @observer = user_factory
+          @student.linked_observers << @observer
+          json = api_call_as_user(@observer, :get, "/api/v1/users/#{@student.id}/enrollments",
+                          { :controller => "enrollments_api", :action => "index", :user_id => @student.to_param,
+                            :format => "json" })
+          courses = json.map { |el| el['course_id'] }
+          expect(courses).to include @course.id
+          expect(courses).to include @other_course.id
         end
       end
     end
@@ -1798,7 +1818,8 @@ describe EnrollmentsApiController, type: :request do
               'name' => e.user.name,
               'sortable_name' => e.user.sortable_name,
               'short_name' => e.user.short_name,
-              'id' => e.user.id
+              'id' => e.user.id,
+              'created_at' => e.user.created_at.iso8601
             },
             'html_url' => course_user_url(@course, e.user),
             'associated_user_id' => nil,
@@ -2146,7 +2167,8 @@ describe EnrollmentsApiController, type: :request do
               'name' => e.user.name,
               'sortable_name' => e.user.sortable_name,
               'short_name' => e.user.short_name,
-              'id' => e.user.id
+              'id' => e.user.id,
+              'created_at' => e.user.created_at.iso8601
             }
           }
         }
@@ -2185,7 +2207,8 @@ describe EnrollmentsApiController, type: :request do
               'name' => e.user.name,
               'sortable_name' => e.user.sortable_name,
               'short_name' => e.user.short_name,
-              'id' => e.user.id
+              'id' => e.user.id,
+              'created_at' => e.user.created_at.iso8601
             }
           }
           h['grades'] = {

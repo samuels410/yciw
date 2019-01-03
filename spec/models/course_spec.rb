@@ -2144,18 +2144,18 @@ describe Course, "tabs_available" do
     end
 
     it "should handle hidden_unused correctly for discussions" do
-      tabs = @course.uncached_tabs_available(@teacher, {})
+      tabs = @course.uncached_tabs_available(@teacher, include_hidden_unused: true)
       dtab = tabs.detect{|t| t[:id] == Course::TAB_DISCUSSIONS}
       expect(dtab[:hidden_unused]).to be_falsey
 
       @course.allow_student_discussion_topics = false
-      tabs = @course.uncached_tabs_available(@teacher, {})
+      tabs = @course.uncached_tabs_available(@teacher, include_hidden_unused: true)
       dtab = tabs.detect{|t| t[:id] == Course::TAB_DISCUSSIONS}
       expect(dtab[:hidden_unused]).to be_truthy
 
       @course.allow_student_discussion_topics = true
       discussion_topic_model
-      tabs = @course.uncached_tabs_available(@teacher, {})
+      tabs = @course.uncached_tabs_available(@teacher, include_hidden_unused: true)
       dtab = tabs.detect{|t| t[:id] == Course::TAB_DISCUSSIONS}
       expect(dtab[:hidden_unused]).to be_falsey
     end
@@ -2168,7 +2168,7 @@ describe Course, "tabs_available" do
 
     it "should not include Announcements without read_announcements rights" do
       @course.account.role_overrides.create!(:role => teacher_role, :permission => 'read_announcements', :enabled => false)
-      tab_ids = @course.uncached_tabs_available(@teacher, {}).map{|t| t[:id] }
+      tab_ids = @course.uncached_tabs_available(@teacher, include_hidden_unused: true).map{|t| t[:id] }
       expect(tab_ids).to_not include(Course::TAB_ANNOUNCEMENTS)
     end
   end
@@ -2632,7 +2632,7 @@ describe Course, 'grade_publishing' do
       end
 
       it 'should kick off the actual grade send' do
-        expect(@course).to receive(:send_later_if_production).with(:send_final_grades_to_endpoint, @user, nil).and_return(nil)
+        expect(@course).to receive(:send_later_if_production_enqueue_args).with(:send_final_grades_to_endpoint, anything, @user, nil).and_return(nil)
         allow(@plugin).to receive(:enabled?).and_return(true)
         @plugin_settings[:publish_endpoint] = "http://localhost/endpoint"
         @course.publish_final_grades(@user)
@@ -2640,7 +2640,7 @@ describe Course, 'grade_publishing' do
 
       it 'should kick off the actual grade send for a specific user' do
         make_student_enrollments
-        expect(@course).to receive(:send_later_if_production).with(:send_final_grades_to_endpoint, @user, @student_enrollments.first.user_id).and_return(nil)
+        expect(@course).to receive(:send_later_if_production_enqueue_args).with(:send_final_grades_to_endpoint, anything, @user, @student_enrollments.first.user_id).and_return(nil)
         allow(@plugin).to receive(:enabled?).and_return(true)
         @plugin_settings[:publish_endpoint] = "http://localhost/endpoint"
         @course.publish_final_grades(@user, @student_enrollments.first.user_id)
@@ -2648,7 +2648,7 @@ describe Course, 'grade_publishing' do
       end
 
       it 'should kick off the timeout when a success timeout is defined and waiting is configured' do
-        expect(@course).to receive(:send_later_if_production).with(:send_final_grades_to_endpoint, @user, nil).and_return(nil)
+        expect(@course).to receive(:send_later_if_production_enqueue_args).with(:send_final_grades_to_endpoint, anything, @user, nil).and_return(nil)
         current_time = Time.now.utc
         allow(Time).to receive(:now).and_return(current_time)
         allow(current_time).to receive(:utc).and_return(current_time)
@@ -2663,7 +2663,7 @@ describe Course, 'grade_publishing' do
       end
 
       it 'should not kick off the timeout when a success timeout is defined and waiting is not configured' do
-        expect(@course).to receive(:send_later_if_production).with(:send_final_grades_to_endpoint, @user, nil).and_return(nil)
+        expect(@course).to receive(:send_later_if_production_enqueue_args).with(:send_final_grades_to_endpoint, anything, @user, nil).and_return(nil)
         current_time = Time.now.utc
         allow(Time).to receive(:now).and_return(current_time)
         allow(current_time).to receive(:utc).and_return(current_time)
@@ -2678,7 +2678,7 @@ describe Course, 'grade_publishing' do
       end
 
       it 'should not kick off the timeout when a success timeout is not defined and waiting is not configured' do
-        expect(@course).to receive(:send_later_if_production).with(:send_final_grades_to_endpoint, @user, nil).and_return(nil)
+        expect(@course).to receive(:send_later_if_production_enqueue_args).with(:send_final_grades_to_endpoint, anything, @user, nil).and_return(nil)
         current_time = Time.now.utc
         allow(Time).to receive(:now).and_return(current_time)
         allow(current_time).to receive(:utc).and_return(current_time)
@@ -2693,7 +2693,7 @@ describe Course, 'grade_publishing' do
       end
 
       it 'should not kick off the timeout when a success timeout is not defined and waiting is configured' do
-        expect(@course).to receive(:send_later_if_production).with(:send_final_grades_to_endpoint, @user, nil).and_return(nil)
+        expect(@course).to receive(:send_later_if_production_enqueue_args).with(:send_final_grades_to_endpoint, anything, @user, nil).and_return(nil)
         current_time = Time.now.utc
         allow(Time).to receive(:now).and_return(current_time)
         allow(current_time).to receive(:utc).and_return(current_time)
@@ -3984,6 +3984,22 @@ describe Course, "section_visibility" do
       enrollment.conclude
 
       expect(@course.users_visible_to(@teacher)).not_to include(@student2)
+    end
+
+    it "should not return observers to section-restricted students" do
+      section2 = @course.course_sections.create!
+      limited_student = user_factory(:active_all => true)
+      @course.enroll_user(limited_student, "StudentEnrollment", :enrollment_state => "active",
+        :section => section2, :limit_privileges_to_course_section => true)
+
+      limited_teacher = user_factory(:active_all => true)
+      @course.enroll_user(limited_teacher, "TeacherEnrollment", :enrollment_state => "active",
+        :section => section2, :limit_privileges_to_course_section => true)
+      
+      observer = user_factory(:active_all => true)
+      @course.enroll_user(observer, "ObserverEnrollment", :enrollment_state => "active", :section => section2)
+      expect(@course.users_visible_to(limited_student)).not_to include(observer)
+      expect(@course.users_visible_to(limited_teacher)).to include(observer)
     end
 
     it "should return student view students to account admins" do

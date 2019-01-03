@@ -5,6 +5,9 @@
   "add_to_do_7def3c37": {
     "message": "Ychwanegu Tasg i’w Gwneud"
   },
+  "address_3159962f": {
+    "message": "Cyfeiriad:"
+  },
   "all_day_fb42c4fc": {
     "message": "Drwy’r Dydd"
   },
@@ -50,8 +53,14 @@
   "assignmenttype_title_posted_datetime_cab69444": {
     "message": "{ assignmentType } { title } wedi’i bostio { datetime }."
   },
+  "assignmenttype_title_reminder_datetime_33fa66d5": {
+    "message": "{ assignmentType } { title }, nodyn atgoffa { datetime }."
+  },
   "beginning_of_your_to_do_history_61ef2dce": {
     "message": "Dechrau’r Hanes Tasgau i’w Gwneud"
+  },
+  "calendar_a8563bb2": {
+    "message": "Calendr:"
   },
   "calendar_event_89aadc1c": {
     "message": "Digwyddiad Calendr"
@@ -61,6 +70,12 @@
   },
   "close_d634289d": {
     "message": "Cau"
+  },
+  "close_opportunity_center_popup_9907d981": {
+    "message": "Cau neidlen y Ganolfan Gyfleoedd"
+  },
+  "count_plural_0_opportunities_one_opportunity_other_bb1698f6": {
+    "message": "{ count, plural,\n     =0 {# cyfle}\n    one {# cyfle}\n  other {# cyfle. }\n}. Cliciwch i agor neidlen y Ganolfan Gyfleoedd."
   },
   "count_plural_one_show_completed_item_other_show_co_8d0d0ae5": {
     "message": "{ count, plural,\n    one {Dangos # eitem wedi’i chwblhau }\n  other {Dangos # eitem wedi’u cwblhau}\n}"
@@ -83,11 +98,17 @@
   "date_is_required_8660ec22": {
     "message": "Mae’n rhaid rhoi dyddiad"
   },
+  "date_time_d9fbf2d7": {
+    "message": "Dyddiad ac Amser:"
+  },
   "delete_a6efa79d": {
     "message": "Dileu"
   },
   "details_98a31b68": {
     "message": "Manylion"
+  },
+  "details_a6f427c3": {
+    "message": "Manylion:"
   },
   "discussion_6719c51d": {
     "message": "Trafodaeth"
@@ -97,6 +118,12 @@
   },
   "dismiss_opportunityname_5995176f": {
     "message": "Gwrthod { opportunityName }"
+  },
+  "dismissed_8b0b1fc9": {
+    "message": "Wedi’i Ddiystyru"
+  },
+  "dismissed_opportunities_f0826640": {
+    "message": "Cyfleoedd wedi’u Diystyru"
   },
   "due_5d7267be": {
     "message": "Erbyn:"
@@ -179,6 +206,9 @@
   "loading_planner_items_947a813d": {
     "message": "Wrthi’n llwytho eitemau’r trefnydd"
   },
+  "location_3b6ff307": {
+    "message": "Lleoliad:"
+  },
   "looks_like_there_isn_t_anything_here_d9bcef49": {
     "message": "Does dim byd yma yn ôl pob golwg"
   },
@@ -191,11 +221,17 @@
   "my_grades_98834476": {
     "message": "Fy Ngraddau"
   },
+  "new_13daf639": {
+    "message": "Newydd"
+  },
   "new_activity_8b84847d": {
     "message": "Gweithgaredd Newydd"
   },
   "new_activity_for_title_14c9c3af": {
     "message": "Gweithgaredd newydd ar gyfer { title }"
+  },
+  "new_opportunities_7d349c4d": {
+    "message": "Cyfleoedd Newydd"
   },
   "next_month_749b1778": {
     "message": "Mis Nesaf"
@@ -208,6 +244,9 @@
   },
   "nothing_for_now_e3e3ce2a": {
     "message": "Dim byd am nawr"
+  },
+  "nothing_here_needs_attention_c4eaded6": {
+    "message": "Does dim byd yma angen sylw."
   },
   "nothing_more_to_do_b665da42": {
     "message": "Does Dim Byd Arall i''w Wneud"
@@ -236,6 +275,12 @@
   "page_50c4823d": {
     "message": "Tudalen"
   },
+  "peer_review_74f26a13": {
+    "message": "Adolygiad gan Gyd-fyfyrwyr"
+  },
+  "peer_review_for_itemtitle_358cb413": {
+    "message": "Adolygiadau gan Gyd-fyfyrwyr ar gyfer { itemTitle }"
+  },
   "points_bceb5005": {
     "message": "pwynt"
   },
@@ -250,6 +295,9 @@
   },
   "quiz_e0dcce8f": {
     "message": "Cwis"
+  },
+  "reminder_date_4564d12d": {
+    "message": "Nodyn atgoffa: { date }"
   },
   "replies_4a8577c8": {
     "message": "Ateb"
@@ -272,6 +320,12 @@
   "startdate_to_enddate_d245175b": {
     "message": "{ startDate } i { endDate }"
   },
+  "startdatetime_enddatetime_20abc10e": {
+    "message": "{ startDateTime } - { endDateTime }"
+  },
+  "startdatetime_endtime_49741bbe": {
+    "message": "{ startDateTime } - { endTime }"
+  },
   "starttime_to_endtime_d7cc249d": {
     "message": "{ startTime } i { endTime }"
   },
@@ -286,6 +340,9 @@
   },
   "the_date_and_time_this_to_do_is_due_74c823d4": {
     "message": "Wedi cyrraedd dyddiad ac amser cyflwyno’r dasg hon"
+  },
+  "there_are_no_points_associated_with_this_item_449c712a": {
+    "message": "Does dim pwyntiau’n gysylltiedig â’r eitem hon"
   },
   "time_2b5aac58": {
     "message": "Amser"

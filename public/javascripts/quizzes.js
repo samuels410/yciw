@@ -906,12 +906,14 @@ const lockedItems = lockManager.isChildContent() ? lockManager.getItemLocks() : 
     updateDisplayComments: function() {
       this.checkShowDetails();
       $(".question_holder > .question > .question_comment").each(function() {
-        var val = $.trim($(this).find(".question_comment_text").html());
-        $(this).css('display', '').toggleClass('empty', !val);
+        const plain = $.trim($(this).find(".question_comment_text").html());
+        const rich = $.trim($(this).find(".question_comment_html").html());
+        $(this).css('display', '').toggleClass('empty', !plain && !rich);
       });
       $(".question_holder .answer_comment_holder").each(function() {
-        var val = $.trim($(this).find(".answer_comment").html());
-        $(this).css('display', '').toggleClass('empty', !val);
+        const plain = $.trim($(this).find(".answer_comment").html());
+        const rich = $.trim($(this).find(".answer_comment_html").html());
+        $(this).css('display', '').toggleClass('empty', !plain && !rich);
       });
       $("#questions .group_top:not(#group_top_new)").each(function(){
         var pickCount = $(this).find(".pick_count").text() || 0;
@@ -3870,21 +3872,21 @@ const lockedItems = lockManager.isChildContent() ? lockManager.getItemLocks() : 
       event.preventDefault();
       RichContentEditor.callOnRCE($("#quiz_description"), 'toggle');
       //  todo: replace .andSelf with .addBack when JQuery is upgraded.
-      $(this).siblings(".toggle_description_views_link").andSelf().toggle();
+      $(this).siblings(".toggle_description_views_link").andSelf().toggle().focus();
     });
 
     $(".toggle_question_content_views_link").click(function(event) {
       event.preventDefault();
       RichContentEditor.callOnRCE($(this).parents(".question_form").find(".question_content"), 'toggle');
       //  todo: replace .andSelf with .addBack when JQuery is upgraded.
-      $(this).siblings(".toggle_question_content_views_link").andSelf().toggle();
+      $(this).siblings(".toggle_question_content_views_link").andSelf().toggle().focus();
     });
 
     $(".toggle_text_after_answers_link").click(function(event) {
       event.preventDefault();
       RichContentEditor.callOnRCE($(this).parents(".question_form").find(".text_after_answers"), 'toggle');
       //  todo: replace .andSelf with .addBack when JQuery is upgraded.
-      $(this).siblings(".toggle_text_after_answers_link").andSelf().toggle();
+      $(this).siblings(".toggle_text_after_answers_link").andSelf().toggle().focus();
     });
 
     $("#calc_helper_methods").change(function() {

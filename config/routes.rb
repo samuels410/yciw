@@ -283,7 +283,25 @@ CanvasRails::Application.routes.draw do
         get 'turnitin/:asset_string' => 'submissions#turnitin_report', as: :turnitin_report
         post 'vericite/resubmit' => 'submissions#resubmit_to_vericite', as: :resubmit_to_vericite
         get 'vericite/:asset_string' => 'submissions#vericite_report', as: :vericite_report
+        get 'audit_events' => 'submissions#audit_events', as: :audit_events
       end
+
+      get 'anonymous_submissions/:anonymous_id/originality_report/:asset_string',
+        to: 'anonymous_submissions#originality_report',
+        as: :anonymous_submission_originality_report
+      post 'anonymous_submissions/:anonymous_id/turnitin/resubmit',
+        to: 'anonymous_submissions#resubmit_to_turnitin',
+        as: :anonymous_submission_resubmit_to_turnitin
+      get 'anonymous_submissions/:anonymous_id/turnitin/:asset_string',
+        to: 'anonymous_submissions#turnitin_report',
+        as: :anonymous_submission_turnitin_report
+      post 'anonymous_submissions/:anonymous_id/vericite/resubmit',
+        to: 'anonymous_submissions#resubmit_to_vericite',
+        as: :anonymous_submission_resubmit_to_vericite
+      get 'anonymous_submissions/:anonymous_id/vericite/:asset_string',
+        to: 'anonymous_submissions#vericite_report',
+        as: :anonymous_submission_vericite_report
+
       get :rubric
       resource :rubric_association, path: :rubric do
         resources :rubric_assessments, path: :assessments
@@ -623,13 +641,15 @@ CanvasRails::Application.routes.draw do
     put 'sso_settings' => 'authentication_providers#update_sso_settings',
         as: :update_sso_settings
 
-    resources :authentication_providers, only: [:index, :create, :update, :destroy]
+    resources :authentication_providers, only: [:index, :create, :update, :destroy] do
+      get :debugging, action: :debug_data
+      put :debugging, action: :start_debugging
+      delete :debugging, action: :stop_debugging
+    end
     get 'test_ldap_connections' => 'authentication_providers#test_ldap_connection'
     get 'test_ldap_binds' => 'authentication_providers#test_ldap_bind'
     get 'test_ldap_searches' => 'authentication_providers#test_ldap_search'
     match 'test_ldap_logins' => 'authentication_providers#test_ldap_login', via: [:get, :post]
-    get 'saml_testing' => 'authentication_providers#saml_testing'
-    get 'saml_testing_stop' => 'authentication_providers#saml_testing_stop'
 
     get 'external_tools/sessionless_launch' => 'external_tools#sessionless_launch'
     resources :external_tools do
@@ -720,7 +740,7 @@ CanvasRails::Application.routes.draw do
   post 'login/cas' => 'login/cas#destroy', as: :cas_logout
   post 'login/cas/:id' => 'login/cas#destroy'
 
-  get 'login/saml' => 'login/saml#new'
+  get 'login/saml' => 'login/saml#new', as: :saml_login_base
   get 'login/saml/logout' => 'login/saml#destroy'
   # deprecated alias
   get 'saml_logout' => 'login/saml#destroy'
@@ -729,6 +749,9 @@ CanvasRails::Application.routes.draw do
   post 'login/saml' => 'login/saml#create'
   # deprecated alias; no longer advertised
   post 'saml_consume' => 'login/saml#create'
+
+  get 'login/saml_idp_discovery' => 'login/saml_idp_discovery#new'
+  get 'login/saml_idp_discovery/:id' => 'login/saml_idp_discovery#new', as: :saml_idp_discovery_login
 
   # the callback URL for all OAuth1.0a based SSO
   get 'login/oauth/callback' => 'login/oauth#create', as: :oauth_login_callback
@@ -1081,6 +1104,7 @@ CanvasRails::Application.routes.draw do
     scope(controller: :assignments_api) do
       get "courses/:course_id/assignments/gradeable_students", controller: :submissions_api, action: :multiple_gradeable_students, as: "multiple_assignments_gradeable_students"
       get 'courses/:course_id/assignments', action: :index, as: 'course_assignments'
+      get 'courses/:course_id/assignment_groups/:assignment_group_id/assignments', action: :index, as: 'course_assignment_group_assignments'
       get 'users/:user_id/courses/:course_id/assignments', action: :user_index, as: 'user_course_assignments'
       get 'courses/:course_id/assignments/:id', action: :show, as: 'course_assignment'
       post 'courses/:course_id/assignments', action: :create
@@ -1225,6 +1249,10 @@ CanvasRails::Application.routes.draw do
         post "#{context}s/:#{context}_id/create_tool_with_verification", action: :create_tool_with_verification, as: "#{context}_create_tool_with_verification"
         put "#{context}s/:#{context}_id/external_tools/:external_tool_id", action: :update, as: "#{context}_external_tools_update"
         delete "#{context}s/:#{context}_id/external_tools/:external_tool_id", action: :destroy, as: "#{context}_external_tools_delete"
+        post "#{context}s/:#{context}_id/developer_keys/:developer_key_id/create_tool", action: :create_tool_from_tool_config
+        post "#{context}s/:#{context}_id/developer_keys/:developer_key_id/create_tool", action: :create_tool_from_tool_config
+        delete "#{context}s/:#{context}_id/developer_keys/:developer_key_id/delete_tool", action: :delete_tool_from_tool_config
+        delete "#{context}s/:#{context}_id/developer_keys/:developer_key_id/delete_tool", action: :delete_tool_from_tool_config
       end
 
       get "groups/:group_id/external_tools", action: :index, as: "group_external_tools"
@@ -1262,6 +1290,7 @@ CanvasRails::Application.routes.draw do
     scope(controller: :sis_imports_api) do
       post 'accounts/:account_id/sis_imports', action: :create
       put 'accounts/:account_id/sis_imports/abort_all_pending', action: :abort_all_pending
+      get 'accounts/:account_id/sis_imports/importing', action: :importing
       get 'accounts/:account_id/sis_imports/:id', action: :show
       get 'accounts/:account_id/sis_imports', action: :index, as: "account_sis_imports"
       put 'accounts/:account_id/sis_imports/:id/abort', action: :abort
@@ -2146,6 +2175,13 @@ CanvasRails::Application.routes.draw do
 
   ApiRouteSet.draw(self, "/api/lti") do
 
+    scope(controller: 'lti/tool_configurations_api') do
+      put 'developer_keys/:developer_key_id/tool_configuration', action: :update
+      post 'accounts/:account_id/developer_keys/tool_configuration', action: :create
+      get 'developer_keys/:developer_key_id/tool_configuration', action: :show
+      delete 'developer_keys/:developer_key_id/tool_configuration', action: :destroy
+    end
+
     scope(controller: 'lti/subscriptions_api') do
       post "subscriptions", action: :create
       delete "subscriptions/:id", action: :destroy
@@ -2161,6 +2197,11 @@ CanvasRails::Application.routes.draw do
 
     scope(controller: 'lti/assignments_api') do
       get 'assignments/:assignment_id', action: :show
+    end
+
+    scope(controller: 'lti/ims/authentication') do
+      post 'authorize_redirect', action: :authorize_redirect
+      get 'authorize', action: :authorize, as: :lti_1_3_authorization
     end
 
     %w(course account).each do |context|
@@ -2225,6 +2266,12 @@ CanvasRails::Application.routes.draw do
     scope(controller: 'lti/ims/results') do
       get "courses/:course_id/line_items/:line_item_id/results/:id", action: :show, as: :lti_result_show
       get "courses/:course_id/line_items/:line_item_id/results", action: :index
+    end
+
+    # Names and Roles Provisioning (NRPS) v2 Service
+    scope(controller: 'lti/ims/names_and_roles') do
+      get "courses/:course_id/names_and_roles", controller: "lti/ims/names_and_roles", action: :course_index, as: :course_names_and_roles
+      get "groups/:group_id/names_and_roles", controller: "lti/ims/names_and_roles", action: :group_index, as: :group_names_and_roles
     end
 
     # Security
