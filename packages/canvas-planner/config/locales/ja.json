@@ -5,6 +5,9 @@
   "add_to_do_7def3c37": {
     "message": "タスクに追加"
   },
+  "address_3159962f": {
+    "message": "住所:"
+  },
   "all_day_fb42c4fc": {
     "message": "全日"
   },
@@ -50,8 +53,14 @@
   "assignmenttype_title_posted_datetime_cab69444": {
     "message": "{ assignmentType } { title }は{ datetime }を掲示しました。"
   },
+  "assignmenttype_title_reminder_datetime_33fa66d5": {
+    "message": "{ assignmentType } { title }、リマインダ{ datetime }."
+  },
   "beginning_of_your_to_do_history_61ef2dce": {
     "message": "あなたのタスク履歴の始まり"
+  },
+  "calendar_a8563bb2": {
+    "message": "カレンダー:"
   },
   "calendar_event_89aadc1c": {
     "message": "予定表のイベント"
@@ -61,6 +70,12 @@
   },
   "close_d634289d": {
     "message": "閉じる"
+  },
+  "close_opportunity_center_popup_9907d981": {
+    "message": "「機会」センターポップアップを閉じる"
+  },
+  "count_plural_0_opportunities_one_opportunity_other_bb1698f6": {
+    "message": "{ count, plural,\n     =0 {# 機会}\n    one {# 機会}\n  other {# 機会}\n}。クリックして「機会」センターポップアップを開きます。"
   },
   "count_plural_one_show_completed_item_other_show_co_8d0d0ae5": {
     "message": "{ count, plural,\n    one {表示する# （完了したアイテムを}\n  other {表示する # （完了したアイテムを）}\n}"
@@ -83,11 +98,17 @@
   "date_is_required_8660ec22": {
     "message": "日付は必須です"
   },
+  "date_time_d9fbf2d7": {
+    "message": "日付 & 時間:"
+  },
   "delete_a6efa79d": {
     "message": "削除"
   },
   "details_98a31b68": {
     "message": "詳細"
+  },
+  "details_a6f427c3": {
+    "message": "詳細:"
   },
   "discussion_6719c51d": {
     "message": "ディスカッション"
@@ -97,6 +118,12 @@
   },
   "dismiss_opportunityname_5995176f": {
     "message": "{ opportunityName }を却下する"
+  },
+  "dismissed_8b0b1fc9": {
+    "message": "却下された"
+  },
+  "dismissed_opportunities_f0826640": {
+    "message": "却下された機会"
   },
   "due_5d7267be": {
     "message": "期限："
@@ -179,6 +206,9 @@
   "loading_planner_items_947a813d": {
     "message": "プランナーアイテムをもっと読み込む"
   },
+  "location_3b6ff307": {
+    "message": "場所:"
+  },
   "looks_like_there_isn_t_anything_here_d9bcef49": {
     "message": "ここに何もないようです"
   },
@@ -191,11 +221,17 @@
   "my_grades_98834476": {
     "message": "私の成績"
   },
+  "new_13daf639": {
+    "message": "新規作成"
+  },
   "new_activity_8b84847d": {
     "message": "新規アクティビティ"
   },
   "new_activity_for_title_14c9c3af": {
     "message": "{ title }の新規アクティビティ"
+  },
+  "new_opportunities_7d349c4d": {
+    "message": "新しい機会"
   },
   "next_month_749b1778": {
     "message": "翌月"
@@ -208,6 +244,9 @@
   },
   "nothing_for_now_e3e3ce2a": {
     "message": "今のところ何もなし"
+  },
+  "nothing_here_needs_attention_c4eaded6": {
+    "message": "ここには注意を必要する新しいものは何もない。"
   },
   "nothing_more_to_do_b665da42": {
     "message": "他にタスクはありません"
@@ -236,6 +275,12 @@
   "page_50c4823d": {
     "message": "ページ"
   },
+  "peer_review_74f26a13": {
+    "message": "ピア レビュー"
+  },
+  "peer_review_for_itemtitle_358cb413": {
+    "message": "{ itemTitle }のピア評価"
+  },
   "points_bceb5005": {
     "message": "ポイント"
   },
@@ -250,6 +295,9 @@
   },
   "quiz_e0dcce8f": {
     "message": "クイズ"
+  },
+  "reminder_date_4564d12d": {
+    "message": "リマインダ（お知らせ）：{ date }"
   },
   "replies_4a8577c8": {
     "message": "返信"
@@ -272,6 +320,12 @@
   "startdate_to_enddate_d245175b": {
     "message": "{ startDate } - { endDate }"
   },
+  "startdatetime_enddatetime_20abc10e": {
+    "message": "{ startDateTime } - { endDateTime }"
+  },
+  "startdatetime_endtime_49741bbe": {
+    "message": "{ startDateTime } - { endTime }"
+  },
   "starttime_to_endtime_d7cc249d": {
     "message": "{ startTime } - { endTime }"
   },
@@ -286,6 +340,9 @@
   },
   "the_date_and_time_this_to_do_is_due_74c823d4": {
     "message": "これを行う日時が期限を過ぎています"
+  },
+  "there_are_no_points_associated_with_this_item_449c712a": {
+    "message": "このアイテムに関連付けられているポイントはありません。"
   },
   "time_2b5aac58": {
     "message": "時間"

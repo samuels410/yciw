@@ -19,7 +19,7 @@
 import $ from 'jquery'
 import React from 'react'
 import ReactDOM from 'react-dom'
-import TestUtils from 'react-addons-test-utils'
+import TestUtils from 'react-dom/test-utils'
 import DashboardCard from 'jsx/dashboard_card/DashboardCard'
 import CourseActivitySummaryStore from 'jsx/dashboard_card/CourseActivitySummaryStore'
 import assertions from 'helpers/assertions'
@@ -47,6 +47,8 @@ QUnit.module('DashboardCard', {
       id: '1',
       backgroundColor: '#EF4437',
       image: null,
+      connectDragSource: c => c,
+      connectDropTarget: c => c
     }
     return sandbox.stub(CourseActivitySummaryStore, 'getStateForCourse').returns({})
   },

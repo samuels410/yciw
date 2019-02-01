@@ -21,7 +21,9 @@ import $ from 'jquery'
 import axios from 'axios'
 import parseLinkHeader from '../../shared/parseLinkHeader'
 
-const actions = {}
+import ltiKeyActions from './ltiKeyActions'
+
+const actions = {...ltiKeyActions}
 
 actions.LIST_DEVELOPER_KEYS_START = 'LIST_DEVELOPER_KEYS_START'
 actions.listDeveloperKeysStart = payload => ({type: actions.LIST_DEVELOPER_KEYS_START, payload})
@@ -179,8 +181,8 @@ actions.editDeveloperKey = payload => dispatch => {
 }
 
 actions.DEVELOPER_KEYS_MODAL_OPEN = 'DEVELOPER_KEYS_MODAL_OPEN'
-actions.developerKeysModalOpen = () => {
-  window.location.hash = "key_modal_opened"
+actions.developerKeysModalOpen = (type = 'api') => {
+  window.location.hash = `${type}_key_modal_opened`
   return {type: actions.DEVELOPER_KEYS_MODAL_OPEN}
 }
 

@@ -187,6 +187,7 @@ describe ContentMigration do
       @assignment.omit_from_final_grade = true
       @assignment.only_visible_to_overrides = true
       @assignment.post_to_sis = true
+      @assignment.allowed_attempts = 10
 
       @assignment.save!
 
@@ -196,7 +197,7 @@ describe ContentMigration do
       attrs = [:turnitin_enabled, :vericite_enabled, :turnitin_settings, :peer_reviews,
           :automatic_peer_reviews, :anonymous_peer_reviews,
           :grade_group_students_individually, :allowed_extensions,
-          :position, :peer_review_count, :omit_from_final_grade, :post_to_sis]
+          :position, :peer_review_count, :omit_from_final_grade, :post_to_sis, :allowed_attempts]
 
       run_course_copy
 
@@ -210,6 +211,59 @@ describe ContentMigration do
       end
       expect(new_assignment.muted).to be_falsey
       expect(new_assignment.only_visible_to_overrides).to be_falsey
+    end
+
+    describe "allowed_attempts copying" do
+      it "copies nil over properly" do
+        assignment_model(course: @copy_from, points_possible: 40, submission_types: 'file_upload', grading_type: 'points')
+        @assignment.allowed_attempts = nil
+        @assignment.save!
+
+        run_course_copy
+        new_assignment = @copy_to.assignments.where(migration_id: mig_id(@assignment)).last
+        expect(new_assignment.allowed_attempts).to be_nil
+      end
+
+      it "copies -1 over properly" do
+        assignment_model(course: @copy_from, points_possible: 40, submission_types: 'file_upload', grading_type: 'points')
+        @assignment.allowed_attempts = -1
+        @assignment.save!
+
+        run_course_copy
+        new_assignment = @copy_to.assignments.where(migration_id: mig_id(@assignment)).last
+        expect(new_assignment.allowed_attempts).to eq(-1)
+      end
+
+      it "copies values > 0 over properly" do
+        assignment_model(course: @copy_from, points_possible: 40, submission_types: 'file_upload', grading_type: 'points')
+        @assignment.allowed_attempts = 3
+        @assignment.save!
+
+        run_course_copy
+        new_assignment = @copy_to.assignments.where(migration_id: mig_id(@assignment)).last
+        expect(new_assignment.allowed_attempts).to eq(3)
+      end
+    end
+
+    it "should copy other feature-dependent assignment attributes" do
+      assignment_model(:course => @copy_from)
+      @assignment.moderated_grading = true
+      @assignment.grader_count = 2
+      @assignment.grader_comments_visible_to_graders = true
+      @assignment.anonymous_grading = true
+      @assignment.graders_anonymous_to_graders = true
+      @assignment.grader_names_visible_to_final_grader = true
+      @assignment.anonymous_instructor_annotations = true
+      @assignment.save!
+
+      run_course_copy
+
+      new_assignment = @copy_to.assignments.where(migration_id: mig_id(@assignment)).first
+      [:moderated_grading, :grader_count, :grader_comments_visible_to_graders,
+        :anonymous_grading, :graders_anonymous_to_graders, :grader_names_visible_to_final_grader,
+        :anonymous_instructor_annotations].each do |attr|
+        expect(new_assignment.send(attr)).to eq @assignment.send(attr)
+      end
     end
 
     it "shouldn't copy turnitin/vericite_enabled if it's not enabled on the copyee's account" do
@@ -592,6 +646,18 @@ describe ContentMigration do
         expect(to_override.due_at).to eq due_at
         expect(to_override.due_at_overridden).to eq true
         expect(to_override.unlock_at_overridden).to eq false
+      end
+
+      it "preserves only_visible_to_overrides for page assignments" do
+        a1 = assignment_model(context: @copy_from, title: 'a1', submission_types: 'wiki_page', only_visible_to_overrides: true)
+        a1.build_wiki_page(title: a1.title, context: a1.context).save!
+        a2 = assignment_model(context: @copy_from, title: 'a2', submission_types: 'wiki_page', only_visible_to_overrides: false)
+        a2.build_wiki_page(title: a2.title, context: a2.context).save!
+        run_course_copy
+        a1_to = @copy_to.assignments.where(migration_id: mig_id(a1)).take
+        expect(a1_to.only_visible_to_overrides).to eq true
+        a2_to = @copy_to.assignments.where(migration_id: mig_id(a2)).take
+        expect(a2_to.only_visible_to_overrides).to eq false
       end
     end
 

@@ -16,6 +16,19 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 %>
 
+
+<% if @context.root_account.feature_enabled?(:assignments_2) && value_to_boolean(params[:assignments_2]) %>
+  <% if can_do(@context, @current_user, :read_as_admin) %>
+    <% js_bundle :assignments_2_show_teacher %>
+
+  <% else %>
+
+    <% css_bundle :assignments_2_student %>
+    <% js_bundle :assignments_2_show_student %>
+  <% end %>
+  <div id="assignments_2"></div>
+<% else %>
+
 <%
   content_for :page_title, @assignment.new_record? ? t(:new_assignment, "New Assignment") : @assignment.title
   content_for :right_side, render(:partial => "assignment_sidebar")
@@ -48,6 +61,9 @@
         </h1>
       </div>
       <div class='assignment-buttons'>
+        <% if @context.root_account.feature_enabled?(:assignments_2) %>
+          <a id="toggle_assignments_2" class="btn" href="<%= course_assignment_path(@context, @assignment)%>?assignments_2=true"><%= t("Assignments 2") %></a>
+        <% end %>
         <button
           id="assignment_publish_button"
           data-id='<%= @assignment.id %>'
@@ -57,7 +73,7 @@
           <a href="<%= edit_polymorphic_path([@context, @assignment]) %>" class='btn edit_assignment_link<%= ' disabled' unless can_do(@assignment, @current_user, :update) %>'>
             <i class='icon-edit'></i> <%= t('links.edit', 'Edit') %>
             <% unless can_do(@assignment, @current_user, :update) %>
-              <span class="screenreader-only">You are not the selected moderator for this assignment</span>
+              <span class="screenreader-only">You do not have permissions to edit this moderated assignment</span>
             <% end %>
           </a>
         <% end %>
@@ -93,6 +109,9 @@
         </h1>
       </div>
       <div class='assignment-buttons'>
+        <% if @context.root_account.feature_enabled?(:assignments_2) %>
+          <a id="toggle_assignments_2" class="btn" href="<%= course_assignment_path(@context, @assignment)%>?assignments_2=true"><%= t("Assignments 2") %></a>
+        <% end %>
         <%= render "shared/mark_as_done" %>
         <%= assignment_submission_button(@assignment, @current_user, @current_user_submission) %>
       </div>
@@ -132,6 +151,16 @@
           </li>
         <% end %>
       <% end %>
+      <% if @assignment.allowed_attempts&.> 0 %>
+        <li>
+          <span class='title'><%= t :attempts, 'Attempts' %></span>
+          <span class='value'><%= @current_user_submission&.attempt || 0 %></span>
+        </li>
+        <li>
+          <span class='title'><%= t :allowed_attempts, 'Allowed Attempts' %></span>
+          <span class='value'><%= @assignment.allowed_attempts + (@current_user_submission&.extra_attempts || 0) %></span>
+        </li>
+      <% end %>
       <%= render :partial => "shared/available_dates", :locals => {:association => @assignment} %>
       <div class="clear"></div>
     </ul>
@@ -170,6 +199,14 @@
             <div class="control-label"><%= t :submission_types, 'File Types' %></div>
             <div class="controls">
               <span class="value"><%= @assignment.allowed_extensions.to_sentence %></span>
+            </div>
+          </div>
+        <% end -%>
+        <% if @assignment.allowed_attempts&.> 0 %>
+          <div class="control-group">
+            <div class="control-label"><%= t :allowed_attempts, 'Allowed Attempts' %></div>
+            <div class="controls">
+              <span class="value"><%= @assignment.allowed_attempts %></span>
             </div>
           </div>
         <% end -%>
@@ -239,3 +276,5 @@
 <% end %>
 
 <%= render partial: "shared/rubrics_component" %>
+
+<% end %>

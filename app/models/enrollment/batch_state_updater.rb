@@ -43,31 +43,30 @@ class Enrollment::BatchStateUpdater
     raise ArgumentError, 'Cannot call with more than 1000 enrollments' if batch.count > 1000
     Enrollment.transaction do
       # cache some data before the destroy that is needed after the destroy
-      invited_user_ids = Enrollment.where(id: batch, workflow_state: 'invited').distinct.pluck(:user_id)
-      students = Enrollment.of_student_type.where(id: batch).preload(user: :linked_observers).to_a
-      students.each{|e| e.workflow_state = 'deleted'; e.readonly!}
-      user_course_tuples = Enrollment.where(id: batch).active.select(%i(user_id course_id)).distinct.to_a
-      user_ids = Enrollment.where(id: batch).order(:user_id).distinct.pluck(:user_id)
-      courses = Course.where(id: Enrollment.where(id: batch).select(:course_id).distinct).to_a
-      root_account = courses.first.root_account
-      data = mark_enrollments_as_deleted(batch, sis_batch: sis_batch, batch_mode: batch_mode)
-      gms = remove_group_memberships(batch, courses, user_ids, sis_batch: sis_batch, batch_mode: batch_mode)
-      data&.push(*gms) if gms
+      @invited_user_ids = Enrollment.where(id: batch, workflow_state: 'invited').distinct.pluck(:user_id)
+      @students = Enrollment.of_student_type.where(id: batch).preload({user: :linked_observers}, :root_account).to_a
+      @students.each{|e| e.workflow_state = 'deleted'; e.readonly!}
+      @user_course_tuples = Enrollment.where(id: batch).active.select(%i(user_id course_id)).distinct.to_a
+      @user_ids = Enrollment.where(id: batch).order(:user_id).distinct.pluck(:user_id)
+      @courses = Course.where(id: Enrollment.where(id: batch).select(:course_id).distinct).to_a
+      @root_account = @courses.first.root_account
+      @data = mark_enrollments_as_deleted(batch, sis_batch: sis_batch, batch_mode: batch_mode)
+      gms = remove_group_memberships(batch, @courses, @user_ids, sis_batch: sis_batch, batch_mode: batch_mode)
+      @data&.push(*gms) if gms
       # touch users after removing group_memberships to invalidate the cache.
-      touch_and_update_associations(user_ids)
-      clear_email_caches(invited_user_ids) unless invited_user_ids.empty?
-      cancel_future_appointments(courses, user_ids)
-      disassociate_cross_shard_users(user_ids)
-      update_linked_enrollments(students)
-      touch_all_graders_if_needed(students)
-      reset_notifications_cache(user_course_tuples)
-      update_assignment_overrides(batch, courses, user_ids)
-      needs_grading_count_updated(courses)
-      recache_all_course_grade_distribution(courses)
-      update_cached_due_dates(students, root_account)
-      return data if sis_batch
-      batch.count
+      cancel_future_appointments(@courses, @user_ids)
+      disassociate_cross_shard_users(@user_ids)
     end
+    update_linked_enrollments(@students)
+    update_assignment_overrides(batch, @courses, @user_ids)
+    touch_and_update_associations(@user_ids)
+    clear_email_caches(@invited_user_ids) unless @invited_user_ids.empty?
+    needs_grading_count_updated(@courses)
+    recache_all_course_grade_distribution(@courses)
+    update_cached_due_dates(@students, @root_account)
+    reset_notifications_cache(@user_course_tuples)
+    touch_all_graders_if_needed(@students)
+    sis_batch ? @data : batch.count
   end
 
   # bulk version of Enrollment.destroy
@@ -77,7 +76,7 @@ class Enrollment::BatchStateUpdater
     updates[sis_batch_id: sis_batch.id] if sis_batch
     Enrollment.where(id: batch).update_all(updates)
     EnrollmentState.where(enrollment_id: batch).update_all(state: 'deleted', state_valid_until: nil)
-    Score.where(enrollment_id: batch).update_all(workflow_state: 'deleted', updated_at: Time.zone.now)
+    Score.where(enrollment_id: batch).order(:id).update_all(workflow_state: 'deleted', updated_at: Time.zone.now)
     data
   end
 
@@ -135,10 +134,11 @@ class Enrollment::BatchStateUpdater
 
   def self.touch_all_graders_if_needed(students)
     courses_to_touch_admins = students.map(&:course_id).uniq
-    Enrollment.connection.after_transaction_commit do
-      User.where(id: Enrollment.where(course_id: courses_to_touch_admins,
-                                      type: ['TeacherEnrollment', 'TaEnrollment', 'DesignerEnrollment']).
-        active.select(:user_id)).touch_all
+    admin_ids = Enrollment.where(course_id: courses_to_touch_admins,
+      type: ['TeacherEnrollment', 'TaEnrollment', 'DesignerEnrollment']).
+      active.distinct.pluck(:user_id).sort
+    admin_ids.each_slice(1000) do |sliced_admin_ids|
+      User.where(id: sliced_admin_ids).touch_all
     end
   end
 
@@ -174,11 +174,15 @@ class Enrollment::BatchStateUpdater
     end
   end
 
-  def self.update_cached_due_dates(students, root_account)
+  def self.update_cached_due_dates(students, root_account, updating_user: nil)
     students.group_by(&:course_id).each do |course, studs|
-      DueDateCacher.recompute_users_for_course(studs.map(&:user_id), course, nil,
-                                               singleton: ('EnrollmentBatchStateUpdater_' +
-                                                 root_account.global_id.to_s))
+      DueDateCacher.recompute_users_for_course(
+        studs.map(&:user_id),
+        course,
+        nil,
+        singleton: ('EnrollmentBatchStateUpdater_' + root_account.global_id.to_s),
+        executing_user: updating_user
+      )
     end
   end
 
@@ -188,7 +192,7 @@ class Enrollment::BatchStateUpdater
     raise ArgumentError, 'Cannot call with more than 1000 enrollments' if batch.count > 1_000
     Enrollment.transaction do
       EnrollmentState.send_later_if_production(:force_recalculation, batch)
-      students = Enrollment.of_student_type.where(id: batch).preload(user: :linked_observers).to_a
+      students = Enrollment.of_student_type.where(id: batch).preload({user: :linked_observers}, :root_account).to_a
       user_ids = Enrollment.where(id: batch).distinct.pluck(:user_id)
       courses = Course.where(id: Enrollment.where(id: batch).select(:course_id).distinct).to_a
       root_account = courses.first.root_account

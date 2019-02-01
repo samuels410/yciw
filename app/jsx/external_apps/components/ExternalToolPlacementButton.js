@@ -20,31 +20,19 @@ import _ from 'underscore'
 import I18n from 'i18n!external_tools'
 import React from 'react'
 import PropTypes from 'prop-types'
-import ReactModal from 'react-modal'
+import Modal from '../../shared/components/InstuiModal'
 import store from '../../external_apps/lib/ExternalAppsStore'
 import 'compiled/jquery.rails_flash_notifications'
-
-const modalOverrides = {
-  overlay: {
-    backgroundColor: 'rgba(0,0,0,0.5)'
-  },
-  content: {
-    position: 'static',
-    top: '0',
-    left: '0',
-    right: 'auto',
-    bottom: 'auto',
-    borderRadius: '0',
-    border: 'none',
-    padding: '0'
-  }
-}
+import ModalBody from '@instructure/ui-overlays/lib/components/Modal/ModalBody';
+import ModalFooter from '@instructure/ui-overlays/lib/components/Modal/ModalFooter';
+import Button from '@instructure/ui-buttons/lib/components/Button';
 
 export default class ExternalToolPlacementButton extends React.Component {
   static propTypes = {
     tool: PropTypes.object.isRequired,
     type: PropTypes.string, // specify "button" if this is not a menu item
-    onClose: PropTypes.func
+    onClose: PropTypes.func,
+    returnFocus: PropTypes.func.isRequired
   }
 
   state = {
@@ -83,6 +71,7 @@ export default class ExternalToolPlacementButton extends React.Component {
     this.setState({modalIsOpen: false}, () => {
       if (this.props.onClose) this.props.onClose()
     })
+    this.props.returnFocus()
   }
 
   placements = () => {
@@ -129,51 +118,19 @@ export default class ExternalToolPlacementButton extends React.Component {
   }
 
   getModal = () => (
-    <ReactModal
+    <Modal
       ref="reactModal"
-      isOpen={this.state.modalIsOpen}
-      onRequestClose={this.closeModal}
-      style={modalOverrides}
-      className="ReactModal__Content--canvas ReactModal__Content--mini-modal"
-      overlayClassName="ReactModal__Overlay--canvas"
+      open={this.state.modalIsOpen}
+      onDismiss={this.closeModal}
+      label={I18n.t('App Placements')}
     >
-      <div id={`${this.state.tool.name}Heading`} className="ReactModal__Layout">
-        <div className="ReactModal__Header">
-          <div className="ReactModal__Header-Title">
-            <h4 tabIndex="-1">{I18n.t('App Placements')}</h4>
-          </div>
-          <div className="ReactModal__Header-Actions">
-            <button
-              className="Button Button--icon-action"
-              type="button"
-              ref="closex"
-              onClick={this.closeModal}
-            >
-              <i className="icon-x" />
-              <span className="screenreader-only">Close</span>
-            </button>
-          </div>
-        </div>
-        <div tabIndex="-1" className="ReactModal__Body">
-          <div id={`${this.state.tool.name.replace(/\s/g, '')}Placements`}>
-            {this.placements() || I18n.t('No Placements Enabled')}
-          </div>
-        </div>
-        <div className="ReactModal__Footer">
-          <div className="ReactModal__Footer-Actions">
-            <button
-              ref="btnClose"
-              type="button"
-              className="btn btn-default"
-              id={`close${this.state.tool.name}`}
-              onClick={this.closeModal}
-            >
-              {I18n.t('Close')}
-            </button>
-          </div>
-        </div>
-      </div>
-    </ReactModal>
+      <ModalBody>
+        {this.placements() || I18n.t('No Placements Enabled')}
+      </ModalBody>
+      <ModalFooter>
+        <Button onClick={this.closeModal}>{I18n.t('Close')}</Button>
+      </ModalFooter>
+    </Modal>
   )
 
   getButton = () => {

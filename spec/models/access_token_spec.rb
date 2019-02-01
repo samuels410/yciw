@@ -17,6 +17,7 @@
 #
 
 require File.expand_path(File.dirname(__FILE__) + '/../spec_helper.rb')
+require File.expand_path(File.dirname(__FILE__) + '/../sharding_spec_helper')
 
 describe AccessToken do
 
@@ -167,6 +168,41 @@ describe AccessToken do
     end
   end
 
+  describe "visible tokens" do
+    specs_require_sharding
+    it "only displays integrations from non-internal developer keys" do
+      user = User.create!
+      trustedkey = DeveloperKey.create!(internal_service: true)
+      trusted_access_token = user.access_tokens.create!({developer_key: trustedkey})
+
+      untrustedkey = DeveloperKey.create!()
+      third_party_access_token = user.access_tokens.create!({developer_key: untrustedkey})
+
+      expect(AccessToken.visible_tokens(user.access_tokens).length).to eq 1
+      expect(AccessToken.visible_tokens(user.access_tokens).first.id).to eq third_party_access_token.id
+    end
+
+    it "access token and developer key scoping work cross-shard" do
+      trustedkey = DeveloperKey.new(internal_service: true)
+      untrustedkey = DeveloperKey.new()
+
+      @shard1.activate do
+        trustedkey.save!
+        untrustedkey.save!
+      end
+
+      @shard2.activate do
+        user = User.create!
+        trusted_access_token = user.access_tokens.create!({developer_key: trustedkey})
+        third_party_access_token = user.access_tokens.create!({developer_key: untrustedkey})
+        user.save!
+
+        expect(AccessToken.visible_tokens(user.access_tokens).length).to eq 1
+        expect(AccessToken.visible_tokens(user.access_tokens).first.id).to eq third_party_access_token.id
+      end
+    end
+  end
+
   describe "token scopes" do
     let_once(:token) do
       token = AccessToken.new
@@ -203,7 +239,6 @@ describe AccessToken do
       dk = DeveloperKey.create!(scopes: dk_scopes, require_scopes: true)
       token = AccessToken.new(developer_key: dk, scopes: dk_scopes)
       dk.update!(scopes: [])
-      allow(dk.owner_account).to receive(:feature_enabled?).with(:developer_key_management_and_scoping).and_return(true)
       expect { token.destroy! }.not_to raise_error
     end
   end
@@ -254,6 +289,7 @@ describe AccessToken do
       @foreign_ac = Account.create!
 
       @dk = DeveloperKey.create!(account: @ac)
+      enable_developer_key_account_binding! @dk
       @at = AccessToken.create!(:user => user_model, :developer_key => @dk)
 
       @dk_without_account = DeveloperKey.create!
@@ -280,8 +316,8 @@ describe AccessToken do
       expect(@at.authorized_for_account?(@foreign_ac)).to be false
     end
 
-    it "foreign account should be authorized if there is no account" do
-      expect(@at_without_account.authorized_for_account?(@foreign_ac)).to be true
+    it "foreign account should not be authorized if there is no account" do
+      expect(@at_without_account.authorized_for_account?(@foreign_ac)).to be false
     end
 
     context 'when the developer key new feature flags are on' do
@@ -292,12 +328,6 @@ describe AccessToken do
         account = account_model
         account.update!(root_account: root_account)
         account
-      end
-
-      before do
-        allow_any_instance_of(Account).to receive(:feature_enabled?).and_return(false)
-        allow_any_instance_of(Account).to receive(:feature_enabled?).with(:developer_key_management_and_scoping) { true }
-        Setting.set(Setting::SITE_ADMIN_ACCESS_TO_NEW_DEV_KEY_FEATURES, 'true')
       end
 
       shared_examples_for 'an access token that honors developer key bindings' do
@@ -395,7 +425,6 @@ describe AccessToken do
 
       before do
         allow_any_instance_of(Account).to receive(:feature_enabled?).and_return(false)
-        allow_any_instance_of(Account).to receive(:feature_enabled?).with(:developer_key_management_and_scoping) { true }
       end
 
       it 'is invalid when scopes requested are not included on dev key' do

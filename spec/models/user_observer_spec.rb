@@ -60,6 +60,20 @@ describe UserObservationLink do
     expect(re_observee).to eq student.as_student_observation_links.first
   end
 
+  it 'should create an observees when there is bad data' do
+    observer = user_with_pseudonym
+    course1 = course_factory
+    course2 = course_factory
+    section = course1.course_sections.create!(name: 'x-list')
+    section.crosslist_to_course(course2)
+    student_enroll = section.enroll_user(student, 'StudentEnrollment', 'active')
+    UserObservationLink.create_or_restore(observer: observer, student: student, root_account: Account.default)
+    # make some bad data
+    Enrollment.where(id: student_enroll.id).update_all(course_id: course1.id)
+    re_observee = UserObservationLink.create_or_restore(observer: observer, student: student, root_account: Account.default)
+    expect(re_observee).to eq student.as_student_observation_links.first
+  end
+
   it "should enroll the observer in all pending/active courses and restore them after destroy" do
     c1 = course_factory(active_all: true)
     e1 = student_in_course(:course => c1, :user => student)
@@ -199,6 +213,19 @@ describe UserObservationLink do
         UserObservationLink.create_or_restore(observer: parent, student: student, root_account: Account.default)
       end
       expect(parent.enrollments.shard(parent).first.course).to eq course
+    end
+
+    it "creates enrollments for trusted accounts" do
+      @shard2.activate do
+        @other_account = Account.create!
+        @parent = user_with_pseudonym(account: @other_account, active_all: true)
+        UserObservationLink.create_or_restore(observer: @parent, student: student, root_account: @other_account)
+      end
+      pseudonym(@parent, :account => Account.default)
+      allow_any_instantiation_of(Account.default).to receive(:trusted_account_ids).and_return([@other_account.id])
+      course_factory(active_all: true)
+      student_in_course(course: @course, user: student, active_all: true)
+      expect(@parent.enrollments.shard(@parent).first.course).to eq @course
     end
   end
 

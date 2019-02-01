@@ -1304,7 +1304,7 @@ input[type="tel"], input[type="color"], .uneditable-input {
 
 // special styles for select
 select.ic-Input, input[type="file"].ic-Input {
-  padding: 0 0 0 $ic-sp;
+  padding: direction-sides(0 0 0 $ic-sp);
 }
 
 // special styles for textarea
@@ -1315,7 +1315,7 @@ textarea.ic-Input {
 
 // We removed -webkit-appearance from anything with the
 // .ic-Input class, to give us more styling control.
-// This makes the select's caret disappear in IE Edge and Webkit.
+// This makes the select's caret disappear.
 // So we add it back in with these hacks.
 
 @mixin add-arrow-for-webkit-and-ie-edge($bg-position-x) {
@@ -1324,11 +1324,11 @@ textarea.ic-Input {
   background-repeat: no-repeat;
   background-size: 10px 5.667px;
   background-position: $bg-position-x 50%;
-  padding: 0 $ic-sp*2 0 $ic-sp;
+  padding: direction-sides(0 $ic-sp*2 0 $ic-sp);
 }
 
-// webkit hack
-select.ic-Input:not(*:root) {
+// non-Edge hack
+select.ic-Input {
   @include add-arrow-for-webkit-and-ie-edge( calc(100% - #{$ic-sp - 4}) );
 }
 
@@ -1349,7 +1349,7 @@ select.ic-Input:not(*:root) {
       .ic-Form-actions {
         margin-top: 0;
         border: none;
-        padding: 0 0 0 $ic-sp;
+        padding: direction-sides(0 0 0 $ic-sp);
         background: transparent;
       }
       .ic-Form-control:not(.ic-Form-control--checkbox):not(.ic-Form-control--radio),
@@ -1487,7 +1487,7 @@ select.ic-Input:not(*:root) {
   position: relative;
   display: flex;
   align-items: center;
-  padding: ($ic-sp - 4) ($ic-sp - 4) ($ic-sp - 4) 0;
+  padding: direction-sides(($ic-sp - 4) ($ic-sp - 4) ($ic-sp - 4) 0);
   @include fontSize($ic-font-size--xsmall);
   line-height: 1.2;
   color: $ic-color-light;

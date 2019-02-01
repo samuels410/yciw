@@ -46,69 +46,6 @@ describe "dashboard" do
       })
     end
 
-    def test_hiding(url)
-      create_announcement
-      items = @user.stream_item_instances
-      expect(items.size).to eq 1
-      expect(items.first.hidden).to eq false
-
-      get url
-      if url =='/'
-        f('#DashboardOptionsMenu_Container button').click
-        fj('span[role="menuitemradio"]:contains("Recent Activity")').click
-      end
-      click_recent_activity_header
-      item_selector = '#announcement-details tbody tr'
-      expect(ff(item_selector).size).to eq 1
-      f('#announcement-details .ignore-item').click
-      expect(f("#content")).not_to contain_css(item_selector)
-
-      # should still be gone on reload
-      get url
-      if url =='/'
-        f('#DashboardOptionsMenu_Container button').click
-        fj('span[role="menuitemradio"]:contains("Recent Activity")').click
-      end
-      expect(f("#content")).not_to contain_css(item_selector)
-
-      expect(@user.recent_stream_items.size).to eq 0
-      expect(items.first.reload.hidden).to eq true
-    end
-
-    it_should_behave_like 'load events list'
-
-    it "should allow hiding a stream item on the dashboard", priority: "1", test_id: 215577 do
-      test_hiding("/")
-    end
-
-    it "should allow hiding a stream item on the course page", priority: "1", test_id: 215578 do
-      test_hiding("/courses/#{@course.to_param}")
-    end
-
-    it "should not show stream items for deleted objects", priority: "1", test_id: 215579 do
-      enable_cache do
-        announcement = create_announcement
-        item_selector = '#announcement-details tbody tr'
-        Timecop.freeze(5.minutes.ago) do
-          items = @user.stream_item_instances
-          expect(items.size).to eq 1
-          expect(items.first.hidden).to eq false
-
-          get "/"
-          f('#DashboardOptionsMenu_Container button').click
-          fj('span[role="menuitemradio"]:contains("Recent Activity")').click
-
-          click_recent_activity_header
-          expect(ff(item_selector).size).to eq 1
-        end
-
-        announcement.destroy
-
-        get "/"
-        expect(f('.no_recent_messages')).to include_text('No Recent Messages')
-      end
-    end
-
     it "should not show announcement stream items without permissions" do
       @course.account.role_overrides.create!(:role => student_role,
                                              :permission => 'read_announcements',
@@ -266,9 +203,9 @@ describe "dashboard" do
       it "should display course name in course menu", priority: "1", test_id: 215586 do
         f('#global_nav_courses_link').click
         expect(driver.current_url).not_to match(/\/courses$/)
-        expect(fj("[aria-label='Global navigation tray'] h2:contains('Courses')")).to be_displayed
+        expect(fj("[aria-label='Courses tray'] h2:contains('Courses')")).to be_displayed
         wait_for_ajax_requests
-        expect(fj("[aria-label='Global navigation tray'] a:contains('#{@course.name}')")).to be_displayed
+        expect(fj("[aria-label='Courses tray'] a:contains('#{@course.name}')")).to be_displayed
       end
 
       it "should display student groups in header nav", priority: "2", test_id: 215587 do
@@ -282,10 +219,10 @@ describe "dashboard" do
         get "/"
 
         f('#global_nav_groups_link').click
-        expect(fj("[aria-label='Global navigation tray'] h2:contains('Groups')")).to be_displayed
+        expect(fj("[aria-label='Groups tray'] h2:contains('Groups')")).to be_displayed
         wait_for_ajax_requests
 
-        list = fj("[aria-label='Global navigation tray']")
+        list = fj("[aria-label='Groups tray']")
         expect(list).to include_text(group.name)
         expect(list).to_not include_text(other_group.name)
       end
@@ -296,7 +233,7 @@ describe "dashboard" do
 
       it "should go to a course when clicking a course link from the menu", priority: "1", test_id: 215614 do
         f('#global_nav_courses_link').click
-        fj("[aria-label='Global navigation tray'] li a:contains('#{@course.name}')").click
+        fj("[aria-label='Courses tray'] li a:contains('#{@course.name}')").click
         expect(driver.current_url).to match "/courses/#{@course.id}"
       end
     end
@@ -380,8 +317,8 @@ describe "dashboard" do
       get "/"
 
       f('#global_nav_courses_link').click
-      expect(fj("[aria-label='Global navigation tray'] h2:contains('Courses')")).to be_displayed
-      expect(f("[aria-label='Global navigation tray']")).not_to include_text(c1.name)
+      expect(fj("[aria-label='Courses tray'] h2:contains('Courses')")).to be_displayed
+      expect(f("[aria-label='Courses tray']")).not_to include_text(c1.name)
     end
 
     it "should show recent feedback and it should work", priority: "1", test_id: 216373 do
@@ -417,7 +354,7 @@ describe "dashboard" do
         course_with_teacher({:user => @user, :active_course => true, :active_enrollment => true})
         get "/"
         f('#global_nav_courses_link').click
-        expect(fj('[aria-label="Global navigation tray"] a:contains("All Courses")')).to be_present
+        expect(fj('[aria-label="Courses tray"] a:contains("All Courses")')).to be_present
       end
     end
   end

@@ -162,6 +162,27 @@ describe Attachment do
       expect(blob["moderated_grading_whitelist"]).to include(student.moderated_grading_ids.as_json)
     end
 
+    it "should always enable annotations when creating a crocodoc url" do
+      crocodocable_attachment_model
+      @attachment.submit_to_crocodoc
+
+      url = Rack::Utils.parse_nested_query(@attachment.crocodoc_url(user, {}).sub(/^.*\?{1}/, ""))
+      blob = extract_blob(url["hmac"], url["blob"],
+                          "user_id" => user.id,
+                          "type" => "crocodoc")
+
+      expect(blob["enable_annotations"]).to be(true)
+    end
+
+    it "should not modify the options reference given to create a crocodoc url" do
+      crocodocable_attachment_model
+      @attachment.submit_to_crocodoc
+
+      url_opts = {}
+      @attachment.crocodoc_url(user, url_opts)
+      expect(url_opts).to eql({})
+    end
+
     it "should submit to crocodoc" do
       crocodocable_attachment_model
       expect(@attachment.crocodoc_available?).to be_falsey
@@ -682,7 +703,19 @@ describe Attachment do
       allow(Attachment).to receive(:s3_storage?).and_return(true)
       expect_any_instance_of(Attachment).to receive(:make_rootless).once
       expect_any_instance_of(Attachment).to receive(:change_namespace).once
-      a.clone_for(c2)
+      a2 = a.clone_for(c2)
+    end
+
+    it "should create thumbnails for images on clone" do
+      c = course_factory
+      a = attachment_model(filename: "blech.jpg", context: c, content_type: 'image/jpg')
+      new_account = Account.create
+      c2 = course_factory(account: new_account)
+      allow(Attachment).to receive(:s3_storage?).and_return(true)
+      expect_any_instance_of(Attachment).to receive(:copy_attachment_content).once
+      expect_any_instance_of(Attachment).to receive(:change_namespace).once
+      expect_any_instance_of(Attachment).to receive(:create_thumbnail_size).once
+      a2 = a.clone_for(c2)
     end
 
     it "should link the thumbnail" do
@@ -926,6 +959,14 @@ describe Attachment do
       expect(@a.display_name).to eq 'a1-1'
     end
 
+    it "rename itself after collision on restoration" do
+      @a1.destroy!
+      @a.display_name = @a1.display_name
+      @a.save!
+      @a1.restore
+      expect(@a1.reload.display_name).to eq "#{@a.display_name}-1"
+    end
+
     it "should update ContentTags when overwriting" do
       mod = @course.context_modules.create!(:name => "some module")
       tag1 = mod.add_item(:id => @a1.id, :type => 'attachment')
@@ -1106,9 +1147,9 @@ describe Attachment do
       attachment.public_download_url
     end
 
-    it "should sanitize filename with iconv" do
+    it "should transliterate filename with i18n" do
       a = attachment_with_context(@course, :display_name => "糟糕.pdf")
-      sanitized_filename = Iconv.conv("ASCII//TRANSLIT//IGNORE", "UTF-8", a.display_name)
+      sanitized_filename = I18n.transliterate(a.display_name, replacement: '_')
       allow(a).to receive(:authenticated_s3_url)
       expect(a).to receive(:authenticated_s3_url).with(include(:response_content_disposition => %(attachment; filename="#{sanitized_filename}"; filename*=UTF-8''%E7%B3%9F%E7%B3%95.pdf)))
       a.public_download_url
@@ -1258,6 +1299,12 @@ describe Attachment do
       allow(@attachment).to receive(:open).and_raise(IOError)
       @attachment.infer_encoding
       expect(@attachment.encoding).to eq nil
+
+      # work across split bytes
+      allow(Attachment).to receive(:read_file_chunk_size).and_return(1)
+      attachment_model(:uploaded_data => stub_png_data('blank.txt', "\xc2\xa9 2011"))
+      @attachment.infer_encoding
+      expect(@attachment.encoding).to eq 'UTF-8'
     end
   end
 

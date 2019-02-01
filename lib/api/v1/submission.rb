@@ -38,6 +38,8 @@ module Api::V1::Submission
             quiz_submission_attempt_json(ver.model, assignment, current_user, session, context, params)
           end
         end
+      elsif quizzes_next_submission?(submission)
+        hash['submission_history'] = quizzes_next_submission_history(submission)
       else
         histories = submission.submission_history
         if includes.include?("group")
@@ -112,7 +114,7 @@ module Api::V1::Submission
 
   SUBMISSION_JSON_FIELDS = %w(id user_id url score grade excused attempt submission_type submitted_at body
     assignment_id graded_at grade_matches_current_submission grader_id workflow_state late_policy_status
-    points_deducted grading_period_id cached_due_date).freeze
+    points_deducted grading_period_id cached_due_date extra_attempts).freeze
   SUBMISSION_JSON_METHODS = %w(late missing seconds_late entered_grade entered_score).freeze
   SUBMISSION_OTHER_FIELDS = %w(attachments discussion_entries).freeze
 
@@ -375,5 +377,18 @@ module Api::V1::Submission
       assignment_id: assignment.id,
       anchor: anchor.to_json
     )
+  end
+
+  def quizzes_next_submission?(submission)
+    assignment = submission.assignment
+    assignment.quiz_lti? && assignment.root_account.feature_enabled?(:quizzes_next_submission_history)
+  end
+
+  def quizzes_next_submission_history(submission)
+    quiz_lti_submission = BasicLTI::QuizzesNextVersionedSubmission.new(
+      submission.assignment,
+      submission.user
+    )
+    quiz_lti_submission.grade_history
   end
 end

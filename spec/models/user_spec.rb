@@ -25,6 +25,29 @@ describe User do
     it "should create a new instance given valid attributes" do
       expect(user_model).to be_valid
     end
+
+    context 'on update' do
+      let(:user) { user_model }
+
+      it 'fails validation if lti_id changes' do
+        user.short_name = "chewie"
+        user.lti_id = "changedToThis"
+        expect(user).to_not be_valid
+      end
+
+      it 'passes validation if lti_id is not changed' do
+        user
+        user.short_name = "chewie"
+        expect(user).to be_valid
+      end
+    end
+  end
+
+  it 'adds an lti_id on creation' do
+    user = User.new
+    expect(user.lti_id).to be_blank
+    user.save!
+    expect(user.lti_id).to_not be_blank
   end
 
   it "should get the first email from communication_channel" do
@@ -1110,29 +1133,16 @@ describe User do
         expect(@student.count_messageable_users_in_course(@course)).to eql 2
       end
 
-      it "should return concluded enrollments in the group if they are still members" do
+      it "users with concluded enrollments should not be messageable" do
         @course.enroll_user(@student, 'StudentEnrollment', :enrollment_state => 'active')
-        @this_section_user_enrollment.conclude
-
-        expect(search_messageable_users(@this_section_user, :context => "group_#{@group.id}").map(&:id)).to eql [@this_section_user.id]
-        expect(@this_section_user.count_messageable_users_in_group(@group)).to eql 1
         expect(search_messageable_users(@student, :context => "group_#{@group.id}").map(&:id)).to eql [@this_section_user.id]
         expect(@student.count_messageable_users_in_group(@group)).to eql 1
-      end
-
-      it "should return concluded enrollments in the group and section if they are still members" do
-        enrollment = @course.enroll_user(@student, 'StudentEnrollment', :enrollment_state => 'active', :limit_privileges_to_course_section => true)
-        # we currently force limit_privileges_to_course_section to be false for students; override it in the db
-        Enrollment.where(:id => enrollment).update_all(:limit_privileges_to_course_section => true)
-
-        @group.users << @other_section_user
         @this_section_user_enrollment.conclude
 
-        expect(search_messageable_users(@this_section_user, :context => "group_#{@group.id}").map(&:id).sort).to eql [@this_section_user.id, @other_section_user.id]
-        expect(@this_section_user.count_messageable_users_in_group(@group)).to eql 2
-        # student can only see people in his section
-        expect(search_messageable_users(@student, :context => "group_#{@group.id}").map(&:id)).to eql [@this_section_user.id]
-        expect(@student.count_messageable_users_in_group(@group)).to eql 1
+        expect(search_messageable_users(@this_section_user, :context => "group_#{@group.id}").map(&:id)).to eql []
+        expect(@this_section_user.count_messageable_users_in_group(@group)).to eql 0
+        expect(search_messageable_users(@student, :context => "group_#{@group.id}").map(&:id)).to eql []
+        expect(@student.count_messageable_users_in_group(@group)).to eql 0
       end
     end
 
@@ -2468,6 +2478,13 @@ describe User do
         expect(@student.grants_right?(@sub_admin, :manage_user_details)).to eq false
       end
 
+      it "is not granted to custom sub-account admins with inherited roles" do
+        custom_role = custom_account_role("somerole", :account => @root_account)
+        @root_account.role_overrides.create!(role: custom_role, enabled: true, permission: :manage_user_logins)
+        @custom_sub_admin = account_admin_user(account: @sub_account, role: custom_role)
+        expect(@student.grants_right?(@custom_sub_admin, :manage_user_details)).to eq false
+      end
+
       it "is not granted to root account admins on other root account admins who are invited as students" do
         other_admin = account_admin_user account: Account.create!
         course_with_student account: @root_account, user: other_admin, enrollment_state: 'invited'
@@ -2504,60 +2521,6 @@ describe User do
       it "is not granted to sub-account admins w/o :generate_observer_pairing_code" do
         @root_account.role_overrides.create!(role: admin_role, enabled: false, permission: :generate_observer_pairing_code)
         expect(@student.grants_right?(@sub_admin, :generate_observer_pairing_code)).to eq false
-      end
-    end
-  end
-
-  describe ":read_as_parent" do
-    before :once do
-      @student = course_with_student(active_all: true).user
-    end
-
-    context "as manually enrolled observer" do
-      before :once do
-        course_with_observer(course: @course, active_enrollment: true, associated_user_id: @student.id)
-      end
-
-      it "is granted" do
-        expect(@student.grants_right?(@observer, :read_as_parent)).to eq true
-      end
-    end
-
-    context "as super observer" do
-      before :once do
-        @observer = user_model
-        UserObservationLink.create(student: @student, observer: @observer)
-      end
-
-      it "is granted" do
-        expect(@student.grants_right?(@observer, :read_as_parent)).to eq true
-      end
-    end
-  end
-
-  describe ":read" do
-    before :once do
-      @student = course_with_student(active_all: true).user
-    end
-
-    context "as manually enrolled observer" do
-      before :once do
-        course_with_observer(course: @course, active_enrollment: true, associated_user_id: @student.id)
-      end
-
-      it "is granted" do
-        expect(@student.grants_right?(@observer, :read)).to eq true
-      end
-    end
-
-    context "as super observer" do
-      before :once do
-        @observer = user_model
-        UserObservationLink.create(student: @student, observer: @observer)
-      end
-
-      it "is granted" do
-        expect(@student.grants_right?(@observer, :read)).to eq true
       end
     end
   end
@@ -2909,13 +2872,6 @@ describe User do
       f.submission_context_code = @course.asset_string
       f.save!
       expect(@user.submissions_folder(@course)).to eq f
-    end
-  end
-
-  describe "after_create" do
-    it "sets the new_user_tutorial_on_off feature flag to true" do
-      u = User.create!
-      expect(u.feature_enabled?(:new_user_tutorial_on_off)).to be true
     end
   end
 

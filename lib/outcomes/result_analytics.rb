@@ -57,7 +57,7 @@ module Outcomes
     #
     # Returns the resulting relation
     def order_results_for_rollup(relation)
-      relation.order(:user_id, :learning_outcome_id)
+      relation.order(:user_id, :learning_outcome_id, :id)
     end
 
     # Public: Generates a rollup of each outcome result for each user.
@@ -127,6 +127,33 @@ module Outcomes
     def add_missing_user_rollups(rollups, users)
       missing_users = users - rollups.map(&:context)
       rollups + missing_users.map { |u| Rollup.new(u, []) }
+    end
+
+    # Public: Gets rating percents for outcomes based on rollup
+    #
+    # Returns a hash of outcome id to array of rating percents
+    def rating_percents(rollups)
+      counts = {}
+      rollups.each do |rollup|
+        rollup.scores.each do |score|
+          next unless score.score
+          outcome = score.outcome
+          next unless outcome
+          ratings = outcome.rubric_criterion[:ratings]
+          next unless ratings
+          counts[outcome.id] = Array.new(ratings.length, 0) unless counts[outcome.id]
+          idx = ratings.find_index { |rating| rating[:points] <= score.score }
+          counts[outcome.id][idx] = counts[outcome.id][idx] + 1 if idx
+        end
+      end
+      counts.each {|k, v| counts[k] = to_percents(v)}
+      counts
+    end
+
+    def to_percents(count_arr)
+      total = count_arr.sum
+      return count_arr if total.zero?
+      count_arr.map {|v| (100.0 * v / total).round}
     end
 
     class << self

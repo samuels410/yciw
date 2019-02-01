@@ -58,14 +58,20 @@ module AssignmentsHelper
   end
 
   def assignment_publishing_enabled?(assignment, user)
-    assignment.grants_right?(user, :update) && !assignment.has_student_submissions?
+    assignment.grants_right?(user, :update)
   end
 
   def assignment_submission_button(assignment, user, user_submission)
     if assignment.expects_submission? && can_do(assignment, user, :submit)
       submit_text = user_submission.try(:has_submission?) ? I18n.t("Re-submit Assignment") : I18n.t("Submit Assignment")
       late = user_submission.try(:late?) ? "late" : ""
-      link_to(submit_text, '#', :role => "button", :class => "Button Button--primary submit_assignment_link #{late}")
+      link_to(
+        submit_text,
+        '#',
+        :role => "button",
+        :class => "Button Button--primary submit_assignment_link #{late}",
+        :disabled => user_submission && user_submission.attempts_left == 0,
+      )
     end
   end
 
@@ -88,6 +94,9 @@ module AssignmentsHelper
   end
 
   def i18n_grade(grade, grading_type = nil)
+    if grading_type == "pass_fail" && %w{complete incomplete}.include?(grade)
+      return grade == "complete" ? I18n.t("Complete") : I18n.t("Incomplete")
+    end
     number = Float(grade.sub(/%$/, '')) rescue nil
     if number.present?
       if grading_type.nil?

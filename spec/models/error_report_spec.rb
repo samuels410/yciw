@@ -25,7 +25,8 @@ describe ErrorReport do
       message << 255.chr
       message << "llo"
       data = { extra: { message: message } }
-      described_class.log_exception_from_canvas_errors('my error', data)
+      expect { described_class.log_exception_from_canvas_errors('my error', data) }.
+        to_not raise_error
     end
 
     it "uses an empty hash as a default for errors with no extra data" do
@@ -40,6 +41,11 @@ describe ErrorReport do
       expect(report.category).to eq(e.class.name)
     end
 
+    it "should ignore category 404" do
+      count = ErrorReport.count
+      ErrorReport.log_error('404', {})
+      expect(ErrorReport.count).to eq(count)
+    end
 
     it "ignores error classes that it's configured to overlook" do
       class ErrorReportSpecException < StandardError; end

@@ -16,7 +16,6 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import I18n from 'i18nObj'
 import React, { Component } from 'react'
 import PropTypes from 'prop-types'
 import tz from 'timezone'
@@ -32,12 +31,14 @@ class FriendlyDatetime extends Component {
       PropTypes.instanceOf(Date)
     ]).isRequired,
     format: PropTypes.string,
-    prefix: PropTypes.string
+    prefix: PropTypes.string,
+    showTime: PropTypes.bool
   }
 
   static defaultProps = {
     format: null,
-    prefix: ""
+    prefix: "",
+    showTime: false
   }
 
   // The original render function is really slow because of all
@@ -45,6 +46,9 @@ class FriendlyDatetime extends Component {
   // As long as @props.datetime stays same, we don't have to recompute our output.
   // memoizing like this beat React.addons.PureRenderMixin 3x
   render = _.memoize(() => {
+    // Separate props not used by the `time` element
+    const {showTime, ...timeElementProps} = this.props
+
     let datetime = this.props.dateTime
     if (!datetime) {
       return (<time />)
@@ -53,9 +57,16 @@ class FriendlyDatetime extends Component {
       datetime = tz.parse(datetime)
     }
     const fudged = $.fudgeDateForProfileTimezone(datetime)
-    const friendly = this.props.format ? tz.format(datetime, this.props.format) : $.friendlyDatetime(fudged)
+    let friendly
+    if (this.props.format) {
+      friendly = tz.format(datetime, this.props.format)
+    } else if (showTime) {
+      friendly = $.datetimeString(datetime)
+    } else {
+      friendly = $.friendlyDatetime(fudged)
+    }
 
-    const timeProps = Object.assign({}, this.props, {
+    const timeProps = Object.assign({}, timeElementProps, {
       title: $.datetimeString(datetime),
       dateTime: datetime.toISOString(),
     })

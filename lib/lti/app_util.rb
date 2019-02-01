@@ -19,11 +19,13 @@
 module Lti
   module AppUtil
     TOOL_DISPLAY_TEMPLATES = {
-      'borderless' => {template: 'lti/unframed_launch', layout: 'borderless_lti'}.freeze,
-      'full_width' => {template: 'lti/full_width_launch'}.freeze,
-      'in_context' => {template: 'lti/framed_launch'}.freeze,
-      'default' =>    {template: 'lti/framed_launch'}.freeze,
+      'borderless'            => {template: 'lti/unframed_launch', layout: 'borderless_lti'}.freeze,
+      'full_width'            => {template: 'lti/full_width_launch'}.freeze,
+      'in_context'            => {template: 'lti/framed_launch'}.freeze,
+      'default'               => {template: 'lti/framed_launch'}.freeze,
+      'full_width_in_context' => {template: 'lti/full_width_in_context'}.freeze,
     }.freeze
+    BLACKLIST_WILDCARD = '*'.freeze # to set up 'deny all' rules
 
     def self.display_template(display_type=nil, display_override:nil)
       unless TOOL_DISPLAY_TEMPLATES.key?(display_type)
@@ -45,6 +47,12 @@ module Lti
         captures = k.match(/^external_tool\[custom_fields\[(.*)\]\]/).try(:captures)
         hash[captures.first] = v if captures.present?
       end
+    end
+
+    def self.allowed?(candidate, whitelist, blacklist)
+      return true if whitelist.blank? && blacklist.blank?
+      return false if blacklist.present? && (blacklist.include?(candidate) || blacklist.include?(BLACKLIST_WILDCARD))
+      whitelist.blank? || whitelist.include?(candidate)
     end
 
   end
