@@ -55,6 +55,23 @@ require 'atom'
 #       }
 #     }
 #
+# @model AnonymousUserDisplay
+#     {
+#       "id": "AnonymousUserDisplay",
+#       "description": "This mini-object is returned in place of UserDisplay when returning student data for anonymous assignments, and includes an anonymous ID to identify a user within the scope of a single assignment.",
+#       "properties": {
+#         "anonymous_id": {
+#           "description": "A unique short ID identifying this user within the scope of a particular assignment.",
+#           "example": "xn29Q",
+#           "type": "string"
+#         },
+#         "avatar_image_url": {
+#           "description": "A URL to retrieve a generic avatar.",
+#           "example": "https://en.gravatar.com/avatar/d8cb8c8cd40ddf0cd05241443a591868?s=80&r=g",
+#           "type": "string"
+#         }
+#       }
+#     }
 #
 # @model User
 #     {
@@ -203,13 +220,13 @@ class UsersController < ApplicationController
     grading_period_id = generate_grading_period_id(params[:grading_period_id])
     opts = { grading_period_id: grading_period_id } if grading_period_id
 
-    grade_data = {
-      grade: enrollment.computed_current_score(opts),
-      hide_final_grades: enrollment.course.hide_final_grades?
-    }
+    grade_data = { hide_final_grades: enrollment.course.hide_final_grades? }
 
     if enrollment.course.grants_any_right?(@current_user, session, :manage_grades, :view_all_grades)
       grade_data[:unposted_grade] = enrollment.unposted_current_score(opts)
+      grade_data[:grade] = enrollment.computed_current_score(opts)
+    else
+      grade_data[:grade] = enrollment.effective_current_score(opts)
     end
 
     render json: grade_data
@@ -433,6 +450,7 @@ class UsersController < ApplicationController
           end
 
           includes = (params[:include] || []) & %w{avatar_url email last_login time_zone}
+          includes << 'last_login' if params[:sort] == 'last_login' && !includes.include?('last_login')
           users = users.with_last_login if includes.include?('last_login')
           users = Api.paginate(users, self, api_v1_account_users_url, page_opts)
           user_json_preloads(users, includes.include?('email'))
@@ -553,10 +571,13 @@ class UsersController < ApplicationController
     end
   end
 
-  def dashboard_cards
-    cancel_cache_buster
+  DASHBOARD_CARD_TABS = [
+    Course::TAB_DISCUSSIONS, Course::TAB_ASSIGNMENTS,
+    Course::TAB_ANNOUNCEMENTS, Course::TAB_FILES
+  ].freeze
 
-    dashboard_courses = map_courses_for_menu(@current_user.menu_courses, :include_section_tabs => true)
+  def dashboard_cards
+    dashboard_courses = map_courses_for_menu(@current_user.menu_courses, tabs: DASHBOARD_CARD_TABS)
     Rails.cache.write(['last_known_dashboard_cards_count', @current_user].cache_key, dashboard_courses.count)
     render json: dashboard_courses
   end
@@ -632,6 +653,9 @@ class UsersController < ApplicationController
 
   # @API List the activity stream
   # Returns the current user's global activity stream, paginated.
+  #
+  # @argument only_active_courses [Boolean]
+  #   If true, will only return objects for courses the user is actively participating in
   #
   # There are many types of objects that can be returned in the activity
   # stream. All object types have the same basic set of shared attributes:
@@ -739,6 +763,7 @@ class UsersController < ApplicationController
       opts[:asset_type] = params[:asset_type] if params.has_key?(:asset_type)
       opts[:context] = Context.find_by_asset_string(params[:context_code]) if params[:context_code]
       opts[:submission_user_id] = params[:submission_user_id] if params.has_key?(:submission_user_id)
+      opts[:only_active_courses] = value_to_boolean(params[:only_active_courses]) if params.has_key?(:only_active_courses)
       api_render_stream(opts)
     else
       render_unauthorized_action
@@ -846,16 +871,14 @@ class UsersController < ApplicationController
   def todo_items
     return render_unauthorized_action unless @current_user
 
-    bookmark = BookmarkedCollection::SimpleBookmarker.new(Assignment, :due_at, :id)
-
+    bookmark = Plannable::Bookmarker.new(Assignment, false, [:due_at, :created_at], :id)
     grading_scope = @current_user.assignments_needing_grading(scope_only: true).
-      reorder(:due_at, :id)
+      reorder(:due_at, :id).preload(:external_tool_tag, :rubric_association, :rubric, :discussion_topic, :quiz).eager_load(:duplicate_of)
     submitting_scope = @current_user.
       assignments_needing_submitting(
         include_ungraded: true,
-        limit: ToDoListPresenter::ASSIGNMENT_LIMIT,
         scope_only: true).
-      reorder(:due_at, :id)
+      reorder(:due_at, :id).preload(:external_tool_tag, :rubric_association, :rubric, :discussion_topic, :quiz).eager_load(:duplicate_of)
 
     grading_collection = BookmarkedCollection.wrap(bookmark, grading_scope)
     grading_collection = BookmarkedCollection.transform(grading_collection) do |a|
@@ -871,7 +894,7 @@ class UsersController < ApplicationController
     ]
 
     if Array(params[:include]).include? 'ungraded_quizzes'
-      quizzes_bookmark = BookmarkedCollection::SimpleBookmarker.new(Quizzes::Quiz, :due_at, :id)
+      quizzes_bookmark = Plannable::Bookmarker.new(Quizzes::Quiz, false, [:due_at, :created_at], :id)
       quizzes_scope = @current_user.
         ungraded_quizzes(
           :needing_submitting => true,
@@ -922,8 +945,7 @@ class UsersController < ApplicationController
   include Api::V1::CalendarEvent
 
   # @API List upcoming assignments, calendar events
-  # A paginated list of the current user's upcoming events, i.e. the same things shown
-  # in the dashboard 'Coming Up' sidebar.
+  # A paginated list of the current user's upcoming events.
   #
   # @example_response
   #   [
@@ -1242,7 +1264,7 @@ class UsersController < ApplicationController
   def api_show
     @user = api_find(User, params[:id])
     if @user.grants_right?(@current_user, session, :api_show_user)
-      render :json => user_json(@user, @current_user, session, %w{locale avatar_url permissions email}, @domain_root_account)
+      render :json => user_json(@user, @current_user, session, %w{locale avatar_url permissions email effective_locale}, @domain_root_account)
     else
       render_unauthorized_action
     end
@@ -1262,13 +1284,14 @@ class UsersController < ApplicationController
     @lti_launch = @tool.settings['post_only'] ? Lti::Launch.new(post_only: true) : Lti::Launch.new
     opts = {
         resource_type: @resource_type,
-        link_code: @opaque_id
+        link_code: @opaque_id,
+        domain: @domain_root_account&.domain
     }
     variable_expander = Lti::VariableExpander.new(@domain_root_account, @context, self,{
                                                                         current_user: @current_user,
                                                                         current_pseudonym: @current_pseudonym,
                                                                         tool: @tool})
-    adapter = if @tool.settings.fetch('use_1_3', false)
+    adapter = if @tool.use_1_3?
       Lti::LtiAdvantageAdapter.new(
         tool: @tool,
         user: @current_user,
@@ -1280,6 +1303,7 @@ class UsersController < ApplicationController
     else
       Lti::LtiOutboundAdapter.new(@tool, @current_user, @domain_root_account).prepare_tool_launch(@return_url, variable_expander,  opts)
     end
+
     @lti_launch.params = adapter.generate_post_payload
 
     @lti_launch.resource_url = @tool.user_navigation(:url)
@@ -1416,6 +1440,8 @@ class UsersController < ApplicationController
   #
   # @argument enable_sis_reactivation [Boolean]
   #   When true, will first try to re-activate a deleted user with matching sis_user_id if possible.
+  #   This is commonly done with user[skip_registration] and communication_channel[skip_confirmation]
+  #   so that the default communication_channel is also restored.
   #
   # @argument destination [URL]
   #
@@ -2421,9 +2447,12 @@ class UsersController < ApplicationController
       grading_period_id = generate_grading_period_id(
         grading_periods.dig(course.id, :selected_period_id)
       )
-      opts = { grading_period_id: grading_period_id} if grading_period_id
-      computed_score = enrollment.computed_current_score(opts)
-      grades[:student_enrollments][course.id] = computed_score
+      opts = { grading_period_id: grading_period_id } if grading_period_id
+      grades[:student_enrollments][course.id] = if course.grants_any_right?(@user, :manage_grades, :view_all_grades)
+        enrollment.computed_current_score(opts)
+      else
+        enrollment.effective_current_score(opts)
+      end
     end
     grades
   end
@@ -2432,8 +2461,11 @@ class UsersController < ApplicationController
     grades = {}
     opts = { grading_period_id: grading_period_id } if grading_period_id
     enrollments.each do |enrollment|
-      computed_score = enrollment.computed_current_score(opts)
-      grades[enrollment.user_id] = computed_score
+      grades[enrollment.user_id] = if enrollment.course.grants_any_right?(@user, :manage_grades, :view_all_grades)
+        enrollment.computed_current_score(opts)
+      else
+        enrollment.effective_current_score(opts)
+      end
     end
     grades
   end
@@ -2491,12 +2523,13 @@ class UsersController < ApplicationController
         @user = @pseudonym.user
         @user.workflow_state = 'registered'
         @user.update_account_associations
-        if params[:user][:skip_registration] && params[:communication_channel][:skip_confirmation]
+        if params[:user]&.dig(:skip_registration) && params[:communication_channel]&.dig(:skip_confirmation)
           cc = CommunicationChannel.where(user_id: @user.id, path_type: :email).order(updated_at: :desc).first
-          return if cc.nil?
-          cc.pseudonym = @pseudonym
-          cc.workflow_state = 'active'
-          cc.save!
+          if cc
+            cc.pseudonym = @pseudonym
+            cc.workflow_state = 'active'
+            cc.save!
+          end
         end
       end
     end

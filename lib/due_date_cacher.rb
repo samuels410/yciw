@@ -20,6 +20,50 @@ require 'anonymity'
 class DueDateCacher
   include Moderation
 
+  thread_mattr_accessor :executing_users, instance_accessor: false
+
+  # These methods allow the caller to specify a user to whom due date
+  # changes should be attributed (currently this is used for creating
+  # audit events for anonymous or moderated assignments), and are meant
+  # to be used when DueDateCacher is invoked in a callback or a similar
+  # place where directly specifying an executing user is impractical.
+  #
+  # DueDateCacher.with_executing_user(a_user) do
+  #   # do something to update due dates, like saving an assignment override
+  #   # any DDC calls that occur while an executing user is set will
+  #   # attribute changes to that user
+  # end
+  #
+  # Users are stored on a stack, so nested calls will work as expected.
+  # A value of nil may also be passed to indicate that no user should be
+  # credited (in which case audit events will not be recorded).
+  #
+  # You may also specify a user explicitly when calling the class methods:
+  #   DueDateCacher.recompute(assignment, update_grades: true, executing_user: a_user)
+  #
+  # An explicitly specified user will take precedence over any users specified
+  # via with_executing_user, but will not otherwise affect the current "stack"
+  # of executing users.
+  #
+  # If you are calling DueDateCacher in a delayed job of your own making (e.g.,
+  # Assignment#run_if_overrides_changed_later!), you should pass a user
+  # explicitly rather than relying on the user stored in with_executing_user
+  # at the time you create the delayed job.
+  def self.with_executing_user(user)
+    self.executing_users ||= []
+    self.executing_users.push(user)
+
+    result = yield
+
+    self.executing_users.pop
+    result
+  end
+
+  def self.current_executing_user
+    self.executing_users ||= []
+    self.executing_users.last
+  end
+
   INFER_SUBMISSION_WORKFLOW_STATE_SQL = <<~SQL_FRAGMENT
     CASE
     WHEN grade IS NOT NULL OR excused IS TRUE THEN
@@ -33,7 +77,7 @@ class DueDateCacher
     END
   SQL_FRAGMENT
 
-  def self.recompute(assignment, update_grades: false)
+  def self.recompute(assignment, update_grades: false, executing_user: nil)
     current_caller = caller(1..1).first
     Rails.logger.debug "DDC.recompute(#{assignment&.id}) - #{current_caller}"
     return unless assignment.active?
@@ -43,24 +87,28 @@ class DueDateCacher
     opts = {
       assignments: [assignment.id],
       inst_jobs_opts: {
-        strand: "cached_due_date:calculator:Course:Assignments:#{assignment.context.global_id}"
+        strand: "cached_due_date:calculator:Course:Assignments:#{assignment.context.global_id}",
+        max_attempts: 10
       },
       update_grades: update_grades,
-      original_caller: current_caller
+      original_caller: current_caller,
+      executing_user: executing_user
     }
 
     recompute_course(assignment.context, opts)
   end
 
-  def self.recompute_course(course, assignments: nil, inst_jobs_opts: {}, run_immediately: false, update_grades: false, original_caller: caller(1..1).first)
+  def self.recompute_course(course, assignments: nil, inst_jobs_opts: {}, run_immediately: false, update_grades: false, original_caller: caller(1..1).first, executing_user: nil)
     Rails.logger.debug "DDC.recompute_course(#{course.inspect}, #{assignments.inspect}, #{inst_jobs_opts.inspect}) - #{original_caller}"
     course = Course.find(course) unless course.is_a?(Course)
+    inst_jobs_opts[:max_attempts] ||= 10
     inst_jobs_opts[:singleton] ||= "cached_due_date:calculator:Course:#{course.global_id}" if assignments.nil? && !inst_jobs_opts[:strand]
 
     assignments_to_recompute = assignments || Assignment.active.where(context: course).pluck(:id)
     return if assignments_to_recompute.empty?
 
-    due_date_cacher = new(course, assignments_to_recompute, update_grades: update_grades, original_caller: original_caller)
+    executing_user ||= self.current_executing_user
+    due_date_cacher = new(course, assignments_to_recompute, update_grades: update_grades, original_caller: original_caller, executing_user: executing_user)
     if run_immediately
       due_date_cacher.recompute
     else
@@ -71,6 +119,7 @@ class DueDateCacher
   def self.recompute_users_for_course(user_ids, course, assignments = nil, inst_jobs_opts = {})
     user_ids = Array(user_ids)
     course = Course.find(course) unless course.is_a?(Course)
+    inst_jobs_opts[:max_attempts] ||= 10
     if assignments.nil?
       inst_jobs_opts[:singleton] ||= "cached_due_date:calculator:Users:#{course.global_id}:#{Digest::MD5.hexdigest(user_ids.sort.join(':'))}"
     end
@@ -79,7 +128,8 @@ class DueDateCacher
 
     current_caller = caller(1..1).first
     update_grades = inst_jobs_opts.delete(:update_grades) || false
-    due_date_cacher = new(course, assignments, user_ids, update_grades: update_grades, original_caller: current_caller)
+    executing_user = inst_jobs_opts.delete(:executing_user) || self.current_executing_user
+    due_date_cacher = new(course, assignments, user_ids, update_grades: update_grades, original_caller: current_caller, executing_user: executing_user)
 
     run_immediately = inst_jobs_opts.delete(:run_immediately) || false
     if run_immediately
@@ -89,12 +139,23 @@ class DueDateCacher
     end
   end
 
-  def initialize(course, assignments, user_ids = [], update_grades: false, original_caller: caller(1..1).first)
+  def initialize(course, assignments, user_ids = [], update_grades: false, original_caller: caller(1..1).first, executing_user: nil)
     @course = course
+
     @assignment_ids = Array(assignments).map { |a| a.is_a?(Assignment) ? a.id : a }
+    @assignments_auditable_by_id = if @assignment_ids.present?
+      Set.new(Assignment.auditable.where(id: @assignment_ids).pluck(:id))
+    else
+      Set.new
+    end
+
     @user_ids = Array(user_ids)
     @update_grades = update_grades
     @original_caller = original_caller
+
+    if executing_user.present?
+      @executing_user_id = executing_user.is_a?(User) ? executing_user.id : executing_user
+    end
   end
 
   def recompute
@@ -131,14 +192,15 @@ class DueDateCacher
         submission_scope = Submission.active.where(assignment_id: assignment_id)
 
         if @user_ids.blank? && assigned_student_ids.blank? && enrollment_counts.prior_student_ids.blank?
-          submission_scope.in_batches.update_all(workflow_state: :deleted)
+          submission_scope.in_batches.update_all(workflow_state: :deleted, updated_at: Time.zone.now)
         else
           # Delete the users we KNOW we need to delete in batches (it makes the database happier this way)
           deletable_student_ids =
             enrollment_counts.accepted_student_ids - assigned_student_ids - enrollment_counts.prior_student_ids
           deletable_student_ids.each_slice(1000) do |deletable_student_ids_chunk|
             # using this approach instead of using .in_batches because we want to limit the IDs in the IN clause to 1k
-            submission_scope.where(user_id: deletable_student_ids_chunk).update_all(workflow_state: :deleted)
+            submission_scope.where(user_id: deletable_student_ids_chunk).
+              update_all(workflow_state: :deleted, updated_at: Time.zone.now)
           end
         end
       end
@@ -149,15 +211,25 @@ class DueDateCacher
         @assignment_ids.each_slice(10) do |assignment_ids_slice|
           Submission.active.
             where(assignment_id: assignment_ids_slice, user_id: student_slice).
-            update_all(workflow_state: :deleted)
+            update_all(workflow_state: :deleted, updated_at: Time.zone.now)
         end
       end
 
       return if values.empty?
 
-      # prepare values for SQL interpolation
-      values = values.sort_by(&:first).map { |v| "(#{v.join(',')})" }
+      values = values.sort_by(&:first)
       values.each_slice(1000) do |batch|
+        auditable_entries = []
+        cached_due_dates_by_submission = {}
+
+        if record_due_date_changed_events?
+          auditable_entries = batch.select { |entry| @assignments_auditable_by_id.include?(entry.first) }
+          cached_due_dates_by_submission = current_cached_due_dates(auditable_entries)
+        end
+
+        # prepare values for SQL interpolation
+        batch_values = batch.map { |entry| "(#{entry.join(',')})" }
+
         # Construct upsert statement to update existing Submissions or create them if needed.
         query = <<~SQL
           UPDATE #{Submission.quoted_table_name}
@@ -167,11 +239,20 @@ class DueDateCacher
               workflow_state = COALESCE(NULLIF(workflow_state, 'deleted'), (
                 #{INFER_SUBMISSION_WORKFLOW_STATE_SQL}
               )),
-              anonymous_id = COALESCE(submissions.anonymous_id, vals.anonymous_id)
-            FROM (VALUES #{batch.join(',')})
+              anonymous_id = COALESCE(submissions.anonymous_id, vals.anonymous_id),
+              updated_at = now() AT TIME ZONE 'UTC'
+            FROM (VALUES #{batch_values.join(',')})
               AS vals(assignment_id, student_id, due_date, grading_period_id, anonymous_id)
             WHERE submissions.user_id = vals.student_id AND
-                  submissions.assignment_id = vals.assignment_id;
+                  submissions.assignment_id = vals.assignment_id AND
+                  (
+                    (submissions.cached_due_date IS DISTINCT FROM vals.due_date::timestamptz) OR
+                    (submissions.grading_period_id IS DISTINCT FROM vals.grading_period_id::integer) OR
+                    (submissions.workflow_state <> COALESCE(NULLIF(submissions.workflow_state, 'deleted'),
+                      (#{INFER_SUBMISSION_WORKFLOW_STATE_SQL})
+                    )) OR
+                    (submissions.anonymous_id IS DISTINCT FROM COALESCE(submissions.anonymous_id, vals.anonymous_id))
+                  );
           INSERT INTO #{Submission.quoted_table_name}
             (assignment_id, user_id, workflow_state, created_at, updated_at, context_code, process_attempts,
             cached_due_date, grading_period_id, anonymous_id)
@@ -180,7 +261,7 @@ class DueDateCacher
               now() AT TIME ZONE 'UTC', now() AT TIME ZONE 'UTC',
               assignments.context_code, 0, vals.due_date::timestamptz, vals.grading_period_id::integer,
               vals.anonymous_id
-            FROM (VALUES #{batch.join(',')})
+            FROM (VALUES #{batch_values.join(',')})
               AS vals(assignment_id, student_id, due_date, grading_period_id, anonymous_id)
             INNER JOIN #{Assignment.quoted_table_name} assignments
               ON assignments.id = vals.assignment_id
@@ -191,6 +272,13 @@ class DueDateCacher
         SQL
 
         Assignment.connection.execute(query)
+
+        next unless record_due_date_changed_events? && auditable_entries.present?
+
+        record_due_date_changes_for_auditable_assignments!(
+          entries: auditable_entries,
+          previous_cached_dates: cached_due_dates_by_submission
+        )
       end
     end
 
@@ -251,5 +339,54 @@ class DueDateCacher
       edd.filter_students_to(@user_ids) if @user_ids.present?
       edd
     end
+  end
+
+  def current_cached_due_dates(entries)
+    return {} if entries.empty?
+
+    entries_for_query = assignment_and_student_id_values(entries: entries)
+    submissions_with_due_dates = Submission.where("(assignment_id, user_id) IN (#{entries_for_query.join(',')})").
+      where.not(cached_due_date: nil).
+      pluck(:id, :cached_due_date)
+
+    submissions_with_due_dates.each_with_object({}) do |(submission_id, cached_due_date), map|
+      map[submission_id] = cached_due_date
+    end
+  end
+
+  def record_due_date_changes_for_auditable_assignments!(entries:, previous_cached_dates:)
+    entries_for_query = assignment_and_student_id_values(entries: entries)
+    updated_submissions = Submission.where("(assignment_id, user_id) IN (#{entries_for_query.join(',')})").
+      pluck(:id, :assignment_id, :cached_due_date)
+
+    timestamp = Time.zone.now
+    records_to_insert = updated_submissions.each_with_object([]) do |(submission_id, assignment_id, new_due_date), records|
+      old_due_date = previous_cached_dates.fetch(submission_id, nil)
+
+      next if new_due_date == old_due_date
+
+      payload = {due_at: [old_due_date&.iso8601, new_due_date&.iso8601]}
+
+      records << {
+        assignment_id: assignment_id,
+        submission_id: submission_id,
+        user_id: @executing_user_id,
+        event_type: 'submission_updated',
+        payload: payload.to_json,
+        created_at: timestamp,
+        updated_at: timestamp
+      }
+    end
+
+    AnonymousOrModerationEvent.bulk_insert(records_to_insert)
+  end
+
+  def assignment_and_student_id_values(entries:)
+    entries.map { |(assignment_id, student_id)| "(#{assignment_id}, #{student_id})" }
+  end
+
+  def record_due_date_changed_events?
+    # Only audit if we have a user and at least one auditable assignment
+    @record_due_date_changed_events ||= @executing_user_id.present? && @assignments_auditable_by_id.present?
   end
 end

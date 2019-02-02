@@ -124,7 +124,7 @@ class UserMerge
           Rails.logger.error "migrating #{table} column user_id failed: #{e}"
         end
       end
-      from_user.all_conversations.find_each { |c| c.move_to_user(target_user) } unless Shard.current != target_user.shard
+      from_user.all_conversations.find_each { |c| c.move_to_user(target_user) }
 
       # all topics changing ownership or with entries changing ownership need to be
       # flagged as updated so the materialized views update
@@ -187,7 +187,7 @@ class UserMerge
         move_observees(target_user, user_merge_data)
       end
 
-      Enrollment.send_later(:recompute_final_scores, target_user.id)
+      Enrollment.send_later(:recompute_due_dates_and_scores, target_user.id)
       target_user.update_account_associations
     end
 

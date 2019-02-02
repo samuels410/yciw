@@ -452,7 +452,7 @@ module Api
   end
 
 
-  def api_bulk_load_user_content_attachments(htmls, context = nil)
+  def self.api_bulk_load_user_content_attachments(htmls, context = nil)
 
     regex = context ? %r{/#{context.class.name.tableize}/#{context.id}/files/(\d+)} : %r{/files/(\d+)}
 
@@ -474,6 +474,10 @@ module Api
 
       attachments.preload(:context).index_by(&:id)
     end
+  end
+
+  def api_bulk_load_user_content_attachments(htmls, context = nil)
+    Api.api_bulk_load_user_content_attachments(htmls, context)
   end
 
   PLACEHOLDER_PROTOCOL = 'https'
@@ -512,18 +516,20 @@ module Api
       protocol = HostUrl.protocol
     end
 
-    rewriter = UserContent::HtmlRewriter.new(context, user)
-    rewriter.set_handler('files') do |match|
-      UserContent::FilesHandler.new(
-        match: match,
-        context: context,
-        user: user,
-        preloaded_attachments: preloaded_attachments,
-        is_public: is_public,
-        in_app: (respond_to?(:in_app?, true) && in_app?)
-      ).processed_url
+    html = context.shard.activate do
+      rewriter = UserContent::HtmlRewriter.new(context, user)
+      rewriter.set_handler('files') do |match|
+        UserContent::FilesHandler.new(
+          match: match,
+          context: context,
+          user: user,
+          preloaded_attachments: preloaded_attachments,
+          is_public: is_public,
+          in_app: (respond_to?(:in_app?, true) && in_app?)
+        ).processed_url
+      end
+      rewriter.translate_content(html)
     end
-    html = rewriter.translate_content(html)
 
     url_helper = Html::UrlProxy.new(self,
                                     context,

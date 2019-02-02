@@ -40,15 +40,15 @@ class Gradezilla
       end
 
       def grid_assignment_row_cell(student,assignment)
-        grading_cell(student, assignment).find(".Grid__AssignmentRowCell")
+        grading_cell(student, assignment).find(".Grid__GradeCell")
       end
 
       def grading_cell_menu_button(student, assignment, menu_selector:)
-        f("#{grading_cell_selector(student, assignment)} .Grid__AssignmentRowCell__#{menu_selector}Menu button")
+        f("#{grading_cell_selector(student, assignment)} .Grid__GradeCell__#{menu_selector}Menu button")
       end
 
       def grade_tray_button
-        f('.Grid__AssignmentRowCell__Options button')
+        f('.Grid__GradeCell__Options button')
       end
 
       def get_grade(student, assignment)
@@ -131,6 +131,28 @@ class Gradezilla
         driver.action.send_keys(:escape).perform
         driver.action.send_keys(key).perform
         wait_for_animations
+      end
+
+      # ---------- Grade Override Cells ---------------
+      def grade_override_selector(student)
+        # TODO: locator for override, similar to total_grade_selector
+      end
+
+      def grade_override_input(student)
+        # TODO: f("#{gade_override_selector(student)} input[type='text']")
+      end
+
+      def get_override_grade(student)
+        f(grade_override_selector(student)).text
+      end
+
+      def edit_override(student, grade)
+        grade_override_selector.click
+
+        override_input = grade_override_input(student)
+        set_value(override_input, grade)
+
+        override_input.send_keys(:return)
       end
     end
   end

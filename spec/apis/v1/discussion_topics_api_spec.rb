@@ -54,7 +54,7 @@ describe Api::V1::DiscussionTopics do
   describe 'include root data if requested' do
     before :once do
       @delayed_post_time = 1.day.from_now
-      @lock_at_time = 2.days.from_now
+      @lock_at_time = 2.days.from_now.change(min: 1)
       @group_topic = group_discussion_topic_model(:delayed_post_at => @delayed_post_time, :lock_at => @lock_at_time)
     end
 
@@ -362,6 +362,7 @@ describe DiscussionTopicsController, type: :request do
        "can_unpublish" => true,
        "delayed_post_at" => nil,
        "lock_at" => nil,
+       "created_at" => @topic.created_at.iso8601,
        "id" => @topic.id,
        "user_name" => @user.name,
        "last_reply_at" => @topic.last_reply_at.as_json,
@@ -409,6 +410,7 @@ describe DiscussionTopicsController, type: :request do
        "allow_rating" => false,
        "only_graders_can_rate" => false,
        "sort_by_rating" => false,
+       "todo_date" => nil,
       }
     end
 
@@ -1489,6 +1491,7 @@ describe DiscussionTopicsController, type: :request do
       "can_unpublish" => true,
       "delayed_post_at" => nil,
       "lock_at" => nil,
+      "created_at" => gtopic.created_at.iso8601,
       "id" => gtopic.id,
       "user_name" => @user.name,
       "last_reply_at" => gtopic.last_reply_at.as_json,
@@ -1536,6 +1539,7 @@ describe DiscussionTopicsController, type: :request do
       "allow_rating" => false,
       "only_graders_can_rate" => false,
       "sort_by_rating" => false,
+      "todo_date" => nil,
     }
     expect(json.sort.to_h).to eq expected.sort.to_h
   end
@@ -2974,7 +2978,7 @@ describe DiscussionTopicsController, type: :request do
     it "duplicate publishes group context discussions if its a student duplicating" do
       @user = @student
       group_category = @course.group_categories.create!(:name => 'group category')
-      @course.enroll_student(@student, :active_all => true)
+      @course.enroll_student(@student, :enrollment_state => "active")
       group = group_category.groups.create!(:name => "group", :context => @course)
       group.add_user(@student)
       topic = group.discussion_topics.create!(:title => "student topic", :user => @student,

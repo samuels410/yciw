@@ -54,7 +54,9 @@ class NumericInteraction < AssessmentItemConverter
 
   def get_canvas_answers
     @doc.css('responseIf, responseElseIf').each do |r_if|
-      answer = {:weight=>100, :id=>unique_local_id, :text=>'answer_text'}
+      answer = {:weight=>100, :text=>'answer_text'}
+      bv = r_if.at_css('baseValue')
+      answer[:id] = get_or_generate_answer_id(bv && bv['identifier'])
       answer[:feedback_id] = get_feedback_id(r_if)
 
       if or_node = r_if.at_css('or')
@@ -89,7 +91,7 @@ class NumericInteraction < AssessmentItemConverter
           if upper = or_node.at_css('and customOperator[class=varlte] baseValue')
             # do margin computation with BigDecimal to avoid rounding errors
             # (this is also used when _scoring_ numeric range questions)
-            margin = BigDecimal.new(upper.text) - BigDecimal.new(exact) rescue "0.0"
+            margin = BigDecimal(upper.text) - BigDecimal(exact) rescue "0.0"
             answer[:margin] = margin.to_f
           end
         end

@@ -239,6 +239,7 @@ class Quizzes::QuizzesController < ApplicationController
         COURSE_ID: @context.id,
         LOCKDOWN_BROWSER: @quiz.require_lockdown_browser?,
         QUIZ: quiz_json(@quiz,@context,@current_user,session),
+        QUIZ_DETAILS_URL: course_quiz_managed_quiz_data_url(@context.id, @quiz.id),
         QUIZZES_URL: course_quizzes_url(@context),
         MAX_GROUP_CONVERSATION_SIZE: Conversation.max_group_conversation_size
       }
@@ -392,7 +393,7 @@ class Quizzes::QuizzesController < ApplicationController
       end
 
       if params[:post_to_sis]
-        @quiz.assignment.post_to_sis = params[:post_to_sis] == '1' ? true : false
+        @quiz.assignment.post_to_sis = params[:post_to_sis] == '1'
       end
 
 
@@ -460,7 +461,8 @@ class Quizzes::QuizzesController < ApplicationController
               old_assignment = @quiz.assignment.clone
               old_assignment.id = @quiz.assignment.id
 
-              @quiz.assignment.post_to_sis = params[:post_to_sis] == '1' ? true : false
+              @quiz.assignment.post_to_sis = params[:post_to_sis] == '1'
+              @quiz.assignment.validate_overrides_for_sis(overrides) unless overrides.nil?
             end
 
             auto_publish = @quiz.published?
@@ -506,7 +508,7 @@ class Quizzes::QuizzesController < ApplicationController
         end
 
         if @quiz.assignment && (@overrides_affected.to_i > 0 || cached_due_dates_changed || created_quiz)
-          DueDateCacher.recompute(@quiz.assignment, update_grades: true)
+          DueDateCacher.recompute(@quiz.assignment, update_grades: true, executing_user: @current_user)
         end
 
         flash[:notice] = t("Quiz successfully updated")

@@ -229,25 +229,15 @@
 #             },
 #             "$ref": "User"
 #           },
-#           "computed_current_score": {
-#             "description": "optional: The student's score in the course, ignoring ungraded assignments. (applies only to student enrollments, and only available in course endpoints)",
-#             "example": 90.25,
-#             "type": "number"
-#           },
-#           "computed_final_score": {
-#             "description": "optional: The student's score in the course including ungraded assignments with a score of 0. (applies only to student enrollments, and only available in course endpoints)",
-#             "example": 80.67,
-#             "type": "number"
-#           },
-#           "computed_current_grade": {
-#             "description": "optional: The letter grade equivalent of computed_current_score, if available. (applies only to student enrollments, and only available in course endpoints)",
-#             "example": "A-",
+#           "override_grade": {
+#             "description": "The user's override grade for the course.",
+#             "example": "A",
 #             "type": "string"
 #           },
-#           "computed_final_grade": {
-#             "description": "optional: The letter grade equivalent of computed_final_score, if available. (applies only to student enrollments, and only available in course endpoints)",
-#             "example": "B-",
-#             "type": "string"
+#           "override_score": {
+#             "description": "The user's override score for the course.",
+#             "example": 99.99,
+#             "type": "number"
 #           },
 #           "unposted_current_grade": {
 #             "description": "The user's current grade in the class including muted/unposted assignments. Only included if user has permissions to view this grade, typically teachers, TAs, and admins.",
@@ -289,25 +279,15 @@
 #             "example": 5,
 #             "type": "integer"
 #           },
-#           "current_period_computed_current_score": {
-#             "description": "optional: The student's score in the course for the current grading period, ignoring ungraded assignments. If the course the enrollment belongs to does not have grading periods, or if no currently active grading period exists, the value will be null. (applies only to student enrollments, and only available in course endpoints)",
-#             "example": 95.80,
-#             "type": "number"
-#           },
-#           "current_period_computed_final_score": {
-#             "description": "optional: The student's score in the course for the current grading period, including ungraded assignments with a score of 0. If the course the enrollment belongs to does not have grading periods, or if no currently active grading period exists, the value will be null. (applies only to student enrollments, and only available in course endpoints)",
-#             "example": 85.25,
-#             "type": "number"
-#           },
-#           "current_period_computed_current_grade": {
-#             "description": "optional: The letter grade equivalent of current_period_computed_current_score, if available. If the course the enrollment belongs to does not have grading periods, or if no currently active grading period exists, the value will be null. (applies only to student enrollments, and only available in course endpoints)",
+#           "current_period_override_grade": {
+#             "description": "The user's override grade for the current grading period.",
 #             "example": "A",
 #             "type": "string"
 #           },
-#           "current_period_computed_final_grade": {
-#             "description": "optional: The letter grade equivalent of current_period_computed_final_score, if available. If the course the enrollment belongs to does not have grading periods, or if no currently active grading period exists, the value will be null. (applies only to student enrollments, and only available in course endpoints)",
-#             "example": "B",
-#             "type": "string"
+#           "current_period_override_score": {
+#             "description": "The user's override score for the current grading period.",
+#             "example": 99.99,
+#             "type": "number"
 #           },
 #           "current_period_unposted_current_score": {
 #             "description": "optional: The student's score in the course for the current grading period, including muted/unposted assignments. Only included if user has permission to view this score, typically teachers, TAs, and admins. If the course the enrollment belongs to does not have grading periods, or if no currently active grading period exists, the value will be null. (applies only to student enrollments, and only available in course endpoints)",
@@ -646,7 +626,10 @@ class EnrollmentsApiController < ApplicationController
     params[:enrollment][:limit_privileges_to_course_section] = value_to_boolean(params[:enrollment][:limit_privileges_to_course_section]) if params[:enrollment].has_key?(:limit_privileges_to_course_section)
     params[:enrollment].slice!(:enrollment_state, :section, :limit_privileges_to_course_section, :associated_user_id, :role, :start_at, :end_at, :self_enrolled, :no_notify)
 
-    @enrollment = @context.enroll_user(user, type, params[:enrollment].merge(:allow_multiple_enrollments => true))
+    DueDateCacher.with_executing_user(@current_user) do
+      @enrollment = @context.enroll_user(user, type, params[:enrollment].merge(:allow_multiple_enrollments => true))
+    end
+
     @enrollment.valid? ?
       render(:json => enrollment_json(@enrollment, @current_user, session)) :
       render(:json => @enrollment.errors, :status => :bad_request)
@@ -670,10 +653,13 @@ class EnrollmentsApiController < ApplicationController
     @current_user.validation_root_account = @domain_root_account
     @current_user.require_self_enrollment_code = true
     @current_user.self_enrollment_code = code
-    if @current_user.save
-      render(json: enrollment_json(@current_user.self_enrollment, @current_user, session))
-    else
-      render(json: {user: @current_user.errors}, status: :bad_request)
+
+    DueDateCacher.with_executing_user(@current_user) do
+      if @current_user.save
+        render(json: enrollment_json(@current_user.self_enrollment, @current_user, session))
+      else
+        render(json: {user: @current_user.errors}, status: :bad_request)
+      end
     end
   end
 
@@ -871,7 +857,7 @@ class EnrollmentsApiController < ApplicationController
       is_approved_parent = user.grants_right?(@current_user, :read_as_parent)
       # otherwise check for read_roster rights on all of the requested
       # user's accounts
-      approved_accounts = user.associated_root_accounts.inject([]) do |accounts, ra|
+      approved_accounts = user.associated_root_accounts.shard(user).inject([]) do |accounts, ra|
         accounts << ra.id if is_approved_parent || ra.grants_right?(@current_user, session, :read_roster)
         accounts
       end

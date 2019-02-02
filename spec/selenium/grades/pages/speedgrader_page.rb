@@ -274,18 +274,18 @@ class Speedgrader
     end
 
     def audit_link
-      # TODO in GRADE-1075 locator for audit link
+      fj("button:contains(\"Assessment audit\")")
     end
 
     def audit_entries
-      # TODO in GRADE-1075 locator all of the audit entries
+      f("#assessment-audit-trail")
     end
 
     # action
-    def visit(course_id, assignment_id)
+    def visit(course_id, assignment_id, timeout = 10)
       get "/courses/#{course_id}/gradebook/speed_grader?assignment_id=#{assignment_id}"
       visibility_check = grade_input
-      keep_trying_until { visibility_check.displayed? }
+      keep_trying_until(timeout) { visibility_check.displayed? }
     end
 
     def select_provisional_grade_by_label(label)
@@ -410,8 +410,26 @@ class Speedgrader
       wait.until { grade_input.attribute('value') != "" }
     end
 
-    def click_audit_link
+    def open_assessment_audit
       audit_link.click
+      audit_tray_label # wait for tray
+      wait_for_ajaximations
+    end
+
+    def audit_tray_label
+      f('span[aria-labelledby="audit-tray-final-grade-label"]')
+    end
+
+    def expand_assessment_audit_user_events(user)
+      f("#user-event-group-#{user.id} button").click
+      wait_for_animations
+    end
+
+    def expand_right_pane
+      # attempting to click things that were on the very edge of the page
+      # was causing certain specs to flicker. this fixes that issue by
+      # increasing the width of the right pane
+      driver.execute_script("$('#right_side').width('900px')")
     end
 
     # quizzes
@@ -502,6 +520,20 @@ class Speedgrader
 
     def rubric_graded_points(index = 0)
       ffj('.react-rubric-cell.graded-points:visible')[index]
+    end
+
+    def comment_button_for_row(row_text)
+      row =fj("tr:contains('#{row_text}')")
+      fj('button:contains("Additional Comments")', row)
+    end
+
+    def additional_comment_textarea
+      f("textarea[data-selenium='criterion_comments_text']")
+    end
+
+    def rubric_comment_for_row(row_text)
+      row = fj("tr:contains('#{row_text}'):visible")
+      f(".react-rubric-break-words", row)
     end
   end
 end

@@ -20,7 +20,7 @@ module Types
   class AssignmentType < ApplicationObjectType
     graphql_name "Assignment"
 
-    implements GraphQL::Relay::Node.interface
+    implements GraphQL::Types::Relay::Node
     implements Interfaces::TimestampInterface
 
     alias :assignment :object
@@ -73,7 +73,6 @@ module Types
     field :position, Int,
       "determines the order this assignment is displayed in in its assignment group",
       null: true
-    field :description, String, null: true
 
     field :points_possible, Float, "the assignment is out of this many points",
       null: true
@@ -93,9 +92,22 @@ module Types
       ).load(assignment).then {
         assignment.low_level_locked_for?(current_user,
                                          check_policies: true,
-                                         context: assignment.context)
+                                         context: assignment.context) || {}
       }
     end
+
+    field :allowed_attempts, Int,
+      "The number of submission attempts a student can make for this assignment. null implies unlimited.",
+      null: true
+
+    def allowed_attempts
+      return nil if assignment.allowed_attempts.nil? || assignment.allowed_attempts <= 0
+      assignment.allowed_attempts
+    end
+
+    field :allowed_extensions, [String],
+      "permitted uploaded file extensions (e.g. ['doc', 'xls', 'txt'])",
+      null: true
 
     field :muted, Boolean, method: :muted?, null: false
 
@@ -119,11 +131,37 @@ module Types
 
     field :html_url, UrlType, null: true
     def html_url
-      Rails.application.routes.url_helpers.course_assignment_url(
+      GraphQLHelpers::UrlHelpers.course_assignment_url(
         course_id: assignment.context_id,
         id: assignment.id,
         host: context[:request].host_with_port
       )
+    end
+
+    class AttachmentPreloader < GraphQL::Batch::Loader
+      def initialize(context)
+        @context = context
+      end
+
+      def perform(htmls)
+        as = Api.api_bulk_load_user_content_attachments(htmls, @context)
+        htmls.each { |html| fulfill(html, as) }
+      end
+    end
+
+    field :description, String, null: true
+    def description
+      return nil if assignment.description.blank?
+      load_association(:context).then do |course|
+        AttachmentPreloader.for(course).load(assignment.description).then do |preloaded_attachments|
+          GraphQLHelpers::UserContent.process(assignment.description,
+                                              request: context[:request],
+                                              context: assignment.context,
+                                              user: current_user,
+                                              in_app: context[:in_app],
+                                              preloaded_attachments: preloaded_attachments)
+        end
+      end
     end
 
     field :needs_grading_count, Int, null: true
@@ -162,6 +200,13 @@ module Types
       load_association(:assignment_group)
     end
 
+    field :modules, [ModuleType], null: true
+    def modules
+      load_association(:context_module_tags).then do
+        assignment.context_module_tags.map(&:context_module).sort_by(&:position)
+      end
+    end
+
     field :only_visible_to_overrides, Boolean,
       "specifies that this assignment is only assigned to students for whom an
        `AssignmentOverride` applies.",
@@ -175,6 +220,11 @@ module Types
         # assignment_overrides_json. they may not return the same results?
         # ¯\_(ツ)_/¯
         AssignmentOverrideApplicator.overrides_for_assignment_and_user(assignment, current_user)
+    end
+
+    field :group_set, GroupSetType, null: true
+    def group_set
+      load_association(:group_category)
     end
 
     field :submissions_connection, SubmissionType.connection_type, null: true do

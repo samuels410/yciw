@@ -20,7 +20,7 @@ require 'atom'
 require 'date'
 require 'icalendar'
 
-Icalendar::Event.ical_property  :x_alt_desc
+Icalendar::Event.optional_property  :x_alt_desc
 
 class CalendarEvent < ActiveRecord::Base
   include CopyAuthorizedLinks
@@ -165,6 +165,10 @@ class CalendarEvent < ActiveRecord::Base
     SQL
   }
 
+  scope :not_hidden, -> {
+    where("NOT EXISTS (SELECT id FROM #{CalendarEvent.quoted_table_name} sub_events WHERE sub_events.parent_calendar_event_id=calendar_events.id)")
+  }
+
   scope :undated, -> { where(:start_at => nil, :end_at => nil) }
 
   scope :between, lambda { |start, ending| where(:start_at => start..ending) }
@@ -203,6 +207,19 @@ class CalendarEvent < ActiveRecord::Base
     end
   end
   protected :default_values
+
+  def root_account
+    if context.respond_to?(:root_account)
+      context.root_account # course, section, group
+    else
+      case context
+      when User
+        context.account
+      when AppointmentGroup
+        context.context&.root_account
+      end
+    end
+  end
 
   def populate_appointment_group_defaults
     self.effective_context_code = context.appointment_group_contexts.map(&:context_code).join(",")
@@ -244,11 +261,8 @@ class CalendarEvent < ActiveRecord::Base
     if self.all_day_changed? && self.all_day?
       self.start_at = zoned_start_at.beginning_of_day rescue nil
       self.end_at = zoned_end_at.beginning_of_day rescue nil
-
     elsif self.start_at_changed? || self.end_at_changed?
-      if self.start_at && self.start_at == self.end_at && zoned_start_at.strftime("%H:%M") == '00:00'
-        self.all_day = true
-      end
+      self.all_day = self.start_at && self.start_at == self.end_at && zoned_start_at.strftime("%H:%M") == '00:00'
     end
 
     if self.all_day && (!self.all_day_date || self.start_at_changed? || self.all_day_date_changed?)
@@ -599,37 +613,30 @@ class CalendarEvent < ActiveRecord::Base
     def to_ics(in_own_calendar:, preloaded_attachments: {}, include_description: false, user_events: [])
       cal = Icalendar::Calendar.new
       # to appease Outlook
-      cal.custom_property("METHOD","PUBLISH")
+      cal.append_custom_property("METHOD","PUBLISH")
 
       event = Icalendar::Event.new
-      event.klass = "PUBLIC"
+      event.ip_class = "PUBLIC"
 
       start_at = @event.is_a?(CalendarEvent) ? @event.start_at : @event.due_at
       end_at = @event.is_a?(CalendarEvent) ? @event.end_at : @event.due_at
 
-      if start_at
-        event.start = start_at.utc_datetime
-        event.start.icalendar_tzid = 'UTC'
-      end
-
-      if end_at
-        event.end = end_at.utc_datetime
-        event.end.icalendar_tzid = 'UTC'
-      end
+      event.dtstart = Icalendar::Values::DateTime.new(start_at.utc_datetime, 'tzid' => 'UTC') if start_at
+      event.dtend = Icalendar::Values::DateTime.new(end_at.utc_datetime, 'tzid' => 'UTC') if end_at
 
       if @event.all_day && @event.all_day_date
-        event.start = Date.new(@event.all_day_date.year, @event.all_day_date.month, @event.all_day_date.day)
-        event.start.ical_params = {"VALUE"=>["DATE"]}
-        event.end = event.start
-        event.end.ical_params = {"VALUE"=>["DATE"]}
+        event.dtstart = Date.new(@event.all_day_date.year, @event.all_day_date.month, @event.all_day_date.day)
+        event.dtstart.ical_params = {"VALUE"=>["DATE"]}
+        event.dtend = event.dtstart
+        event.dtend.ical_params = {"VALUE"=>["DATE"]}
       end
 
       event.summary = @event.title
 
       if @event.description && include_description
         html = api_user_content(@event.description, @event.context, nil, preloaded_attachments)
-        event.description html_to_text(html)
-        event.x_alt_desc(html, { 'FMTTYPE' => 'text/html' })
+        event.description = html_to_text(html)
+        event.x_alt_desc = Icalendar::Values::Text.new(html, {'FMTTYPE' => 'text/html'})
       end
 
       if @event.is_a?(CalendarEvent)
@@ -657,8 +664,7 @@ class CalendarEvent < ActiveRecord::Base
       end
 
       event.location = loc_string
-      event.dtstamp = @event.updated_at.utc_datetime if @event.updated_at
-      event.dtstamp.icalendar_tzid = 'UTC' if event.dtstamp
+      event.dtstamp = Icalendar::Values::DateTime.new(@event.updated_at.utc_datetime, 'tzid' => 'UTC') if @event.updated_at
 
       tag_name = @event.class.name.underscore
 
@@ -670,9 +676,9 @@ class CalendarEvent < ActiveRecord::Base
 
       # This will change when there are other things that have calendars...
       # can't call calendar_url or calendar_url_for here, have to do it manually
-      event.url           "https://#{HostUrl.context_host(url_context)}/calendar?include_contexts=#{@event.context.asset_string}&month=#{start_at.try(:strftime, "%m")}&year=#{start_at.try(:strftime, "%Y")}##{tag_name}_#{@event.id}"
-      event.uid           "event-#{tag_name.gsub('_', '-')}-#{@event.id}"
-      event.sequence      0
+      event.url =         "https://#{HostUrl.context_host(url_context)}/calendar?include_contexts=#{@event.context.asset_string}&month=#{start_at.try(:strftime, "%m")}&year=#{start_at.try(:strftime, "%Y")}##{tag_name}_#{@event.id}"
+      event.uid =         "event-#{tag_name.gsub('_', '-')}-#{@event.id}"
+      event.sequence =    0
 
       if @event.respond_to?(:applied_overrides)
         @event.applied_overrides.try(:each) do |override|

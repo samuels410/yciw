@@ -1,3 +1,21 @@
+/*
+ * Copyright (C) 2018 - present Instructure, Inc.
+ *
+ * This file is part of Canvas.
+ *
+ * Canvas is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, version 3 of the License.
+ *
+ * Canvas is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 process.env.NODE_ENV = 'test'
 
 const path = require('path')
@@ -31,17 +49,6 @@ if (process.env.SENTRY_DSN) {
     ]
   }));
 }
-
-
-// These externals are necessary for Enzyme
-// See http://airbnb.io/enzyme/docs/guides/webpack.html
-Object.assign(testWebpackConfig.externals || (testWebpackConfig.externals = {}), {
-  'react-dom/server': 'window',
-  'react/lib/ReactContext': 'true',
-  'react/lib/ExecutionEnvironment': 'true',
-  'react-dom/test-utils': 'somethingThatDoesntActuallyExist',
-  'react-test-renderer/shallow': 'somethingThatDoesntActuallyExist'
-})
 
 testWebpackConfig.resolve.alias['spec/jsx'] = path.resolve(__dirname, 'spec/javascripts/jsx')
 

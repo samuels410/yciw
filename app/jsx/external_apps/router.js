@@ -32,6 +32,7 @@ import regularizePathname from '../external_apps/lib/regularizePathname'
   const baseUrl = matches[0];
 
   let targetNodeToRenderIn = null;
+  let alreadyRendered = false
 
 
   /**
@@ -43,9 +44,10 @@ import regularizePathname from '../external_apps/lib/regularizePathname'
     } else {
       ReactDOM.render(
         <Root>
-          <AppList pathname={ctx.pathname} />
+          <AppList pathname={ctx.pathname} alreadyRendered={alreadyRendered}/>
         </Root>
       , targetNodeToRenderIn);
+      alreadyRendered = true
     }
   };
 
@@ -91,8 +93,8 @@ export default {
       page.start();
     },
     stop () {
-      // we may not be the only thing using page on this page. 
-      // page.stop();
+      // we may not be the only thing using page on this page.
+      page.stop();
     },
     regularizePathname
   };

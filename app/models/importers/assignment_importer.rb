@@ -195,6 +195,8 @@ module Importers
         item.points_possible = 0
       end
 
+      item.allowed_attempts = hash[:allowed_attempts] if hash[:allowed_attempts]
+
       if !item.new_record? && item.is_child_content? && (item.editing_restricted?(:due_dates) || item.editing_restricted?(:availability_dates))
         # is a date-restricted master course item - clear their old overrides because we're mean
         item.assignment_overrides.where.not(:set_type => AssignmentOverride::SET_TYPE_NOOP).destroy_all
@@ -294,7 +296,10 @@ module Importers
        :automatic_peer_reviews, :anonymous_peer_reviews,
        :grade_group_students_individually, :allowed_extensions,
        :position, :peer_review_count,
-       :omit_from_final_grade, :intra_group_peer_reviews, :post_to_sis
+       :omit_from_final_grade, :intra_group_peer_reviews, :post_to_sis,
+       :moderated_grading, :grader_count, :grader_comments_visible_to_graders,
+       :anonymous_grading, :graders_anonymous_to_graders, :grader_names_visible_to_final_grader,
+       :anonymous_instructor_annotations
       ].each do |prop|
         item.send("#{prop}=", hash[prop]) unless hash[prop].nil?
       end

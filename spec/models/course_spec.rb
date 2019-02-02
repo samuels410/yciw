@@ -1041,6 +1041,8 @@ describe Course do
       profile.save!
       @course.save!
       @course.reload
+      @course.update!(latest_outcome_import:
+        OutcomeImport.create!(context: @course))
 
       expect(@course.course_sections).not_to be_empty
       expect(@course.students).to eq [@student]
@@ -1566,13 +1568,13 @@ describe Course, "gradebook_to_csv" do
     rows = CSV.parse(csv, headers: true)
     expect(rows.length).to equal(2)
     expect(rows[0]["Unposted Final Score"]).to eq "(read only)"
-    expect(rows[1]["Unposted Final Score"]).to eq "50.0"
+    expect(rows[1]["Unposted Final Score"]).to eq "50.00"
     expect(rows[0]["Final Score"]).to eq "(read only)"
-    expect(rows[1]["Final Score"]).to eq "50.0"
+    expect(rows[1]["Final Score"]).to eq "50.00"
     expect(rows[0]["Unposted Current Score"]).to eq "(read only)"
-    expect(rows[1]["Unposted Current Score"]).to eq "100.0"
+    expect(rows[1]["Unposted Current Score"]).to eq "100.00"
     expect(rows[0]["Current Score"]).to eq "(read only)"
-    expect(rows[1]["Current Score"]).to eq "100.0"
+    expect(rows[1]["Current Score"]).to eq "100.00"
   end
 
   it "should order assignments and groups by position" do
@@ -1627,10 +1629,10 @@ describe Course, "gradebook_to_csv" do
       "Some Assignment Group 2 Unposted Final Score"
     ]
 
-    expect(rows[1]["Some Assignment Group 1 Current Score"]).to eq "100.0"
-    expect(rows[1]["Some Assignment Group 1 Final Score"]).to eq "50.0"
-    expect(rows[1]["Some Assignment Group 2 Current Score"]).to eq "50.0"
-    expect(rows[1]["Some Assignment Group 2 Final Score"]).to eq "25.0"
+    expect(rows[1]["Some Assignment Group 1 Current Score"]).to eq "100.00"
+    expect(rows[1]["Some Assignment Group 1 Final Score"]).to eq "50.00"
+    expect(rows[1]["Some Assignment Group 2 Current Score"]).to eq "50.00"
+    expect(rows[1]["Some Assignment Group 2 Final Score"]).to eq "25.00"
   end
 
   it "handles nil assignment due_dates if the group and position are the same" do
@@ -1749,13 +1751,13 @@ describe Course, "gradebook_to_csv" do
     expect(rows[0]["Current Grade"]).to eq "(read only)"
     expect(rows[1]["Current Grade"]).to eq "A-"
     expect(rows[0]["Unposted Final Score"]).to eq "(read only)"
-    expect(rows[1]["Unposted Final Score"]).to eq "90.0"
+    expect(rows[1]["Unposted Final Score"]).to eq "90.00"
     expect(rows[0]["Final Score"]).to eq "(read only)"
-    expect(rows[1]["Final Score"]).to eq "90.0"
+    expect(rows[1]["Final Score"]).to eq "90.00"
     expect(rows[0]["Unposted Current Score"]).to eq "(read only)"
-    expect(rows[1]["Unposted Current Score"]).to eq "90.0"
+    expect(rows[1]["Unposted Current Score"]).to eq "90.00"
     expect(rows[0]["Current Score"]).to eq "(read only)"
-    expect(rows[1]["Current Score"]).to eq "90.0"
+    expect(rows[1]["Current Score"]).to eq "90.00"
   end
 
   it "should include sis ids if enabled" do
@@ -1873,13 +1875,13 @@ describe Course, "gradebook_to_csv" do
     it "includes points for unweighted courses" do
       csv = CSV.parse(GradebookExporter.new(@course, @teacher).to_csv, headers: true)
       expect(csv[0]["Assignments Current Points"]).to eq "(read only)"
-      expect(csv[1]["Assignments Current Points"]).to eq "8.0"
+      expect(csv[1]["Assignments Current Points"]).to eq "8.00"
       expect(csv[0]["Assignments Final Points"]).to eq "(read only)"
-      expect(csv[1]["Assignments Final Points"]).to eq "8.0"
+      expect(csv[1]["Assignments Final Points"]).to eq "8.00"
       expect(csv[0]["Current Points"]).to eq "(read only)"
-      expect(csv[1]["Current Points"]).to eq "8.0"
+      expect(csv[1]["Current Points"]).to eq "8.00"
       expect(csv[0]["Final Points"]).to eq "(read only)"
-      expect(csv[1]["Final Points"]).to eq "8.0"
+      expect(csv[1]["Final Points"]).to eq "8.00"
     end
 
     it "doesn't include points for weighted courses" do
@@ -2010,11 +2012,11 @@ describe Course, "gradebook_to_csv" do
       csv = GradebookExporter.new(@course, @teacher).to_csv
       expect(csv).not_to be_nil
       rows = CSV.parse(csv)
-      expect(rows[2][4]).to eq "3.0"
+      expect(rows[2][4]).to eq "3.00"
       expect(rows[2][5]).to eq "N/A"
 
       expect(rows[3][4]).to eq "N/A"
-      expect(rows[3][5]).to eq "3.0"
+      expect(rows[3][5]).to eq "3.00"
 
       expect(rows[4][4]).to eq "N/A"
       expect(rows[4][5]).to eq "N/A"
@@ -2144,18 +2146,18 @@ describe Course, "tabs_available" do
     end
 
     it "should handle hidden_unused correctly for discussions" do
-      tabs = @course.uncached_tabs_available(@teacher, {})
+      tabs = @course.uncached_tabs_available(@teacher, include_hidden_unused: true)
       dtab = tabs.detect{|t| t[:id] == Course::TAB_DISCUSSIONS}
       expect(dtab[:hidden_unused]).to be_falsey
 
       @course.allow_student_discussion_topics = false
-      tabs = @course.uncached_tabs_available(@teacher, {})
+      tabs = @course.uncached_tabs_available(@teacher, include_hidden_unused: true)
       dtab = tabs.detect{|t| t[:id] == Course::TAB_DISCUSSIONS}
       expect(dtab[:hidden_unused]).to be_truthy
 
       @course.allow_student_discussion_topics = true
       discussion_topic_model
-      tabs = @course.uncached_tabs_available(@teacher, {})
+      tabs = @course.uncached_tabs_available(@teacher, include_hidden_unused: true)
       dtab = tabs.detect{|t| t[:id] == Course::TAB_DISCUSSIONS}
       expect(dtab[:hidden_unused]).to be_falsey
     end
@@ -2168,7 +2170,7 @@ describe Course, "tabs_available" do
 
     it "should not include Announcements without read_announcements rights" do
       @course.account.role_overrides.create!(:role => teacher_role, :permission => 'read_announcements', :enabled => false)
-      tab_ids = @course.uncached_tabs_available(@teacher, {}).map{|t| t[:id] }
+      tab_ids = @course.uncached_tabs_available(@teacher, include_hidden_unused: true).map{|t| t[:id] }
       expect(tab_ids).to_not include(Course::TAB_ANNOUNCEMENTS)
     end
   end
@@ -2632,7 +2634,7 @@ describe Course, 'grade_publishing' do
       end
 
       it 'should kick off the actual grade send' do
-        expect(@course).to receive(:send_later_if_production).with(:send_final_grades_to_endpoint, @user, nil).and_return(nil)
+        expect(@course).to receive(:send_later_if_production_enqueue_args).with(:send_final_grades_to_endpoint, anything, @user, nil).and_return(nil)
         allow(@plugin).to receive(:enabled?).and_return(true)
         @plugin_settings[:publish_endpoint] = "http://localhost/endpoint"
         @course.publish_final_grades(@user)
@@ -2640,7 +2642,7 @@ describe Course, 'grade_publishing' do
 
       it 'should kick off the actual grade send for a specific user' do
         make_student_enrollments
-        expect(@course).to receive(:send_later_if_production).with(:send_final_grades_to_endpoint, @user, @student_enrollments.first.user_id).and_return(nil)
+        expect(@course).to receive(:send_later_if_production_enqueue_args).with(:send_final_grades_to_endpoint, anything, @user, @student_enrollments.first.user_id).and_return(nil)
         allow(@plugin).to receive(:enabled?).and_return(true)
         @plugin_settings[:publish_endpoint] = "http://localhost/endpoint"
         @course.publish_final_grades(@user, @student_enrollments.first.user_id)
@@ -2648,7 +2650,7 @@ describe Course, 'grade_publishing' do
       end
 
       it 'should kick off the timeout when a success timeout is defined and waiting is configured' do
-        expect(@course).to receive(:send_later_if_production).with(:send_final_grades_to_endpoint, @user, nil).and_return(nil)
+        expect(@course).to receive(:send_later_if_production_enqueue_args).with(:send_final_grades_to_endpoint, anything, @user, nil).and_return(nil)
         current_time = Time.now.utc
         allow(Time).to receive(:now).and_return(current_time)
         allow(current_time).to receive(:utc).and_return(current_time)
@@ -2663,7 +2665,7 @@ describe Course, 'grade_publishing' do
       end
 
       it 'should not kick off the timeout when a success timeout is defined and waiting is not configured' do
-        expect(@course).to receive(:send_later_if_production).with(:send_final_grades_to_endpoint, @user, nil).and_return(nil)
+        expect(@course).to receive(:send_later_if_production_enqueue_args).with(:send_final_grades_to_endpoint, anything, @user, nil).and_return(nil)
         current_time = Time.now.utc
         allow(Time).to receive(:now).and_return(current_time)
         allow(current_time).to receive(:utc).and_return(current_time)
@@ -2678,7 +2680,7 @@ describe Course, 'grade_publishing' do
       end
 
       it 'should not kick off the timeout when a success timeout is not defined and waiting is not configured' do
-        expect(@course).to receive(:send_later_if_production).with(:send_final_grades_to_endpoint, @user, nil).and_return(nil)
+        expect(@course).to receive(:send_later_if_production_enqueue_args).with(:send_final_grades_to_endpoint, anything, @user, nil).and_return(nil)
         current_time = Time.now.utc
         allow(Time).to receive(:now).and_return(current_time)
         allow(current_time).to receive(:utc).and_return(current_time)
@@ -2693,7 +2695,7 @@ describe Course, 'grade_publishing' do
       end
 
       it 'should not kick off the timeout when a success timeout is not defined and waiting is configured' do
-        expect(@course).to receive(:send_later_if_production).with(:send_final_grades_to_endpoint, @user, nil).and_return(nil)
+        expect(@course).to receive(:send_later_if_production_enqueue_args).with(:send_final_grades_to_endpoint, anything, @user, nil).and_return(nil)
         current_time = Time.now.utc
         allow(Time).to receive(:now).and_return(current_time)
         allow(current_time).to receive(:utc).and_return(current_time)
@@ -3984,6 +3986,22 @@ describe Course, "section_visibility" do
       enrollment.conclude
 
       expect(@course.users_visible_to(@teacher)).not_to include(@student2)
+    end
+
+    it "should not return observers to section-restricted students" do
+      section2 = @course.course_sections.create!
+      limited_student = user_factory(:active_all => true)
+      @course.enroll_user(limited_student, "StudentEnrollment", :enrollment_state => "active",
+        :section => section2, :limit_privileges_to_course_section => true)
+
+      limited_teacher = user_factory(:active_all => true)
+      @course.enroll_user(limited_teacher, "TeacherEnrollment", :enrollment_state => "active",
+        :section => section2, :limit_privileges_to_course_section => true)
+      
+      observer = user_factory(:active_all => true)
+      @course.enroll_user(observer, "ObserverEnrollment", :enrollment_state => "active", :section => section2)
+      expect(@course.users_visible_to(limited_student)).not_to include(observer)
+      expect(@course.users_visible_to(limited_teacher)).to include(observer)
     end
 
     it "should return student view students to account admins" do

@@ -25,6 +25,13 @@ module Lti
       controller(ApplicationController) do
         include Lti::Ims::Concerns::GradebookServices
         before_action :verify_user_in_context, :verify_line_item_in_context
+        skip_before_action(
+          :verify_access_token,
+          :verify_developer_key,
+          :verify_tool,
+          :verify_tool_permissions,
+          :verify_tool_features
+        )
 
         def index
           return render_error(params[:error_message]) if params.key?(:error_message)
@@ -37,7 +44,6 @@ module Lti
           {
             line_item_id: line_item.id,
             context_id: context.id,
-            tool_id: tool.id,
             user_id: user.id
           }
         end
@@ -45,32 +51,34 @@ module Lti
 
       let_once(:context) { course_model(workflow_state: 'available') }
       let_once(:user) { student_in_course(course: context).user }
-      let_once(:assignment) { assignment_model context: context }
-      let_once(:line_item) { line_item_model assignment: assignment }
+      let_once(:assignment) do
+        opts = {course: context}
+        opts[:submission_types] = 'external_tool'
+        opts[:external_tool_tag_attributes] = {
+          url: tool.url,
+          content_type: 'context_external_tool',
+          content_id: tool.id
+        }
+        assignment_model(opts)
+      end
+      let_once(:developer_key) { DeveloperKey.create! }
+      let_once(:tool) do
+        ContextExternalTool.create!(
+          context: context,
+          consumer_key: 'key',
+          shared_secret: 'secret',
+          name: 'test tool',
+          url: 'http://www.tool.com/launch',
+          developer_key: developer_key,
+          settings: { use_1_3: true },
+          workflow_state: 'public'
+        )
+      end
+      let_once(:line_item) { assignment.line_items.first }
       let(:parsed_response_body) { JSON.parse(response.body) }
       let(:valid_params) { {course_id: context.id, userId: user.id, line_item_id: line_item.id} }
 
       describe '#before_actions' do
-        context 'with tool in context' do
-          it 'allows access'
-        end
-
-        context 'with tool in context chain' do
-          it 'allows access'
-        end
-
-        context 'with tool not in context' do
-          it 'does not allow access'
-        end
-
-        context 'with tool that has capability' do
-          it 'allows access'
-        end
-
-        context 'with tool that does not have capability' do
-          it 'does not allow access'
-        end
-
         context 'with user and line item in context' do
           before { user.enrollments.first.update!(workflow_state: 'active') }
 
@@ -80,7 +88,7 @@ module Lti
           end
         end
 
-        context 'with user not active context' do
+        context 'with user not active in context' do
           it 'fails to process the request' do
             get :index, params: valid_params
             expect(response.code).to eq '422'
@@ -103,29 +111,6 @@ module Lti
             get :index, params: {course_id: context.id, userId: user.id, line_item_id: LineItem.last.id + 1}
             expect(response).to be_not_found
           end
-        end
-      end
-
-      describe '#render_error' do
-        before { user.enrollments.first.update!(workflow_state: 'active') }
-        let(:error_message) { 'test error message' }
-        let(:params) do
-          {
-            error_message: error_message,
-            course_id: context.id,
-            userId: user.id,
-            line_item_id: line_item.id
-          }
-        end
-
-        it 'returns the error message correctly' do
-          get :index, params: params
-          expect(parsed_response_body.dig('errors', 'message')).to eq error_message
-        end
-
-        it 'returns the correct response code' do
-          get :index, params: params
-          expect(response.code).to eq '412'
         end
       end
     end

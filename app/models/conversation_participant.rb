@@ -352,7 +352,8 @@ class ConversationParticipant < ActiveRecord::Base
       update_cached_data
       save
     end
-    self.conversation.queue_update_stream_items
+    # update the stream item data but leave the instances alone
+    StreamItem.send_later_if_production_enqueue_args(:generate_or_update, {:priority => 25}, self.conversation)
   end
 
   def update_attributes(hash)
@@ -489,7 +490,7 @@ class ConversationParticipant < ActiveRecord::Base
           existing = self
         end
         # replicate ConversationParticipant record to the new user's shard
-        if old_shard != new_user.shard && new_user.shard != conversation.shard
+        if old_shard != new_user.shard && new_user.shard != conversation.shard && !new_user.all_conversations.where(:conversation_id => conversation).exists?
           new_cp = existing.clone
           new_cp.shard = new_user.shard
           new_cp.save!

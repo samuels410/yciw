@@ -37,6 +37,7 @@ describe "Sessions Timeout" do
           f(".copy_settings_button").click
         end
         f("#plugin_setting_disabled").click
+        f('#settings_session_timeout').clear
         f('#settings_session_timeout').send_keys('19')
         expect_new_page_load{ f('.save_button').click }
         assert_flash_error_message "There was an error saving the plugin settings"
@@ -49,7 +50,7 @@ describe "Sessions Timeout" do
     plugin_setting.save!
     user_with_pseudonym({:active_user => true})
     login_as
-    expect(f('[aria-label="Global navigation tray"] h2').text).to eq @user.primary_pseudonym.unique_id
+    expect(f('[aria-label="Profile tray"] h2').text).to eq @user.primary_pseudonym.unique_id
 
     Timecop.travel(Time.now + 61.seconds) do
       get "/courses"

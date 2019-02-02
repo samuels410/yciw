@@ -26,8 +26,9 @@ class Score < ActiveRecord::Base
   has_one :score_metadata
 
   validates :enrollment, presence: true
-  validates :current_score, :unposted_current_score, :final_score,
-    :unposted_final_score, numericality: true, allow_nil: true
+  validates :current_score, :unposted_current_score,
+    :final_score, :unposted_final_score, :override_score,
+    numericality: true, allow_nil: true
 
   validate :scorable_association_check
 
@@ -79,9 +80,27 @@ class Score < ActiveRecord::Base
     score_to_grade(unposted_final_score)
   end
 
+  def effective_final_score
+    override_score || final_score
+  end
+
+  def effective_final_score_lower_bound
+    score = effective_final_score
+    return score unless course.grading_standard_enabled?
+    course.grading_standard_or_default.lower_bound(score)
+  end
+
+  def effective_final_grade
+    score_to_grade(effective_final_score)
+  end
+
   def scorable
     # if you're calling this method, you might want to preload objects to avoid N+1
     grading_period || assignment_group || enrollment.course
+  end
+
+  def overridden?
+    override_score.present?
   end
 
   def self.params_for_course

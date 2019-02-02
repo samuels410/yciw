@@ -21,17 +21,10 @@ module NewUserSearchPage
   # ---------------------- Page ----------------------
   def visit_users(account)
     get("/accounts/#{account.id}/users")
-    wait_for_ajaximations
   end
 
   def visit_subaccount(sub_account)
     get("/accounts/#{sub_account.id}/users")
-    wait_for_ajaximations
-  end
-
-  def visit_courses(account)
-    get("/accounts/#{account.id}/")
-    wait_for_ajaximations
   end
 
   # ---------------------- Controls ----------------------
@@ -47,12 +40,12 @@ module NewUserSearchPage
     f('input[placeholder="Search people..."]')
   end
 
-  def add_user_button_jqcss
+  def add_people_button_jqcss
     'button:has([name="IconPlus"]):contains("People")'
   end
 
-  def add_user_button
-    fj(add_user_button_jqcss)
+  def add_people_button
+    fj(add_people_button_jqcss)
   end
 
   def more_options_button
@@ -80,15 +73,15 @@ module NewUserSearchPage
   end
 
   def masquerade_button(user_name)
-    fj("[data-automation='users list'] tr:contains('#{user_name}') [role=button]:has([name='IconMasquerade'])")
+    fj("[data-automation='users list'] tr:contains('#{user_name}') a:has([name='IconMasquerade'])")
   end
 
   def send_message_button(user_name)
-    fj("[data-automation='users list'] tr:contains('#{user_name}') [role=button]:has([name='IconMessage'])")
+    fj("[data-automation='users list'] tr:contains('#{user_name}') a:has([name='IconMessage'])")
   end
 
   def edit_user_button(user_name)
-    fj("[data-automation='users list'] tr:contains('#{user_name}') [role=button]:has([name='IconEdit'])")
+    fj("[data-automation='users list'] tr:contains('#{user_name}') button:has([name='IconEdit'])")
   end
 
   def page_previous_jqcss
@@ -159,8 +152,8 @@ module NewUserSearchPage
     wait_for_ajaximations
   end
 
-  def click_add_user
-    add_user_button.click
+  def click_add_people
+    add_people_button.click
   end
 
   def select_people_option(option)

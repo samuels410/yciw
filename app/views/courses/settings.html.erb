@@ -102,7 +102,7 @@
       <% end %>
       <tr>
         <td class="form-label"><%= f.blabel :name, :course_name, :en => "Name" %></td>
-        <td class="nobr">
+        <td>
           <% if can_rename_course %>
             <%= f.text_field :name, :class => "course_form", :maxlength => '255', :style => "width: 150px;" %>
           <% else %>
@@ -112,7 +112,7 @@
       </tr>
       <tr>
         <td class="form-label nobr"><%= f.blabel :course_code, :en => "Course Code" %></td>
-        <td class="nobr">
+        <td>
           <% if can_rename_course %>
             <%= f.text_field :course_code, :maxlength => '255', :style => "width: 100px;" %>
           <% else %>
@@ -120,7 +120,6 @@
           <% end %>
         </td>
       </tr>
-      <% if @context.root_account.feature_enabled?(:master_courses) %>
       <tr>
         <td class="form-label nobr"><%= f.blabel :blueprint_course, :en => "Blueprint Course" %></td>
         <td class="nobr">
@@ -140,7 +139,6 @@
           <% end %>
         </td>
       </tr>
-      <% end %>
       <tr>
         <td><%= f.blabel :time_zone, :en => "Time Zone" %></td>
         <td>
@@ -157,7 +155,7 @@
       <% if @context.sis_source_id && can_do(@context, @current_user, :read_sis) || can_do(@context.root_account, @current_user, :manage_sis) %>
         </tr><tr>
           <td class="form-label"><%= f.blabel :sis_source_id, :en => "SIS ID" %></td>
-          <td>
+          <td style="word-wrap: break-word;">
             <% if can_manage && can_do(@context.root_account, @current_user, :manage_sis) %>
               <%= f.text_field :sis_source_id, :style => "width: 202px;", :title => t('sis_source_id', "SIS ID"), :value => @context.sis_source_id %>
             <% else %>
@@ -221,6 +219,13 @@
           <% end %>
         </td>
       </tr><tr>
+        <td></td>
+        <td class="tall-row">
+          <div class="aside top-hint">
+            <%= t "Changing course dates may override term availability settings and placement in the Courses page and Dashboard. Please confirm term dates before modifying course dates." %>
+          </div>
+        </td>
+      </tr><tr>
         <td class="form-label"><%= f.blabel :start_at, :en => "Starts" %></td>
         <td class="nobr">
           <% if can_manage %>
@@ -241,12 +246,11 @@
                 meaning that the previous day will be the last day this course is active.") %></p></div>">
             </i>
 
-            <%= f.check_box :restrict_enrollments_to_course_dates %>
-            <%= f.label :restrict_enrollments_to_course_dates, :en => "Users can only participate in the course between these dates" %>
+            <%= f.check_box :restrict_enrollments_to_course_dates, "aria-describedby" => 'users-can-only-participate-description' %>
+            <%= f.label :restrict_enrollments_to_course_dates, :en => "Students can only participate in the course between these dates" %>
           </div>
-
-          <div class="aside palign">
-            <%= t('course_overrides_term', %{This will override any term availability settings.}) %>
+          <div class="aside bottom-hint" id="users-can-only-participate-description">
+            <%= t "When selected, the course is in a read-only state outside these dates." %>
           </div>
           <% else %>
             <%= datetime_string(@context.conclude_at, :verbose) %>
@@ -257,9 +261,26 @@
         <td class="form-label"></td>
         <td class="nobr">
           <%= f.check_box :restrict_enrollments_to_course_dates, :disabled => true %>
-          <%= f.label :restrict_enrollments_to_course_dates, :en => "Users can only participate in the course between these dates" %>
+          <%= f.label :restrict_enrollments_to_course_dates, :en => "Students can only participate in the course between these dates" %>
         </td>
       <% end %>
+      </tr><tr>
+        <td></td>
+        <td class="tall-row">
+          <div class="nobr" role="group" aria-describedby="restrict-view-description">
+            <div>
+              <%= f.check_box :restrict_student_past_view, :disabled => !can_manage || @context.account.restrict_student_past_view[:locked] %>
+              <%= f.label :restrict_student_past_view, :en => "Restrict students from viewing this course after end date" %>
+            </div>
+            <div>
+              <%= f.check_box :restrict_student_future_view, :disabled => !can_manage || @context.account.restrict_student_future_view[:locked] %>
+              <%= f.label :restrict_student_future_view, :en => "Restrict students from viewing this course before start date" %>
+            </div>
+          </div>
+          <div class="aside bottom-hint" id="restrict-view-description">
+            <%= t "When selected, the course is inaccessible outside course dates. If the course dates are blank, these start and end dates apply to the term dates." %>
+          </div>
+        </td>
       <% if available_locales.size > 1 %>
       </tr><tr>
         <td class="form-label"><%= f.blabel :locale, :language, :en => "Language" %></td>
@@ -349,15 +370,6 @@
           <div class="public_options">
             <%= f.check_box :indexed, :disabled => !can_manage %>
             <%= f.label :indexed, :en => "Include this course in the public course index" %>
-          </div>
-          <br/>
-          <div>
-            <%= f.check_box :restrict_student_past_view, :disabled => !can_manage || @context.account.restrict_student_past_view[:locked] %>
-            <%= f.label :restrict_student_past_view, :en => "Restrict students from viewing course after end date" %>
-          </div>
-          <div>
-            <%= f.check_box :restrict_student_future_view, :disabled => !can_manage || @context.account.restrict_student_future_view[:locked] %>
-            <%= f.label :restrict_student_future_view, :en => "Restrict students from viewing course before start date" %>
           </div>
         </td>
       </tr><tr>
@@ -589,12 +601,6 @@
       'Warning: For improved accessibility in reordering Course Navigation elements, please use the Move To Dialog option found in the menu.') %>
     </div>
 
-    <% keyboard_navigation([
-         {:key => t('keycodes.next_navigation_link', 'Up'), :description => t('keycode_descriptions.next_navigation_link', 'Select next navigation link')},
-         {:key => t('keycodes.previous_navigation_link', 'Down'), :description => t('keycode_descriptions.previous_navigation_link', 'Select previous navigation link')},
-         {:key => t('keycodes.toggle_navigation_dragging', 'Space'), :description => t('keycode_descriptions.toggle_navigation_dragging', 'Select link to begin dragging, or drop previously selected link')}
-     ]) %>
-
     <%= form_tag context_url(@context, :context_update_nav_url), {:id => "nav_form", :title => t('titles.edit_navigation', "Edit Course Navigation") } do %>
       <input type="hidden" name="tabs_json" id="tabs_json" value="[]" />
       <% tabs = sortable_tabs %>
@@ -610,29 +616,28 @@
         <% tabs.select {|t| !t[:hidden] }.each do |tab|  %>
           <li aria-label="<%= tab[:label] %>" class="navitem <%= 'enabled' if tab[:id] != Course::TAB_HOME %> <%= tab[:label].downcase %>"
               id="nav_edit_tab_id_<%= tab[:id] %>"
-              tabindex="0"
           >
             <%= tab[:label] %>
-            <div class="admin-links">
-              <a class="al-trigger al-trigger-gray" role="button" href="#">
-                <i class="icon-more" aria-hidden="true"></i>
-                <span class="screenreader-only">
-                  <%= t('Settings for %{tab_label}', { tab_label: tab[:label]}) %>
-                </span>
-              </a>
-
-              <ul class="al-options" role="menu" tabindex="0" aria-hidden="true" aria-expanded="false" aria-activedescendant="content-2">
-                <li role="presentation">
-                  <a href="#" class="icon-x disable_nav_item_link" id="disable_nav_item_link_<%= tab[:id] %>" role="menuitem" title="Disable this item"><%= t("Disable") %></a>
-                </li>
-                <li role="presentation">
-                  <a href="#" class="icon-updown move_nav_item_link" id="move_nav_item_link_<%= tab[:id] %>" role="menuitem" title="Move this item"><%= t("Move") %></a>
-                </li>
-              </ul>
-            </div>
-            <span class="disabled_message"><%= tab[:disabled_message] %></span>
+            <% if tab[:id] != Course::TAB_HOME %>
+              <div class="admin-links">
+                <a class="al-trigger al-trigger-gray" role="button" href="#">
+                  <i class="icon-more" aria-hidden="true"></i>
+                  <span class="screenreader-only">
+                    <%= t('Settings for %{tab_label}', { tab_label: tab[:label]}) %>
+                  </span>
+                </a>
+                <ul class="al-options" role="menu" tabindex="0" aria-hidden="true" aria-expanded="false" aria-activedescendant="content-2">
+                  <li role="presentation">
+                    <a href="#" class="icon-x disable_nav_item_link" id="disable_nav_item_link_<%= tab[:id] %>" role="menuitem" title="Disable this item"><%= t("Disable") %></a>
+                  </li>
+                  <li role="presentation">
+                    <a href="#" class="icon-updown move_nav_item_link" id="move_nav_item_link_<%= tab[:id] %>" role="menuitem" title="Move this item"><%= t("Move") %></a>
+                  </li>
+                </ul>
+              </div>
+              <span class="disabled_message"><%= tab[:disabled_message] %></span>
+            <% end %>
           </li>
-
         <% end %>
       </ul>
 
@@ -648,7 +653,6 @@
           <li aria-label="<%= tab[:label] %>"
               class="navitem enabled"
               id="nav_edit_tab_id_<%= tab[:id] %>"
-              tabindex="0"
           >
             <%= tab[:label] %>
             <div class="admin-links">

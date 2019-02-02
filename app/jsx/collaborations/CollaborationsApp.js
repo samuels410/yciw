@@ -18,12 +18,10 @@
 
 import React from 'react'
 import PropTypes from 'prop-types'
-import Modal from 'react-modal'
 import GettingStartedCollaborations from '../collaborations/GettingStartedCollaborations'
 import CollaborationsNavigation from '../collaborations/CollaborationsNavigation'
 import CollaborationsList from './CollaborationsList'
 import LoadingSpinner from './LoadingSpinner'
-import { dispatch } from './store/store'
 
   class CollaborationsApp extends React.Component {
     constructor (props) {

@@ -34,8 +34,12 @@ module PactConfig
     if my_broker_host.include?(EXTERNAL_BROKER_HOST)
       # external consumers
       GENERIC_CONSUMER = 'Generic Consumer'.freeze
+      FIU = 'lmsAPI'.freeze
     else
       # internal consumers
+      ANDROID_STUDENT = 'Android Student'.freeze
+      ANDROID_TEACHER = 'Android Teacher'.freeze
+      ANDROID_PARENT = 'Android Parent'.freeze
       GENERIC_CONSUMER = 'Generic Consumer'.freeze
       QUIZ_LTI = 'Quiz LTI'.freeze
       SISTEMIC = 'Sistemic'.freeze

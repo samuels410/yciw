@@ -18,7 +18,6 @@
 import moment from 'moment-timezone';
 import _ from 'lodash';
 import parseLinkHeader from 'parse-link-header';
-import { makeEndOfDayIfMidnight } from './dateUtils';
 
 const getItemDetailsFromPlannable = (apiResponse, timeZone) => {
   let { plannable, plannable_type, planner_override } = apiResponse;
@@ -35,6 +34,7 @@ const getItemDetailsFromPlannable = (apiResponse, timeZone) => {
     id: plannableId,
     uniqueId: `${plannable_type}-${plannableId}`,
     location: plannable.location_name || null,
+    address: plannable.location_address || null,
     dateStyle: plannable.todo_date ? 'todo' : 'due'
   };
   details.originallyCompleted = details.completed;
@@ -49,6 +49,7 @@ const getItemDetailsFromPlannable = (apiResponse, timeZone) => {
   }
 
   if (plannable_type === 'calendar_event') {
+    details.details = plannable.description;
     details.allDay = plannable.all_day;
     if (!details.allDay && plannable.end_at && plannable.end_at !== apiResponse.plannable_date ) {
       details.endTime = moment(plannable.end_at);
@@ -106,8 +107,7 @@ export function transformApiToInternalItem (apiResponse, courses, groups, timeZo
   }
   const details = getItemDetailsFromPlannable(apiResponse, timeZone);
 
-  // Standardize 00:00:00 date to 11:59PM on the current day to make due date less confusing
-  const plannableDate = makeEndOfDayIfMidnight(apiResponse.plannable_date, timeZone);
+  const plannableDate = moment.tz(apiResponse.plannable_date, timeZone);
 
   if ((!contextInfo.context) && apiResponse.plannable_type === 'planner_note' && (details.course_id)) {
     const course = courses.find(c => c.id === details.course_id);
