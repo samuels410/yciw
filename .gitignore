@@ -58,6 +58,9 @@ yarn-error.log
 
 # user docker compose overrides
 docker-compose.local.*
+/.idea/*
+.idea/yciw.iml
+.idea/.rakeTasks
 
 # sub-packages
 /packages/*/node_modules
