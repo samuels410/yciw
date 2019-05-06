@@ -21,12 +21,16 @@ exports[`Free-form Rubric with a custom criterion by default renders the LongDes
   onExiting={[Function]}
   onOpen={[Function]}
   open={false}
+  overflow="scroll"
   shouldCloseOnDocumentClick={true}
   shouldReturnFocus={true}
   size="medium"
   transition="fade"
+  variant="default"
 >
-  <ModalHeader>
+  <ModalHeader
+    variant="default"
+  >
     <CloseButton
       buttonRef={[Function]}
       margin="0"
@@ -50,6 +54,7 @@ exports[`Free-form Rubric with a custom criterion by default renders the LongDes
   <ModalBody
     as="div"
     padding="medium"
+    variant="default"
   >
     <Text
       as="span"
@@ -177,12 +182,16 @@ exports[`Free-form Rubric with a custom criterion when assessing renders the Lon
   onExiting={[Function]}
   onOpen={[Function]}
   open={false}
+  overflow="scroll"
   shouldCloseOnDocumentClick={true}
   shouldReturnFocus={true}
   size="medium"
   transition="fade"
+  variant="default"
 >
-  <ModalHeader>
+  <ModalHeader
+    variant="default"
+  >
     <CloseButton
       buttonRef={[Function]}
       margin="0"
@@ -206,6 +215,7 @@ exports[`Free-form Rubric with a custom criterion when assessing renders the Lon
   <ModalBody
     as="div"
     padding="medium"
+    variant="default"
   >
     <Text
       as="span"
@@ -333,12 +343,16 @@ exports[`Free-form Rubric with a custom criterion without an assessment renders 
   onExiting={[Function]}
   onOpen={[Function]}
   open={false}
+  overflow="scroll"
   shouldCloseOnDocumentClick={true}
   shouldReturnFocus={true}
   size="medium"
   transition="fade"
+  variant="default"
 >
-  <ModalHeader>
+  <ModalHeader
+    variant="default"
+  >
     <CloseButton
       buttonRef={[Function]}
       margin="0"
@@ -362,6 +376,7 @@ exports[`Free-form Rubric with a custom criterion without an assessment renders 
   <ModalBody
     as="div"
     padding="medium"
+    variant="default"
   >
     <Text
       as="span"
@@ -481,12 +496,16 @@ exports[`Free-form Rubric with a outcome criterion by default renders the LongDe
   onExiting={[Function]}
   onOpen={[Function]}
   open={false}
+  overflow="scroll"
   shouldCloseOnDocumentClick={true}
   shouldReturnFocus={true}
   size="medium"
   transition="fade"
+  variant="default"
 >
-  <ModalHeader>
+  <ModalHeader
+    variant="default"
+  >
     <CloseButton
       buttonRef={[Function]}
       margin="0"
@@ -510,6 +529,7 @@ exports[`Free-form Rubric with a outcome criterion by default renders the LongDe
   <ModalBody
     as="div"
     padding="medium"
+    variant="default"
   >
     <Text
       as="span"
@@ -691,12 +711,16 @@ exports[`Free-form Rubric with a outcome criterion when assessing renders the Lo
   onExiting={[Function]}
   onOpen={[Function]}
   open={false}
+  overflow="scroll"
   shouldCloseOnDocumentClick={true}
   shouldReturnFocus={true}
   size="medium"
   transition="fade"
+  variant="default"
 >
-  <ModalHeader>
+  <ModalHeader
+    variant="default"
+  >
     <CloseButton
       buttonRef={[Function]}
       margin="0"
@@ -720,6 +744,7 @@ exports[`Free-form Rubric with a outcome criterion when assessing renders the Lo
   <ModalBody
     as="div"
     padding="medium"
+    variant="default"
   >
     <Text
       as="span"
@@ -901,12 +926,16 @@ exports[`Free-form Rubric with a outcome criterion without an assessment renders
   onExiting={[Function]}
   onOpen={[Function]}
   open={false}
+  overflow="scroll"
   shouldCloseOnDocumentClick={true}
   shouldReturnFocus={true}
   size="medium"
   transition="fade"
+  variant="default"
 >
-  <ModalHeader>
+  <ModalHeader
+    variant="default"
+  >
     <CloseButton
       buttonRef={[Function]}
       margin="0"
@@ -930,6 +959,7 @@ exports[`Free-form Rubric with a outcome criterion without an assessment renders
   <ModalBody
     as="div"
     padding="medium"
+    variant="default"
   >
     <Text
       as="span"
@@ -1057,12 +1087,16 @@ exports[`Point Rubric with a custom criterion by default renders the LongDescrip
   onExiting={[Function]}
   onOpen={[Function]}
   open={false}
+  overflow="scroll"
   shouldCloseOnDocumentClick={true}
   shouldReturnFocus={true}
   size="medium"
   transition="fade"
+  variant="default"
 >
-  <ModalHeader>
+  <ModalHeader
+    variant="default"
+  >
     <CloseButton
       buttonRef={[Function]}
       margin="0"
@@ -1086,6 +1120,7 @@ exports[`Point Rubric with a custom criterion by default renders the LongDescrip
   <ModalBody
     as="div"
     padding="medium"
+    variant="default"
   >
     <Text
       as="span"
@@ -1252,12 +1287,16 @@ exports[`Point Rubric with a custom criterion when assessing renders the LongDes
   onExiting={[Function]}
   onOpen={[Function]}
   open={false}
+  overflow="scroll"
   shouldCloseOnDocumentClick={true}
   shouldReturnFocus={true}
   size="medium"
   transition="fade"
+  variant="default"
 >
-  <ModalHeader>
+  <ModalHeader
+    variant="default"
+  >
     <CloseButton
       buttonRef={[Function]}
       margin="0"
@@ -1281,6 +1320,7 @@ exports[`Point Rubric with a custom criterion when assessing renders the LongDes
   <ModalBody
     as="div"
     padding="medium"
+    variant="default"
   >
     <Text
       as="span"
@@ -1447,12 +1487,16 @@ exports[`Point Rubric with a custom criterion without an assessment renders the 
   onExiting={[Function]}
   onOpen={[Function]}
   open={false}
+  overflow="scroll"
   shouldCloseOnDocumentClick={true}
   shouldReturnFocus={true}
   size="medium"
   transition="fade"
+  variant="default"
 >
-  <ModalHeader>
+  <ModalHeader
+    variant="default"
+  >
     <CloseButton
       buttonRef={[Function]}
       margin="0"
@@ -1476,6 +1520,7 @@ exports[`Point Rubric with a custom criterion without an assessment renders the 
   <ModalBody
     as="div"
     padding="medium"
+    variant="default"
   >
     <Text
       as="span"
@@ -1621,12 +1666,16 @@ exports[`Point Rubric with a outcome criterion by default renders the LongDescri
   onExiting={[Function]}
   onOpen={[Function]}
   open={false}
+  overflow="scroll"
   shouldCloseOnDocumentClick={true}
   shouldReturnFocus={true}
   size="medium"
   transition="fade"
+  variant="default"
 >
-  <ModalHeader>
+  <ModalHeader
+    variant="default"
+  >
     <CloseButton
       buttonRef={[Function]}
       margin="0"
@@ -1650,6 +1699,7 @@ exports[`Point Rubric with a outcome criterion by default renders the LongDescri
   <ModalBody
     as="div"
     padding="medium"
+    variant="default"
   >
     <Text
       as="span"
@@ -1870,12 +1920,16 @@ exports[`Point Rubric with a outcome criterion when assessing renders the LongDe
   onExiting={[Function]}
   onOpen={[Function]}
   open={false}
+  overflow="scroll"
   shouldCloseOnDocumentClick={true}
   shouldReturnFocus={true}
   size="medium"
   transition="fade"
+  variant="default"
 >
-  <ModalHeader>
+  <ModalHeader
+    variant="default"
+  >
     <CloseButton
       buttonRef={[Function]}
       margin="0"
@@ -1899,6 +1953,7 @@ exports[`Point Rubric with a outcome criterion when assessing renders the LongDe
   <ModalBody
     as="div"
     padding="medium"
+    variant="default"
   >
     <Text
       as="span"
@@ -2119,12 +2174,16 @@ exports[`Point Rubric with a outcome criterion without an assessment renders the
   onExiting={[Function]}
   onOpen={[Function]}
   open={false}
+  overflow="scroll"
   shouldCloseOnDocumentClick={true}
   shouldReturnFocus={true}
   size="medium"
   transition="fade"
+  variant="default"
 >
-  <ModalHeader>
+  <ModalHeader
+    variant="default"
+  >
     <CloseButton
       buttonRef={[Function]}
       margin="0"
@@ -2148,6 +2207,7 @@ exports[`Point Rubric with a outcome criterion without an assessment renders the
   <ModalBody
     as="div"
     padding="medium"
+    variant="default"
   >
     <Text
       as="span"

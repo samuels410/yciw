@@ -109,7 +109,7 @@ test('A key press event on the select menu causes the change function to call', 
   ]
   let fired = false
   const selectMenu = new SpeedgraderSelectMenu(optionsArray)
-  selectMenu.appendTo('#test_area', e => (fired = true))
+  selectMenu.appendTo('#test_area', () => (fired = true))
   const event = new Event('keyup')
   event.keyCode = 37
   document.getElementById('students_selectmenu').dispatchEvent(event)
@@ -152,8 +152,18 @@ QUnit.module('SpeedGraderSelectMenu - rendered select control', {
         ],
         anonymizableId: 'id'
       },
-      {id: '3', name: 'Student 2', className: {raw: 'graded', formatted: 'graded'}, anonymizableId: 'id'},
-      {id: '1', name: 'Student 1', className: {raw: 'not_graded', formatted: 'not graded'}, anonymizableId: 'id'}
+      {
+        id: '3',
+        name: 'Student 2',
+        className: {raw: 'graded', formatted: 'graded'},
+        anonymizableId: 'id'
+      },
+      {
+        id: '1',
+        name: 'Student 1',
+        className: {raw: 'not_graded', formatted: 'not graded'},
+        anonymizableId: 'id'
+      }
     ]
     this.selectMenu = new SpeedgraderSelectMenu(this.optionsArray)
     this.selectMenu.appendTo('#test_area')

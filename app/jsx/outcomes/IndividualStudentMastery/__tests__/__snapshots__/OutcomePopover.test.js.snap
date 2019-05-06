@@ -17,7 +17,7 @@ exports[`renders correctly with no custom outcomeProficiency 1`] = `
     on={
       Array [
         "hover",
-        "focus",
+        "click",
       ]
     }
     onBlur={[Function]}
@@ -32,11 +32,14 @@ exports[`renders correctly with no custom outcomeProficiency 1`] = `
     onToggle={[Function]}
     placement="bottom"
     positionTarget={null}
+    shadow="resting"
     shouldCloseOnDocumentClick={true}
     shouldCloseOnEscape={true}
-    shouldContainFocus={false}
+    shouldContainFocus={true}
+    shouldFocusContentOnTriggerBlur={false}
     shouldRenderOffscreen={false}
     shouldReturnFocus={true}
+    show={false}
     stacking="topmost"
     trackPosition={true}
     variant="default"
@@ -45,10 +48,11 @@ exports[`renders correctly with no custom outcomeProficiency 1`] = `
     <PopoverTrigger>
       <Link
         as="button"
-        ellipsis={false}
         iconPlacement="start"
         linkRef={[Function]}
         onClick={[Function]}
+        onMouseEnter={[Function]}
+        onMouseLeave={[Function]}
         variant="default"
       >
         <span
@@ -74,8 +78,21 @@ exports[`renders correctly with no custom outcomeProficiency 1`] = `
         as="div"
         display="auto"
         maxWidth="30rem"
-        padding="small"
+        overflowX="visible"
+        overflowY="visible"
+        padding="large"
       >
+        <CloseButton
+          buttonRef={[Function]}
+          margin="0"
+          offset="x-small"
+          onClick={[Function]}
+          placement="end"
+          size="small"
+          variant="icon"
+        >
+          Click to close outcome details popover
+        </CloseButton>
         <Text
           as="span"
           letterSpacing="normal"
@@ -175,11 +192,6 @@ exports[`renders correctly with no custom outcomeProficiency 1`] = `
       </View>
     </PopoverContent>
   </Popover>
-  <FlexItem
-    as="span"
-    grow={false}
-    shrink={false}
-  />
 </span>
 `;
 
@@ -200,7 +212,7 @@ exports[`renders correctly with no results 1`] = `
     on={
       Array [
         "hover",
-        "focus",
+        "click",
       ]
     }
     onBlur={[Function]}
@@ -215,11 +227,14 @@ exports[`renders correctly with no results 1`] = `
     onToggle={[Function]}
     placement="bottom"
     positionTarget={null}
+    shadow="resting"
     shouldCloseOnDocumentClick={true}
     shouldCloseOnEscape={true}
-    shouldContainFocus={false}
+    shouldContainFocus={true}
+    shouldFocusContentOnTriggerBlur={false}
     shouldRenderOffscreen={false}
     shouldReturnFocus={true}
+    show={false}
     stacking="topmost"
     trackPosition={true}
     variant="default"
@@ -228,10 +243,11 @@ exports[`renders correctly with no results 1`] = `
     <PopoverTrigger>
       <Link
         as="button"
-        ellipsis={false}
         iconPlacement="start"
         linkRef={[Function]}
         onClick={[Function]}
+        onMouseEnter={[Function]}
+        onMouseLeave={[Function]}
         variant="default"
       >
         <span
@@ -257,8 +273,21 @@ exports[`renders correctly with no results 1`] = `
         as="div"
         display="auto"
         maxWidth="30rem"
-        padding="small"
+        overflowX="visible"
+        overflowY="visible"
+        padding="large"
       >
+        <CloseButton
+          buttonRef={[Function]}
+          margin="0"
+          offset="x-small"
+          onClick={[Function]}
+          placement="end"
+          size="small"
+          variant="icon"
+        >
+          Click to close outcome details popover
+        </CloseButton>
         <Text
           as="span"
           letterSpacing="normal"
@@ -355,11 +384,6 @@ exports[`renders correctly with no results 1`] = `
       </View>
     </PopoverContent>
   </Popover>
-  <FlexItem
-    as="span"
-    grow={false}
-    shrink={false}
-  />
 </span>
 `;
 
@@ -380,7 +404,7 @@ exports[`renders the OutcomePopover component 1`] = `
     on={
       Array [
         "hover",
-        "focus",
+        "click",
       ]
     }
     onBlur={[Function]}
@@ -395,11 +419,14 @@ exports[`renders the OutcomePopover component 1`] = `
     onToggle={[Function]}
     placement="bottom"
     positionTarget={null}
+    shadow="resting"
     shouldCloseOnDocumentClick={true}
     shouldCloseOnEscape={true}
-    shouldContainFocus={false}
+    shouldContainFocus={true}
+    shouldFocusContentOnTriggerBlur={false}
     shouldRenderOffscreen={false}
     shouldReturnFocus={true}
+    show={false}
     stacking="topmost"
     trackPosition={true}
     variant="default"
@@ -408,10 +435,11 @@ exports[`renders the OutcomePopover component 1`] = `
     <PopoverTrigger>
       <Link
         as="button"
-        ellipsis={false}
         iconPlacement="start"
         linkRef={[Function]}
         onClick={[Function]}
+        onMouseEnter={[Function]}
+        onMouseLeave={[Function]}
         variant="default"
       >
         <span
@@ -437,8 +465,21 @@ exports[`renders the OutcomePopover component 1`] = `
         as="div"
         display="auto"
         maxWidth="30rem"
-        padding="small"
+        overflowX="visible"
+        overflowY="visible"
+        padding="large"
       >
+        <CloseButton
+          buttonRef={[Function]}
+          margin="0"
+          offset="x-small"
+          onClick={[Function]}
+          placement="end"
+          size="small"
+          variant="icon"
+        >
+          Click to close outcome details popover
+        </CloseButton>
         <Text
           as="span"
           letterSpacing="normal"
@@ -538,10 +579,5 @@ exports[`renders the OutcomePopover component 1`] = `
       </View>
     </PopoverContent>
   </Popover>
-  <FlexItem
-    as="span"
-    grow={false}
-    shrink={false}
-  />
 </span>
 `;

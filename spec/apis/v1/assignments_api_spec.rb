@@ -400,7 +400,9 @@ describe AssignmentsApiController, type: :request do
         'id' => @rubric.id,
         'title' => 'some rubric',
         'points_possible' => 12,
-        'free_form_criterion_comments' => true
+        'free_form_criterion_comments' => true,
+        'hide_score_total' => false,
+        'hide_points' => false,
       })
       expect(json.first['rubric']).to eq [
         {
@@ -1107,11 +1109,8 @@ describe AssignmentsApiController, type: :request do
 
     it "returns assignments for authorized observer" do
       course_with_student_submissions(:active_all => true)
-      parent = User.create
-      parent.as_observer_observation_links.create! do |uo|
-        uo.user_id = @student.id
-      end
-      parent.save!
+      parent = User.create!
+      add_linked_observer(@student, parent)
       json = api_get_assignments_user_index(@student, @course, parent)
       expect(json[0]['course_id']).to eq @course.id
     end
@@ -1297,6 +1296,75 @@ describe AssignmentsApiController, type: :request do
         {},
         {},
         { :expected_status => 400 })
+    end
+
+    context "Quizzes.Next course copy retry" do
+      let(:assignment) do
+        @course.assignments.create(
+          :title => "some assignment",
+          :assignment_group => @group,
+          :due_at => Time.zone.now + 1.week,
+          submission_types: "external_tool"
+        )
+      end
+
+      let(:course_copied) do
+        course = @course.dup
+        course.name = 'target course'
+        course.workflow_state = 'available'
+        course.save!
+        course
+      end
+
+      let!(:failed_assignment) do
+        course_copied.assignments.create(
+          title: 'failed assignment',
+          workflow_state: 'failed_to_duplicate',
+          duplicate_of_id: assignment.id
+        )
+      end
+
+      before do
+        tool = @course.context_external_tools.create!(
+          name: "bob",
+          url: "http://www.google.com",
+          consumer_key: "bob",
+          shared_secret: "bob",
+          tool_id: 'Quizzes 2',
+          privacy_level: 'public'
+        )
+        tag = ContentTag.create(content: tool, url: tool.url, context: assignment)
+        assignment.external_tool_tag = tag
+        assignment.save!
+      end
+
+      it "creates a new assignment with workflow_state duplicating" do
+        url = "/api/v1/courses/#{@course.id}/assignments/#{assignment.id}/duplicate.json" \
+          "?target_assignment_id=#{failed_assignment.id}&target_course_id=#{course_copied.id}"
+
+        expect {
+          api_call_as_user(
+            @teacher, :post,
+            url,
+            {
+              controller: "assignments_api",
+              action: "duplicate",
+              format: "json",
+              course_id: @course.id.to_s,
+              assignment_id: assignment.id.to_s,
+              target_assignment_id: failed_assignment.id,
+              target_course_id: course_copied.id
+            },
+            {},
+            {},
+            { :expected_status => 200 }
+          )
+        }.to change { course_copied.assignments.where(duplicate_of_id: assignment.id).count }.by 1
+        duplicated_assignments = course_copied.assignments.where(duplicate_of_id: assignment.id)
+        expect(duplicated_assignments.count).to eq 2
+        new_assignment = duplicated_assignments.where.not(id: failed_assignment.id).first
+        expect(new_assignment.workflow_state).to eq('duplicating')
+      end
     end
   end
 
@@ -1658,9 +1726,7 @@ describe AssignmentsApiController, type: :request do
           a
         end
         let(:update_response) do
-          put "/api/v1/courses/#{@course.id}/assignments/#{assignment.id}", params: {
-            assignment: { name: 'banana' }
-          }
+          put "/api/v1/courses/#{@course.id}/assignments/#{assignment.id}", params: params
         end
         let(:lookups) { assignment.assignment_configuration_tool_lookups }
 
@@ -1671,7 +1737,31 @@ describe AssignmentsApiController, type: :request do
           user_session(@user)
         end
 
+        context 'when changing the workflow state' do
+          let(:params) do
+            {
+              assignment: {
+                published: true
+              }
+            }
+          end
+
+          it 'does not attempt to clear tool associations' do
+            expect(assignment).not_to receive(:clear_tool_settings_tools)
+            update_response
+          end
+        end
+
         context 'when switching to unsupported submission type' do
+          let(:params) do
+            {
+              assignment: {
+                name: 'banana',
+                submission_types: ['online_upload']
+              }
+            }
+          end
+
           it 'destroys tool associations' do
             expect do
               update_response

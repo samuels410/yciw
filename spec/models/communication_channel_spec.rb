@@ -97,6 +97,16 @@ describe CommunicationChannel do
     expect(@cc.confirmation_code).not_to eql(old_cc)
   end
 
+  it "should not send two reset confirmation code" do
+    cc = communication_channel_model
+    enable_cache do
+      expect(cc).to receive(:set_confirmation_code).twice # once from create, once from first forgot
+      cc.forgot_password!
+      cc.forgot_password!
+      cc.forgot_password!
+    end
+  end
+
   it "should use a 15-digit confirmation code for default or email path_type settings" do
     communication_channel_model
     expect(@cc.path_type).to eql('email')
@@ -166,6 +176,25 @@ describe CommunicationChannel do
     expect(@cc1.position).to eql(2)
     @cc3.reload
     expect(@cc3.position).to eql(1)
+  end
+
+  it "should correctly count the number of confirmations sent" do
+    account = Account.create!
+    @u1 = User.create!
+    @cc1 = @u1.communication_channels.create!(:path => 'landong@instructure.com')
+    @cc1.send_confirmation!(account)
+    @cc1.send_confirmation!(account)
+    @cc1.send_confirmation!(account)
+    # Note this 4th one should not count up
+    @cc1.send_confirmation!(account)
+    @cc2 = @u1.communication_channels.create!(:path => 'steveb@instructure.com')
+    @cc2.send_confirmation!(account)
+    @cc2.send_confirmation!(account)
+    @cc3 = @u1.communication_channels.create!(:path => 'aaronh@instructure.com')
+    @cc3.send_confirmation!(account)
+    expect(@cc1.confirmation_sent_count).to eql(3)
+    expect(@cc2.confirmation_sent_count).to eql(2)
+    expect(@cc3.confirmation_sent_count).to eql(1)
   end
 
   context "can_notify?" do

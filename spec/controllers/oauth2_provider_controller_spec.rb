@@ -374,6 +374,12 @@ describe Oauth2ProviderController do
           expect(json.keys.sort).to match_array(success_token_keys)
           expect(json['token_type']).to eq 'Bearer'
         end
+
+        context 'with global_id as client_id' do
+          let(:client_id) { key.global_id }
+
+          it { is_expected.to have_http_status(200) }
+        end
       end
 
       context 'invalid grant_type provided' do
@@ -481,47 +487,23 @@ describe Oauth2ProviderController do
         expect(response.body).to match(/incorrect client/)
       end
 
-      context "multiple refreshes" do
-        before :each do
-          allow_any_instance_of(Canvas::Oauth::GrantTypes::RefreshToken).
-            to receive(:update_recently_refreshed_tokens?).and_return(false)
-        end
+      it 'should be able to regenerate access_token multiple times' do
+        post :token, params: base_params.merge(refresh_token: refresh_token)
+        expect(response).to be_successful
+        json = JSON.parse(response.body)
+        expect(json['access_token']).to_not eq old_token.full_token
 
-        it 'should be able to regenerate access_token multiple times (with enough time in between)' do
-          post :token, params: base_params.merge(refresh_token: refresh_token)
-          expect(response).to be_successful
-          json = JSON.parse(response.body)
-          expect(json['access_token']).to_not eq old_token.full_token
-
-          Timecop.freeze(1.minute.from_now) do
-            access_token = json['access_token']
-            post :token, params: base_params.merge(refresh_token: refresh_token)
-            expect(response).to be_successful
-            json = JSON.parse(response.body)
-            expect(json['access_token']).to_not eq access_token
-          end
-        end
-
-        it 'should not be able to regenerate access_token multiple times in short succession' do
-          post :token, params: base_params.merge(refresh_token: refresh_token)
-          expect(response).to be_successful
-          json = JSON.parse(response.body)
-          expect(json['access_token']).to_not eq old_token.full_token
-
-          Timecop.freeze(old_token.reload.updated_at + 1.second) do
-            access_token = json['access_token']
-            post :token, params: base_params.merge(refresh_token: refresh_token)
-            expect(response).to be_successful
-            json = JSON.parse(response.body)
-            expect(json['access_token']).to eq access_token # didn't change
-          end
-        end
+        access_token = json['access_token']
+        post :token, params: base_params.merge(refresh_token: refresh_token)
+        expect(response).to be_successful
+        json = JSON.parse(response.body)
+        expect(json['access_token']).to_not eq access_token
       end
     end
 
     context 'client_credentials' do
       let(:grant_type) { 'client_credentials' }
-      let(:aud) { Rails.application.routes.url_helpers.oauth2_token_url host: 'test.host' }
+      let(:aud) { Rails.application.routes.url_helpers.oauth2_token_url(host: 'test.host', protocol: 'https://') }
       let(:iat) { 1.minute.ago.to_i }
       let(:exp) { 10.minutes.from_now.to_i }
       let(:signing_key) { JSON::JWK.new(key.private_jwk) }
@@ -569,7 +551,7 @@ describe Oauth2ProviderController do
         end
 
         context 'with aud as an array' do
-          let(:aud) { [Rails.application.routes.url_helpers.oauth2_token_url(host: 'test.host'), 'doesnotexist'] }
+          let(:aud) { [Rails.application.routes.url_helpers.oauth2_token_url(host: 'test.host', protocol: 'https://'), 'doesnotexist'] }
 
           it { is_expected.to have_http_status 200 }
         end
@@ -578,6 +560,17 @@ describe Oauth2ProviderController do
           let(:exp) { 1.minute.ago.to_i }
 
           it { is_expected.to have_http_status 400 }
+        end
+
+        context 'with iat in the future by a small amount' do
+          let(:future_iat_time) { 5.seconds.from_now }
+          let(:iat) { future_iat_time.to_i }
+
+          it 'returns an access token' do
+            Timecop.freeze(future_iat_time - 5.seconds) do
+              expect(subject).to have_http_status 200
+            end
+          end
         end
 
         context 'with bad iat' do

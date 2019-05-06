@@ -45,13 +45,17 @@
           <i class="icon-gradebook" aria-hidden="true"></i>
           <span class="screenreader-only" aria-hidden="true"><%= t("Gradebook") %></span>
         </a>
-        <button type="button" data-muted="<%= @assignment.muted? %>" id="mute_link"
-          class="Button Button--icon-action gradebookActions__Button<%= @disable_unmute_assignment ? " disabled" : "" %>" title="<%= t('Mute/Unmute Assignment') %>">
-          <i class=<%= @assignment.muted? ? "icon-muted" : "icon-unmuted"  %> aria-hidden="true"></i>
-          <span class="screenreader-only" aria-hidden="true">
-            <%= @assignment.muted? ? t("Unmute Assignment") : t("Mute Assignment") %>
-          </span>
-        </button>
+        <% if post_policies_enabled %>
+          <span id="speed_grader_post_grades_menu_mount_point"></span>
+        <% else %>
+          <button type="button" data-muted="<%= @assignment.muted? %>" id="mute_link"
+            class="Button Button--icon-action gradebookActions__Button<%= @disable_unmute_assignment ? " disabled" : "" %>" title="<%= t('Mute/Unmute Assignment') %>">
+            <i class=<%= @assignment.muted? ? "icon-muted" : "icon-unmuted"  %> aria-hidden="true"></i>
+            <span class="screenreader-only" aria-hidden="true">
+              <%= @assignment.muted? ? t("Unmute Assignment") : t("Mute Assignment") %>
+            </span>
+          </button>
+        <% end %>
 
         <span id="speed_grader_settings_mount_point"></span>
       </div>
@@ -96,47 +100,6 @@
       </div>
     </div>
   <% end %>
-  </div>
-</div>
-<div id="moderation_bar">
-  <div id="moderation_bar_content">
-    <div id="moderation_tabs" class="ui-tabs-minimal">
-      <ul>
-        <li data-pg-index="0"><a href="#dummy_container">
-          <span class="mark_title"><%= t('1st Reviewer') %></span>
-          <span class="mark_grade"></span>
-        </a></li>
-        <li data-pg-index="1"><a href="#dummy_container">
-          <span class="mark_title"><%= t('2nd Reviewer') %></span>
-          <span class="mark_grade"></span>
-        </a></li>
-        <li data-pg-index="final"><a href="#dummy_container">
-          <span class="mark_title"><%= t('Moderator') %></span>
-          <span class="mark_grade"></span>
-        </a></li>
-      </ul>
-      <div id="dummy_container"></div>
-    </div>
-    <div id="new_mark_container">
-      <a id="new_mark_dropdown_link" href="#dummy_container" class="al-trigger" data-popup-within="#full_width_container" tabindex="0">
-        <%= t('Add Review') %>
-        <i class="icon-mini-arrow-down"></i>
-      </a>
-      <ul id="new_mark_dropdown" class="al-options" role="menu" tabindex="0" aria-hidden="true" aria-expanded="false" aria-activedescendant="new_mark_dropdown_link1">
-        <li role="presentation">
-          <a href="#" id="new_mark_link" tabindex="-1" role="menuitem"><%= t('Add 2nd Review') %></a>
-        </li>
-        <li role="presentation">
-          <a href="#" id="new_mark_final_link" tabindex="-1" role="menuitem"><%= t('Add Moderator Review (New)') %></a>
-        </li>
-        <li role="presentation">
-          <a href="#" id="new_mark_copy_link1" tabindex="-1" role="menuitem"><%= t('Add Moderator Review (Copy 1st)') %></a>
-        </li>
-        <li role="presentation">
-          <a href="#" id="new_mark_copy_link2" tabindex="-1" role="menuitem"><%= t('Add Moderator Review (Copy 2nd)') %></a>
-        </li>
-      </ul>
-    </div>
   </div>
 </div>
 <div id="enrollment_inactive_notice" class="alert alert-info" style="display: none;">
@@ -212,7 +175,7 @@
                   download_url = context_url(@context, resource, @assignment.id, submission_id_or_anonymous_id, download: "{{attachmentId}}")
                   preview_url = context_url(@context, resource, @assignment.id, submission_id_or_anonymous_id, download: "{{attachmentId}}", inline: 1)
                 %>
-                <a class="submission-file-download icon-download" title="<%= t("Download this file") %>" href="<%= download_url %>"></a>
+                <a class="submission-file-download icon-download" title="<%= t("Download this file") %>" href="<%= download_url %>" download></a>
                 <span class="turnitin_score_container"></span>
                 <a class="display_name no-hover" href="<%= preview_url %>" title="<%= t('titles.preview_file', "Preview this File") %>">???</a>
                 <span id="react_pill_container"></span>
@@ -453,8 +416,10 @@
     <button type="submit" class="btn btn-primary submit_button"><%= t('buttons.save_settings', "Save Settings") %></button>
   </div>
 </form>
-<%= render :partial => "shared/mute_dialog" %>
-<%= render :partial => "shared/unmute_dialog" %>
+<% unless post_policies_enabled %>
+  <%= render :partial => "shared/mute_dialog" %>
+  <%= render :partial => "shared/unmute_dialog" %>
+<% end %>
 <ul id="section-menu" class="ui-selectmenu-menu ui-widget ui-widget-content ui-selectmenu-menu-dropdown ui-selectmenu-open" style="display:none;" role="listbox" aria-activedescendant="section-menu-link">
   <li role="presentation" class="ui-selectmenu-item">
     <a href="#" tabindex="-1" role="option" aria-selected="true" id="section-menu-link">

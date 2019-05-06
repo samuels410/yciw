@@ -273,7 +273,7 @@ describe CoursesController do
         expect(assigns[:future_enrollments]).to be_empty
 
         observer = user_with_pseudonym(active_all: true)
-        o = @student.as_student_observation_links.build; o.observer = observer; o.save!
+        add_linked_observer(@student, observer)
         user_session(observer)
         get 'index'
         expect(response).to be_successful
@@ -407,7 +407,7 @@ describe CoursesController do
         expect(assigns[:future_enrollments].map(&:course_id)).to eq [course1.id, course2.id]
 
         observer = user_with_pseudonym(active_all: true)
-        o = @student.as_student_observation_links.build; o.observer = observer; o.save!
+        add_linked_observer(@student, observer)
         user_session(observer)
         get 'index'
         expect(response).to be_successful
@@ -441,7 +441,7 @@ describe CoursesController do
         expect(assigns[:future_enrollments]).to eq [enrollment1]
 
         observer = user_with_pseudonym(active_all: true)
-        o = @student.as_student_observation_links.build; o.observer = observer; o.save!
+        add_linked_observer(@student, observer)
         user_session(observer)
         get 'index'
         expect(response).to be_successful
@@ -616,7 +616,7 @@ describe CoursesController do
 
     it "should assign active course_settings_sub_navigation external tools" do
       user_session(@teacher)
-      @teacher.enable_feature!(:lor_for_user)
+      Account.default.enable_feature!(:lor_for_account)
       shared_settings = { consumer_key: 'test', shared_secret: 'secret', url: 'http://example.com/lti' }
       other_tool = @course.context_external_tools.create(shared_settings.merge(name: 'other', course_navigation: {enabled: true}))
       inactive_tool = @course.context_external_tools.create(shared_settings.merge(name: 'inactive', course_settings_sub_navigation: {enabled: true}))
@@ -1522,7 +1522,14 @@ describe CoursesController do
     end
 
     it "should log published event on update" do
+      @course.claim!
       expect(Auditors::Course).to receive(:record_published).once
+      user_session(@teacher)
+      put 'update', params: {:id => @course.id, :offer => true}
+    end
+
+    it "should not log published event if course was already published" do
+      expect(Auditors::Course).to receive(:record_published).never
       user_session(@teacher)
       put 'update', params: {:id => @course.id, :offer => true}
     end
@@ -1562,6 +1569,64 @@ describe CoursesController do
       put 'update', params: {:id => @course.id, :course => { :event => 'claim' }}
       @course.reload
       expect(@course.workflow_state).to eq 'claimed'
+    end
+
+    it "concludes a course" do
+      expect(Auditors::Course).to receive(:record_concluded).once
+      user_session(@teacher)
+      put 'update', params: {:id => @course.id, :course => {:event => "conclude"}, :format => :json}
+      json = JSON.parse response.body
+      expect(json['course']['workflow_state']).to eq 'completed'
+      @course.reload
+      expect(@course.workflow_state).to eq 'completed'
+    end
+
+    it "publishes a course" do
+      @course.claim!
+      expect(Auditors::Course).to receive(:record_published).once
+      user_session(@teacher)
+      put 'update', params: {:id => @course.id, :course => {:event => 'offer'}, :format => :json}
+      json = JSON.parse response.body
+      expect(json['course']['workflow_state']).to eq 'available'
+      @course.reload
+      expect(@course.workflow_state).to eq 'available'
+    end
+
+    it "deletes a course" do
+      user_session(@teacher)
+      expect(Auditors::Course).to receive(:record_deleted).once
+      put 'update', params: {:id => @course.id, :course => {:event => 'delete'}, :format => :json}
+      json = JSON.parse response.body
+      expect(json['course']['workflow_state']).to eq 'deleted'
+      @course.reload
+      expect(@course.workflow_state).to eq 'deleted'
+    end
+
+    it "doesn't allow a teacher to undelete a course" do
+      @course.destroy
+      expect(Auditors::Course).to receive(:record_restored).never
+      user_session(@teacher)
+      put 'update', params: {:id => @course.id, :course => {:event => 'undelete'}, :format => :json}
+      expect(response.status).to eq 401
+    end
+
+    it "undeletes a course" do
+      @course.destroy
+      expect(Auditors::Course).to receive(:record_restored).once
+      user_session(account_admin_user)
+      put 'update', params: {:id => @course.id, :course => {:event => 'undelete'}, :format => :json}
+      json = JSON.parse response.body
+      expect(json['course']['workflow_state']).to eq 'claimed'
+      @course.reload
+      expect(@course.workflow_state).to eq 'claimed'
+    end
+
+    it "returns an error if a bad event is given" do
+      user_session(@teacher)
+      put 'update', params: {:id => @course.id, :course => {:event => 'boogie'}, :format => :json}
+      expect(response.status).to eq 400
+      json = JSON.parse response.body
+      expect(json['errors'].keys).to include 'workflow_state'
     end
 
     it "should lock active course announcements" do
@@ -2152,10 +2217,11 @@ describe CoursesController do
       expect(feed.entries.all?{|e| e.authors.present?}).to be_truthy
     end
 
-    it "should not include unpublished assignments or discussions" do
+    it "should not include unpublished assignments or discussions or pages" do
       discussion_topic_model(:context => @course)
       @assignment.unpublish
       @topic.unpublish!
+      @course.wiki_pages.create! :title => 'unpublished', :workflow_state => 'unpublished'
       get 'public_feed', params: {:feed_code => @enrollment.feed_code}, :format => 'atom'
       feed = Atom::Feed.load_feed(response.body) rescue nil
       expect(feed).not_to be_nil
@@ -2511,6 +2577,20 @@ describe CoursesController do
       json = json_parse(response.body)
       expect(json[0]).to include({ "id" => student1.id, "group_ids" => [group1.id] })
       expect(json[1]).to include({ "id" => student2.id, "group_ids" => [group2.id] })
+    end
+
+    it 'can take student uuids as inputs and output uuids in json' do
+      user_session(teacher)
+      get 'users', params: {
+        course_id: course.id,
+        user_uuids: [student1.uuid],
+        format: 'json',
+        include: ['uuid'],
+        enrollment_role: 'StudentEnrollment'
+      }
+      json = json_parse(response.body)
+      expect(json.count).to eq(1)
+      expect(json[0]).to include({ "id" => student1.id, "uuid" => student1.uuid })
     end
   end
 end

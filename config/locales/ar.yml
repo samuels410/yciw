@@ -60,6 +60,9 @@ ar:
   _at_the_bottom__4360f2b4: "-- في الأسفل --"
   _at_the_bottom__d2cf682a: "-- في الأسفل --"
   _b4455c8b: "%"
+  _count_points_23dc93e0: 
+    one: "-1 نقطة"
+    other: "- %{count} نقاط"
   _section_not_synced_yet_cd07d0dd: "-- لم تتم مزامنة القسم حتى الآن"
   _start_from_a_template__a03ea3b3: "-- البدء من قالب --"
   a_calculation_value_is_not_used_with_this_calculat_b1e854b4: "لا تُستخدم قيمة الحساب مع طريقة الحساب هذه"
@@ -75,8 +78,11 @@ ar:
   a_partner_id_is_required_to_use_academic_benchmark_adba3df0: "يتطلب وجود معرف شريك لاستخدام المعايير الأكاديمية"
   a_partner_key_is_required_to_use_academic_benchmar_da9f31bd: "يتطلب وجود مفتاح شريك لاستخدام المعايير الأكاديمية"
   a_problem_occurred_adding_reviewers_57b083d9: "حدث خطأ أثناء إضافة المراجعين."
+  a_public_privacy_level_will_send_the_launching_use_63bdbfaa: "سيقوم مستوى الخصوصية العمومي بإرسال معلومات التعرف على الشخصية للمستخدم المشغل إلى مزود الأداة. قد يؤثر إعداد هذا إلى \"خاص\" على الأدوات التي تعتمد على تلك المعلومات على نطاق واسع."
   a_section_is_required_64103992: "القسم مطلوب"
   a_sis_integration_is_not_configured_and_the_enable_3c560d89: "لم يتم تكوين تكامل SIS ولم يتم تمكين ميزة تمكين إعدادات تكامل SIS جديدة"
+  a_student_has_just_turned_in_a_late_submission_for_23f0ba9e: "قام طالب للتو بتسليم إرسال متأخر لـ %{assignment_name} في المساق %{course_name}"
+  a_student_just_turned_in_their_assignment_late_ass_e991e212: "قام طالب للتو بتسليم المهمة الخاصة به (متأخر)، %{assignment_name}"
   a_table_containing_the_name_of_the_grading_scheme__2c25dc3: "جدول يحتوي على اسم نظام التقييم والرموز الخاصة بتحرير النظام وحذفه."
   a_table_containing_the_name_of_the_grading_scheme__8e6d32f8: "جدول يحتوي على اسم نظام التقييم والأزرار الخاصة بتحرير النظام وحذفه."
   a_table_of_answers_and_brief_statistics_regarding__f516e98f: "جدول الإجابات وموجز إحصائي بشأن خيارات إجابات الطالب."
@@ -113,6 +119,7 @@ ar:
   accepted_formats_svg_png_jpg_gif_f793e4bc: "التنسيقات المقبولة: svg و png و jpeg و gif"
   accepted_user_role_type_course_course_2ce91589: "مقبول: %{user}، %{role_type}، مساق، %{course}"
   accepting_40ba3b70: "جارٍ القبول"
+  access_denied_f922a9ff: "الوصول مرفوض"
   access_report_80d28095: "تقرير الوصول"
   access_token_3be22221: "رمز الوصول المميز"
   access_token_count_access_token_count_dfb5463c: "عدد رموز الوصول المميز: %{access_token_count}"
@@ -1083,10 +1090,13 @@ ar:
           تتيح معاينات Google Docs للمستخدمين عرض المستندات
           من داخل Canvas دون الحاجة إلى تنزيلها و
           فتح البرنامج المناسب (مثل Word أو Excel).
+          
           كما أن معاينات Google Docs قادرة على عرض أنواع ملفات
           لا يدعمها عارض مستندات Canvas.
+          
           باستخدام هذه الخدمة فإنك تقر بأنك قرأت
-          [شروط استخدام Google Docs Viewer](%{terms_url}) وتوافق عليها.
+          [شروط استخدام Google Docs Viewer](%{terms_url})
+          وتوافق عليها.
       about_google_docs_tooltip: "نبذة حول معاينات Google Docs"
       account_admins_title: "مسؤولو الحساب"
       account_quotas: 
@@ -1126,8 +1136,8 @@ ar:
       default_language_description: "سيتجاوز ذلك أي إعدادات للغة المستعرض/نظام التشغيل. ما زال يمكن ضبط اللغات المفضلة على مستوى المساق/المستخدم."
       delete: حذف
       delete_announcement_tooltip: "حذف هذا الإعلان"
-      email_notification_from_description: "يسمح هذا الإعداد للمشرف بتمييز النص \"من\" بعلامة تجارية أو تصنيفه على جميع الإشعارات المرسلة من Canvas لهذا الحساب.\n"
-      email_notification_from_settings: "إعدادات  \"من\" الخاصة بإشعارات البريد الإلكتروني "
+      email_notification_from_description: "يسمح هذا الإعداد للمشرف بتمييز النص \"من\" بعلامة تجارية أو تصنيفه على جميع الإشعارات المرسلة من Canvas لهذا الحساب."
+      email_notification_from_settings: "إعدادات  \"من\" الخاصة بإشعارات البريد الإلكتروني"
       enabled_web_serices_title: "خدمات الويب المُمكّنة"
       equall_endpoint_help: "‏‏هذا هو عنوان URL لخدمة equella. قد يظهر هكذا \"%{sample_url}\"."
       equella_settings_title: "إعدادات Equella"
@@ -1198,7 +1208,7 @@ ar:
         open_registration: "فتح التسجيل"
         originality_report_visibility: "بإمكان الطلاب رؤية تقرير الأصالة"
         outgoing_email_default_name_option_custom: "اسم  \"من\" المخصص"
-        outgoing_email_default_name_option_default: "إعداد Canvas الافتراضي\n"
+        outgoing_email_default_name_option_default: "إعداد Canvas الافتراضي"
         prevent_course_renaming_by_teachers: "عدم السماح للمعلمين بإعادة تسمية المساقات الخاصة بهم"
         restrict_quiz_questions: "تقييد الطلاب من عرض أسئلة الاختبار بعد تاريخ انتهاء المساق"
         restrict_student_future_listing: "منع الطلاب من عرض المساقات المقبلة في قائمة التسجيلات"
@@ -1320,7 +1330,7 @@ ar:
             text: "معرف الدورة:"
     sis_agent_token_auth: 
       labels: 
-        sis_app_token: "الرمز المميز لوكيل نظام معلومات الطالب "
+        sis_app_token: "الرمز المميز لوكيل نظام معلومات الطالب"
         sis_app_url: "عنوان URL لتطبيق نظام معلومات الطلاب"
     sis_batch_counts: 
       accounts_label: الحسابات
@@ -1370,7 +1380,7 @@ ar:
       add_sis_stickiness_instructions: "من خلال تحديد هذا الخيار، ستتم معالجة التغييرات التي حدثت أثناء استيراد SIS هذه وكأنها تغييرات لواجهة المستخدم، مما يمنع عمليات استيراد SIS اللاحقة ـ غير المتجاوزة ـ من تغيير الحقول التي تم تغييرها هنا."
       add_sis_stickiness_label: "المعالجة كتغييرات لواجهة المستخدم"
       batch_import_instructions: |-
-          عند تحديدها، سيتم حذف بيانات SIS السابقة التي تم استيرادها للفصل الدراسي المحدد.
+          عند تحديدها، سيتم حذف بيانات SIS السابقة التي تم استيرادها للفصل الدراسي المحدد.  
           راجع الوثائق لمعرفة التفاصيل.
       batch_mode_label: "هذا تحديث دفعي كامل"
       clear_sis_stickiness_instructions: "من خلال تحديد هذا الخيار، سيكون بإمكان كل الحقول في كل السجلات التي تأثرت باستيراد SIS هذا أن تتغير في عمليات استيراد SIS المستقبلية غير المتجاوزة."
@@ -1384,7 +1394,7 @@ ar:
       imported_with_messages_message: "تم استيراد بيانات SIS لكن مع ظهور الرسائل:"
       last_batch_title: "الدفعة الأخيرة"
       override_sis_stickiness_instructions: |-
-          افتراضيًا، تكون الأولوية لتغييرات واجهة المستخدم قبل تغييرات استيراد SIS؛ لكن بالنسبة لبعض الحقول، لن يستطيع استيراد SIS تغيير بيانات الحقل إذا قام أحد المسؤولين بتغيير هذا الحقل عبر واجهة المستخدم. عند تحديد هذا الخيار، فإن استيراد SIS هذا سيتجاوز تغييرات واجهة المستخدم.
+          افتراضيًا، تكون الأولوية لتغييرات واجهة المستخدم قبل تغييرات استيراد SIS؛ لكن بالنسبة لبعض الحقول، لن يستطيع استيراد SIS تغيير بيانات الحقل إذا قام أحد المسؤولين بتغيير هذا الحقل عبر واجهة المستخدم. عند تحديد هذا الخيار، فإن استيراد SIS هذا سيتجاوز تغييرات واجهة المستخدم.  
           راجع الوثائق لمعرفة التفاصيل.
       override_sis_stickiness_label: "تجاوز تغييرات واجهة المستخدم"
       page_title: "استيراد SIS"
@@ -1398,7 +1408,7 @@ ar:
       pending_batches_title: "دفعات معلقة"
       process_data_button: "بيانات العملية"
       select_file_instructions: |-
-          حدد ملف zip الذي تريد استيراده.
+          حدد ملف zip الذي تريد استيراده.  
           للحصول على وصف لطريقة إنشاء ملفات zip هذه، [الرجاء الاطلاع على هذه الوثائق](%{url}).
       sis_import_crumb: "استيراد SIS"
       started_at_message: "بدأ: %{started_at}"
@@ -1633,6 +1643,7 @@ ar:
   add_criterion_eb9587ef: "إضافة معيار"
   add_custom_link_22059c0: "إضافة ارتباط مخصص"
   add_discussion_653dab4c: "إضافة مناقشة"
+  add_domain_f15bc6c1: "إضافة مجال"
   add_email_address_aef3b61: "إضافة عنوان بريد إلكتروني"
   add_existing_content_7e36da66: "إضافة محتوى حالي"
   add_external_feed_6d437a28: "إضافة موجز خارجي"
@@ -1662,6 +1673,7 @@ ar:
   add_new_group_7ac49f31: "إضافة مجموعة جديدة"
   add_new_set_of_due_dates_e8e240f: "إضافة مجموعة جديدة من تواريخ الاستحقاق"
   add_new_term_d2217c0d: "إضافة المدة الجديدة"
+  add_override_da70f198: "إضافة تجاوز"
   add_people_7948b7da: "إضافة أشخاص"
   add_people_7ee4b2ec: "إضافة أشخاص"
   add_people_to_coursename_5ea234e1: "إضافة أشخاص إلى: %{courseName}"
@@ -1680,6 +1692,7 @@ ar:
   add_students_tas_and_observers_to_your_course_e84692dd: "أضف الطلاب ومساعدي المعلمين والمراقبين إلى مساقك"
   add_students_to_the_course_874be8fb: "إضافة طلاب إلى المساق"
   add_sub_account_to_account_name_b104db90: "إضافة حساب فرعي إلى %{account_name}"
+  add_submission_type_8690db4b: "إضافة نوع الإرسال"
   add_tas_to_the_course_2aac6e02: "إضافة مساعد معلم إلى المساق"
   add_theme_32fa3d50: "إضافة نسق"
   add_to_course_481a51c4: "إضافة إلى مساق..."
@@ -1690,7 +1703,7 @@ ar:
   add_user_s_by_b2549f89: "إضافة مستخدم (مستخدمين) بواسطة"
   add_users_b10c7fb1: "إضافة مستخدمين"
   add_users_to_name_b8109bbb: "إضافة مستخدمين إلى %{name}"
-  add_your_assignments_you_can_just_make_a_long_list_8a7862dd: "أضف مهامك. يمكنك عمل قائمة طويلة أو تقسيمها إلى مجموعات - كما يمكنك تعيين تقديرات لكل مجموعة مهام. "
+  add_your_assignments_you_can_just_make_a_long_list_8a7862dd: "أضف مهامك. يمكنك عمل قائمة طويلة أو تقسيمها إلى مجموعات - كما يمكنك تعيين تقديرات لكل مجموعة مهام."
   add_your_zendesk_instance_s_custom_field_id_for_ea_3aeb75f4: "إضافة معرف الحقل المخصص لمثيل Zendesk الخاص بك إلى كل ما يلي (لن يتم تسجيل الحقول التي لا تتضمن معرف):"
   added_new_proficiency_rating_e30cab8a: "تمت إضافة تصنيف إجادة جديد"
   adding_rss_feed_f1202567: "إضافة موجز RSS"
@@ -1832,10 +1845,10 @@ ar:
   allow_importing_of_qti_and_common_cartridge_into_q_81b657cd: "السماح باستيراد QTI وCommon Cartridge إلى Quizzes.Next."
   allow_in_mastery_paths_5332c786: "السماح بذلك في مسارات الإتقان"
   allow_intra_group_peer_reviews_53f1e455: "السماح لمراجعات الأقران داخل المجموعة الواحدة"
-  allow_lor_tools: "السماح للمستخدمين بعرض الأدوات الخارجية المكونة واستخدامها لـ LOR. "
+  allow_lor_tools: "السماح للمستخدمين بعرض الأدوات الخارجية المكونة واستخدامها لـ LOR."
   allow_moderator_to_review_multiple_independent_gra_c59d64f6: "السماح للمشرف بمراجعة درجات مستقلة متعددة لإرسالات محددة"
   allow_multiple_attempts_e67a0a37: "السماح بمحاولات متعددة"
-  allow_opt_out_of_inbox: "السماح للمستخدمين بإلغاء الاشتراك في صندوق وارد المحادثات. سيؤدي هذا إلى إرسال جميع رسائل وإعلامات المحادثات كإعلامات ASAP إلى البريد الإلكتروني الأساسي الخاص بالمستخدم، مع إخفاء شارة الرسائل غير المقروءة في صندوق الوارد الخاص بالمحادثات، إضافة إلى إخفاء تفضيلات الإعلامات الخاصة بالمحادثات.   "
+  allow_opt_out_of_inbox: "السماح للمستخدمين بإلغاء الاشتراك في صندوق وارد المحادثات. سيؤدي هذا إلى إرسال جميع رسائل وإعلامات المحادثات كإعلامات ASAP إلى البريد الإلكتروني الأساسي الخاص بالمستخدم، مع إخفاء شارة الرسائل غير المقروءة في صندوق الوارد الخاص بالمحادثات، إضافة إلى إخفاء تفضيلات الإعلامات الخاصة بالمحادثات."
   allow_outcome_extra_credit_57c1e84e: "السماح بائتمان إضافي للناتج"
   allow_passive_acceptance_of_terms_of_service_63ef5994: "السماح بالقبول السلبي لشروط الخدمة"
   allow_reorder_dashboard_cards_78215947: "السماح بإعادة ترتيب بطاقات لوحة المعلومات"
@@ -1862,6 +1875,9 @@ ar:
   allows_teacher_designer_ta_based_roles_to_access_t_d480279: "يسمح للأدوار القائمة على المعلم/المصمم/المعلم المساعد بالوصول إلى أداة الدردشة."
   allows_teacher_ta_based_roles_to_access_the_attend_bf5b2a17: "يسمح للأدوار القائمة على المعلم/المعلم المساعد على TA بالوصول إلى أداة الدردشة."
   allows_teachers_to_mark_grade_data_to_be_exported__a6bf77cf: "السماح للمعلمين بوضع علامة على بيانات الدرجة المقرر تصديرها بشكل مجمع إلى تكاملات SIS."
+  allows_teachers_to_specify_post_policies_for_this__a3ef829d: |-
+      يمكّن المعلمين من تحديد نُهُج النشر لهذا المساق أو المهام المحددة، مما يمكن من
+      نشر وإخفاء الدرجات يدويًا
   allows_the_duplicating_of_modules_in_canvas_2e15b444: "السماح بتكرار الوحدات النمطية في Canvas"
   allows_the_duplicating_of_objects_in_canvas_c86f3665: "السماح بتكرار الكائنات الموجودة في Canvas"
   allows_the_duplication_of_calendar_events_7bb0d6c5: "السماح بتكرار أحداث التقويم"
@@ -1949,7 +1965,9 @@ ar:
       يسمح للمستخدم بإنشاء مجموعات المساقات المنشأة بواسطة الطلاب وتحريرها وحذفها.
   allows_user_to_create_edit_and_delete_course_rubri_92b58f29: "يسمح للمستخدم بإنشاء مقاييس التقييم وتحريرها وحذفها في ارتباط مقاييس التقييم."
   allows_user_to_create_edit_and_delete_rubrics_1c0acc08: "يسمح للمستخدم بإنشاء مقاييس التقييم وتحريرها وحذفها."
-  allows_user_to_create_import_edit_and_delete_outco_472c842e: "يسمح للمستخدم بإنشاء واستيراد وتحرير وحذف الحصائل ومجموعات الحصائل على مستوى المساق."
+  allows_user_to_create_import_edit_and_delete_outco_472c842e: |-
+      يسمح للمستخدم بإنشاء واستيراد وتحرير وحذف الحصائل ومجموعات
+      الحصائل على مستوى المساق.
   allows_user_to_create_new_conferences_allows_user__89cebec2: "يسمح للمستخدم بإنشاء المؤتمرات الجديدة. يسمح للمستخدم ببدء المؤتمرات التي أنشأها."
   allows_user_to_designate_a_course_as_a_blueprint_c_bc5ff9bc: |-
       يسمح للمستخدم بتعيين مساق كمساق مخطط.
@@ -1962,7 +1980,9 @@ ar:
   allows_user_to_edit_blueprint_content_lock_setting_25128c82: "يسمح للمستخدم بتحرير إعدادات قفل المحتوى المخطط على النقاشات الفردية."
   allows_user_to_edit_blueprint_content_lock_setting_fd580fab: "يسمح للمستخدم بتحرير إعدادات قفل المحتوى المخطط على الإعدادات الفردية إذا كان المستخدم مسجلاً في مساق مخطط رئيسي."
   allows_user_to_edit_blueprint_lock_settings_on_the_371aeb2a: "يسمح للمستخدم بتحرير إعدادات قفل المخطط على صفحة فهرس الصفحات في المساقات المخططة الرئيسية."
-  allows_user_to_edit_blueprint_lock_settings_on_the_3a90958b: "يسمح للمستخدم بتحرير إعدادات قفل المخطط على صفحات فهرس المهام والاختبارات الموجزة في المساقات المخططة الرئيسية."
+  allows_user_to_edit_blueprint_lock_settings_on_the_3a90958b: |-
+      يسمح للمستخدم بتحرير إعدادات قفل المخطط على صفحات فهرس المهام
+      والاختبارات الموجزة في المساقات المخططة الرئيسية.
   allows_user_to_edit_blueprint_lock_settings_on_the_94a44495: "يسمح للمستخدم بتحرير إعدادات قفل المخطط على صفحة فهرس النقاشات في المساقات المخططة الرئيسية."
   allows_user_to_edit_blueprint_lock_settings_on_the_9f51663c: "يسمح للمستخدم بتحرير إعدادات قفل المخطط على صفحة الملفات في المساقات المخططة الرئيسية."
   allows_user_to_edit_configurations_for_manually_ad_7e0f496c: "يسمح للمستخدم بتحرير التكوينات للتطبيقات الخارجية المضافة يدويًا."
@@ -1989,7 +2009,9 @@ ar:
   allows_user_to_import_sis_data_583b20a5: "يسمح للمستخدم باستيراد بيانات SIS."
   allows_user_to_like_discussion_posts_when_the_only_7390d91c: "يسمح للمستخدم بالإعجاب بمنشورات النقاش عند تحديد خانة اختيار يمكن الإعجاب بواسطة المقيّمين فقط."
   allows_user_to_manage_feature_options_in_account_s_c3c8ee03: "يسمح للمستخدم بإدارة خيارات الميزة في إعدادات الحساب."
-  allows_user_to_manage_modules_create_add_items_edi_1afafd65: "يسمح للمستخدم بإدارة الوحدات النمطية (إنشاء، إضافة العناصر، تحرير إعدادات الوحدات النمطية، نشر/إلغاء نشر، وما شابه)."
+  allows_user_to_manage_modules_create_add_items_edi_1afafd65: |-
+      يسمح للمستخدم بإدارة الوحدات النمطية (إنشاء، إضافة العناصر، تحرير إعدادات
+      الوحدات النمطية، نشر/إلغاء نشر، وما شابه).
   allows_user_to_manage_observers_associated_with_st_4b45f2be: "يسمح للمستخدم بإدارة المراقبين المقترنين بالطلاب في الحساب."
   allows_user_to_manage_rubrics_326eedc2: "يسمح للمستخدم بإدارة مقاييس التقييم."
   allows_user_to_manually_add_an_app_in_account_sett_c5ce3789: "يسمح للمستخدم بإضافة تطبيق يدويًا في إعدادات الحساب."
@@ -2017,8 +2039,8 @@ ar:
   allows_user_to_select_final_grade_for_moderated_as_c5e28a9c: "يسمح للمستخدم بتحديد الدرجة النهائية للمهام المشرف عليها."
   allows_user_to_send_a_message_in_conversations_wit_d48abf1a: "يسمح للمستخدم بإرسال رسالة في المحادثات بدون تحديد مساق."
   allows_user_to_send_a_message_to_all_in_course_nam_697703a0: |-
-      يسمح للمستخدم بإرسال رسالة إلى "الجميع في [course name]".
-      يسمح للمستخدم بإرسال رسالة إلى "الجميع في [course group]".
+      يسمح للمستخدم بإرسال رسالة إلى \"الجميع في [course name]\".
+      يسمح للمستخدم بإرسال رسالة إلى \"الجميع في [course group]\".
   allows_user_to_send_a_message_to_all_in_course_nam_992e425: "يسمح للمستخدم بإرسال رسالة إلى \"الجميع في [course name]\" أو \"الجميع في [course group]\"."
   allows_user_to_send_messages_to_individual_course__9347e1e2: "يسمح للمستخدم بإرسال رسائل إلى أفراد المساق كل على حدة."
   allows_user_to_share_a_quiz_to_commons_6746e0da: "يسمح للمستخدم بمشاركة اختبار موجز إلى Commons."
@@ -2042,7 +2064,9 @@ ar:
       يسمح للمستخدم بعرض معلومات النشاط الأخير وإجمالي النشاط على صفحة الأشخاص.
   allows_user_to_view_and_edit_the_sis_id_and_integr_f206fdcb: "يسمح للمستخدم بعرض معرف SIS وتحريره ومعرف التفاعل في تفاصيل تسجيل دخول المستخدم."
   allows_user_to_view_and_insert_data_in_the_sis_id__921967c: "يسمح للمستخدم بعرض البيانات وإدخالها في حقل معرف SIS."
-  allows_user_to_view_and_link_questions_in_a_quiz_t_b971e002: "يسمح للمستخدم بعرض الأسئلة وربطها في اختبار موجز ببنوك أسئلة من مستوى الحسابات. في حالة تعطيلها، سيتمكن المستخدم من العرض والربط ببنوك أسئلة المساق فقط. يمكّن من ارتباط إدارة بنوك الأسئلة أو صفحة فهرس الاختبارات الموجزة"
+  allows_user_to_view_and_link_questions_in_a_quiz_t_b971e002: |-
+      يسمح للمستخدم بعرض الأسئلة وربطها في اختبار موجز ببنوك أسئلة من مستوى الحسابات.
+      في حالة تعطيلها، سيتمكن المستخدم من العرض والربط ببنوك أسئلة المساق فقط. يمكّن من ارتباط إدارة بنوك الأسئلة أو صفحة فهرس الاختبارات الموجزة
   allows_user_to_view_and_link_questions_in_a_quiz_t_d312a571: "يسمح للمستخدم بعرض الأسئلة وربطها في اختبار موجز ببنوك أسئلة من مستوى الحسابات. في حالة تعطيلها، سيتمكن المستخدم من العرض والربط ببنوك أسئلة المساق فقط."
   allows_user_to_view_and_link_questions_in_a_quiz_t_f6795580: "يسمح للمستخدم بعرض الأسئلة وربطها في اختبار موجز ببنوك أسئلة من مستوى الحسابات."
   allows_user_to_view_and_manage_authentication_opti_e1bb0ad3: "يسمح للمستخدم بعرض خيارات المصادقة وإدارتها للحساب بأكمله."
@@ -2056,8 +2080,10 @@ ar:
   allows_user_to_view_course_analytics_through_the_c_5f24ec08: "يسمح للمستخدم بعرض تحليلات المساق من خلال لوحة معلومات المساق. يسمح للمستخدم بعرض تحليلات الطالب."
   allows_user_to_view_course_and_student_analytics_f_5e3dca12: "يسمح للمستخدم بعرض تحليلات المساق والطالب من الصفحة الرئيسية للمساق وصفحة الأشخاص."
   allows_user_to_view_course_sis_id_3a1818a5: "يسمح للمستخدم بعرض معرف SIS للمساق."
-  allows_user_to_view_course_status_choose_home_page_b97cee14: "يسمح للمستخدم بعرض أزرار حالة المساق واختر الصفحة الرئيسية وقائمة اختيار إعداد المساق في الصفحة الرئيسية."
-  allows_user_to_view_create_edit_delete_and_publish_48716e21: "يسمح للمستخدم بعرض الصفحات وإنشائها وتحريرها وحذفها ونشرها/إلغاء نشرها.\n\
+  allows_user_to_view_course_status_choose_home_page_b97cee14: |-
+      يسمح للمستخدم بعرض أزرار حالة المساق واختر الصفحة الرئيسية وقائمة اختيار إعداد
+      المساق في الصفحة الرئيسية.
+  allows_user_to_view_create_edit_delete_and_publish_48716e21: "يسمح للمستخدم بعرض الصفحات وإنشائها وتحريرها وحذفها ونشرها/إلغاء نشرها.\n\n\
       \x20     يسمح للمستخدم بعرض سجل الصفحة وتعيين الصفحة الأمامية. "
   allows_user_to_view_create_edit_delete_and_publish_9d6c0bfa: |-
       يسمح للمستخدم بعرض الصفحات وإنشائها وتحريرها وحذفها ونشرها/إلغاء نشرها.
@@ -2305,6 +2331,7 @@ ar:
   answer_correct_answer_c2c4a20c: "%{answer}، (إجابة صحيحة)"
   answer_description_6b353cfd: "وصف الإجابة"
   answer_distribution_2a956e3f: "توزيع الإجابات"
+  answer_field_8c4e7c46: "حقل الإجابة"
   answer_incorrect_answer_80efe585: "%{answer}، (إجابة خاطئة)"
   answer_sequence_cfeda025: "تسلسل الإجابة"
   answer_text_80_character_limit_2fce1113: "نص الإجابة (80 حرفًا كحد أقصى)"
@@ -2481,6 +2508,7 @@ ar:
   ask_your_instructor_a_question_a61ca5e9: "طرح سؤال على معلمك"
   assess_and_survey_your_students_ce8172a9: "قم بتقييم طلابك واستطلاع آرائهم"
   assessment_audit_d4a76709: "مراجعة التقييم"
+  assessment_audit_events_for_creatorname_56e84e8: "أحداث تدقيق التقييم الخاصة ب%{creatorName}"
   assessment_audit_events_for_username_eb2144ad: "أحداث تدقيق التقييم الخاصة ب %{userName}"
   assessment_audit_tray_5dd11721: "علبة مراجعة التقييم"
   assessment_by_name_7b879a2c: "تقييم من قبل %{name}"
@@ -2499,6 +2527,7 @@ ar:
   assessment_type_81a73b9c: "نوع التقييم"
   assign_eedf72bb: تكليف
   assign_reviews_on_date_7e48ec50: "تاريخ تعيين المراجعات"
+  assign_to_6b806cd9: "تعيين إلى:"
   assign_to_c46e21: "تعيين إلى"
   assigned_permissions_6f6fecb6: "الأذونات المعينة"
   assigned_roles_ace6c950: "الأدوار المخصصة"
@@ -2630,6 +2659,7 @@ ar:
     unmute_button: "إلغاء حجب المهمة"
     unmute_dialog: "تم حجب هذه المهمة حاليًا. وهذا يعني أن الطلاب لا يمكنهم عرض الدرجات والملاحظات الخاصة بهم. هل ترغب في إلغاء حجبها الآن؟"
     unmuting_assignment: "إظهار درجة التعيين..."
+  assignment_name_12eadcbd: "اسم المهمة"
   assignment_name_a_z_aeefaa36: "اسم المهمة - من الألف إلى الياء"
   assignment_name_b2d87383: "اسم المهمة"
   assignment_name_course_name_is_now_due_55613e9b: "حان موعد استحقاق %{assignment_name}، %{course_name}"
@@ -2637,6 +2667,7 @@ ar:
   assignment_name_course_name_override_is_now_due_ed5ce1e: "حان موعد استحقاق %{assignment_name}، %{course_name} (%{override})"
   assignment_name_course_name_override_no_longer_has_5a94da2b: "لم يعد هناك موعد استحقاق لـ %{assignment_name}، %{course_name} (%{override})"
   assignment_name_grade_history_b506426c: "محفوظات تقييمات %{assignment_name}"
+  assignment_name_is_required_9d17311b: "اسم المهمة مطلوب"
   assignment_name_z_a_34f92f4b: "اسم المهمة - من الياء إلى الألف"
   assignment_options_1e5b7074: "خيارات التعيين"
   assignment_override: 
@@ -2653,6 +2684,7 @@ ar:
   assignment_title_82b4422e: "عنوان المهمة:"
   assignment_title_8a707dd2: "عنوان المهمة"
   assignment_title_e3192978: "المهمة: %{title}"
+  assignment_type_60255aac: "نوع المهمة"
   assignment_unmuted_2cffe4ca: "تم إلغاء كتم المهمة"
   assignment_updated_c7482598: "تم تحديث المهمة"
   assignment_url_37c849c6: "عنوان url للمهمة"
@@ -3059,7 +3091,7 @@ ar:
     processing_submission: "Canvas يقوم الآن بمعالجة إرسالك. يمكنك الخروج من هذه الصفحة بأمان وسنرسل إليك رسالة عبر البريد الإلكتروني إذا لم تتم معالجة الإرسال."
     redirect_page: 
       redirect_message: |-
-          كان هذا الإرسال عنوان url، سنأخذك إلى ارتباط url الآن.
+          كان هذا الإرسال عنوان url، سنأخذك إلى ارتباط url الآن.  
           [انقر هنا للانتقال إلى الإرسال](%{url})
     remove_never_drop_rule: "إزالة قاعدة عدم الإسقاط"
     remove_unsaved_never_drop_rule: "إزالة قاعدة عدم الإسقاط غير المحفوظة"
@@ -3305,6 +3337,8 @@ ar:
         originality_report_visible_after_grading: "بعد منح علامة للمهمة"
         originality_report_visible_immediately: فورًا
   assignments_1e02582c: المهام
+  assignments_2: 
+    submission_attempts: المحاولات
   assignments_2_e88d7a26: "المهمة 2"
   assignments_and_gradebook_37e43d4f: "المهام ودفتر الدرجات"
   assignments_and_quizzes_add_edit_delete_5bac17ed: "المهام والاختبارات الموجزة - إضافة / تحرير / حذف"
@@ -3327,12 +3361,14 @@ ar:
   associated_courses_1fbc6202: "مساقات مقترنة"
   associations_3fd4abe8: اقترانات
   associations_saved_successfully_48b9eae3: "تم حفظ الاقترانات بنجاح"
+  at_791460b3: في
   at_least_one_scope_must_be_selected_97d6fce9: "يجب تحديد نطاق واحد على الأقل."
   at_least_one_term_must_be_attached_24fd2bf5: "يجب إرفاق فصل دراسي واحد على الأقل"
   at_the_bottom_a109f5c8: "في الأسفل"
   at_the_bottom_a6a5f0fe: "في الأسفل"
   at_the_top_c2ce2371: "في الأعلى"
   at_the_top_fa836591: "في الأعلى"
+  attach_a_file_86a4fc00: "إرفاق ملف"
   attach_files_to_discussions_bd16c245: "إرفاق ملفات بالمناقشات"
   attach_terms_2b8770a5: "إرفاق فصول دراسية"
   attached_display_name_afa00c2e: "المرفقات: %{display_name}"
@@ -3354,10 +3390,16 @@ ar:
     upload_error_too_many_redirects: "عدد كبير جدًا من حالات إعادة التوجيه"
     upload_error_unexpected: "حدث خطأ غير معروف أثناء التنزيل من %{url}"
   attachment_deffe5a9: مرفق
+  attempt_1_7ba3c30f: "المحاولة 1"
+  attempt_1_grade_484b35e4: "المحاولة 1: %{grade}"
   attempt_3dd42b18: المحاولة
   attempt_current_attempt_ef626179: "محاولة %{current_attempt}"
   attempt_current_attempt_of_max_attempts_427ed508: "محاولة %{current_attempt} من %{max_attempts}"
   attempt_to_detect_an_appropriate_field_separator_i_4e59eb0c: "محاولة الكشف عن فاصل حقل مناسب في عمليات تصدير دفتر الدرجات بناءً على تنسيق الأرقام للغتك."
+  attempts_22baad: 
+    one: المحاولة
+    other: المحاولات
+  attempts_allowed_8441aadf: "المحاولات المسموح بها"
   attendance: 
     options: 
       clear_attendance_marks: "مسح علامات الحضور"
@@ -3509,6 +3551,7 @@ ar:
   avaible_daec2e57: متوفر
   availability_dates_438d71e0: "تواريخ الإتاحة"
   availability_dates_changed_exceptions_465ba375: "استثناءات تواريخ الإتاحة التي تغيرت:"
+  available_2ed9f226: "متوفرة:"
   available_8606e40c: متوفر
   available_after_3416802b: "متوفر بعد"
   available_after_unlock_at_b5682224: "متاح بعد %{unlock_at}"
@@ -3537,6 +3580,7 @@ ar:
   avatar_for_author_2eabbf55: "أفاتار لـ %{author}"
   avatar_for_studentname_8ea511ae: "أفاتار لـ %{studentName}"
   average_49c63f9b: متوسط
+  average_score_15cd7c3c: "متوسط الدرجات"
   back_2900f52a: عودة
   back_to_announcements_1036e43e: "العودة إلى الإعلانات"
   back_to_app_center_95420d83: "عودة إلى مركز التطبيقات"
@@ -3601,7 +3645,7 @@ ar:
   blueprint_course_sync_in_progress_a1e2622b: "مزامنة المساق المخطط قيد التقدم"
   blueprint_courses_9dd321b8: "المساقات المخططة"
   blueprint_courses_add_edit_associate_delete_bc26d5c2: "المساقات المخططة - إضافة / تحرير / إقران / حذف"
-  blueprint_courses_are_an_account_level_feature_opt_3388f731: "المساقات المخططة هي خيار ميزة من مستوى الحسابات.\n\n\
+  blueprint_courses_are_an_account_level_feature_opt_3388f731: "المساقات المخططة هي خيار ميزة من مستوى الحسابات.\n\n\n\
       \x20     لتحرير إعدادات قفل المخططات من صفحة فهرس النقاشات، يجب تمكين المساق - إضافة / تحرير / حذف والنقاشات - إشراف أيضًا. "
   blueprint_courses_create_edit_associate_delete_bf41988e: "مساقات مخططة (إنشاء / تحرير / إقران / حذف)"
   blueprint_courses_is_an_account_level_feature_opti_38676924: "المساقات المخططة هي خيار ميزة من مستوى الحسابات. يمكن لأدوار المساق فقط إدارة المساقات المخططة إذا تمت إضافتهم إلى المساق المخطط بصفة معلم أو معلم مساعد أو مصمم. للوصول إلى الشريط الجانبي للمساقات المخططة، يجب تمكين المساقات - إضافة / تحرير / حذف المساقات. لإضافة مساق مقترن، يجب أيضًا تمكين المساقات - عرض القائمة والمساقات - إضافة / تحرير / حذف. لتحرير إعدادات القفل على أي نوع كائن مخطط، يجب تمكين المساقات - إضافة / تحرير / حذف."
@@ -3651,11 +3695,11 @@ ar:
   bookmarks_5b5b81c9: "الإشارات المرجعية"
   both_discussions_create_and_discussions_moderate_a_c238f67: |-
       تسمح كل من المناقشات - إنشاء والمناقشات - إشراف للمستخدم بإنشاء مناقشة في صفحة المناقشات. إذا تم تمكين هذا الإذن، فلا تكون المناقشات - إنشاء مهمة.
-      لعرض النقاشات في مساق، يجب تمكين النقاشات - عرض.
+              لعرض النقاشات في مساق، يجب تمكين النقاشات - عرض.
       للرد على نقاش، يجب أيضًا تمكين النقاشات - نشر. لتحرير تفاصيل المهام على نقاش، يجب أيضًا تمكين المهام والاختبارات الموجزة - إضافة / تحرير / حذف.
   both_discussions_create_and_discussions_moderate_a_f20cc937: |-
       تسمح كل من النقاشات - إنشاء والنقاشات - إشراف للمستخدم بإنشاء مناقشة في صفحة النقاشات. إذا تم تمكين هذا الإذن، فلا تكون النقاشات - إنشاء مهمة.
-      لعرض النقاشات في مساق، يجب تمكين النقاشات - عرض.
+              لعرض النقاشات في مساق، يجب تمكين النقاشات - عرض.
       للرد على نقاش، يجب أيضًا تمكين النقاشات - نشر.
       لتحرير تفاصيل المهام على نقاش، يجب أيضًا تمكين المهام والاختبارات الموجزة - إضافة / تحرير / حذف.
   bottom_15a2a9be: أسفل
@@ -3686,7 +3730,10 @@ ar:
       قم ببناء صفحات تضم محتوى وموارد تعليمية
       تساعد الطلاب على التعلم، ولكنها ليست مهامًا. قم بتضمين نصوص
       ووسائط متعددة وارتباطات إلى ملفات وموارد خارجية.
-  build_pages_containing_content_and_educational_res_6474319f: "قم ببناء صفحات تضم محتوى وموارد تعليمية تساعد الطلاب على التعلم، ولكنها ليست مهامًا. قم بتضمين نصوص ووسائط متعددة وارتباطات إلى ملفات وموارد خارجية."
+  build_pages_containing_content_and_educational_res_6474319f: |-
+      قم ببناء صفحات تضم محتوى وموارد تعليمية تساعد الطلاب على التعلم،
+                      ولكنها ليست مهامًا. قم بتضمين نصوص ووسائط
+                      متعددة وارتباطات إلى ملفات وموارد خارجية.
   bulk_course_migration: 
     export_failed: "حدث خطأ أثناء تصدير المساق ذي المعرف bb_lcid %{id} من Blackboard"
     export_failed_no_id: "حدث خطأ أثناء استيراد مساق"
@@ -3794,7 +3841,9 @@ ar:
     view_account_roster: "عرض كشف الحساب"
     view_course_roster: "عرض كشف المساق"
   by_default_all_links_are_enabled_for_a_course_stud_8e617dbc: "في الوضع الافتراضي، تكون جميع الارتباطات ممكنة للمساق. لن يرى الطلاب الارتباطات التي تنقل إلى أقسام لا محتوىً بها. على سبيل المثال، إن لم تقم بعمل أية اختبارات، فلن يرى الطلاب ارتباط الاختبارات. يمكنك تصنيف هذه الارتباطات ويمكنك تعطيلها صراحةً إذا كانت هناك أجزاء من االمساق لا ترغب في الوصول إليها من قبل الطلاب."
-  by_default_students_are_able_to_create_groups_to_r_ba7f2450: "يستطيع الطلاب افتراضيًا إنشاء المجموعات، لمنع الطلاب من إنشاء المجموعات، قم بإلغاء تحديد خانة اختبار السماح للطلاب بتنظيم مجموعاتهم في إعدادات المساق."
+  by_default_students_are_able_to_create_groups_to_r_ba7f2450: |-
+      يستطيع الطلاب افتراضيًا إنشاء المجموعات، لمنع الطلاب من إنشاء المجموعات، قم بإلغاء
+      تحديد خانة اختبار السماح للطلاب بتنظيم مجموعاتهم في إعدادات المساق.
   by_default_students_can_always_create_groups_in_a__149d08b7: "يتمكن الطلاب دومًا بشكل افتراضي من إنشاء المجموعات في المساقات. لمنع الطلاب من إنشاء المجموعات، يجب تمكين المساقات - إضافة / تحرير / حذف كما يجب إلغاء تحديد خانة اختيار السماح للطلاب بتنظيم مجموعاتهم."
   by_lti_2_registration_url_e421e523: "عبر عنوان URL لتسجيل LTI 2"
   by_url_a163275e: "حسب URL"
@@ -4097,7 +4146,7 @@ ar:
     prompts: 
       delete_assignment: "هل ترغب بالتأكيد في حذف هذه المهمة؟"
       delete_event: "هل ترغب بالتأكيد في حذف هذا الحدث؟"
-      delete_override: "هل أنت متأكد أنك تريد حذف تجاوز المهمة هذه؟\n"
+      delete_override: "هل أنت متأكد أنك تريد حذف تجاوز المهمة هذه؟"
       unreserve_event: "هل تريد بالتأكيد حذف الحجز الخاص بك لهذا الحدث؟"
     reschedule: "إعادة الجدولة"
     reservation_over_limit_dialog: 
@@ -4222,10 +4271,10 @@ ar:
   can_edit_this_page_role_selection_6ccec3c7: "يمكن تحرير تحديد دور هذه الصفحة"
   can_interact_with_users_in_their_section_only_48cb8c43: "يمكن التفاعل مع المستخدمين في القسم الخاص بهم فقط"
   can_t_compute_score_until_an_assignment_has_points_f34dd600: "لا يمكن حساب مجموع الدرجات إلا أن تكون للمهمة نقاط ممكنة"
-  can_t_delete_alignments_based_on_rubric_associatio_1a10fcce: "\n\
-      \x20                   لا يمكن حذف المحاذاة بناءً على اقترانات مقاييس التقييم.\n\
-      \x20                   لإزالة هذه الارتباطات يجب عليك إزالة الصف من مقياس تقييم الأصل\"\n\
-      \x20                 "
+  can_t_delete_alignments_based_on_rubric_associatio_1a10fcce: "\n\n\
+      \x20                   لا يمكن حذف المحاذاة بناءً على اقترانات مقاييس التقييم.\n\n\
+      \x20                   لإزالة هذه الارتباطات يجب عليك إزالة الصف من مقياس تقييم الأصل\"\n\n\
+      \x20                   "
   can_t_delete_alignments_based_on_rubric_associatio_d9fd10a3: "لا يمكن حذف التوفيقات على أساس ارتباطات العناوين. لإزالة هذه الارتباطات يجب عليك إزالة الصف من عنوان الأصل."
   can_t_enable_anonymous_grading_and_group_assignmen_9938416e: "يتعذر تمكين التقييم المجهول ومهام المجموعات في نفس الوقت"
   can_t_perform_diffing_against_more_than_one_file_o_44475c0d: "لا يمكن القيام بالمقارنة بين أكثر من ملف من نفس النوع"
@@ -4301,6 +4350,8 @@ ar:
   canvas_alert_graded_assignment_context_for_name_459fdf31: "تنبيه Canvas - تم التقييم: %{assignment}، %{context} ل %{name}"
   canvas_alert_invited_course_as_role_type_9ed79ce3: "تنبيه Canvas - تمت الدعوة: %{course} بوصفه %{role_type}"
   canvas_alert_invited_course_as_role_type_ea825937: "تنبيه Canvas - تمت الدعوة: المساق بوصفه %{role_type}"
+  canvas_alert_late_anonymous_submission_assignment__bf9a6452: "تنبيه Canvas - إرسال مجهول متأخر: %{assignment_name}"
+  canvas_alert_late_submission_user_name_assignment__ee1301ac: "تنبيه Canvas - إرسال متأخر: %{user_name}، %{assignment_name}"
   canvas_attribute_eaa7e31a: "سمة Canvas"
   canvas_by_instructure_1490381: "Canvas بواسطة Instructure"
   canvas_cartridge_description: "وهذا يؤدي إلى إمكانية تحويل تصدير canvas إلى تنسيق json وسيط ليتم استيراده"
@@ -4484,6 +4535,7 @@ ar:
   clicking_the_checkbox_will_cause_scopes_table_to_a_fba5886a: "سيؤدي النقر فوق خانة الاختيار إلى ظهور جدول النطاقات أدناه"
   clicking_the_checkbox_will_cause_scopes_table_to_d_dbdbffd3: "سيؤدي النقر فوق خانة الاختيار إلى اختفاء جدول النطاقات أدناه"
   clone_group_set_c2a40e15: "استنساخ فئة مجموعات"
+  close_17f50799: إغلاق
   close_and_return_to_canvas_80544344: "إغلاق والعودة إلى Canvas"
   close_d634289d: إغلاق
   close_date_9b52fb9b: "تاريخ الإغلاق:"
@@ -4497,6 +4549,7 @@ ar:
   close_move_tray_8609e988: "إغلاق نقل العلبة"
   close_picker_256aca8a: "غلق أداة الانتقاء"
   close_sidebar_10b0fbb4: "إغلاق الشريط الجانبي"
+  close_student_tray_789b656d: "إغلاق علبة الطالب"
   close_submission_tray_c4988fa8: "إغلاق علبة الإرسال"
   closed_for_comments_e395b42f: "مغلق للتعليقات"
   closes_5c6b4367: "إغلاق:"
@@ -4567,22 +4620,22 @@ ar:
     forms: 
       buttons: 
         delete_from_canvas: |-
-            مجرد الحذف
+            مجرد الحذف  
             من موقع Canvas
         delete_from_google_docs: |-
-            الحذف أيضًا من
+            الحذف أيضًا من  
             Google Docs
         start_collaborating: "بدء التعاون"
         update: "تحديث التعاون"
       collaboration_name: "تعاون %{course_or_group_name}"
       descriptions: 
         etherpad: |-
-            EtherPad هو مشروع ذو مصدر مفتوح يتيح لك إعداد المستندات المشتركة بسرعة. وهو سريع بالقدر الكافي الذي يمكنك من رؤية ما يكتبه الآخرون أثناء قيامهم بالكتابة. على الجانب الآخر، لا تخضع "اللوحات" للحماية بكلمة مرور بحيث يمكن لأي شخص لديه ارتباط تحريرها. ويتسم EtherPad بكونه أكثر مناسبة من مستندات Google إذا كنت ترغب في دعم عدم معرفة الهوية و/أو السماح للأشخاص الذيم ليس لديهم حسابات Google بالمشاركة.
-            
+            EtherPad هو مشروع ذو مصدر مفتوح يتيح لك إعداد المستندات المشتركة بسرعة. وهو سريع بالقدر الكافي الذي يمكنك من رؤية ما يكتبه الآخرون أثناء قيامهم بالكتابة. على الجانب الآخر، لا تخضع "اللوحات" للحماية بكلمة مرور بحيث يمكن لأي شخص لديه ارتباط تحريرها. ويتسم EtherPad بكونه أكثر مناسبة من مستندات Google إذا كنت ترغب في دعم عدم معرفة الهوية و/أو السماح للأشخاص الذيم ليس لديهم حسابات Google بالمشاركة.  
+              
             **تحذير**: تأكد من معرفتك الجيدة [بسياسة الحذف فيEtherPad](%{etherpad_deletion_policy_url}) لضمان الحفاظ على عملك.
         google_docs: |-
-            تعد Google Docs منطقة رائعة للتعاون في مشروع المجموعة.  إنها تشبه Microsoft Word، غير أنها تتيح لك فرصة العمل مع الآخرين في نفس الملف في الوقت نفسه دون إرسال بريد إلكتروني إليهم.
-            
+            تعد Google Docs منطقة رائعة للتعاون في مشروع المجموعة.  إنها تشبه Microsoft Word، غير أنها تتيح لك فرصة العمل مع الآخرين في نفس الملف في الوقت نفسه دون إرسال بريد إلكتروني إليهم.  
+              
             **تحذير**: ستحتاج (أنت ومن يتعاونون معك) إلى حساب Google من أجل المشاركة في أية علاقات تعاون لـ Google Docs.
       labels: 
         collaboration_type: "التعاون باستخدام:"
@@ -4658,6 +4711,7 @@ ar:
   comment_by_replying_to_this_message_or_join_the_co_26d42fde: "إضافة تعليق بالرد على هذه الرسالة أو الالتحاق بالمحادثة باستخدام هذا الارتباط: %{link}."
   comment_by_replying_to_this_message_or_join_the_co_52b5ac1c: "قم بالتعليق بالرد على هذه الرسالة أو انضم إلى المحادثة باستخدام هذا الرابط: %{link}. عندما يُسمح بذلك، إذا كنت بحاجة لتضمين مرفق، فالرجاء تسجيل الدخول إلى Canvas والرد على المناقشة."
   comment_by_replying_to_this_message_or_join_the_co_886bc612: "قم بالتعليق بالرد على هذه الرسالة أو انضم إلى المحادثة باستخدام هذا الرابط: %{link}عندما يُسمح بذلك، إذا كنت بحاجة لتضمين مرفق، فالرجاء تسجيل الدخول إلى Canvas والرد على الإعلان."
+  comment_input_box_b8c7e58b: "مربع إدخال التعليق"
   comments_e07bcbe3: التعليقات
   commmessages_9fa33faa: CommMessages
   common_cartridge_description: "يقوم هذا الإجراء بتمكين تحويل حِزم الكارتريدج المشتركة الموجودة بتنسيق json الوسيط ليتم استيرادها"
@@ -4668,7 +4722,10 @@ ar:
   common_timezones_2b00baba: "المناطق الزمنية الشائعة"
   commons_ed0252fb: Commons
   communicate_to_your_students_exactly_what_will_be__57a679c5: "أبلغ طلابك بما سيكون مطلوبًا منهم بالضبط طوال السياق وفق ترتيب زمني. إنشاء مخطط دراسي مضمن بناءً على المهام والأحداث التي أنشأتها."
-  communicate_to_your_students_exactly_what_will_be__7312d45d: "أبلغ طلابك بما سيكون مطلوبًا منهم بالضبط طوال السياق وفق ترتيب زمني. أنشئ مخططًا دراسيًا مضمَّنًا بناءً على المهام والأحداث التي أنشأتها."
+  communicate_to_your_students_exactly_what_will_be__7312d45d: |-
+      أبلغ طلابك بما سيكون مطلوبًا منهم بالضبط طوال السياق وفق ترتيب
+                زمني. أنشئ مخططًا دراسيًا مضمَّنًا بناءً على المهام
+                والأحداث التي أنشأتها.
   communication_5255723c: الاتصالات
   communication_channel: 
     body: "كود تحقق Canvas الخاص بك هو %{verification_code}"
@@ -4699,7 +4756,8 @@ ar:
       details: 
         account_exists: |-
             يوجد حساب مستخدم مقترن بالفعل بالبريد الإلكتروني %{email}.
-            **هل أنت %{name}؟**
+            
+              **هل أنت %{name}؟**
         account_needed: "لقد تمت دعوتك للانضمام إلى **%{course}**. لقبول هذا الطلب فإنك تحتاج إلى حساب Canvas. انقر فوق الارتباط أدناه لإنشاء حساب Canvas."
         add_email: "هل تود إضافة عنوان البريد الإلكتروني هذا إلى الحساب الحالي الخاص بك؟"
         choose_login: "حدّد المكان الذي تريد تسجيل الدخول إليه."
@@ -4709,6 +4767,7 @@ ar:
         merge_one: "هل تود الانضمام إلى **%{current_user}** و**%{other_user}**؟"
         multiple_accounts_course: |-
             يوجد %{count} من الحسابات المقترنة بعنوان البريد الإلكتروني هذا.
+            
             فأيهما أنت؟
         none_of_these: "لا شيء من هذا، أنا مستخدم جديد"
         register: "لإنهاء تسجيل دخولك، ستحتاج إلى المزيد من المعلومات القليلة."
@@ -4753,7 +4812,11 @@ ar:
   conditional_content_b284da8f: "محتوى شرطي"
   conditional_release_d206e93b: "إصدار مشروط"
   conduct_virtual_lectures_virtual_office_hours_and__959d6996: "تنفيذ محاضرات افتراضية وساعات عمل افتراضية ومجموعات طلابية. بث مواد صوتية ومرئية آنية ومشاركة شرائح عروض تقديمية وتقديم عروض توضيحية للتطبيقات والموارد عبر الإنترنت والمزيد."
-  conduct_virtual_lectures_virtual_office_hours_and__cc05907b: "قم بتنفيذ محاضرات افتراضية وساعات عمل افتراضية ومجموعات طلابية. قم ببث مواد صوتية ومرئية آنية ومشاركة شرائح عروض تقديمية وتقديم عروض توضيحية للتطبيقات والموارد عبر الإنترنت والمزيد."
+  conduct_virtual_lectures_virtual_office_hours_and__cc05907b: |-
+      قم بتنفيذ محاضرات افتراضية وساعات عمل افتراضية ومجموعات طلابية.
+      قم ببث مواد صوتية ومرئية آنية ومشاركة شرائح عروض تقديمية
+      وتقديم عروض توضيحية للتطبيقات والموارد عبر الإنترنت
+      والمزيد.
   conference_was_deleted_30869390: "تم حذف المؤتمر"
   conferences: 
     concluded_conference: 
@@ -4813,7 +4876,7 @@ ar:
     no_settings_error: "لا يحتوي المؤتمر على صفحة إعدادات متقدمة"
     no_urls_error: "للأسف، يبدو أنه لا توجد أي صفحات %{type} لهذا المؤتمر بعد."
     notifications: 
-      inaccessible: "تحذير: تحتوي هذه الصفحة على محتوى جهة خارجية لا يمكن الوصول إليه عن طريق برامج قراءة الشاشة.\n"
+      inaccessible: "تحذير: تحتوي هذه الصفحة على محتوى جهة خارجية لا يمكن الوصول إليه عن طريق برامج قراءة الشاشة."
     show: 
       buttons: 
         close: "إنهاؤه الآن"
@@ -4831,6 +4894,7 @@ ar:
   configure_toolname_app_651371be: "تكوين تطبيق %{toolName}"
   confirm_contact_method_29d6fe4b: "تأكيد طريقة الاتصال"
   confirm_delete_6febeafb: "تأكيد الحذف"
+  confirm_delete_a5239715: "تأكيد الحذف"
   confirm_delete_announcements_3d83b69a: "تأكيد حذف الإعلانات"
   confirm_delete_discussions_1fb0d053: "تأكيد حذف النقاشات"
   confirm_deletion_b2efe7d4: "تأكيد الحذف"
@@ -5189,7 +5253,7 @@ ar:
         cant_delete: "تعذر الحذف"
         conclude_enrollment: "الوصول لهذا التسجيل"
         delete_enrollment: "حذف هذا التسجيل"
-        faculty_journal: "دفتر الكلية "
+        faculty_journal: "دفتر الكلية"
         link_enrollment: "ربط هذا التسجيل"
         link_services: "ربط خدمات الويب بالحساب الخاص بي"
         message_user: "إرسال رسالة"
@@ -5199,7 +5263,7 @@ ar:
         report_avatar: "تقرير بصورة غير مناسبة"
         restore_enrollment: "استعادة هذا التسجيل"
         student_teacher_activity: "التفاعلات معك"
-        teacher_activity: "تقرير تفاعل الطالب "
+        teacher_activity: "تقرير تفاعل الطالب"
         title: 
           enrollment_sis_defined: "تم تعريف هذا التسجيل بواسطة الجامعة، ولا يمكن حذفه"
         user_account_details: "تفاصيل حساب المستخدم"
@@ -5703,6 +5767,7 @@ ar:
   costa_rica_97d66afe: كوستاريكا
   could_not_duplicate_discussion_953ed67f: "تعذر تكرار المناقشة"
   could_not_save_chosencolor_741b74ce: "تعذر حفظ '%{chosenColor}'"
+  couldn_t_adjust_dates_on_assignment_name_id_id_eaf1c353: "تعذر ضبط التواريخ على المهمة %{name} (المعرف %{id})"
   couldn_t_find_an_authority_to_update_44d9407e: "تعذر العثور على سلطة للتحديث"
   couldn_t_find_canvas_csv_import_headers_487f1b6c: "تعذر العثور على رؤوس استيراد CSV الخاصة بـ Canvas"
   couldn_t_generate_diff_message_a0528b20: "تعذر إنشاء الفرق: %{message}"
@@ -6831,7 +6896,9 @@ ar:
   create_an_ba36d171: إنشاء
   create_and_administer_online_quizzes_and_surveys_b_7d2fa85f: "قم بإنشاء اختبارات موجزة واستطلاعات رأي على الإنترنت وإدارتها، سواء كانت بدرجات أو دون درجات."
   create_announcements_above_1c36202b: "إنشاء الإعلانات أعلاه"
-  create_as_many_discussion_topics_as_needed_as_assi_45ec1df: "أنشئ العدد اللازم من موضوعات النقاش، كمهام لمنح العلامات أو كمنتدى لمشاركة الأفكار والمعلومات."
+  create_as_many_discussion_topics_as_needed_as_assi_45ec1df: |-
+      أنشئ العدد اللازم من موضوعات النقاش، كمهام لمنح العلامات
+                أو كمنتدى لمشاركة الأفكار والمعلومات.
   create_as_many_discussion_topics_as_needed_as_assi_f1221307: "إنشاء العدد اللازم من موضوعات النقاش، كمهام لمنح العلامات أو كمنتدى لمشاركة الأفكار والمعلومات."
   create_assessments_with_quizzes_next_and_migrate_e_eaaee5e6: "إنشاء تقييمات من خلال Quizzes.Next وقم بترحيل اختبارات Canvas الموجزة الحالية."
   create_assignment_68532ceb: "إنشاء مهمة"
@@ -6839,7 +6906,10 @@ ar:
       قم بإنشاء مهام في صفحة المهام. قم بتنظيم المهام
       في مجموعات مثل واجب منزلي، وأعمال داخل الصف، ومقالات،
       ومناقشات، واختبارات موجزة. يمكن وزن مجموعات المهام.
-  create_assignments_on_the_assignments_page_organiz_90c78fdc: "أنشئ مهامًا في صفحة المهام. قم بتنظيم المهام في مجموعات مثل واجب منزلي، وأعمال داخل الصف، ومقالات، ومناقشات، واختبارات موجزة. يمكن وزن مجموعات المهام."
+  create_assignments_on_the_assignments_page_organiz_90c78fdc: |-
+      أنشئ مهامًا في صفحة المهام. قم بتنظيم المهام في مجموعات مثل واجب منزلي،
+                      وأعمال داخل الصف، ومقالات، ومناقشات، واختبارات موجزة.
+                      يمكن وزن مجموعات المهام.
   create_content_for_your_course_500a7032: "إنشاء محتوى لمساقك"
   create_criterion_6df4d4ad: "إنشاء معيار"
   create_developer_key_78de8510: "إنشاء مفتاح مطور"
@@ -6879,11 +6949,13 @@ ar:
   created_created_at_37c0ec3b: "تاريخ الإنشاء: %{created_at}"
   created_created_bf5714b8: "تم الإنشاء %{created}"
   created_group_group_name_2097306b: "تم إنشاء المجموعة %{group_name}"
+  creating_a_group_is_not_yet_handled_by_the_new_ass_3360471d: "لم تتم معالجة إنشاء مجموعة حتى الآن في تدفق المهام الجديدة. هل تريد التوجه إلى صفحة المهام القديمة؟"
   creating_a_submission_export_will_allow_you_to_dow_b4b1a658: "سيسمح لك إنشاء \"تصدير إرسال\" بتنزيل ملف Zip يضم كافة إرسالات مهمتك في جميع مساقاتك الحالية والسابقة. قد يكون ملفاً كبيراً، وبالتالي قد يستغرق بعض الوقت. يمكنك الانتقال إلى صفحات أخرى والعودة فيما بعد."
   creating_key_8a026e61: "جار إنشاء المفتاح"
   creative_commons_714a065f: "المشاع الإبداعي"
   creative_commons_license_725584ae: "ترخيص المشاع الإبداعي:"
   creative_commons_licenses_7d557d9a: "تراخيص المشاع الإبداعي"
+  creatorname_performed_actions_while_anonymous_was__c2124eca: "نفذ %{creatorName} إجراءات عندما كان إخفاء الهوية متوقفًا عن التشغيل"
   criteria_9fac648: المعايير
   criterion_5f0b62f8: المعيار
   criterion_created_42669293: "تم إنشاء المعيار"
@@ -7319,6 +7391,7 @@ ar:
   delete_account_name_96aee330: "حذف %{account_name}"
   delete_alignment_f33c97d5: "حذف المحاذاة"
   delete_announcement_title_756a9d1f: "حذف إعلان %{title}"
+  delete_assignment_5d3f3f15: "حذف المهمة"
   delete_assignment_group_7c3b01c4: "حذف مجموعة المهام"
   delete_assignment_name_deec56e3: "حذف المهمة %{name}"
   delete_bank_d8f4cb64: "حذف %{bank}"
@@ -7366,6 +7439,7 @@ ar:
   delete_this_page_509f2baf: "حذف هذه الصفحة"
   delete_this_question_8f955ceb: "حذف هذا السؤال"
   delete_this_section_380338: "حذف هذا القسم"
+  delete_this_submission_type_37a0809c: "احذف نوع الإرسال هذا"
   delete_this_theme_46d95edc: "حذف هذا النسق؟"
   delete_this_token_f5962a4f: "حذف هذا الرمز المميز"
   delete_time_range_e14461a0: "حذف النطاق الزمني"
@@ -7378,6 +7452,7 @@ ar:
   deleted_ce03674d: "تم الحذف"
   deleted_content_exceptions_237e809d: "استثناءات المحتوى المحذوفة:"
   deleting_6421031e: "يتم الآن الحذف..."
+  deleting_assignment_22d5851d: "جارٍ حذف المهمة"
   delicious_7f9ac66f: Delicious
   demo_sites_require_recaptcha_settings_to_be_config_8bf9c7e3: "تتطلب المواقع التجريبية تكوين إعدادات Recaptcha. يرجى استشارة مسؤول الموقع لديك لمعرفة مثيل Canvas. "
   demos: 
@@ -7559,8 +7634,12 @@ ar:
   disabling_post_to_sis_is_not_available_for_non_pub_ee031373: "تعطيل النشر لـ SIS غير متاح للمساقات غير المنشورة"
   disabling_sync_to_name_failed_e7521ebb: "فشل تعطيل المزامنة إلى %{name} "
   disabling_this_permission_will_override_if_enabled_8d9c42f5: "سيتجاوز تعطيل هذا الإذن (عند تمكينه) إذن المقاييس - إضافة / تحرير / حذف، مما سيمنع المستخدم من إنشاء أو تحرير مقاييس التقييم من المهام الفردية. ولكن إذا تم تمكين حصائل التعلم - إضافة / تحرير / حذف، فلا يزال بإمكان المستخدم إضافة مقاييس التقييم عن طريق الحصائل - إدارة مقاييس التقييم."
-  disabling_this_permission_will_override_if_enabled_955dfb03: "سيتجاوز تعطيل هذا الإذن (عند تمكينه) إذن المقاييس - إضافة / تحرير / حذف، مما سيمنع المستخدم من إنشاء أو تحرير مقاييس التقييم من المهام الفردية. ولكن إذا تم تمكين حصائل التعلم - إضافة / تحرير / حذف، فلا يزال بإمكان المستخدم إضافة مقاييس التقييم عن طريق الحصائل (زر إدارة مقاييس التقييم)."
-  disabling_this_permission_will_override_if_enabled_9c4fa650: "سيتجاوز تعطيل هذا الإذن (عند تمكينه) إذن المقاييس - إضافة / تحرير / حذف، مما سيمنع المستخدم من إنشاء أو تحرير مقاييس التقييم من المهام الفردية. ولكن إذا تم تمكين حصائل التعلم - إضافة / تحرير / حذف، فلا يزال بإمكان المستخدم إضافة مقاييس التقييم عن طريق الحصائل (زر إدارة مقاييس التقييم)."
+  disabling_this_permission_will_override_if_enabled_955dfb03: |-
+      سيتجاوز تعطيل هذا الإذن (عند تمكينه) إذن المقاييس - إضافة / تحرير / حذف، مما سيمنع المستخدم من إنشاء أو تحرير مقاييس التقييم من المهام الفردية.
+      ولكن إذا تم تمكين حصائل التعلم - إضافة / تحرير / حذف، فلا يزال بإمكان المستخدم إضافة مقاييس التقييم عن طريق الحصائل (زر إدارة مقاييس التقييم).
+  disabling_this_permission_will_override_if_enabled_9c4fa650: |-
+      سيتجاوز تعطيل هذا الإذن (عند تمكينه) إذن المقاييس - إضافة / تحرير / حذف، مما سيمنع المستخدم من إنشاء أو تحرير مقاييس التقييم من المهام الفردية.
+      ولكن إذا تم تمكين حصائل التعلم - إضافة / تحرير / حذف، فلا يزال بإمكان المستخدم إضافة مقاييس التقييم عن طريق الحصائل (زر إدارة مقاييس التقييم).
   disallow_comments_6d04b47a: "عدم السماح للتعليقات"
   disallow_comments_for_title_21f9c653: "عدم السماح للتعليقات الخاصة ب %{title}"
   disallow_replies_for_title_ca3806b2: "عدم السماح للردود على %{title}"
@@ -7985,6 +8064,7 @@ ar:
   does_not_meet_expectations_b0736d20: "لا يفي بالتوقعات"
   domain_3b54c511: المجال
   domain_is_required_1d4c8b25: "المجال مطلوب"
+  domain_name_6c783b0: "اسم المجال"
   dominican_republic_1_3cef4021: "جمهورية الدومينيكان (+1)"
   don_t_add_this_user_for_now_32912974: "لا تضف هذا المستخدم في الوقت الحالي."
   don_t_move_lti_query_params_to_post_body_21744487: "عدم نقل معلمات استعلام LTI إلى نص المنشورة"
@@ -8015,7 +8095,7 @@ ar:
   draft_92507c72: (مسودة)
   draft_comment_b2376ea4: "مسودة تعليق"
   drag_and_drop_or_click_to_browse_your_computer_2b46a2b6: "السحب و الإفلات أو النقر لاستعراض الكمبيوتر الخاص بك"
-  drag_and_drop_your_image_here_or_7fba7c14: "سحب وإسقاط الصورة هنا أو"
+  drag_and_drop_your_image_here_or_7fba7c14: "سحب وإسقاط الصورة هنا أو "
   drag_to_rearrange_sections_637efee3: "اسحب لإعادة ترتيب الأقسام"
   drag_up_or_down_to_reorder_382126ff: "سحب لأعلى أو لأسفل لإعادة الترتيب"
   drop_image_62a2a071: "إسقاط الصورة"
@@ -8151,6 +8231,7 @@ ar:
     other: "تحرير أذونات لـ  %{count} من العناصر"
     two: "تحرير أذونات لـ  %{count} من العناصر"
     zero: "تحرير أذونات لـ  %{count} من العناصر"
+  edit_points_3a339cd8: "تحرير النقاط"
   edit_quiz_ededddd8: "تحرير الاختبار"
   edit_rating_c2ac31e5: "تحرير التصنيف"
   edit_role_1e96ad20: "تحرير الدور"
@@ -8190,6 +8271,7 @@ ar:
   edit_this_question_1c82c3cf: "تحرير هذا السؤال"
   edit_this_theme_in_theme_editor_f8f07ac9: "تحرير هذا النسق في محرر النسق"
   edit_title_20a9577: "تحرير %{title}"
+  edit_title_4f508e10: "تحرير عنوان"
   edit_tool_690c199b: "تحرير الأداة"
   edit_toolname_app_23cfbb8: "تحرير تطبيق %{toolName}"
   edit_user_c46cf103: "تحرير مستخدم"
@@ -8300,7 +8382,7 @@ ar:
   enable_new_gradebook_history_page_e0fd9d02: "تمكين صفحة سجل دفتر درجات جديد."
   enable_new_sis_integration_settings_ab6780a4: "تمكين إعدادات تكامل نظام معلومات طلاب جديد"
   enable_or_condition_for_modules_a16f02d8: "تمكين شرط \"OR\" للوحدات"
-  enable_reregistration_for_lti_2_b2a10444: "تمكين إعادة التسجيل بالنسبة لـ LTI 2"
+  enable_reregistration_for_lti_2_b2a10444: "تمكين إعادة التسجيل بالنسبة لـ LTI 2 "
   enable_scope_ac28b832: "تمكين النطاق"
   enable_student_context_card_links_eba2f2c5: "تمكين روابط بطاقة سياق الطالب"
   enable_the_creation_of_blueprint_courses_79f91c30: "تمكين إنشاء مساقات مخططة"
@@ -8384,7 +8466,7 @@ ar:
   enter_grades_as_e113e606: "أدخل التقديرات في صورة"
   enter_or_find_an_external_tool_url_6aebbd0d: "إدخال عنوان URL لأداة خارجية أو البحث عنه"
   enter_specific_phrase_9b686755: "إدخال عبارة محددة"
-  enter_the_access_token_for_your_organization_from__38b84fd1: "أدخل الرمز المميز للوصول لمؤسستك من                       *eduappcenter.com*. حالما يتم تطبيقه، سيتم إدراج التطبيقات التي اعتمدتها مؤسستك في                        EduAppCenter فقط على صفحة التطبيقات الخارجية.                     تعلم كيفية إنشاء **رمز مميز للوصول**."
+  enter_the_access_token_for_your_organization_from__38b84fd1: "أدخل الرمز المميز للوصول لمؤسستك من                     *eduappcenter.com*. حالما يتم تطبيقه، سيتم إدراج التطبيقات التي اعتمدتها مؤسستك في                     EduAppCenter فقط على صفحة التطبيقات الخارجية.                     تعلم كيفية إنشاء **رمز مميز للوصول**."
   enter_the_access_token_for_your_organization_from__cc77493d: "أدخل رمز الوصول المميز لمؤسستك من خلال *eduappcenter.com*. بعد تطبيقه، سيتم فقط إدراج التطبيقات التي اعتمدتها مؤسستك عبر EduAppCenter في صفحة التطبيقات الخارجية. **تعلم كيفية إنشاء رمز مميز**."
   enter_the_access_token_for_your_organization_from__f1c71941: "أدخل الرمز المميز للوصول لمؤسستك من                       *eduappcenter.com*. حالما يتم تطبيقه، سيتم إدراج التطبيقات التي اعتمدتها مؤسستك في                        EduAppCenter فقط على صفحة التطبيقات الخارجية.                       تعلم كيفية إنشاء **رمز مميز للوصول**."
   enter_the_email_addresses_of_the_users_you_would_l_17cef6a0: "أدخل عناوين البريد الإلكتروني للمستخدمين الذين ترغب في إضافتهم، مفصولة بفاصلات."
@@ -8623,15 +8705,17 @@ ar:
       page_title: "محفظات ePortfolio الخاصة بي"
       what: 
         details1: |-
-            تعد محفظات ePortfolio المكان الذي يمكنك فيه عرض الإرسالات     والخبرات المهمة التي تحدث أثناء عملية
-            التعلم ومناقشتها. يمكنك استخدام ePortfolio لعمل التالي: 
+            تعد محفظات ePortfolio المكان الذي يمكنك فيه عرض الإرسالات
+            والخبرات المهمة التي تحدث أثناء عملية التعلم ومناقشتها.
+            يمكنك استخدام ePortfolio لعمل التالي: 
             
             * عرض الأوراق التي يهمك أنت عرضها أكثر مما يهم معلمك
             * التحدث حول كل الأفكار والأعمال التي تمت في إرسالات الفصل
             * تجميع نظرة عامة حول الخبرة التعليمية ككل
             * مشاركة عملك مع الأصدقاء وأصحاب العمل المستقبليين، إلخ
             
-            يمكن أن تكون المحفظات الإلكترونية عامة بالنسبة لكل الأشخاص لعرضها، أو خاصة وبذلك سيكون الأشخاص هم فقط الذين يمكنهم عرضها، ويمكنك تغيير هذا الإعداد في أي وقت.
+            يمكن أن تكون المحفظات الإلكترونية عامة بالنسبة لكل الأشخاص لعرضها، أو خاصة وبذلك
+            سيكون الأشخاص هم فقط الذين يمكنهم عرضها، ويمكنك تغيير هذا الإعداد في أي وقت.
             
             هل أنت مستعد للبدء؟ انقر فوق الزر.
     wizard_box: 
@@ -8795,7 +8879,7 @@ ar:
   exit_theme_editor_9ddd41bb: "الخروج من محرر النسق"
   expand_2f2fadbd: توسيع
   expand_collapse_title_outcome_group_239f0a9d: "توسيع/طي مجموعة نتائج %{title}"
-  expand_collapse_title_outcome_group_student_meets__46ffef48: "توسيع/طي مجموعة نواتج %{title}، يفي الطالب بمستوى إجادة %{mastery_count} من نواتج %{count} "
+  expand_collapse_title_outcome_group_student_meets__46ffef48: "توسيع/طي مجموعة نواتج %{title}، يفي الطالب بمستوى إجادة %{mastery_count} من نواتج %{count}"
   expand_global_navigation_2c28d5d4: "توسيع التنقل العمومي"
   expand_group_53765272: "توسيع المجموعة"
   expand_list_of_group_members_for_groupname_9ce9d2f7: "توسيع قائمة أعضاء مجموعة %{groupName}"
@@ -8983,7 +9067,7 @@ ar:
   failed_276786d: فشل
   failed_307449e1: "فشل:"
   failed_creating_user_b706a1c5: "فشل إنشاء مستخدم"
-  failed_loading_associations_component_is_your_netw_fa49fb32: "فشل تحميل مكون الاقترانات. هل اتصال شبكتك جيد؟ "
+  failed_loading_associations_component_is_your_netw_fa49fb32: "فشل تحميل مكون الاقترانات. هل اتصال شبكتك جيد؟"
   failed_loading_course_sections_refresh_page_to_try_f97160bf: "فشل تحميل أقسام المساق. تحديث الصفحة لإعادة المحاولة."
   failed_loading_sync_history_component_is_your_netw_2d04fc10: "فشل تحميل مكون مزامنة السجل. هل اتصال شبكتك جيد؟"
   failed_loading_unsynced_changes_component_is_your__89f863d6: "فشل تحميل مكون التغييرات غير المتزامنة. هل اتصال شبكتك جيد؟"
@@ -9199,6 +9283,7 @@ ar:
   files_toolbar_2f2f0976: "شريط أدوات الملفات"
   files_tutorial_tray_3ad1eea6: "علبة برنامج الملفات التعليمي"
   files_uploaded_519844ed: "الملفات المحملة"
+  fill_in_the_blank_answer_d83b83bb: "تعبئة الإجابة الفارغة"
   fill_in_the_blank_read_surrounding_text_1a6c73c7: "املأ الفراغات، اقرأ النص المجاور"
   filled_5d8c39e: "تم إملاؤه"
   filter_9df28e5b: "عامل تصفية:"
@@ -9264,8 +9349,8 @@ ar:
   flash_6afbf65a: Flash
   flickr_displays_safesearch_images_within_the_creat_48835f79: |-
       يعرض Flickr صور SafeSearch داخل مجال عام للمشاع الإبداعي.
-      لكن نتائج البحث الآمن غير مضمونة، حيث أن بعض الصور قد لا تتضمن
-      مستوى أمان محدد من قبل أصحابها.
+                    لكن نتائج البحث الآمن غير مضمونة، حيث أن بعض الصور قد لا تتضمن
+                    مستوى أمان محدد من قبل أصحابها.
   folder: 
     course_content_folder_name: "محتوى المساق"
     default_folder_name: "مجلد جديد"
@@ -9374,7 +9459,11 @@ ar:
   good_score_b02f3587: "درجة جيدة"
   google_apps_domain_eddc8dee: "مجال Google Apps"
   google_docs_40374e65: "Google Docs"
-  google_docs_domain_restriction_description: "القيد على مجال Google Docs يسمح بقصر عمليات الإرسال والتعاون في Google Docs على نطاق واحد فقط. وبالنسبة للطلاب الذين يحاولون إرسال فروض دراسية أو المشاركة في عمليات تعاون في مجال غير معتمد، فسيتلقون رسالة خطأ تبلغهم بضرورة تحديث تكامل Google Docs."
+  google_docs_domain_restriction_description: |-
+      القيد على مجال Google Docs يسمح بقصر عمليات الإرسال والتعاون
+      في Google Docs على نطاق واحد فقط. وبالنسبة للطلاب الذين يحاولون
+      إرسال فروض دراسية أو المشاركة في عمليات تعاون في مجال غير معتمد،
+      فسيتلقون رسالة خطأ تبلغهم بضرورة تحديث تكامل Google Docs.
   google_docs_preview_9f41b23c: "معاينة Google Docs"
   google_drive_7cb003c9: "Google Drive"
   google_template_29640bc0: "قالب Google"
@@ -9402,6 +9491,7 @@ ar:
   grade_export_title: "تصدير الدرجة"
   grade_for_name_b9df168a: "الدرجة الخاصة بـ: %{name}"
   grade_for_studentname_d124b199: "الدرجة الخاصة بـ %{studentName}"
+  grade_grade_7e52dd1c: "الدرجة: %{grade}"
   grade_high_to_low_1cea0381: "الدرجات - من الأعلى إلى الأدنى"
   grade_history_9c51ad49: "سجل الدرجات..."
   grade_history_ccc09fde: "سجل الدرجات"
@@ -10273,6 +10363,7 @@ ar:
       pages: الصفحات
       people: الأشخاص
   group_a8f5ed9c: المجموعة
+  group_assignment_7060989f: "تعيين المجموعة"
   group_assignments_can_t_be_anonymously_graded_2dd9be24: "لا يمكن تقييم مهام المجموعات كمجهول"
   group_assignments_cannot_be_enabled_for_anonymousl_ed896b1c: "لا يمكن تمكين مهام المجموعات للمهام المقيمة كمجهول"
   group_assignments_cannot_be_enabled_for_moderated__6b2faeef: "لا يمكن تمكين مهام المجموعات للمهام الموجودة تحت الإشراف"
@@ -10536,7 +10627,7 @@ ar:
         account_group_explanation: "تعد مجموعات الطلاب على مستوى الحساب طريقة جيدة لتجميع الطلاب دون ربطهم بمساق خاص. بحيث تحصل كل مجموعة طلاب على تقويم ولوحة مناقشة وأدوات تعاون حتى يستطيعوا تنظيم أنفسهم والعمل معًا بفعالية أكبر."
         add_group_set: "إضافة مجموعة مجموعات"
         course_group_explanation: "تعد مجموعات الطلاب طريقة مفيدة لتنظيم الطلاب لإنجاز المشروعات أو أوراق المجموعات. بحيث تحصل كل مجموعة طلاب على تقويم ولوحة مناقشة وأدوات تعاون حتى يستطيعوا تنظيم أنفسهم والعمل معًا بفعالية أكبر."
-        group_assignment_instructions: "يمكنك عشوائيًا تعيين الطلاب إلى مجموعات من حجم خاص، أو إنشاء المجموعات وتنظيمها يدويًا.  وبمجرد أن يتم إنشاء مجموعاتك، يمكنك ضبط مهام بحيث تصبح مهام \"إرسال المجموعة\"، مما يعني أن كل مجموعة ستحتوي على كل إرسال واحد لجميع مستخدمي تلك المجموعة. "
+        group_assignment_instructions: "يمكنك عشوائيًا تعيين الطلاب إلى مجموعات من حجم خاص، أو إنشاء المجموعات وتنظيمها يدويًا.  وبمجرد أن يتم إنشاء مجموعاتك، يمكنك ضبط مهام بحيث تصبح مهام \"إرسال المجموعة\"، مما يعني أن كل مجموعة ستحتوي على كل إرسال واحد لجميع مستخدمي تلك المجموعة."
         group_set: "مجموعة المجموعات"
         headings: 
           account_groups: "مجموعات الطلاب على مستوى الحساب"
@@ -10649,7 +10740,7 @@ ar:
     member_tooltip_hide: "إخفاء كشف المجموعة"
     member_tooltip_show: "عرض كشف المجموعة"
     membership_pending: 
-      group_join_request: "طلب الانضمام إلى مجموعة "
+      group_join_request: "طلب الانضمام إلى مجموعة"
       group_join_request_info: "تلقت هذه المجموعة طلبك للانضمام إليها. وسيتم إعلامك بمجرد أن يقبلوا طلبك أو يرفضوه."
     messages: 
       creating_group: "جارٍ إنشاء مجموعة..."
@@ -10693,10 +10784,10 @@ ar:
       مشروع يحتاج إلى تركيز أكثر.
   groups_are_a_good_place_to_collaborate_on_projects_fdfe57a9: |-
       تعد المجموعات مكان جيد للتعاون في المشروعات أو لتحديد الجداول لجلسات الدراسة
-      وما شابه.  تحصل كل مجموعة على تقويم ومناقشات ويكي ومساحة صغيرة لتخزين
-      الملفات.  يمكن للمجموعات التعاون في المستندات أو حتى جدولة مؤتمرات الويب.
-      تشبه كثيرًا مساقًا مصغرًا حيث يمكنك العمل مع عدد أقل من الطلاب على
-      مشروع أكثر تركيزًا.
+                    وما شابه.  تحصل كل مجموعة على تقويم ومناقشات ويكي ومساحة صغيرة لتخزين
+                    الملفات.  يمكن للمجموعات التعاون في المستندات أو حتى جدولة مؤتمرات الويب.
+                    تشبه كثيرًا مساقًا مصغرًا حيث يمكنك العمل مع عدد أقل من الطلاب على
+                    مشروع أكثر تركيزًا.
   groups_cannot_have_size_restrictions_to_assign_by__7d36fa32: "يتعذر أن يكون لدى المجموعات قيود من حيث الحجم للتعيين حسب القسم"
   groups_course_c73e4c2c: "الدرجات (المساق)"
   groups_must_be_empty_to_assign_by_section_a9fafa72: "يجب أن تكون المجموعات فارغة ليتم التعيين حسب القسم"
@@ -10715,16 +10806,15 @@ ar:
   hello_name_your_outcomes_import_failed_due_to_an_e_385db5d3: |-
       مرحبًا%{name}،
       
-      فشل استيراد النواتج الخاصة بك بسبب وجود خطأ أثناء عملية الاستيراد. يرجى التحقق من ملفك ومحاولة إعادة التحميل في %{url}
+            فشل استيراد النواتج الخاصة بك بسبب وجود خطأ أثناء عملية الاستيراد. يرجى التحقق من ملفك ومحاولة إعادة التحميل في %{url}
       
+            حدث الخطأ التالي: 
+            %{row}
       
-      حدث الخطأ التالي: 
-      %{row}
+            لعرض تنسيق الاستيراد المناسب، يرجى مراجعة Canvas API Docs على %{doc_url}
       
-      لعرض تنسيق الاستيراد المناسب، يرجى مراجعة Canvas API Docs على %{doc_url}
-      
-      شكرًا لك،
-      Instructure
+            شكرًا لك،
+            Instructure
   hello_name_your_outcomes_import_failed_due_to_erro_4c3f236b: |-
       مرحبًا%{name}،
       
@@ -10740,21 +10830,21 @@ ar:
   hello_name_your_outcomes_were_successfully_importe_a510e0d: |-
       مرحبًا %{name}،
       
-      تم استيراد النواتج الخاصة بك بنجاح. يمكنك الآن إدارتها في %{url}
+              تم استيراد النواتج الخاصة بك بنجاح. يمكنك الآن إدارتها في %{url}
       
-      شكرًا لك،
-      Instructure
+              شكرًا لك،
+              Instructure
   hello_name_your_outcomes_were_successfully_importe_d0c37335: |-
       مرحبًا %{name}،
       
-      تم استيراد نواتجك بنجاح، ولكن مع وجود المشكلات التالية (حتى التحذيرات الـ 100 الأولى): 
+              تم استيراد نواتجك بنجاح، ولكن مع وجود المشكلات التالية (حتى التحذيرات الـ 100 الأولى): 
       
-      %{rows}
+              %{rows}
       
-      يمكنك الآن إدارتها في %{url}
+              يمكنك الآن إدارتها في %{url}
       
-      شكرًا لك،
-      Instructure
+              شكرًا لك،
+              Instructure
   help_4c4968b1: تعليمات
   help_dialog: 
     Back: عودة
@@ -10844,7 +10934,7 @@ ar:
         few: "*%{count}* مراجعات نظيرة"
         many: "*%{count}* مراجعة نظيرة"
         one: "مراجعة نظيرة *واحدة*"
-        other: "*%{count}* من المراجعات النظيرة "
+        other: "*%{count}* من المراجعات النظيرة"
         two: "*%{count}* من المراجعات النظيرة"
         zero: "لا توجد أيه مراجعات نظيرة"
     local: محلي
@@ -10965,9 +11055,11 @@ ar:
   if_disabled_user_will_still_have_access_to_course__6816d525: |-
       في حالة التعطيل، لن يزال بإمكان المستخدم إمكانية الوصول إلى إعدادات المساق.
       
-      لا يمكن للمستخدم إدارة محتوى المساقات الفردية بدون وجود إذن ملائم لعنصر المحتوى ذلك.
+      لا يمكن للمستخدم إدارة محتوى المساقات الفردية بدون وجود
+      إذن ملائم لعنصر المحتوى ذلك.
       
-      تم حصر إمكانية رؤية المساق للمستخدمين المسجلين في المساق، يمكّن هذا الإذن المستخدم من عرض محتوى المساق بدون التسجيل في المساق.
+      تم حصر إمكانية رؤية المساق للمستخدمين المسجلين في المساق، يمكّن هذا الإذن المستخدم
+      من عرض محتوى المساق بدون التسجيل في المساق.
   if_enabled_access_to_lti_1_3_and_lti_advantage_wil_1013107c: "إذا تم التمكين، سيتم تمكين الوصول إلى ميزة LTI 1.3 وLTI."
   if_enabled_allows_more_than_the_maximum_possible_s_5d79c0d5: "في حالة التمكين، تسمح بأكثر من الحد الأقصى للدرجات المحتملة للناتج المحدد في معايير تقييم."
   if_enabled_common_cartridge_importers_will_convert_9bffff09: "ستقوم برامج الاستيراد Common Cartridge إذا تم تمكينها، بتحويل ملفات HTML إلى صفحات"
@@ -10987,7 +11079,10 @@ ar:
   if_none_are_selected_send_to_everyone_in_the_entir_21119709: "(في حال عدم تحديد أي شخص، الإرسال إلى الجميع في الحساب الفرعي بأكمله)"
   if_statistics_view_or_users_manage_login_details_i_da650b69: "إذا تم تمكين الإحصائيات - عرض أو المستخدمون - عرض تفاصيل تسجيل الدخول، فسيتمكن المستخدم من إنشاء نشاط تسجيل الدخول/تسجيل الخروج في أدوات المسؤول. لإخفاء خيار نشاط تسجيل الدخول/تسجيل الخروج في أدوات المسؤول، فيجب تعطيل كل من هذين الإذنين."
   if_the_open_registration_account_setting_is_enable_f3b9a75f: "إذا تم تمكين إعداد فتح حساب التسجيل، فبإمكان المستخدمين المتمتعين بهذا الإذن إضافة الطلاب أو المراقبين إلى المساق عبر عنوان البريد الإلكتروني أو معرف تسجيل الدخول إذا لم يكن الطالب أو المراقب يمتلك بالفعل حساب على Canvas."
-  if_this_permission_is_disabled_and_courses_add_edi_9bafd797: "إذا تم تعطيل هذا الإذن وتمكين المساقات - إضافة / تحرير / حذف، فبإمكان المستخدمين إضافة مساق جديد من خلال زر إضافة مساق جديد في إعدادات الحساب."
+  if_this_permission_is_disabled_and_courses_add_edi_9bafd797: |-
+      إذا تم تعطيل هذا الإذن وتمكين المساقات - إضافة / تحرير / حذف،
+      فبإمكان المستخدمين إضافة مساق جديد من خلال زر إضافة مساق جديد
+      في إعدادات الحساب.
   if_this_permission_is_disabled_at_the_account_leve_39648abb: "إذا تم تعطيل هذا الإذن على مستوى الحساب، فلن يتمكن المستخدمون من عرض أي مجموعات حسابات حالية. بإمكان المستخدمين على مستوى المساق عرض أي مجموعات حالية، بما يشمل المجموعات المنشأة بواسطة الطلاب ولكن دون الوصول إليها. لعرض المجموعات، يجب أيضًا تمكين المستخدمون - عرض القائمة. لإضافة مجموعات من مستوى الحساب من خلال ملفات CSV، بيانات SIS، يجب أيضًا تمكين الاستيراد."
   if_this_permission_is_disabled_users_can_only_view_b68143d5: "إذا تم تمكين هذا الإذن، فبإمكان المستخدمين عرض المجموعات الحالية فقط والتي تشمل المجموعات المنشأة بواسطة المجموعات."
   if_this_permission_is_disabled_users_can_still_cre_76a2d4b8: "إذا تم تعطيل هذا الإذن، فلا يزال بإمكان المستخدمين إنشاء أو إضافة مقاييس التقييم إلى المهام إذا تم تمكين ميزة المهام والاختبارات الموجزة - إضافة / تحرير / حذف."
@@ -11003,7 +11098,8 @@ ar:
   if_you_configure_settings_that_cause_you_to_not_be_13d4cbbf: "في حال قيامك بتكوين إعدادات تؤدي إلى منعك من تسجيل الدخول، يمكنك الوصول مباشرة إلى تسجيل الدخول العادي إلى Canvas من خلال %{url}"
   if_you_do_not_select_usage_rights_now_this_file_wi_40c42125: "إن لم تحدد الآن حقوق الاستخدام، لن يتم نشر هذا الملف بعد تحميله."
   if_you_enable_this_feature_be_sure_that_your_sales_566967e6: "إذا قمت بتمكين هذه الميزة، تأكد من أن هذه الحقول المخصصة أضيفت إلى حساب Salesforce الخاص بك تماماً بنفس الأسماء الموجودة في العمود الأيسر من الجدول"
-  if_you_keep_having_problems_click_the_link_link_be_a4d695eb: "إذا ما زلت تواجه مشكلات، انقر فوق الارتباط \"%{link}\" الموجود أدناه للبحث في الأدلة أو لإخبارنا بما يحدث. "
+  if_you_have_a_moment_click_here_to_tell_us_what_ha_d8b578d5: "إذا كان لديك قليل من الوقت، *انقر هنا لإخبارنا عما حدث*."
+  if_you_keep_having_problems_click_the_link_link_be_a4d695eb: "إذا ما زلت تواجه مشكلات، انقر فوق الارتباط \"%{link}\" الموجود أدناه للبحث في الأدلة أو لإخبارنا بما يحدث."
   if_you_leave_the_zip_file_download_currently_being_c47c1dfb: "إذا قمت بالمغادرة، فسيتم إلغاء تنزبل الملف المضغوط الذي يجري إعداده حاليًا."
   if_you_made_changes_to_the_student_submission_file_e006d49b: |-
       إذا قمت بإدخال تغييرات على ملفات الإرسال الخاصة بالطالب والتي قمت بتنزيلها
@@ -11103,7 +11199,7 @@ ar:
   include_scores_when_alerting_about_grades_89728ae1: "تضمين النقاط عند التنبيه حول الدرجات."
   include_scores_when_alerting_about_grades_if_your__b221c2c8: |-
       تضمين النقاط عند التنبيه حول الدرجات.
-      إذا لم يكن البريد الإلكتروني الخاص بك تابعًا لمؤسسة فهذا يعني أنه سيتم إرسال المحتوى الحساس خارج المؤسسة.
+                إذا لم يكن البريد الإلكتروني الخاص بك تابعًا لمؤسسة فهذا يعني أنه سيتم إرسال المحتوى الحساس خارج المؤسسة.
   include_this_assignment_s_grades_when_posting_to_y_6bff3323: "إدراج تقديرات المهمة هذه عند الإرسال إلى نظام معلومات الطالب في مدرستك"
   include_this_assignment_s_grades_when_syncing_to_y_55bfa487: "إدراج درجات المهمة هذه عند المزامنة إلى نظام معلومات الطالب في مدرستك"
   include_unpublished_assignments_83ebbaec: "تضمين المهام التي لم يتم نشرها"
@@ -11134,6 +11230,7 @@ ar:
   information_7f11072: معلومات
   information_816d9fa5: معلومات
   information_icon_8a514faa: "رمز المعلومات"
+  inherit_whitelist_will_be_inherited_from_the_paren_fddf0d5c: "مورث - سيتم توريث القائمة البيضاء من حساب ولي الأمر.  يمكن إضافة المجالات، لكن لن تُجبر على القيام بذلك إلا إذا قمت بتغيير هذا الإعداد إلى \"تشغيل\"."
   inherited_d4d0bc33: موروث
   inherited_developer_keys_table_e4a65b67: "جدول مفاتيح المطورين الموروث"
   inner_box_background_6f9092f: "خلفية المربع الداخلي"
@@ -11143,8 +11240,9 @@ ar:
       نقاط، ونسب مئوية، وكامل أو غير كامل، ونجاح أو رسوب، ومقياس المعدل التراكمي،
       والعلامات بالأحرف. المهام الجماعية لوزن العلامات.
   input_and_distribute_grades_for_students_display_g_9a2e46a0: |-
-      أدخل العلامات ووزعها للطلاب. اعرض العلامات في شكل نقاط، ونسب مئوية، وكامل أو غير كامل، ونجاح أو رسوب، ومقياس المعدل التراكمي،
-      والعلامات بالأحرف. المهام الجماعية لوزن العلامات.
+      أدخل العلامات ووزعها للطلاب. اعرض العلامات في شكل نقاط، ونسب مئوية، وكامل
+                أو غير كامل، ونجاح أو رسوب، ومقياس المعدل التراكمي،
+                والعلامات بالأحرف. المهام الجماعية لوزن العلامات.
   insert_equella_links_49a8dacd: "إدراج ارتباطات Equella"
   insert_math_equation_57c6e767: "إدخال معادلة رياضية"
   insert_row_below_25187f89: "إدراج صف أسفل"
@@ -11224,6 +11322,7 @@ ar:
       enter_search_terms: "إدخال كلمات البحث"
   instructure_default_73317bb1: "افتراضي Instructure"
   instructure_default_old_66ef6e9b: "افتراضي Instructure (قديم)"
+  instructure_legacy_a2cacda7: "Instructure القديم"
   integration_id_8a20b328: "معرّف التكامل"
   integration_id_a6977535: "معرّف التكامل:"
   integration_id_int_id_is_already_in_use_f30f03b5: "معرف التكامل \"%{int_id}\" قيد الاستخدام بالفعل"
@@ -11244,6 +11343,7 @@ ar:
   invalid_date_or_invalid_datetime_for_attr_6661103f: "تاريخ غير صالح أو تاريخ/وقت غير صالح لـ %{attr}"
   invalid_datetime_for_graded_since_884cce5: "تاريخ/وقت غير صالح لـ graded_since"
   invalid_datetime_for_submitted_since_a238f3a6: "تاريخ/وقت غير صالح لـ submitted_since"
+  invalid_domain_e810c1d: "مجال غير صالح"
   invalid_field_type_61d31870: "%{field} غير صالح: \"%{type}\""
   invalid_fields_after_ratings_fields_815ff223: "الحقول غير الصالحة بعد التصنيفات: %{fields}"
   invalid_fields_fields_8698284: "الحقول غير الصالحة: %{fields}"
@@ -11293,7 +11393,7 @@ ar:
   item_type_link_5a2abed2: "نوع العنصر: ارتباط"
   item_type_locked_85c560ec: "نوع العنصر: مؤمّن"
   item_type_quiz_c894ddb1: "نوع العنصر: اختبار"
-  items_299a7626: "العناصر:"
+  items_299a7626: "العناصر: "
   items_items_selected_5b55e566: "تم تحديد %{items} من العناصر"
   items_selected_have_different_usage_rights_52b325cc: "تختلف العناصر المحددة في حقوق الاستخدام."
   j_5226008a: j
@@ -11407,7 +11507,7 @@ ar:
   last_enrollment_activity_10fe15ba: "آخر نشاط تسجيل"
   last_export_899a04c5: "عملية التصدير الأخيرة:"
   last_first_name_95a078f5: "اسم العائلة، الاسم الأول"
-  last_item_79583712: "أحدث عنصر:"
+  last_item_79583712: "أحدث عنصر: "
   last_length_graded_items_6db7374e: "آخر عناصر %{length} تم منحها درجات"
   last_login_54565109: "آخر تسجيل دخول"
   last_login_b7bc0479: "آخر تسجيل دخول:"
@@ -11420,12 +11520,18 @@ ar:
   last_user_access_title: "أخر وصول للمستخدم"
   late_2be42b88: متأخر
   late_8bd684b6: متأخر
+  late_anonymous_assignment_a_student_has_submitted__60158b6a: "المهمة المتأخرة المجهولة: قام طالب بإرسال متأخر لـ %{assignment_title}"
+  late_anonymous_assignment_assignment_name_b541c517: "المهمة المتأخرة المجهولة: %{assignment_name}"
   late_anonymous_assignment_user_name_has_submitted__f1ec191d: "المهمة المتأخرة المجهولة: %{user_name} أرسل متأخرًا ل %{assignment_title}"
+  late_assignment_user_name_assignment_name_2df32e01: "المهمة المتأخرة: %{user_name}، %{assignment_name}"
   late_assignment_user_name_has_submitted_late_for_a_ce1a2d41: "المهمة المتأخرة: %{user_name} أرسل متأخرًا ل %{assignment_title}"
   late_bd436902: متأخر
   late_penalty_78099d18: "عقوبة التأخير:"
   late_penalty_817fff4e: "عقوبة التأخير:"
   late_penalty_9c312b22: "عقوبة التأخير:"
+  late_penalty_minus_count_points_810572fe: 
+    one: "عقوبة تأخير: ناقص نقطة واحدة"
+    other: "عقوبة تأخير: ناقص %{count} نقاط"
   late_penalty_pointsdeducted_7033a095: "عقوبة التأخير: %{pointsDeducted}"
   late_penalty_pointsdeducted_dac023ff: "عقوبة التأخير: *%{pointsDeducted}*"
   late_percent_b91d01b3: "متأخر: %{percent}"
@@ -11433,6 +11539,10 @@ ar:
   late_policies_fd5dced6: "السياسات المتأخرة"
   late_policies_updated_2ecf9aff: "تم تحديث السياسات المتأخرة"
   late_policy_9d0e76b5: "السياسة المتأخرة"
+  late_policy_d3f95a91: "سياسة التأخير:"
+  late_policy_minus_count_points_1a945541: 
+    one: "سياسة التأخير: ناقص نقطة واحدة"
+    other: "سياسة تأخير: ناقص %{count} نقاط"
   late_submission_deduction_interval_b9fca334: "الفاصل الزمني لاقتطاع الإرسال المتأخر"
   late_submission_deduction_must_be_between_0_and_10_9cde872d: "يجب أن يكون اقتطاع الإرسال المتأخر بين 0 و 100"
   late_submission_deduction_must_be_numeric_5b3f468e: "يجب أن يكون اقتطاع الإرسال المتأخر رقميًا"
@@ -11569,9 +11679,9 @@ ar:
     incoming_message_processor: 
       failure_message: 
         body: |-
-            تعذر تسليم الرسالة المعنونة "%{subject}". تم إرسال الرسالة إلى عنوان صندوق بريد غير معروف. إذا كنت تحاول الاتصال بشخص ما من خلال Canvas، فيمكنك محاولة تسجيل الدخول إلى حسابك وإرسال رسالة إليه باستخدام أداة Inbox.⏎
-            ⏎
-            شكرًا،⏎
+            تعذر تسليم الرسالة المعنونة "%{subject}". تم إرسال الرسالة إلى عنوان صندوق بريد غير معروف. إذا كنت تحاول الاتصال بشخص ما من خلال Canvas، فيمكنك محاولة تسجيل الدخول إلى حسابك وإرسال رسالة إليه باستخدام أداة Inbox.
+            
+            شكرًا،
             دعم Canvas
         subject: "فشل رد الرسالة: %{subject}"
       locked_topic: 
@@ -11614,6 +11724,7 @@ ar:
   limit_students_to_attend_input_value_slot_s_9a5bf576: "تحديد عدد الطلاب لحضور %{input_value} جزء (أجزاء). "
   limit_this_slot_to_input_type_number_name_max_part_1580add0: "تقييد هذا الجزء الزمني إلى %{input_type_number_name_max_parti} مجموعة."
   limit_this_slot_to_input_type_number_name_max_part_8344547a: "تقييد هذا الجزء الزمني إلى %{input_type_number_name_max_parti} مستخدم."
+  limited_322546c5: محدود
   link_7262adec: ارتباط
   link_color_55f8b835: "لون الارتباط"
   link_description_4355ca82: "وصف الارتباط"
@@ -11817,7 +11928,11 @@ ar:
           verify: التحقق
         details: 
           mfa_enrollment: |-
-              تؤدي المصادقة متعددة العوامل إلى زيادة الأمان من خلال المطالبة بأن يكون لديك شيء ما في حوزتك الفعلية، بالإضافة إلى علمك بكلمة المرور الخاصة بك، من أجل تسجيل الدخول إلى Canvas. قد يكون هذا الشيء جهازًا يمكن من خلاله إنشاء رموز مصادقة أو هاتفًا يمكن من خلاله تلقي رسائل نصية. يمكن تكوين تطبيق Google Authenticator لـ [iPhone](%{iphone_url}) أو [Android](%{android_url}) من خلال مسح رمز QR أدناه. يمكن تكوين رموز مميزة أخرى من خلال إدخال المفتاح السري **%{secret_key}**. بمجرد قيامك بتكوين مصادقة متعددة العوامل، يوصى بالانتقال إلى صفحة ملف التعريف الخاصة بك
+              تؤدي المصادقة متعددة العوامل إلى زيادة الأمان من خلال المطالبة بأن يكون لديك شيء ما في حوزتك الفعلية، بالإضافة إلى علمك
+              بكلمة المرور الخاصة بك، من أجل تسجيل الدخول إلى Canvas. قد يكون هذا الشيء جهازًا يمكن من خلاله إنشاء رموز مصادقة
+               أو هاتفًا يمكن من خلاله تلقي رسائل نصية. يمكن تكوين تطبيق Google Authenticator لـ [iPhone](%{iphone_url})
+              أو [Android](%{android_url}) من خلال مسح رمز QR أدناه. يمكن تكوين رموز مميزة أخرى من خلال إدخال المفتاح
+              السري **%{secret_key}**. بمجرد قيامك بتكوين مصادقة متعددة العوامل، يوصى بالانتقال إلى صفحة ملف التعريف الخاصة بك
               وطباعة مجموعة من الرموز الاحتياطية، في حالة كان جهاز المصادقة متعددة العوامل العادي الخاص بك غير متاح.
           mfa_required: "مطلوب منك إعداد مصادقة متعددة العوامل."
           otp_on_device: "الرجاء إدخال كود التحقق المعروض بواسطة الرمز المميز token الخاص بك."
@@ -11852,7 +11967,7 @@ ar:
   login_id_bc943b97: "معرف تسجيل الدخول:"
   login_info_d1d9f11e: "معلومات التسجيل"
   login_instructure_logo_8f2332db: "شعار تسجيل دخول Instructure"
-  login_is_invalid_must_be_alphanumeric_or_an_email__ae4499b3: "معرّف تسجيل الدخول غير صالح: يجب أن يكون على شكل حروف وأرقام أو عنوان بريد إلكتروني "
+  login_is_invalid_must_be_alphanumeric_or_an_email__ae4499b3: "معرّف تسجيل الدخول غير صالح: يجب أن يكون على شكل حروف وأرقام أو عنوان بريد إلكتروني"
   login_is_too_long_25373f95: "معرّف تسجيل الدخول طويل جداً"
   login_label_1dea0f9d: "تسمية تسجيل الدخول"
   login_link_color_a887a109: "لون ارتباط تسجيل الدخول"
@@ -12461,7 +12576,7 @@ ar:
     assignment_changed: 
       email: 
         body: |-
-            لقد تغيرت المهمة "%{title}" لـ %{course}.
+            لقد تغيرت المهمة "%{title}" لـ %{course}.  
             
             انقر هنا لعرض المهمة: 
             %{url}
@@ -12537,7 +12652,7 @@ ar:
         no_due_date: "موعد الاستحقاق: بلا تاريخ استحقاق"
     assignment_due_date_override_changed: 
       email: 
-        assignment_due_date_changed: "تغيير تاريخ استحقاق المهمة:%{assignment_name}, %{course_name} (%{override})\n"
+        assignment_due_date_changed: "تغيير تاريخ استحقاق المهمة:%{assignment_name}, %{course_name} (%{override})"
         assignment_due_date_changed_sentence: "تاريخ الاستحقاق للمهمة،  %{assignment_name}, for the course, %{course_name} (%{override}) تغير إلى:"
         html: 
           assignment_due_date_changed: "تم تغيير تاريخ استحقاق المهمة: %{assignment_name}، %{course_name} (%{override})"
@@ -12697,7 +12812,8 @@ ar:
             %{course_or_group}.  تم إنشاء المستند في %{service}
             وتمت دعوتك باستخدام عنوان بريدك الإلكتروني %{email}.
             
-            إذا كان هذا عنوان بريد إلكتروني خطأ لهذا النوع من التعاون، فسيلزم تغيير إعدادات ملف التعريف أو التسجيل مع %{service}.
+            إذا كان هذا عنوان بريد إلكتروني خطأ لهذا النوع من التعاون، فسيلزم تغيير إعدادات
+            ملف التعريف أو التسجيل مع %{service}.
             
             يمكنك الاطلاع على التفاصيل هنا: 
             %{link}
@@ -12706,9 +12822,10 @@ ar:
             %{course_or_group}.  تم إنشاء المستند بواسطة %{user}
             في %{service} وتمت دعوتك باستخدام عنوان بريدك الإلكتروني, %{email}.
             
-            إذا كان هذا هو عنوان البريد الإلكتروني الخاطئ لهذا النوع من التعاون، فسيلزم تغيير إعدادات ملف التعريف أو التسجيل مع %{service}.
+            إذا كان هذا هو عنوان البريد الإلكتروني الخاطئ لهذا النوع من التعاون، فسيلزم تغيير
+            إعدادات ملف التعريف أو التسجيل مع %{service}.
             
-            يمكنك الاطلاع على التفاصيل هنا: 
+            يمكنك الاطلاع على التفاصيل هنا:
             %{link}
         html: 
           body: "لقد تمت دعوتك للتعاون في المستند %{document} لـ %{course_or_group}. تم إنشاء المستند في %{service} وتمت دعوتك باستخدام عنوان بريدك الإلكتروني %{email}."
@@ -12719,8 +12836,7 @@ ar:
         subject: "دعوة التعاون: %{course_or_group}"
       sms: 
         body: |-
-            تمت دعوتك للتعاون في المستند، %{document} لـ
-            %{course_or_group}.
+            تمت دعوتك للتعاون في المستند، %{document} لـ %{course_or_group}.
             
             مزيد من المعلومات على %{link}
       summary: 
@@ -12899,7 +13015,9 @@ ar:
     dialog: 
       title: "إرسال رسالة رد"
     email: 
-      footer: "لقد تلقيت هذه الرسالة الإلكترونية لأنك تشارك في فصل أو أكثر من الفصول التي تستخدم Canvas. لتغيير الإخطار بالبريد الإلكتروني أو إيقاف تشغيله، انتقل إلى ⏎ %{url}"
+      footer: |-
+          لقد تلقيت هذه الرسالة الإلكترونية لأنك تشارك في فصل أو أكثر من الفصول التي تستخدم Canvas. لتغيير الإخطار بالبريد الإلكتروني أو إيقاف تشغيله، انتقل إلى
+          %{url}
     enrollment_accepted: 
       email: 
         body_designer: "قام %{user} بقبول دعوتهم للمشاركة في المساق %{course}, بوصفه مصممًا فقط."
@@ -13388,11 +13506,11 @@ ar:
         body: "تنبيه Canvas - التعليق: %{discussion_topic}, %{course}."
     new_discussion_topic: 
       email: 
-        body: "لقد تم بدء مناقشة جديدة قد تكون شيقة بالنسبة لك: "
+        body: "لقد تم بدء مناقشة جديدة قد تكون شيقة بالنسبة لك:"
         details: "الانضمام إلى المحادثة هنا:"
         html: 
           attached_file: "ملف مرفق"
-          body: "لقد تم بدء مناقشة جديدة قد تكون شيقة بالنسبة لك: "
+          body: "لقد تم بدء مناقشة جديدة قد تكون شيقة بالنسبة لك:"
           download: تنزيل
           link: "انقر هنا للانضمام إلى المحادثة"
           subject: "المناقشة الجديدة - %{discussion_topic}: %{course}"
@@ -14105,6 +14223,7 @@ ar:
       student_progress: "تقدم الطالب"
     relock_modules: "إعادة قفل الوحدات"
     requirements_changed: "تم تغيير المتطلبات"
+  modules_b8f6aa9: الوحدات
   modules_c4325335: الوحدات
   modules_home_page_568c6bb9: "الصفحة الرئيسية للوحدات النمطية"
   modules_item_controller: 
@@ -14129,6 +14248,7 @@ ar:
   more_courses_5ebbe998: "مزيد من المساقات"
   more_importantly_canvas_allows_you_to_add_outcomes_78822cf: "الأهم من ذلك، يتيح لك Canvas إضافة النواتج إلى معايير التقييم بحيث يمكنك تقييم الإجادة بينما تقوم بتقييم المهام. بمجرد أن تقوم بإعداد النواتج، انقر فوق إدارة المعايير للبدء في استخدام النواتج الخاصة بالتقييم."
   more_info_at_course_name_56dc8c10: "مزيد من المعلومات حول %{course_name}"
+  more_info_at_web_address_dba7e187: "المزيد من المعلومات على %{web_address}"
   more_information_3dfb76b5: "مزيد من المعلومات"
   more_information_about_ratings_57cdd446: "المزيد من المعلومات حول التصنيفات"
   more_modules_d9a9f003: "المزيد من الوحدات النمطية"
@@ -14137,6 +14257,7 @@ ar:
   more_than_999_submissions_need_grading_bc087dd0: "أكثر من 999 إرسال يتطلب التقييم"
   more_than_9_submissions_need_grading_30157d49: "أكثر من 9 إرسالات تتطلب التقييم"
   more_than_a19b440: "%{more_than}+"
+  most_recent_b2797d2: الأحدث
   most_recent_export_7282b756: "أحدث تصدير"
   most_recent_result_counts_as_calculation_int_of_ma_13628bf0: "تساوي أحدث نتيجة %{calculation_int}% من نتيجة الإتقان، بينما يساوي متوسط كل النتائج الأخرى %{remainder}% من النتيجة. يتعين وجود نتيجتين على الأقل قبل إرجاع النتيجة."
   most_recent_result_counts_as_calculation_int_of_ma_a734a4db: "تساوي أحدث نتيجة %{calculation_int}% من نتيجة الإتقان، بينما يساوي متوسط كل النتائج الأخرى %{remainder}% من النتيجة. إذا كانت هناك نتيجة واحدة فقط، سيتم إرجاع الدرجة."
@@ -14202,6 +14323,7 @@ ar:
   multiple_are_marked_current_theme_because_the_same_3bdebbe1: "تم وضع علامة على عدة سمات \"كسمة حالية\" لأنه تم حفظ القيم نفسها تحت عدة أسماء؛ أي، كل منها يطابق ما تم تطبيقه حاليًا."
   multiple_ba5220cd: متعدد
   multiple_canvas_accounts_are_associated_with_cleve_c1739660: "حسابات Canvas عديدة مرتبطة بمقاطعة Clever %{district_id}"
+  multiple_dropdowns_read_surrounding_text_f61274b3: "قوائم منسدلة متعددة، اقرأ النص المحيط"
   multiple_due_dates_283dd861: "تواريخ استحقاق متعددة"
   multiple_due_dates_6b0d75c6: "تواريخ استحقاق عديدة"
   multiple_modules_930713d4: "وحدات متعددة"
@@ -14248,7 +14370,7 @@ ar:
     mute_assignment: "حجب المهمة"
     score_change_notifications: "إعلامات تغيير النقاط"
     see_grade: "الدرجة الخاصة بالمهمة"
-    students_will_see: "سيرى الطلاب أنه قد تم حجب هذه المهمة. "
+    students_will_see: "سيرى الطلاب أنه قد تم حجب هذه المهمة."
     submission_comments: "تعليقات الإرسال"
     sure_you_want_to_mute: "هل ترغب بالتأكيد في حجب هذه المهمة؟ بينما تم حجب هذه المهمة، لن يتلقى الطلاب إعلامات جديدة حولها أو لن يقدروا على رؤيتها:"
   mute_unmute_assignment_62608e44: "حجب/إظهار المهمة"
@@ -14288,11 +14410,14 @@ ar:
   name_is_too_long_48daa8db: "الاسم طويل للغاية"
   name_is_too_long_must_be_under_length_characters_b8dad44c: "الاسم طويل للغاية، يجب أن يكون أقل من %{length} حرف"
   name_is_unlocked_click_to_lock_b8b9a2c8: "%{name} غير مؤمَّن. انقر للتأمين."
+  name_lti_tool_b61eb0af: "%{name} (أداة LTI)"
   name_missing_f4f3eb9e: "الاسم مفقود"
   name_only_5f56718e: "الاسم فقط"
   name_options_bc5c95ce: "%{name} خيارات"
+  name_quiz_15f55961: "%{name} (الاختبار الموجز)"
   name_unposted_current_score_e98e95fd: "%{name} الدرجة الحالية غير المنشورة"
   name_unposted_final_score_124708d2: "%{name} الدرجة النهائية غير المنشورة"
+  name_user_e44eebed: "%{name} المستخدم"
   nav_avatar_border_3246beb1: "حافة الصورة المجسمة للتنقل"
   nav_background_fd299145: "خلفية التنقل"
   nav_badge_3c67de17: "شارة التنقل"
@@ -14349,10 +14474,15 @@ ar:
   new_quiz_34aacba6: "اختبار جديد"
   new_quiz_statistics_desc: "تمكين صفحة إحصائيات الاختبار الجديد لمساق."
   new_rating_canceled_eed3c4ff: "تم إلغاء تصنيف جديد"
-  new_rating_created_54125331: "تم إنشاء تقييم جديد "
+  new_rating_created_54125331: "تم إنشاء تقييم جديد"
   new_sis_integrations: |-
       تنطبق هذه الميزة على المؤسسات التي بها تكامل SIS Canvas حالي.
-      يجب على جميع العملاء الذي يستخدمون حلول تمرير الدرجات في Canvas أو المنتجات الشريكة تمكين هذه الميزة لمهام سير عمل التحقق من صحة بيانات المهمة المحسنة. وعند تمكينها، تقوم هذه الميزة بعرض إعدادات تكامل SIS الجديدة لمزامنة SIS (تمرير درجات من مستوى المهام) في إعدادات الحساب. تم دمج خيار ميزة النشر إلى SIS في هذه الإعدادات الجديدة وسيتم تمكينها بشكل افتراضي.
+      يجب على جميع العملاء الذي يستخدمون حلول تمرير الدرجات في Canvas
+      أو المنتجات الشريكة تمكين هذه الميزة لمهام سير عمل التحقق من صحة بيانات
+      المهمة المحسنة. وعند تمكينها، تقوم هذه الميزة بعرض إعدادات تكامل SIS الجديدة
+      لمزامنة SIS (تمرير درجات من مستوى المهام) في إعدادات الحساب.
+      تم دمج خيار ميزة النشر إلى SIS في هذه الإعدادات
+      الجديدة وسيتم تمكينها بشكل افتراضي.
   new_topic_for_course_3d98222a: "موضوع جديد لـ %{course}"
   new_typography_4eaeca26: "أسلوب طباعة جديد"
   new_ui_487a624e: "واجهة مستخدم جديدة"
@@ -14380,6 +14510,7 @@ ar:
   no_74e9b590: لا
   no_alignments_are_available_for_this_outcome_7f8346f9: "لا توجد محاذاة متوفرة لهذه الحصيلة."
   no_announcements_280df147: "لا توجد إعلانات"
+  no_assignment_group_assigned_8f1cdb9b: "لم يتم تعيين مجموعة مهام"
   no_assignment_name_adbb215b: "لا يوجد اسم مهة"
   no_assignments_with_that_name_found_1d7be1: "لم يتم العثور على مهام بذلك الاسم"
   no_associated_terms_13bacefc: "لا توجد فصول مرتبطة"
@@ -14416,6 +14547,7 @@ ar:
   no_matching_users_found_83889c10: "لم يتم العثور على تطابق للمستخدمين."
   no_message_present_e3af6358: "لا توجد رسائل"
   no_migration_file: "الملف مطلوب لترحيل المحتوى."
+  no_module_assigned_ca183bd7: "لم يتم تعيين وحدة نمطية"
   no_more_results_to_load_6774fb1c: "لا توجد نتائج إضافية للتحميل."
   no_outcome_file_or_authority_given_c90f9c5f: "لا يتوفر ملف نتيجة أو إعطاء تفويض"
   no_password_was_given_472222e5: "لم يتم إعطاء كلمة مرور"
@@ -14660,12 +14792,12 @@ ar:
       migration_import_finished: "انتهى استيراد الترحيل"
       new_account_user: "مستخدم الحساب الجديد"
       new_announcement: "الإعلان الجديد"
-      new_context_group_membership: "عضوية مجموعة السياقات الجديدة "
-      new_context_group_membership_invitation: "دعوة عضوية مجموعة السياقات الجديدة "
+      new_context_group_membership: "عضوية مجموعة السياقات الجديدة"
+      new_context_group_membership_invitation: "دعوة عضوية مجموعة السياقات الجديدة"
       new_course: "المساق الجديد"
       new_discussion_entry: "إدخال المناقشة الجديد"
       new_discussion_topic: "موضوع المناقشة الجديد"
-      new_event_created: "تم إنشاء حدث جديد "
+      new_event_created: "تم إنشاء حدث جديد"
       new_file_added: "تمت إضافة ملف جديد"
       new_files_added: "تمت إضافة ملفات جديد"
       new_student_organized_group: "مجموعة منظمة جديدة من قبل الطلاب"
@@ -14812,11 +14944,11 @@ ar:
             other: "وحدات بايت"
             two: "وحدات بايت"
             zero: "وحدات بايت"
-          eb: EB
+          eb: إكسابايت
           gb: جيجابايت
           kb: كيلوبايت
           mb: ميجابايت
-          pb: PB
+          pb: بيتابايت
           tb: تيرابايت
     percentage: 
       format: 
@@ -14833,6 +14965,7 @@ ar:
   number_of_scores_to_ignore_for_each_student_fb94e818: "عدد الدرجات المقرر تجاهلها لكل طالب"
   number_to_grade_661b05dd: "%{number} إلى الدرجة"
   number_unsubmitted_145fefae: "%{number} لم يتم الإرسال"
+  numerical_answer_ec7120bf: "إجابة رقمية"
   nummastered_of_numgroup_mastered_b8113c9c: "%{numMastered} من %{numGroup} تم إتقانها"
   numpoints_points_b1f0666a: "%{numPoints} نقاط"
   o365_template_297a82f6: "قالب O365"
@@ -14887,6 +15020,7 @@ ar:
   occurrence_s_c12d1aad: "حدث (أحداث)"
   of_students_5d1af0d2: "# من الطلاب"
   off_5385ef3f: "إيقاف تشغيل"
+  off_policy_will_not_apply_to_this_sub_account_8b12386b: "إيقاف تشغيل - لن يتم تطبيق السياسة على هذا الحساب الفرعي"
   offline_web_export_dca67174: "تصدير ويب دون اتصال"
   ok_c47544a2: موافق
   ok_ff1b646a: موافق
@@ -14900,6 +15034,7 @@ ar:
   on_paper_46d0ba36: "على الورق"
   on_time_17ca5ad9: "في الموعد المحدد"
   on_time_percent_eebffe38: "في الموعد: %{percent}"
+  on_whitelist_will_only_be_the_domains_which_have_b_c4c3a861: "تشغيل - ستكون القائمة البيضاء هي المجالات التي تمت إضافتها فقط بوضوح إلى هذا الحساب."
   once_this_feature_is_enabled_you_will_not_be_able__ad338dcb: "بمجرد تمكين هذه الميزة، لن تستطيع إيقاف تشغيلها من جديد. تأكد من أنك مستعد لتمكين مجلد الإرسالات قبل المتابعة."
   once_you_have_submitted_an_answer_you_will_not_be__840df9e9: "بمجرد أن ترسل إجابة، فلن تتمكن من تغييرها لاحقًا. لن يكون بمقدورك رؤية السؤال السابق."
   once_you_start_debugging_all_info_about_the_next_a_e871403b: "حالما تبدأ تصحيح جميع المعلومات حول محاولة تسجيل دخول التالية التي سيتم جمعها. انقر فوق \"تحديث\" لمعرفة إذا كان قد تم جمع المزيد من البيانات أو \"إيقاف التصحيح\" لإزالة البيانات المجمعة وإيقاف محاولة التصحيح الحالية."
@@ -14942,6 +15077,7 @@ ar:
   open_name_color_picker_a2646a33: "فتح أداة انتقاء اللون %{name}"
   open_sidebar_2852e8c8: "فتح شريط جانبي"
   open_speedgrader_11604608: "مفتوح SpeedGrader"
+  open_student_context_tray_24c1b1d6: "فتح علبة سياق الطالب"
   open_submission_tray_4eb14e96: "فتح علبة الإرسال"
   open_the_grade_detail_tray_cea682a5: "فتح علبة تفاصيل الدرجة"
   open_theme_editor_2d924ebe: "فتح محرر النسق"
@@ -14981,8 +15117,9 @@ ar:
   orbis_report_header_submission_score: "درجة الإرسال"
   ordered_by_recent_activity_112d33d5: "ترتيب حسب النشاط الأخير"
   organize_and_segment_your_course_by_topic_unit_cha_4c38a6b9: |-
-      قم بتنظيم وتقسيم مساقك حسب الموضوع أو الوحدة أو الفصل أو الأسبوع. حدد الوحدات النمطية بالتسلسل عن طريق تعريف المعايير
-      والمتطلبات الأساسية.
+      قم بتنظيم وتقسيم مساقك حسب الموضوع أو الوحدة أو الفصل أو الأسبوع.
+                        حدد الوحدات النمطية بالتسلسل عن طريق تعريف المعايير
+                        والمتطلبات الأساسية.
   organize_and_segment_your_course_by_topic_unit_cha_6ac2de91: "قم بتنظيم مساقك وتقسيمه بحسب الموضوع أو الوحدة أو الفصل أو الأسبوع. حدد الوحدات النمطية بالتسلسل عن طريق تعريف المعايير والمتطلبات الأساسية."
   organize_epub_by_content_type_default_is_by_module_6f44ae06: "تنظيم ePub حسب نوع المحتوى (افتراضيًا، يتم ذلك حسب الوحدة)."
   organize_your_course_content_c3c7ed03: "تنظيم محتوى مساقك"
@@ -14992,6 +15129,7 @@ ar:
   other_carrier_45531207: "المزود الآخر"
   other_ddacb37d: أخرى
   other_incorrect_match_options_c1418af5: "خيارات المطابقة غير الصحيحة الأخرى:"
+  other_options_d25f199c: "خيارات أخرى"
   other_timezones_42530564: "مناطق زمنية أخرى"
   out_of_78a76f91: "من إجمالي"
   out_of_formattedoutof_e08e90d5: "من إجمالي %{formattedOutOf}"
@@ -15033,7 +15171,7 @@ ar:
         new_group: المجموعة
         new_outcome: النتيجة
     common_core: "المعايير الأساسية الشائعة"
-    common_core_description: "يوجد على اليسار مجلد نتائج مألوف يوفر تحليلاً لكل مجموعة من معايير الولايات الأساسية الشائعة. وسيسمح لك بتضمين أي معايير أساسية شائعة بدون جهد لدرجاتك ضمن دورتك التدريبية.\n"
+    common_core_description: "يوجد على اليسار مجلد نتائج مألوف يوفر تحليلاً لكل مجموعة من معايير الولايات الأساسية الشائعة. وسيسمح لك بتضمين أي معايير أساسية شائعة بدون جهد لدرجاتك ضمن دورتك التدريبية."
     confirm: 
       delete: "هل تريد الحذف بالتأكيد؟"
       import_group: "هل تريد استيراد مجموعة  \"%{group}\" إلى مجموعة \"%{target}\"؟"
@@ -15058,11 +15196,11 @@ ar:
     find_instructions: 
       instructions: 
         find: 
-          description: "*يمكن الوصول إلى النتائج التي تم إنشاؤها عن طريق مؤسستك أو ولايتك من هنا.  مثلما هو الحال مع دورتك التدريبية، ستتيح لك اللوحة على اليسار التنقل بين النتائج الحالية. بعد العثور على نتيجة أو مجموعة ترغب في استخدامها، انقر فوق الزر أدناه لإضافتها إلى دورتك التدريبية.*\n"
+          description: "*يمكن الوصول إلى النتائج التي تم إنشاؤها عن طريق مؤسستك أو ولايتك من هنا.  مثلما هو الحال مع دورتك التدريبية، ستتيح لك اللوحة على اليسار التنقل بين النتائج الحالية. بعد العثور على نتيجة أو مجموعة ترغب في استخدامها، انقر فوق الزر أدناه لإضافتها إلى دورتك التدريبية.*"
           title: "العثور على نتائج"
     flash: 
       addSuccess: "تم الإنشاء بنجاح"
-      deleteError: "حدث خطأ ما. تعذر الحذف في هذا الوقت.\n"
+      deleteError: "حدث خطأ ما. تعذر الحذف في هذا الوقت."
       deleteSuccess: "تم الحذف بنجاح"
       error: "حدث خطأ ما، يرجى تحديث الصفحة وإعادة المحاولة."
       importError: "حدث خطأ أثناء الاستيراد، يرجى المحاولة في وقت لاحق."
@@ -15121,7 +15259,7 @@ ar:
       no_aligned_items: "لا توجد عناصر تمت محاذاتها"
       no_artifacts: "لا توجد أدوات"
     state_standards: "معايير الولاية"
-    state_standards_description: "ستشاهد جهة اليسار مجلد لكل ولاية مع معايير الولاية المحدثة. وهذا يسمح لك بتضمين معايير الولاية بسهولة للتصنيف داخل الدورة.\n"
+    state_standards_description: "ستشاهد جهة اليسار مجلد لكل ولاية مع معايير الولاية المحدثة. وهذا يسمح لك بتضمين معايير الولاية بسهولة للتصنيف داخل الدورة."
     successful_outcome_creation: "تم إنشاء الناتج بنجاح!"
     successful_outcome_delete: "تم حذف الناتج بنجاح"
     successful_outcome_removal: "تمت إزالة الناتج بنجاح"
@@ -15174,6 +15312,7 @@ ar:
     overrides: 
       everyone: الجميع
   overrides_e8659a73: التجاوزات
+  overview_of_student_status_a004bcf3: "معاينة حالة الطالب"
   overwrite_all_users_existing_default_dashboard_pre_9b2ad7d1: "استبدال جميع تفضيلات لوحة معلومات المستخدمين الافتراضية الحالية"
   own_copyright_cc59db55: "امتلاك حقوق النشر"
   owner_email_236d1b2: "البريد الإلكتروني للمالك"
@@ -15268,7 +15407,9 @@ ar:
   paypal: 
     exception: "عذرًا، حدث خطأ، الرجاء المحاولة مرة أخرى لاحقًا."
   pdf_d8236d9a: PDF
+  peer_review_assignment_7d314c59: "مهمة مراجعة أقران"
   peer_review_for_assignment_ce72fc52: "مراجعة نظيرة لـ %{assignment}"
+  peer_reviewed_assignments_are_not_yet_handled_in_t_5eef60fb: "لم تتم معالجة مهام مراجعة الأقران حتى الآن في تدفق المهام الجديدة. هل تريد التوجه إلى صفحة إنشاء المهام القديمة؟"
   peer_reviewed_graded_discussion_b339df5b: "مناقشة بدرجات يراجعها الأقران:"
   peer_reviews_api: 
     errors: 
@@ -15346,6 +15487,7 @@ ar:
   please_add_a_due_date_1d433d2: "الرجاء إضافة تاريخ استحقاق"
   please_add_at_least_one_non_blank_answer_213c2c8e: "يرجى إضافة إجابة غير فارغة واحدة على الأقل."
   please_add_at_least_one_non_blank_answer_for_each__a05a55f9: "يرجى إضافة إجابة غير فارغة واحدة على الأقل لكل متغير."
+  please_adjust_your_security_preferences_before_con_fd568e8d: "يرجى تعديل تفضيلات الأمان لديك قبل المتابعة."
   please_allow_arc_to_access_your_webcam_e72e4be4: "الرجاء السماح لـ Arc بالوصول إلى كاميرا الويب الخاصة بك."
   please_allow_canvas_to_access_your_webcam_f66bacb1: "الرجاء السماح لـ Canvas بالوصول إلى كاميرا الويب الخاصة بك."
   please_create_a_group_set_8db6e8fe: "يُرجى إنشاء مجموعة."
@@ -15392,7 +15534,9 @@ ar:
       description: "تجميد خصائص التعيين عند النسخ"
       name: "أداة تجميد خصائص التعيين"
     assignment_freezer_settings: 
-      description: "تسمح هذه الوظيفة الإضافية للمسؤولين باختيار خاصية على التعيينات تجعل الخصائص ⏎ التي تم تكوينها غير قابلة للتحرير بمجرد نسخ التعيين إلى مساق آخر."
+      description: |-
+          تسمح هذه الوظيفة الإضافية للمسؤولين باختيار خاصية على التعيينات تجعل الخصائص
+          التي تم تكوينها غير قابلة للتحرير بمجرد نسخ التعيين إلى مساق آخر.
       no_copying_frozen: "لا تسمح بنسخ التعيينات المجمدة."
     banner_grade_exchange_settings: 
       labels: 
@@ -15542,15 +15686,20 @@ ar:
       name: "تصدير الدرجة"
     grade_export_settings: 
       description: |-
-          يتيح هذا المكون الإضافي نشر الدرجات النهائية مرة أخرى إلى نظام معلومات الطالب (SIS). عند التمكين، يُمنح المستخدم خيارًا في دفتر الدرجات لنشر هذه الدرجات. يحدث ذلك عبر طلب النشر إلى نقطة النهاية المحددة للنشر. يحدد كل نوع صيغة المحتوى الخاص به ونوع mime. لا يُلتفت إلى استجابة نقطة النهاية ويتم تجاهلها حاليًا.
+          يسمح هذا المكون الإضافي بإعادة نشر الدرجات النهائية إلى نظام معلومات الطالب (SIS).  عند التمكين، سيتم منح خيار للمستخدم في دفتر الدرجات لنشر هذه الدرجات.  سيحدث هذا عبر طلب نشر إلى نقطة نهاية النشر المحددة.  كل نوع يحدد تنسيق محتواه ونوع MIME.  الاستجابة من نقطة النهاية غير مهمة ويتم تجاهلها في الوقت الحالي.
           
-          على سبيل المثال، يقوم ملف Instructure بتنسيق CSV بنشر ملف csv بنوع mime 'نص/csv' إلى نقطة النهاية المحددة التي تشتمل على الأعمدة التالية:"publisher_id", "publisher_sis_id", "course_id", "course_sis_id", "section_id", "section_sis_id", "student_id", "student_sis_id", "enrollment_id", "enrollment_status", "score", "grade"
+          على سبيل المثال، سينشر ملف CSV المنسق في Instructure ملف csv بنوع mime "text/csv" إلى نقطة النهاية المحددة، تحتوي على الأعمدة التالية: 
           
-          (ملاحظة: لا يتم إرجاع العمود "الدرجة" إلا إذا حدد المساق معيار التقييم)
+          "publisher_id"، "publisher_sis_id"، "course_id"، "course_sis_id"، "section_id"، "section_sis_id"، "student_id"، "student_sis_id"، "enrollment_id"، "enrollment_status"، "score"، "grade"
+          
+          (ملاحظة: يتم إرجاع عمود "الدرجة" فقط إذا حدد المساق المعايير القياسية لمنح العلامات)
           
           يكون لكل طالب موجود بالمساق المنشور 1 من الصفوف أو أكثر في ملف csv المنشور. وبالتحديد يكون هناك 1 من الصفوف لكل تسجيل دخول يمتلكه الطالب في الحساب الجذري الخاص بالمساق. في معظم الأحيان، يؤدي ذلك إلى وجود 1 من الصفوف لكل طالب ولكن إذا كان الطالب يمتلك أكثر من تسجيل دخول فسيكون هناك صف لكل تسجيل.
+          
+          إذا تم تحديد "تضمين تجاوزات الدرجة النهائية" وتمكين الميزة لتجاوز الدرجة النهائية، سيتلقى الطلاب ذوو الدرجة/النتيجة التي تم تجاوزها ما حل محل النتيجة والدرجة المحسوبة.
       labels: 
         format_type: "نوع تنسيق الناتج"
+        include_final_grade_overrides: "تضمين تجاوزات الدرجة النهائية"
         publish_endpoint: "نقطة النهاية المراد نشرها إلى"
         success_timeout: "مهلة الإعلام بالنجاح (بالثواني)"
         wait_for_success: "انتظار إعلامات النجاح"
@@ -15598,6 +15747,7 @@ ar:
           عليك بالذهاب إلى وحدة تحكم إدارة Katura وضمن "إعدادات
           -> إعدادات التكامل" قم بتمكين إخطارات الخادم بواسطة
           عنوان URL للإخطار: 
+          
           %{notification_url}
           
           ثم قم باختيار الخانات "إضافة إدخال" و "حذف إدخال" في عمود "أرسلها الخادم".
@@ -15802,10 +15952,12 @@ ar:
   points_bb475533: النقاط
   points_bceb5005: النقاط
   points_changed_exceptions_b0c771f7: "استثناءات النقاط التي تغيرت:"
+  points_e63de520: " نقاط"
   points_for_rating_tier_index_not_present_338d94e6: "النقاط الخاصة بمستوى التقييم %{index} غير موجودة"
   points_for_tier_index_must_be_less_than_points_for_9683c02: "النقاط الخاصة بالمستوى %{index} يجب أن تكون أقل من النقاط الخاصة بالمستوى السابق (%{points} أكبر من %{prior})"
   points_highest_to_lowest_87f1b143: "النقاط - من الأعلى للأسفل"
   points_lowest_to_highest_45089e82: "النقاط - من الأسفل للأعلى"
+  points_must_be_0_c278c612: "يجب أن تكون النقاط >= 0"
   points_must_be_less_than_previous_rating_bc627bec: "يجب أن تكون النقاط أقل من التصنيف السابق"
   points_n_e0b20623: "النقاط %{n}"
   points_out_of_total_24f61148: "*%{points}* من إجمالي **%{total}**"
@@ -15860,6 +16012,7 @@ ar:
   post_grade_to_sis_disabled_click_to_toggle_6ee5ff3: "نشر الدرجات في SIS معطل. انقر للتبديل."
   post_grade_to_sis_enabled_click_to_toggle_82da8ce8: "نشر الدرجات في SIS ممكّن. انقر للتبديل."
   post_grades_39c52870: "نشر الدرجات"
+  post_grades_3e692d46: "نشر درجات"
   post_grades_description: |-
       يتيح نشر الدرجات للمدرسين نشر الدرجات التي تعود إلى أنظمة SIS الممكنة: Powerschool،
       Aspire (SIS2000) وJMC وأي نظام SIS آخر ممكّن به SIF ويقبل عناصر SIF GradingCategory،
@@ -15868,6 +16021,8 @@ ar:
   post_grades_to_posttosisname_70430da4: "نشر الدرجات إلى %{postToSISName}"
   post_grades_to_sis_97ece878: "نشر الدرجات في SIS"
   post_grades_to_sis_checkbox_is_enabled_by_default__394a8229: "بشكل افتراضي، لم يتم وضع العلامة على خانة الاختيار \"نشر الدرجات في SIS\" بالنسبة للمهام والمناقشات التي تم تقييمها والاختبارات."
+  post_grades_tray_83f2fb2e: "نشر علبة الدرجات"
+  post_policies_22f09fea: "نُهُج النشر"
   post_to_961f8937: "نشر على"
   posted_at_4cfce2c3: "%{posted_at}"
   posted_on_e1010e1e: "تم النشر على:"
@@ -15914,6 +16069,8 @@ ar:
   primary_color_button_b75db628: "زر اللون الأساسي"
   primary_color_button_disabled_9081ddff: "زر اللون الأساسي معطل"
   privacy_290109ea: الخصوصية
+  privacy_level_f0ec09a3: "مستوى الخصوصية"
+  private_3883d133: خاص
   proceed_f3d33864: تقدم
   processing_2fcc9739: "تتم الآن المعالجة"
   product_name: Canvas
@@ -16048,7 +16205,7 @@ ar:
         change_password: "تغيير كلمة المرور"
         confirm_password: "تأكيد كلمة المرور"
         default_email: "البريد الإلكتروني الافتراضي"
-        disable_inbox: "تعطيل شارة الرسائل غير المقروءة في صندوق وارد المحادثات وإرسال جميع رسائل وإعلامات المحادثات عبر البريد الإلكتروني في أقرب وقت ممكن. "
+        disable_inbox: "تعطيل شارة الرسائل غير المقروءة في صندوق وارد المحادثات وإرسال جميع رسائل وإعلامات المحادثات عبر البريد الإلكتروني في أقرب وقت ممكن."
         expires_at: "انتهاء مدة الصلاحية"
         headers: 
           approved_integrations: "عمليات التكامل المعتمدة"
@@ -16118,10 +16275,13 @@ ar:
         unregister_service: "إلغاء تسجيل الخدمة"
       twitter_description: |-
           موقع Twitter هو خدمة لنشر الرسائل القصيرة والاشتراك فيها.
-          إذا كان لديك حساب على Twitter، فيمكنك تسجيله هنا.  ثم في حالة السماح لزملائك في المساقات/المجموعات رؤية خدماتك المسجلة، يمكنهم بسهولة الاتصال بحسابك على Twitter.
+          إذا كان لديك حساب على Twitter، فيمكنك تسجيله هنا.  ثم في حالة السماح 
+          لزملائك في المساقات/المجموعات رؤية خدماتك المسجلة، يمكنهم بسهولة الاتصال 
+          بحسابك على Twitter.
           
           يمكنك أيضًا الاشتراك في الحصول على الإعلامات المرسلة إلى حسابك على Twitter.
-          سيتم إرسال هذه الإعلامات كرسائل مباشرة إلى حسابك من حسابك، ولن تظهر في التدفق العام.
+          سيتم إرسال هذه الإعلامات كرسائل مباشرة إلى حسابك من حسابك، 
+          ولن تظهر في التدفق العام.
       unknown_service: "غير معروف"
       web_services: "يستطيع Canvas أن يجعل حياتك أسهل حيث يتم إدخاله أدوات الويب التي تستخدمها بالفعل. انقر فوق أي من الخدمات الموجودة في \"الخدمات الأخرى\" لرؤية ما نعنيه."
       yo_description: |-
@@ -16242,7 +16402,9 @@ ar:
   progress_loading_bar_a26b8861: "شريط التقدم/التحميل"
   project_groups_1fa0320b: "مجموعات المشروع"
   provide_a_space_for_users_to_work_on_a_single_goog_604cdf06: "توفير مساحة للمستخدمين للعمل على مستند Google Doc واحد بشكل متزامن، من داخل مساق Canvas الخاص بك."
-  provide_a_space_for_users_to_work_on_a_single_goog_8edec82b: "قم بتوفير مساحة للمستخدمين للعمل على مستند Google Doc واحد بشكل متزامن، من داخل مساق Canvas الخاص بك."
+  provide_a_space_for_users_to_work_on_a_single_goog_8edec82b: |-
+      قم بتوفير مساحة للمستخدمين للعمل على مستند Google Doc
+                واحد بشكل متزامن، من داخل مساق Canvas الخاص بك.
   provide_a_uri_to_your_idp_s_metadata_to_automatica_38e985bd: "أدخل عنوان URI إلى بيانات تعريف IdP الخاصة بك لتعبئة الحقول الأخرى تلقائيًا. إذا كانت مدرستك جزءًا من InCommon أو مؤسسة UK Access Management Federation، قم بتحديد urn:mace:incommon أو http://ukfederation.org.uk بالترتيب لعنوان URI الخاص ببيانات التعريف، وأدخل معرف كيان مدرستك."
   provide_a_uri_to_your_idp_s_metadata_to_automatica_6f81a3cd: "أدخل عنوان URI لبيانات تعريف موفر الهوية IdP الخاص بك لملء الحقول الأخرى بشكل تلقائي. إذا كانت مدرستك تابعة لـ InCommon، أدخل urn:mace:incommon لعنوان URL بيانات التعريف وكذلك معرف كيان مدرستك."
   provide_the_url_to_your_saml_idp_discovery_service_daa80306: |-
@@ -16973,7 +17135,7 @@ ar:
       errors: 
         invalid_submissions: "تعذر التحقق من إرسال الاختبار هذا بأنه ينتمي إليك. يرجى إعادة المحاولة."
         late_quiz: "لقد أرسلت هذا الاختبار متأخرًا، وربما لم تكن إجاباتك قد تم تسجيلها."
-        protected_quiz: "هذا الاختبار محمي وهو متوفر فقط من مواقع معينة.  لا يظهر الكمبيوتر الذي تستخدمه حاليًا في موقع صالح لبدء هذا الاختبار. "
+        protected_quiz: "هذا الاختبار محمي وهو متوفر فقط من مواقع معينة.  لا يظهر الكمبيوتر الذي تستخدمه حاليًا في موقع صالح لبدء هذا الاختبار."
       show: 
         score_out_of: "لقد حصلت على %{score} من %{points_possible}"
       still_zipping: "ضغط الملفات قيد المعالجة..."
@@ -17034,7 +17196,7 @@ ar:
           download_submissions: "تنزيل كل الملفات"
       equations_help: 
         equation_functions: "بالإضافة إلى المتغيرات، توجد كذلك مجموعة من وظائف المساعد التي يمكنك استخدامها لإنشاء قيم مفيدة. على سبيل المثال: %{example} لمشاهدة شرح وظيفة المساعد، قم باختيارها من القائمة أدناه:"
-        equation_intro: "تعتمد الأسئلة المحسوبة على مجموعة من واحدة أو أكثر من الصيغ المحسوبة بالترتيب.  ويمكنك تعريف المتغيرات المتوسطة في هذه الصيغ، إلا أن النتيجة الرقمية الخاصة بالصيغة الأخيرة هي المستخدمة لإنشاء الإجابة الصحيحة. على سبيل المثال: %{example} بالنسبة لهذه المجموعة من الصيغ، فإن الإجابة النهائية هي 71. ومع ذلك، لا توجد متغيرات معرفة مسبقًا، لذلك سيكون لدى كافة الطلاب نفس السؤال بنفس الإجابة. راجع علامة التبويب \"متغيرات\" لمزيد من المعلومات عن المتغيرات. "
+        equation_intro: "تعتمد الأسئلة المحسوبة على مجموعة من واحدة أو أكثر من الصيغ المحسوبة بالترتيب.  ويمكنك تعريف المتغيرات المتوسطة في هذه الصيغ، إلا أن النتيجة الرقمية الخاصة بالصيغة الأخيرة هي المستخدمة لإنشاء الإجابة الصحيحة. على سبيل المثال: %{example} بالنسبة لهذه المجموعة من الصيغ، فإن الإجابة النهائية هي 71. ومع ذلك، لا توجد متغيرات معرفة مسبقًا، لذلك سيكون لدى كافة الطلاب نفس السؤال بنفس الإجابة. راجع علامة التبويب \"متغيرات\" لمزيد من المعلومات عن المتغيرات."
         equation_variables2: "يمكنك أيضًا أن تقوم بتعريف المتغيرات في نص السؤال الخاص بك باستخدام الأقواس (\"ما نتاج [a] + [b]؟\"). لكل متغير، سترى \"قيمة تضرب كمثال\" بناءً على إعدادات المتغير. يسمح لك هذا بالتحقق من حساباتك والتأكد من أن الصيغ تعمل. على سبيل المثال، إذا كان سؤالك \"ما هو نتاج[a] + 5؟\" فسيطلب منك وقتها أن تعرف المتغير \"a\". إذا كانت القيمة التي تضرب كمثال للمتغير \"a\" هي 5.2، فيمكنك أن تكتب: %{example} يمكنك بهذه الصيغة أن تنشئ أي عدد من مجموعات الحل، بقيمة مختلفة من \"a\" في كل مجموعة. قد يرى طالب السؤال \"ما هو نتاج 5.2+5؟\" وقد يراه آخر \"ما هو نتاج 9+5؟\"."
         links: 
           functions: الوظائف
@@ -17106,7 +17268,7 @@ ar:
         distractor_instructions: "كتابة كل إجابة غير صحيحة على السطر الخاص به"
         equation_example: "على سبيل المثال: \"ما ناتج إضافة 5 إلى [x]؟\""
         explanation: 
-          generate_possible_solutions: "في النهاية، قم بإنشاء أي عدد تحتاجه من مجموعات حلول المتغير للاختبار الخاص بك. "
+          generate_possible_solutions: "في النهاية، قم بإنشاء أي عدد تحتاجه من مجموعات حلول المتغير للاختبار الخاص بك."
         explanations: 
           calculated: "أدخل سؤالك، وقم بتكوين صيغة، وقم بإنشاء مجموعة من الإجابات الممكنة. وسيرى الطلاب السؤال مع مجموعة محددة عشوائيًا من المتغيرات التي تم ملؤها ويجب عليهم كتابة الإجابة الرقمية الصحيحة."
           equations: "يمكنك تعريف المتغيرات عن طريق كتابة أسماء المتغير المحاطة بأقواس"
@@ -17116,13 +17278,13 @@ ar:
           formula_definition: "بعد ذلك، ستحتاج إلى كتابة الصيغة أو الصيغ المستخدمة لحساب الإجابة الصحيحة. وما عليك سوى استخدام نفس أسماء المتغيرات المذكورة أعلاه."
           matching: "قم بتكوين زوجين من القيم المتطابقة. وسيرى الطلاب القيم الموجودة على اليسار ويجب عليهم تحديد القيمة المطابقة على اليمين من قائمة منسدلة. ويمكن أن تحمل الصفوف المتعددة نفس الإجابة، كما يمكنك إضافة إجابات غير صحيحة إضافية على الجانب الأيمن."
           missing_word: "حدد النص للانتقال قبل القائمة المنسدلة وبعدها. وقم بتكوين مجموعة من الإجابات الممكنة وحدد إجابة صحيحة واحدة."
-          multi_answer_sets: "في المربع أدناه، وفي كل مكان تريد أن تظهر فيه مربع إجابة، اكتب كلمة مرجعية (بلا مسافات) محاطة بأقواس "
+          multi_answer_sets: "في المربع أدناه، وفي كل مكان تريد أن تظهر فيه مربع إجابة، اكتب كلمة مرجعية (بلا مسافات) محاطة بأقواس"
           multiple_answers: "سيقوم هذا السؤال بعرض خانة اختيار بجوار كل إجابة، ويجب على الطالب تحديد \"كافة\" الإجابات التي تقوم بتعليمها كإجابة صحيحة."
           multiple_choice: "أدخل السؤال والإجابات المتعددة، ثم حدد الإجابة الصحيحة الواحدة."
           multiple_dropdowns: "أدخل سؤالك، محددًا أين ينبغي أن تنتقل كل قائمة منسدلة. ثم حدد الإجابات الممكنة لكل قائمة منسدلة، مع إجابة صحيحة واحدة لكل قائمة منسدلة."
           numerical: "حدد الإجابة الصحيحة كأي عدد داخل نطاق ما، أو عددًا مضافًا إليه أو مطروحًا منه جزء من هامش الخطأ. وسيتم إعطاء الطالب مربعًا نصيًا فارغًا لكتابة إجابته الرقمية."
           short_answer: |-
-              أدخل نص السؤال، ثم حدد جميع الإجابات الصحيحة الممكنة للفراغ.
+              أدخل نص السؤال، ثم حدد جميع الإجابات الصحيحة الممكنة للفراغ.  
               وسيرى الطلاب السؤال متبوعًا بمربع نصي صغير لكتابة إجاباتهم.
           text_only: "سيتم تحديد درجة هذا \"السؤال\"، ولكنها قد تكون مفيدة لإرسال مجموعة من الأسئلة ذات الصلة."
           true_false: "أدخل نص السؤال، ثم حدد ما إذا كانت الإجابة الصحيحة \"صواب\" أم \"خطأ\"."
@@ -17222,8 +17384,8 @@ ar:
       index: 
         page_titles: الاختبارات
       invalid_ip: 
-        quiz_protected: "هذا الاختبار محمي وهو متوفر فقط من مواقع معينة. لا يبدو أن الكمبيوتر الذي تستخدمه حاليًا موجود في موقع صالح لبدء هذا الاختبار. "
-        survey_protected: "هذا الاستطلاع محمي وهو متوفر فقط من مواقع معينة. لا يبدو أن الكمبيوتر الذي تستخدمه حاليًا موجود في موقع صالح لبدء هذا الاستطلاع. "
+        quiz_protected: "هذا الاختبار محمي وهو متوفر فقط من مواقع معينة. لا يبدو أن الكمبيوتر الذي تستخدمه حاليًا موجود في موقع صالح لبدء هذا الاختبار."
+        survey_protected: "هذا الاستطلاع محمي وهو متوفر فقط من مواقع معينة. لا يبدو أن الكمبيوتر الذي تستخدمه حاليًا موجود في موقع صالح لبدء هذا الاستطلاع."
       lockdown_browser_required: 
         headers: 
           requires_lockdown: "مستعرض Respondus LockDown مطلوب"
@@ -17780,7 +17942,7 @@ ar:
         zero: "%{count} من عمليات الإرسال الأخرى"
     take_quiz: 
       confirms: 
-        cant_go_back_blank: "لا يمكنك العودة إلى هذا السؤال بعد الضغط على التالي. هل أنت متأكد أنك تريد تركه فارغًا؟\n"
+        cant_go_back_blank: "لا يمكنك العودة إلى هذا السؤال بعد الضغط على التالي. هل أنت متأكد أنك تريد تركه فارغًا؟"
         navigate_away: "أنت على وشك الخروج من هذه الصفحة.  هل تريد المتابعة على أية حال؟"
         unanswered_questions: 
           few: "لم تقم بالإجابة على %{count} من الأسئلة (انظر الشريط الجانبي الأيمن للتفاصيل).  الإرسال على أية حال؟"
@@ -17888,6 +18050,7 @@ ar:
     submission_action_take_quiz: "خذ %{title}"
   quizzes_7e598f57: الاختبارات
   quizzes_and_question_banks_9b7569e3: "الاختبارات الموجزة وبنوك الأسئلة"
+  quizzes_are_not_yet_handled_in_the_new_assignments_3898536a: "لم تتم معالجة الاختبارات الموجزة حتى الآن في تدفق المهام الجديدة. هل تريد التوجه إلى صفحة إنشاء الاختبارات الموجزة القديمة؟"
   quizzes_next_importing_75e63f67: "استيراد Quizzes.Next"
   quizzes_next_submission_history_c0f7cd20: "محفوظات إرسال الاختبارات Quizzes.Next"
   quizzes_tutorial_tray_6f87cdd3: "علبة برنامج الاختبارات الموجزة التعليمي"
@@ -18031,8 +18194,10 @@ ar:
       other: "%{count} من الأقسام"
       two: "%{count} من الأقسام"
       zero: "%{count} من الأقسام"
+  record_audio_14666880: "تسجيل الصوت"
   record_media_6637ff19: "تسجيل الوسائط"
   record_upload_media_5fdce166: "تسجيل/تحميل الوسائط"
+  record_video_70dc8439: "تسجيل الفيديو"
   record_with_microphone_only_e4ee07aa: "التسجيل بالميكروفون فقط"
   record_with_webcam_af21e07c: "التسجيل بكاميرا ويب"
   recording_98da6bda: "جارٍ التسجيل"
@@ -18115,6 +18280,7 @@ ar:
   remove_collaborationtitle_c3e81adb: "إزالة \"%{collaborationTitle}\"؟"
   remove_contact_method_ca890ba3: "إزالة طريقة الاتصال"
   remove_course_association_name_b760c502: "إزالة اقتران المساق %{name}"
+  remove_domain_from_the_whitelist_14c7d5e9: "إزالة %{domain} من القائمة البيضاء"
   remove_email_address_b1820820: "إزالة عنوان البريد الإلكتروني"
   remove_empty_attachment_b2aea632: "إزالة المرفق الفارغ"
   remove_f47dc62a: إزالة
@@ -18135,6 +18301,7 @@ ar:
   remove_this_item_from_the_module_4b2ceab7: "إزالة هذا العنصر من الوحدة"
   remove_this_rubric_from_my_list_c7d80704: "إزالة هذا العنوان من قائمتي"
   remove_this_section_9a88ca43: "إزالة هذا القسم"
+  remove_user_from_section_5556f465: "إزالة مستخدم من القسم"
   removed_course_association_course_a233342c: "اقتران المساق الذي تمت إزالته %{course}"
   removed_user_as_group_leader_bb69330f: "تمت إزالة %{user} كقائد مجموعة"
   rename_45608f54: "إعادة تسمية"
@@ -18521,8 +18688,10 @@ ar:
   score_percent_11941c81: "%{score} نسبة مئوية"
   score_points_3c48e2a8: "%{score} نقاط"
   score_pointspossible_bd57ea9e: "%{score}/%{pointsPossible}"
+  score_pointspossibletranslated_c1ac019e: "%{score}/%{pointsPossibleTranslated}"
   score_pts_adcb1af3: "%{score} نقاط"
   score_score_6f81e8c8: "الدرجة: %{score}"
+  score_to_keep_e89e4fa5: "الدرجة التي يتعين الاحتفاظ بها"
   scored_less_than_2427896c: "تم إحراز نقاط أقل من"
   scored_less_than_cutoff_on_assignment_5f5c4303: "تم إحراز نقاط أقل من %{cutoff} في %{assignment}"
   scored_more_than_cutoff_on_assignment_f422fec: "تم إحراز نقاط أكثر من %{cutoff} في %{assignment}"
@@ -18658,6 +18827,7 @@ ar:
   search_announcements_by_title_407a998e: "البحث في الإعلانات بالعنوان"
   search_by_99d1ba5f: "البحث بـ"
   search_by_c559efd: "البحث بـ"
+  search_by_title_or_author_273a8f49: "البحث حسب العنوان أو المؤلف..."
   search_by_title_short_name_or_sis_id_fe84aa12: "البحث بالعنوان أو الاسم القصير أو معرف SIS"
   search_by_user_dd3ad189: "بحث بواسطة المستخدم"
   search_courses_591bc900: "البحث عن المساقات..."
@@ -18933,10 +19103,12 @@ ar:
       not_available_yet: "سنرسل إليك رسالة بريد إلكتروني قريبًا قبل بدء المساق."
   self_registration_156392d6: "التسجيل الذاتي"
   self_signup_15b23092: self_signup
+  send_a_comment_to_your_instructor_about_this_assig_83fd5960: "أرسل تعليقًا إلى معلمك حول هذه المهمة."
   send_a_message_to_student_b2e72576: "إرسال رسالة إلى %{student}"
   send_a_message_to_the_teacher_1ae115b6: "إرسال رسالة إلى المعلم"
   send_a_message_to_this_student_ec46b8dd: "إرسال رسالة إلى هذا الطالب"
   send_authorization_url_in_lti2_registration_287fcb33: "إرسال عنوان URL للاعتماد في تسجيل LTI2"
+  send_comment_4e05f2fb: "إرسال تعليق"
   send_comment_to_instructor_only_4295a109: "إرسال تعليق إلى المعلم فقط"
   send_comment_to_the_whole_group_8d41e63a: "إرسال تعليق إلى المجموعة بأكملها"
   send_comment_to_this_student_only_e3d9ca1: "إرسال تعليق إلى هذا الطالب فقط"
@@ -18984,10 +19156,10 @@ ar:
   set_name_f83b658: "تعيين الاسم"
   set_of_grading_periods_545b37e9: "مجموعة فترات تقييم الدرجات"
   set_some_up_now_1749bb44: "إعداد البعض الآن"
-  set_up_how_your_proficiency_ratings_appear_inside__8139bb81: "\n\
-      \x20                 إعداد طريقة ظهور تصنيفات الإجادة الخاصة بك داخل دفتر درجات إجادة التعلم.\n\
-      \x20                 تعديل عدد التصنيفات ومستوى الإجادة والنقاط والألوان.\n\
-      \x20               "
+  set_up_how_your_proficiency_ratings_appear_inside__8139bb81: "\n\n\
+      \x20                 إعداد طريقة ظهور تصنيفات الإجادة الخاصة بك داخل دفتر درجات إجادة التعلم.\n\n\
+      \x20                 تعديل عدد التصنيفات ومستوى الإجادة والنقاط والألوان.\n\n\
+      \x20                 "
   set_up_how_your_proficiency_ratings_appear_inside__f25d5da8: "إعداد طريقة ظهور تصنيفات الإجادة الخاصة بك داخل دفتر درجات إجادة التعلم. تعديل عدد التصنيفات ومستوى الإجادة والنقاط والألوان."
   settings: 
     recaptcha_settings: 
@@ -19033,13 +19205,11 @@ ar:
       اختر الحصول على نسخة من إعلاناتك الخاصة في الإخطارات.
   share_important_updates_with_users_97ec11ad: "شارك التحديثات الهامة مع المستخدمين"
   share_the_following_pairing_code_with_an_observer__44f50f99: |-
-      مشاركة رمز الإقران التالي مع
-      مراقب للسماح
+      مشاركة رمز الإقران التالي مع مراقب للسماح
       له بالاتصال بـ %{name}. ستنتهي صلاحية هذا الرمز خلال سبعة أيام،
       أو بعد استخدام واحد.
   share_the_following_pairing_code_with_an_observer__9b7c3667: |-
-      مشاركة رمز الإقران التالي مع
-      مراقب للسماح
+      مشاركة رمز الإقران التالي مع مراقب للسماح
       له بالاتصال بك. ستنتهي صلاحية هذا الرمز خلال سبعة أيام،
       أو بعد استخدام واحد.
   share_the_following_pairing_code_with_an_observer__9cd44f7e: |-
@@ -19234,7 +19404,7 @@ ar:
         add_outcome: "إضافة ناتج"
       labels: 
         criterion_ratings: "تصنيفات المعيار"
-        master_level: "تعيين الإتقان عند أي مجموع نقاط معينة أو أعلى "
+        master_level: "تعيين الإتقان عند أي مجموع نقاط معينة أو أعلى"
         use_for_scoring: "استخدام هذا المعيار لتسجيل مجموع النقاط"
       points: "%{points} نقطة (نقاط)"
       points_threshold: "العتبة: %{points} نقطة (نقاط)"
@@ -19409,7 +19579,7 @@ ar:
       no_links: "لم يضف %{name} أي ارتباطات"
       nothing_in_common: "ليس بينكما أي شيء مشترك"
       save_profile: "حفظ ملف التعريف"
-      service_contact: "الاتصال بـ %{user} باستخدام  %{service} "
+      service_contact: "الاتصال بـ %{user} باستخدام  %{service}"
       social_instructions: "راجع وسائل الاتصال التي ترغب أن تكون مرئية للآخرين على ملفك التعريفي."
       title: العنوان
       titles: 
@@ -19464,11 +19634,11 @@ ar:
       messages: 
         locked: "لا يمكن تغيير عنوان بمجرد أن تبدأ في استخدامه."
         rubric_in_use: 
-          few: "ضع في الاعتبار أن %{count} من الطلاب قد تم تقييمهم باستخدام نموذج التقييم هذا. سيؤدي تغييره إلى التأثير على تقييمهم. "
-          many: "ضع في الاعتبار أن %{count} من الطلاب قد تم تقييمهم باستخدام نموذج التقييم هذا. سيؤدي تغييره إلى التأثير على تقييمهم. "
-          one: "ضع في الاعتبار أن طالبًا واحدًا قد تم تقييمه باستخدام نموذج التقييم هذا. سيؤدي تغييره إلى التأثير على تقييمه. "
-          other: "ضع في الاعتبار أن %{count} من الطلاب قد تم تقييمهم باستخدام نموذج التقييم هذا. سيؤدي تغييره إلى التأثير على تقييمهم. "
-          two: "ضع في الاعتبار أن %{count} من الطلاب قد تم تقييمهم باستخدام نموذج التقييم هذا. سيؤدي تغييره إلى التأثير على تقييمهم. "
+          few: "ضع في الاعتبار أن %{count} من الطلاب قد تم تقييمهم باستخدام نموذج التقييم هذا. سيؤدي تغييره إلى التأثير على تقييمهم."
+          many: "ضع في الاعتبار أن %{count} من الطلاب قد تم تقييمهم باستخدام نموذج التقييم هذا. سيؤدي تغييره إلى التأثير على تقييمهم."
+          one: "ضع في الاعتبار أن طالبًا واحدًا قد تم تقييمه باستخدام نموذج التقييم هذا. سيؤدي تغييره إلى التأثير على تقييمه."
+          other: "ضع في الاعتبار أن %{count} من الطلاب قد تم تقييمهم باستخدام نموذج التقييم هذا. سيؤدي تغييره إلى التأثير على تقييمهم."
+          two: "ضع في الاعتبار أن %{count} من الطلاب قد تم تقييمهم باستخدام نموذج التقييم هذا. سيؤدي تغييره إلى التأثير على تقييمهم."
           zero: "ضع في الاعتبار أن %{count} من الطلاب قد تم تقييمهم باستخدام نموذج التقييم هذا. سيؤدي تغييره إلى التأثير على تقييمهم."
         rubric_in_use2: "لقد قمت بتصنيف الطلاب بالفعل باستخدام هذا العنوان. وقد تؤثر أي تغييرات رئيسية على نتائج التقييم."
       out_of: "%{points} *من %{total}*"
@@ -19646,11 +19816,11 @@ ar:
       no_valid_users: "*عذرًا،* يبدو أنه لم يكن هناك أي عناوين بريد إلكتروني صالحة أو معرفات لتسجيل الدخول تم تدوينها، الرجاء الرجوع والمحاولة مرة أخرى."
       titles: 
         new_user: "مستخدم جديد"
-      user_list_explanation: "تنسيق عينة: \"استخدام طالب كعينة\" <student@example.com>، \"اسم العائلة، الاسم الأول\" <firstlast@example.com>،  justAnEmailAddress@example.com\n\n"
+      user_list_explanation: "تنسيق عينة: \"استخدام طالب كعينة\" <student@example.com>، \"اسم العائلة، الاسم الأول\" <firstlast@example.com>،  justAnEmailAddress@example.com"
     wiki_image: 
       titles: 
         click_to_embed: "انقر لتضمين %{image}"
-        embed_image: "انقر لتضمين الصورة "
+        embed_image: "انقر لتضمين الصورة"
     wiki_sidebar: 
       aria: 
         file_label: "حدد ملفًا، حد التحميل 50"
@@ -19938,6 +20108,7 @@ ar:
   some_submissions_are_not_gradeable_grade_changes_f_f8bf44e2: "بعض المهام المرسلة غير قابلة لمنح العلامات، وقد تم تجاهل تغييرات العلامات لتلك المهام المرسلة."
   someone: "شخص ما"
   someone_bbbc538b: "شخص ما"
+  something_broke_unexpectedly_6d3720ee: "حدث خطأ غير متوقع."
   something_is_broken_but_i_can_work_around_it_for_n_7fcedb9d: "حدث تلف بشيء ما لكن أستطيع تدبير الأمور الآن"
   something_went_wrong_accessing_your_mic_or_webcam_6e3cad12: "حدث خطأ ما أثناء الوصول إلى الميكروفون أو كاميرا الويب الخاصة بك."
   something_went_wrong_accessing_your_webcam_6643b87e: "حدث خطأ ما أثناء الوصول إلى كاميرا الويب الخاصة بك."
@@ -20087,6 +20258,9 @@ ar:
   student_5da6bfd1: الطالب
   student_921b864d: طالب
   student_assignment_outcome_map_title: "كفاءة الطلاب"
+  student_can_choose_any_combination_of_submission_t_1273b6e8: "يمكن للطالب اختيار أي مزيج من أنواع الإرسالات"
+  student_can_choose_only_one_submission_type_36769093: "يمكن للطالب اختيار نوع إرسال واحد فقط"
+  student_choice_b7f46223: "اختيار الطالب"
   student_collaborations_create_b9e312c1: "الأعمال الجماعية للطالب - إنشاء"
   student_context_card_ad59967e: "بطاقة سياق الطالب"
   student_context_cards_376d2072: "بطاقات سياق الطالب"
@@ -20104,7 +20278,8 @@ ar:
   student_id_9d858781: "الطالب (%{id})"
   student_id_a61d78c7: "معرف الطالب"
   student_interaction_report_3f3d2ff1: "تقرير تفاعل الطلاب"
-  student_interactions_report_7717b685: "تقرير تفاعلات الطالب "
+  student_interactions_report_7717b685: "تقرير تفاعلات الطالب"
+  student_is_required_to_do_all_submission_types_c594d40b: "يلزم الطالب تنفيذ كافة أنواع الإرسالات"
   student_messages_b0a242d: "رسائل الطالب"
   student_must_complete_all_of_these_requirements_656771d6: "ينبغي على الطالب أن يكمل جميع هذه المتطلبات"
   student_must_complete_one_of_these_requirements_6046eb3a: "ينبغي على الطالب أن يكمل إحدى هذه المتطلبات"
@@ -20125,6 +20300,7 @@ ar:
       بحاجة إلى تحسين.
   student_planner_aee76000: "مخطِط الطالب"
   student_planner_date_4cc73abb: "تاريخ مخطط الطالب:"
+  student_points_possible_points_196c7108: "{{نقاط_الطالب}}/{{النقاط_المحتملة}}"
   student_position_6d3b7750: "الطالب %{position}"
   student_settings_354d9a7e: "إعدادات الطالب"
   student_sis_6721040e: "Sis الطالب"
@@ -20227,6 +20403,7 @@ ar:
       other: "%{count} من الحسابات الفرعية"
       two: "%{count} من الحسابات الفرعية"
       zero: "%{count} من الحسابات الفرعية"
+  sub_accounts_can_choose_one_of_three_options_b0dfe46a: "يمكن للحسابات الفرعية اختيار خيار واحد من الخيارات الثلاثة:"
   subaccount_91f4c279: "حساب فرعي"
   subaccount_settings_8549eff7: "إعدادات الحسابات الفرعية"
   subaccounts_efd02bd4: "الحسابات الفرعية"
@@ -20250,6 +20427,7 @@ ar:
   submission_comment_submission_submittor_assignment_3302b9af: "تعليق الإرسال: %{submission_submittor}، %{assignment}، %{context}"
   submission_comment_updated_8d917ded: "تم تحديث تعليق على الإرسال"
   submission_comments_4fa03a17: "تعليقات الإرسال"
+  submission_date_8f659c0c: "تاريخ الإرسال"
   submission_date_a7920dac: "تاريخ الإرسال"
   submission_detail: 
     go_to_submission_url: "انتقال إلى عنوان URL الخاص بالإرسال"
@@ -20276,9 +20454,11 @@ ar:
   submission_in_another_grading_period_e754b329: "الإرسال في مرحلة تقييم أخرى"
   submission_index_e960f9bf: "إرسال %{index}"
   submission_options_5184a65b: "خيارات الإرسال"
+  submission_requirement_8ba1ee08: "متطلبات الإرسال"
   submission_score_b7a291e8: "درجة الإرسال"
   submission_status_3079e730: "حالة الإرسال"
   submission_tray_429ac3df: "علبة الإرسالات"
+  submission_type_a925fc5f: "نوع الإرسال"
   submission_updated_8897f3b7: "تم تحديث الإرسال"
   submissions: 
     assignment_submit_success: "تم إرسال المهمة بنجاح."
@@ -20533,14 +20713,14 @@ ar:
   tenant_d2a41f78: الحائز
   term_41f37cae: "الفصل الدراسي"
   term_42976f1c: "الفصل الدراسي:"
-  term_created_27d27c2b: "تم إنشاء الفصل"
+  term_created_27d27c2b: "تم إنشاء الفصل "
   term_e1c1d390: "الفصل الدراسي"
   term_id_2e802ed1: "معرف الفصل الدراسي"
   term_id_74b933ef: "معرف الفصل الدراسي"
   term_sis_7edb8ab7: "sis الفصل الدراسي"
   term_sis_bfe0ae01: "Sis الفصل الدراسي"
   term_start_b8c2aad1: "بداية الفصل"
-  term_starting_5bd5e070: "بداية الفصل"
+  term_starting_5bd5e070: "بداية الفصل "
   terms: 
     index: 
       add_term: "إضافة مصطلح"
@@ -20607,7 +20787,7 @@ ar:
         term_start: "بداية المدة"
         unspecified: "في أي وقت"
       timespan: "%{start_at} *إلى* %{end_at}"
-  terms_35d91184: "الفصول:"
+  terms_35d91184: "الفصول: "
   terms_4d979628: "الفصول الدراسية"
   terms_not_found_terms_must_be_included_with_multi__ca2e5c25: "لم يتم العثور على الفصول الدراسية. يجب أن توجد فصول دراسية مع multi_term_batch_mode"
   terms_of_service_attributes_not_valid_f3f9fca9: "سمات شروط الخدمة غير صالحة"
@@ -20646,7 +20826,11 @@ ar:
   the_course_link_validator_searches_through_course__76f0bc63: "تبحث أداة المصادقة على ارتباط المساق في محتويات المساق وتقوم بإرجاع كافة الارتباطات غير الصالحة أو غير المستجيبة التي تعثر عليها. يرجى الملاحظة أنه لا يمكن الوصول من خوادمنا إلى بعض الإرتباطات التي تحمل علامة غير مستجيبة وأنها ستعمل بالنسبة للطلاب."
   the_course_state_manage_permission_allows_users_to_67e16652: "يسمح إذن حالة المساق - إدارة للمستخدمين بنشر المساقات التي تحتوي على الوحدات النمطية. لنشر/إلغاء نشر محتوى الوحدة النمطية، يجب تمكين محتوى المساق - إضافة / تحرير / حذف."
   the_course_status_buttons_unpublished_and_publishe_e2dca595: "يتم عرض أزرار حالة المساق (غير المنشورة والمنشورة) فقط حتى استلام إرسال الطالب. لا يمكن إلغاء نشر المساقات في حالة وجود عمليات إرسال للطلاب."
-  the_download_process_has_started_this_can_take_awh_7e616db1: "بدأت عملية التنزيل. قد تستغرق هذه العملية بعض الوقت للمساقات الكبيرة. يمكنك مغادرة الصفحة وسوف تتلقى إشعارًا عند اكتمال التنزيل."
+  the_download_process_has_started_this_can_take_awh_7e616db1: |-
+      بدأت عملية التنزيل.
+                قد تستغرق هذه العملية بعض الوقت للمساقات الكبيرة.
+                يمكنك مغادرة الصفحة وسوف تتلقى إشعارًا
+                عند اكتمال التنزيل.
   the_engine_that_processes_sis_imports_has_been_ref_69b1c16b: "تم إعادة تصميم المحرك الذي يعالج عمليات استيراد SIS لتحسين معالجة استقرار عمليات استيراد SIS الكبيرة. لم يتم تغيير الأداء الوظيفي لعمليات استيراد SIS."
   the_error_stack_trace_if_there_is_one_b7e008a1: "تتبع تكدس الخطأ، إذا وُجد"
   the_field_field_is_required_56512820: "الحقل \"%{field}\" مطلوب"
@@ -20783,6 +20967,7 @@ ar:
   there_was_a_problem_loading_submissions_39855ff0: "حدثت مشكلة أثناء تحميل الإرسالات."
   there_was_a_problem_loading_the_gradebook_69b2a17: "حدثت مشكلة أثناء تحميل دفتر الدرجات."
   there_was_a_problem_logging_in_at_institution_5a298155: "حدث مشكل أثناء تسجيل الدخول إلى %{institution}"
+  there_was_a_problem_overriding_the_grade_f6d83c4d: "حدثت مشكلة أثناء تجاوز الدرجة."
   there_was_a_problem_posting_the_comment_75d15646: "حدثت مشكلة أثناء نشر التعليق"
   there_was_a_problem_publishing_grades_b0b9202f: "حدثت مشكلة أثناء نشر الدرجات."
   there_was_a_problem_saving_the_grade_8ea5d2ac: "حدثت مشكلة أثناء حفظ الدرجة."
@@ -20824,8 +21009,16 @@ ar:
   these_backup_codes_can_be_used_if_your_multi_facto_ca30a3df: "يمكن استخدام هذه الرموز الاحتياطية إذا كان جهاز المصادقة متعددة العوامل غير متاح. الرجاء طباعتها والاحتفاظ بها في مكان آمن، مثل محفظتك."
   these_credentials_are_for_academic_benchmark_api_v_324baaa4: "هذه الشهادات تخص المعيار الأكاديمي API v3. سيؤدي ترك مفتاح الشريك فارغًا إلى جعل أداة الاستيراد تستخدم المعيار الأكاديمي API v1 بشكل افتراضي."
   these_credentials_are_for_academic_benchmark_api_v_952718b1: "هذه الشهادات تخص المعيار الأكاديمي API v1، والتي سيتم إهمالها في إصدار مستقبلي."
+  these_domains_have_automatically_been_added_to_you_cef51600: |-
+      تمت إضافة هذه المجالات تلقائيًا إلى القائمة البيضاء الخاصة بك.
+                   إذا كنت ترغب في إزالتها، فيجب أن تقوم بإزالة الأداة المقترنة.
   these_grading_periods_were_created_for_you_by_an_a_e977c2b5: "قام مسؤول بإنشاء فترات تقييم الدرجات هذه من أجلك."
   this_action_has_been_disabled_by_your_admin_5e34bfa0: "تم تعطيل هذا الإجراء بواسطة مسؤولك."
+  this_allows_you_to_restrict_custom_javascript_that_d8495e02: |-
+      يسمح لك هذا بتقييد تخصيص JavaScript الذي يعمل في حالتك من Canvas.
+                     سيتم تمكين هذا من قبل سياسة أمان المحتوى (CSP) المحدثة.
+                     ستتم إضافة المجالات إلى القائمة البيضاء الخاصة بك مع إمكانية إضافة المجالات يدويًا.
+                     هناك %{max_domains} مجال كحد أقصى في القائمة البيضاء.
   this_allows_you_to_restrict_custom_javascript_that_e1e61bc3: |-
       يسمح لك هذا بتقييد تخصيص JavaScript الذي يعمل في حالتك من Canvas.
                      سيتم تمكين هذا من قبل سياسة أمان المحتوى (CSP) المحدثة.
@@ -20928,7 +21121,9 @@ ar:
       للإدارة الكاملة لبنوك أسئلة المساق، يجب تمكين هذه الميزة وميزة المهام والاختبارات الموجزة - إضافة / تحرير / حذف.
   this_permission_is_available_for_all_canvas_accoun_25cd5444: "يتوفر هذا الإذن لجميع حسابات Canvas ولكن يستخدم فقط للمؤسسات المقترنة بحساب Canvas Catalog. لا يوجد تأثير على الواجهة الأمامية في الوقت الحالي، ولكن يقترح المهندسون بقاء الإذن ممكّنًا للمسؤولين. يمكن تعطيل الإذن للأدوار الأخرى."
   this_permission_only_affects_course_announcements__6bc2b0a5: "يؤثر هذا الإذن على إعلانات المساق فقط، لإدارة الإعلانات العامة، يجب تمكين الإعلانات العامة - إضافة / تحرير / حذف."
-  this_permission_only_controls_adding_users_at_the__f33e8ae8: "يمكن لهذا الإذن أن يتحكم في إضافة المستخدمين على مستوى الحساب. لإضافة مستخدمين إلى المساقات، يجب أيضًا تمكين المستخدمون - إضافة / إزالة الطلاب من المساقات أو المستخدمون - إضافة / إزالة المعلمين أو مصممي المساقات أو المعلمين المساعدين من المساقات إلى المساق الذي يجب تمكينه."
+  this_permission_only_controls_adding_users_at_the__f33e8ae8: |-
+      يمكن لهذا الإذن أن يتحكم في إضافة المستخدمين على مستوى الحساب. لإضافة مستخدمين إلى المساقات، يجب أيضًا
+      تمكين المستخدمون - إضافة / إزالة الطلاب من المساقات أو المستخدمون - إضافة / إزالة المعلمين أو مصممي المساقات أو المعلمين المساعدين من المساقات إلى المساق الذي يجب تمكينه.
   this_question_group_is_set_to_pick_more_questions__2e3552c4: "تم تعيين هذه المجموعة من الأسئلة ليكون عدد الأسئلة المختارة أكبر من عدد الأسئلة المتوفرة."
   this_question_will_show_a_checkbox_next_to_each_an_169cd6d9: "سيقوم هذا السؤال بعرض خانة اختيار بجوار كل إجابة."
   this_quiz_has_been_excused_d89d2b74: "هذا الامتحان لم يعد إجباري"
@@ -20944,7 +21139,7 @@ ar:
   this_student_s_enrollment_has_been_concluded_c03bfafe: "تم إنهاء تسجيل هذا الطالب."
   this_student_s_enrollment_has_been_concluded_f135b8e4: "تم إنهاء التسجيل الخاص بهذا الطلب"
   this_student_s_responses_are_hidden_because_this_a_252e8335: "أجوبة هذا الطالب مخفية لأن هذه المهمة مجهولة الهوية."
-  this_student_was_just_awarded_an_unusually_high_gr_9ad835f3: "تم للتو منح هذا الطالب درجة مرتفعة بشكل غير معتاد. "
+  this_student_was_just_awarded_an_unusually_high_gr_9ad835f3: "تم للتو منح هذا الطالب درجة مرتفعة بشكل غير معتاد."
   this_student_was_just_awarded_negative_points_55741a37: "تم للتو منح هذا الطالب نقاط سلبية."
   this_student_wrote_f1a3f22d: "كتب هذا الطالب:"
   this_submission_has_already_been_graded_and_is_rea_8ec61c52: "تم تقييم هذا الإرسال بالفعل وهو جاهز لتلقي الإشراف."
@@ -21043,7 +21238,7 @@ ar:
     caracas: كراكاس
     casablanca: "الدار البيضاء"
     central_america: "أمريكا الوسطى"
-    central_time_us_canada: "التوقيت المركزي (الولايات المتحدة وكندا) "
+    central_time_us_canada: "التوقيت المركزي (الولايات المتحدة وكندا)"
     chatham_is: "جزر تشاتام"
     chennai: تشيناي
     chihuahua: شيواوا
@@ -21219,13 +21414,15 @@ ar:
     view_in_separate_window: "عرض في نافذة منفصلة"
   tls_7a2eaba5: TLS
   to_1126ab55: " إلى"
-  to_35c6baa2: إلى
+  to_35c6baa2: "إلى "
   to_51406be9: إلى
   to_access_assignment_submissions_through_assignmen_30c5c8f2: "للوصول إلى إرسالات المهام من خلال المهام أو دفتر الدرجات أو للعرض في SpeedGrader، يجب أيضًا تمكين الدرجات - عرض جميع الدرجات أو الدرجات - تحرير."
   to_access_assignment_submissions_through_assignmen_ce438715: |-
       للوصول إلى إرسالات المهام من خلال المهام وSpeedGrader، يجب أيضًا تمكين الدرجات - تحرير.
       لتحرير درجة أو إضافة تعليقات في SpeedGrader أو دفتر الدرجات، يجب أيضًا تمكين الدرجات - تحرير.
-  to_access_assignment_submissions_through_assignmen_ecbb8fb7: "للوصول إلى إرسالات المهام من خلال المهام ودفتر الدرجات، يجب أيضًا تمكين الدرجات - عرض جميع الدرجات."
+  to_access_assignment_submissions_through_assignmen_ecbb8fb7: |-
+      للوصول إلى إرسالات المهام من خلال المهام ودفتر الدرجات، يجب أيضًا
+      تمكين الدرجات - عرض جميع الدرجات.
   to_access_the_account_courses_page_courses_view_li_e1da6165: "للوصول إلى صفحة مساقات الحساب، يجب أيضًا تمكين المساقات - عرض القائمة."
   to_access_the_assignments_index_page_course_conten_a5b00f98: "للوصول إلى صفحة فهرس المهام، يجب تمكين محتوى المساق - عرض. لتوزيع المهام على الطلاب كل على حدة، يجب أيضًا تمكين المستخدمون - عرض القائمة."
   to_access_the_people_page_and_view_groups_users_vi_43aceac3: "للوصول إلى صفحة الأشخاص وعرض المجموعات، يجب أيضًا تمكين المستخدمون - عرض القائمة."
@@ -21245,7 +21442,9 @@ ar:
   to_activate_sms_enter_the_four_character_confirmat_3982a3ec: "لتنشيط الرسائل القصيرة SMS، أدخل رمز التأكيد المكون من أربعة أحرف والذي أُرسل إلى %{sms_number}."
   to_add_announcements_discussions_moderate_must_als_2496cbd7: "لإضافة الإعلانات، يجب أيضًا تمكين النقاشات - إشراف. لعرض الإعلانات الحديثة على الصفحة الرئيسية، يجب تحديد إظهار الإعلانات الحديثة على خانة اختيار الصفحة الرئيسية للمساق في إعدادات المساق."
   to_add_edit_or_delete_groups_groups_add_edit_delet_b826f547: "لإضافة المجموعات أو تحريرها أو حذفها، يجب أيضًا تمكين المجموعات - إضافة / تحرير / حذف."
-  to_add_users_to_a_course_users_add_remove_students_5036ad25: "لإضافة مستخدمين إلى المساقات، يجب أيضًا تمكين المستخدمون - إضافة / إزالة الطلاب من المساقات للمساق و/أو المستخدمون - إضافة / إزالة المعلمين أو مصممي المساقات أو المعلمين المساعدين من المساقات الذي يجب تمكينه."
+  to_add_users_to_a_course_users_add_remove_students_5036ad25: |-
+      لإضافة مستخدمين إلى المساقات، يجب أيضًا تمكين المستخدمون - إضافة / إزالة الطلاب من المساقات للمساق و/أو المستخدمون - إضافة / إزالة المعلمين أو مصممي المساقات
+      أو المعلمين المساعدين من المساقات الذي يجب تمكينه.
   to_add_users_to_a_course_users_add_remove_students_888b391e: |-
       لإضافة مستخدمين إلى المساقات، يجب أيضًا تمكين المستخدمون - إضافة / إزالة الطلاب من المساقات و/أو المستخدمون - إضافة / إزالة المعلمين أو مصممي المساقات أو المعلمين المساعدين من المساقات الذي يجب تمكينه.
       لتحرير قسم الطلاب، يجب أيضًا تمكين المحادثات - إرسال رسائل إلى أفراد المساق كل على حدة والمستخدمون - إضافة / إزالة الطلاب من المساقات.
@@ -21279,7 +21478,8 @@ ar:
   to_change_sis_account_id_the_user_must_have_manage_4b8a37a8: "لتغيير sis_account_id، يجب أن يمتلك المستخدم إذن manage_sis."
   to_close_comments_on_a_discussion_drag_a_discussio_85b27448: "لإغلاق التعليقات على مناقشة، اسحب المناقشة هنا، أو حدد \"إغلاق لعدم التعليق\" من قائمة إعدادات المناقشة."
   to_configure_an_openid_connect_provider_you_need_t_5c937249: |-
-      لتكوين مورد اتصال OpenID تحتاج لعناوين URL للمصادقة والتخويل، والحصول على معرف العميل وكلمة سر العميل.
+      لتكوين مورد اتصال OpenID تحتاج لعناوين URL للمصادقة والتخويل، والحصول 
+      على معرف العميل وكلمة سر العميل.
       
       إذا كان المورد قادراً على تكوين عناوين URL صالحة لرد الاتصال أو إعادة التوجيه، استخدم %{callback_url}.
   to_create_announcements_discussions_manage_must_al_932ac38f: "لإنشاء إعلانات، يجب أيضًا تمكين النقاشات - إدارة."
@@ -21448,7 +21648,8 @@ ar:
   to_view_users_and_user_account_details_users_view__99807b12: |-
       لعرض المستخدمين وتفاصيل حساب المستخدمين، يجب تمكين المستخدمون - عرض القائمة.
       لتغيير كلمات مرور المستخدم، يجب أيضًا تمكين المستخدمون - عرض القائمة.
-      لعرض معرف SIS للمستخدمين، يجب أيضًا تمكين بيانات SIS - إدارة أو بيانات SIS - قراءة. لعرض معرف تكامل المستخدمين، يجب أيضًا تمكين بيانات SIS - إدارة.
+      لعرض معرف SIS للمستخدمين، يجب أيضًا تمكين بيانات SIS - إدارة أو بيانات SIS - قراءة.
+      لعرض معرف تكامل المستخدمين، يجب أيضًا تمكين بيانات SIS - إدارة.
   today_76e10f9c: اليوم
   toggle_alignment_details_for_title_944f605: "تبديل تفاصيل المحاذاة لـ %{title}"
   toggle_course_card_color_overlays_b5b8137a: "تبديل التراكبات اللونية لبطاقة المساق"
@@ -21502,6 +21703,7 @@ ar:
   trinidad_and_tobago_1_fc2d8d1c: "ترينيداد وتوباغو (+1)"
   truncated_56b1a661: مقطوع
   turn_on_rtl_even_for_non_rtl_languages_8a1a8bc2: "تشغيل واجهة من اليمين لليسار حتى للغات التي ليست ضمن لغات اليمين لليسار"
+  turned_in_submission_date_e9180b8b: "تم التسليم: %{submission_date}"
   turning_off_this_tutorial_will_remove_the_tutorial_dfd81b3a: "سيؤدي إيقاف تشغيل هذا البرنامج التعليمي إلى إزالة علبة البرنامج التعليمي من العرض الخاص بك لكافة مساقاتك. يمكن استعادتها من خيارات الميزات في إعدادات المستخدم الخاصة بك."
   turnitin: 
     error_1007: "الملف الذي تم تحميله كبير جدًا."
@@ -21556,7 +21758,10 @@ ar:
   undated_15c2e5fe: "دون تاريخ"
   undated_items_toggle_list_visibility_6219e641: "تقوم العناصر غير المؤرخة بتبديل رؤية القائمة"
   undelivered_message_459916a9: "لم يتم تسليم الرسالة"
-  underline_all_links_description: "ضع خطًا أسفل الارتباطات التي تعرض ارتباطات تشعبية في قوائم التنقل ولوحة المعلومات والأشرطة الجانبية للصفحات باعتبارها *نصًا مسطّرًا*. لا ينطبق خيار الميزات هذا على ارتباطات المحتويات التي ينشؤها المستخدم في محرر المحتوى المنسق، والذي دائمًا ما يضع خطًا تحت الارتباطات لجميع المستخدمين."
+  underline_all_links_description: |-
+      ضع خطًا أسفل الارتباطات التي تعرض ارتباطات تشعبية في قوائم التنقل ولوحة المعلومات والأشرطة الجانبية للصفحات باعتبارها 
+      *نصًا مسطّرًا*. لا ينطبق خيار الميزات هذا على ارتباطات المحتويات التي ينشؤها المستخدم في محرر المحتوى المنسق، 
+      والذي دائمًا ما يضع خطًا تحت الارتباطات لجميع المستخدمين.
   underline_links_e7cf9b4f: "تسطير الارتباطات"
   undo_a7be8fef: تراجع
   undo_remove_course_association_name_68eb4037: "التراجع عن إزالة اقتران المساق %{name}"
@@ -21566,6 +21771,7 @@ ar:
   ungraded_answers_31ef2df7: "أجوبة لم يتم تقييمها"
   ungraded_ed0c6f98: "لم يتم تقييم الدرجة"
   ungraded_or_excused_60694bd7: "لم يتم تقييم الدرجة أو معفي"
+  ungraded_out_of_pointspossible_2d6d81da: "لم يتم تقييم الدرجة من %{pointsPossible}"
   ungraded_submissions_44efb0ec: "إرسالات لم يتم تقييمها"
   ungraded_survey_ad7de790: "استطلاع لم يتم تقييم درجاته"
   united_arab_emirates_971_649b3750: "الإمارات العربية المتحدة (+971)"
@@ -21581,14 +21787,18 @@ ar:
   unknown_compression_method_b6a850b5: "طريقة ضغط غير معروفة"
   unknown_content_type_ae6d08e8: "نوع المحتوى غير معروف"
   unknown_event_7a0bcda3: "حدث غير معروف"
+  unknown_external_tool_c918e9b2: "أداة خارجية غير معروفة"
   unknown_manage_discussion_action_encountered_92a8dfc0: "تمت مصادفة إدارة إجراء مناقشة غير معروفة"
   unknown_question_bank: "بنك الأسئلة غير معروف"
   unknown_quiz: "الاختبار غير معروف"
+  unknown_quiz_3892d071: "اختبار موجز غير معروف"
   unknown_role_cbe9a089: "دور غير معلوم"
   unknown_status_status_35331e1d: "حالة غير معروفة، %{status}"
   unknown_status_status_message_3a4ed4d5: "حالة غير معروفة، %{status}: %{message}"
   unknown_user_1113fcaa: "مستخدم غير معروف"
   unknown_user_url_82196ba7: "عنوان URL لمستخدم غير معروف"
+  unlimited_attempts_81a37d4: "محاولات غير محدودة"
+  unlimited_ff19e96d: "غير محدود"
   unlock_562bc4cb: "إلغاء التأمين"
   unlock_at_bb930b34: "إلغاء التأمين في"
   unlock_at_time_a0bbfb9: "إلغاء التأمين في: %{time}"
@@ -21655,6 +21865,7 @@ ar:
   until_6437a827: " حتى"
   until_8bdea3de: حتى
   until_date_949017c4: "حتى %{date}"
+  until_fccd159a: "حتى:"
   untitled_16aa4f2b: "بدون عنوان"
   untitled_assignment_59354b34: "مهمة بدون عنوان"
   unused_courses_title: "مساقات غير مستخدمة"
@@ -21665,7 +21876,9 @@ ar:
       قم بتحديث وعرض الأقسام وتفاصيل المساق والتنقل وخيارات
       الميزة وتكاملات التطبيق الخارجية، وكلها ظاهرة فقط
       للمعلمين.
-  update_and_view_sections_course_details_navigation_de248be8: "قم بتحديث وعرض الأقسام وتفاصيل المساق والتنقل وخيارات الميزة وتكاملات التطبيق الخارجية، وكلها ظاهرة فقط للمعلمين."
+  update_and_view_sections_course_details_navigation_de248be8: |-
+      قم بتحديث وعرض الأقسام وتفاصيل المساق والتنقل وخيارات الميزة وتكاملات
+                      التطبيق الخارجية، وكلها ظاهرة فقط للمعلمين.
   update_comment_8cedb4f0: "تحديث تعليق"
   update_comments_21991be0: "تحديث التعليقات"
   update_criterion_edcbd330: "تحديث المعيار"
@@ -21882,10 +22095,12 @@ ar:
       updating_user_details: "جارٍ تحديث تفاصيل المستخدم..."
     notices: 
       image_reported: "لقد تم الإبلاغ عن هذه الصورة"
+  user_name_has_just_turned_in_a_late_submission_for_874a9a31: "قام %{user_name} للتو بتسليم إرسال متأخر لـ %{assignment_name} في المساق %{course_name}"
   user_name_just_added_you_to_a_conversation_in_canv_7b278b51: "أضافك %{user_name} للتو في محادثة في Canvas. لعرض المحادثة، انقر فوق هذا الارتباط: %{link}."
   user_name_just_sent_you_a_message_in_canvas_9e911af7: "أرسل لك %{user_name} رسالة للتو في Canvas"
   user_name_just_sent_you_a_message_in_canvas_a2cb3bf4: "%{user_name} أرسل لك للتو رسالة في Canvas."
   user_name_just_sent_you_a_message_in_canvas_do_not_16b13cf2: "%{user_name} أرسل لك للتو رسالة في Canvas - لا تقم بالرد"
+  user_name_just_turned_in_their_assignment_late_ass_a54b128a: "قام %{user_name} للتو بتسليم المهمة الخاصة به (متأخر)، %{assignment_name}"
   user_name_successfully_added_79af8365: "تمت إضافة %{user_name} بنجاح!"
   user_name_you_just_sent_a_message_in_canvas_b1fd4598: "%{user_name}، أرسلت رسالة للتو في Canvas."
   user_name_you_just_sent_a_message_in_canvas_do_not_7c7bc1c6: "%{user_name}، أرسلت رسالة للتو في Canvas - لا تقم بالرد"
@@ -21934,7 +22149,7 @@ ar:
         current_courses: "المساقات الحالية"
         last_entry: "إدخال دفتر الكلية الأخير"
         student: الطالب
-      journal_header: "دفتر الكلية "
+      journal_header: "دفتر الكلية"
       page_title: "دفتر الكلية"
   user_observees_40cec795: "الأشخاص المراقَبون من قبل المستخدم"
   user_observer_csv_3592a9cf: "ملف CSV لمراقب المستخدم"
@@ -22016,7 +22231,7 @@ ar:
       grades: الدرجات
       profile: "ملف تعريف %{user}"
     current_conference: 
-      current_conference_text: "لقد تمت دعوتك للانضمام إلى **[%{conference}](%{link_to_conference})**. بدأت عند %{started_at} ووصلت إلى %{participant_count}.\n"
+      current_conference_text: "لقد تمت دعوتك للانضمام إلى **[%{conference}](%{link_to_conference})**. بدأت عند %{started_at} ووصلت إلى %{participant_count}."
       participant_count: 
         few: "%{count} من المشاركين"
         many: "%{count} من المشاركين"
@@ -22163,7 +22378,7 @@ ar:
         name_and_email: "الاسم والبريد الإلكتروني"
       update_instructions: "يمكنك تحديث بعض من معلومات هذا المستخدم، إلا أنه يمكنه تغييرها مرة أخرى إن شاء."
     new: 
-      create_a_canvas_account: "إنشاء حساب في Canvas "
+      create_a_canvas_account: "إنشاء حساب في Canvas"
       privacy_policy: "سياسة الخصوصية"
       terms_of_use: "شروط الاستخدام"
     no_self_registration: "لم يتم تمكين التسجيل الذاتي لهذا الحساب"
@@ -22234,10 +22449,14 @@ ar:
     user_not_found: "لم يتم العثور على مستخدم نشط بهذا المعرف."
     user_updated: "تم تحديث المستخدم بنجاح."
     welcome: 
-      no_courses_message: "ليس لديك أي مساقات، لذا لن تكون هذه الصفحة مثيرة جدًا الآن. بمجرد أن قمت بإنشاء المساقات أو توقيعها، ستبدأ في رؤية المحادثات الواردة من كافة الفصول."
+      no_courses_message: |-
+          ليس لديك أي مساقات، لذا لن تكون هذه الصفحة مثيرة جدًا الآن.
+          بمجرد أن قمت بإنشاء المساقات أو توقيعها، ستبدأ في رؤية
+          المحادثات الواردة من كافة الفصول.
       unpublished_courses_message: |-
           قمت بالتسجيل في مساق واحد أو أكثر لم يبدأ بعد. بمجرد
-          توفر هذه المساقات، سترى معلومات حولها هنا وفي شريط التنقل على الجانب الأيسر. وفي غضون هذا، لا تتردد في التسجيل
+          توفر هذه المساقات، سترى معلومات حولها هنا وفي شريط
+          التنقل على الجانب الأيسر. وفي غضون هذا، لا تتردد في التسجيل
           في مزيد من المساقات أو إعدادها على الملف التعريفي الخاص بك.
       welcome_to_happiness: "مرحبًا بك في Canvas!"
   users_act_as_d922940: "المستخدمون - التصرف بصفة"
@@ -22425,6 +22644,9 @@ ar:
   whenever_b943b119: "في أي وقت"
   where_would_you_like_to_move_title_fabd6e8f: "إلى أين ترغب في نقل %{title}؟"
   which_course_is_this_question_about_f819a158: "ما هو المساق الذي يتطرق إليه هذا السؤال؟"
+  whitelist_count_max_26a270f: "القائمة البيضاء (%{count}/%{max})"
+  whitelisted_domains_faed9e0c: "مجالات في القائمة البيضاء"
+  whitelisted_tool_domains_7df5e481: "مجالات الأداة في القائمة البيضاء"
   who_can_create_new_courses_7a6c1338: "الأشخاص الذين يمكنهم إنشاء مساقات جديدة"
   widget: 
     upload_media_track_form: 
@@ -22667,7 +22889,9 @@ ar:
   you_can_leave_the_page_and_you_will_get_a_notifica_fefe11e8: "يمكنك مغادرة الصفحة وسوف تتلقى إشعارًا عند اكتمال عملية المزامنة."
   you_can_log_in_directly_with_this_provider_by_goin_467d7f66: "يمكنك تسجيل الدخول مع ذلك المورد بالذهاب إلى %{url}"
   you_can_now_set_regrade_options_for_students_who_h_c1ceb1c4: "يمكنك الآن تعيين خيارات إعادة التقييم للطلاب الذين حلوا الاختبار بالفعل."
-  you_can_publish_your_course_from_the_home_page_whe_a36d49d6: "يمكنك نشر مساقك من الصفحة الرئيسية متى تكون مستعدًا لمشاركته مع الطلاب. إلى أن تقوم بنشر مساقك، لن يتمكن غير المعلمين من الوصول إليه."
+  you_can_publish_your_course_from_the_home_page_whe_a36d49d6: |-
+      يمكنك نشر مساقك من الصفحة الرئيسية متى تكون مستعدًا لمشاركته مع الطلاب.
+                إلى أن تقوم بنشر مساقك، لن يتمكن غير المعلمين من الوصول إليه.
   you_can_reply_to_this_comment_by_responding_to_thi_3d130e8c: "يمكنك الرد على هذا التعليق عن طريق الإجابة على هذه الرسالة أو مراجعة تفاصيل الإرسال باستخدام هذا الارتباط: %{link}."
   you_can_reply_to_this_comment_by_responding_to_thi_4fd1379e: "يمكنك الرد على هذا التعليق بالاستجابة لهذه الرسالة أو مراجعة تفاصيل المهمة المرسلة باستخدام هذا الرابط: %{link}.  عندما يُسمح بذلك، إذا كنت بحاجة لتضمين مرفق، فالرجاء تسجيل الدخول إلى Canvas والرد على المهمة المرسلة"
   you_can_reply_to_this_message_in_canvas_by_clickin_f5f5f7a3: "يمكنك أن ترد على هذه الرسالة في Canvas بالنقر فوق هذا الرابط: %{link}."
@@ -22705,6 +22929,8 @@ ar:
   you_do_not_have_permission_to_invite_users_that_do_b7142404: "ليس لديك إذن لدعوة مستخدمين غير موجودين بالفعل."
   you_do_not_have_permission_to_publish_this_course_ff361c82: "ليس لديك إذن لنشر هذا المساق."
   you_do_not_have_permissions_to_edit_this_moderated_3195294f: "ليس لديك الأذونات اللازمة لتحرير هذه المهمة قيد الإشراف"
+  you_don_t_have_access_to_view_this_resource_8378e0e8: "لا يمكنك الوصول لعرض هذا المورد."
+  you_don_t_have_permission_to_access_this_resource_447d3a5e: "ليس لديك إذن للوصول إلى هذا المورد."
   you_don_t_have_permission_to_manage_grades_for_thi_a9a1be3a: "ليس لديك إذنًا لإدارة الدرجات الخاصة بهذا المساق"
   you_have_been_given_extra_time_on_this_attempt_9d8bff6c: "لقد مُنحت وقتًا إضافيًا لهذه المحاولة"
   you_have_changed_the_progression_requirements_for__6772bc89: "لقد قمت بتغيير متطلبات التقدم لمساق نشط. من المحتمل وجود طلاب تقدموا بالفعل إلى هذه الوحدة وإلى وحدات أخرى تعتمد عليها."
@@ -22715,6 +22941,7 @@ ar:
   you_have_no_ltis_configured_to_create_collaboratio_5cad28dd: "ليس لديك أي LTI مكون ليتفاعل مع التعاونات. تحدث مع معلمك لإعداد البعض."
   you_have_no_outcomes_click_here_to_create_one_ebf262a3: "لا توجد نتائج. *انقر هنا* لإنشاء واحدة."
   you_have_no_outcomes_click_here_to_go_to_the_outco_574bd0af: "لا توجد نتائج. انقر هنا للانتقال إلى صفحة النتائج."
+  you_have_reached_the_domain_limit_if_you_wish_to_a_587db18: "لقد قمت بالوصول إلى الحد الأقصى للمجال، إذا كنت ترغب في إضافة المزيد إلى القائمة البيضاء الخاصة بك، فيُرجى إزالة مجالات أخرى أولاً."
   you_have_reached_the_limit_of_len_characters_in_th_babea8fe: "لقت وصلت لحد %{len} من الأحرف في رسالة الإعلام."
   you_have_reached_the_maximum_webhooks_per_account__ae9a7f83: "لقد وصلت إلى الحد الأقصى لصفحات webhook لكل حساب (%{max})"
   you_have_reached_the_maximum_webhooks_per_user_lim_2af4b256: "لقد وصلت إلى الحد الأقصى لصفحات webhook لكل مستخدم (%{max})"
@@ -22729,8 +22956,7 @@ ar:
   you_may_not_reproduce_or_communicate_any_of_the_co_7636b552: |-
       لا يحق لك إعادة إنتاج أي من المحتوى الموجود في
       هذا المساق أو نقله، بما في ذلك الملفات التي تم تصديرها من هذا المساق دون
-      إذن كتابي
-      مسبق من مؤسستك.  راجع مؤسستك للتحقق من وجود إرشادات محددة
+      إذن كتابي مسبق من مؤسستك.  راجع مؤسستك للتحقق من وجود إرشادات محددة
       لاتفاقية الاستخدام عبر الإنترنت.
   you_may_not_see_all_comments_right_now_because_the_96cf2051: "قد لا تستطيع مشاهدة جميع التعليقات لأنه يجري حاليًا تصحيح المهمة."
   you_may_want_to_assign_some_tas_to_help_you_with_t_702244aa: "قد تحتاج إلى تعيين البعض من مساعدي المعلمين لمعاونتك في المساق. يمكن لمساعدي المعلمين تقييم إرسالات الطلاب وإدارة المناقشات وكذلك تحديث تواريخ الاستحقاق وتفاصيل المهام لك."
@@ -22809,7 +23035,8 @@ ar:
       بعد إنشاء التطبيق، قم بتدوين مفتاح العميل وكلمة سر العميل، ثم أدخلهما هنا.
   you_will_need_to_register_an_application_on_twitte_95e7b621: |-
       سوف تحتاج لـ [تسجيل تطبيق على Twitter](%{twitter_url}).
-      عليك بتكوين %{callback_url} كعنوان URL لرد الاتصال، ثم تعيين مستوى الوصول على "قراءة" و "كتابة" و "وصول" إلى الرسائل المباشرة.
+      عليك بتكوين %{callback_url} كعنوان URL لرد الاتصال، ثم تعيين مستوى الوصول 
+      على "قراءة" و "كتابة" و "وصول" إلى الرسائل المباشرة.
       بعد إنشاء التطبيق، قم بتدوين مفتاح العميل وكلمة سر العميل، ثم أدخلهما هنا.
   you_will_not_be_able_to_preview_your_changes_f7b868fb: "لن تكون قادرًا على معاينة تغييراتك"
   your_answer_8dad6ea4: "إجابتك:"

@@ -59,7 +59,7 @@ module Lti
                                  @context.enrollment_term.start_at }
     TERM_NAME_GUARD = -> { @context.is_a?(Course) && @context.enrollment_term&.name }
     USER_GUARD = -> { @current_user }
-    SIS_USER_GUARD = -> { @current_user && @current_user.pseudonym && @current_user.pseudonym.sis_user_id }
+    SIS_USER_GUARD = -> { sis_pseudonym&.sis_user_id }
     PSEUDONYM_GUARD = -> { sis_pseudonym }
     ENROLLMENT_GUARD = -> { @current_user && @context.is_a?(Course) }
     ROLES_GUARD = -> { @current_user && (@context.is_a?(Course) || @context.is_a?(Account)) }
@@ -742,13 +742,23 @@ module Lti
                        -> { @current_user.id },
                        USER_GUARD
 
-    # Returns the Canvas user_uuid of the launching user.
+    # Returns the Canvas user_uuid of the launching user for the context.
     # @duplicates User.uuid
     # @example
     #   ```
     #   N2ST123dQ9zyhurykTkBfXFa3Vn1RVyaw9Os6vu3
     #   ```
     register_expansion 'vnd.instructure.User.uuid', [],
+                       -> { UserPastLtiId.uuid_for_user_in_context(@current_user, @context) },
+                       USER_GUARD
+
+    # Returns the current Canvas user_uuid of the launching user.
+    # @duplicates User.uuid
+    # @example
+    #   ```
+    #   N2ST123dQ9zyhurykTkBfXFa3Vn1RVyaw9Os6vu3
+    #   ```
+    register_expansion 'vnd.instructure.User.current_uuid', [],
                        -> { @current_user.uuid },
                        USER_GUARD
 
@@ -810,6 +820,16 @@ module Lti
     #   ```
     register_expansion 'Canvas.xuser.allRoles', [],
                        -> { lti_helper.all_roles }
+
+    # Same as "Canvas.xuser.allRoles", but uses roles formatted for LTI Advantage
+    # @example
+    #   ```
+    #    "http://purl.imsglobal.org/vocab/lis/v2/institution/person#Student",
+    #    "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor",
+    #    "http://purl.imsglobal.org/vocab/lis/v2/system/person#User"
+    #   ```
+    register_expansion 'com.instructure.User.allRoles', [],
+                       -> { lti_helper.all_roles('lti1_3') }
 
     # Returns the Canvas global user_id of the launching user.
     # @duplicates Canvas.root_account.global_id
@@ -918,7 +938,7 @@ module Lti
     #   da12345678cb37ba1e522fc7c5ef086b7704eff9
     #   ```
     register_expansion 'Canvas.masqueradingUser.userId', [],
-                       -> { @tool.opaque_identifier_for(@controller.logged_in_user) },
+                       -> { @tool.opaque_identifier_for(@controller.logged_in_user, context: @context) },
                        MASQUERADING_GUARD
 
     # Returns the xapi url for the user.

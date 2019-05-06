@@ -17,7 +17,7 @@
 
 require_relative '../../common'
 
-class Gradezilla
+module Gradezilla
   class Cells
     class << self
       include SeleniumDependencies
@@ -52,7 +52,7 @@ class Gradezilla
       end
 
       def get_grade(student, assignment)
-        grading_cell(student, assignment).text
+        grading_cell(student, assignment).text.strip
       end
 
       def edit_grade(student, assignment, grade)
@@ -95,6 +95,10 @@ class Gradezilla
       end
 
       def open_tray(student, assignment)
+        # ie has narrow columns hiding the grade_tray_button
+        if driver.browser == :internet_explorer
+          driver.execute_script("arguments[0].setAttribute('style', 'width: 150px')", grading_cell(student, assignment))
+        end
         grading_cell(student, assignment).click
         grade_tray_button.click
         Gradezilla::GradeDetailTray.submission_tray_full_content
@@ -135,11 +139,11 @@ class Gradezilla
 
       # ---------- Grade Override Cells ---------------
       def grade_override_selector(student)
-        # TODO: locator for override, similar to total_grade_selector
+        ".slick-row.student_#{student.id} .slick-cell.total-grade-override"
       end
 
       def grade_override_input(student)
-        # TODO: f("#{gade_override_selector(student)} input[type='text']")
+        f("#{grade_override_selector(student)} input[type='text']")
       end
 
       def get_override_grade(student)
@@ -147,7 +151,7 @@ class Gradezilla
       end
 
       def edit_override(student, grade)
-        grade_override_selector.click
+        f(grade_override_selector(student)).click
 
         override_input = grade_override_input(student)
         set_value(override_input, grade)

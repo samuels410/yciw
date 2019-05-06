@@ -17,7 +17,7 @@
 #
 
 require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
-require File.expand_path(File.dirname(__FILE__) + '/../../helpers/graphql_type_tester')
+require_relative "../graphql_spec_helper"
 
 describe Types::PageType do
   let_once(:course) { course_with_teacher(active_all: true); @course }
@@ -27,5 +27,13 @@ describe Types::PageType do
 
   it "works" do
     expect(page_type.resolve("title")).to eq page.title
+  end
+
+  it "has modules" do
+    module1 = course.context_modules.create!(name: 'Module 1')
+    module2 = course.context_modules.create!(name: 'Module 2')
+    page.context_module_tags.create!(context_module: module1, context: course, tag_type: 'context_module')
+    page.context_module_tags.create!(context_module: module2, context: course, tag_type: 'context_module')
+    expect(page_type.resolve("modules { _id }").sort).to eq [module1.id.to_s, module2.id.to_s]
   end
 end

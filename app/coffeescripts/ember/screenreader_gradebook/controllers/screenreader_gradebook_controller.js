@@ -37,9 +37,11 @@ import ic_submission_download_dialog from '../../shared/components/ic_submission
 import htmlEscape from 'str/htmlEscape'
 import CalculationMethodContent from '../../../models/grade_summary/CalculationMethodContent'
 import SubmissionStateMap from 'jsx/gradebook/SubmissionStateMap'
+import GradeOverrideEntry from '../../../../jsx/grading/GradeEntry/GradeOverrideEntry'
 import GradingPeriodsApi from '../../../api/gradingPeriodsApi'
 import GradingPeriodSetsApi from '../../../api/gradingPeriodSetsApi'
 import GradebookSelector from 'jsx/gradezilla/individual-gradebook/components/GradebookSelector'
+import {updateFinalGradeOverride} from '../../../../jsx/gradezilla/default_gradebook/FinalGradeOverrides/FinalGradeOverrideApi'
 import 'jquery.instructure_date_and_time'
 
 const {get, set, setProperties} = Ember
@@ -234,22 +236,89 @@ const ScreenreaderGradebookController = Ember.ObjectController.extend({
 
   hideStudentNames: false,
 
-  showConcludedEnrollments: (() => userSettings.contextGet('show_concluded_enrollments') || false)
+  showConcludedEnrollments: function() {
+    if (!ENV.GRADEBOOK_OPTIONS.settings) {
+      return false
+    }
+    return ENV.GRADEBOOK_OPTIONS.settings.show_concluded_enrollments === 'true'
+  }
     .property()
     .volatile(),
 
-  updateshowConcludedEnrollmentsSetting: function() {
-    const isChecked = this.get('showConcludedEnrollments')
-    if (isChecked) {
-      userSettings.contextSet('show_concluded_enrollments', isChecked)
-    }
+  updateShowConcludedEnrollmentsSetting: function() {
+    ajax.request({
+      dataType: 'json',
+      type: 'put',
+      url: ENV.GRADEBOOK_OPTIONS.settings_update_url,
+      data: {
+        gradebook_settings: {
+          show_concluded_enrollments: this.get('showConcludedEnrollments')
+        }
+      }
+    })
   }.observes('showConcludedEnrollments'),
+
+  finalGradeOverrideEnabled: (() => ENV.GRADEBOOK_OPTIONS.final_grade_override_enabled).property(),
+
+  allowFinalGradeOverride: function() {
+    if (!ENV.GRADEBOOK_OPTIONS.course_settings) {
+      return false
+    }
+
+    return ENV.GRADEBOOK_OPTIONS.course_settings.allow_final_grade_override
+  }
+    .property()
+    .volatile(),
+
+  updateAllowFinalGradeOverride: function() {
+    ajax.request({
+      dataType: 'json',
+      type: 'put',
+      url: `/api/v1/courses/${ENV.GRADEBOOK_OPTIONS.context_id}/settings`,
+      data: {
+        allow_final_grade_override: this.get('allowFinalGradeOverride')
+      }
+    })
+  }.observes('allowFinalGradeOverride'),
+
+  selectedStudentFinalGradeOverrideChanged: function() {
+    const student = this.get('selectedStudent')
+
+    if (!student) {
+      return
+    }
+
+    const gradingPeriodId = this.get('selectedGradingPeriod.id')
+    const studentOverrides = this.overridesForStudent(student.id)
+
+    if (!studentOverrides) {
+      this.set('selectedStudentFinalGradeOverride', null)
+      return
+    }
+
+    if (gradingPeriodId === '0' || gradingPeriodId == null) {
+      this.set('selectedStudentFinalGradeOverride', {...studentOverrides.courseGrade})
+    } else {
+      this.set('selectedStudentFinalGradeOverride', {
+        ...studentOverrides.gradingPeriodGrades[gradingPeriodId]
+      })
+    }
+  }
+    .observes(
+      'selectedStudent',
+      'selectedGradingPeriod',
+      'final_grade_overrides',
+      'final_grade_overrides.content'
+    )
+    .on('init'),
 
   selectedAssignmentPointsPossible: function() {
     return I18n.n(this.get('selectedAssignment.points_possible'))
   }.property('selectedAssignment'),
 
   selectedStudent: null,
+
+  selectedStudentFinalGradeOverride: null,
 
   selectedSection: null,
 
@@ -281,9 +350,69 @@ const ScreenreaderGradebookController = Ember.ObjectController.extend({
       return this.updateSubmissionsFromExternal(submissions)
     },
 
+    onEditFinalGradeOverride(grade) {
+      const options = {}
+
+      if (ENV.GRADEBOOK_OPTIONS.grading_standard) {
+        options.gradingScheme = {data: ENV.GRADEBOOK_OPTIONS.grading_standard}
+      }
+
+      const gradeOverrideEntry = new GradeOverrideEntry(options)
+      const currentOverride = this.get('selectedStudentFinalGradeOverride') || {}
+      const enteredGrade = gradeOverrideEntry.parseValue(grade)
+      const existingGrade = gradeOverrideEntry.parseValue(currentOverride.percentage)
+
+      if (!enteredGrade.valid || !gradeOverrideEntry.hasGradeChanged(existingGrade, enteredGrade)) {
+        return
+      }
+
+      const gradingPeriodId = this.get('selectedGradingPeriod.id')
+      const records = this.get('final_grade_overrides')
+      const overrides = records.get('content.finalGradeOverrides')
+      const student = this.get('selectedStudent')
+      const studentOverrides = this.overridesForStudent(student.id)
+      const studentEnrollment = this.get('enrollments').content.find(
+        enrollment => enrollment.user_id === student.id
+      )
+
+      if (gradingPeriodId === '0' || gradingPeriodId == null) {
+        studentOverrides.courseGrade.percentage = enteredGrade.grade.percentage
+        updateFinalGradeOverride(studentEnrollment.id, null, enteredGrade.grade)
+      } else {
+        studentOverrides.gradingPeriodGrades[gradingPeriodId].percentage =
+          enteredGrade.grade.percentage
+        updateFinalGradeOverride(studentEnrollment.id, gradingPeriodId, enteredGrade.grade)
+      }
+
+      records.set('content', {finalGradeOverrides: overrides})
+    },
+
     selectItem(property, item) {
       return this.announce(property, item)
     }
+  },
+
+  overridesForStudent(studentId) {
+    const records = this.get('final_grade_overrides')
+
+    if (!records || !records.get('isLoaded')) {
+      return null
+    }
+
+    const overrides = records.get('content.finalGradeOverrides')
+    const studentOverrides = overrides[studentId] || {}
+    studentOverrides.courseGrade = studentOverrides.courseGrade || {}
+    studentOverrides.gradingPeriodGrades = studentOverrides.gradingPeriodGrades || {}
+
+    this.get('gradingPeriods').forEach(gp => {
+      studentOverrides.gradingPeriodGrades[gp.id] =
+        studentOverrides.gradingPeriodGrades[gp.id] || {}
+    })
+
+    overrides[studentId] = studentOverrides
+    records.set('content.finalGradeOverrides', {...overrides})
+
+    return studentOverrides
   },
 
   pollGradebookCsvProgress(attachmentProgress) {
@@ -418,7 +547,6 @@ const ScreenreaderGradebookController = Ember.ObjectController.extend({
     const weightingScheme = this.get('weightingScheme')
     const gradingPeriodSet = this.getGradingPeriodSet()
     const effectiveDueDates = this.get('effectiveDueDates.content')
-
     const hasGradingPeriods = gradingPeriodSet && effectiveDueDates
 
     return CourseGradeCalculator.calculate(
@@ -1073,11 +1201,8 @@ const ScreenreaderGradebookController = Ember.ObjectController.extend({
 
   showAttendance: (() => userSettings.contextGet('show_attendance')).property().volatile(),
 
-  updateUngradedAssignmentUserSetting: function() {
-    const isChecked = this.get('includeUngradedAssignments')
-    if (isChecked) {
-      return userSettings.contextSet('include_ungraded_assignments', isChecked)
-    }
+  updateIncludeUngradedAssignmentsSetting: function() {
+    userSettings.contextSet('include_ungraded_assignments', this.get('includeUngradedAssignments'))
   }.observes('includeUngradedAssignments'),
 
   assignmentGroupsHash() {

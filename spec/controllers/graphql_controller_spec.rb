@@ -61,9 +61,9 @@ describe GraphQLController do
 
     context "data dog metrics" do
       it "reports data dog metrics if requested" do
-        expect_any_instance_of(Tracers::DatadogTracer).to receive :trace
+        expect(InstStatsd::Statsd).to receive(:increment).with("graphql.ASDF.count", tags: anything)
         request.headers["GraphQL-Metrics"] = "true"
-        post :execute, params: {query: '{legacyNode(User, 1) { id }'}
+        post :execute, params: {query: 'query ASDF { course(id: "1") { id } }'}
       end
     end
   end
@@ -74,13 +74,13 @@ describe GraphQLController do
     # this is the dumbest place to put this test except every where else i
     # could think of
     it "records datadog metrics if requested" do
-      expect_any_instance_of(Datadog::Statsd).to receive :increment
+      expect(InstStatsd::Statsd).to receive(:increment)
       get :graphiql, params: {datadog_metric: "this_is_a_test"}
     end
 
     it "doesn't normally datadog" do
       get :graphiql
-      expect_any_instance_of(Datadog::Statsd).not_to receive :increment
+      expect(InstStatsd::Statsd).not_to receive :increment
     end
   end
 end

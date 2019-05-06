@@ -330,6 +330,7 @@ describe Enrollment do
         @enrollment.scores.create!(course_score: true, current_score: 88.0)
         @enrollment.scores.create!(grading_period_id: period.id, current_score: 82.0)
         @course.enable_feature!(:final_grades_override)
+        @course.update!(allow_final_grade_override: true)
       end
 
       before(:each) do
@@ -349,9 +350,15 @@ describe Enrollment do
         expect(@enrollment.effective_current_grade).to eq "A"
       end
 
-      it "does not return the override grade if the feature is not enabled" do
-        @course.disable_feature!(:final_grades_override)
+      it "does not return the override grade if the feature is not allowed" do
         @enrollment.scores.find_by(course_score: true).update!(override_score: 97.0)
+        @course.update!(allow_final_grade_override: false)
+        expect(@enrollment.effective_current_grade).to eq "B+"
+      end
+
+      it "does not return the override grade if the feature is not enabled" do
+        @enrollment.scores.find_by(course_score: true).update!(override_score: 97.0)
+        @course.disable_feature!(:final_grades_override)
         expect(@enrollment.effective_current_grade).to eq "B+"
       end
 
@@ -374,6 +381,7 @@ describe Enrollment do
       before(:once) do
         @enrollment = StudentEnrollment.create!(valid_enrollment_attributes)
         @course.enable_feature!(:final_grades_override)
+        @course.update!(allow_final_grade_override: true)
       end
 
       it "returns the course current score" do
@@ -391,15 +399,15 @@ describe Enrollment do
         expect(@enrollment.effective_current_score).to eq 97.0
       end
 
-      it "returns the lower bound of an override score, if a grading standard is enabled" do
-        allow(@course).to receive(:grading_standard_enabled?).and_return(true)
+      it "does not return the override score if the feature is not allowed" do
         @enrollment.scores.create!(current_score: 79.0, override_score: 97.0)
-        expect(@enrollment.effective_current_score).to eq 94.0
+        @course.update!(allow_final_grade_override: false)
+        expect(@enrollment.effective_current_score).to eq 79.0
       end
 
       it "does not return the override score if the feature is not enabled" do
-        @course.disable_feature!(:final_grades_override)
         @enrollment.scores.create!(current_score: 79.0, override_score: 97.0)
+        @course.disable_feature!(:final_grades_override)
         expect(@enrollment.effective_current_score).to eq 79.0
       end
     end
@@ -419,6 +427,7 @@ describe Enrollment do
         @enrollment.scores.create!(course_score: true, final_score: 88.0)
         @enrollment.scores.create!(grading_period_id: period.id, final_score: 82.0)
         @course.enable_feature!(:final_grades_override)
+        @course.update!(allow_final_grade_override: true)
       end
 
       before(:each) do
@@ -438,9 +447,15 @@ describe Enrollment do
         expect(@enrollment.effective_final_grade).to eq "A"
       end
 
-      it "does not return the override grade if the feature is not enabled" do
-        @course.disable_feature!(:final_grades_override)
+      it "does not return the override grade if the feature is not allowed" do
         @enrollment.scores.find_by(course_score: true).update!(override_score: 97.0)
+        @course.update!(allow_final_grade_override: false)
+        expect(@enrollment.effective_final_grade).to eq "B+"
+      end
+
+      it "does not return the override grade if the feature is not enabled" do
+        @enrollment.scores.find_by(course_score: true).update!(override_score: 97.0)
+        @course.disable_feature!(:final_grades_override)
         expect(@enrollment.effective_final_grade).to eq "B+"
       end
 
@@ -465,6 +480,7 @@ describe Enrollment do
         @enrollment.scores.create!(course_score: true, final_score: 88.0)
         @enrollment.scores.create!(grading_period_id: period.id, final_score: 82.0)
         @course.enable_feature!(:final_grades_override)
+        @course.update!(allow_final_grade_override: true)
       end
 
       it "returns the course final score" do
@@ -480,15 +496,16 @@ describe Enrollment do
         expect(@enrollment.effective_current_score).to eq 97.0
       end
 
-      it "returns the lower bound override score, if a grading standard is enabled" do
-        allow(@course).to receive(:grading_standard_enabled?).and_return true
+      it "does not return the override score if the feature is not allowed" do
         @enrollment.scores.find_by(course_score: true).update!(override_score: 97.0)
-        expect(@enrollment.effective_final_score).to be 94.0
+        @course.disable_feature!(:final_grades_override)
+        @course.update!(allow_final_grade_override: false)
+        expect(@enrollment.effective_final_score).to be 88.0
       end
 
       it "does not return the override score if the feature is not enabled" do
-        @course.disable_feature!(:final_grades_override)
         @enrollment.scores.find_by(course_score: true).update!(override_score: 97.0)
+        @course.disable_feature!(:final_grades_override)
         expect(@enrollment.effective_final_score).to be 88.0
       end
     end
@@ -499,12 +516,18 @@ describe Enrollment do
         @course = @enrollment.course
         @score = @enrollment.scores.create!(course_score: true, final_score: 19)
         @course.enable_feature!(:final_grades_override)
+        @course.update!(allow_final_grade_override: true)
       end
 
       before(:each) do
         @course.enable_feature!(:final_grades_override)
         @course.update!(grading_standard_enabled: true)
         @score.update!(override_score: 99.0)
+      end
+
+      it "returns nil if final_grades_override is not allowed" do
+        @course.update!(allow_final_grade_override: false)
+        expect(@enrollment.override_grade).to be nil
       end
 
       it "returns nil if final_grades_override is not enabled" do
@@ -545,11 +568,16 @@ describe Enrollment do
         @course = @enrollment.course
         @score = @enrollment.scores.create!(course_score: true, final_score: 19)
         @course.enable_feature!(:final_grades_override)
+        @course.update!(allow_final_grade_override: true)
       end
 
       before(:each) do
-        @course.enable_feature!(:final_grades_override)
         @score.update!(override_score: 99.0)
+      end
+
+      it "returns nil if final_grades_override is not allowed" do
+        @course.update!(allow_final_grade_override: false)
+        expect(@enrollment.override_score).to be nil
       end
 
       it "returns nil if final_grades_override is not enabled" do
@@ -1211,7 +1239,7 @@ describe Enrollment do
       course_with_teacher(:active_all => true)
       student = user_with_pseudonym
       observer = user_with_pseudonym
-      observer.linked_students << student
+      add_linked_observer(student, observer)
 
       @course.enroll_student(student, :no_notify => true)
       expect(student.messages).to be_empty
@@ -1231,7 +1259,7 @@ describe Enrollment do
       course_with_teacher
       student = user_with_pseudonym
       observer = user_with_pseudonym
-      observer.linked_students << student
+      add_linked_observer(student, observer)
 
       @course.enroll_student(student)
       expect(observer.messages).to be_empty
@@ -1295,7 +1323,7 @@ describe Enrollment do
     student = user_with_pseudonym
     observer = user_with_pseudonym
     old_time = observer.updated_at
-    observer.linked_students << student
+    add_linked_observer(student, observer)
     @course.enrollments.create(user: student, skip_touch_user: true, type: 'StudentEnrollment')
     expect(observer.reload.updated_at).to eq old_time
   end
@@ -2760,7 +2788,7 @@ describe Enrollment do
     before :once do
       @student = user_factory(active_all: true)
       @parent = user_with_pseudonym(:active_all => true)
-      @student.linked_observers << @parent
+      add_linked_observer(@student, @parent)
     end
 
     it 'should get new observer enrollments when an observed user gets a new enrollment' do
@@ -2813,10 +2841,11 @@ describe Enrollment do
 
       it "allows enrolling a user that is observed from another shard" do
         se = @shard1.activate do
-          account = Account.create!
+          @other_account = Account.create!
           expect_any_instance_of(User).to receive(:can_be_enrolled_in_course?).and_return(true)
-          course_with_student(account: account, active_all: true, user: @student)
+          course_with_student(account: @other_account, active_all: true, user: @student)
         end
+        add_linked_observer(@student, @parent, root_account: @other_account)
         pe = @parent.observer_enrollments.shard(@shard1).first
 
         expect(pe).not_to be_nil

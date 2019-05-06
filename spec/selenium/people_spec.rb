@@ -20,7 +20,7 @@ require File.expand_path(File.dirname(__FILE__) + '/common')
 describe "people" do
   include_context "in-process server selenium tests"
 
-  before(:once) do
+  before(:each) do
     make_full_screen
   end
 
@@ -375,7 +375,7 @@ describe "people" do
       expect(f("#content")).not_to contain_css('.delete_course_link')
       expect(f("#content")).not_to contain_css('.reset_course_content_button')
       get "/courses/#{@course.id}/confirm_action?event=conclude"
-      expect(f('.ui-state-error')).to include_text('Unauthorized')
+      expect(f('#unauthorized_message')).to include_text('Access Denied')
     end
 
     # TODO reimplement per CNVS-29609, but make sure we're testing at the right level
@@ -539,7 +539,7 @@ describe "people" do
       @section = @course.course_sections.create!(name: "section1")
 
       @teacher = user_with_pseudonym(:active_all => true)
-      @enrollment = @course.enroll_teacher(@teacher)
+      @enrollment = @course.enroll_teacher(@teacher, enrollment_state: 'active')
     end
 
     before :each do

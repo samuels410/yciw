@@ -94,7 +94,7 @@ describe 'creating a quiz' do
         'must have a student or section selected'
     end
 
-    it 'saves and publishes a new quiz', priority: "1", test_id: 193785 do
+    it 'saves and publishes a new quiz', :xbrowser, priority: "1", test_id: 193785 do
       @quiz = course_quiz
       open_quiz_edit_form
 

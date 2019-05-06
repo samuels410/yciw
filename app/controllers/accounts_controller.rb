@@ -523,7 +523,7 @@ class AccountsController < ApplicationController
   # @argument search_term [String]
   #   The partial course name, code, or full ID to match and return in the results list. Must be at least 3 characters.
   #
-  # @argument include[] [String, "syllabus_body"|"term"|"course_progress"|"storage_quota_used_mb"|"total_students"|"teachers"|"account_name"]
+  # @argument include[] [String, "syllabus_body"|"term"|"course_progress"|"storage_quota_used_mb"|"total_students"|"teachers"|"account_name"|"concluded"]
   #   - All explanations can be seen in the {api:CoursesController#index Course API index documentation}
   #   - "sections", "needs_grading_count" and "total_scores" are not valid options at the account level
   #
@@ -549,30 +549,27 @@ class AccountsController < ApplicationController
       params[:state] -= %w{available}
     end
 
-    name_col = Course.best_unicode_collation_key('name')
-    sortable_name_col = User.sortable_name_order_by_clause(nil)
-
+    sortable_name_col = User.sortable_name_order_by_clause('users')
+    
     order = if params[:sort] == 'course_name'
-              "#{name_col}"
+              "#{Course.best_unicode_collation_key('courses.name')}"
             elsif params[:sort] == 'sis_course_id'
-              "#{Course.quoted_table_name}.sis_source_id"
+              "courses.sis_source_id"
             elsif params[:sort] == 'teacher'
               "(SELECT #{sortable_name_col} FROM #{User.quoted_table_name}
-                JOIN #{Enrollment.quoted_table_name} on #{User.quoted_table_name}.id
-                = #{Enrollment.quoted_table_name}.user_id
-                WHERE #{Enrollment.quoted_table_name}.workflow_state <> 'deleted'
-                AND #{Enrollment.quoted_table_name}.type = 'TeacherEnrollment'
-                AND #{Enrollment.quoted_table_name}.course_id = #{Course.quoted_table_name}.id
+                JOIN #{Enrollment.quoted_table_name} on users.id = enrollments.user_id
+                WHERE enrollments.workflow_state <> 'deleted'
+                AND enrollments.type = 'TeacherEnrollment'
+                AND enrollments.course_id = courses.id
                 ORDER BY #{sortable_name_col} LIMIT 1)"
             # leaving subaccount as an option for backwards compatibility
             elsif params[:sort] == 'subaccount' || params[:sort] == 'account_name'
-              "(SELECT #{name_col} FROM #{Account.quoted_table_name}
-                WHERE #{Account.quoted_table_name}.id
-                = #{Course.quoted_table_name}.account_id)"
+              "(SELECT #{Account.best_unicode_collation_key('accounts.name')} FROM #{Account.quoted_table_name}
+                WHERE accounts.id = courses.account_id)"
             elsif params[:sort] == 'term'
-              "(SELECT #{EnrollmentTerm.quoted_table_name}.name FROM #{EnrollmentTerm.quoted_table_name}
-                WHERE #{EnrollmentTerm.quoted_table_name}.id
-                = #{Course.quoted_table_name}.enrollment_term_id)"
+              "(SELECT #{EnrollmentTerm.best_unicode_collation_key('enrollment_terms.name')}
+                FROM #{EnrollmentTerm.quoted_table_name}
+                WHERE enrollment_terms.id = courses.enrollment_term_id)"
             else
               "id"
             end
@@ -659,7 +656,7 @@ class AccountsController < ApplicationController
 
     ActiveRecord::Associations::Preloader.new.preload(@courses, [:account, :root_account, course_account_associations: :account])
     preload_teachers(@courses) if includes.include?("teachers")
-    ActiveRecord::Associations::Preloader.new.preload(@courses, [:enrollment_term]) if includes.include?("term")
+    ActiveRecord::Associations::Preloader.new.preload(@courses, [:enrollment_term]) if includes.include?("term") || includes.include?('concluded')
 
     if includes.include?("total_students")
       student_counts = StudentEnrollment.not_fake.where("enrollments.workflow_state NOT IN ('rejected', 'completed', 'deleted', 'inactive')").
@@ -711,11 +708,7 @@ class AccountsController < ApplicationController
       unless account_settings.empty?
         if @account.grants_right?(@current_user, session, :manage_account_settings)
           if account_settings[:settings]
-            account_settings[:settings].slice!(:restrict_student_past_view,
-                                               :restrict_student_future_view,
-                                               :restrict_student_future_listing,
-                                               :lock_all_announcements,
-                                               :sis_assignment_name_length_input)
+            account_settings[:settings].slice!(*permitted_api_account_settings)
             ensure_sis_max_name_length_value!(account_settings)
           end
           @account.errors.add(:name, t(:account_name_required, 'The account name cannot be blank')) if account_params.has_key?(:name) && account_params[:name].blank?
@@ -865,13 +858,14 @@ class AccountsController < ApplicationController
           end
           params[:account].delete :services
         end
-        if @account.grants_right?(@current_user, :manage_site_settings)
-          # If the setting is present (update is called from 2 different settings forms, one for notifications)
-          if params[:account][:settings] && params[:account][:settings][:outgoing_email_default_name_option].present?
-            # If set to default, remove the custom name so it doesn't get saved
-            params[:account][:settings][:outgoing_email_default_name] = '' if params[:account][:settings][:outgoing_email_default_name_option] == 'default'
-          end
 
+        # If the setting is present (update is called from 2 different settings forms, one for notifications)
+        if params[:account][:settings] && params[:account][:settings][:outgoing_email_default_name_option].present?
+          # If set to default, remove the custom name so it doesn't get saved
+          params[:account][:settings][:outgoing_email_default_name] = '' if params[:account][:settings][:outgoing_email_default_name_option] == 'default'
+        end
+
+        if @account.grants_right?(@current_user, :manage_site_settings)
           google_docs_domain = params[:account][:settings].try(:delete, :google_docs_domain)
           if @account.feature_enabled?(:google_docs_domain_restriction) &&
              @account.root_account? &&
@@ -924,7 +918,7 @@ class AccountsController < ApplicationController
           end
         end
 
-        process_external_integration_keys
+        @account.process_external_integration_keys(params[:account][:external_integration_keys], @current_user)
 
         can_edit_email = params[:account][:settings].try(:delete, :edit_institution_email)
         if @account.root_account? && !can_edit_email.nil?
@@ -992,6 +986,11 @@ class AccountsController < ApplicationController
         MASKED_APP_CENTER_ACCESS_TOKEN: @account.settings[:app_center_access_token].try(:[], 0...5),
         PERMISSIONS: {
           :create_tool_manually => @account.grants_right?(@current_user, session, :create_tool_manually),
+        },
+        CSP: {
+          :enabled => @account.csp_enabled?,
+          :inherited => @account.csp_inherited?,
+          :settings_locked => @account.csp_locked?,
         }
       })
       js_env(edit_help_links_env, true)
@@ -1341,18 +1340,7 @@ class AccountsController < ApplicationController
   end
 
   def process_external_integration_keys(account = @account)
-    if params_keys = params[:account][:external_integration_keys]
-      ExternalIntegrationKey.indexed_keys_for(account).each do |key_type, key|
-        next unless params_keys.key?(key_type)
-        next unless key.grants_right?(@current_user, :write)
-        unless params_keys[key_type].blank?
-          key.key_value = params_keys[key_type]
-          key.save!
-        else
-          key.delete
-        end
-      end
-    end
+    account.process_external_integration_keys(params[:account][:external_integration_keys], @current_user)
   end
 
   def set_default_dashboard_view(new_view)
@@ -1435,6 +1423,14 @@ class AccountsController < ApplicationController
       :default_user_storage_quota_mb, :default_group_storage_quota_mb, :integration_id, :brand_config_md5,
       :settings => PERMITTED_SETTINGS_FOR_UPDATE, :ip_filters => strong_anything
     ]
+  end
+
+  def permitted_api_account_settings
+    [:restrict_student_past_view,
+      :restrict_student_future_view,
+      :restrict_student_future_listing,
+      :lock_all_announcements,
+      :sis_assignment_name_length_input]
   end
 
   def strong_account_params

@@ -154,7 +154,7 @@
 #         "format": "int64"
 #       },
 #       "asset_type": {
-#         "description": "The type of the learning object that was changed in the blueprint course.  One of 'assignment', 'attachment', 'discussion_topic', 'external_tool', 'quiz', or 'wiki_page'.",
+#         "description": "The type of the learning object that was changed in the blueprint course.  One of 'assignment', 'attachment', 'discussion_topic', 'external_tool', 'quiz', 'wiki_page', 'syllabus', or 'settings'.  For 'syllabus' or 'settings', the asset_id is the course id.",
 #         "example": "assignment",
 #         "type": "string"
 #       },
@@ -291,6 +291,8 @@ class MasterCourses::MasterTemplatesController < ApplicationController
   # Send a list of course ids to add or remove new associations for the template.
   # Cannot add courses that do not belong to the blueprint course's account. Also cannot add
   # other blueprint courses or courses that already have an association with another blueprint course.
+  #
+  # After associating new courses, {api:MasterCourses::MasterTemplatesController#queue_migration start a sync} to populate their contents from the blueprint.
   #
   # @argument course_ids_to_add [Array]
   #   Courses to add as associated courses
@@ -704,7 +706,7 @@ class MasterCourses::MasterTemplatesController < ApplicationController
       end
     end
     changes << changed_syllabus_json(@course, exceptions) if updated_syllabus
-
+    changes << changed_settings_json(@course) if @mm.migration_settings[:copy_settings]
     render :json => changes
   end
 

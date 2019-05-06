@@ -58,6 +58,7 @@ module Api::V1::DeveloperKey
         hash['account_name'] = key.account_name
         hash['visible'] = key.visible
       end
+      hash['is_lti_key'] = key.public_jwk.present?
       hash['id'] = key.global_id
     end
   end

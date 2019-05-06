@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 - present Instructure, Inc.
+ * Copyright (C) 2018 - present Instructure, Inc.
  *
  * This file is part of Canvas.
  *
@@ -14,10 +14,6 @@
  *
  * You should have received a copy of the GNU Affero General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
-
- <Text as="div" size="small" weight="light">
-   {'Pwning the order'}
- </Text>
  */
 
 import React from 'react'
@@ -35,7 +31,7 @@ const translations = {
   FILE_PLACEHOLDER: I18n.t('Untitled'),
   FINISH: I18n.t('Finish'),
   NO_WEBCAM: I18n.t('No Video'),
-  NOT_ALLOWED_ERROR: I18n.t('Please allow Canvas to access your webcam.'),
+  NOT_ALLOWED_ERROR: I18n.t('Please allow Canvas to access your microphone and webcam.'),
   NOT_READABLE_ERROR: I18n.t('Your webcam may already be in use.'),
   PLAYBACK_PAUSE: I18n.t('Pause'),
   PLAYBACK_PLAY: I18n.t('Play'),

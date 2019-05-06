@@ -16,8 +16,8 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-Types::LegacyNodeType = GraphQL::EnumType.define do
-  name "NodeType"
+class Types::LegacyNodeType < Types::BaseEnum
+  graphql_name "NodeType"
 
   value "Assignment"
   value "AssignmentGroup"
@@ -27,10 +27,15 @@ Types::LegacyNodeType = GraphQL::EnumType.define do
   value "User"
   value "Enrollment"
   value "GradingPeriod"
+  value 'MediaObject'
   value "Module"
+  value "ModuleItem"
   value "Page"
+  value "PostPolicy"
+  value "Progress"
   value "Group"
   value "GroupSet"
+  value "File"
 
 =begin
   # TODO: seems like we should be able to dynamically generate the types that

@@ -673,7 +673,16 @@ Returns the Canvas user_id of the launching user.
 420000000000042
 ```
 ## vnd.instructure.User.uuid [duplicates User.uuid]
-Returns the Canvas user_uuid of the launching user.
+Returns the Canvas user_uuid of the launching user for the context.
+
+**Availability**: *when launched by a logged in user*  
+
+
+```
+N2ST123dQ9zyhurykTkBfXFa3Vn1RVyaw9Os6vu3
+```
+## vnd.instructure.User.current_uuid [duplicates User.uuid]
+Returns the current Canvas user_uuid of the launching user.
 
 **Availability**: *when launched by a logged in user*  
 
@@ -733,6 +742,17 @@ System role urns start with "urn:lti:sysrole" and include roles for the entire s
 
 ```
 urn:lti:instrole:ims/lis/Administrator,urn:lti:instrole:ims/lis/Instructor,urn:lti:sysrole:ims/lis/SysAdmin,urn:lti:sysrole:ims/lis/User
+```
+## com.instructure.User.allRoles
+Same as "Canvas.xuser.allRoles", but uses roles formatted for LTI Advantage.
+
+**Availability**: *always*  
+
+
+```
+ "http://purl.imsglobal.org/vocab/lis/v2/institution/person#Student",
+ "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor",
+ "http://purl.imsglobal.org/vocab/lis/v2/system/person#User"
 ```
 ## Canvas.user.globalId [duplicates Canvas.root_account.global_id]
 Returns the Canvas global user_id of the launching user.

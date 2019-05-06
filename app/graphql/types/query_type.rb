@@ -20,7 +20,7 @@ module Types
   class QueryType < ApplicationObjectType
     graphql_name "Query"
 
-    field :node, field: GraphQL::Relay::Node.field
+    add_field GraphQL::Types::Relay::NodeField
 
     field :legacy_node, GraphQL::Types::Relay::Node, null: true do
       description "Fetches an object given its type and legacy ID"
@@ -66,6 +66,15 @@ module Types
           sort_by! { |enrollment|
             Canvas::ICU.collation_key(enrollment.course.nickname_for(current_user))
           }.map(&:course)
+    end
+
+    field :module_item, Types::ModuleItemType, null: true do
+      description "ModuleItem"
+      argument :id, ID, "a graphql or legacy id", required: true,
+        prepare: GraphQLHelpers.relay_or_legacy_id_prepare_func("ModuleItem")
+    end
+    def module_item(id:)
+      GraphQLNodeLoader.load("ModuleItem", id, context)
     end
   end
 end

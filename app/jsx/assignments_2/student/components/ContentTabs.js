@@ -16,16 +16,20 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import React from 'react'
-import TabList, {TabPanel} from '@instructure/ui-tabs/lib/components/TabList'
-import IconUpload from '@instructure/ui-icons/lib/Solid/IconUpload'
-import IconComment from '@instructure/ui-icons/lib/Line/IconComment'
-import IconRubric from '@instructure/ui-icons/lib/Line/IconRubric'
-import Text from '@instructure/ui-elements/lib/components/Text'
+import ClosedDiscussionSVG from '../SVG/ClosedDiscussions.svg'
+import ContentUploadTab from './ContentUploadTab'
 import Flex, {FlexItem} from '@instructure/ui-layout/lib/components/Flex'
-import View from '@instructure/ui-layout/lib/components/View'
-
+import I18n from 'i18n!assignments_2'
+import LoadingIndicator from '../../shared/LoadingIndicator'
+import React, {lazy, Suspense} from 'react'
 import {StudentAssignmentShape} from '../assignmentData'
+import SVGWithTextPlaceholder from '../../shared/SVGWithTextPlaceholder'
+import TabList, {TabPanel} from '@instructure/ui-tabs/lib/components/TabList'
+import Text from '@instructure/ui-elements/lib/components/Text'
+
+const Comments = lazy(() =>
+  import('./Comments').then(result => (result.default ? result : {default: result}))
+)
 
 ContentTabs.propTypes = {
   assignment: StudentAssignmentShape
@@ -33,61 +37,26 @@ ContentTabs.propTypes = {
 
 function ContentTabs(props) {
   return (
-    <div data-test-id="assignment-2-student-content-tabs">
+    <div data-testid="assignment-2-student-content-tabs">
       <TabList defaultSelectedIndex={0} variant="minimal">
-        <TabPanel
-          title={
-            <Flex as="header" alignItems="center" justifyItems="center" direction="column">
-              <FlexItem>
-                <IconUpload size="small" />
-                <View margin="small">
-                  <Text>Upload</Text>
-                </View>
-              </FlexItem>
-            </Flex>
-          }
-        >
-          <Flex as="header" alignItems="center" justifyItems="center" direction="column">
-            <FlexItem>
-              <Text data-test-id="assignment-2-student-content-tabs-test-text">
-                `TODO: Input Upload Content Here...`
-              </Text>
-            </FlexItem>
-          </Flex>
+        <TabPanel title={I18n.t('Upload')}>
+          <ContentUploadTab />
         </TabPanel>
-        <TabPanel
-          title={
-            <Flex as="header" alignItems="center" justifyItems="center" direction="column">
-              <FlexItem>
-                <IconComment size="small" />
-                <View margin="small">
-                  <Text>Comments</Text>
-                </View>
-              </FlexItem>
-            </Flex>
-          }
-        >
-          <Flex as="header" alignItems="center" justifyItems="center" direction="column">
-            <FlexItem>
-              <Text>
-                {`TODO: Input Comments Content Here... ${props.assignment &&
-                  props.assignment.description}`}
-              </Text>
-            </FlexItem>
-          </Flex>
+        <TabPanel title={I18n.t('Comments')}>
+          {!props.assignment.muted ? (
+            <Suspense fallback={<LoadingIndicator />}>
+              <Comments assignment={props.assignment} />
+            </Suspense>
+          ) : (
+            <SVGWithTextPlaceholder
+              text={I18n.t(
+                'You may not see all comments right now because the assignment is currently being graded.'
+              )}
+              url={ClosedDiscussionSVG}
+            />
+          )}
         </TabPanel>
-        <TabPanel
-          title={
-            <Flex as="header" alignItems="center" justifyItems="center" direction="column">
-              <FlexItem>
-                <IconRubric size="small" />
-                <View margin="small">
-                  <Text>Rubric</Text>
-                </View>
-              </FlexItem>
-            </Flex>
-          }
-        >
+        <TabPanel title={I18n.t('Rubric')}>
           <Flex as="header" alignItems="center" justifyItems="center" direction="column">
             <FlexItem>
               <Text>`TODO: Input Rubric Content Here...`</Text>

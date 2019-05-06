@@ -73,16 +73,22 @@ module Api::V1::SubmissionComment
 
     submission_comments.map do |comment|
       json = comment.as_json(include_root: false, methods: comment_methods, only: ANONYMOUS_MODERATED_JSON_ATTRIBUTES)
-      author_id = comment.author_id.to_s
-
       json[:publishable] = comment.publishable_for?(current_user)
-      if (
-          anonymous_students?(current_user: current_user, assignment: assignment) &&
-          student_ids_to_anonymous_ids(current_user: current_user, submissions: submissions, assignment: assignment, course: course).key?(author_id)
+      author_id = comment.author_id.to_s
+      student_anonymous_ids = student_ids_to_anonymous_ids(
+        assignment: assignment,
+        course: course,
+        current_user: current_user,
+        submissions: submissions
       )
+
+      if anonymous_students?(current_user: current_user, assignment: assignment) &&
+          student_anonymous_ids.key?(author_id) &&
+          comment.author != current_user
+
         json.delete(:author_id)
         json.delete(:author_name)
-        json[:anonymous_id] = student_ids_to_anonymous_ids(current_user: current_user, submissions: submissions, assignment: assignment, course: course)[author_id]
+        json[:anonymous_id] = student_anonymous_ids[author_id]
         json[:avatar_path] = User.default_avatar_fallback if display_avatars
       elsif anonymous_graders?(current_user: current_user, assignment: assignment) && assignment.grader_ids_to_anonymous_ids.key?(author_id)
         json.delete(:author_id)
@@ -117,9 +123,16 @@ module Api::V1::SubmissionComment
   def student_ids_to_anonymous_ids(current_user:, assignment:, course:, submissions:)
     return @student_ids_to_anonymous_ids if defined? @student_ids_to_anonymous_ids
     # ensure each student has membership, even without a submission
-    students = students(current_user: current_user, assignment: assignment, course: course)
-    @student_ids_to_anonymous_ids = students.each_with_object({}) {|student, map| map[student.id.to_s] = nil}
-    submissions.each do |submission|
+    student_ids = students(current_user: current_user, assignment: assignment, course: course).pluck(:id)
+    @student_ids_to_anonymous_ids = student_ids.each_with_object({}) {|student_id, map| map[student_id.to_s] = nil}
+    missing_student_ids = student_ids - submissions.map(&:user_id)
+    missing_submissions = if missing_student_ids.empty?
+      []
+    else
+      Submission.where(assignment: assignment, user_id: missing_student_ids)
+    end
+
+    (submissions + missing_submissions).each do |submission|
       @student_ids_to_anonymous_ids[submission.user_id.to_s] = submission.anonymous_id
     end
     @student_ids_to_anonymous_ids

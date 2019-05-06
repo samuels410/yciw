@@ -18,55 +18,73 @@
 
 import React from 'react'
 import PropTypes from 'prop-types'
-import GradingStandardCollection from '../grading/gradingStandardCollection'
-import GradingPeriodSetCollection from '../grading/GradingPeriodSetCollection'
+import GradingStandardCollection from './gradingStandardCollection'
+import GradingPeriodSetCollection from './GradingPeriodSetCollection'
 import $ from 'jquery'
 import I18n from 'i18n!grading_periods'
-  const { bool, string, shape } = PropTypes;
 
-  class AccountTabContainer extends React.Component {
-    static propTypes = {
-      readOnly: bool.isRequired,
-      urls: shape({
-        gradingPeriodSetsURL: string.isRequired,
-        gradingPeriodsUpdateURL: string.isRequired,
-        enrollmentTermsURL: string.isRequired,
-        deleteGradingPeriodURL: string.isRequired
-      }).isRequired,
-    }
+const {bool, string, shape} = PropTypes
 
-    componentDidMount () {
-      $(this.tabContainer).children('.ui-tabs-minimal').tabs();
-    }
+class AccountTabContainer extends React.Component {
+  static propTypes = {
+    readOnly: bool.isRequired,
+    urls: shape({
+      gradingPeriodSetsURL: string.isRequired,
+      gradingPeriodsUpdateURL: string.isRequired,
+      enrollmentTermsURL: string.isRequired,
+      deleteGradingPeriodURL: string.isRequired
+    }).isRequired
+  }
 
-    render () {
-      return (
-        <div ref={(el) => { this.tabContainer = el; }}>
-          <h1>{I18n.t('Grading')}</h1>
-          <div className="ui-tabs-minimal">
-            <ul>
-              <li><a href="#grading-periods-tab" className="grading_periods_tab"> {I18n.t('Grading Periods')}</a></li>
-              <li><a href="#grading-standards-tab" className="grading_standards_tab"> {I18n.t('Grading Schemes')}</a></li>
-            </ul>
-            <div
-              ref={(el) => { this.gradingPeriods = el; }}
-              id="grading-periods-tab"
-            >
-              <GradingPeriodSetCollection
-                urls={this.props.urls}
-                readOnly={this.props.readOnly}
-              />
-            </div>
-            <div
-              ref={(el) => { this.gradingStandards = el; }}
-              id="grading-standards-tab"
-            >
-              <GradingStandardCollection />
-            </div>
+  componentDidMount() {
+    $(this.tabContainer)
+      .children('.ui-tabs-minimal')
+      .tabs()
+  }
+
+  render() {
+    return (
+      <div
+        ref={el => {
+          this.tabContainer = el
+        }}
+      >
+        <h1>{I18n.t('Grading')}</h1>
+        <div className="ui-tabs-minimal">
+          <ul>
+            <li>
+              <a href="#grading-periods-tab" className="grading_periods_tab">
+                {' '}
+                {I18n.t('Grading Periods')}
+              </a>
+            </li>
+            <li>
+              <a href="#grading-standards-tab" className="grading_standards_tab">
+                {' '}
+                {I18n.t('Grading Schemes')}
+              </a>
+            </li>
+          </ul>
+          <div
+            ref={el => {
+              this.gradingPeriods = el
+            }}
+            id="grading-periods-tab"
+          >
+            <GradingPeriodSetCollection urls={this.props.urls} readOnly={this.props.readOnly} />
+          </div>
+          <div
+            ref={el => {
+              this.gradingStandards = el
+            }}
+            id="grading-standards-tab"
+          >
+            <GradingStandardCollection />
           </div>
         </div>
-      );
-    }
+      </div>
+    )
   }
+}
 
 export default AccountTabContainer

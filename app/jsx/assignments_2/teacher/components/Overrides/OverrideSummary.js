@@ -19,6 +19,8 @@
 import React from 'react'
 import I18n from 'i18n!assignments_2'
 import {OverrideShape} from '../../assignmentData'
+import OverrideAttempts from './OverrideAttempts'
+import OverrideAssignTo from './OverrideAssignTo'
 import OverrideSubmissionTypes from './OverrideSubmissionTypes'
 import TeacherViewContext from '../TeacherViewContext'
 import AvailabilityDates from '../../../shared/AvailabilityDates'
@@ -27,6 +29,7 @@ import FriendlyDatetime from '../../../../shared/FriendlyDatetime'
 import Flex, {FlexItem} from '@instructure/ui-layout/lib/components/Flex'
 import Text from '@instructure/ui-elements/lib/components/Text'
 import View from '@instructure/ui-layout/lib/components/View'
+import Responsive from '@instructure/ui-layout/lib/components/Responsive'
 
 export default class OverrideSummary extends React.Component {
   static contextType = TeacherViewContext
@@ -39,8 +42,8 @@ export default class OverrideSummary extends React.Component {
     return <Text weight="bold">{override.title}</Text>
   }
 
-  renderAttemptsAllowed() {
-    const allowed = this.props.override.allowedAttempts
+  renderAttemptsAllowed(override) {
+    const allowed = override.allowedAttempts
     const attempts = Number.isInteger(allowed) ? allowed : 1
     return <Text>{I18n.t({one: '1 Attempt', other: '%{count} Attempts'}, {count: attempts})}</Text>
   }
@@ -48,7 +51,7 @@ export default class OverrideSummary extends React.Component {
   renderSubmissionTypesAndDueDate(override) {
     return (
       <Text>
-        <OverrideSubmissionTypes variant="simple" override={this.props.override} />
+        <OverrideSubmissionTypes variant="summary" override={override} />
         <Text> | </Text>
         <FriendlyDatetime
           prefix={I18n.t('Due: ')}
@@ -72,24 +75,57 @@ export default class OverrideSummary extends React.Component {
     const override = this.props.override
     if (override) {
       return (
-        <View as="div">
-          <Flex justifyItems="space-between">
-            <FlexItem grow>
-              <Flex direction="column">
-                <FlexItem>{this.renderTitle(override)}</FlexItem>
-                <FlexItem>{this.renderAttemptsAllowed(override)}</FlexItem>
-              </Flex>
-            </FlexItem>
-            <FlexItem>
-              <Flex direction="column" textAlign="end" justifyItems="end">
-                <FlexItem>{this.renderSubmissionTypesAndDueDate(override)}</FlexItem>
-                <FlexItem>{this.renderAvailability(override)}</FlexItem>
-              </Flex>
-            </FlexItem>
-          </Flex>
-        </View>
+        <Responsive
+          match="media"
+          query={{
+            largerScreen: {minWidth: '36rem'}
+          }}
+        >
+          {(props, matches) => {
+            const largerScreen = matches.includes('largerScreen')
+
+            const leftColumn = (
+              <View display="block" margin={largerScreen ? '0' : '0 0 small'}>
+                <View display="block" margin="0 0 xxx-small">
+                  <OverrideAssignTo override={override} variant="summary" />
+                </View>
+                <View display="block">
+                  <OverrideAttempts override={override} variant="summary" />
+                </View>
+              </View>
+            )
+
+            const rightColumn = (
+              <View display="block">
+                <View display="block" margin="0 0 xxx-small">
+                  {this.renderSubmissionTypesAndDueDate(override)}
+                </View>
+                <View display="block">{this.renderAvailability(override)}</View>
+              </View>
+            )
+
+            return (
+              <View as="div" data-testid="OverrideSummary">
+                {largerScreen ? (
+                  <Flex justifyItems="space-between">
+                    <FlexItem grow shrink>
+                      {leftColumn}
+                    </FlexItem>
+                    <FlexItem textAlign="end">{rightColumn}</FlexItem>
+                  </Flex>
+                ) : (
+                  <View display="block">
+                    {leftColumn}
+                    {rightColumn}
+                  </View>
+                )}
+              </View>
+            )
+          }}
+        </Responsive>
       )
+    } else {
+      return <View as="div" />
     }
-    return <View as="div" />
   }
 }

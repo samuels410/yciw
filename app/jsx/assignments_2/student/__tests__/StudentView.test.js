@@ -16,13 +16,11 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 import React from 'react'
-import ReactDOM from 'react-dom'
-import $ from 'jquery'
 import {mockAssignment} from '../test-utils'
 import {MockedProvider} from 'react-apollo/test-utils'
 import StudentView from '../StudentView'
-import {STUDENT_VIEW_QUERY} from '../assignmentData'
-import wait from 'waait'
+import {GetAssignmentEnvVariables, STUDENT_VIEW_QUERY} from '../assignmentData'
+import {render, waitForElement} from 'react-testing-library'
 
 const mocks = [
   {
@@ -40,27 +38,74 @@ const mocks = [
   }
 ]
 
-beforeAll(() => {
-  const found = document.getElementById('fixtures')
-  if (!found) {
-    const fixtures = document.createElement('div')
-    fixtures.setAttribute('id', 'fixtures')
-    document.body.appendChild(fixtures)
-  }
+describe('StudentView', () => {
+  it('renders normally', async () => {
+    const {getByTestId} = render(
+      <MockedProvider mocks={mocks} removeTypename addTypename>
+        <StudentView assignmentLid="7" />
+      </MockedProvider>
+    )
+    expect(
+      await waitForElement(() => getByTestId('assignments-2-student-view'))
+    ).toBeInTheDocument()
+  })
+
+  it('renders default env correctly', async () => {
+    const defaultEnv = GetAssignmentEnvVariables()
+
+    expect(defaultEnv).toEqual({
+      assignmentUrl: '',
+      currentUserId: null,
+      modulePrereq: null,
+      moduleUrl: ''
+    })
+  })
+
+  it('renders with env params set', async () => {
+    window.ENV = {
+      context_asset_string: 'test_1',
+      current_user_id: '1',
+      PREREQS: {}
+    }
+
+    const env = GetAssignmentEnvVariables()
+
+    expect(env).toEqual({
+      assignmentUrl: 'http://localhost/tests/1/assignments',
+      currentUserId: '1',
+      modulePrereq: null,
+      moduleUrl: 'http://localhost/tests/1/modules'
+    })
+  })
+
+  it('renders loading', async () => {
+    const {getByTitle} = render(
+      <MockedProvider mocks={mocks} removeTypename addTypename>
+        <StudentView assignmentLid="7" />
+      </MockedProvider>
+    )
+
+    expect(getByTitle('Loading')).toBeInTheDocument()
+  })
 })
 
-afterEach(() => {
-  ReactDOM.unmountComponentAtNode(document.getElementById('fixtures'))
-})
-
-it('renders normally', async () => {
-  ReactDOM.render(
-    <MockedProvider mocks={mocks} removeTypename addTypename>
+it('renders error', async () => {
+  const errorMock = [
+    {
+      request: {
+        query: STUDENT_VIEW_QUERY,
+        variables: {
+          assignmentLid: '7'
+        }
+      },
+      error: new Error('aw shucks')
+    }
+  ]
+  const {getByText} = render(
+    <MockedProvider mocks={errorMock} removeTypename addTypename>
       <StudentView assignmentLid="7" />
-    </MockedProvider>,
-    document.getElementById('fixtures')
+    </MockedProvider>
   )
-  await wait(0) // wait for response
-  const element = $('[data-test-id="assignments-2-student-view"]')
-  expect(element).toHaveLength(1)
+
+  expect(await waitForElement(() => getByText('Something broke unexpectedly.'))).toBeInTheDocument()
 })

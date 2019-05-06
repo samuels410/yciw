@@ -86,7 +86,7 @@ const dropTarget = {
     if (dragIndex === hoverIndex) {
       return
     }
-    const hoverBoundingRect = findDOMNode(component).getBoundingClientRect() // eslint-disable-line
+    const hoverBoundingRect = findDOMNode(component).getBoundingClientRect()
     const hoverMiddleY = (hoverBoundingRect.bottom - hoverBoundingRect.top) / 2
     const clientOffset = monitor.getClientOffset()
     const hoverClientY = clientOffset.y - hoverBoundingRect.top
@@ -129,7 +129,7 @@ export class DiscussionRow extends Component {
     isDragging: bool,
     isMasterCourse: bool.isRequired,
     masterCourseData: masterCourseDataShape,
-    moveCard: func, // eslint-disable-line
+    moveCard: func,
     onMoveDiscussion: func,
     toggleSubscriptionState: func.isRequired,
     updateDiscussion: func.isRequired
@@ -211,11 +211,10 @@ export class DiscussionRow extends Component {
           'manageMenu'
         )
         break
-     case 'masterypaths': // eslint-disable-line
-        const returnTo = encodeURIComponent(window.location.pathname)
+      case 'masterypaths':
         window.location = `discussion_topics/${
           this.props.discussion.id
-        }/edit?return_to=${returnTo}#mastery-paths-editor`
+        }/edit?return_to=${encodeURIComponent(window.location.pathname)}#mastery-paths-editor`
         break
       case 'ltiMenuTool':
         window.location = `${menuTool.base_url}&discussion_topics[]=${id}`
@@ -388,13 +387,15 @@ export class DiscussionRow extends Component {
     if (this.props.discussion.pinned) {
       return (
         <span aria-hidden="true">
-          <IconPinLine />&nbsp;&nbsp;{I18n.t('Unpin')}
+          <IconPinLine />
+          &nbsp;&nbsp;{I18n.t('Unpin')}
         </span>
       )
     } else {
       return (
         <span aria-hidden="true">
-          <IconPinSolid />&nbsp;&nbsp;{I18n.t('Pin')}
+          <IconPinSolid />
+          &nbsp;&nbsp;{I18n.t('Pin')}
         </span>
       )
     }
@@ -422,19 +423,22 @@ export class DiscussionRow extends Component {
     if (menuTool.canvas_icon_class) {
       return (
         <span>
-          <i className={menuTool.canvas_icon_class} />&nbsp;&nbsp;{menuTool.title}
+          <i className={menuTool.canvas_icon_class} />
+          &nbsp;&nbsp;{menuTool.title}
         </span>
       )
     } else if (menuTool.icon_url) {
       return (
         <span>
-          <img className="icon" alt="" src={menuTool.icon_url} />&nbsp;&nbsp;{menuTool.title}
+          <img className="icon" alt="" src={menuTool.icon_url} />
+          &nbsp;&nbsp;{menuTool.title}
         </span>
       )
     } else {
       return (
         <span>
-          <IconLtiLine />&nbsp;&nbsp;{menuTool.title}
+          <IconLtiLine />
+          &nbsp;&nbsp;{menuTool.title}
         </span>
       )
     }
@@ -477,7 +481,8 @@ export class DiscussionRow extends Component {
         this.createMenuItem(
           'moveTo',
           <span aria-hidden="true">
-            <IconUpdownLine />&nbsp;&nbsp;{I18n.t('Move To')}
+            <IconUpdownLine />
+            &nbsp;&nbsp;{I18n.t('Move To')}
           </span>,
           I18n.t('Move discussion %{title}', {title: discussionTitle})
         )
@@ -489,7 +494,8 @@ export class DiscussionRow extends Component {
         this.createMenuItem(
           'duplicate',
           <span aria-hidden="true">
-            <IconCopySolid />&nbsp;&nbsp;{I18n.t('Duplicate')}
+            <IconCopySolid />
+            &nbsp;&nbsp;{I18n.t('Duplicate')}
           </span>,
           I18n.t('Duplicate discussion %{title}', {title: discussionTitle})
         )
@@ -532,7 +538,8 @@ export class DiscussionRow extends Component {
         this.createMenuItem(
           'delete',
           <span aria-hidden="true">
-            <IconTrashSolid />&nbsp;&nbsp;{I18n.t('Delete')}
+            <IconTrashSolid />
+            &nbsp;&nbsp;{I18n.t('Delete')}
           </span>,
           I18n.t('Delete discussion %{title}', {title: discussionTitle})
         )
@@ -606,7 +613,7 @@ export class DiscussionRow extends Component {
   }
 
   renderDueDate = () => {
-    const assignment = this.props.discussion.assignment // eslint-disable-line
+    const assignment = this.props.discussion.assignment
     let dueDateString = null
     let className = ''
     if (assignment && assignment.due_at) {
@@ -653,7 +660,7 @@ export class DiscussionRow extends Component {
   }
 
   renderUpperRightBadges = () => {
-    const assignment = this.props.discussion.assignment // eslint-disable-line
+    const assignment = this.props.discussion.assignment
     const peerReview = assignment ? assignment.peer_reviews : false
     const maybeRenderPeerReviewIcon = peerReview ? (
       <span className="ic-item-row__peer_review">
@@ -770,7 +777,7 @@ export class DiscussionRow extends Component {
     const contentWrapper = document.createElement('span')
     contentWrapper.innerHTML = this.props.discussion.message
 
-    return this.props.connectDragPreview(
+    return (
       <div>
         <Grid startAt="medium" vAlign="middle" colSpacing="none">
           <GridRow>

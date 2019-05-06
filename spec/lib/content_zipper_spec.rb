@@ -208,11 +208,12 @@ describe ContentZipper do
       end
     end
 
-    it 'only includes un-deleted attachments' do
+    it 'excludes deleted attachments' do
       course_with_student(active_all: true)
 
       assignment = assignment_model(course: @course)
       att = attachment_model(uploaded_data: stub_file_data('test.txt', 'asdf', 'text/plain'), context: @student)
+      submission_model(user: @student, assignment: assignment, attachments: [att])
       att.destroy
 
       attachment = Attachment.new(display_name: 'my_download.zip')
@@ -222,15 +223,25 @@ describe ContentZipper do
       attachment.save!
 
       ContentZipper.process_attachment(attachment, @teacher)
+      expect(Zip::File.new(attachment.open).entries.count).to eq 0
+    end
 
-      # assert no submissions
-      submission_count = 0
-      full_filename = attachment.full_filename
-      Zip::File.foreach(full_filename) do
-        submission_count += 1
-      end
+    it 'strips harmful characters from submission filenames' do
+      course_with_student(active_all: true)
 
-      expect(submission_count).to eq 0
+      assignment = assignment_model(course: @course)
+      att = attachment_model(uploaded_data: stub_file_data('A/V??.txt', 'a/v', 'text/plain'), context: @student)
+      submission_model(user: @student, assignment: assignment, attachments: [att])
+
+      attachment = Attachment.new(display_name: 'my_download.zip')
+      attachment.user = @teacher
+      attachment.workflow_state = 'to_be_zipped'
+      attachment.context = assignment
+      attachment.save!
+
+      ContentZipper.process_attachment(attachment, @teacher)
+      entry = Zip::File.new(attachment.open).entries.first
+      expect(entry.name).to end_with 'A_V_.txt'
     end
   end
 
@@ -454,7 +465,32 @@ describe ContentZipper do
       end
       attachment.save!
       expect {
-        ContentZipper.zip_eportfolio(attachment, eportfolio)
+        ContentZipper.new.zip_eportfolio(attachment, eportfolio)
+      }.to_not raise_error
+    end
+
+    it "does not process attachments that user cannot see" do
+      course_with_student(active_all: true)
+      folder = Folder.root_folders(@course).first
+      attachment_model(uploaded_data: stub_png_data('hidden.png'),
+                       content_type: 'image/png', folder: folder, display_name: 'hidden.png')
+
+      user = User.create!
+      eportfolio = user.eportfolios.create!(name: 'an name')
+      eportfolio.ensure_defaults
+      entry = eportfolio.eportfolio_entries.first
+      entry.parse_content({:section_count => 1, :section_1 => {:section_type => 'rich_text', :content => "/files/#{@attachment.id}/download"}})
+      entry.save!
+      attachment = eportfolio.attachments.build do |attachment|
+        attachment.display_name = 'an_attachment'
+        attachment.user = user
+        attachment.workflow_state = 'to_be_zipped'
+      end
+      attachment.save!
+      expect(Attachment).to receive(:find_by_id).with(@attachment.id.to_s)
+      expect(ContentZipper::StaticAttachment).to_not receive(:new)
+      expect {
+        ContentZipper.new.zip_eportfolio(attachment, eportfolio)
       }.to_not raise_error
     end
 

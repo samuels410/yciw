@@ -111,8 +111,10 @@ module FilesCommon
         driver.find_elements(:name, 'restrict_options')[1].click
         ff('.ui-datepicker-trigger.btn')[0].click
         fln("15").click
+        ff('.ui-datepicker-trigger.btn')[0].send_keys(:enter) # close the calendar
         ff('.ui-datepicker-trigger.btn')[1].click
         fln("25").click
+        ff('.ui-datepicker-trigger.btn')[1].send_keys(:enter) # close the calendar
       end
     end
     ff('.btn.btn-primary')[1].click
@@ -168,7 +170,7 @@ module FilesCommon
 
   def create_new_folder
     f('.btn-add-folder').click
-    f('.ef-edit-name-form').submit
+    f("input[aria-label='Folder Name']").send_keys(:return)
     wait_for_ajaximations
     all_files_folders.first
   end

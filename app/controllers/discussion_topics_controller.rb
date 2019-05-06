@@ -391,7 +391,7 @@ class DiscussionTopicsController < ApplicationController
           },
           discussion_topic_menu_tools: external_tools_display_hashes(:discussion_topic_menu),
         }
-        if @context.is_a?(Course) && @context.grants_right?(@current_user, session, :read) && !@js_env[:COURSE_ID].present?
+        if @context.is_a?(Course) && @context.grants_right?(@current_user, session, :read) && @js_env&.dig(:COURSE_ID).blank?
           hash[:COURSE_ID] = @context.id.to_s
         end
         conditional_release_js_env(includes: :active_rules)
@@ -430,7 +430,6 @@ class DiscussionTopicsController < ApplicationController
   end
 
   def announcements_locked?
-    return true if @context.account.lock_all_announcements[:locked]
     return false unless @context.is_a?(Course)
     @context.lock_all_announcements?
   end
@@ -452,6 +451,7 @@ class DiscussionTopicsController < ApplicationController
     return unless authorized_action(@topic, @current_user, (@topic.new_record? ? :create : :update))
     return render_unauthorized_action unless @topic.visible_for?(@current_user)
 
+    @context.try(:require_assignment_group)
     can_set_group_category = @context.respond_to?(:group_categories) && @context.grants_right?(@current_user, session, :manage) # i.e. not a student
     hash =  {
       URL_ROOT: named_context_url(@context, :api_v1_context_discussion_topics_url),
@@ -727,8 +727,8 @@ class DiscussionTopicsController < ApplicationController
               @assignment_presenter.can_view_speed_grader_link?(@current_user)
               env_hash[:SPEEDGRADER_URL_TEMPLATE] = named_context_url(@topic.assignment.context,
                                                                       :speed_grader_context_gradebook_url,
-                                                                      :assignment_id => @topic.assignment.id,
-                                                                      :anchor => {:student_id => ":student_id"}.to_json)
+                                                                      assignment_id: @topic.assignment.id,
+                                                                      student_id: ":student_id")
             end
 
             js_hash = {:DISCUSSION => env_hash}

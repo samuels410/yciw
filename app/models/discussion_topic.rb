@@ -37,7 +37,7 @@ class DiscussionTopic < ActiveRecord::Base
   include LockedFor
 
   restrict_columns :content, [:title, :message]
-  restrict_columns :settings, [:delayed_post_at, :require_initial_post, :discussion_type,
+  restrict_columns :settings, [:delayed_post_at, :require_initial_post, :discussion_type, :assignment_id,
                                :lock_at, :pinned, :locked, :allow_rating, :only_graders_can_rate, :sort_by_rating]
   restrict_columns :state, [:workflow_state]
   restrict_assignment_columns
@@ -272,7 +272,15 @@ class DiscussionTopic < ActiveRecord::Base
     end
     if @old_assignment_id
       Assignment.where(:id => @old_assignment_id, :context_id => self.context_id, :context_type => self.context_type, :submission_types => 'discussion_topic').update_all(:workflow_state => 'deleted', :updated_at => Time.now.utc)
-      ContentTag.delete_for(Assignment.find(@old_assignment_id)) if @old_assignment_id
+      old_assignment = Assignment.find(@old_assignment_id)
+      ContentTag.delete_for(old_assignment)
+      # prevent future syncs from recreating the deleted assignment
+      if is_child_content?
+        old_assignment.submission_types = 'none'
+        context.master_course_subscriptions.each do |sub|
+          sub.create_content_tag_for!(old_assignment, :downstream_changes => ['workflow_state'])
+        end
+      end
     elsif self.assignment && @saved_by != :assignment && !self.root_topic_id
       deleted_assignment = self.assignment.deleted?
       self.sync_assignment
@@ -679,7 +687,7 @@ class DiscussionTopic < ActiveRecord::Base
   end
 
   scope :visible_to_student_sections, -> (student) {
-    visibility_scope = DiscussionTopicSectionVisibility.
+    visibility_scope = DiscussionTopicSectionVisibility.active.
       where("discussion_topic_section_visibilities.discussion_topic_id = discussion_topics.id").
       where("EXISTS (?)", Enrollment.active_or_pending.where(:user_id => student).
         where("enrollments.course_section_id = discussion_topic_section_visibilities.course_section_id")
@@ -1102,17 +1110,25 @@ class DiscussionTopic < ActiveRecord::Base
     tags_to_update = self.context_module_tags.to_a
     if self.for_assignment?
       tags_to_update += self.assignment.context_module_tags
-      self.ensure_submission(user) if context.grants_right?(user, :participate_as_student) && assignment.visible_to_user?(user) && action == :contributed
+      if context.grants_right?(user, :participate_as_student) && assignment.visible_to_user?(user) && [:contributed, :deleted].include?(action)
+        only_update = (action == :deleted) # if we're deleting an entry, don't make a submission if it wasn't there already
+        self.ensure_submission(user, only_update)
+      end
     end
-    tags_to_update.each { |tag| tag.context_module_action(user, action, points) }
+    unless action == :deleted
+      tags_to_update.each { |tag| tag.context_module_action(user, action, points) }
+    end
   end
 
-  def ensure_submission(user)
-    submission = Submission.active.where(assignment_id: self.assignment_id, user_id: user).first
-    unless submission && submission.submission_type == 'discussion_topic' && submission.workflow_state != 'unsubmitted'
-      submission = self.assignment.submit_homework(user, :submission_type => 'discussion_topic')
-    end
+  def ensure_submission(user, only_update=false)
     topic = self.root_topic? ? self.child_topic_for(user) : self
+
+    submission = Submission.active.where(assignment_id: self.assignment_id, user_id: user).first
+    unless only_update || (submission && submission.submission_type == 'discussion_topic' && submission.workflow_state != 'unsubmitted')
+      submission = self.assignment.submit_homework(user, :submission_type => 'discussion_topic',
+        :submitted_at => topic && topic.discussion_entries.active.where(:user_id => user).minimum(:created_at))
+    end
+    return unless submission
     if topic
       attachment_ids = topic.discussion_entries.active.where(:user_id => user).where.not(:attachment_id => nil).pluck(:attachment_id)
       submission.attachment_ids = attachment_ids.sort.map(&:to_s).join(",")

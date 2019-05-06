@@ -27,6 +27,11 @@ describe Course do
 
   describe 'relationships' do
     it { is_expected.to have_one(:late_policy).dependent(:destroy).inverse_of(:course) }
+
+    it { is_expected.to have_many(:post_policies).dependent(:destroy).inverse_of(:course) }
+    it { is_expected.to have_one(:default_post_policy).inverse_of(:course) }
+    it { is_expected.to have_many(:assignment_post_policies).inverse_of(:course) }
+
     it { is_expected.to have_many(:feature_flags) }
   end
 
@@ -217,6 +222,33 @@ describe Course do
     it 'excludes admins' do
       admin = account_admin_user
       expect(@course.moderators).not_to include admin
+    end
+  end
+
+  describe "#allow_final_grade_override?" do
+    before :once do
+      @course = Account.default.courses.create!
+      @course.root_account.enable_feature!(:new_gradebook)
+      @course.enable_feature!(:new_gradebook)
+    end
+
+    before :each do
+      @course.enable_feature!(:final_grades_override)
+      @course.allow_final_grade_override = true
+    end
+
+    it "returns true when the feature is enabled and the setting is allowed" do
+      expect(@course.allow_final_grade_override?).to be true
+    end
+
+    it "returns false when the feature is enabled and the setting is not allowed" do
+      @course.allow_final_grade_override = false
+      expect(@course.allow_final_grade_override?).to be false
+    end
+
+    it "returns false when the feature is disabled" do
+      @course.disable_feature!(:final_grades_override)
+      expect(@course.allow_final_grade_override?).to be false
     end
   end
 
@@ -600,6 +632,17 @@ describe Course do
       expect(new_course).to_not be_valid
       new_course.integration_id = nil
       expect(new_course).to be_valid
+    end
+
+    it "should validate the license" do
+      course = course_factory
+      course.license = 'blah'
+      course.save!
+      expect(course.reload.license).to eq 'private'
+
+      course.license = 'cc_by_sa'
+      course.save!
+      expect(course.reload.license).to eq 'cc_by_sa'
     end
   end
 
@@ -1142,6 +1185,16 @@ describe Course do
       expect(@course.uuid).not_to eq @new_course.uuid
       expect(@course.replacement_course_id).to eq @new_course.id
     end
+
+    it "should transfer favorites with the enrollments" do
+      student_in_course(:course => @course)
+      fav = @student.favorites.create!(:context => @course)
+
+      @course.reload
+
+      @new_course = @course.reset_content
+      expect(fav.reload.context).to eq @new_course
+    end
   end
 
   context "group_categories" do
@@ -1201,6 +1254,32 @@ describe Course do
 
     it 'returns nil if no quiz LTI tool is configured' do
       expect(@course.quiz_lti_tool).to be nil
+    end
+  end
+
+  describe "#post_manually?" do
+    let_once(:course) { Course.create! }
+
+    context "when post policies are enabled" do
+      before(:once) { course.enable_feature!(:post_policies) }
+
+      it "returns true if a policy with manual posting is attached to the course" do
+        course.post_policies.create!(post_manually: true)
+        expect(course).to be_post_manually
+      end
+
+      it "returns false if a policy without manual posting is attached to the course" do
+        course.post_policies.create!(post_manually: false)
+        expect(course).not_to be_post_manually
+      end
+
+      it "returns false if no policy is attached to the course" do
+        expect(course).not_to be_post_manually
+      end
+    end
+
+    it "returns false when post policies are not enabled" do
+      expect(course).not_to be_post_manually
     end
   end
 end
@@ -2730,7 +2809,10 @@ describe Course, 'grade_publishing' do
         enrollments = [double(), double()]
         publishing_pseudonym = double()
         publishing_user = double()
-        expect(course).to receive(:generate_grade_publishing_csv_output).with(enrollments, publishing_user, publishing_pseudonym).and_return 42
+        allow(course).to receive(:allow_final_grade_override?).and_return false
+        expect(course).to receive(:generate_grade_publishing_csv_output).with(
+          enrollments, publishing_user, publishing_pseudonym, include_final_grade_overrides: false
+        ).and_return 42
         expect(Course.valid_grade_export_types["instructure_csv"][:callback].call(course,
             enrollments, publishing_user, publishing_pseudonym)).to eq 42
         expect(Course.valid_grade_export_types["instructure_csv"][:requires_grading_standard]).to be_falsey
@@ -3077,7 +3159,7 @@ describe Course, 'grade_publishing' do
         a1 = @course.assignments.create!(:title => "A1", :points_possible => 10)
         a2 = @course.assignments.create!(:title => "A2", :points_possible => 10)
         @course.enroll_teacher(@user).tap{|e| e.workflow_state = 'active'; e.save!}
-        @ase = @student_enrollments.find_all(&:active?)
+        @ase = @course.student_enrollments.active
 
         add_pseudonym(@ase[2], Account.default, "student2", nil)
         add_pseudonym(@ase[3], Account.default, "student3", "student3")
@@ -3107,7 +3189,7 @@ describe Course, 'grade_publishing' do
 
       it 'should generate valid csv without a grading standard' do
         @course.recompute_student_scores_without_send_later
-        expect(@course.generate_grade_publishing_csv_output(@ase.map(&:reload), @user, @pseudonym)).to eq [
+        expect(@course.generate_grade_publishing_csv_output(@ase, @user, @pseudonym)).to eq [
           [@ase.map(&:id),
                ("publisher_id,publisher_sis_id,course_id,course_sis_id,section_id,section_sis_id," +
                 "student_id,student_sis_id,enrollment_id,enrollment_status," +
@@ -3128,7 +3210,7 @@ describe Course, 'grade_publishing' do
 
       it 'should generate valid csv without a publishing pseudonym' do
         @course.recompute_student_scores_without_send_later
-        expect(@course.generate_grade_publishing_csv_output(@ase.map(&:reload), @user, nil)).to eq [
+        expect(@course.generate_grade_publishing_csv_output(@ase, @user, nil)).to eq [
           [@ase.map(&:id),
                ("publisher_id,publisher_sis_id,course_id,course_sis_id,section_id,section_sis_id," +
                 "student_id,student_sis_id,enrollment_id,enrollment_status," +
@@ -3151,7 +3233,7 @@ describe Course, 'grade_publishing' do
         @course_section.sis_source_id = "section1"
         @course_section.save!
         @course.recompute_student_scores_without_send_later
-        expect(@course.generate_grade_publishing_csv_output(@ase.map(&:reload), @user, @pseudonym)).to eq [
+        expect(@course.generate_grade_publishing_csv_output(@ase, @user, @pseudonym)).to eq [
           [@ase.map(&:id),
                ("publisher_id,publisher_sis_id,course_id,course_sis_id,section_id,section_sis_id," +
                 "student_id,student_sis_id,enrollment_id,enrollment_status," +
@@ -3174,7 +3256,7 @@ describe Course, 'grade_publishing' do
         @course.grading_standard_id = 0
         @course.save!
         @course.recompute_student_scores_without_send_later
-        expect(@course.generate_grade_publishing_csv_output(@ase.map(&:reload), @user, @pseudonym)).to eq [
+        expect(@course.generate_grade_publishing_csv_output(@ase, @user, @pseudonym)).to eq [
           [@ase.map(&:id),
                ("publisher_id,publisher_sis_id,course_id,course_sis_id,section_id,section_sis_id," +
                 "student_id,student_sis_id,enrollment_id,enrollment_status," +
@@ -3216,6 +3298,104 @@ describe Course, 'grade_publishing' do
                 "#{@user.id},U1,#{@course.id},,#{@ase[7].course_section_id},,#{@ase[7].user.id},student7b,#{@ase[7].id},active,85.0,B\n"),
            "text/csv"]
         ]
+      end
+
+      context "when including final grade overrides" do
+        before(:once) do
+          @course.update!(grading_standard_id: 0)
+        end
+
+        before(:each) do
+          @course.enable_feature!(:final_grades_override)
+          @course.update!(allow_final_grade_override: true)
+        end
+
+        def csv_output
+          @course.generate_grade_publishing_csv_output(
+            @ase,
+            @user,
+            @pseudonym,
+            include_final_grade_overrides: true
+          )
+        end
+
+        it "does not use the final grade override if final grades override feature is not allowed" do
+          @ase[1].scores.find_by(course_score: true).update!(final_score: 0, override_score: 100)
+          @course.update!(allow_final_grade_override: false)
+          expect(csv_output[0][1]).to include(
+            "#{@user.id},U1,#{@course.id},,#{@ase[1].course_section_id},,#{@ase[1].user.id},,#{@ase[1].id},active,0.0,F\n"
+          )
+        end
+
+        it "does not use the final grade override if final grades override feature is not enabled" do
+          @ase[1].scores.find_by(course_score: true).update!(final_score: 0, override_score: 100)
+          @course.disable_feature!(:final_grades_override)
+          expect(csv_output[0][1]).to include(
+            "#{@user.id},U1,#{@course.id},,#{@ase[1].course_section_id},,#{@ase[1].user.id},,#{@ase[1].id},active,0.0,F\n"
+          )
+        end
+
+        it "uses the final grade override over the computed final grade if the final grades override feature is enabled" do
+          @ase[1].scores.find_by(course_score: true).update!(final_score: 0, override_score: 100)
+          expect(csv_output[0][1]).to include(
+            "#{@user.id},U1,#{@course.id},,#{@ase[1].course_section_id},,#{@ase[1].user.id},,#{@ase[1].id},active,100.0,A\n"
+          )
+        end
+
+        it "does not skip users with no computed final score when they have an override score" do
+          @ase[1].scores.find_by(course_score: true).update!(final_score: nil, override_score: 100)
+          enrollment_ids = csv_output[0][1]
+          expect(enrollment_ids).to include(
+            "#{@user.id},U1,#{@course.id},,#{@ase[1].course_section_id},,#{@ase[1].user.id},,#{@ase[1].id},active,100.0,A\n"
+          )
+        end
+
+        it "skips users with no computed final score and no override score" do
+          @ase[1].scores.find_by(course_score: true).update!(final_score: nil, override_score: nil)
+          enrollment_ids = csv_output[0][0]
+          expect(enrollment_ids).not_to include @ase[1].id
+        end
+      end
+
+      context "when not including final grade overrides" do
+        before(:once) do
+          @course.update!(grading_standard_id: 0)
+        end
+
+        before(:each) do
+          @course.enable_feature!(:final_grades_override)
+        end
+
+        def csv_output
+          @course.generate_grade_publishing_csv_output(@ase, @user, @pseudonym)
+        end
+
+        it "does not use the final grade override if final grades override feature is not enabled" do
+          @course.disable_feature!(:final_grades_override)
+          @ase[1].scores.find_by(course_score: true).update!(final_score: 0, override_score: 100)
+          expect(csv_output[0][1]).to include(
+            "#{@user.id},U1,#{@course.id},,#{@ase[1].course_section_id},,#{@ase[1].user.id},,#{@ase[1].id},active,0.0,F\n"
+          )
+        end
+
+        it "does not use the final grade override if the final grades override feature is enabled" do
+          @ase[1].scores.find_by(course_score: true).update!(final_score: 0, override_score: 100)
+          expect(csv_output[0][1]).to include(
+            "#{@user.id},U1,#{@course.id},,#{@ase[1].course_section_id},,#{@ase[1].user.id},,#{@ase[1].id},active,0.0,F\n"
+          )
+        end
+
+        it "skip users with no computed final score when they have an override score" do
+          @ase[1].scores.find_by(course_score: true).update!(final_score: nil, override_score: 100)
+          enrollment_ids = csv_output[0][0]
+          expect(enrollment_ids).not_to include @ase[1].id
+        end
+
+        it "skips users with no computed final score when they have no override score" do
+          @ase[1].scores.find_by(course_score: true).update!(final_score: nil, override_score: nil)
+          enrollment_ids = csv_output[0][0]
+          expect(enrollment_ids).not_to include @ase[1].id
+        end
       end
     end
 
@@ -3997,7 +4177,7 @@ describe Course, "section_visibility" do
       limited_teacher = user_factory(:active_all => true)
       @course.enroll_user(limited_teacher, "TeacherEnrollment", :enrollment_state => "active",
         :section => section2, :limit_privileges_to_course_section => true)
-      
+
       observer = user_factory(:active_all => true)
       @course.enroll_user(observer, "ObserverEnrollment", :enrollment_state => "active", :section => section2)
       expect(@course.users_visible_to(limited_student)).not_to include(observer)
@@ -4841,6 +5021,10 @@ describe Course do
   end
 
   describe "re_send_invitations!" do
+    before :once do
+      @notification = Notification.create!(:name => 'Enrollment Invitation')
+    end
+
     it "should send invitations" do
       course_factory(active_all: true)
       user1 = user_with_pseudonym(:active_all => true)
@@ -4850,7 +5034,6 @@ describe Course do
 
       dm_count = DelayedMessage.count
       count1 = DelayedMessage.where(:communication_channel_id => user1.communication_channels.first).count
-      Notification.create!(:name => 'Enrollment Invitation')
       @course.re_send_invitations!(@teacher)
 
       expect(DelayedMessage.count).to eq dm_count + 1
@@ -4867,15 +5050,13 @@ describe Course do
       @course.enroll_student(user2, :section => section2)
       @course.enroll_ta(ta, :active_all => true, :section => section2, :limit_privileges_to_course_section => true)
 
-      notification = Notification.where(:name => 'Enrollment Invitation').first_or_create!
-
-      count1 = user1.communication_channel.delayed_messages.where(notification_id: notification).count
-      count2 = user2.communication_channel.delayed_messages.where(notification_id: notification).count
+      count1 = user1.communication_channel.delayed_messages.where(notification_id: @notification).count
+      count2 = user2.communication_channel.delayed_messages.where(notification_id: @notification).count
 
       @course.re_send_invitations!(ta)
 
-      expect(user1.communication_channel.delayed_messages.where(notification_id: notification).count).to eq count1
-      expect(user2.communication_channel.delayed_messages.where(notification_id: notification).count).to eq count2 + 1
+      expect(user1.communication_channel.delayed_messages.where(notification_id: @notification).count).to eq count1
+      expect(user2.communication_channel.delayed_messages.where(notification_id: @notification).count).to eq count2 + 1
     end
   end
 
@@ -5095,6 +5276,33 @@ describe Course, '#module_items_visible_to' do
     expect(@course.module_items_visible_to(@teacher).map(&:title)).to match_array %w(published unpublished)
   end
 
+  context "with section specific discussions" do
+    before :once do
+      @other_section = @course.course_sections.create!
+      @other_section_student = user_factory(:active_all => true)
+      @course.enroll_user(@other_section_student, "StudentEnrollment", :section => @other_section, :enrollment_state => "active")
+      @topic = @course.discussion_topics.create!(:course_sections => [@other_section], :is_section_specific => true)
+      @topic_tag = @module.add_item(:type => 'discussion_topic', :id => @topic.id)
+    end
+
+    it "should show to student in section" do
+      expect(@course.module_items_visible_to(@other_section_student)).to include(@topic_tag)
+    end
+
+    it "should not show to student not in section" do
+      expect(@course.module_items_visible_to(@student)).to_not include(@topic_tag)
+    end
+
+    it "should not show to student if visibiilty is deleted" do
+      @topic.discussion_topic_section_visibilities.destroy_all
+      expect(@course.module_items_visible_to(@other_section_student)).to_not include(@topic_tag)
+    end
+
+    it "should show to teacher" do
+      expect(@course.module_items_visible_to(@teacher)).to include(@topic_tag)
+    end
+  end
+
   context "sharding" do
     specs_require_sharding
 
@@ -5264,6 +5472,10 @@ describe Course, "#show_total_grade_as_points?" do
   describe Course, "#gradebook_backwards_incompatible_features_enabled?" do
     let(:course) { Course.create! }
 
+    it "returns false if there are no policies nor is final_grade_override enabled" do
+      expect(course).not_to be_gradebook_backwards_incompatible_features_enabled
+    end
+
     it "returns true if a late policy is enabled" do
       course.late_policy = LatePolicy.new(late_submission_deduction_enabled: true)
 
@@ -5276,15 +5488,16 @@ describe Course, "#show_total_grade_as_points?" do
       expect(course.gradebook_backwards_incompatible_features_enabled?).to be true
     end
 
+    it 'is backward incompatible if final_grades_override is enabled' do
+      course.enable_feature!(:final_grades_override)
+      expect(course).to be_gradebook_backwards_incompatible_features_enabled
+    end
+
     it "returns true if both a late and missing policy are enabled" do
       course.late_policy =
         LatePolicy.new(late_submission_deduction_enabled: true, missing_submission_deduction_enabled: true)
 
       expect(course.gradebook_backwards_incompatible_features_enabled?).to be true
-    end
-
-    it "returns false if there are no policies" do
-      expect(course.gradebook_backwards_incompatible_features_enabled?).to be false
     end
 
     it "returns false if both policies are disabled" do

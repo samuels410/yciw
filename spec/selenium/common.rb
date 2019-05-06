@@ -20,6 +20,7 @@ require "nokogiri"
 require "selenium-webdriver"
 require "socket"
 require "timeout"
+require "sauce_whisk"
 require_relative 'test_setup/custom_selenium_rspec_matchers'
 require_relative 'test_setup/selenium_driver_setup'
 require_relative 'test_setup/selenium_extensions'
@@ -66,6 +67,7 @@ module SeleniumErrorRecovery
       puts "Error: got `#{exception}`, aborting"
       RSpec.world.wants_to_quit = true
     when EOFError, Errno::ECONNREFUSED, Net::ReadTimeout
+      return false if SeleniumDriverSetup.saucelabs_test_run?
       return false if RSpec.world.wants_to_quit
       return false unless exception.backtrace.grep(/selenium-webdriver/).present?
 
@@ -113,6 +115,7 @@ shared_context "in-process server selenium tests" do
   include Rails.application.routes.url_helpers
 
   prepend_before :each do
+    resize_screen_to_normal
     SeleniumDriverSetup.allow_requests!
     driver.ready_for_interaction = false # need to `get` before we do anything selenium-y in a spec
   end
@@ -127,7 +130,7 @@ shared_context "in-process server selenium tests" do
     retry_count = 0
     begin
       default_url_options[:host] = app_host_and_port
-      close_modal_if_present { resize_screen_to_normal }
+      close_modal_if_present { resize_screen_to_normal } unless @driver.nil?
     rescue
       if maybe_recover_from_exception($ERROR_INFO) && (retry_count += 1) < 3
         retry
@@ -191,6 +194,13 @@ shared_context "in-process server selenium tests" do
     end
 
     if SeleniumDriverSetup.saucelabs_test_run?
+      job_id = driver.session_id
+      job = SauceWhisk::Jobs.fetch job_id
+      old_name = job.name
+      job.name = old_name.prepend(example.metadata[:full_description].to_s + " - ")
+      job.passed = example.exception.nil?
+      job.save
+
       driver.quit
       SeleniumDriverSetup.reset!
     end
@@ -198,6 +208,10 @@ shared_context "in-process server selenium tests" do
 
   # logs everything that showed up in the browser console during selenium tests
   after(:each) do |example|
+    # safari driver and edge driver do not support driver.manage.logs
+    # don't run for sauce labs smoke tests
+    next if SeleniumDriverSetup.saucelabs_test_run?
+
     if example.exception
       html = f('body').attribute('outerHTML')
       document = Nokogiri::HTML(html)
@@ -205,6 +219,15 @@ shared_context "in-process server selenium tests" do
     end
 
     browser_logs = driver.manage.logs.get(:browser)
+
+    # log INSTUI deprecation warnings
+    if browser_logs.present?
+      spec_file = example.file_path.sub(/.*spec\/selenium\//, '')
+      deprecations =  browser_logs.select {|l| l.message =~ /\[.*deprecated./}.map do |l|
+        ">>> #{spec_file}: \"#{example.description}\": #{driver.current_url}: #{l.message.gsub(/.*Warning/, 'Warning') }"
+      end
+      puts "\n", deprecations.uniq
+    end
 
     if !example.metadata[:ignore_js_errors] && browser_logs.present?
       msg = "browser console logs for \"#{example.description}\":\n" + browser_logs.map(&:message).join("\n\n")
@@ -227,13 +250,19 @@ shared_context "in-process server selenium tests" do
         "https://www.gstatic.com/_/apps-viewer/_/js/k=apps-viewer.standalone.en_US",
         "In webpack, loading timezones on-demand is not",
         "Uncaught RangeError: Maximum call stack size exceeded",
-        "Warning: React does not recognize the `%s` prop on a DOM element."
+        "Warning: React does not recognize the `%s` prop on a DOM element.",
+        # For InstUI upgrade to 5.36. These should probably be fixed eventually.
+        "Warning: [Focusable] Exactly one focusable child is required (0 found).",
+        # COMMS-1815: Meeseeks should fix this one on the permissions page
+        "Warning: [Select] The option 'All Roles' doesn't correspond to an option.",
+        "Warning: [Focusable] Exactly one tabbable child is required (0 found).",
+        "Access to Font at 'http://cdnjs.cloudflare.com/ajax/libs/mathjax/"
       ].freeze
 
       javascript_errors = browser_logs.select do |e|
         e.level == "SEVERE" &&
-        e.message.present? &&
-        browser_errors_we_dont_care_about.none? {|s| e.message.include?(s)}
+          e.message.present? &&
+          browser_errors_we_dont_care_about.none? {|s| e.message.include?(s)}
       end
 
       if javascript_errors.present?

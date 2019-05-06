@@ -35,7 +35,7 @@ import round from 'compiled/util/round'
 import numberHelper from '../shared/helpers/numberHelper'
 import CourseGradeCalculator from '../gradebook/CourseGradeCalculator'
 import {scopeToUser} from '../gradebook/EffectiveDueDates'
-import {gradeToScoreLowerBound, scoreToGrade} from '../gradebook/GradingSchemeHelper'
+import {scoreToGrade} from '../gradebook/GradingSchemeHelper'
 import GradeFormatHelper from '../gradebook/shared/helpers/GradeFormatHelper'
 import StatusPill from '../grading/StatusPill'
 import SelectMenuGroup from '../grade_summary/SelectMenuGroup'
@@ -363,8 +363,17 @@ function calculateTotals (calculatedGrades, currentOrFinal, groupWeightingScheme
   let finalGrade
   let teaserText
 
-  if (!gradeChanged && ENV.grading_scheme && ENV.effective_final_grade) {
-    finalGrade = formatPercentGrade(gradeToScoreLowerBound(ENV.effective_final_grade, ENV.grading_scheme))
+  if (gradingSchemeEnabled()) {
+    const scoreToUse = overrideScorePresent() ?
+      ENV.effective_final_score :
+      calculatePercentGrade(finalScore, finalPossible)
+
+    const letterGrade = scoreToGrade(scoreToUse, ENV.grading_scheme)
+    $('.final_grade .letter_grade').text(letterGrade)
+  }
+
+  if (!gradeChanged && overrideScorePresent()) {
+    finalGrade = formatPercentGrade(ENV.effective_final_score)
     teaserText = scoreAsPoints
   } else if (showTotalGradeAsPoints && groupWeightingScheme !== 'percent') {
     finalGrade = scoreAsPoints
@@ -391,13 +400,19 @@ function calculateTotals (calculatedGrades, currentOrFinal, groupWeightingScheme
     $.screenReaderFlashMessageExclusive(msg)
   }
 
-  if (ENV.grading_scheme) {
-    $('.final_letter_grade .grade').text(
-      ENV.effective_final_grade || scoreToGrade(calculatePercentGrade(finalScore, finalPossible), ENV.grading_scheme)
-    )
-  }
-
   $('.revert_all_scores').showIf($('#grades_summary .revert_score_link').length > 0)
+}
+
+// This element is only rendered by the erb if the course has enabled grading
+// schemes. We can't rely on only checking for the presence of
+// ENV.grading_scheme as that, in this case, always returns Canvas's default
+// grading scheme even if grading schemes are not enabled.
+function gradingSchemeEnabled() {
+  return $('.final_grade .letter_grade').length > 0 && ENV.grading_scheme
+}
+
+function overrideScorePresent() {
+  return ENV.effective_final_score != null
 }
 
 function updateStudentGrades () {

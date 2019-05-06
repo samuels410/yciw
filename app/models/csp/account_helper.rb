@@ -21,12 +21,19 @@ module Csp::AccountHelper
 
     # the setting (and id of the account to search) that will be passed down to sub-accounts e.g. ([true, 2])
     account_class.add_setting :csp_inherited_data, :inheritable => true
+
+    account_class.after_save :unload_csp_data
+  end
+
+  def unload_csp_data
+    @csp_loaded = false
   end
 
   def load_csp_data
     unless @csp_loaded
-      csp_data = self.settings.dig(:csp_inherited_data, :value) || self.csp_inherited_data&.dig(:value) || [false, nil]
-      @csp_enabled, @csp_account_id = csp_data
+      csp_data = self.csp_inherited_data
+      @csp_enabled, @csp_account_id = csp_data&.dig(:value) || [false, nil]
+      @csp_locked = !!csp_data&.dig(:locked)
       @csp_loaded = true
     end
   end
@@ -38,11 +45,17 @@ module Csp::AccountHelper
 
   def csp_account_id
     load_csp_data
-    @csp_account_id
+    @csp_account_id || self.global_id
   end
 
   def csp_inherited?
-    csp_account_id != self.global_id
+    load_csp_data
+    @csp_account_id != self.global_id
+  end
+
+  def csp_locked?
+    load_csp_data
+    @csp_locked
   end
 
   def csp_directly_enabled?
@@ -57,8 +70,26 @@ module Csp::AccountHelper
     set_csp_setting!([false, self.global_id])
   end
 
+  def lock_csp!
+    set_csp_locked!(true)
+  end
+
+  def unlock_csp!
+    set_csp_locked!(false)
+  end
+
+  def set_csp_locked!(value)
+    csp_settings = self.settings[:csp_inherited_data].dup
+    raise "csp not explicitly set" unless csp_settings
+    csp_settings[:locked] = !!value
+    self.settings[:csp_inherited_data] = csp_settings
+    self.save!
+  end
+
   def set_csp_setting!(value)
-    self.settings[:csp_inherited_data] = {:value => value}
+    csp_settings = self.settings[:csp_inherited_data].dup || {}
+    csp_settings[:value] = value
+    self.settings[:csp_inherited_data] = csp_settings
     self.save!
   end
 
@@ -72,6 +103,7 @@ module Csp::AccountHelper
     Csp::Domain.unique_constraint_retry do |retry_count|
       if retry_count > 0 && (record = self.csp_domains.where(:domain => domain).take)
         record.undestroy if record.deleted?
+        record
       else
         record = self.csp_domains.create(:domain => domain)
         record.valid? && record
@@ -83,13 +115,13 @@ module Csp::AccountHelper
     self.csp_domains.active.where(:domain => domain.downcase).take&.destroy!
   end
 
-
-  def csp_whitelisted_domains
-    reutrn [] unless csp_enabled?
+  def csp_whitelisted_domains(request = nil, include_files:, include_tools:)
     # first, get the whitelist from the enabled csp account
     # then get the list of domains extracted from external tools
-    (::Csp::Domain.get_cached_domains_for_account(self.csp_account_id) +
-      self.cached_tool_domains).uniq.sort
+    domains = ::Csp::Domain.get_cached_domains_for_account(self.csp_account_id)
+    domains += cached_tool_domains if include_tools
+    domains += csp_files_domains(request) if include_files
+    domains.uniq.sort
   end
 
   ACCOUNT_TOOL_CACHE_KEY_PREFIX = "account_tool_domains".freeze
@@ -113,5 +145,23 @@ module Csp::AccountHelper
 
   def clear_tool_domain_cache
     Account.send_later_if_production(:invalidate_inherited_caches, self, [ACCOUNT_TOOL_CACHE_KEY_PREFIX])
+  end
+
+  def csp_files_domains(request)
+    files_host = HostUrl.file_host(root_account, request.host_with_port)
+    config = Canvas::DynamicSettings.find(tree: :private, cluster: root_account.shard.database_server.id)
+    if config['attachment_specific_file_domain'] == 'true'
+      separator = config['attachment_specific_file_domain_separator'] || '.'
+      files_host = if separator != '.'
+        "*.#{files_host[files_host.index('.') + 1..-1]}"
+      else
+        "*.#{files_host}"
+      end
+    end
+    [files_host]
+  end
+
+  def csp_logging_config
+    @config ||= YAML.load(Canvas::DynamicSettings.find(tree: :private, cluster: shard.database_server.id)['csp_logging.yml'] || '{}')
   end
 end

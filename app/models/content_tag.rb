@@ -83,7 +83,7 @@ class ContentTag < ActiveRecord::Base
 
   attr_accessor :skip_touch
   def touch_context_module
-    return true if skip_touch.present?
+    return true if skip_touch.present? || self.context_module_id.nil?
     ContentTag.touch_context_modules([self.context_module_id])
   end
 
@@ -409,7 +409,9 @@ class ContentTag < ActiveRecord::Base
   end
 
   def context_module_action(user, action, points=nil)
-    self.context_module.update_for(user, action, self, points) if self.context_module
+    Shackles.activate(:master) do
+      self.context_module.update_for(user, action, self, points) if self.context_module
+    end
   end
 
   def progression_for_user(user)

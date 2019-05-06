@@ -82,6 +82,7 @@ SecondaryDetailLine.propTypes = {
 export default class AssignmentColumnHeader extends ColumnHeader {
   static propTypes = {
     ...ColumnHeader.propTypes,
+
     assignment: shape({
       anonymizeStudents: bool.isRequired,
       courseId: string.isRequired,
@@ -93,10 +94,25 @@ export default class AssignmentColumnHeader extends ColumnHeader {
       published: bool.isRequired,
       submissionTypes: arrayOf(string).isRequired
     }).isRequired,
+
     curveGradesAction: shape({
       isDisabled: bool.isRequired,
       onSelect: func.isRequired
     }).isRequired,
+
+    hideGradesAction: shape({
+      onSelect: func.isRequired
+    }).isRequired,
+
+    postGradesAction: shape({
+      enabled: bool.isRequired,
+      onSelect: func.isRequired
+    }).isRequired,
+
+    showGradePostingPolicyAction: shape({
+      onSelect: func.isRequired
+    }).isRequired,
+
     sortBySetting: shape({
       direction: string.isRequired,
       disabled: bool.isRequired,
@@ -108,6 +124,7 @@ export default class AssignmentColumnHeader extends ColumnHeader {
       onSortByUnposted: func.isRequired,
       settingKey: string.isRequired
     }).isRequired,
+
     students: arrayOf(
       shape({
         isInactive: bool.isRequired,
@@ -121,23 +138,29 @@ export default class AssignmentColumnHeader extends ColumnHeader {
         }).isRequired
       })
     ).isRequired,
+
     submissionsLoaded: bool.isRequired,
+
     setDefaultGradeAction: shape({
       disabled: bool.isRequired,
       onSelect: func.isRequired
     }).isRequired,
+
     downloadSubmissionsAction: shape({
       hidden: bool.isRequired,
       onSelect: func.isRequired
     }).isRequired,
+
     reuploadSubmissionsAction: shape({
       hidden: bool.isRequired,
       onSelect: func.isRequired
     }).isRequired,
+
     muteAssignmentAction: shape({
       disabled: bool.isRequired,
       onSelect: func.isRequired
     }).isRequired,
+
     onMenuDismiss: func.isRequired,
     showUnpostedMenuItem: bool.isRequired
   }
@@ -158,6 +181,14 @@ export default class AssignmentColumnHeader extends ColumnHeader {
     this.invokeAndSkipFocus(this.props.curveGradesAction)
   }
 
+  hideGrades = () => {
+    this.invokeAndSkipFocus(this.props.hideGradesAction)
+  }
+
+  postGrades = () => {
+    this.invokeAndSkipFocus(this.props.postGradesAction)
+  }
+
   setDefaultGrades = () => {
     this.invokeAndSkipFocus(this.props.setDefaultGradeAction)
   }
@@ -172,6 +203,10 @@ export default class AssignmentColumnHeader extends ColumnHeader {
 
   reuploadSubmissions = () => {
     this.invokeAndSkipFocus(this.props.reuploadSubmissionsAction)
+  }
+
+  showGradePostingPolicy = () => {
+    this.invokeAndSkipFocus(this.props.showGradePostingPolicyAction)
   }
 
   invokeAndSkipFocus(action) {
@@ -342,14 +377,24 @@ export default class AssignmentColumnHeader extends ColumnHeader {
           <span data-menu-item-id="set-default-grade">{I18n.t('Set Default Grade')}</span>
         </MenuItem>
 
-        <MenuItem
-          disabled={this.props.muteAssignmentAction.disabled}
-          onSelect={this.muteAssignment}
-        >
-          <span data-menu-item-id="assignment-muter">
-            {this.props.assignment.muted ? I18n.t('Unmute Assignment') : I18n.t('Mute Assignment')}
-          </span>
-        </MenuItem>
+        {this.props.postGradesAction.enabled ? (
+          <MenuItem onSelect={this.postGrades}>{I18n.t('Post grades')}</MenuItem>
+        ) : (
+          <MenuItem
+            disabled={this.props.muteAssignmentAction.disabled}
+            onSelect={this.muteAssignment}
+          >
+            <span data-menu-item-id="assignment-muter">
+              {this.props.assignment.muted
+                ? I18n.t('Unmute Assignment')
+                : I18n.t('Mute Assignment')}
+            </span>
+          </MenuItem>
+        )}
+
+        {this.props.postGradesAction.enabled && (
+          <MenuItem onSelect={this.hideGrades}>{I18n.t('Hide grades')}</MenuItem>
+        )}
 
         {!this.props.enterGradesAsSetting.hidden && <MenuItemSeparator />}
 
@@ -384,6 +429,14 @@ export default class AssignmentColumnHeader extends ColumnHeader {
         {!this.props.reuploadSubmissionsAction.hidden && (
           <MenuItem onSelect={this.reuploadSubmissions}>
             <span data-menu-item-id="reupload-submissions">{I18n.t('Re-Upload Submissions')}</span>
+          </MenuItem>
+        )}
+
+        {this.props.postGradesAction.enabled && <MenuItemSeparator />}
+
+        {this.props.postGradesAction.enabled && (
+          <MenuItem onSelect={this.showGradePostingPolicy}>
+            {I18n.t('Grade Posting Policy')}
           </MenuItem>
         )}
       </Menu>

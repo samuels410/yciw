@@ -468,8 +468,8 @@ describe DiscussionTopicsController do
       # this is essentially a unit test for app/coffeescripts/models/Entry.coffee,
       # making sure that we get back the expected format for this url template
       template = assigns[:js_env][:DISCUSSION][:SPEEDGRADER_URL_TEMPLATE]
-      url = template.gsub(/%22:student_id%22/, '123')
-      expect(url).to match "%7B%22student_id%22:123%7D"
+      url = template.gsub(/%3Astudent_id/, '123')
+      expect(url).to match "student_id=123"
     end
 
     it "should mark as read when viewed" do
@@ -787,6 +787,14 @@ describe DiscussionTopicsController do
       allow(AssignmentUtil).to receive(:post_to_sis_friendly_name).and_return('Foo Bar')
       get 'new', params: {:course_id => @course.id}
       expect(assigns[:js_env][:SIS_NAME]).to eq('Foo Bar')
+    end
+  end
+
+  describe "GET 'new'" do
+    it "creates a default assignment group if none exist" do
+      user_session(@teacher)
+      get :new, params: {course_id: @course.id}
+      expect(@course.assignment_groups.count).not_to eq 0
     end
   end
 

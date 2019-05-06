@@ -51,6 +51,20 @@
       {{#t "show_notes"}}Show Notes in Student Info{{/t}}
       </label>
     </div>
+    {{#if finalGradeOverrideEnabled}}
+      <div class="checkbox">
+        <label class="checkbox">
+        {{
+          input
+          type="checkbox"
+          id="allow_final_grade_override"
+          name="allow_final_grade_override"
+          checked=allowFinalGradeOverride
+        }}
+        {{#t}}Allow Final Grade Override{{/t}}
+        </label>
+      </div>
+    {{/if}}
     {{#unless gradesAreWeighted}}
       <div class="checkbox">
         <label class="checkbox">

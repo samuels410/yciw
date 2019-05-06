@@ -19,7 +19,7 @@ module Api::V1
   class CourseJson
 
     BASE_ATTRIBUTES = %w(id name course_code account_id created_at start_at default_view enrollment_term_id is_public
-                         grading_standard_id root_account_id uuid).freeze
+                         grading_standard_id root_account_id uuid license).freeze
 
     INCLUDE_CHECKERS = {grading: 'needs_grading_count', syllabus: 'syllabus_body',
                         url: 'html_url', description: 'public_description', permissions: 'permissions'}.freeze
@@ -62,6 +62,9 @@ module Api::V1
       @hash['workflow_state'] = @course.api_state
       @hash['course_format'] = @course.course_format if @course.course_format.present?
       @hash['restrict_enrollments_to_course_dates'] = !!@course.restrict_enrollments_to_course_dates
+      if visibility = @course.overridden_course_visibility
+        @hash['overridden_course_visibility'] = visibility
+      end
       if @includes.include?(:current_grading_period_scores)
         @hash['has_grading_periods'] = @course.grading_periods?
         @hash['multiple_grading_periods_enabled'] = @hash['has_grading_periods'] # for backwards compatibility
@@ -170,12 +173,10 @@ module Api::V1
         scores[:unposted_final_grade] = student_enrollment.unposted_final_grade
         scores[:unposted_final_score] = student_enrollment.unposted_final_score
 
-        if @course.feature_enabled?(:final_grades_override)
-          override_grade = student_enrollment.override_grade(course_score: true)
-          override_score = student_enrollment.override_score(course_score: true)
-          scores[:override_grade] = override_grade if override_grade.present?
-          scores[:override_score] = override_score if override_score.present?
-        end
+        override_grade = student_enrollment.override_grade(course_score: true)
+        override_score = student_enrollment.override_score(course_score: true)
+        scores[:override_grade] = override_grade if override_grade.present?
+        scores[:override_score] = override_score if override_score.present?
       else
         scores[:computed_current_grade] = student_enrollment.effective_current_grade
         scores[:computed_current_score] = student_enrollment.effective_current_score

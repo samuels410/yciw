@@ -17,7 +17,7 @@
 #
 
 require File.expand_path(File.dirname(__FILE__) + "/../../spec_helper")
-require File.expand_path(File.dirname(__FILE__) + "/../../helpers/graphql_type_tester")
+require_relative "../graphql_spec_helper"
 
 describe Types::AssignmentType do
   let_once(:course) { course_factory(active_all: true) }
@@ -43,6 +43,14 @@ describe Types::AssignmentType do
     expect(assignment_type.resolve("assignmentGroup { _id }")).to eq assignment.assignment_group.id.to_s
     expect(assignment_type.resolve("muted")).to eq assignment.muted?
     expect(assignment_type.resolve("allowedExtensions")).to eq assignment.allowed_extensions
+    expect(assignment_type.resolve("createdAt").to_datetime).to eq assignment.created_at.to_s.to_datetime
+    expect(assignment_type.resolve("updatedAt").to_datetime).to eq assignment.updated_at.to_s.to_datetime
+    expect(assignment_type.resolve("gradeGroupStudentsIndividually")).to eq assignment.grade_group_students_individually
+    expect(assignment_type.resolve("anonymousGrading")).to eq assignment.anonymous_grading
+    expect(assignment_type.resolve("omitFromFinalGrade")).to eq assignment.omit_from_final_grade
+    expect(assignment_type.resolve("anonymousInstructorAnnotations")).to eq assignment.anonymous_instructor_annotations
+    expect(assignment_type.resolve("postToSis")).to eq assignment.post_to_sis
+    expect(assignment_type.resolve("canUnpublish")).to eq assignment.can_unpublish?
   end
 
   context "top-level permissions" do
@@ -61,6 +69,49 @@ describe Types::AssignmentType do
     end
   end
 
+  it "works with rubric" do
+    rubric = Rubric.create!(title: 'hi', context: course)
+    assignment.build_rubric_association(:rubric => rubric,
+                                         :purpose => 'grading',
+                                         :use_for_grading => true,
+                                         :context => course)
+    assignment.rubric_association.save!
+    expect(assignment_type.resolve("rubric { _id }")).to eq rubric.id.to_s
+    expect(assignment_type.resolve("rubric { freeFormCriterionComments }")).to eq assignment.rubric.free_form_criterion_comments
+    expect(assignment_type.resolve("rubric { freeFormCriterionComments }")).to eq rubric.free_form_criterion_comments
+  end
+
+  it "works with moderated grading" do
+    assignment.moderated_grading = true
+    assignment.grader_count = 1
+    assignment.final_grader_id = teacher.id
+    assignment.save!
+    assignment.update_attributes final_grader_id: teacher.id
+    expect(assignment_type.resolve("moderatedGrading { enabled }")).to eq assignment.moderated_grading
+    expect(assignment_type.resolve("moderatedGrading { finalGrader { _id } }")).to eq teacher.id.to_s
+    expect(assignment_type.resolve("moderatedGrading { gradersAnonymousToGraders }")).to eq assignment.graders_anonymous_to_graders
+    expect(assignment_type.resolve("moderatedGrading { graderCount }")).to eq assignment.grader_count
+    expect(assignment_type.resolve("moderatedGrading { graderCommentsVisibleToGraders }")).to eq assignment.grader_comments_visible_to_graders
+    expect(assignment_type.resolve("moderatedGrading { graderNamesVisibleToFinalGrader }")).to eq assignment.grader_names_visible_to_final_grader
+  end
+
+  it "works with peer review info" do
+    assignment.peer_reviews_due_at = Time.zone.now
+    assignment.save!
+    expect(assignment_type.resolve("peerReviews { enabled }")).to eq assignment.peer_reviews
+    expect(assignment_type.resolve("peerReviews { count }")).to eq assignment.peer_review_count
+    expect(assignment_type.resolve("peerReviews { dueAt }").to_datetime).to eq assignment.peer_reviews_due_at.to_s.to_datetime
+    expect(assignment_type.resolve("peerReviews { intraReviews }")).to eq assignment.intra_group_peer_reviews
+    expect(assignment_type.resolve("peerReviews { anonymousReviews }")).to eq assignment.anonymous_peer_reviews
+    expect(assignment_type.resolve("peerReviews { automaticReviews }")).to eq assignment.automatic_peer_reviews
+  end
+
+  it "works with timezone stuffs" do
+    assignment.time_zone_edited = "Mountain Time (US & Canada)"
+    assignment.save!
+    expect(assignment_type.resolve("timeZoneEdited")).to eq assignment.time_zone_edited
+  end
+
   it "returns needsGradingCount" do
     assignment.submit_homework(student, {:body => "so cool", :submission_type => "online_text_entry"})
     expect(assignment_type.resolve("needsGradingCount", current_user: teacher)).to eq 1
@@ -72,11 +123,41 @@ describe Types::AssignmentType do
     ).to eq "http://test.host/courses/#{assignment.context_id}/assignments/#{assignment.id}"
   end
 
-  it "uses api_user_content for the description" do
-    assignment.update_attributes description: %|Hi <img src="/courses/#{course.id}/files/12/download"<h1>Content</h1>|
-    expect(
-      assignment_type.resolve("description", request: ActionDispatch::TestRequest.create)
-    ).to include "http://test.host/courses/#{course.id}/files/12/download"
+  context "description" do
+    before do
+      assignment.update_attributes description: %|Hi <img src="/courses/#{course.id}/files/12/download"<h1>Content</h1>|
+    end
+
+    it "includes description when lock settings allow" do
+      expect_any_instance_of(Assignment).
+        to receive(:low_level_locked_for?).
+        and_return(can_view: true)
+      expect(assignment_type.resolve("description", request: ActionDispatch::TestRequest.create)).to include "Content"
+    end
+
+    it "returns null when not allowed" do
+      expect_any_instance_of(Assignment).
+        to receive(:low_level_locked_for?).
+        and_return(can_view: false)
+      expect(assignment_type.resolve("description", request: ActionDispatch::TestRequest.create)).to be_nil
+    end
+
+    it "works for assignments in public courses" do
+      course.update! is_public: true
+      expect(
+        assignment_type.resolve(
+          "description",
+          request: ActionDispatch::TestRequest.create,
+          current_user: nil
+        )
+      ).to include "Content"
+    end
+
+    it "uses api_user_content for the description" do
+      expect(
+        assignment_type.resolve("description", request: ActionDispatch::TestRequest.create)
+      ).to include "http://test.host/courses/#{course.id}/files/12/download"
+    end
   end
 
   it "returns nil when allowed_attempts is unset" do
@@ -133,6 +214,42 @@ describe Types::AssignmentType do
         GQL
       ).to match_array assignment.submissions.pluck(:id).map(&:to_s)
     end
+
+    context "filtering by section" do
+      let(:assignment) { course.assignments.create! }
+      let(:course) { Course.create! }
+      let(:section1) { course.course_sections.create! }
+      let(:section2) { course.course_sections.create! }
+      let(:teacher) { course.enroll_user(User.create!, "TeacherEnrollment", enrollment_state: "active").user }
+
+      before(:each) do
+        section1_student = section1.enroll_user(User.create!, "StudentEnrollment", "active").user
+        section2_student = section2.enroll_user(User.create!, "StudentEnrollment", "active").user
+        @section1_student_submission = assignment.submit_homework(section1_student, body: "hello world")
+        assignment.submit_homework(section2_student, body: "hello universe")
+      end
+
+      it "returns submissions only for the given section" do
+        section1_submission_ids = assignment_type.resolve(<<~GQL, current_user: teacher)
+          submissionsConnection(filter: {sectionIds: [#{section1.id}]}) {
+            edges { node { _id } }
+          }
+        GQL
+        expect(section1_submission_ids.map(&:to_i)).to contain_exactly(@section1_student_submission.id)
+      end
+    end
+  end
+
+  xit "validate assignment 404 return correctly with override instrumenter (ADMIN-2407)" do
+    result = CanvasSchema.execute(<<~GQL, context: {current_user: @teacher})
+      query {
+        assignment(id: "987654321") {
+          _id dueAt lockAt unlockAt
+        }
+      }
+    GQL
+    expect(result.dig('errors')).to be_nil
+    expect(result.dig('data', 'assignment')).to be_nil
   end
 
   it "can access it's parent course" do
@@ -148,7 +265,7 @@ describe Types::AssignmentType do
     module2 = assignment.course.context_modules.create!(name: 'Module 2')
     assignment.context_module_tags.create!(context_module: module1, context: assignment.course, tag_type: 'context_module')
     assignment.context_module_tags.create!(context_module: module2, context: assignment.course, tag_type: 'context_module')
-    expect(assignment_type.resolve("modules { _id }").sort).to eq [module1.id.to_s, module2.id.to_s]
+    expect(assignment_type.resolve("modules { _id }").to_set).to eq [module1.id.to_s, module2.id.to_s].to_set
   end
 
   it "only returns valid submission types" do
@@ -156,11 +273,48 @@ describe Types::AssignmentType do
     expect(assignment_type.resolve("submissionTypes")).to eq ["none"]
   end
 
+  it "can return multiple submission types" do
+    assignment.update_attribute :submission_types, "discussion_topic,wiki_page"
+    expect(assignment_type.resolve("submissionTypes")).to eq ["discussion_topic", "wiki_page"]
+  end
+
   it "returns (valid) grading types" do
     expect(assignment_type.resolve("gradingType")).to eq assignment.grading_type
 
     assignment.update_attribute :grading_type, "fakefakefake"
     expect(assignment_type.resolve("gradingType")).to be_nil
+  end
+
+  context "overridden assignments" do
+    before(:once) do
+      @assignment_due_at = 1.month.from_now
+
+      @overridden_due_at = 2.weeks.from_now
+      @overridden_unlock_at = 1.week.from_now
+      @overridden_lock_at = 3.weeks.from_now
+
+      @overridden_assignment = course.assignments.create!(title: "asdf",
+                                                          workflow_state: "published",
+                                                          due_at: @assignment_due_at)
+
+      override = assignment_override_model(assignment: @overridden_assignment,
+                                           due_at: @overridden_due_at,
+                                           unlock_at: @overridden_unlock_at,
+                                           lock_at: @overridden_lock_at)
+
+      override.assignment_override_students.build(user: student)
+      override.save!
+    end
+
+    let(:overridden_assignment_type) { GraphQLTypeTester.new(@overridden_assignment) }
+
+    it "returns overridden assignment dates" do
+      expect(overridden_assignment_type.resolve("dueAt", current_user: teacher)).to eq @assignment_due_at.iso8601
+      expect(overridden_assignment_type.resolve("dueAt", current_user: student)).to eq @overridden_due_at.iso8601
+
+      expect(overridden_assignment_type.resolve("lockAt", current_user: student)).to eq @overridden_lock_at.iso8601
+      expect(overridden_assignment_type.resolve("unlockAt", current_user: student)).to eq @overridden_unlock_at.iso8601
+    end
   end
 
   describe Types::AssignmentOverrideType do
@@ -233,6 +387,35 @@ describe Types::AssignmentType do
     it "works when lock_info is a hash" do
       assignment.update_attributes! unlock_at: 1.month.from_now
       expect(assignment_type.resolve("lockInfo { isLocked }")).to eq true
+    end
+  end
+
+  describe "PostPolicy" do
+    let(:assignment) { course.assignments.create! }
+    let(:course) { Course.create!(workflow_state: "available") }
+    let(:student) { course.enroll_user(User.create!, "StudentEnrollment", enrollment_state: "active").user }
+    let(:teacher) { course.enroll_user(User.create!, "TeacherEnrollment", enrollment_state: "active").user }
+
+    before(:each) do
+      @post_policy = course.post_policies.create!(assignment: assignment, post_manually: true)
+    end
+
+    context "when user has manage_grades permission" do
+      let(:context) { { current_user: teacher } }
+
+      it "returns the PostPolicy related to the assignment" do
+        resolver = GraphQLTypeTester.new(assignment, context)
+        expect(resolver.resolve("postPolicy {_id}").to_i).to eql @post_policy.id
+      end
+    end
+
+    context "when user does not have manage_grades permission" do
+      let(:context) { { current_user: student } }
+
+      it "returns null in place of the PostPolicy" do
+        resolver = GraphQLTypeTester.new(assignment, context)
+        expect(resolver.resolve("postPolicy {_id}")).to be nil
+      end
     end
   end
 end

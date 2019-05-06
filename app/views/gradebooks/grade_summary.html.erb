@@ -36,9 +36,7 @@
         <div class="student_assignment final_grade">
           <%= before_label(:total, "Total") %> <span class="grade"></span>
           <% if @context.grading_standard_enabled? %>
-            <span class="final_letter_grade">
-              (<span class="grade" id="final_letter_grade_text">-</span>)
-            </span>
+            (<span class="letter_grade" id="final_letter_grade_text">–</span>)
           <% end %>
         </div>
       <% end %>
@@ -118,7 +116,7 @@
   <% end %>
 
   <div id="assignments">
-    <span id="aria-announcer" class="hide-text affix" aria-live="polite" aria-relevant="additions"></span>
+    <span id="aria-announcer" class="hide-text affix" aria-live="polite"></span>
   <table id="grades_summary" class="<%= 'editable' if @presenter.editable? %> ic-Table ic-Table--hover-row">
     <% if @presenter.editable? %>
       <caption class="screenreader-only"><%= whatif_instructions %></caption>

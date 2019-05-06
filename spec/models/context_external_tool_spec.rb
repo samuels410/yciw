@@ -44,6 +44,65 @@ describe ContextExternalTool do
     end
   end
 
+  describe '#login_or_launch_url' do
+    let_once(:developer_key) { DeveloperKey.create! }
+    let_once(:tool) do
+      ContextExternalTool.create!(
+        context: @course,
+        consumer_key: 'key',
+        shared_secret: 'secret',
+        name: 'test tool',
+        url: 'http://www.tool.com/launch',
+        developer_key: developer_key
+      )
+    end
+
+    it 'returns the launch url' do
+      expect(tool.login_or_launch_url).to eq tool.url
+    end
+
+    context 'when a content_tag_uri is specified' do
+      let(:content_tag_uri) { 'https://www.test.com/tool-launch' }
+
+      it 'returns the content tag uri' do
+        expect(tool.login_or_launch_url(content_tag_uri: content_tag_uri)).to eq content_tag_uri
+      end
+    end
+
+    context 'when the extension url is present' do
+      let(:placement_url) { 'http://www.test.com/editor_button' }
+
+      before do
+        tool.editor_button = {
+          "url" => placement_url,
+          "text" => "LTI 1.3 twoa",
+          "enabled" => true,
+          "icon_url" => "https://static.thenounproject.com/png/131630-200.png",
+          "message_type" => "LtiDeepLinkingRequest",
+          "canvas_icon_class" => "icon-lti"
+        }
+      end
+
+      it 'returns the extension url' do
+        expect(tool.login_or_launch_url(extension_type: :editor_button)).to eq placement_url
+      end
+
+    end
+
+    context 'lti_1_3 tool' do
+      let(:oidc_initiation_url) { 'http://www.test.com/oidc/login' }
+
+      before do
+        tool.settings['use_1_3'] = true
+        developer_key.update!(oidc_initiation_url: oidc_initiation_url)
+      end
+
+      it 'returns the oidc login url' do
+        expect(tool.login_or_launch_url).to eq oidc_initiation_url
+      end
+    end
+  end
+
   describe '#deployment_id' do
     let_once(:tool) do
       ContextExternalTool.create!(
@@ -58,6 +117,11 @@ describe ContextExternalTool do
 
     it 'returns the correct deployment_id' do
       expect(tool.deployment_id).to eq "#{tool.id}:#{Lti::Asset.opaque_identifier_for(tool.context)}"
+    end
+
+    it 'sends only 255 chars' do
+      allow(Lti::Asset).to receive(:opaque_identifier_for).and_return(256.times.map { 'a' }.join)
+      expect(tool.deployment_id.size).to eq 255
     end
   end
 
@@ -302,6 +366,40 @@ describe ContextExternalTool do
     }
     @tool.save!
     expect(@tool.has_placement?(:course_navigation)).to eq false
+  end
+
+  describe 'validate_urls' do
+    subject { tool.valid? }
+
+    let(:tool) do
+      course.context_external_tools.build(
+        :name => "a", :url => url, :consumer_key => '12345', :shared_secret => 'secret', settings: settings
+      )
+    end
+    let(:settings) { {} }
+    let_once(:course) { course_model }
+    let(:url) { 'https://example.com' }
+
+    context 'with bad launch_url' do
+      let(:url) { 'https://example.com>' }
+
+      it { is_expected.to be false }
+    end
+
+    context 'with bad settings_url' do
+      let(:settings) do
+        { course_navigation: {
+            :url => 'https://example.com>',
+            :text => "Example",
+            :icon_url => "http://www.example.com/image.ico",
+            :selection_width => 50,
+            :selection_height => 50
+          }
+        }
+      end
+
+      it { is_expected.to be false }
+    end
   end
 
   describe "find_external_tool" do
@@ -1441,6 +1539,22 @@ describe ContextExternalTool do
       it 'returns true' do
         expect(tool).to be_lti_1_3_enabled
       end
+    end
+  end
+
+  describe 'editor_button_json' do
+    let(:tool) { @root_account.context_external_tools.new(name: "editor thing", domain: "www.example.com") }
+
+    it 'includes a boolean false for use_tray' do
+      tool.editor_button = { use_tray: "false" }
+      json = ContextExternalTool.editor_button_json([tool], @course, user_with_pseudonym)
+      expect(json[0][:use_tray]).to eq false
+    end
+
+    it 'includes a boolean true for use_tray' do
+      tool.editor_button = { use_tray: "true" }
+      json = ContextExternalTool.editor_button_json([tool], @course, user_with_pseudonym)
+      expect(json[0][:use_tray]).to eq true
     end
   end
 end

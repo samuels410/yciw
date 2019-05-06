@@ -139,6 +139,11 @@ describe ExternalToolsController do
       it 'caches the the LTI 1.3 launch' do
         expect(cached_launch["https://purl.imsglobal.org/spec/lti/claim/message_type"]).to eq "LtiResourceLinkRequest"
       end
+
+      it 'sets the "canvas_domain" to the request domain' do
+        message_hint = JSON::JWT.decode(assigns[:lti_launch].params['lti_message_hint'], :skip_verification)
+        expect(message_hint['canvas_domain']).to eq 'localhost'
+      end
     end
 
     context 'basic-lti-launch-request' do
@@ -1630,6 +1635,8 @@ describe ExternalToolsController do
   end
 
   describe 'lti 1.3' do
+    include_context 'lti_1_3_spec_helper'
+
     let_once(:account) { Account.default }
     let_once(:sub_account) { account_model(root_account: account) }
     let_once(:course) { course_model account: sub_account }
@@ -1644,45 +1651,6 @@ describe ExternalToolsController do
         developer_key: developer_key,
         settings: settings
       )
-    end
-    let(:settings) do
-      {
-        'title' => 'LTI 1.3 Tool',
-        'description' => '1.3 Tool',
-        'launch_url' => 'http://lti13testtool.docker/blti_launch',
-        'custom_fields' => {'has_expansion' => '$Canvas.user.id', 'no_expansion' => 'foo'},
-        'public_jwk' => {
-          "kty" => "RSA",
-          "e" => "AQAB",
-          "n" => "2YGluUtCi62Ww_TWB38OE6wTaN...",
-          "kid" => "2018-09-18T21:55:18Z",
-          "alg" => "RS256",
-          "use" => "sig"
-        },
-        'extensions' =>  [
-          {
-            'platform' => 'canvas.instructure.com',
-            'privacy_level' => 'public',
-            'tool_id' => 'LTI 1.3 Test Tool',
-            'domain' => 'http://lti13testtool.docker',
-            'settings' =>  {
-              'icon_url' => 'https://static.thenounproject.com/png/131630-200.png',
-              'selection_height' => 500,
-              'selection_width' => 500,
-              'text' => 'LTI 1.3 Test Tool Extension text',
-              'course_navigation' =>  {
-                'message_type' => 'LtiResourceLinkRequest',
-                'canvas_icon_class' => 'icon-lti',
-                'icon_url' => 'https://static.thenounproject.com/png/131630-211.png',
-                'text' => 'LTI 1.3 Test Tool Course Navigation',
-                'url' =>
-                'http://lti13testtool.docker/launch?placement=course_navigation',
-                'enabled' => true
-              }
-            }
-          }
-        ]
-      }
     end
     let(:dev_key_id) { developer_key.id }
 

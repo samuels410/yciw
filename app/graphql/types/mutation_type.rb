@@ -16,13 +16,42 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
+class MutationFieldExtension < GraphQL::Schema::FieldExtension
+  def resolve(object:, arguments:, context:, **rest)
+    GraphQLPostgresTimeout.wrap(context.query) do
+      yield(object, arguments)
+    end
+  rescue GraphQLPostgresTimeout::Error
+    raise GraphQL::ExecutionError, "operation timed out"
+  end
+end
+
 class Types::MutationType < Types::ApplicationObjectType
   graphql_name "Mutation"
 
+  ##
+  # wraps all mutation fields with necessary
+  # extensions (e.g. pg timeout)
+  def self.field(*args, **kwargs)
+    super(*args, **kwargs, extensions: [MutationFieldExtension])
+  end
+
   field :create_group_in_set, mutation: Mutations::CreateGroupInSet
+  field :hide_assignment_grades, mutation: Mutations::HideAssignmentGrades
+  field :hide_assignment_grades_for_sections, mutation: Mutations::HideAssignmentGradesForSections
+  field :post_assignment_grades, mutation: Mutations::PostAssignmentGrades
+  field :post_assignment_grades_for_sections, mutation: Mutations::PostAssignmentGradesForSections
   field :set_override_score, <<~DESC, mutation: Mutations::SetOverrideScore
     Sets the overridden final score for the associated enrollment, optionally limited to a specific
     grading period. This will supersede the computed final score/grade if present.
   DESC
+  field :set_assignment_post_policy, <<~DESC, mutation: Mutations::SetAssignmentPostPolicy
+    Sets the post policy for the assignment.
+  DESC
+  field :set_course_post_policy, <<~DESC, mutation: Mutations::SetCoursePostPolicy
+    Sets the post policy for the course, with an option to override and delete
+    existing assignment post policies.
+  DESC
   field :update_assignment, mutation: Mutations::UpdateAssignment
+  field :create_submission_comment, mutation: Mutations::CreateSubmissionComment
 end

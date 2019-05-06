@@ -1,0 +1,40 @@
+Auto-merging yarn.lock
+CONFLICT (content): Merge conflict in yarn.lock
+Removing spec/shared_examples/messages/assignment_submitted_late.email.rb
+Removing spec/selenium/grades/pages/gradezilla_late_policies_page.rb
+Removing spec/selenium/announcements/pages/announcements_page.rb
+Removing spec/migrations/populate_root_account_id_on_user_observers_spec.rb
+Removing spec/messages/submission_comment_for_teacher.erb_spec.rb
+Removing spec/messages/assignment_submitted_late.email.html.erb_spec.rb
+Removing spec/messages/assignment_submitted_late.email.erb_spec.rb
+Removing spec/graphql/assignment_override_instrumenter_spec.rb
+Removing spec/coffeescripts/gradezilla/SetDefaultGradeDialogSpec.js
+Removing spec/coffeescripts/gradebook/SetDefaultGradeDialogSpec.js
+Removing public/partials/_course_visibility_help.html
+Removing packages/canvas-rce/doc/development.md
+Removing packages/canvas-planner/webpack.config.js
+Removing packages/canvas-planner/src/demo.js
+Removing packages/canvas-planner/public/index.html
+Removing packages/canvas-planner/public/ie11-polyfill.js
+Removing packages/canvas-planner/postcss.config.js
+Removing packages/canvas-planner/babel-preset.js
+Removing packages/canvas-planner/.stylelintrc
+Auto-merging lib/feature.rb
+CONFLICT (content): Merge conflict in lib/feature.rb
+Auto-merging config/routes.rb
+Auto-merging config/initializers/delayed_job.rb
+Auto-merging app/views/shared/terms_required.html.erb
+Removing app/jsx/external_apps/components/__tests__/Lti13Apps.test.js
+Removing app/jsx/external_apps/components/Lti13Apps.js
+Removing app/jsx/assignments_2/student/components/__tests__/PointsDisplay.test.js
+Removing app/jsx/assignments_2/student/components/PointsDisplay/index.js
+Removing app/jsx/assignments_2/student/components/PointsDisplay/Points.js
+Removing app/jsx/assignments_2/student/components/PointsDisplay/Percent.js
+Removing app/jsx/assignments_2/student/components/PointsDisplay/Letter.js
+Removing app/jsx/assignments_2/student/components/PointsDisplay/GradingScheme.js
+Removing app/jsx/assignments_2/student/components/PointsDisplay/Complete.js
+Removing app/graphql/assignment_override_instrumenter.rb
+Auto-merging app/controllers/files_controller.rb
+Auto-merging app/controllers/application_controller.rb
+Removing app/coffeescripts/gradebook/SetDefaultGradeDialog.coffee
+Automatic merge failed; fix conflicts and then commit the result.

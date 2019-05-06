@@ -49,6 +49,7 @@ describe "discussions" do
       end
 
       it "should add an attachment to a new topic", priority: "1", test_id: 150466 do
+        skip_if_firefox('known issue with firefox https://bugzilla.mozilla.org/show_bug.cgi?id=1335085')
         topic_title = 'new topic with file'
         get url
         wait_for_tiny(f('textarea[name=message]'))
@@ -183,6 +184,7 @@ describe "discussions" do
       end
 
       it "should allow a student to create a discussion", priority: "1", test_id: 150471 do
+        skip_if_firefox('known issue with firefox https://bugzilla.mozilla.org/show_bug.cgi?id=1335085')
         get url
         wait_for_tiny(f('textarea[name=message]'))
         replace_content(f('input[name=title]'), "Student Discussion")

@@ -16,46 +16,11 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 require File.expand_path(File.dirname(__FILE__) + '/../spec_helper.rb')
-
-settings = {
-  'title' => 'LTI 1.3 Tool',
-  'description' => '1.3 Tool',
-  'launch_url' => 'http://lti13testtool.docker/blti_launch',
-  'custom_fields' => {'has_expansion' => '$Canvas.user.id', 'no_expansion' => 'foo'},
-  'public_jwk' => {
-    "kty" => "RSA",
-    "e" => "AQAB",
-    "n" => "2YGluUtCi62Ww_TWB38OE6wTaN...",
-    "kid" => "2018-09-18T21:55:18Z",
-    "alg" => "RS256",
-    "use" => "sig"
-  },
-  'extensions' =>  [
-    {
-      'platform' => 'canvas.instructure.com',
-      'privacy_level' => 'public',
-      'tool_id' => 'LTI 1.3 Test Tool',
-      'domain' => 'http://lti13testtool.docker',
-      'settings' =>  {
-        'icon_url' => 'https://static.thenounproject.com/png/131630-200.png',
-        'selection_height' => 500,
-        'selection_width' => 500,
-        'text' => 'LTI 1.3 Test Tool Extension text',
-        'course_navigation' =>  {
-          'message_type' => 'LtiResourceLinkRequest',
-          'canvas_icon_class' => 'icon-lti',
-          'icon_url' => 'https://static.thenounproject.com/png/131630-211.png',
-          'text' => 'LTI 1.3 Test Tool Course Navigation',
-          'url' =>
-          'http://lti13testtool.docker/launch?placement=course_navigation',
-          'enabled' => true
-        }
-      }
-    }
-  ]
-}
+require File.expand_path(File.dirname(__FILE__) + '/../lti_1_3_spec_helper')
 
 RSpec.describe DeveloperKeyAccountBinding, type: :model do
+  include_context 'lti_1_3_spec_helper'
+
   let(:account) { account_model }
   let(:developer_key) { DeveloperKey.create! }
   let(:dev_key_binding) do
@@ -185,7 +150,7 @@ RSpec.describe DeveloperKeyAccountBinding, type: :model do
   describe 'find_site_admin_cached' do
     specs_require_sharding
 
-    let(:root_account_shard) { Shard.create! }
+    let(:root_account_shard) { @shard1 }
     let(:root_account) { root_account_shard.activate { account_model } }
     let(:site_admin_key) { Account.site_admin.shard.activate { DeveloperKey.create! } }
     let(:root_account_key) { root_account_shard.activate { DeveloperKey.create!(account: root_account) } }
@@ -248,7 +213,7 @@ RSpec.describe DeveloperKeyAccountBinding, type: :model do
   context 'sharding' do
     specs_require_sharding
 
-    let(:root_account_shard) { Shard.create! }
+    let(:root_account_shard) { @shard1 }
     let(:root_account) { root_account_shard.activate { account_model } }
     let(:sa_developer_key) { Account.site_admin.shard.activate { DeveloperKey.create!(name: 'SA Key') } }
     let(:root_account_binding) do

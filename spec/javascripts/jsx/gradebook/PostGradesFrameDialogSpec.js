@@ -16,7 +16,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import fakeENV from  'helpers/fakeENV'
+import fakeENV from 'helpers/fakeENV'
 import PostGradesFrameDialog from 'compiled/gradebook/PostGradesFrameDialog'
 
 let dialog
@@ -25,7 +25,7 @@ let iframe
 let info
 
 QUnit.module('PostGradesFrameDialog screenreader only content', {
-  setup () {
+  setup() {
     fakeENV.setup({LTI_LAUNCH_FRAME_ALLOWANCES: ['midi', 'media']})
     dialog = new PostGradesFrameDialog({})
     dialog.open()
@@ -33,7 +33,7 @@ QUnit.module('PostGradesFrameDialog screenreader only content', {
     iframe = el.find('iframe')
   },
 
-  teardown () {
+  teardown() {
     dialog.close()
     dialog.$dialog.remove()
     fakeENV.teardown()
@@ -43,14 +43,14 @@ QUnit.module('PostGradesFrameDialog screenreader only content', {
 test('shows beginning info alert and adds class to iframe', () => {
   const info = el.find('.before_external_content_info_alert')
   info.focus()
-  notOk(info.hasClass('screenreader-only'))
+  notOk(info.children().hasClass('screenreader-only'))
   ok(iframe.hasClass('info_alert_outline'))
 })
 
 test('shows ending info alert and adds class to iframe', () => {
   info = el.find('.after_external_content_info_alert')
   info.focus()
-  notOk(info.hasClass('screenreader-only'))
+  notOk(info.children().hasClass('screenreader-only'))
   ok(iframe.hasClass('info_alert_outline'))
 })
 
@@ -58,7 +58,7 @@ test('hides beginning info alert and removes class from iframe', () => {
   info = el.find('.before_external_content_info_alert')
   info.focus()
   info.blur()
-  ok(info.hasClass('screenreader-only'))
+  ok(info.children().hasClass('screenreader-only'))
   notOk(iframe.hasClass('info_alert_outline'))
 })
 
@@ -66,12 +66,17 @@ test('hides ending info alert and removes class from iframe', () => {
   info = el.find('.after_external_content_info_alert')
   info.focus()
   info.blur()
-  ok(info.hasClass('screenreader-only'))
+  ok(info.children().hasClass('screenreader-only'))
   notOk(iframe.hasClass('info_alert_outline'))
 })
 
 test("doesn't show infos or add border to iframe by default", () => {
-  equal(el.find('.before_external_content_info_alert.screenreader-only, .after_external_content_info_alert.screenreader-only').length, 2)
+  equal(
+    el.find(
+      '.before_external_content_info_alert > .screenreader-only, .after_external_content_info_alert > .screenreader-only'
+    ).length,
+    2
+  )
   notOk(iframe.hasClass('info_alert_outline'))
 })
 

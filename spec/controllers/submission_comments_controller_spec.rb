@@ -21,10 +21,10 @@ require_relative '../spec_helper'
 RSpec.describe SubmissionCommentsController do
   describe "GET 'index'" do
     before :once do
-      course = Account.default.courses.create!
-      @teacher = course_with_teacher(course: course, active_all: true).user
-      @student = course_with_student(course: course, active_all: true).user
-      @assignment = course.assignments.create!
+      @course = Account.default.courses.create!
+      @teacher = course_with_teacher(course: @course, active_all: true).user
+      @student = course_with_student(course: @course, active_all: true).user
+      @assignment = @course.assignments.create!
       @submission = @assignment.submissions.find_by!(user: @student)
       @submission.submission_comments.create!(author: @teacher, comment: 'a comment')
     end
@@ -33,6 +33,20 @@ RSpec.describe SubmissionCommentsController do
       before { user_session(@teacher) }
 
       context 'given a standard request' do
+        before do
+          get :index, params: { submission_id: @submission.id }, format: :pdf
+        end
+
+        specify { expect(response).to have_http_status :ok }
+        specify { expect(response).to render_template(:index) }
+        specify { expect(response.headers.fetch('Content-Type')).to match(/\Aapplication\/pdf/) }
+      end
+
+      context "when course is in a concluded term" do
+        before :once do
+          @course.enrollment_term.update!(end_at: 1.day.ago)
+        end
+
         before do
           get :index, params: { submission_id: @submission.id }, format: :pdf
         end
@@ -123,7 +137,7 @@ RSpec.describe SubmissionCommentsController do
         AnonymousOrModerationEvent.where(
           assignment: assignment,
           submission: submission,
-        ).reload
+        ).order(:id)
       end
       let(:last_event) { audit_events.last }
 
@@ -138,12 +152,12 @@ RSpec.describe SubmissionCommentsController do
         end
 
         it 'records the user_id of the destroyer' do
-          delete(:destroy, params: {id: comment.id})
+          delete(:destroy, params: {id: comment.id, format: :json})
           expect(last_event.user_id).to eq teacher.id
         end
 
         it 'sets the event_type of the event to "submission_comment_deleted"' do
-          delete(:destroy, params: {id: comment.id})
+          delete(:destroy, params: {id: comment.id, format: :json})
           expect(last_event.event_type).to eq 'submission_comment_deleted'
         end
 
@@ -248,7 +262,7 @@ RSpec.describe SubmissionCommentsController do
         AnonymousOrModerationEvent.where(
           assignment: assignment,
           submission: submission
-        ).reload
+        ).order(:id)
       end
       let(:last_event) { audit_events.last }
 
@@ -268,7 +282,7 @@ RSpec.describe SubmissionCommentsController do
         end
 
         it 'sets the event_type of the event to "submission_comment_updated"' do
-          patch(:update, params: {id: comment.id, submission_comment: {comment: 'update!!!'}})
+          patch(:update, params: {id: comment.id, submission_comment: {comment: 'update!!!'}, format: :json})
           expect(last_event.event_type).to eq 'submission_comment_updated'
         end
 
@@ -291,7 +305,7 @@ RSpec.describe SubmissionCommentsController do
 
           it 'records changed values as if saving a new comment' do
             comment_params = {draft: false, comment: 'this is NO LONGER a draft'}
-            patch(:update, params: {id: draft_comment.id, submission_comment: comment_params})
+            patch(:update, params: {id: draft_comment.id, submission_comment: comment_params, format: :json})
 
             expect(last_event.payload['comment']).to eq 'this is NO LONGER a draft'
           end
@@ -299,7 +313,7 @@ RSpec.describe SubmissionCommentsController do
 
         it 'captures changes to the comment field' do
           new_text = 'update!!!!!!'
-          patch(:update, params: {id: comment.id, submission_comment: {comment: new_text}})
+          patch(:update, params: {id: comment.id, submission_comment: {comment: new_text}, format: :json})
 
           expect(last_event.payload['comment']).to eq ['initial comment', new_text]
         end

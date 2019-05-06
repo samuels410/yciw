@@ -47,6 +47,12 @@ class SubmissionComment < ActiveRecord::Base
 
   validates_length_of :comment, :maximum => maximum_text_length, :allow_nil => true, :allow_blank => true
   validates_length_of :comment, :minimum => 1, :allow_nil => true, :allow_blank => true
+  validates_each :attempt do |record, attr, value|
+    next if value.nil?
+    if record.submission.attempt.nil? || value > record.submission.attempt
+      record.errors.add(attr, 'attempt must not be larger than number of submission attempts')
+    end
+  end
 
   before_save :infer_details
   before_save :set_edited_at
@@ -134,16 +140,14 @@ class SubmissionComment < ActiveRecord::Base
   end
 
   set_policy do
-    given do |user,session|
-      !self.teacher_only_comment && self.submission.user_can_read_grade?(user, session) && !self.hidden? && !self.draft?
-    end
+    given { |user, session| can_view_comment?(user, session) }
     can :read
 
     given {|user| self.author == user}
     can :read and can :delete and can :update
 
-    given {|user, session| self.submission.grants_right?(user, session, :grade) }
-    can :read and can :delete
+    given { |user, session| submission.grants_right?(user, session, :grade) }
+    can :delete
 
     given { |user, session|
         self.can_read_author?(user, session)
@@ -184,6 +188,50 @@ class SubmissionComment < ActiveRecord::Base
     }
   end
 
+  def can_view_comment?(user, session)
+    # Users can always view their own comments
+    return true if author_id == user.id
+
+    # A user with the power to moderate the assignment can see all comments.
+    # For moderated assignments, this is the final grader or an admin;
+    # for non-moderated assignments, it's all teachers.
+    assignment = submission.assignment
+    if assignment.moderated_grading?
+      return true if assignment.permits_moderation?(user)
+    elsif assignment.user_can_update?(user, session)
+      return true
+    end
+
+    # Students on the receiving end of an assessment can view assessors' comments
+    return true if assessment_request.present? && assessment_request.user_id == user.id
+
+    # The student who owns the submission can't see drafts or hidden comments (or,
+    # generally, any instructor comments if the assignment is muted)
+    if submission.user_id == user.id
+      return false if draft? || hidden? || assignment.muted?
+
+      # Generally the student should see only non-provisional comments--but they should
+      # also see provisional comments from the final grader if grades are published
+      return !provisional || (assignment.grades_published? && author_id == assignment.final_grader_id)
+    end
+
+    # For non-moderated assignments, check whether the user can view grades
+    return submission.user_can_read_grade?(user, session) unless assignment.moderated_grading?
+
+    # If we made it here, the current user is a provisional grader viewing a
+    # moderated assignment, and the comment is by someone else.
+    return true if assignment.grader_comments_visible_to_graders?
+
+    if assignment.grades_published?
+      # If grades are published, show comments from the student, the final grader,
+      # and the chosen grader (and--as checked above--the current user)
+      [submission.user_id, assignment.final_grader_id, submission.grader_id].include?(author_id)
+    else
+      # If not, show comments from the student (and--as checked above--the current user)
+      author_id == submission.user_id
+    end
+  end
+
   def can_read_author?(user, session)
     RequestCache.cache('user_can_read_author', self, user, session) do
       (!self.anonymous? && !self.submission.assignment.anonymous_peer_reviews?) ||
@@ -220,6 +268,10 @@ class SubmissionComment < ActiveRecord::Base
     read_attribute(:context) || self.submission.assignment.context rescue nil
   end
 
+  def parse_attachment_ids
+    (self.attachment_ids || "").split(",").map(&:to_i)
+  end
+
   def attachment_ids=(ids)
     # raise "Cannot set attachment id's directly"
   end
@@ -230,7 +282,7 @@ class SubmissionComment < ActiveRecord::Base
     # access to files in another user's comments, since they're all being held
     # on the assignment for now.
     attachments ||= []
-    old_ids = (self.attachment_ids || "").split(",").map{|id| id.to_i}
+    old_ids = parse_attachment_ids
     write_attribute(:attachment_ids, attachments.select { |a|
       old_ids.include?(a.id) ||
       a.recently_created ||
@@ -252,7 +304,7 @@ class SubmissionComment < ActiveRecord::Base
 
   def attachments
     return Attachment.none unless attachment_ids.present?
-    ids = attachment_ids.split(",").map(&:to_i)
+    ids = parse_attachment_ids
     attachments = submission.assignment.attachments.where(id: ids)
   end
 

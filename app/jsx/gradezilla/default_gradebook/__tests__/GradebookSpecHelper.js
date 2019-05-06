@@ -28,6 +28,11 @@ export function createGradebook(options = {}) {
     context_allows_gradebook_uploads: true,
     context_id: '1',
     context_url: '/courses/1/',
+
+    course_settings: {
+      allow_final_grade_override: false
+    },
+
     currentUserId: '1',
     default_grading_standard: [['A', 0.9], ['B', 0.8], ['C', 0.7], ['D', 0.6], ['F', 0.0]],
     editable: true,
@@ -49,6 +54,7 @@ export function createGradebook(options = {}) {
     new_gradebook_development_enabled: true,
     outcome_gradebook_enabled: false,
     post_grades_ltis: [],
+    post_policies_enabled: false,
     publish_to_sis_enabled: false,
     sections: [],
     settings: {
@@ -77,7 +83,7 @@ export function createGradebook(options = {}) {
 }
 
 export function setFixtureHtml($fixture) {
-  $fixture.innerHTML = `
+  return ($fixture.innerHTML = `
     <div id="application">
       <div id="wrapper">
         <div data-component="GridColor"></div>
@@ -92,13 +98,16 @@ export function setFixtureHtml($fixture) {
         </div>
         <div id="gradebook-settings-modal-button-container"></div>
         <div data-component="GradebookSettingsModal"></div>
+        <div id="hide-assignment-grades-tray"></div>
+        <div id="post-assignment-grades-tray"></div>
+        <div id="assignment-posting-policy-tray"></div>
         <div data-component="StatusesModal"></div>
         <div data-component="AnonymousSpeedGraderAlert"></div>
         <div id="StudentTray__Container"></div>
         <div id="gradebook_grid"></div>
       </div>
     </div>
-  `
+  `)
 }
 
 export function stubDataLoader() {
@@ -112,5 +121,5 @@ export function stubDataLoader() {
     gotSubmissions: $.Deferred()
   }
 
-  window.sandbox.stub(DataLoader, 'loadGradebookData').returns(dataLoaderPromises)
+  return window.sandbox.stub(DataLoader, 'loadGradebookData').returns(dataLoaderPromises)
 }

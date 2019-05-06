@@ -23,9 +23,10 @@ import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReade
 import I18n from 'i18n!assignments_2_student_header'
 
 import AssignmentGroupModuleNav from './AssignmentGroupModuleNav'
-import SubmissionStatusPill from './SubmissionStatusPill'
+import SubmissionStatusPill from '../../shared/SubmissionStatusPill'
+import LatePolicyStatusDisplay from './LatePolicyStatusDisplay'
 import DateTitle from './DateTitle'
-import PointsDisplay from './PointsDisplay'
+import GradeDisplay from './GradeDisplay'
 import StepContainer from './StepContainer'
 import Attempt from './Attempt'
 import {number} from 'prop-types'
@@ -39,10 +40,14 @@ class Header extends React.Component {
   }
 
   state = {
-    isSticky: false
+    isSticky: false,
+    nonStickyHeaderheight: 0
   }
 
   componentDidMount() {
+    const nonStickyHeaderheight = document.getElementById('assignments-2-student-header')
+      .clientHeight
+    this.setState({nonStickyHeaderheight})
     window.addEventListener('scroll', this.handleScroll)
   }
 
@@ -59,66 +64,92 @@ class Header extends React.Component {
   }
 
   render() {
+    const submission = this.props.assignment.submissionsConnection
+      ? this.props.assignment.submissionsConnection.nodes[0]
+      : {}
     return (
-      <div
-        data-test-id="assignments-2-student-header"
-        className={
-          this.state.isSticky
-            ? 'assignment-student-header-sticky'
-            : 'assignment-student-header-normal'
-        }
-      >
-        <Heading level="h1">
-          {/* We hide this because in the designs, what visually looks like should
+      <React.Fragment>
+        <div
+          data-testid="assignments-2-student-header"
+          id="assignments-2-student-header"
+          className={
+            this.state.isSticky
+              ? 'assignment-student-header-sticky'
+              : 'assignment-student-header-normal'
+          }
+        >
+          <Heading level="h1">
+            {/* We hide this because in the designs, what visually looks like should
               be the h1 appears after the group/module links, but we need the
               h1 to actually come before them for a11y */}
-          <ScreenReaderContent> {this.props.assignment.name} </ScreenReaderContent>
-        </Heading>
+            <ScreenReaderContent> {this.props.assignment.name} </ScreenReaderContent>
+          </Heading>
 
-        {!this.state.isSticky && <AssignmentGroupModuleNav assignment={this.props.assignment} />}
-        <Flex margin={this.state.isSticky ? '0' : '0 0 medium 0'}>
-          <FlexItem grow>
-            <DateTitle assignment={this.props.assignment} />
-          </FlexItem>
-          <FlexItem grow>
-            <PointsDisplay
-              displayAs={this.props.assignment.gradingType}
-              receivedGrade={
-                this.props.assignment.submissionsConnection &&
-                this.props.assignment.submissionsConnection.nodes[0] &&
-                this.props.assignment.submissionsConnection.nodes[0].grade
-              }
-              possiblePoints={this.props.assignment.pointsPossible}
-            />
-            <FlexItem as="div" align="end" textAlign="end">
-              <SubmissionStatusPill
-                submissionStatus={
-                  this.props.assignment.submissionsConnection &&
-                  this.props.assignment.submissionsConnection.nodes[0] &&
-                  this.props.assignment.submissionsConnection.nodes[0].submissionStatus
-                }
-              />
+          {!this.state.isSticky && <AssignmentGroupModuleNav assignment={this.props.assignment} />}
+          <Flex margin={this.state.isSticky ? '0' : '0 0 medium 0'}>
+            <FlexItem shrink>
+              <DateTitle isSticky={this.state.isSticky} assignment={this.props.assignment} />
             </FlexItem>
-          </FlexItem>
-        </Flex>
-        {!this.state.isSticky && <Attempt assignment={this.props.assignment} />}
-        <div className="assignment-pizza-header-outer">
-          <div
-            className="assignment-pizza-header-inner"
-            data-test-id={
-              this.state.isSticky
-                ? 'assignment-student-header-sticky'
-                : 'assignment-student-header-normal'
-            }
-          >
-            <StepContainer
-              assignment={this.props.assignment}
-              isCollapsed={this.state.isSticky}
-              collapsedLabel={I18n.t('Submitted')}
-            />
+            <FlexItem grow align="start">
+              <GradeDisplay
+                gradingType={this.props.assignment.gradingType}
+                receivedGrade={submission.grade}
+                pointsPossible={this.props.assignment.pointsPossible}
+              />
+              <FlexItem as="div" align="end" textAlign="end">
+                <Flex direction="column">
+                  {submission.gradingStatus === 'graded' &&
+                    (submission.latePolicyStatus === 'late' ||
+                      submission.submissionStatus === 'late') && (
+                      <FlexItem grow>
+                        <LatePolicyStatusDisplay
+                          gradingType={this.props.assignment.gradingType}
+                          pointsPossible={this.props.assignment.pointsPossible}
+                          originalGrade={submission.enteredGrade}
+                          pointsDeducted={submission.deductedPoints}
+                          grade={submission.grade}
+                        />
+                      </FlexItem>
+                    )}
+                  <FlexItem grow>
+                    {submission.submissionStatus && (
+                      <SubmissionStatusPill submissionStatus={submission.submissionStatus} />
+                    )}
+                  </FlexItem>
+                </Flex>
+              </FlexItem>
+            </FlexItem>
+          </Flex>
+          {!this.state.isSticky && <Attempt assignment={this.props.assignment} />}
+          <div className="assignment-pizza-header-outer">
+            <div
+              className="assignment-pizza-header-inner"
+              data-test-id={
+                this.state.isSticky
+                  ? 'assignment-student-header-sticky'
+                  : 'assignment-student-header-normal'
+              }
+            >
+              <StepContainer
+                assignment={this.props.assignment}
+                forceLockStatus={!this.props.assignment.env.currentUserId} // TODO: replace with new 'self' graphql query when ready
+                isCollapsed={this.state.isSticky}
+                collapsedLabel={I18n.t('Submitted')}
+              />
+            </div>
           </div>
         </div>
-      </div>
+        {
+          // We need this element to fill the gap that is missing when the regular header is removed in the transtion
+          // to the sticky header
+        }
+        {this.state.isSticky && (
+          <div
+            data-test-id="header-element-filler"
+            style={{height: `${this.state.nonStickyHeaderheight - this.props.scrollThreshold}px`}}
+          />
+        )}
+      </React.Fragment>
     )
   }
 }

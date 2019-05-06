@@ -17,7 +17,7 @@
 #
 
 require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
-require File.expand_path(File.dirname(__FILE__) + '/../../helpers/graphql_type_tester')
+require_relative "../graphql_spec_helper"
 
 describe Types::DiscussionType do
   let_once(:discussion) { group_discussion_assignment }
@@ -26,5 +26,13 @@ describe Types::DiscussionType do
 
   it "works" do
     expect(discussion_type.resolve("_id")).to eq discussion.id.to_s
+  end
+
+  it "has modules" do
+    module1 = discussion.course.context_modules.create!(name: 'Module 1')
+    module2 = discussion.course.context_modules.create!(name: 'Module 2')
+    discussion.context_module_tags.create!(context_module: module1, context: discussion.course, tag_type: 'context_module')
+    discussion.context_module_tags.create!(context_module: module2, context: discussion.course, tag_type: 'context_module')
+    expect(discussion_type.resolve("modules { _id }").sort).to eq [module1.id.to_s, module2.id.to_s]
   end
 end

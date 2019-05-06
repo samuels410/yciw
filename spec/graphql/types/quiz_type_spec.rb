@@ -17,7 +17,7 @@
 #
 
 require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
-require File.expand_path(File.dirname(__FILE__) + '/../../helpers/graphql_type_tester')
+require_relative "../graphql_spec_helper"
 
 describe Types::QuizType do
   let_once(:quiz) { quiz_model }
@@ -25,5 +25,13 @@ describe Types::QuizType do
 
   it "works" do
     expect(quiz_type.resolve("_id")).to eq quiz.id.to_s
+  end
+
+  it "has modules" do
+    module1 = quiz.context.context_modules.create!(name: 'Module 1')
+    module2 = quiz.context.context_modules.create!(name: 'Module 2')
+    quiz.context_module_tags.create!(context_module: module1, context: quiz.context, tag_type: 'context_module')
+    quiz.context_module_tags.create!(context_module: module2, context: quiz.context, tag_type: 'context_module')
+    expect(quiz_type.resolve("modules { _id }").sort).to eq [module1.id.to_s, module2.id.to_s]
   end
 end

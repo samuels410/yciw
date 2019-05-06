@@ -232,27 +232,34 @@ describe GradebooksController do
         @student_enrollment.scores.find_by(course_score: true).update!(override_score: 99)
       end
 
-      it "includes the effective final grade in the ENV" do
+      it "includes the effective final score in the ENV" do
         user_session(@teacher)
         get :grade_summary, params: { course_id: @course.id, id: @student.id }
-        expect(assigns[:js_env][:effective_final_grade]).to eq "A"
+        expect(assigns[:js_env][:effective_final_score]).to eq 99
       end
 
-      it "does not include the effective final grade in the ENV if the feature is disabled" do
+      it "does not include the effective final score in the ENV if the feature is disabled" do
         @course.disable_feature!(:final_grades_override)
         user_session(@teacher)
         get :grade_summary, params: { course_id: @course.id, id: @student.id }
-        expect(assigns[:js_env].key?(:effective_final_grade)).to be false
+        expect(assigns[:js_env].key?(:effective_final_score)).to be false
       end
 
-      it "does not include the effective final grade in the ENV if there is no override score" do
+      it "does not include the effective final score in the ENV if there is no override score" do
         @student_enrollment.scores.find_by(course_score: true).update!(override_score: nil)
         user_session(@teacher)
         get :grade_summary, params: { course_id: @course.id, id: @student.id }
-        expect(assigns[:js_env].key?(:effective_final_grade)).to be false
+        expect(assigns[:js_env].key?(:effective_final_score)).to be false
       end
 
-      it "takes the effective final grade for the grading period, if present" do
+      it "does not include the effective final score in the ENV if there is no score" do
+        invited_student = @course.enroll_user(User.create!, "StudentEnrollment", enrollment_state: "invited").user
+        user_session(@teacher)
+        get :grade_summary, params: { course_id: @course.id, id: invited_student.id }
+        expect(assigns[:js_env].key?(:effective_final_score)).to be false
+      end
+
+      it "takes the effective final score for the grading period, if present" do
         grading_period_group = @course.grading_period_groups.create!
         grading_period = grading_period_group.grading_periods.create!(
           title: "a grading period",
@@ -262,13 +269,13 @@ describe GradebooksController do
         @student_enrollment.scores.find_by(grading_period: grading_period).update!(override_score: 84)
         user_session(@teacher)
         get :grade_summary, params: { course_id: @course.id, id: @student.id }
-        expect(assigns[:js_env][:effective_final_grade]).to eq "B"
+        expect(assigns[:js_env][:effective_final_score]).to eq 84
       end
 
-      it "takes the effective final grade for the course score, if viewing all grading periods" do
+      it "takes the effective final score for the course score, if viewing all grading periods" do
         user_session(@teacher)
         get :grade_summary, params: { course_id: @course.id, id: @student.id, grading_period_id: 0 }
-        expect(assigns[:js_env][:effective_final_grade]).to eq "A"
+        expect(assigns[:js_env][:effective_final_score]).to eq 99
       end
     end
 
@@ -785,6 +792,69 @@ describe GradebooksController do
         user_session(@teacher)
       end
 
+      describe "course_settings" do
+        let(:course_settings) { gradebook_options.fetch(:course_settings) }
+
+        describe "allow_final_grade_override" do
+          before :once do
+            @course.enable_feature!(:new_gradebook)
+            @course.enable_feature!(:final_grades_override)
+            @course.update!(allow_final_grade_override: true)
+          end
+
+          let(:allow_final_grade_override) { course_settings.fetch(:allow_final_grade_override) }
+
+          it "sets allow_final_grade_override to true when final grade override is allowed" do
+            get :show, params: { course_id: @course.id }
+            expect(allow_final_grade_override).to eq true
+          end
+
+          it "sets allow_final_grade_override to false when final grade override is not allowed" do
+            @course.update!(allow_final_grade_override: false)
+            get :show, params: { course_id: @course.id }
+            expect(allow_final_grade_override).to eq false
+          end
+
+          # TODO: remove these specs once we no longer need the fallback behavior (GRADE-2124)
+          context "when the course setting is not set" do
+            before(:each) do
+              settings_without_override = @course.settings.dup
+              settings_without_override.delete(:allow_final_grade_override)
+
+              @course.settings = settings_without_override
+              @course.save!
+            end
+
+            it "sets allow_final_grade_override to true if the current user's preference is true" do
+              @teacher.preferences.deep_merge!({
+                gradebook_settings: {@course.id => {"show_final_grade_overrides" => "true"}}
+              })
+              get :show, params: { course_id: @course.id }
+              expect(allow_final_grade_override).to eq true
+            end
+
+            it "sets allow_final_grade_override to false if the current user's preference is false" do
+              @teacher.preferences.deep_merge!({
+                gradebook_settings: {@course.id => {"show_final_grade_overrides" => "false"}}
+              })
+              get :show, params: { course_id: @course.id }
+              expect(allow_final_grade_override).to eq false
+            end
+
+            it "sets allow_final_grade_override to false if the current user's preference does not exist" do
+              get :show, params: { course_id: @course.id }
+              expect(allow_final_grade_override).to eq false
+            end
+          end
+
+          it "sets allow_final_grade_override to false when 'Final Grade Override' is not enabled" do
+            @course.disable_feature!(:final_grades_override)
+            get :show, params: { course_id: @course.id }
+            expect(allow_final_grade_override).to eq false
+          end
+        end
+      end
+
       describe "default_grading_standard" do
         it "uses the course's grading standard" do
           grading_standard = grading_standard_for(@course)
@@ -843,11 +913,72 @@ describe GradebooksController do
         expect(gradebook_options).not_to have_key :grading_schemes
       end
 
+      it "sets post_policies_enabled to true when Post Policies are enabled" do
+        @course.enable_feature!(:new_gradebook)
+        @course.enable_feature!(:post_policies)
+        get :show, params: { course_id: @course.id }
+        expect(gradebook_options[:post_policies_enabled]).to be(true)
+      end
+
+      it "sets post_policies_enabled to false when Post Policies are not enabled" do
+        @course.enable_feature!(:new_gradebook)
+        get :show, params: { course_id: @course.id }
+        expect(gradebook_options[:post_policies_enabled]).to be(false)
+      end
+
       it 'includes api_max_per_page' do
         Setting.set('api_max_per_page', 50)
         get :show, params: {course_id: @course.id}
         api_max_per_page = assigns[:js_env][:GRADEBOOK_OPTIONS][:api_max_per_page]
         expect(api_max_per_page).to eq(50)
+      end
+
+      describe "post_policies_enabled" do
+        it "is set to true if New Gradebook is enabled and post policies are enabled" do
+          @course.enable_feature!(:new_gradebook)
+          @course.enable_feature!(:post_policies)
+
+          get :show, params: {course_id: @course.id}
+          expect(assigns[:js_env][:GRADEBOOK_OPTIONS][:post_policies_enabled]).to be true
+        end
+
+        it "is set to false if New Gradebook is enabled and post policies are disabled" do
+          @course.enable_feature!(:new_gradebook)
+
+          get :show, params: {course_id: @course.id}
+          expect(assigns[:js_env][:GRADEBOOK_OPTIONS][:post_policies_enabled]).to be false
+        end
+
+        it "is not included if New Gradebook is not enabled" do
+          get :show, params: {course_id: @course.id}
+          expect(assigns[:js_env][:GRADEBOOK_OPTIONS]).not_to have_key(:post_policies_enabled)
+        end
+      end
+
+      describe "post_manually" do
+        it "is set to true if post policies are enabled and the course is manually-posted" do
+          @course.enable_feature!(:new_gradebook)
+          @course.enable_feature!(:post_policies)
+
+          @course.post_policies.create!(post_manually: true)
+          get :show, params: {course_id: @course.id}
+          expect(assigns[:js_env][:GRADEBOOK_OPTIONS][:post_manually]).to be true
+        end
+
+        it "is set to false if post policies are enabled and the course is not manually-posted" do
+          @course.enable_feature!(:new_gradebook)
+          @course.enable_feature!(:post_policies)
+
+          get :show, params: {course_id: @course.id}
+          expect(assigns[:js_env][:GRADEBOOK_OPTIONS][:post_manually]).to be false
+        end
+
+        it "is not included if post policies are not enabled" do
+          @course.enable_feature!(:new_gradebook)
+
+          get :show, params: {course_id: @course.id}
+          expect(assigns[:js_env][:GRADEBOOK_OPTIONS]).not_to have_key(:post_manually)
+        end
       end
 
       context "publish_to_sis_enabled" do
@@ -878,7 +1009,6 @@ describe GradebooksController do
           get :show, params: { course_id: @course.id }
           expect(gradebook_options[:publish_to_sis_enabled]).to be false
         end
-
 
         it "is false when the course is not using a SIS" do
           allow_any_instantiation_of(@course).to receive(:allows_grade_publishing_by).with(@teacher).and_return(true)
@@ -1893,7 +2023,6 @@ describe GradebooksController do
       end
 
       it 'sets can_view_audit_trail to true when the current user can view the assignment audit trail' do
-        @course.account.enable_feature!(:anonymous_moderated_marking_audit_trail)
         @course.root_account.role_overrides.create!(permission: :view_audit_trail, enabled: true, role: teacher_role)
         @assignment.update!(moderated_grading: true, grader_count: 2, grades_published_at: 2.days.ago)
         @assignment.update!(muted: false) # must be updated separately for some reason
@@ -1966,6 +2095,29 @@ describe GradebooksController do
       it 'is not set if the assignment is not moderated' do
         get 'speed_grader', params: {course_id: @course, assignment_id: @assignment}
         expect(assigns[:js_env]).not_to include(:current_anonymous_id)
+      end
+    end
+
+    describe "post_policies_enabled" do
+      context "when New Gradebook is enabled" do
+        before(:each) { @course.enable_feature!(:new_gradebook) }
+
+        it "is set to true if the Post Policies feature is enabled" do
+          @course.enable_feature!(:post_policies)
+
+          get "speed_grader", params: {course_id: @course, assignment_id: @assignment}
+          expect(assigns[:js_env][:post_policies_enabled]).to be true
+        end
+
+        it "is not set if the Post Policies feature is not enabled" do
+          get "speed_grader", params: {course_id: @course, assignment_id: @assignment}
+          expect(assigns[:js_env]).not_to include(:post_policies_enabled)
+        end
+      end
+
+      it "is not set if New Gradebook is not enabled" do
+        get "speed_grader", params: {course_id: @course, assignment_id: @assignment}
+        expect(assigns[:js_env]).not_to include(:post_policies_enabled)
       end
     end
   end

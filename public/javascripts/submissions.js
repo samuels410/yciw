@@ -44,7 +44,9 @@ import './rubric_assessment' /*global rubricAssessment*/
     for(var jdx in data) {
       var submission = data[jdx].submission;
       var comments = submission.visible_submission_comments || submission.submission_comments;
-      if(submission.user_id != ENV.SUBMISSION.user_id) { continue; }
+      const anonymizableId = ENV.SUBMISSION.user_id ? 'user_id' : 'anonymous_id'
+      // Be sure not to compare numeric and stringified user IDs
+      if (submission[anonymizableId].toString() !== ENV.SUBMISSION[anonymizableId]) { continue; }
 
       for(var idx in comments) {
         var comment = comments[idx].submission_comment || comments[idx];
@@ -206,9 +208,12 @@ import './rubric_assessment' /*global rubricAssessment*/
         var method = $(".update_submission_url").attr('title');
         var formData = {
           'submission[assignment_id]': ENV.SUBMISSION.assignment_id,
-          'submission[user_id]': ENV.SUBMISSION.user_id,
           'submission[group_comment]': ($("#submission_group_comment").attr('checked') ? "1" : "0")
         };
+
+        const anonymizableIdKey = ENV.SUBMISSION.user_id ? 'user_id' : 'anonymous_id'
+        formData[`submission[${anonymizableIdKey}]`] = ENV.SUBMISSION[anonymizableIdKey]
+
         if($("#media_media_recording:visible").length > 0) {
           var comment_id = $("#media_media_recording").data('comment_id');
           var comment_type = $("#media_media_recording").data('comment_type');
@@ -304,6 +309,11 @@ import './rubric_assessment' /*global rubricAssessment*/
           $("#rubric_assessment_option_" + assessment.id).text(assessment.assessor_name);
           $("#new_rubric_assessment_option").remove();
           $("#rubric_assessments_list").show();
+
+          if(assessment.assessment_type === 'peer_review') {
+            $('.save_rubric_button').remove()
+          }
+
           /* the 500 timeout is due to the fadeOut in the closeRubric function, which defaults to 400.
           We need to ensure any warning messages are read out after the fadeOut manages the page focus
           so that any messages are not interrupted in voiceover utilities */

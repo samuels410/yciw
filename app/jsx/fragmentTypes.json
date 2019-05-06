@@ -24,6 +24,9 @@
             "name": "Enrollment"
           },
           {
+            "name": "File"
+          },
+          {
             "name": "GradingPeriod"
           },
           {
@@ -33,10 +36,22 @@
             "name": "GroupSet"
           },
           {
+            "name": "MediaObject"
+          },
+          {
             "name": "Module"
           },
           {
+            "name": "ModuleItem"
+          },
+          {
             "name": "Page"
+          },
+          {
+            "name": "PostPolicy"
+          },
+          {
+            "name": "Progress"
           },
           {
             "name": "Quiz"
@@ -75,6 +90,15 @@
             "name": "Enrollment"
           },
           {
+            "name": "ExternalTool"
+          },
+          {
+            "name": "ExternalUrl"
+          },
+          {
+            "name": "File"
+          },
+          {
             "name": "GradingPeriod"
           },
           {
@@ -87,7 +111,16 @@
             "name": "Module"
           },
           {
+            "name": "ModuleExternalTool"
+          },
+          {
+            "name": "ModuleItem"
+          },
+          {
             "name": "Page"
+          },
+          {
+            "name": "Progress"
           },
           {
             "name": "Quiz"
@@ -97,6 +130,9 @@
           },
           {
             "name": "Submission"
+          },
+          {
+            "name": "SubmissionComment"
           },
           {
             "name": "User"
@@ -112,6 +148,36 @@
           },
           {
             "name": "Course"
+          }
+        ]
+      },
+      {
+        "kind": "INTERFACE",
+        "name": "ModuleItemInterface",
+        "possibleTypes": [
+          {
+            "name": "Assignment"
+          },
+          {
+            "name": "Discussion"
+          },
+          {
+            "name": "ExternalTool"
+          },
+          {
+            "name": "ExternalUrl"
+          },
+          {
+            "name": "File"
+          },
+          {
+            "name": "ModuleExternalTool"
+          },
+          {
+            "name": "Page"
+          },
+          {
+            "name": "Quiz"
           }
         ]
       },
@@ -148,6 +214,27 @@
           },
           {
             "name": "AdhocStudents"
+          }
+        ]
+      },
+      {
+        "kind": "UNION",
+        "name": "ProgressContext",
+        "possibleTypes": [
+          {
+            "name": "Assignment"
+          },
+          {
+            "name": "Course"
+          },
+          {
+            "name": "File"
+          },
+          {
+            "name": "GroupSet"
+          },
+          {
+            "name": "User"
           }
         ]
       }

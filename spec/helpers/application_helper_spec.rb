@@ -521,7 +521,7 @@ describe ApplicationHelper do
       tool.save!
       @context = @group
 
-      expect(editor_buttons).to eq([{:name=>"bob", :id=>tool.id, :url=>"http://example.com", :icon_url=>"http://example.com", :canvas_icon_class => 'icon-commons', :width=>800, :height=>400}])
+      expect(editor_buttons).to eq([{:name=>"bob", :id=>tool.id, :url=>"http://example.com", :icon_url=>"http://example.com", :canvas_icon_class => 'icon-commons', :width=>800, :height=>400, :use_tray => false}])
     end
 
     it "should return hash of tools if in course" do
@@ -532,7 +532,7 @@ describe ApplicationHelper do
       allow(controller).to receive(:group_external_tool_path).and_return('http://dummy')
       @context = @course
 
-      expect(editor_buttons).to eq([{:name=>"bob", :id=>tool.id, :url=>"http://example.com", :icon_url=>"http://example.com", :canvas_icon_class => 'icon-commons', :width=>800, :height=>400}])
+      expect(editor_buttons).to eq([{:name=>"bob", :id=>tool.id, :url=>"http://example.com", :icon_url=>"http://example.com", :canvas_icon_class => 'icon-commons', :width=>800, :height=>400, :use_tray => false}])
     end
 
     it "should not include tools from the domain_root_account for users" do
@@ -1103,6 +1103,61 @@ describe ApplicationHelper do
     it "returns the account short name when the logo is custom" do
       Account.default.create_brand_config!(variables: {"ic-brand-Login-logo" => "test.jpg"})
       expect(alt_text_for_login_logo).to eql "Default Account"
+    end
+  end
+
+  context "content security policy enabled" do
+
+    let(:sub_account) { Account.default.sub_accounts.create! }
+    let(:sub_2_account) { sub_account.sub_accounts.create! }
+    let(:headers) {{}}
+    let(:js_env) {{}}
+
+    before do
+      Account.default.enable_feature!(:javascript_csp)
+
+      Account.default.add_domain!("root_account.test")
+      Account.default.add_domain!("root_account2.test")
+      sub_account.add_domain!("sub_account.test")
+      sub_2_account.add_domain!("sub_2_account.test")
+
+      allow(helper).to receive(:headers).and_return(headers)
+      allow(helper).to receive(:js_env) { |env| js_env.merge!(env) }
+    end
+
+    context "on root account" do
+      before do
+        allow(helper).to receive(:csp_context).and_return(Account.default)
+      end
+
+      it "doesn't set the CSP report only header if not configured" do
+        helper.include_custom_meta_tags
+        expect(headers).to_not have_key('Content-Security-Policy-Report-Only')
+        expect(headers).to_not have_key('Content-Security-Policy')
+        expect(js_env).not_to have_key(:csp)
+      end
+
+      it "sets the CSP full header when active" do
+        Account.default.enable_csp!
+
+        helper.include_custom_meta_tags
+        expect(headers['Content-Security-Policy']).to eq "frame-src 'self' localhost root_account.test root_account2.test"
+        expect(headers).to_not have_key('Content-Security-Policy-Report-Only')
+        expect(js_env[:csp]).to eq "frame-src 'self' localhost root_account.test root_account2.test; script-src 'self' 'unsafe-eval' 'unsafe-inline' localhost root_account.test root_account2.test"
+      end
+
+      it "includes the report URI" do
+        allow(helper).to receive(:csp_report_uri).and_return("; report-uri https://somewhere/")
+        helper.include_custom_meta_tags
+        expect(headers['Content-Security-Policy-Report-Only']).to eq "frame-src 'self' localhost root_account.test root_account2.test; report-uri https://somewhere/"
+      end
+
+      it "includes the report URI when active" do
+        allow(helper).to receive(:csp_report_uri).and_return("; report-uri https://somewhere/")
+        Account.default.enable_csp!
+        helper.include_custom_meta_tags
+        expect(headers['Content-Security-Policy']).to eq "frame-src 'self' localhost root_account.test root_account2.test; report-uri https://somewhere/"
+      end
     end
   end
 end

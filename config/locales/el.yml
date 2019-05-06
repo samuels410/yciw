@@ -40,6 +40,7 @@ el:
   LongTextEditor: 
     cancel: Ακύρωση
     save: Αποθήκευση
+  _5a374287: "..."
   _at_the_bottom__4360f2b4: "-- Στο κάτω μέρος --"
   _b4455c8b: "%"
   a_calculation_value_is_not_used_with_this_calculat_b1e854b4: "Μια τιμή υπολογισμού δεν χρησιμοποιείται με αυτή την μέθοδο υπολογιστμού"
@@ -498,6 +499,15 @@ el:
         search: "Εύρευση ατόμων με αριθμό ταυτοποίησης/ID ή όνομα"
         search_people: "Search people"
     adtalem: 
+      faculty_missing_grades: 
+        parameters: 
+          custom_reports: 
+            end: 
+              parameters: 
+                header: "Τελειώνει στις:"
+            start: 
+              parameters: 
+                header: "Αρχίζει στις:"
       no_submissions: 
         parameters: 
           custom_reports: 
@@ -656,6 +666,15 @@ el:
     default_account_quotas_not_updated: "Οι προεπιλεγμένες ποσοστώσεις του λογαριασμού δεν έχουν ενημερωθεί"
     default_account_quotas_updated: "Οι ενημερωμένες ποσοστώσεις του λογαριασμού έχουν ενημερωθεί"
     devry_u: 
+      faculty_missing_grades: 
+        parameters: 
+          custom_reports: 
+            end: 
+              parameters: 
+                header: "Τελειώνει στις:"
+            start: 
+              parameters: 
+                header: "Αρχίζει στις:"
       no_submissions: 
         parameters: 
           custom_reports: 
@@ -1053,7 +1072,7 @@ el:
       add_sis_stickiness_instructions: "Έχοντας ενεργοποιήσει αυτή την επιλογή, η επεξεργασία των αλλαγών που γίνονται μέσω της εισαγωγής προς το SIS θα γίνεται σαν να επρόκειτο για αλλαγές UI, εμποδίζοντας την αλλαγή των πεδίων που άλλαξαν εδώ σε επόμενες μη υπερισχύουσες εισαγωγές προς το SIS."
       add_sis_stickiness_label: "Επεξεργασία ως αλλαγές UI"
       batch_import_instructions: |-
-          Αν επιλεγεί, θα οδηγήσει στη διαγραφή όλων όσων αφορούν αυτό το εξάμηνο, συμπεριλαμβανομένων όλων των μαθημάτων και των εγγραφών που δεν περιέχονται στο επιλεγμένο αρχείο εισαγωγής παραπάνω.
+          Αν επιλεγεί, θα οδηγήσει στη διαγραφή όλων όσων αφορούν αυτό το εξάμηνο, συμπεριλαμβανομένων όλων των μαθημάτων και των εγγραφών που δεν περιέχονται στο επιλεγμένο αρχείο εισαγωγής παραπάνω.  
           Βλ. τα συνοδευτικά έγγραφα για λεπτομέρειες.
       batch_mode_label: "Πρόκειται για μαζική ενημέρωση των τμημάτων"
       clear_sis_stickiness_instructions: "Αν ενενεργοποιήσετε αυτήν την επιλογή, όλα τα πεδία σε όλες τις καταγραφές που επηρεάζονται από την εισαγωγή προς το SIS θα μπορούν να αλλάξουν σε μελλοντικές μη υπερισχύουσες εισαγωγές προς το SIS."
@@ -1067,7 +1086,7 @@ el:
       imported_with_messages_message: "Τα δεδομένα SIS εισήχθησαν, αλλά με αυτά τα μηνύματα:"
       last_batch_title: "Τελευταίο Τμήμα"
       override_sis_stickiness_instructions: |-
-          Από προεπιλογή, οι αλλαγές στο UI υπερισχύουν έναντι των αλλαγών εισαγωγής προς το SIS. Για ορισμένα πεδία, η εισαγωγή προς το SIS δεν θα αλλάξει τα δεδομένα του πεδίου αν ο διαχειριστής έχει αλλάξει το συγκεκριμένο πεδίο μέσω του UI. Αν ενεργοποιήσετε αυτή την επιλογή, η εισαγωγή προς το SIS θα υπερισχύσει των αλλαγών στο UI.
+          Από προεπιλογή, οι αλλαγές στο UI υπερισχύουν έναντι των αλλαγών εισαγωγής προς το SIS. Για ορισμένα πεδία, η εισαγωγή προς το SIS δεν θα αλλάξει τα δεδομένα του πεδίου αν ο διαχειριστής έχει αλλάξει το συγκεκριμένο πεδίο μέσω του UI. Αν ενεργοποιήσετε αυτή την επιλογή, η εισαγωγή προς το SIS θα υπερισχύσει των αλλαγών στο UI. 
           Βλ. τα συνοδευτικά έγγραφα για λεπτομέρειες.
       override_sis_stickiness_label: "Υπερίσχυση επί των αλλαγών στο UI"
       page_title: "Εισαγωγή SIS"
@@ -1077,7 +1096,7 @@ el:
       pending_batches_title: "Εκκρεμή Τμήματα"
       process_data_button: "Επεξεργασία Δεδομένων"
       select_file_instructions: |-
-          <mrk mid="7790" mtype="seg">Επιλέξτε το αρχείο zip που θέλετε να εισαγάγετε.</mrk>
+          <mrk mid="7790" mtype="seg">Επιλέξτε το αρχείο zip που θέλετε να εισαγάγετε.</mrk>  
           <mrk mid="7791" mtype="seg">Για περιγραφή το τρόπου δημιουργίας αυτών των αρχείων zip, [παρακαλώ δείτε αυτά τα συνοδευτικά έγγραφα](%{url}).</mrk>
       sis_import_crumb: "Εισαγωγή SIS"
       title: "Εισαγωγή SIS"
@@ -1186,6 +1205,17 @@ el:
             text: "Αυτή είναι μια αναφορά για τα μαθήματα που δεν περιέχουν κανένα από τα ακόλουθα στοιχεία: εργασίες, ανακοινώσεις, συζητήσεις, αρχεία, ενότητες, σελίδες ή κουίζ."
     update_failed_notice: "Απέτυχε η ενημέρωση των ρυθμίσεων λογαριασμού"
     user_access_csv_parameters: 
+      account_reports: 
+        usu: 
+          enrollment_type: 
+            header: "Τύπος Εγγραφής"
+      all: "Όλες οι εγγραφές"
+      designer: "Εγγραφές Σχεδιαστών"
+      observer: "Εγγραφές Παρατηρητών"
+      students: "Εγγραφές Φοιτητών/τριών"
+      ta: "Εγγραφές Βοηθών Διδασκαλίας"
+      teachers: "Εγγραφές Καθηγητών"
+    user_access_prospect_education_csv_parameters: 
       account_reports: 
         usu: 
           enrollment_type: 
@@ -2162,6 +2192,8 @@ el:
         originality_report_visible_after_grading: "Μετά τη βαθμολόγηση της εργασίας"
         originality_report_visible_immediately: Αμέσως
   assignments_1e02582c: Εργασίες
+  assignments_2: 
+    submission_attempts: Προσπάθειες
   assignments_api: 
     invalid_date_time: "Μη έγκυρη ημερομηνία/ώρα για το %{attribute}"
     invalid_submission_types: "Μη έγκυροι τύποι υποβολής"
@@ -2172,6 +2204,7 @@ el:
   associated_course_name_9b5b1945: "Όνομα Σχετιζόμενου Μαθήματος"
   associations_3fd4abe8: Συσχετίσεις
   attach_files_to_discussions_bd16c245: "Επισύναψη αρχείων στις συζητήσεις"
+  attached_files_4c1d26cf: "Επισυναπτόμενα Αρχεία:"
   attached_files_must_be_greater_than_0_bytes_7f57bee7: "Τα επισυναπτόμενα αρχεία πρέπει να είναι πάνω από 0 bytes"
   attachment: 
     default_filename: Αρχείο
@@ -2294,6 +2327,7 @@ el:
   availableslots_available_87b8b69d: "%{availableSlots} Διαθέσιμες"
   avatar_8a8aa935: Avatar
   average_49c63f9b: "Μέσος Όρος"
+  average_score_15cd7c3c: "Μέσος όρος"
   back_2900f52a: Πίσω
   back_to_announcements_1036e43e: "Πίσω στις Ανακοινώσεις"
   back_to_app_center_95420d83: "Πίσω στο Κέντρο Εφαρμογών"
@@ -2813,6 +2847,7 @@ el:
   canvas_alert_change_assignment_name_course_name_2fc63d9c: "<mrk mid=\"4387\" mtype=\"seg\">Ειδοποίηση Canvas - Αλλαγή:</mrk> <mrk mid=\"4388\" mtype=\"seg\">%{assignment_name}, %{course_name}</mrk>"
   canvas_alert_invited_course_as_role_type_9ed79ce3: "<mrk mid=\"1447\" mtype=\"seg\">Ειδοποίηση Canvas - Προσκλήθηκε:</mrk> <mrk mid=\"1448\" mtype=\"seg\">%{course} ως %{role_type}</mrk>"
   canvas_alert_invited_course_as_role_type_ea825937: "Ειδοποίηση Canvas - Προσκλήθηκε: course ως %{role_type}"
+  canvas_alert_late_submission_user_name_assignment__ee1301ac: "<mrk mid=\"1742\" mtype=\"seg\">Ειδοποίηση Canvas - Εκπρόθεσμη Υποβολή:</mrk> <mrk mid=\"1743\" mtype=\"seg\">%{user_name}, %{assignment_name}</mrk>"
   canvas_by_instructure_1490381: "Canvas από την Instructure"
   canvas_cartridge_description: "Αυτή η επιλογή επιτρέπει τη μετατροπή εξαγωγής του canvas στην ενδιάμεση μορφή json για εισαγωγή"
   canvas_cartridge_display: "Common Cartridge του Canvas"
@@ -2875,13 +2910,16 @@ el:
   click_for_more_details_on_this_outcome_8c018d2f: "Κάντε κλικ για περισσότερες λεπτομέρειες σχετικά με αυτό το αποτέλεσμα"
   click_here_for_an_account_9536cb36: "Κάντε Κλικ Εδώ για ένα Λογαριασμό"
   click_here_it_s_free_eeccb9cb: "Κάντε Κλικ Εδώ, Είναι Δωρεάν!"
+  click_here_to_review_the_submission_ae017c01: "Πατήστε εδώ για να δείτε την υποβολή"
   click_here_to_see_the_file_79e2b366: "Κάντε κλικ εδώ για να δείτε το αρχείο."
+  click_here_to_view_the_submission_24777a69: "Πατήστε εδώ για να εμφανίσετε την υποβολή"
   click_to_enter_comments_if_the_student_chooses_thi_507c20f6: "Κάντε κλικ για να εισαγάγετε σχόλια αν ο σπουδαστής επιλέξει αυτή την απάντηση"
   click_to_report_profile_picture_370f9625: "Κάντε κλικ για αναφορά εικόνας προφίλ"
   click_to_set_this_answer_as_correct_1326e3fd: "Κάνετε κλικ για να ορίσετε αυτήν την απάντηση ως σωστή"
   click_to_test_dropdown_b950974d: "Κάντε κλικ για να δοκιμάσετε το dropdown"
   clicking_on_the_column_headers_will_sort_the_rows__3a6e9573: "Κάνοντας κλικ στις επικεφαλίδες των στηλών θα ταξινομήσετε τις σειρές κατά στήλη."
   clone_group_set_c2a40e15: "Κλωνοποίηση Σετ Ομάδων"
+  close_17f50799: κλείσιμο
   close_and_return_to_canvas_80544344: "Κλείσιμο και επιστροφή στο Canvas"
   close_d634289d: Κλείσιμο
   closed_for_comments_e395b42f: "Κλεισμένο για Σχόλια"
@@ -2930,8 +2968,8 @@ el:
       collaboration_name: "Συνεργασία %{course_or_group_name} "
       descriptions: 
         google_docs: |-
-            <mrk mid="340" mtype="seg">Τα Google Docs είναι μια πολύ καλή λύση για να συνεργαστείτε σε ομαδικό πρότζεκτ.</mrk>  <mrk mid="341" mtype="seg">Είναι σαν το Microsoft Word, αλλά σας επιτρέπει να εργαστείτε μαζί με άλλους στο ίδιο αρχείο την ίδια στιγμή χωρίς να χρειάζεται να το στέλνετε με email από τον έναν στον άλλον.</mrk>
-            
+            <mrk mid="340" mtype="seg">Τα Google Docs είναι μια πολύ καλή λύση για να συνεργαστείτε σε ομαδικό πρότζεκτ.</mrk>  <mrk mid="341" mtype="seg">Είναι σαν το Microsoft Word, αλλά σας επιτρέπει να εργαστείτε μαζί με άλλους στο ίδιο αρχείο την ίδια στιγμή χωρίς να χρειάζεται να το στέλνετε με email από τον έναν στον άλλον.</mrk>  
+              
             <mrk mid="342" mtype="seg">**Προειδοποίηση**: Εσείς (και όλοι οι συνεργάτες σας) χρειάζεται να έχουν έναν λογαριασμό Google για να μπορέσουν να συμμετάσχουν στις συνεργασίες με Google Docs.</mrk>
       labels: 
         collaboration_type: "Συνεργαστείτε χρησιμοποιώντας:"
@@ -4561,6 +4599,7 @@ el:
     labels: 
       assign_blanks: "Απονομή μηδενικών στους σπουδαστές που δεν έχουν υποβάλλει"
     this_is_permanent: "<mrk mid=\"7410\" mtype=\"seg\">Δεν είναι δυνατή η αναίρεση της αναπροσαρμογής βαθμών.</mrk> <mrk mid=\"7411\" mtype=\"seg\">Το ιστορικό προ-αναπροσαρμοσμένων βαθμών θα είναι διαθέσιμο, αλλά η ενέργεια της αναπροσαρμογής είναι μη αναστρέψιμη.</mrk>"
+  curving_assignments_e9479ee3: "Αναπροσαρμογή εργασιών"
   custom_fields_fc3e55af: "Προσαρμοσμένα Πεδία"
   cutoff_score_74254c89: "κατώτατη βαθμολογία"
   cyan_c1d5f68a: Κυανό
@@ -5918,12 +5957,14 @@ el:
   gpa_scale_a6d1cdea: "Κλίμακα GPA"
   grade_9c6f076d: Βαθμός
   grade_assignment_7c1abc11: "Βαθμός %{assignment}"
+  grade_change_notifications_98461261: "Ειδοποιήσεις αλλαγής βαθμών"
   grade_display_warning_dialog: 
     grade_display_warning: 
       checkbox: "Να μην εμφανιστεί ξανά για αυτό το μάθημα."
       warning: Προειδοποίηση
   grade_distribution_e52c9256: "Κατανομή Βαθμών"
   grade_export_title: "Εξαγωγή Βαθμών"
+  grade_grade_7e52dd1c: "Βαθμός: %{grade}"
   grade_summary: 
     graph_title: "Μέση βαθμολογία %{mean}, Υψηλή βαθμολογία %{high}, Χαμηλή βαθμολογία %{low}"
   gradebook: 
@@ -6250,6 +6291,7 @@ el:
       pages: Σελίδες
       people: Άνθρωποι
   group_a8f5ed9c: Ομάδα
+  group_assignment_7060989f: "Ομαδική Εργασία"
   group_assignments_cannot_be_enabled_for_moderated__6b2faeef: "Δεν είναι δυνατή η ενεργοποίηση ομαδικών εργασιών για εργασίες με βαθμολόγηση από περισσότερους"
   group_categories: 
     notices: 
@@ -6576,6 +6618,7 @@ el:
   hide_correct_answers_at_2421b0aa: "Απόκρυψη Σωστών Απαντήσεων Σε"
   hide_correct_answers_at_b1a59408: "Απόκρυψη Σωστών Απαντήσεων Σε"
   hide_courses_without_enrollments_6df4dfad: "Απόκρυψη μαθημάτων στα οποία δεν υπάρχουν εγγραφές"
+  hide_e057ff36: Απόκρυψη
   hide_score_total_for_assessment_results_d0ef117f: "Απόκρυψη της συνολικής βαθμολογίας των αποτελεσμάτων αξιολόγησης"
   hide_student_names_3e59e862: "Απόκρυψη Ονομάτων των Σπουδαστών"
   high_contrast_description: |-
@@ -6690,6 +6733,7 @@ el:
   inner_box_background_6f9092f: "Εσωτερικό Φόντο Κουτιού"
   inner_box_border_d0524b03: "Εσωτερικό Πλαίσιο Κουτιού"
   insert_equella_links_49a8dacd: "Εισαγωγή Συνδέσμων τύπου Equella"
+  insert_here_ccdb022e: "εισαγωγή εδώ"
   insert_math_equation_57c6e767: "Εισαγωγή Μαθηματικής Εξίσωσης"
   insert_row_below_25187f89: "Εισαγωγή γραμμής κάτω"
   installed_7b284a91: Εγκαταστάθηκε
@@ -6762,6 +6806,7 @@ el:
   international_text_messaging_rates_may_apply_d4b4a97a: "Ενδέχεται να εφαρμόζεται χρέωση διεθνών μηνυμάτων κειμένου."
   invalid_authenticity_token_b753558c: "Μη Έγκυρο Token Επαλήθευσης"
   invalid_content_type_utf_8_required_bd458b78: "Μη έγκυρος τύπος περιεχομένου, απαιτείται UTF-8"
+  invalid_domain_e810c1d: "Μη έγκυρο domain"
   invalid_file_type_881cc9b2: "Μη έγκυρος τύπος αρχείου"
   invalid_points_possible: "Η τιμή των πιθανών μορίων για αυτή την εργασία πρέπει να είναι μηδέν ή μεγαλύτερη."
   invalid_recipient_name_56b22b86: "Μη έγκυρο όνομα παραλήπτη."
@@ -6874,6 +6919,7 @@ el:
   last_post_display_last_reply_at_b9896355: "Τελευταία δημοσίευση %{display_last_reply_at}"
   last_user_access_title: "Τελευταία Πρόσβαση Χρήστη"
   late_2be42b88: Πρόσφατο/α
+  late_assignment_user_name_assignment_name_2df32e01: "<mrk mid=\"5564\" mtype=\"seg\">Εκπρόθεσμη Υποβολή:</mrk> <mrk mid=\"5565\" mtype=\"seg\">%{user_name}, %{assignment_name}</mrk>"
   late_percent_b91d01b3: "<mrk mid=\"4316\" mtype=\"seg\">Πρόσφατο/α:</mrk> <mrk mid=\"4317\" mtype=\"seg\">%{percent}</mrk>"
   latest_assessment_a85280ef: "Πιο Πρόσφατη Αξιολόγηση"
   latest_f604a75: "Το/τα πιο πρόσφατο/α"
@@ -6957,7 +7003,7 @@ el:
         quizzes: Κουίζ
         rubrics: "Ρουμπρίκες Αξιολόγισης"
         syllabus_body: "Κύριο Μέρος του Αναλυτικού Προγράμματος"
-        wikis: "Σελίδες wiki"
+        wikis: Σελίδες
     cc: 
       standard: 
         failed_to_convert_qti: "Η εισαγωγή της Αξιολόγησης %{file_identifier} απέτυχε"
@@ -7257,6 +7303,7 @@ el:
   message_students_cecc3f83: "Στείλτε Μήνυμα στους Φοιτητές/τριες"
   message_students_dialog: 
     recipients: "Παραλήπτες:"
+  message_students_who_369b8488: "Στείλτε Μήνυμα στους Σπουδαστές Που..."
   message_students_who_57f07a41: "Στείλτε μήνυμα στους φοιτητές/ιες που..."
   message_text_5f692459: "Αποστολή Μηνύματος Κειμένου"
   message_this_student_6d14043d: "Αποστολή μηνύματος σε αυτόν τον σπουδαστή"
@@ -7600,9 +7647,9 @@ el:
     assignment_changed: 
       email: 
         body: |-
-            <mrk mid="1691" mtype="seg">Η εργασία «%{title}» για το μάθημα %{course} έχει αλλάξει.</mrk>
+            <mrk mid="1691" mtype="seg">Η εργασία «%{title}» για το μάθημα %{course} έχει αλλάξει.</mrk>  
             
-            <mrk mid="1692" mtype="seg">Πατήστε εδώ να εμφανίσετε την εργασία:</mrk>
+            <mrk mid="1692" mtype="seg">Πατήστε εδώ να εμφανίσετε την εργασία:</mrk> 
             <mrk mid="1693" mtype="seg">%{url}</mrk>
         html: 
           body: "Η εργασία «%{title}» για το μάθημα %{course} έχει αλλάξει."
@@ -8874,8 +8921,10 @@ el:
   moodle_dropdown_warning_title: "H ερώτηση Πολλαπλών Dropdown ίσως εισήχθη λανθασμένα"
   moodle_formula_many_warning_title: "Υπάρχουν %{count} ερωτήσεις Τύπου σε αυτή την τράπεζα για τις οποίες θα πρέπει να δημιουργηθούν εκ νέου οι πιθανές απαντήσεις"
   moodle_formula_warning_title: "Οι πιθανές ερωτήσεις θα πρέπει να δημιουργηθούν εκ νέου για τις ερωτήσεις Τύπου"
+  more_cf9cc661: Περισσότερα
   more_courses_5ebbe998: "Περισσότερα μαθήματα"
   more_info_at_course_name_56dc8c10: "Περισσότερες πληροφορίες στο %{course_name}"
+  more_info_at_web_address_dba7e187: "Περισσότερες πληροφορίες στο %{web_address}"
   more_information_3dfb76b5: "Περισσότερες πληροφορίες"
   more_than_a19b440: "%{more_than}+"
   most_recent_score_13a87e8c: "Πιο Πρόσφατη Βαθμολογία"
@@ -8963,6 +9012,7 @@ el:
   next_steps_ce0f0d0c: "Επόμενα Βήματα"
   no_74e9b590: όχι
   no_assignment_name_adbb215b: "Δεν Υπάρχει Όνομα Εργασίας"
+  no_content_5dbc9acf: "Κανένα Περιεχόμενο"
   no_content_has_been_added_f36bab43: "* Δεν έχει προστεθεί περιεχόμενο"
   no_courses_found_12d68a74: "Δεν βρέθηκαν μαθήματα"
   no_date_bfeb2df7: "Δεν υπάρχει Ημερομηνία"
@@ -9371,6 +9421,9 @@ el:
       points: Μόρια
       pts: pts
       rating_description: "Περιγραφή αξιολόγησης κριτηρίου"
+    criterion_header: 
+      insert_criterion_rating: "Εισαγωγή αξιολόγησης κριτηρίου"
+      insert_rating: Εισαγωγή
     dont_import: "Δεν είναι δυνατή η εισαγωγή αυτής της ομάδας."
     failed_outcome_creation: "Αποτυχία δημιουργίας αποτελέσματος"
     failed_outcome_update: "Αποτυχία ενημέρωσης αποτελέσματος"
@@ -9946,6 +9999,7 @@ el:
   possible_combination_count_db651ca4: "Αριθμός Πιθανών Συνδυασμών"
   possible_score_5e0a328e: "<mrk mid=\"4337\" mtype=\"seg\">Πιθανά:</mrk> <mrk mid=\"4338\" mtype=\"seg\">%{score}</mrk>"
   post_1e445890: Δημοσίευση
+  post_grades_39c52870: "Δημοσίευση βαθμών"
   post_grades_description: |-
       <mrk mid="2791" mtype="seg">Η επιλογή Δημοσίευση Βαθμών επιτρέπει στους καθηγητές να δημοσιεύσουν και πάλι τους βαθμούς προς τα ενεργοποιημένα συστήματα SIS:</mrk> <mrk mid="2792" mtype="seg">Powerschool,
       Aspire (SIS2000), JMC, και κάθε άλλο SIS με δυνατότητα SIF που δέχεται τα στοιχεία SIF GradingCategory,
@@ -10908,7 +10962,7 @@ el:
           multiple_dropdowns: "Εισαγάγετε την ερώτησή σας, προσδιορίζοντας πού θα τοποθετηθεί κάθε αναπτυσσόμενη λίστα. Στη συνέχεια, ορίστε πιθανές απαντήσεις για κάθε αναπτυσσόμενη λίστα με μία σωστή απάντηση ανά λίστα."
           numerical: "<mrk mid=\"5238\" mtype=\"seg\">Ορίστε τη σωστή απάντηση ως οποιονδήποτε αριθμός εντός κάποιου εύρους ή ως αριθμό συν/πλην κάποιο περιθώριο σφάλματος.</mrk> <mrk mid=\"5239\" mtype=\"seg\">Ο σπουδαστής θα έχει στη διάθεσή τους ένα κενό πεδίο κειμένου για να πληκτρολογήσει την αριθμητική απάντησή του.</mrk>"
           short_answer: |-
-              <mrk mid="5240" mtype="seg">Εισαγάγετε το κείμενο της ερώτησή σας και στη συνέχεια ορίστε όλες τις πιθανές σωστές απαντήσεις για το αντίστοιχο κενό.</mrk>
+              <mrk mid="5240" mtype="seg">Εισαγάγετε το κείμενο της ερώτησή σας και στη συνέχεια ορίστε όλες τις πιθανές σωστές απαντήσεις για το αντίστοιχο κενό.</mrk>  
               <mrk mid="5241" mtype="seg">Οι σπουδαστές θα δουν την ερώτηση μαζί με ένα μικρό πλαίσιο κειμένου για να πληκτρολογήσουν την απάντησή τους.</mrk>
           text_only: "Αυτή η «ερώτηση» δεν θα λάβει κάποια βαθμολογία, αλλά μπορεί να φανεί χρήσιμη για την εισαγωγή μιας σειράς σχετικών ερωτήσεων."
           true_false: "Εισαγάγετε το κείμενο της ερώτησής σας και στη συνέχεια επιλέξτε αν η σωστή απάντηση είναι Σωστό ή Λάθος."
@@ -11564,6 +11618,7 @@ el:
   remove_student_from_recipients_4b206e35: "Αφαίρεση του/της %{student} από τους παραλήπτες"
   remove_text_8e485c41: "Αφαίρεση %{text}"
   remove_these_dates_48453a81: "Αφαίρεση αυτων των ημερομηνιών"
+  remove_user_from_section_5556f465: "Αφαίρεση Χρήστη από τον Τομέα"
   rename_45608f54: Μετανόμασε
   rename_this_page_554f0583: "Μετονομασία Σελίδας"
   replace_e61834a7: Αντικατάσταση
@@ -11804,6 +11859,7 @@ el:
   schedule_student_availability_332154a: "Προγραμματισμός της διαθεσιμότητας σπουδαστή"
   scheduler_65b5ac91: "Μηχανισμός Προγραμματισμού"
   school_of_rock_4b7b1fd0: "Ένα Σχολείο Πολύ Ροκ"
+  score_change_notifications_6b94f27f: "Ειδοποιήσεις αλλαγής βαθμολογίας"
   score_f7ac9e08: Βαθμολογία
   score_muted_82eef66: "<mrk mid=\"4347\" mtype=\"seg\">Βαθμολογία:</mrk> <mrk mid=\"4348\" mtype=\"seg\">(σε σίγαση)</mrk>"
   score_of_score_view_in_speedgrader_a7c1c954: "<mrk mid=\"1488\" mtype=\"seg\">Βαθμολογία %{score}.</mrk> <mrk mid=\"1489\" mtype=\"seg\">Προβολή στο SpeedGrader</mrk>"
@@ -12240,6 +12296,7 @@ el:
         select_and_add_criterion: "Επιλογή και Προσθήκη Κριτηρίου"
     footer_links: 
       facebook: Facebook
+      privacy_policy: "Πολιτική Απορρήτου"
       twitter: Twitter
     global_dialogs: 
       buttons: 
@@ -12852,6 +12909,7 @@ el:
   submission_comment: 
     unknown_author: Κάποιος
   submission_comments_4fa03a17: "Σχόλια Υποβολής"
+  submission_comments_b6d65841: "Σχόλια υποβολής"
   submission_date_a7920dac: "ημερομηνία υποβολής"
   submission_detail: 
     go_to_submission_url: "Μετάβαση στο URL υποβολής"
@@ -12874,6 +12932,7 @@ el:
     update_grade: "Ενημέρωση Βαθμού"
     view_rubric_assessment_in_the_speedgrader: "Προβολή Αξιολόγησης Ρουμπρίκας στο SpeedGrader"
   submission_score_b7a291e8: "βαθμολογία υποβολής"
+  submission_type_a925fc5f: "Είδος υποβολής"
   submissions: 
     assignment_submit_success: "Η εργασία υποβλήθηκε επιτυχώς."
     assignment_submitted: "Η εργασία υποβλήθηκε."
@@ -13132,6 +13191,7 @@ el:
   the_unique_id_used_for_representing_the_specific_r_3bdf5870: "Το μοναδικό id που χρησιμοποιείται για να υποδηλώσει τον συγκεκριμένο κύκλο αίτησης/απόκρισης γύρω από τον οποίο προέκυψε αυτή η αναφορά σφάλματος"
   the_url_a_sufficiently_priviledged_user_could_use__e6b02c56: "Το URL το οποίο κάποιος χρήστης με αρκετά δικαιώματα θα μπορούσε να χρησιμοποιήσει για να μεταμφιεστεί στον χρήστη που αναφέρει το σφάλμα στην ίδια σελίδα ώστε να προσπαθήσει και να αναπαραγάγει το πρόβλημα"
   the_url_of_the_page_the_user_was_on_when_they_repo_11dfa92f: "Το URL της σελίδας όπου ο χρήστης ήταν όταν αναφέρθηκε το πρόβλημα"
+  their_grade_for_the_assignment_c36a60ef: "Ο βαθμός του/της για την εργασία"
   theme_52404e51: Θέμα
   theme_editor_b7b00f6b: "Επεξεργαστής Θέματος (Theme Editor)"
   theme_editor_changes_have_been_cancelled_2af5cc5f: "Οι αλλαγές του Επεξεργαστή Θέματος (Theme Editor) ακυρώθηκαν."
@@ -13179,6 +13239,7 @@ el:
   this_item_will_reappear_when_there_are_new_grades__8f9e5383: "Αυτό το στοιχείο θα επανεμφανιστεί μόλις υπάρξουν νέοι βαθμοί προς διαχείριση."
   this_login_is_for_provider_6f17462: "Αυτή η σύνδεση αφορά τον %{provider}"
   this_message_includes_media_comments_to_listen_or__5fc98641: "Αυτό το μήνυμα περιέχει πολυμεσικά σχόλια. Για να ακούσετε ή να απαντήσετε, κάντε κλικ σε αυτόν τον σύνδεσμο: %{link}."
+  this_message_includes_media_comments_to_listen_or__75ea03a1: "Αυτό το μήνυμα περιέχει πολυμεσικά σχόλια. Για να ακούσετε ή να απαντήσετε, κάντε κλικ σε αυτόν τον σύνδεσμο:"
   this_module_is_locked_until_completing_all_of_the__ddf06070: "<mrk mid=\"67\" mtype=\"seg\">Αυτή η ενότητα είναι κλειδωμένη μέχρι να ολοκληρωθούν όλες οι απαιτήσεις για τις παρακάτω ενότητες:</mrk> <mrk mid=\"68\" mtype=\"seg\">%{prerequisites}</mrk>"
   this_module_is_locked_until_datetime_b2486751: "Αυτή η ενότητα είναι κλειδωμένη μέχρι %{datetime}"
   this_most_likely_happened_because_you_imported_cou_a78ea880: "Αυτό μάλλον συνέβη επειδή εισαγάγατε περιεχόμενο μαθήματος χωρίς τα σχετιζόμενα αρχεία του."
@@ -13436,10 +13497,12 @@ el:
   top_box_background_6db383e9: "Φόντο Κουτιού Επάνω"
   top_box_border_94cee4a7: "Πλαίσιο Κουτιού Επάνω"
   total_71a4807: Σύνολο
+  total_points_44d76792: "Συνολικοί Πόντοι"
   total_range_45c8549a: "Συνολικό Εύρος"
   tree_browser: 
     folder_tree_instructions: "<mrk mid=\"7366\" mtype=\"seg\">Χρησιμοποιήστε τα βελάκια πάνω και κάτω για να πλοηγηθείτε στο δέντρο.</mrk> <mrk mid=\"7367\" mtype=\"seg\">Πατήστε το δεξί βελάκι για ανάπτυξη των φακέλων, το αριστερό για σύμπτυξη και το Enter για να επιλέξετε το επιλεγμένο στοιχείο.</mrk>"
   truncated_56b1a661: Ελλιπές
+  turned_in_submission_date_e9180b8b: "υποβλήθηκε στις: %{submission_date}"
   turnitin: 
     error_1007: "Το αρχείο που μεταφορτώθηκε είναι πολύ μεγάλο."
     error_1009: "<mrk mid=\"3194\" mtype=\"seg\">Μη έγκυρος τύπος αρχείου.</mrk> <mrk mid=\"3195\" mtype=\"seg\">(Έγκυροι τύποι αρχείου είναι οι MS Word, Acrobat PDF, Postscript, Text, HTML, WordPerfect (WPD) και Rich Text Format.)</mrk>"
@@ -13479,6 +13542,8 @@ el:
   unknown_quiz: "Άγνωστο κουίζ"
   unknown_user_1113fcaa: "Άγνωστος Χρήστης"
   unknown_user_url_82196ba7: "Άγνωστο URL Χρήστη"
+  unlimited_attempts_81a37d4: "Απεριόριστες Προσπάθειες"
+  unlimited_ff19e96d: "Χωρίς Περιορισμούς"
   unlock_at_bb930b34: "Ξεκλείδωμα σε"
   unlock_at_time_a0bbfb9: "<mrk mid=\"3982\" mtype=\"seg\">Ξεκλείδωμα σε:</mrk> <mrk mid=\"3983\" mtype=\"seg\">%{time}</mrk>"
   unlock_date_cannot_be_after_due_date_8829d9ca: "Η ημερομηνία ξεκλειδώματος δεν μπορεί να είναι μετά την καταληκτική ημερομηνία"
@@ -13545,6 +13610,7 @@ el:
   user_696f4d6a: χρήστης
   user_access_tokens_title: "Token Πρόσβασης Χρήστη"
   user_avatars_e4fc4ed3: "Τα Avatars του Χρήστη"
+  user_c95de254: Χρήστης
   user_content_aaf0fb5a: "Περιεχόμενο Χρήστη"
   user_count_respondents_e30a8593: "%{user_count} απαντώντες"
   user_date_range_search: 
@@ -13616,8 +13682,10 @@ el:
       updating_user_details: "Γίνεται Ενημέρωση των Λεπτομερειών Χρήστη..."
     notices: 
       image_reported: "Έχει γίνει αναφορά αυτής της εικόνας"
+  user_name_has_just_turned_in_a_late_submission_for_874a9a31: "Ο χρήστης %{user_name} μόλις υπέβαλε εκπρόθεσμα την εργασία %{assignment_name} για το μάθημα %{course_name}"
   user_name_just_added_you_to_a_conversation_in_canv_7b278b51: "<mrk mid=\"1519\" mtype=\"seg\">Ο χρήστης %{user_name} μόλις σας προσέθεσε σε μια συνομιλία στο Canvas.</mrk> <mrk mid=\"1520\" mtype=\"seg\">Για να προβάλετε τη συζήτηση, κάντε κλικ σε αυτόν τον σύνδεσμο:</mrk> <mrk mid=\"1521\" mtype=\"seg\">%{link}.</mrk>"
   user_name_just_sent_you_a_message_in_canvas_a2cb3bf4: "Ο χρήστης %{user_name} μόλις σας έστειλε μήνυμα στο Canvas."
+  user_name_just_turned_in_their_assignment_late_ass_a54b128a: "Ο χρήστης %{user_name} μόλις υπέβαλε την εργασία του (εκπρόθεσμα), %{assignment_name}"
   user_name_you_just_sent_a_message_in_canvas_b1fd4598: "%{user_name}, μόλις στείλατε μήνυμα στο Canvas."
   user_name_you_ll_need_to_log_in_before_you_can_vie_164c8e30: "%{user_name}, πρέπει να *συνδεθείτε* πριν μπορέσετε να δείτε αυτή τη σελίδα."
   user_navigation_a097be0f: "Πλοήγηση Χρήστη"
@@ -14140,6 +14208,7 @@ el:
   you_can_check_out_the_group_by_clicking_this_link__10fb5deb: "<mrk mid=\"1526\" mtype=\"seg\">Μπορείτε να δείτε την ομάδα κάνοντας κλικ σε αυτόν τον σύνδεσμο:</mrk> <mrk mid=\"1527\" mtype=\"seg\">%{link}.</mrk>"
   you_can_check_out_the_group_by_clicking_this_link__e49e4f1d: "<mrk mid=\"226\" mtype=\"seg\">Μπορείτε να δείτε την ομάδα κάνοντας κλικ σε αυτόν τον σύνδεσμο:</mrk> <mrk mid=\"227\" mtype=\"seg\">%{link}</mrk>"
   you_can_log_in_directly_with_this_provider_by_goin_467d7f66: "Μπορείτε να συνδεθείτε απευθείας με αυτόν τον πάροχο στο %{url}"
+  you_can_review_the_submission_details_by_clicking__58a7753: "Μπορείτε να ελέγξετε τις λεπτομέρειες υποβολής κάνοντας κλικ στον παρακάτω σύνδεσμο:"
   you_can_review_the_submission_details_by_clicking__9abc5515: "<mrk mid=\"371\" mtype=\"seg\">Μπορείτε να ελέγξετε τις λεπτομέρειες υποβολής κάνοντας κλικ σε αυτόν τον σύνδεσμο:</mrk> <mrk mid=\"372\" mtype=\"seg\">%{link}.</mrk>"
   you_can_see_details_for_this_group_by_clicking_thi_acaf07e5: "<mrk mid=\"4917\" mtype=\"seg\">Μπορείτε να δείτε λεπτομέρειες για αυτή την ομάδα κάνοντας κλικ σε αυτόν τον σύνδεσμο:</mrk> <mrk mid=\"4918\" mtype=\"seg\">%{link}.</mrk>"
   you_can_t_delete_a_sub_account_that_has_courses_in_c4f439cf: "Δεν μπορείτε να διαγράψετε ένα υπολογαριασμό που περιέχει μαθήματα."

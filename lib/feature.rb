@@ -103,9 +103,8 @@ class Feature
   def self.register(feature_hash)
     @features ||= {}
     feature_hash.each do |feature_name, attrs|
-      puts "feature_name: #{feature_name}"
-      validate_attrs(attrs)
       feature = feature_name.to_s
+      validate_attrs(attrs, feature)
       if attrs[:development] && production_environment?
         @features[feature] = DISABLED_FEATURE
       else
@@ -114,9 +113,9 @@ class Feature
     end
   end
 
-  def self.validate_attrs(attrs)
-    raise 'invalid state' unless VALID_STATES.include? attrs[:state]
-    raise 'invalid applies_to' unless VALID_APPLIES_TO.include? attrs[:applies_to]
+  def self.validate_attrs(attrs, feature)
+    raise "invalid 'state' for feature: #{feature}" unless VALID_STATES.include? attrs[:state]
+    raise "invalid 'applies_to' for feature: #{feature}" unless VALID_APPLIES_TO.include? attrs[:applies_to]
   end
 
   # TODO: register built-in features here
@@ -152,7 +151,6 @@ END
       applies_to: 'Course',
       state: 'allowed',
       root_opt_in: true,
-      beta: true
     },
     'high_contrast' =>
     {
@@ -175,7 +173,6 @@ Rich Content Editor, which always underlines links for all users.
 END
       applies_to: 'User',
       state: 'allowed',
-      beta: true
     },
     'new_user_tutorial_on_off' =>
     {
@@ -230,7 +227,6 @@ END
       applies_to: 'Course',
       state: 'hidden',
       root_opt_in: true,
-      beta: true
     },
     'anonymous_instructor_annotations' =>
     {
@@ -249,31 +245,95 @@ END
       applies_to: 'Course',
       state: 'allowed',
       root_opt_in: true,
-      beta: true,
-
       custom_transition_proc: ->(user, context, _from_state, transitions) do
         if context.is_a?(Course)
-          if !context.grants_right?(user, :change_course_state)
-            transitions['on']['locked'] = true if transitions&.dig('on')
-            transitions['off']['locked'] = true if transitions&.dig('off')
-          else
+          is_admin = context.account_membership_allows(user)
+          is_teacher = user.teacher_enrollments.active.where(course_id: context.id).exists?
+
+          if is_admin || is_teacher
             should_lock = context.gradebook_backwards_incompatible_features_enabled?
             transitions['off']['locked'] = should_lock if transitions&.dig('off')
+          else
+            transitions['on']['locked'] = true if transitions&.dig('on')
+            transitions['off']['locked'] = true if transitions&.dig('off')
           end
         elsif context.is_a?(Account)
-          new_gradebook_feature_flag = FeatureFlag.where(feature: :new_gradebook, state: :on)
+          backwards_incompatible_feature_flags =
+            FeatureFlag.where(feature: [:new_gradebook, :final_grades_override], state: :on)
           all_active_sub_account_ids = Account.sub_account_ids_recursive(context.id)
           relevant_accounts = Account.joins(:feature_flags).where(id: [context.id].concat(all_active_sub_account_ids))
           relevant_courses = Course.joins(:feature_flags).where(account_id: all_active_sub_account_ids)
 
-          accounts_with_feature = relevant_accounts.merge(new_gradebook_feature_flag)
-          courses_with_feature = relevant_courses.merge(new_gradebook_feature_flag)
+          accounts_with_feature = relevant_accounts.merge(backwards_incompatible_feature_flags)
+          courses_with_feature = relevant_courses.merge(backwards_incompatible_feature_flags)
 
           if accounts_with_feature.exists? || courses_with_feature.exists?
             transitions['off'] ||= {}
             transitions['off']['locked'] = true
             transitions['off']['warning'] =
               I18n.t("This feature can't be disabled because there is at least one sub-account or course with this feature enabled.")
+          end
+
+          if context.feature_enabled?(:final_grades_override)
+            # state is locked to `on`
+            transitions['off'] ||= {}
+            transitions['off']['locked'] = true
+            transitions['allowed'] ||= {}
+            transitions['allowed']['locked'] = true
+          elsif context.feature_allowed?(:final_grades_override, exclude_enabled: true)
+            # Lock `off` since Final Grade Override is set to `allowed`
+            transitions['off'] ||= {}
+            transitions['off']['locked'] = true
+          end
+        end
+      end
+    },
+    'final_grades_override' => {
+      display_name: -> { I18n.t('Final Grade Override') },
+      description: -> {
+        I18n.t <<~DESCRIPTION
+          Enable ability to alter the final grade for the entire course without changing scores for assignments.
+        DESCRIPTION
+      },
+      applies_to: 'Course',
+      root_opt_in: true,
+      state: 'allowed',
+      beta: true,
+      custom_transition_proc: ->(_user, context, from_state, transitions) do
+        transitions['off'] ||= {}
+        transitions['on'] ||= {}
+
+        # The goal here is to make Final Grade Override fully dependent upon New Gradebook's status.
+        # In other words this is a "one-way" flag:
+        #  - Once Allowed, it can no longer be set to Off.
+        #  - Once On, it can no longer be Off nor Allowed.
+        #  - For Final Grade Override to be set to `allowed`, New Gradebook must be at least `allowed` or `on`
+        #  - For Final Grade Override to be set to `on`, New Gradebook must be `on`.
+        if context.is_a?(Course)
+          if context.feature_enabled?(:new_gradebook)
+            transitions['off']['locked'] = true if from_state == 'on' # lock off to enforce no take backs
+          else
+            transitions['on']['locked'] = true # feature unavailable without New Gradebook
+          end
+        elsif context.is_a?(Account)
+          transitions['allowed'] ||= {}
+          if context.feature_enabled?(:new_gradebook)
+            if from_state == 'allowed'
+              transitions['off']['locked'] = true # lock off to enforce no take backs
+            elsif from_state == 'on'
+              # lock both `off` and `allowed` to enforce no take backs
+              transitions['off']['locked'] = true
+              transitions['allowed']['locked'] = true
+            end
+          elsif context.feature_allowed?(:new_gradebook, exclude_enabled: true)
+            # Locked into `allowed` since Final Grade Override can't go back to `off` and can't
+            # set to `on` without New Gradebook also set to `on`.
+            transitions['off']['locked'] = true
+            transitions['on']['locked'] = true
+          else
+            # feature unavailable without New Gradebook
+            transitions['allowed']['locked'] = true
+            transitions['on']['locked'] = true
           end
         end
       end
@@ -297,7 +357,6 @@ END
       applies_to: 'Course',
       state: 'hidden',
       root_opt_in: true,
-      beta: true
     },
     'duplicate_modules' =>
     {
@@ -317,15 +376,6 @@ END
       state: 'hidden',
       root_opt_in: true
     },
-    'lor_for_user' =>
-    {
-      display_name: -> { I18n.t('features.lor', "LOR External Tools") },
-      description:  -> { I18n.t('allow_lor_tools', <<-END) },
-Allow users to view and use external tools configured for LOR.
-END
-      applies_to: 'User',
-      state: 'hidden'
-    },
     'lor_for_account' =>
     {
       display_name: -> { I18n.t('features.lor', "LOR External Tools") },
@@ -343,7 +393,6 @@ Show a searchable list of courses in this root account with the "Include this co
 END
       applies_to: 'RootAccount',
       state: 'allowed',
-      beta: true,
       root_opt_in: true
     },
     'gradebook_list_students_by_sortable_name' =>
@@ -358,7 +407,7 @@ END
     'usage_rights_required' =>
     {
       display_name: -> { I18n.t('Require Usage Rights for Uploaded Files') },
-      description: -> { I18n.t('If enabled, content designers must provide copyright and license information for files before they are published. Only applies if Better File Browsing is also enabled.') },
+      description: -> { I18n.t('If enabled, copyright and license information must be provided for files before they are published.') },
       applies_to: 'Course',
       state: 'hidden',
       root_opt_in: true
@@ -429,9 +478,8 @@ END
       description: -> { I18n.t('Allow the ability to send notifications through our dispatch queue') },
       applies_to: 'RootAccount',
       state: 'hidden',
-      beta: true,
       development: false,
-      root_opt_in: true
+      root_opt_in: false
     },
     'better_scheduler' =>
     {
@@ -439,9 +487,8 @@ END
       description: -> { I18n.t('Uses the new scheduler and its functionality') },
       applies_to: 'RootAccount',
       state: 'hidden',
-      beta: true,
       development: false,
-      root_opt_in: true
+      root_opt_in: false
     },
     'course_card_images' =>
     {
@@ -450,21 +497,7 @@ END
       applies_to: 'Course',
       state: 'allowed',
       root_opt_in: true,
-      beta: true
     },
-<<<<<<< HEAD
-    'dashcard_reordering' =>
-    {
-      display_name: -> { I18n.t('Allow Reorder Dashboard Cards') },
-      description: -> { I18n.t('Allow dashboard cards to be reordered for each user.') },
-      applies_to: 'RootAccount',
-      state: 'hidden',
-      beta: true,
-      development: true,
-      root_opt_in: true
-    },
-=======
->>>>>>> merge-04-02-2019
     'responsive_layout' =>
     {
       display_name: -> { I18n.t('Responsive Layout') },
@@ -548,7 +581,6 @@ END
       description: -> { I18n.t('Configure individual learning paths for students based on assessment results.') },
       applies_to: 'Course',
       state: 'allowed',
-      beta: true,
       development: false,
       root_opt_in: true,
       after_state_change_proc:  ->(user, context, _old_state, new_state) {
@@ -576,26 +608,13 @@ END
       root_opt_in: true,
       touch_context: true
     },
-<<<<<<< HEAD
-    'master_courses' =>
-    {
-      display_name: -> { I18n.t('Blueprint Courses') }, # this won't be confusing at all
-      description: -> { I18n.t('Enable the creation of Blueprint Courses') },
-      applies_to: 'RootAccount',
-      state: 'allowed',
-      beta: false,
-      root_opt_in: true,
-    },
-=======
->>>>>>> merge-04-02-2019
     'student_context_cards' =>
     {
       display_name: -> { I18n.t('Student Context Card') },
       description: -> { I18n.t('Enable student context card links') },
-      applies_to: "Course",
+      applies_to: "RootAccount",
       state: "allowed",
-      beta: true,
-      root_opt_in: true,
+      beta: true
     },
     'new_user_tutorial' =>
     {
@@ -633,15 +652,9 @@ END
       state: 'allowed',
       visible_on: ->(context) do
         root_account = context.root_account
-        is_provisioned = Rails.env.development? || root_account.settings&.dig(:provision, 'lti').present?
-
-        if is_provisioned
-          FeatureFlag.where(
-            feature: 'quizzes_next',
-            context: root_account
-          ).first_or_create!(state: 'on') # if it's local or previously provisioned, FF is on
-        end
-        is_provisioned
+        # assume all Quizzes.Next provisions so far have been done through uuid_provisioner
+        #  so all provisioned accounts will have the FF in Canvas UI
+        root_account.settings&.dig(:provision, 'lti').present?
       end
     },
     'quizzes_next_submission_history' => {
@@ -674,8 +687,8 @@ END
       display_name: -> { I18n.t('LTI 1.3 and LTI Advantage')},
       description: -> { I18n.t('If enabled, access to LTI 1.3 and LTI Advantage will be enabled.') },
       applies_to: 'RootAccount',
-      development: true,
-      state: 'allowed'
+      beta: true,
+      state: 'hidden'
     },
     'assignments_2' => {
       display_name: -> { I18n.t('Assignments 2') },
@@ -689,8 +702,7 @@ END
       display_name: -> { I18n.t('Content Security Policy')},
       description: -> { I18n.t('Enable the Security tab on the settings page to adjust CSP settings')},
       applies_to: 'RootAccount',
-      state: 'hidden',
-      development: true,
+      state: 'hidden_in_prod',
       beta: true
     },
     'restrict_students_from_annotating' => {
@@ -704,15 +716,24 @@ END
       state: 'allowed',
       development: true
     },
-    'final_grades_override' => {
-      display_name: -> { I18n.t('Final Grade Override') },
+    'post_policies' => {
+      display_name: -> { I18n.t('Post Policies') },
       description: -> {
         I18n.t <<~DESCRIPTION
-          Enable ability to alter the final grade for the entire course without changing scores for assignments.
+          Allows teachers to specify post policies for this course or specific assignments, enabling grades to be
+          posted and hidden manually.
         DESCRIPTION
       },
       applies_to: 'Course',
       state: 'hidden',
+      development: true
+    },
+    'rce_enhancements' => {
+      display_name: -> { I18n.t('RCE Enhancements') },
+      description: -> { I18n.t('Allow switching to the enhanced RCE') },
+      applies_to: 'Course',
+      state: 'hidden',
+      root_opt_in: true,
       development: true,
       beta: true
     }

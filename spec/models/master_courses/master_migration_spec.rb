@@ -1133,6 +1133,36 @@ describe MasterCourses::MasterMigration do
       expect(copied_topic_assmt.reload.due_at.to_i).to eq new_master_due_at.to_i
     end
 
+    it "allows a minion course's change of the graded status of a discussion topic to stick" do
+      @copy_to = course_factory
+      sub = @template.add_child_course!(@copy_to)
+
+      topic = @copy_from.discussion_topics.new
+      topic.assignment = @copy_from.assignments.build(:due_at => 1.month.from_now)
+      topic.save!
+      run_master_migration
+
+      topic_to = @copy_to.discussion_topics.where(:migration_id => mig_id(topic)).take
+      assignment_to = topic_to.assignment
+      topic_to.assignment = nil
+      topic_to.save!
+
+      expect(assignment_to.reload).to be_deleted
+      topic_tag = MasterCourses::ChildContentTag.where(content_type: 'DiscussionTopic', content_id: topic_to.id).take
+      expect(topic_tag.downstream_changes).to include 'assignment_id'
+      assign_tag = MasterCourses::ChildContentTag.where(content_id: 'Assignment', content_id: assignment_to.id).take
+      expect(assign_tag.downstream_changes).to include 'workflow_state'
+
+      Timecop.travel(1.hour.from_now) do
+        topic.message = 'content updated'
+        topic.save!
+      end
+      run_master_migration
+
+      expect(topic_to.reload.assignment).to be_nil
+      expect(assignment_to.reload).to be_deleted
+    end
+
     it "should ignore course settings on selective export unless requested" do
       @copy_to = course_factory
       @sub = @template.add_child_course!(@copy_to)
@@ -1176,6 +1206,25 @@ describe MasterCourses::MasterMigration do
       run_master_migration(:copy_settings => true) # selective with settings
       expect(@copy_to.reload.start_at).to be_nil # remove the dates
       expect(@copy_to.conclude_at).to be_nil
+    end
+
+    it "should be able to disable grading standard" do
+      gs = @copy_from.grading_standards.create!(:title => "Standard eh", :data => [["Eh", 0.93], ["Eff", 0]])
+      @copy_from.update_attributes(:grading_standard_enabled => true, :grading_standard => gs)
+
+      @copy_to = course_factory
+      @sub = @template.add_child_course!(@copy_to)
+
+      run_master_migration
+
+      expect(@copy_to.reload.grading_standard.data).to eq gs.data
+      expect(@copy_to.grading_standard_enabled).to eq true
+
+      @copy_from.update_attribute(:grading_standard_enabled, false)
+      run_master_migration(:copy_settings => true)
+
+      expect(@copy_to.reload.grading_standard).to be_nil
+      expect(@copy_to.grading_standard_enabled).to eq false
     end
 
     it "should copy front wiki pages" do
@@ -1432,6 +1481,33 @@ describe MasterCourses::MasterMigration do
       Assignment.where(:id => @assmt).update_all(:updated_at => 10.minutes.from_now)
       run_master_migration
       expect(assignment_to.reload.rubric).to eq other_rubric
+    end
+
+    it "should link assignment rubrics when association is pointed to a new rubric" do
+      Timecop.freeze(10.minutes.ago) do
+        @copy_to = course_factory
+        @template.add_child_course!(@copy_to)
+        @assmt = @copy_from.assignments.create!
+        @course = @copy_from
+        @first_rubric = outcome_with_rubric
+        @ra = @first_rubric.associate_with(@assmt, @copy_from, purpose: 'grading')
+      end
+      Timecop.freeze(8.minutes.ago) do
+        run_master_migration
+      end
+
+      assignment_to = @copy_to.assignments.where(:migration_id => mig_id(@assmt)).first
+      rubric_to = @copy_to.rubrics.where(:migration_id => mig_id(@first_rubric)).first
+      expect(assignment_to.reload.rubric).to eq rubric_to
+
+      @second_rubric = outcome_with_rubric
+      @ra.rubric = @second_rubric
+      @ra.save! # change the rubric but don't make a new association
+
+      run_master_migration
+
+      second_rubric_to = @copy_to.rubrics.where(:migration_id => mig_id(@second_rubric)).first
+      expect(assignment_to.reload.rubric).to eq second_rubric_to
     end
 
     it "shouldn't delete module items in associated courses" do

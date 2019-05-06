@@ -37,7 +37,9 @@ module LtiAdvantage::Messages
           accept_presentation_document_targets: ['iframe'],
           deep_link_return_url: 'http://test.com/return_url'
         ),
-        roles: ['foo']
+        roles: ['foo'],
+        target_link_uri: 'https://www.example.com',
+        lti11_legacy_user_id: 'aaaaa'
       )
     end
 
@@ -112,9 +114,7 @@ module LtiAdvantage::Messages
           context: LtiAdvantage::Claims::Context.new
         )
         message.validate
-        expect(message.errors.messages[:context].first.messages).to eq(
-          { id: ["can't be blank"] }
-        )
+        expect(message.errors.messages.keys).to include(:context)
       end
     end
   end

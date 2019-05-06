@@ -17,52 +17,76 @@
  */
 
 import React from 'react'
-import {bool} from 'prop-types'
+import {bool, func} from 'prop-types'
+
 import View from '@instructure/ui-layout/lib/components/View'
+
 import {TeacherAssignmentShape} from '../../assignmentData'
 import Override from './Override'
 import EveryoneElse from './EveryoneElse'
 
-Overrides.propTypes = {
-  assignment: TeacherAssignmentShape.isRequired,
-  readOnly: bool
-}
-
-Overrides.defaultProps = {
-  readOnly: false
-}
-
-export default function Overrides(props) {
-  return (
-    <View as="div">
-      {renderOverrides(props.assignment, props.readOnly)}
-      {renderEveryoneElse(props.assignment, props.readOnly)}
-    </View>
-  )
-}
-
-function renderEveryoneElse(assignment, readOnly) {
-  if (assignment.dueAt !== null) {
-    return <EveryoneElse assignment={assignment} readOnly={readOnly} />
+export default class Overrides extends React.Component {
+  static propTypes = {
+    assignment: TeacherAssignmentShape.isRequired,
+    onChangeAssignment: func.isRequired,
+    readOnly: bool
   }
-  return null
-}
 
-function renderOverrides(assignment, readOnly) {
-  if (assignment.assignmentOverrides.nodes.length > 0) {
-    return assignment.assignmentOverrides.nodes.map(override => (
-      // in the existing schema, submissionTypes and allowedExtensions are on the assignment.
-      // eventually, they will also be part of each override
-      <Override
-        key={override.lid}
-        override={{
-          ...override,
-          submissionTypes: assignment.submissionTypes,
-          allowedExtensions: assignment.allowedExtensions
-        }}
-        readOnly={readOnly}
-      />
-    ))
+  static defaultProps = {
+    readOnly: false
   }
-  return null
+
+  handleChangeOverride = (overrideIndex, path, value) => {
+    if (path === 'allowedAttempts' || path === 'submissionTypes') {
+      this.props.onChangeAssignment(path, value)
+    } else {
+      this.props.onChangeAssignment(`assignmentOverrides.nodes.${overrideIndex}.${path}`, value)
+    }
+  }
+
+  renderEveryoneElse() {
+    if (this.props.assignment.dueAt !== null) {
+      return (
+        <EveryoneElse
+          assignment={this.props.assignment}
+          onChangeAssignment={this.props.onChangeAssignment}
+          readOnly={this.props.readOnly}
+        />
+      )
+    }
+    return null
+  }
+
+  renderOverrides() {
+    const assignment = this.props.assignment
+    const overrides = assignment.assignmentOverrides.nodes
+    if (overrides.length > 0) {
+      return overrides.map((override, index) => (
+        // in the existing schema submissionTypes, allowedExtensions, and allowedAttempts are on the assignment.
+        // eventually, they will also be part of each override
+        <Override
+          key={override.lid}
+          override={{
+            ...override,
+            submissionTypes: assignment.submissionTypes,
+            allowedExtensions: assignment.allowedExtensions,
+            allowedAttempts: assignment.allowedAttempts
+          }}
+          index={index}
+          onChangeOverride={this.handleChangeOverride}
+          readOnly={this.props.readOnly}
+        />
+      ))
+    }
+    return null
+  }
+
+  render() {
+    return (
+      <View as="div">
+        {this.renderOverrides()}
+        {this.renderEveryoneElse()}
+      </View>
+    )
+  }
 }

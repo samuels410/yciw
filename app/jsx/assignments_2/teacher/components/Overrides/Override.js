@@ -17,31 +17,42 @@
  */
 
 import React from 'react'
-import {bool} from 'prop-types'
+import {bool, func, number} from 'prop-types'
 import I18n from 'i18n!assignments_2'
 import {OverrideShape} from '../../assignmentData'
 import ToggleGroup from '@instructure/ui-toggle-details/lib/components/ToggleGroup'
 import View from '@instructure/ui-layout/lib/components/View'
 import OverrideSummary from './OverrideSummary'
+import OverrideDetail from './OverrideDetail'
 
 Override.propTypes = {
-  override: OverrideShape,
+  override: OverrideShape.isRequired,
+  onChangeOverride: func.isRequired,
+  index: number.isRequired, // offset of this override in the assignment
   readOnly: bool
 }
 Override.defaultProps = {
-  readOnly: true
+  readOnly: false
 }
 
 export default function Override(props) {
   return (
-    <View as="div" margin="0 0 small 0">
+    <View as="div" margin="0 0 small 0" data-testid="Override">
       <ToggleGroup
         toggleLabel={I18n.t('Expand')}
         summary={<OverrideSummary override={props.override} />}
         background="default"
       >
-        <div style={{padding: '.5rem'}}>OverrideDetail goes here</div>
+        <OverrideDetail
+          override={props.override}
+          onChangeOverride={onChangeOverride}
+          readOnly={props.readOnly}
+        />
       </ToggleGroup>
     </View>
   )
+
+  function onChangeOverride(path, value) {
+    props.onChangeOverride(props.index, path, value)
+  }
 }

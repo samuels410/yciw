@@ -27,7 +27,6 @@ import 'jqueryui/dialog'
 import './jquery.instructure_misc_helpers' /* /\$\.h/, /\$\.fileSize/ */
 import './jquery.instructure_misc_plugins' /* .dim, /\.log\(/ */
 import 'jqueryui/progressbar'
-import 'jqueryui/tabs'
 
   "use strict"
   var jsUploader
@@ -59,9 +58,10 @@ import 'jqueryui/tabs'
     return ENV.context_asset_string || ('user_' + ENV.current_user_id);
   }
 
-  function addEntry(entry){
-    var contextCode = $.mediaComment.contextCode(),
-        mediaType = { 2: 'image', 5: 'audio' }[entry.mediaType] || 'video';
+  function addEntry(entry, isAudioFile){
+    const contextCode = $.mediaComment.contextCode();
+
+    const mediaType = { 2: 'image', 5: 'audio' }[entry.mediaType] || isAudioFile ? 'audio' : 'video';
 
     if (contextCode) {
       $.ajaxJSON("/media_objects", "POST", {
@@ -548,6 +548,7 @@ import 'jqueryui/tabs'
         if($div.data('ks')) {
           var mediaCommentsTemplate = require('jst/MediaComments');
           $div.html(mediaCommentsTemplate());
+          require('jqueryui/tabs')
           $div.find("#media_record_tabs").tabs({activate: $.mediaComment.video_delegate.expectReady});
           mediaCommentReady();
         } else if($div.data('ks-error')) {

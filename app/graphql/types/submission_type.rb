@@ -17,6 +17,14 @@
 #
 
 module Types
+
+  class LatePolicyStatusType < Types::BaseEnum
+    graphql_name "LatePolicyStatusType"
+    value "late"
+    value "missing"
+    value "none"
+  end
+
   class SubmissionType < ApplicationObjectType
     graphql_name "Submission"
 
@@ -39,11 +47,36 @@ module Types
     end
 
     def protect_submission_grades(attr)
-      submission.user_can_read_grade?(current_user, session) ?
-        submission.send(attr) :
-        nil
+      load_association(:assignment).then do
+        if submission.user_can_read_grade?(current_user, session)
+          submission.send(attr)
+        end
+      end
     end
     private :protect_submission_grades
+
+    field :attempt, Integer, null: false
+    def attempt
+      submission.attempt || 0 # Nil in database, make it 0 here for easier api
+    end
+
+    field :comments_connection, SubmissionCommentType.connection_type, null: true do
+      argument :filter, Types::SubmissionCommentFilterInputType, required: false
+    end
+    def comments_connection(filter: nil)
+      filter ||= {}
+      load_association(:assignment).then do
+        scope = submission.comments_for(current_user).published
+        if filter[:attempts].present?
+          # Attempt 0 is represented as attempt nil in the database. It proved
+          # to be a PITA to try and chagne that, so we are fixing it up at the
+          # API boundary instead
+          attempts = filter[:attempts].map{ |i| i == 0 ? nil : i }
+          scope = scope.where(attempt: attempts)
+        end
+        scope
+      end
+    end
 
     field :score, Float, null: true
     def score
@@ -82,6 +115,7 @@ module Types
 
     field :submitted_at, DateTimeType, null: true
     field :graded_at, DateTimeType, null: true
+    field :posted_at, DateTimeType, null: true
 
     field :state, SubmissionStateType, method: :workflow_state, null: false
 
@@ -97,5 +131,6 @@ module Types
     end
 
     field :grading_status, String, null: true
+    field :late_policy_status, LatePolicyStatusType, null: true
   end
 end

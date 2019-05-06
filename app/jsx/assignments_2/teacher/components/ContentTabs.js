@@ -17,12 +17,22 @@
  */
 
 import React from 'react'
+import {bool, func} from 'prop-types'
+import I18n from 'i18n!assignments_2'
 import TabList, {TabPanel} from '@instructure/ui-tabs/lib/components/TabList'
 import {TeacherAssignmentShape} from '../assignmentData'
 import Details from './Details'
+import Students from './Students'
 
 ContentTabs.propTypes = {
-  assignment: TeacherAssignmentShape.isRequired
+  assignment: TeacherAssignmentShape.isRequired,
+  onChangeAssignment: func.isRequired,
+  onValidate: func.isRequired,
+  readOnly: bool
+}
+
+ContentTabs.defaultProps = {
+  readOnly: false
 }
 
 export default function ContentTabs(props) {
@@ -30,11 +40,18 @@ export default function ContentTabs(props) {
   return (
     <TabList defaultSelectedIndex={0} variant="minimal">
       <TabPanel title="Details">
-        <Details assignment={assignment} />
+        <Details
+          assignment={assignment}
+          onChangeAssignment={props.onChangeAssignment}
+          onValidate={props.onValidate}
+          readOnly={props.readOnly}
+        />
       </TabPanel>
-      <TabPanel title="Students">Students</TabPanel>
-      <TabPanel title="Rubric">Rubric</TabPanel>
-      <TabPanel title="Settings">Settings</TabPanel>
+      <TabPanel title={I18n.t('Grading')}>Grading</TabPanel>
+      <TabPanel title={I18n.t('Rubric')}>Rubric</TabPanel>
+      <TabPanel title={I18n.t('Students')}>
+        <Students assignment={assignment} />
+      </TabPanel>
     </TabList>
   )
 }

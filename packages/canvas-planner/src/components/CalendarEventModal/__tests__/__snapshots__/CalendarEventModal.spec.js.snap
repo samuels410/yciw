@@ -19,12 +19,16 @@ exports[`renders 1`] = `
   onExiting={[Function]}
   onOpen={[Function]}
   open={true}
+  overflow="scroll"
   shouldCloseOnDocumentClick={true}
   shouldReturnFocus={true}
   size="small"
   transition="fade"
+  variant="default"
 >
-  <ModalHeader>
+  <ModalHeader
+    variant="default"
+  >
     <Heading
       border="none"
       color="inherit"
@@ -33,7 +37,6 @@ exports[`renders 1`] = `
     >
       <Link
         as="button"
-        ellipsis={false}
         href="http://example.com"
         iconPlacement="start"
         linkRef={[Function]}
@@ -57,6 +60,7 @@ exports[`renders 1`] = `
   <ModalBody
     as="div"
     padding="medium"
+    variant="default"
   >
     <List
       as="ul"
@@ -78,6 +82,8 @@ exports[`renders 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -100,6 +106,8 @@ exports[`renders 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -122,6 +130,8 @@ exports[`renders 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -144,6 +154,8 @@ exports[`renders 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -197,12 +209,16 @@ exports[`renders with allDay 1`] = `
   onExiting={[Function]}
   onOpen={[Function]}
   open={true}
+  overflow="scroll"
   shouldCloseOnDocumentClick={true}
   shouldReturnFocus={true}
   size="small"
   transition="fade"
+  variant="default"
 >
-  <ModalHeader>
+  <ModalHeader
+    variant="default"
+  >
     <Heading
       border="none"
       color="inherit"
@@ -211,7 +227,6 @@ exports[`renders with allDay 1`] = `
     >
       <Link
         as="button"
-        ellipsis={false}
         href="http://example.com"
         iconPlacement="start"
         linkRef={[Function]}
@@ -235,6 +250,7 @@ exports[`renders with allDay 1`] = `
   <ModalBody
     as="div"
     padding="medium"
+    variant="default"
   >
     <List
       as="ul"
@@ -256,6 +272,8 @@ exports[`renders with allDay 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -278,6 +296,8 @@ exports[`renders with allDay 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -300,6 +320,8 @@ exports[`renders with allDay 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -322,6 +344,8 @@ exports[`renders with allDay 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -375,12 +399,16 @@ exports[`renders with only the startTime 1`] = `
   onExiting={[Function]}
   onOpen={[Function]}
   open={true}
+  overflow="scroll"
   shouldCloseOnDocumentClick={true}
   shouldReturnFocus={true}
   size="small"
   transition="fade"
+  variant="default"
 >
-  <ModalHeader>
+  <ModalHeader
+    variant="default"
+  >
     <Heading
       border="none"
       color="inherit"
@@ -389,7 +417,6 @@ exports[`renders with only the startTime 1`] = `
     >
       <Link
         as="button"
-        ellipsis={false}
         href="http://example.com"
         iconPlacement="start"
         linkRef={[Function]}
@@ -413,6 +440,7 @@ exports[`renders with only the startTime 1`] = `
   <ModalBody
     as="div"
     padding="medium"
+    variant="default"
   >
     <List
       as="ul"
@@ -434,6 +462,8 @@ exports[`renders with only the startTime 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -456,6 +486,8 @@ exports[`renders with only the startTime 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -478,6 +510,8 @@ exports[`renders with only the startTime 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -500,6 +534,8 @@ exports[`renders with only the startTime 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -553,12 +589,16 @@ exports[`renders with user displayName for calendar 1`] = `
   onExiting={[Function]}
   onOpen={[Function]}
   open={true}
+  overflow="scroll"
   shouldCloseOnDocumentClick={true}
   shouldReturnFocus={true}
   size="small"
   transition="fade"
+  variant="default"
 >
-  <ModalHeader>
+  <ModalHeader
+    variant="default"
+  >
     <Heading
       border="none"
       color="inherit"
@@ -567,7 +607,6 @@ exports[`renders with user displayName for calendar 1`] = `
     >
       <Link
         as="button"
-        ellipsis={false}
         href="http://example.com"
         iconPlacement="start"
         linkRef={[Function]}
@@ -591,6 +630,7 @@ exports[`renders with user displayName for calendar 1`] = `
   <ModalBody
     as="div"
     padding="medium"
+    variant="default"
   >
     <List
       as="ul"
@@ -612,6 +652,8 @@ exports[`renders with user displayName for calendar 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -634,6 +676,8 @@ exports[`renders with user displayName for calendar 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -656,6 +700,8 @@ exports[`renders with user displayName for calendar 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -678,6 +724,8 @@ exports[`renders with user displayName for calendar 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -731,12 +779,16 @@ exports[`renders without address 1`] = `
   onExiting={[Function]}
   onOpen={[Function]}
   open={true}
+  overflow="scroll"
   shouldCloseOnDocumentClick={true}
   shouldReturnFocus={true}
   size="small"
   transition="fade"
+  variant="default"
 >
-  <ModalHeader>
+  <ModalHeader
+    variant="default"
+  >
     <Heading
       border="none"
       color="inherit"
@@ -745,7 +797,6 @@ exports[`renders without address 1`] = `
     >
       <Link
         as="button"
-        ellipsis={false}
         href="http://example.com"
         iconPlacement="start"
         linkRef={[Function]}
@@ -769,6 +820,7 @@ exports[`renders without address 1`] = `
   <ModalBody
     as="div"
     padding="medium"
+    variant="default"
   >
     <List
       as="ul"
@@ -790,6 +842,8 @@ exports[`renders without address 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -812,6 +866,8 @@ exports[`renders without address 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -834,6 +890,8 @@ exports[`renders without address 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -887,12 +945,16 @@ exports[`renders without details 1`] = `
   onExiting={[Function]}
   onOpen={[Function]}
   open={true}
+  overflow="scroll"
   shouldCloseOnDocumentClick={true}
   shouldReturnFocus={true}
   size="small"
   transition="fade"
+  variant="default"
 >
-  <ModalHeader>
+  <ModalHeader
+    variant="default"
+  >
     <Heading
       border="none"
       color="inherit"
@@ -901,7 +963,6 @@ exports[`renders without details 1`] = `
     >
       <Link
         as="button"
-        ellipsis={false}
         href="http://example.com"
         iconPlacement="start"
         linkRef={[Function]}
@@ -925,6 +986,7 @@ exports[`renders without details 1`] = `
   <ModalBody
     as="div"
     padding="medium"
+    variant="default"
   >
     <List
       as="ul"
@@ -946,6 +1008,8 @@ exports[`renders without details 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -968,6 +1032,8 @@ exports[`renders without details 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -990,6 +1056,8 @@ exports[`renders without details 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -1012,6 +1080,8 @@ exports[`renders without details 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -1046,12 +1116,16 @@ exports[`renders without location 1`] = `
   onExiting={[Function]}
   onOpen={[Function]}
   open={true}
+  overflow="scroll"
   shouldCloseOnDocumentClick={true}
   shouldReturnFocus={true}
   size="small"
   transition="fade"
+  variant="default"
 >
-  <ModalHeader>
+  <ModalHeader
+    variant="default"
+  >
     <Heading
       border="none"
       color="inherit"
@@ -1060,7 +1134,6 @@ exports[`renders without location 1`] = `
     >
       <Link
         as="button"
-        ellipsis={false}
         href="http://example.com"
         iconPlacement="start"
         linkRef={[Function]}
@@ -1084,6 +1157,7 @@ exports[`renders without location 1`] = `
   <ModalBody
     as="div"
     padding="medium"
+    variant="default"
   >
     <List
       as="ul"
@@ -1105,6 +1179,8 @@ exports[`renders without location 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -1127,6 +1203,8 @@ exports[`renders without location 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"
@@ -1149,6 +1227,8 @@ exports[`renders without location 1`] = `
         <View
           display="auto"
           margin="0 0 0 x-small"
+          overflowX="visible"
+          overflowY="visible"
         >
           <Text
             as="span"

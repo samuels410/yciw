@@ -88,8 +88,9 @@ module Api::V1::User
         json[:email] = user.email
       end
 
-      if includes.include?('bio') && !excludes.include?('personal_info') && @domain_root_account.enable_profiles? && user.profile
-        json[:bio] = user.profile.bio
+      if !excludes.include?('personal_info') && @domain_root_account&.enable_profiles? && user.profile
+        json[:bio] = user.profile.bio if includes.include?('bio')
+        json[:title] = user.profile.title if includes.include?('title')
       end
 
       if includes.include?('sections')
@@ -138,7 +139,13 @@ module Api::V1::User
       end
 
       if includes.include?('lti_id')
-        json[:lti_id] = user.lti_context_id
+        json[:lti_id] = Lti::Asset.old_id_for_user_in_context(user, context) || user.lti_context_id
+      end
+
+      if includes.include?('uuid')
+        past_uuid = UserPastLtiId.uuid_for_user_in_context(user, context)
+        json[:past_uuid] = past_uuid unless past_uuid == user.uuid
+        json[:uuid] = user.uuid
       end
     end
   end
@@ -359,9 +366,9 @@ module Api::V1::User
 
   def group_ids(user)
     if user.group_memberships.loaded?
-      user.group_memberships.map(&:group_id)
+      user.group_memberships.reject(&:deleted?).map(&:group_id)
     else
-      user.group_memberships.pluck(:group_id)
+      user.group_memberships.active.pluck(:group_id)
     end
   end
 end

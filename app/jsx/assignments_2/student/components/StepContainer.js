@@ -17,7 +17,8 @@
  */
 
 import I18n from 'i18n!assignments_2_student_header_date_title'
-import {boolean, string} from 'prop-types'
+import {bool, string} from 'prop-types'
+import {StudentAssignmentShape} from '../assignmentData'
 import Text from '@instructure/ui-elements/lib/components/Text'
 
 import React from 'react'
@@ -56,7 +57,7 @@ function availableStepContainer(props) {
 }
 
 availableStepContainer.propTypes = {
-  isCollapsed: boolean,
+  isCollapsed: bool,
   collapsedLabel: string
 }
 
@@ -79,19 +80,25 @@ function unavailableStepContainer(props) {
 }
 
 unavailableStepContainer.propTypes = {
-  isCollapsed: boolean,
+  isCollapsed: bool,
   collapsedLabel: string
 }
 
 function StepContainer(props) {
-  const {assignment, isCollapsed, collapsedLabel} = props
+  const {assignment, isCollapsed, collapsedLabel, forceLockStatus} = props
 
-  // TODO render the step-container based on the actual assignment data.
-  if (assignment.lockInfo.isLocked) {
+  // TODO: render the step-container based on the actual assignment data.
+  if (forceLockStatus || assignment.lockInfo.isLocked) {
     return unavailableStepContainer({isCollapsed, collapsedLabel})
   } else {
     return availableStepContainer({isCollapsed, collapsedLabel})
   }
+}
+
+StepContainer.propTypes = {
+  assignment: StudentAssignmentShape,
+  collapsedLabel: string.isRequired,
+  forceLockStatus: bool
 }
 
 export default React.memo(StepContainer)

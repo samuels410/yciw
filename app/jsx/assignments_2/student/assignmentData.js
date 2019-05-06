@@ -18,9 +18,14 @@
 import gql from 'graphql-tag'
 import {bool, number, shape, string, arrayOf} from 'prop-types'
 
-export function GetLinkStateDefaults() {
-  const defaults = {}
-  if (!window.ENV) {
+export function GetAssignmentEnvVariables() {
+  const defaults = {
+    assignmentUrl: '',
+    currentUserId: null,
+    modulePrereq: null,
+    moduleUrl: ''
+  }
+  if (!window.ENV || !Object.keys(window.ENV).length) {
     return defaults
   }
 
@@ -29,6 +34,7 @@ export function GetLinkStateDefaults() {
   }`
   defaults.assignmentUrl = `${baseUrl}/assignments`
   defaults.moduleUrl = `${baseUrl}/modules`
+  defaults.currentUserId = ENV.current_user_id
 
   if (ENV.PREREQS.items && ENV.PREREQS.items.length !== 0 && ENV.PREREQS.items[0].prev) {
     const prereq = ENV.PREREQS.items[0].prev
@@ -41,7 +47,7 @@ export function GetLinkStateDefaults() {
     defaults.modulePrereq = null
   }
 
-  return {env: {...defaults, __typename: 'env'}}
+  return {...defaults}
 }
 
 export const STUDENT_VIEW_QUERY = gql`
@@ -52,20 +58,13 @@ export const STUDENT_VIEW_QUERY = gql`
         dueAt
         lockAt
         name
+        muted
         pointsPossible
         unlockAt
         gradingType
         allowedAttempts
         assignmentGroup {
           name
-        }
-        env @client {
-          assignmentUrl
-          moduleUrl
-          modulePrereq {
-            title
-            link
-          }
         }
         lockInfo {
           isLocked
@@ -79,7 +78,12 @@ export const STUDENT_VIEW_QUERY = gql`
           filter: {states: [unsubmitted, graded, pending_review, submitted]}
         ) {
           nodes {
+            id
+            deductedPoints
+            enteredGrade
             grade
+            gradingStatus
+            latePolicyStatus
             submissionStatus
           }
         }
@@ -88,10 +92,75 @@ export const STUDENT_VIEW_QUERY = gql`
   }
 `
 
+export const SUBMISSION_COMMENT_QUERY = gql`
+  query GetSubmissionComments($submissionId: ID!) {
+    submissionComments: node(id: $submissionId) {
+      ... on Submission {
+        commentsConnection {
+          nodes {
+            _id
+            comment
+            updatedAt
+            mediaObject {
+              id
+              title
+              mediaType
+              mediaSources {
+                src: url
+                type: contentType
+              }
+            }
+            author {
+              avatarUrl
+              shortName
+            }
+            attachments {
+              _id
+              displayName
+              mimeClass
+              url
+            }
+          }
+        }
+      }
+    }
+  }
+`
+
+export const AttachmentShape = shape({
+  _id: string,
+  displayName: string,
+  mimeClass: string,
+  url: string
+})
+
+export const CommentShape = shape({
+  _id: string,
+  attachments: arrayOf(AttachmentShape),
+  comment: string,
+  mediaObject: MediaObjectShape,
+  author: shape({
+    avatarUrl: string,
+    shortName: string
+  }),
+  updatedAt: string
+})
+
+export const MediaObjectShape = shape({
+  id: string,
+  title: string,
+  mediaType: string,
+  mediaSources: shape({
+    src: string,
+    type: string
+  })
+})
+
 export const StudentAssignmentShape = shape({
-  description: string.isRequired,
+  description: string,
   dueAt: string,
   lockAt: string,
+  muted: bool.isRequired,
   name: string.isRequired,
   pointsPossible: number.isRequired,
   unlockAt: string,
@@ -103,6 +172,7 @@ export const StudentAssignmentShape = shape({
   env: shape({
     assignmentUrl: string.isRequired,
     moduleUrl: string.isRequired,
+    currentUserId: string,
     modulePrereq: shape({
       title: string.isRequired,
       link: string.isRequired
@@ -120,8 +190,17 @@ export const StudentAssignmentShape = shape({
   submissionsConnection: shape({
     nodes: arrayOf(
       shape({
-        grade: string
+        commentsConnection: shape({
+          nodes: arrayOf(CommentShape)
+        }),
+        id: string,
+        deductedPoints: number,
+        enteredGrade: string,
+        grade: string,
+        gradingStatus: string,
+        latePolicyStatus: string,
+        submissionStatus: string
       })
     ).isRequired
-  }).isRequired
+  })
 })

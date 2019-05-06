@@ -2,7 +2,7 @@
 
 exports[`new activity button does not show when there is no new activity 1`] = `
 <div
-  className="undefined PlannerHeader"
+  className="PlannerHeader-styles__root PlannerHeader"
 >
   <Button
     as="button"
@@ -79,9 +79,11 @@ exports[`new activity button does not show when there is no new activity 1`] = `
     onToggle={[Function]}
     placement="bottom end"
     positionTarget={null}
+    shadow="resting"
     shouldCloseOnDocumentClick={true}
     shouldCloseOnEscape={true}
     shouldContainFocus={false}
+    shouldFocusContentOnTriggerBlur={false}
     shouldRenderOffscreen={false}
     shouldReturnFocus={true}
     show={false}
@@ -91,35 +93,38 @@ exports[`new activity button does not show when there is no new activity 1`] = `
     withArrow={true}
   >
     <PopoverTrigger>
-      <Button
-        as="button"
-        buttonRef={[Function]}
-        cursor="pointer"
-        fluidWidth={false}
+      <Badge
+        count={1}
+        countUntil={100}
+        elementRef={[Function]}
+        formatOutput={[Function]}
+        formatOverflowText={[Function]}
         margin="0 medium 0 0"
-        onClick={[Function]}
-        size="medium"
-        type="button"
-        variant="icon"
+        placement="top end"
+        pulse={false}
+        standalone={false}
+        type="count"
+        variant="primary"
       >
-        <Badge
-          count={1}
-          elementRef={[Function]}
-          formatOutput={[Function]}
-          formatOverflowText={[Function]}
-          placement="top end"
-          pulse={false}
-          standalone={false}
-          type="count"
-          variant="primary"
+        <Button
+          as="button"
+          buttonRef={[Function]}
+          cursor="pointer"
+          fluidWidth={false}
+          icon={[Function]}
+          margin="0"
+          onClick={[Function]}
+          size="medium"
+          type="button"
+          variant="icon"
         >
-          <View
-            display="auto"
+          <ScreenReaderContent
+            as="span"
           >
-            <IconAlerts />
-          </View>
-        </Badge>
-      </Button>
+            opportunities popup
+          </ScreenReaderContent>
+        </Button>
+      </Badge>
     </PopoverTrigger>
     <PopoverContent>
       <Animatable(Opportunities)
@@ -244,6 +249,8 @@ exports[`new activity button does not show when there is no new activity 1`] = `
     <View
       as="div"
       display="auto"
+      overflowX="visible"
+      overflowY="visible"
       padding="large large medium"
     >
       <CloseButton
@@ -296,7 +303,7 @@ exports[`new activity button does not show when there is no new activity 1`] = `
 
 exports[`new activity button shows when there is new activity 1`] = `
 <div
-  className="undefined PlannerHeader"
+  className="PlannerHeader-styles__root PlannerHeader"
 >
   <Button
     as="button"
@@ -373,9 +380,11 @@ exports[`new activity button shows when there is new activity 1`] = `
     onToggle={[Function]}
     placement="bottom end"
     positionTarget={null}
+    shadow="resting"
     shouldCloseOnDocumentClick={true}
     shouldCloseOnEscape={true}
     shouldContainFocus={false}
+    shouldFocusContentOnTriggerBlur={false}
     shouldRenderOffscreen={false}
     shouldReturnFocus={true}
     show={false}
@@ -385,35 +394,38 @@ exports[`new activity button shows when there is new activity 1`] = `
     withArrow={true}
   >
     <PopoverTrigger>
-      <Button
-        as="button"
-        buttonRef={[Function]}
-        cursor="pointer"
-        fluidWidth={false}
+      <Badge
+        count={1}
+        countUntil={100}
+        elementRef={[Function]}
+        formatOutput={[Function]}
+        formatOverflowText={[Function]}
         margin="0 medium 0 0"
-        onClick={[Function]}
-        size="medium"
-        type="button"
-        variant="icon"
+        placement="top end"
+        pulse={false}
+        standalone={false}
+        type="count"
+        variant="primary"
       >
-        <Badge
-          count={1}
-          elementRef={[Function]}
-          formatOutput={[Function]}
-          formatOverflowText={[Function]}
-          placement="top end"
-          pulse={false}
-          standalone={false}
-          type="count"
-          variant="primary"
+        <Button
+          as="button"
+          buttonRef={[Function]}
+          cursor="pointer"
+          fluidWidth={false}
+          icon={[Function]}
+          margin="0"
+          onClick={[Function]}
+          size="medium"
+          type="button"
+          variant="icon"
         >
-          <View
-            display="auto"
+          <ScreenReaderContent
+            as="span"
           >
-            <IconAlerts />
-          </View>
-        </Badge>
-      </Button>
+            opportunities popup
+          </ScreenReaderContent>
+        </Button>
+      </Badge>
     </PopoverTrigger>
     <PopoverContent>
       <Animatable(Opportunities)
@@ -538,6 +550,8 @@ exports[`new activity button shows when there is new activity 1`] = `
     <View
       as="div"
       display="auto"
+      overflowX="visible"
+      overflowY="visible"
       padding="large large medium"
     >
       <CloseButton
@@ -590,7 +604,7 @@ exports[`new activity button shows when there is new activity 1`] = `
 
 exports[`renders the base component correctly with buttons and trays 1`] = `
 <div
-  className="undefined PlannerHeader"
+  className="PlannerHeader-styles__root PlannerHeader"
 >
   <Button
     as="button"
@@ -667,9 +681,11 @@ exports[`renders the base component correctly with buttons and trays 1`] = `
     onToggle={[Function]}
     placement="bottom end"
     positionTarget={null}
+    shadow="resting"
     shouldCloseOnDocumentClick={true}
     shouldCloseOnEscape={true}
     shouldContainFocus={false}
+    shouldFocusContentOnTriggerBlur={false}
     shouldRenderOffscreen={false}
     shouldReturnFocus={true}
     show={false}
@@ -679,35 +695,38 @@ exports[`renders the base component correctly with buttons and trays 1`] = `
     withArrow={true}
   >
     <PopoverTrigger>
-      <Button
-        as="button"
-        buttonRef={[Function]}
-        cursor="pointer"
-        fluidWidth={false}
+      <Badge
+        count={1}
+        countUntil={100}
+        elementRef={[Function]}
+        formatOutput={[Function]}
+        formatOverflowText={[Function]}
         margin="0 medium 0 0"
-        onClick={[Function]}
-        size="medium"
-        type="button"
-        variant="icon"
+        placement="top end"
+        pulse={false}
+        standalone={false}
+        type="count"
+        variant="primary"
       >
-        <Badge
-          count={1}
-          elementRef={[Function]}
-          formatOutput={[Function]}
-          formatOverflowText={[Function]}
-          placement="top end"
-          pulse={false}
-          standalone={false}
-          type="count"
-          variant="primary"
+        <Button
+          as="button"
+          buttonRef={[Function]}
+          cursor="pointer"
+          fluidWidth={false}
+          icon={[Function]}
+          margin="0"
+          onClick={[Function]}
+          size="medium"
+          type="button"
+          variant="icon"
         >
-          <View
-            display="auto"
+          <ScreenReaderContent
+            as="span"
           >
-            <IconAlerts />
-          </View>
-        </Badge>
-      </Button>
+            opportunities popup
+          </ScreenReaderContent>
+        </Button>
+      </Badge>
     </PopoverTrigger>
     <PopoverContent>
       <Animatable(Opportunities)
@@ -832,6 +851,8 @@ exports[`renders the base component correctly with buttons and trays 1`] = `
     <View
       as="div"
       display="auto"
+      overflowX="visible"
+      overflowY="visible"
       padding="large large medium"
     >
       <CloseButton

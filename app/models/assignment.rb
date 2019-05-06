@@ -97,6 +97,7 @@ class Assignment < ActiveRecord::Base
 
   has_one :external_tool_tag, :class_name => 'ContentTag', :as => :context, :inverse_of => :context, :dependent => :destroy
   has_one :score_statistic, dependent: :destroy
+  has_one :post_policy, dependent: :destroy, inverse_of: :assignment
 
   has_many :moderation_graders, inverse_of: :assignment
   has_many :moderation_grader_users, through: :moderation_graders, source: :user
@@ -499,7 +500,9 @@ class Assignment < ActiveRecord::Base
               :update_cached_due_dates,
               :apply_late_policy,
               :touch_submissions_if_muted_changed,
-              :update_line_items
+              :update_line_items,
+              :ensure_manual_posting_if_anonymous,
+              :ensure_manual_posting_if_moderated
 
   with_options if: -> { auditable? && @updating_user.present? } do
     after_create :create_assignment_created_audit_event!
@@ -875,7 +878,9 @@ class Assignment < ActiveRecord::Base
     assignment_groups = self.context.assignment_groups.active
     if !assignment_groups.map(&:id).include?(self.assignment_group_id)
       self.assignment_group = assignment_groups.first
-      save! if do_save
+      Shackles.activate(:master) do
+        save! if do_save
+      end
     end
   end
 
@@ -989,14 +994,11 @@ class Assignment < ActiveRecord::Base
   end
 
   def touch_submissions_if_muted_changed
+    # TODO: (GRADE-1982) implement a version of recalculate_module_progressions
+    # that can operate on an arbitrary set of submissions and call it in
+    # post_submissions. When that's done, this method can be removed.
     if saved_change_to_muted?
       self.class.connection.after_transaction_commit do
-        # this is necessary to generate new permissions cache keys for students
-        submissions.touch_all
-
-        # this ensures live events notifications
-        submissions.in_workflow_state('graded').each(&:assignment_muted_changed)
-
         self.send_later_if_production(:recalculate_module_progressions) unless self.muted?
       end
     end
@@ -1321,10 +1323,10 @@ class Assignment < ActiveRecord::Base
     self.lock_at = CanvasTime.fancy_midnight(self.lock_at)
   end
 
-  def infer_all_day
+  def infer_all_day(tz = nil)
     # make the comparison to "fancy midnight" and the date-part extraction in
     # the time zone that was active during editing
-    time_zone = (ActiveSupport::TimeZone.new(self.time_zone_edited) rescue nil) || Time.zone
+    time_zone = tz || (ActiveSupport::TimeZone.new(self.time_zone_edited) rescue nil) || Time.zone
     self.all_day, self.all_day_date = Assignment.all_day_interpretation(
       :due_at => self.due_at ? self.due_at.in_time_zone(time_zone) : nil,
       :due_at_was => self.due_at_was,
@@ -1372,7 +1374,7 @@ class Assignment < ActiveRecord::Base
 
   def include_description?(user, lock_info=nil)
     return unless user
-    lock_info ||= self.locked_for?(user, :check_policies => true)
+    lock_info = locked_for?(user, :check_policies => true) if lock_info.nil?
     !lock_info || (lock_info[:can_view] && !lock_info[:context_module])
   end
 
@@ -1802,6 +1804,8 @@ class Assignment < ActiveRecord::Base
     if did_grade
       submission.grade_matches_current_submission = true
       submission.regraded = true
+      submission.graded_at = Time.zone.now
+      submission.posted_at = submission.graded_at unless submission.posted? || post_manually?
     end
     submission.audit_grade_changes = did_grade || submission.excused_changed?
 
@@ -1811,7 +1815,6 @@ class Assignment < ActiveRecord::Base
       submission.workflow_state = "graded"
     end
     submission.group = group
-    submission.graded_at = Time.zone.now if did_grade
     previously_graded ? submission.with_versioning(:explicit => true) { submission.save! } : submission.save!
     submission.audit_grade_changes = false
 
@@ -1905,13 +1908,15 @@ class Assignment < ActiveRecord::Base
     end
   end
 
-  # Update at this point is solely used for commenting on the submission
-  def update_submission(original_student, opts={})
+  def update_submission_runner(original_student, opts={})
     raise "Student Required" unless original_student
 
     group, students = group_students(original_student)
     opts[:author] ||= opts[:commenter] || opts[:user_id].present? && User.find_by(id: opts[:user_id])
-    res = []
+    res = {
+      comments: [],
+      submissions: []
+    }
 
     # Only teachers (those who can manage grades) can have hidden comments
     opts[:hidden] = muted? && self.context.grants_right?(opts[:author], :manage_grades) unless opts.key?(:hidden)
@@ -1926,23 +1931,37 @@ class Assignment < ActiveRecord::Base
     ensure_grader_can_adjudicate(grader: opts[:author], provisional: opts[:provisional], occupy_slot: true) do
       if opts[:comment] && Canvas::Plugin.value_to_boolean(opts[:group_comment])
         uuid = CanvasSlug.generate_securish_uuid
-        res = find_or_create_submissions(students) do |submission|
-          save_comment_to_submission(submission, group, opts, uuid)
+        find_or_create_submissions(students) do |submission|
+          res[:comments] << save_comment_to_submission(submission, group, opts, uuid)
+          res[:submissions] << submission
         end
       else
         submission = find_or_create_submission(original_student)
-        res << save_comment_to_submission(submission, group, opts)
+        res[:comments] << save_comment_to_submission(submission, group, opts)
+        res[:submissions] << submission
       end
     end
     res
+  end
+  private :update_submission_runner
+
+  def add_submission_comment(original_student, opts={})
+    comments = update_submission_runner(original_student, opts)[:comments]
+    comments.compact # Possible no comments were added depending on opts
+  end
+
+  # Update at this point is solely used for commenting on the submission
+  def update_submission(original_student, opts={})
+    update_submission_runner(original_student, opts)[:submissions]
   end
 
   def save_comment_to_submission(submission, group, opts, uuid = nil)
     submission.group = group
     submission.save! if submission.changed?
     opts[:group_comment_id] = uuid if group && uuid
-    submission.add_comment(opts)
+    comment = submission.add_comment(opts)
     submission.reload
+    comment
   end
   private :save_comment_to_submission
 
@@ -2507,17 +2526,6 @@ class Assignment < ActiveRecord::Base
     chain.preload(:context)
   }
 
-  # This should only be used in the course drop down to show assignments not yet graded.
-  scope :need_grading_info, lambda {
-    chain = api_needed_fields.
-      where("EXISTS (?)",
-        Submission.active.where("assignment_id=assignments.id").
-          where(Submission.needs_grading_conditions)).
-      order("assignments.due_at")
-
-    chain.preload(:context)
-  }
-
   scope :expecting_submission, -> do
     where.not(submission_types: [nil, ''] + %w(none not_graded on_paper wiki_page))
   end
@@ -2544,11 +2552,11 @@ class Assignment < ActiveRecord::Base
   }
 
   scope :duplicating_for_too_long, -> {
-    where("workflow_state = 'duplicating' AND duplication_started_at < ?", 5.minutes.ago)
+    where("workflow_state = 'duplicating' AND duplication_started_at < ?", 15.minutes.ago)
   }
 
   scope :importing_for_too_long, -> {
-    where("workflow_state = 'importing' AND importing_started_at < ?", 5.minutes.ago)
+    where("workflow_state = 'importing' AND importing_started_at < ?", 15.minutes.ago)
   }
 
   def overdue?
@@ -3018,7 +3026,6 @@ class Assignment < ActiveRecord::Base
   end
 
   def can_view_audit_trail?(user)
-    return false unless context.account.feature_enabled?(:anonymous_moderated_marking_audit_trail)
     auditable? && !muted? && grades_published? && context.grants_right?(user, :view_audit_trail)
   end
 
@@ -3113,6 +3120,60 @@ class Assignment < ActiveRecord::Base
     end
   end
 
+  def effective_post_policy
+    post_policy || course.default_post_policy
+  end
+
+  def post_manually?
+    if course.feature_enabled?(:post_policies)
+      !!effective_post_policy&.post_manually?
+    else
+      muted?
+    end
+  end
+
+  def post_submissions(submission_ids: nil, skip_updating_timestamp: false)
+    submissions = if submission_ids.nil?
+      self.submissions.active
+    else
+      self.submissions.active.where(id: submission_ids)
+    end
+    return if submissions.blank?
+
+    unless skip_updating_timestamp
+      update_time = Time.zone.now
+      submissions.update_all(posted_at: update_time, updated_at: update_time)
+    end
+    submissions.in_workflow_state('graded').each(&:assignment_muted_changed)
+
+    show_stream_items(submissions: submissions)
+
+    update_muted_status! if course.feature_enabled?(:post_policies)
+  end
+
+  def hide_submissions(submission_ids: nil, skip_updating_timestamp: false)
+    submissions = if submission_ids.nil?
+      self.submissions.active
+    else
+      self.submissions.active.where(id: submission_ids)
+    end
+    return if submissions.blank?
+
+    submissions.update_all(posted_at: nil, updated_at: Time.zone.now) unless skip_updating_timestamp
+    submissions.in_workflow_state('graded').each(&:assignment_muted_changed)
+
+    hide_stream_items(submissions: submissions)
+
+    update_muted_status! if course.feature_enabled?(:post_policies)
+  end
+
+  def ensure_post_policy(post_manually:)
+    return unless course.feature_enabled?(:post_policies)
+
+    build_post_policy(course: course) if post_policy.blank?
+    post_policy.update!(post_manually: post_manually)
+  end
+
   private
 
   def anonymous_grader_identities(index_by:)
@@ -3142,6 +3203,16 @@ class Assignment < ActiveRecord::Base
     return unless moderated_grading_changed?
 
     self.muted = true if moderated_grading?
+  end
+
+  def ensure_manual_posting_if_anonymous
+    return unless course.feature_enabled?(:post_policies) && saved_change_to_anonymous_grading?(from: false, to: true)
+    ensure_post_policy(post_manually: true)
+  end
+
+  def ensure_manual_posting_if_moderated
+    return unless course.feature_enabled?(:post_policies) && saved_change_to_moderated_grading?(from: false, to: true)
+    ensure_post_policy(post_manually: true)
   end
 
   def due_date_ok?

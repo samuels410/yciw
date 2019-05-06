@@ -160,7 +160,8 @@ RSpec.describe ApplicationController do
         "microphone *",
         "camera *",
         "midi *",
-        "encrypted-media *"
+        "encrypted-media *",
+        "autoplay *"
       ]
     end
 
@@ -203,6 +204,12 @@ RSpec.describe ApplicationController do
 
     it "should reject disallowed paths" do
       expect(controller.send(:clean_return_to, "ftp://example.com/javascript:hai")).to be_nil
+    end
+
+    it "removes /download from the end of a file path" do
+      expect(controller.send(:clean_return_to, "/courses/1/files/1/download?wrap=1")).to eq "https://canvas.example.com/courses/1/files/1"
+      expect(controller.send(:clean_return_to, "/courses/1~1/files/1~1/download?wrap=1")).to eq "https://canvas.example.com/courses/1~1/files/1~1"
+      expect(controller.send(:clean_return_to, "/courses/1/pages/download?wrap=1")).to eq "https://canvas.example.com/courses/1/pages/download?wrap=1"
     end
   end
 
@@ -273,7 +280,7 @@ RSpec.describe ApplicationController do
     it "should not include :download=>1 in download urls for relative contexts" do
       controller.instance_variable_set(:@context, @attachment.context)
       allow(controller).to receive(:named_context_url).and_return('')
-      url = controller.send(:safe_domain_file_url, @attachment, nil, nil, true)
+      url = controller.send(:safe_domain_file_url, @attachment, download: true)
       expect(url).not_to match(/[\?&]download=1(&|$)/)
     end
 
@@ -281,7 +288,7 @@ RSpec.describe ApplicationController do
       expect(controller).to receive(:file_download_url).
         with(@attachment, @common_params.merge(:download_frd => 1)).
         and_return('')
-      controller.send(:safe_domain_file_url, @attachment, nil, nil, true)
+      controller.send(:safe_domain_file_url, @attachment, download: true)
     end
 
     it "prepends a unique file subdomain if configured" do
@@ -289,7 +296,7 @@ RSpec.describe ApplicationController do
         expect(controller).to receive(:file_download_url).
           with(@attachment, @common_params.merge(:inline => 1)).
           and_return("/files/#{@attachment.id}")
-        expect(controller.send(:safe_domain_file_url, @attachment, ['canvasfiles.com', Shard.default], nil, false)).to eq "a#{@attachment.shard.id}-#{@attachment.id}.canvasfiles.com/files/#{@attachment.id}"
+        expect(controller.send(:safe_domain_file_url, @attachment, host_and_shard: ['canvasfiles.com', Shard.default])).to eq "a#{@attachment.shard.id}-#{@attachment.id}.canvasfiles.com/files/#{@attachment.id}"
       end
     end
   end
@@ -651,6 +658,28 @@ RSpec.describe ApplicationController do
             it 'sets the "login_hint" to the current user lti id' do
               expect(assigns[:lti_launch].params['login_hint']).to eq Lti::Asset.opaque_identifier_for(user)
             end
+
+            it 'does not use the oidc_initiation_url as the resource_url' do
+              expect(assigns[:lti_launch].resource_url).to eq tool.url
+            end
+
+            it 'sets the "canvas_domain" to the request domain' do
+              message_hint = JSON::JWT.decode(assigns[:lti_launch].params['lti_message_hint'], :skip_verification)
+              expect(message_hint['canvas_domain']).to eq 'localhost'
+            end
+
+            context 'when the developer key has an oidc_initiation_url' do
+              before do
+                tool.developer_key.update!(oidc_initiation_url: oidc_initiation_url)
+                controller.send(:content_tag_redirect, course, content_tag, nil)
+              end
+
+              let(:oidc_initiation_url) { 'https://www.test.com/oidc/login' }
+
+              it 'does use the oidc_initiation_url as the resource_url' do
+                expect(assigns[:lti_launch].resource_url).to eq oidc_initiation_url
+              end
+            end
           end
 
           context 'assignments' do
@@ -668,6 +697,11 @@ RSpec.describe ApplicationController do
         it 'creates a basic lti launch request when tool is not configured to use LTI 1.3' do
           controller.send(:content_tag_redirect, course, content_tag, nil)
           expect(assigns[:lti_launch].params["lti_message_type"]).to eq "basic-lti-launch-request"
+        end
+
+        it 'does not use the oidc_initiation_url as the resource_url' do
+          controller.send(:content_tag_redirect, course, content_tag, nil)
+          expect(assigns[:resource_url]).to eq tool.url
         end
       end
 
@@ -1062,6 +1096,12 @@ describe ApplicationController do
       controller.instance_variable_set(:@current_user, current_user)
       controller.send(:setup_live_events_context)
       expect(LiveEvents.get_context).to eq({user_id: '12345'}.merge(non_conditional_values))
+    end
+
+    it 'sets the "context_sis_source_id"' do
+      controller.instance_variable_set(:@context, course_model(sis_source_id: 'banana'))
+      controller.send(:setup_live_events_context)
+      expect(LiveEvents.get_context[:context_sis_source_id]).to eq 'banana'
     end
 
     context 'when a domain_root_account exists' do

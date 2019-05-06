@@ -1095,6 +1095,7 @@ describe 'Submissions API', type: :request do
              "filename" => "unknown.loser",
              "display_name" => "unknown.loser",
              "workflow_state" => "pending_upload",
+             "upload_status" => "success",
              "id" => sub1.attachments.first.id,
              "uuid" => sub1.attachments.first.uuid,
              "folder_id" => sub1.attachments.first.folder_id,
@@ -1192,6 +1193,7 @@ describe 'Submissions API', type: :request do
                 "filename" => "unknown.loser",
                 "display_name" => "unknown.loser",
                 "workflow_state" => "pending_upload",
+                "upload_status" => "success",
                 "id" => sub1.attachments.first.id,
                 "uuid" => sub1.attachments.first.uuid,
                 "folder_id" => sub1.attachments.first.folder_id,
@@ -1304,6 +1306,7 @@ describe 'Submissions API', type: :request do
                "display_name" => "snapshot.png",
                "filename" => "snapshot.png",
                "workflow_state" => "pending_upload",
+               "upload_status" => "success",
                "url" => "http://www.example.com/files/#{sub2a1.id}/download?download_frd=1&verifier=#{sub2a1.uuid}",
                "id" => sub2a1.id,
                "uuid" => sub2a1.uuid,
@@ -1342,6 +1345,7 @@ describe 'Submissions API', type: :request do
            "display_name" => "snapshot.png",
            "filename" => "snapshot.png",
            "workflow_state" => "pending_upload",
+           "upload_status" => "success",
            "url" => "http://www.example.com/files/#{sub2a1.id}/download?download_frd=1&verifier=#{sub2a1.uuid}",
            "id" => sub2a1.id,
            "uuid" => sub2a1.uuid,
@@ -1366,8 +1370,8 @@ describe 'Submissions API', type: :request do
         "score"=>9.0,
         "entered_score"=>9.0,
         "rubric_assessment"=>
-         {"crit2"=>{"comments"=>"Hmm", "points"=>2.0},
-          "crit1"=>{"comments"=>nil, "points"=>7.0}},
+         {"crit2"=>{"comments"=>"Hmm", "points"=>2.0, "rating_id"=>"rat1"},
+          "crit1"=>{"comments"=>nil, "points"=>7.0, "rating_id"=>"rat2"}},
         "workflow_state"=>"graded",
         "late"=>false,
         "missing"=>false,
@@ -1766,14 +1770,9 @@ describe 'Submissions API', type: :request do
 
         expect(json.first['provisional_grades']).to_not be_empty
         speedgrader_url = URI.parse(json.first['provisional_grades'].first['speedgrader_url'])
-        expect(speedgrader_url.path).to eq "/courses/#{@course.id}/gradebook/speed_grader"
-        expect(speedgrader_url.query).to eq "assignment_id=#{@assignment.id}"
-        expect(JSON.parse(URI.decode(speedgrader_url.fragment))).to eq(
-          {
-            "student_id" => @student.id,
-            "provisional_grade_id" => @provisional_grade.id
-          }
-        )
+        expect(speedgrader_url).to match_path("/courses/#{@course.id}/gradebook/speed_grader").
+          and_query({'assignment_id' => @assignment.id, 'student_id' => @student.id}).
+          and_fragment({"provisional_grade_id" => @provisional_grade.id})
       end
 
       it "can include users" do
@@ -4561,7 +4560,7 @@ describe 'Submissions API', type: :request do
                 "grade_matches_current_submission"=>true,
                 "graded_anonymously"=>nil,
                 "final"=>false,
-                "speedgrader_url"=>"http://www.example.com/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}#%7B%22provisional_grade_id%22:#{pg.id},%22student_id%22:#{@student1.id}%7D"}]},
+                "speedgrader_url"=>"http://www.example.com/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}&student_id=#{@student1.id}#%7B%22provisional_grade_id%22:#{pg.id}%7D"}]},
            {"id"=>@student2.id,
             "display_name"=>"User",
             "avatar_image_url"=>"http://www.example.com/images/messages/avatar-50.png",
@@ -4583,9 +4582,9 @@ describe 'Submissions API', type: :request do
         json = api_call_as_user(@teacher, :get, @path, @params)
         anonymous_id = @assignment.submission_for_student(@student1).anonymous_id
         json = json.map { |el| el['provisional_grades'][0] }.compact
-        expect(json[0]['speedgrader_url']).to eq(
-          "http://www.example.com/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}#%7B%22provisional_grade_id%22:#{pg.id},%22anonymous_id%22:%22#{anonymous_id}%22%7D"
-        )
+        expect(json[0]['speedgrader_url']).to match_path("http://www.example.com/courses/#{@course.id}/gradebook/speed_grader").
+          and_query({'assignment_id' => @assignment.id, 'anonymous_id' => anonymous_id}).
+          and_fragment({ 'provisional_grade_id' => pg.id })
         expect(json[0]['scorer_id']).to eq @ta.id
         expect(json[0]['anonymous_grader_id']).to be_nil
       end

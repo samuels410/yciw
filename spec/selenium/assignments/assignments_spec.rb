@@ -168,7 +168,7 @@ describe "assignments" do
       expect(driver.title).to include(assignment_name + ' edit')
     end
 
-    it "should create an assignment using main add button", priority: "1", test_id: 132582 do
+    it "should create an assignment using main add button", :xbrowser, priority: "1", test_id: 132582 do
       assignment_name = 'first assignment'
       # freeze for a certain time, so we don't get unexpected ui complications
       time = DateTime.new(Time.now.year,1,7,2,13)
@@ -176,22 +176,20 @@ describe "assignments" do
         due_at = format_time_for_view(time)
 
         get "/courses/#{@course.id}/assignments"
-        wait_for_ajaximations
         #create assignment
-        f(".new_assignment").click
-        wait_for_ajaximations
+        wait_for_new_page_load { f(".new_assignment").click }
         f('#assignment_name').send_keys(assignment_name)
         f('#assignment_points_possible').send_keys('10')
         ['#assignment_text_entry', '#assignment_online_url', '#assignment_online_upload'].each do |element|
           f(element).click
         end
-        f('.DueDateInput').send_keys(due_at)
+        replace_content(f('.DueDateInput'), due_at)
+
 
         submit_assignment_form
         #confirm all our settings were saved and are now displayed
-        wait_for_ajaximations
         expect(f('h1.title')).to include_text(assignment_name)
-        expect(fj('#assignment_show .points_possible')).to include_text('10')
+        expect(f('#assignment_show .points_possible')).to include_text('10')
         expect(f('#assignment_show fieldset')).to include_text('a text entry box, a website url, or a file upload')
 
         expect(f('.assignment_dates')).to include_text(due_at)
@@ -975,7 +973,7 @@ describe "assignments" do
     it "should not show the moderation page if it is not a moderated assignment ", priority: "2", test_id: 609653 do
       @assignment.update_attribute(:moderated_grading, false)
       get "/courses/#{@course.id}/assignments/#{@assignment.id}/moderate"
-      expect(f('#content h2').text).to eql "Page Not Found"
+      expect(f('#content h1').text).to eql "Page Not Found"
     end
   end
 

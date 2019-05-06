@@ -187,6 +187,7 @@ module Canvas::LiveEvents
     {
       assignment_id: assignment.global_id,
       context_id: assignment.global_context_id,
+      context_uuid: assignment.context.uuid,
       context_type: assignment.context_type,
       assignment_group_id: assignment.global_assignment_group_id,
       workflow_state: assignment.workflow_state,
@@ -229,7 +230,8 @@ module Canvas::LiveEvents
       group_weight: assignment_group.group_weight,
       sis_source_id: assignment_group.sis_source_id,
       integration_data: assignment_group.integration_data,
-      rules: assignment_group.rules
+      rules: assignment_group.rules,
+      workflow_state: assignment_group.workflow_state
     }
   end
 

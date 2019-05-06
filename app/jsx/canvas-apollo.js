@@ -27,6 +27,36 @@ import {ApolloProvider, Query} from 'react-apollo'
 import introspectionQueryResultData from './fragmentTypes.json'
 import {withClientState} from 'apollo-link-state'
 
+function createConsoleErrorReportLink() {
+  return onError(({graphQLErrors, networkError}) => {
+    if (graphQLErrors)
+      graphQLErrors.map(({message, locations, path}) =>
+        console.log(`[GraphQL error]: Message: ${message}, Location: ${locations}, Path: ${path}`)
+      )
+    if (networkError) console.log(`[Network error]: ${networkError}`)
+  })
+}
+
+function setHeadersLink() {
+  return new ApolloLink((operation, forward) => {
+    operation.setContext({
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'GraphQL-Metrics': true,
+        'X-CSRF-Token': $.cookie('_csrf_token')
+      }
+    })
+    return forward(operation)
+  })
+}
+
+function createHttpLink() {
+  return new HttpLink({
+    uri: '/api/graphql',
+    credentials: 'same-origin'
+  })
+}
+
 function createClient(opts = {}) {
   const cache = new InMemoryCache({
     addTypename: true,
@@ -44,41 +74,17 @@ function createClient(opts = {}) {
     defaults
   })
 
+  const links =
+    createClient.mockLink == null
+      ? [createConsoleErrorReportLink(), setHeadersLink(), stateLink, createHttpLink()]
+      : [createConsoleErrorReportLink(), stateLink, createClient.mockLink]
+
   const client = new ApolloClient({
-    link: ApolloLink.from([
-      onError(({graphQLErrors, networkError}) => {
-        if (graphQLErrors)
-          graphQLErrors.map(({message, locations, path}) =>
-            console.log(
-              `[GraphQL error]: Message: ${message}, Location: ${locations}, Path: ${path}`
-            )
-          )
-        if (networkError) console.log(`[Network error]: ${networkError}`)
-      }),
-
-      new ApolloLink((operation, forward) => {
-        operation.setContext({
-          headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'GraphQL-Metrics': true,
-            'X-CSRF-Token': $.cookie('_csrf_token')
-          }
-        })
-        return forward(operation)
-      }),
-
-      stateLink,
-
-      new HttpLink({
-        uri: '/api/graphql',
-        credentials: 'same-origin'
-      })
-    ]),
+    link: ApolloLink.from(links),
     cache
   })
 
   return client
 }
 
-const client = createClient()
-export {client, createClient, gql, ApolloProvider, Query}
+export {createClient, gql, ApolloProvider, Query}

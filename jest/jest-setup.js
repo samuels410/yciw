@@ -19,6 +19,21 @@
 import Enzyme from 'enzyme'
 import Adapter from 'enzyme-adapter-react-16'
 
+const errorsToIgnore = ["Warning: [Focusable] Exactly one tabbable child is required (0 found)."];
+
+window.fetch = require('unfetch')
+
+/* eslint-disable-next-line */
+const _consoleDotError = console.error
+/* eslint-disable-next-line */
+console.error = function (message) {
+      if(errorsToIgnore.includes(message)) return
+      _consoleDotError.apply(this, arguments)
+    }
+
+window.scroll = () => {}
+window.ENV = {}
+
 Enzyme.configure({ adapter: new Adapter() })
 
 // because InstUI themeable components need an explicit "dir" attribute on the <html> element
@@ -38,5 +53,5 @@ if (process.env.DEPRECATION_SENTRY_DSN) {
 
 // set up mocks for native APIs
 if (!('MutationObserver' in window)) {
-  Object.defineProperty(window, 'MutationObserver', { value: require('mutation-observer') })
+  Object.defineProperty(window, 'MutationObserver', { value: require('@sheerun/mutationobserver-shim') })
 }

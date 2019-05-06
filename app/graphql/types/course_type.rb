@@ -17,18 +17,23 @@
 #
 
 module Types
-  SubmissionOrderInputType = GraphQL::InputObjectType.define do
-    name "SubmissionOrderCriteria"
-    argument :field, !GraphQL::EnumType.define {
-      name "SubmissionOrderField"
-      value "_id", value: "id"
-      value "gradedAt", value: "graded_at"
-    }
-    argument :direction, GraphQL::EnumType.define {
-      name "OrderDirection"
-      value "ascending", value: "ASC"
-      value "descending", value: "DESC NULLS LAST"
-    }
+  class SubmissionOrderFieldType < BaseEnum
+    graphql_name "SubmissionOrderField"
+    value :_id, value: :id
+    value :gradedAt, value: :graded_at
+  end
+
+  class OrderDirectionType < BaseEnum
+    graphql_name "OrderDirection"
+    value :ascending, value: "ASC"
+    value :descending, value: "DESC NULLS LAST"
+  end
+
+  class SubmissionOrderInputType < BaseInputObject
+    graphql_name "SubmissionOrderCriteria"
+
+    argument :field, SubmissionOrderFieldType, required: true
+    argument :direction, OrderDirectionType, required: false
   end
 
   class CourseType < ApplicationObjectType
@@ -36,8 +41,8 @@ module Types
 
     alias :course :object
 
-    CourseWorkflowState = GraphQL::EnumType.define do
-      name "CourseWorkflowState"
+    class CourseWorkflowState < BaseEnum
+      graphql_name "CourseWorkflowState"
       description "States that Courses can be in"
       value "created"
       value "claimed"
@@ -46,8 +51,8 @@ module Types
       value "deleted"
     end
 
-    CourseFilterableEnrollmentWorkflowState = GraphQL::EnumType.define do
-      name "CourseFilterableEnrollmentState"
+    class CourseFilterableEnrollmentWorkflowState < BaseEnum
+      graphql_name "CourseFilterableEnrollmentState"
       description "Users in a course can be returned based on these enrollment states"
       value "invited"
       value "creation_pending"
@@ -95,6 +100,12 @@ module Types
     def sections_connection
       course.active_course_sections.
         order(CourseSection.best_unicode_collation_key('name'))
+    end
+
+    field :modules_connection, ModuleType.connection_type, null: true
+    def modules_connection
+      course.modules_visible_to(current_user).
+        order('name')
     end
 
     field :users_connection, UserType.connection_type, null: true do
@@ -194,13 +205,27 @@ module Types
     field :permissions, CoursePermissionsType,
       "returns permission information for the current user in this course",
       null: true
-
     def permissions
       Loaders::CoursePermissionsLoader.for(
         course,
         current_user: current_user, session: session
       )
     end
+
+    field :post_policy, PostPolicyType, "A course-specific post policy", null: true
+    def post_policy
+      return nil unless course.grants_right?(current_user, :manage_grades)
+      load_association(:default_post_policy)
+    end
+
+    field :assignment_post_policies, PostPolicyType.connection_type,
+      <<~DOC,
+        PostPolicies for assignments within a course
+      DOC
+      null: true
+    def assignment_post_policies
+      return nil unless course.grants_right?(current_user, :manage_grades)
+      course.assignment_post_policies
+    end
   end
 end
-

@@ -22,8 +22,8 @@ module Types
     implements GraphQL::Types::Relay::Node
     implements Interfaces::TimestampInterface
 
-    AssignmentGroupState = GraphQL::EnumType.define do
-      name "AssignmentGroupState"
+    class AssignmentGroupState < BaseEnum
+      graphql_name "AssignmentGroupState"
       description "States that Assignment Group can be in"
       value "available"
       value "deleted"
@@ -39,7 +39,7 @@ module Types
 
     implements Interfaces::AssignmentsConnectionInterface
     def assignments_connection(filter: {})
-      load_association(:context) { |course|
+      load_association(:context).then { |course|
         super(course: course, filter: filter)
       }
     end

@@ -597,6 +597,11 @@ describe UserLearningObjectScopes do
       end
     end
 
+    it 'should not duplicate assignments for teachers in multiple sections' do
+      @course2.enroll_teacher(@teacher, enrollment_state: 'active', section: @section2b, allow_multiple_enrollments: true)
+      expect(@teacher.assignments_needing_grading.count).to eq 2
+    end
+
     it "should count assignments with ungraded submissions across multiple courses" do
       expect(@teacher.assignments_needing_grading.size).to eql(2)
       expect(@teacher.assignments_needing_grading).to be_include(@course1.assignments.first)
@@ -615,6 +620,15 @@ describe UserLearningObjectScopes do
       expect(@teacher.assignments_needing_grading).to be_include(@course2.assignments.first)
     end
 
+    it "should include re-submitted submissions in the list of submissions needing grading" do
+      @course1.assignments.first.grade_student(@student_a, grade: "1", grader: @teacher)
+      @course1.assignments.first.grade_student(@student_b, grade: '1', grader: @teacher)
+      expect(@teacher.assignments_needing_grading.size).to eq 1
+      @course1.assignments.first.submit_homework(@student_a, :body => "Changed my mind!")
+      expect(@teacher.assignments_needing_grading.size).to eq 2
+      expect(@teacher.assignments_needing_grading).to include @course1.assignments.first
+    end
+
     it "should only count submissions in accessible course sections" do
       expect(@ta.assignments_needing_grading.size).to be 2
       expect(@ta.assignments_needing_grading).to be_include(@course1.assignments.first)
@@ -626,6 +640,7 @@ describe UserLearningObjectScopes do
       @course2.assignments.first.grade_student(@student_a, grade: "1", grader: @teacher)
       @ta = User.find(@ta.id)
       expect(@ta.assignments_needing_grading.size).to be 1
+      expect(@ta.assignments_needing_grading(scope_only: true).size).to be 1
       expect(@ta.assignments_needing_grading).to be_include(@course2.assignments.first)
 
       # but if we enroll the TA in both sections of course1, it should be accessible
@@ -633,8 +648,23 @@ describe UserLearningObjectScopes do
                           :allow_multiple_enrollments => true, :limit_privileges_to_course_section => true)
       @ta = User.find(@ta.id)
       expect(@ta.assignments_needing_grading.size).to be 2
+      expect(@ta.assignments_needing_grading(scope_only: true).size).to be 2
       expect(@ta.assignments_needing_grading).to be_include(@course1.assignments.first)
       expect(@ta.assignments_needing_grading).to be_include(@course2.assignments.first)
+    end
+
+    it "should not count submissions for users with a deleted enrollment in the graders's section" do
+      @course1.enroll_student(@student_b, allow_multiple_enrollments: true).update_attributes(workflow_state: 'deleted')
+      assignment = @course1.assignments.first
+      assignment.grade_student(@student_a, grade: "1", grader: @teacher)
+      expect(@ta.assignments_needing_grading(scope_only: true)).not_to include assignment
+    end
+
+    it 'should not count submissions for sections where the grader has a deleted enrollment' do
+      @course1.enroll_user(@ta, 'TaEnrollment', allow_multiple_enrollments: true, section: @section1b).update_attributes(workflow_state: 'deleted')
+      assignment = @course1.assignments.first
+      assignment.grade_student(@student_a, grade: "1", grader: @teacher)
+      expect(@ta.assignments_needing_grading(scope_only: true)).not_to include assignment
     end
 
     it "should limit the number of returned assignments" do

@@ -62,12 +62,16 @@ exports[`The CriterionInfo component renders the root component as expected 2`] 
     onExiting={[Function]}
     onOpen={[Function]}
     open={true}
+    overflow="scroll"
     shouldCloseOnDocumentClick={true}
     shouldReturnFocus={true}
     size="medium"
     transition="fade"
+    variant="default"
   >
-    <ModalHeader>
+    <ModalHeader
+      variant="default"
+    >
       <CloseButton
         buttonRef={[Function]}
         margin="0"
@@ -91,6 +95,7 @@ exports[`The CriterionInfo component renders the root component as expected 2`] 
     <ModalBody
       as="div"
       padding="medium"
+      variant="default"
     >
       <Text
         as="span"

@@ -17,13 +17,20 @@
 #
 
 class CanvasSchema < GraphQL::Schema
+  use GraphQL::Execution::Interpreter
+
   query Types::QueryType
   mutation Types::MutationType
 
   use GraphQL::Batch
 
   def self.id_from_object(obj, type_def, ctx)
-    GraphQL::Schema::UniqueWithinType.encode(type_def.name, obj.id)
+    case obj
+    when MediaObject
+      GraphQL::Schema::UniqueWithinType.encode(type_def.name, obj.media_id)
+    else
+      GraphQL::Schema::UniqueWithinType.encode(type_def.name, obj.id)
+    end
   end
 
   def self.object_from_id(relay_id, ctx)
@@ -32,7 +39,7 @@ class CanvasSchema < GraphQL::Schema
     GraphQLNodeLoader.load(type, id, ctx)
   end
 
-  def self.resolve_type(_type, obj, _ctx)
+  def self.resolve_type(type, obj, _ctx)
     case obj
     when Course then Types::CourseType
     when Assignment then Types::AssignmentType
@@ -41,17 +48,30 @@ class CanvasSchema < GraphQL::Schema
     when User then Types::UserType
     when Enrollment then Types::EnrollmentType
     when Submission then Types::SubmissionType
+    when SubmissionComment then Types::SubmissionCommentType
     when Group then Types::GroupType
     when GroupCategory then Types::GroupSetType
     when GradingPeriod then Types::GradingPeriodType
     when ContextModule then Types::ModuleType
+    when PostPolicy then Types::PostPolicyType
     when WikiPage then Types::PageType
+    when Attachment then Types::FileType
     when DiscussionTopic then Types::DiscussionType
     when Quizzes::Quiz then Types::QuizType
+    when Progress then Types::ProgressType
+    when MediaObject then Types::MediaObjectType
+    when ContentTag
+      if !type.nil? && type.name == "ModuleItemInterface"
+        return Types::ExternalUrlType if obj.content_type == "ExternalUrl"
+        return Types::ModuleExternalToolType if obj.content_type == "ContextExternalTool"
+      else
+        Types::ModuleItemType
+      end
+    when ContextExternalTool then Types::ExternalToolType
     end
   end
 
-  orphan_types [Types::ModuleType, Types::PageType]
-
-  instrument :field, AssignmentOverrideInstrumenter.new
+  orphan_types [Types::PageType, Types::FileType, Types::ExternalUrlType,
+                Types::ExternalToolType, Types::ModuleExternalToolType,
+                Types::ProgressType]
 end

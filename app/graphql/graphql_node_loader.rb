@@ -67,24 +67,49 @@ module GraphQLNodeLoader
       Loaders::IDLoader.for(GroupCategory).load(id).then do |category|
         Loaders::AssociationLoader.for(GroupCategory, :context)
           .load(category)
-          .then(check_read_permission)
+          .then { check_read_permission.(category) }
       end
     when "GradingPeriod"
       Loaders::IDLoader.for(GradingPeriod).load(id).then(check_read_permission)
+    when 'MediaObject'
+      Loaders::MediaObjectLoader.load(id)
     when "Module"
       Loaders::IDLoader.for(ContextModule).load(id).then do |mod|
         Loaders::AssociationLoader.for(ContextModule, :context)
           .load(mod)
-          .then(check_read_permission)
+          .then { check_read_permission.(mod) }
+      end
+    when "ModuleItem"
+      Loaders::IDLoader.for(ContentTag).load(id).then do |tag|
+        Loaders::AssociationLoader.for(ContentTag, :context_module).load(tag).then do |mod|
+          next nil unless mod.grants_right?(ctx[:current_user], :read)
+          next nil unless tag.visible_to_user?(ctx[:current_user]) # Checks context and content
+          tag
+        end
       end
     when "Page"
       Loaders::IDLoader.for(WikiPage).load(id).then do |page|
         # This association preload loads the requisite dependencies for
         # checking :read permission.  This might be wasted work due to
         # permissions caching???
-        Loaders::AssociationLoader.for(WikiPage, wiki: [:course, :group])
-          .load(page)
-          .then(check_read_permission)
+        Loaders::AssociationLoader.for(WikiPage, :wiki).load(page).then do |wiki|
+          Promise.all([
+            Loaders::AssociationLoader.for(Wiki, :course).load(wiki),
+            Loaders::AssociationLoader.for(Wiki, :group).load(wiki),
+          ]).then { check_read_permission.(page) }
+        end
+      end
+    when "PostPolicy"
+      Loaders::IDLoader.for(PostPolicy).load(id).then do |policy|
+        Loaders::AssociationLoader.for(PostPolicy, :course).load(policy).then do
+          next nil unless policy.course.grants_right?(ctx[:current_user], :manage_grades)
+          policy
+        end
+      end
+    when "File"
+      Loaders::IDLoader.for(Attachment).load(id).then do |attachment|
+        next if attachment.deleted?
+        check_read_permission.call(attachment)
       end
     when "AssignmentGroup"
       Loaders::IDLoader.for(AssignmentGroup).load(id).then(check_read_permission)
@@ -94,6 +119,13 @@ module GraphQLNodeLoader
       Loaders::IDLoader.for(Quizzes::Quiz).load(id).then(check_read_permission)
     when "Submission"
       Loaders::IDLoader.for(Submission).load(id).then(check_read_permission)
+    when "Progress"
+      Loaders::IDLoader.for(Progress).load(id).then do |progress|
+        Loaders::AssociationLoader.for(Progress, :context).load(progress).then do
+          next nil unless progress.context.grants_right?(ctx[:current_user], :read)
+          progress
+        end
+      end
     else
       raise UnsupportedTypeError.new("don't know how to load #{type}")
     end

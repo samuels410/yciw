@@ -62,6 +62,7 @@ CanvasRails::Application.routes.draw do
   # deprecated
   get 'pseudonyms/:id/register/:nonce' => 'communication_channels#confirm', as: :registration_confirmation_deprecated
   post 'confirmations/:user_id/re_send(/:id)' => 'communication_channels#re_send_confirmation', as: :re_send_confirmation, id: nil
+  get 'confirmations/:user_id/limit_reached(/:id)' => 'communication_channels#confirmation_limit_reached', as: :confirmation_limit_reached, id: nil
   match 'forgot_password' => 'pseudonyms#forgot_password', as: :forgot_password, via: [:get, :post]
   get 'pseudonyms/:pseudonym_id/change_password/:nonce' => 'pseudonyms#confirm_change_password', as: :confirm_change_password
   post 'pseudonyms/:pseudonym_id/change_password/:nonce' => 'pseudonyms#change_password', as: :change_password
@@ -73,9 +74,8 @@ CanvasRails::Application.routes.draw do
   get 'mr/:id' => 'info#message_redirect', as: :message_redirect
   get 'help_links' => 'info#help_links'
 
-  # These are just debug routes, but they make working on error pages easier,
-  # and it shouldn't matter if a client stumbles across them
-  get 'test_error' => 'info#test_error'
+  # This is a debug route that makes working on error pages easier
+  get 'test_error' => 'info#test_error' unless Rails.env.production?
 
   concern :question_banks do
     resources :question_banks do
@@ -820,8 +820,6 @@ CanvasRails::Application.routes.draw do
 
     resources :pseudonyms, except: :index
     resources :question_banks, only: :index
-    get :assignments_needing_grading
-    get :assignments_needing_submitting
     get :admin_merge
     post :merge
     get :grades
@@ -1170,8 +1168,6 @@ CanvasRails::Application.routes.draw do
         action: :publish, as: 'publish_provisional_grades'
       put "courses/:course_id/assignments/:assignment_id/provisional_grades/:provisional_grade_id/select",
         action: :select, as: 'select_provisional_grade'
-      post "courses/:course_id/assignments/:assignment_id/provisional_grades/:provisional_grade_id/copy_to_final_mark",
-        action: :copy_to_final_mark, as: 'copy_to_final_mark'
     end
 
     post '/courses/:course_id/assignments/:assignment_id/submissions/:user_id/comments/files', action: :create_file, controller: :submission_comments_api
@@ -1375,6 +1371,8 @@ CanvasRails::Application.routes.draw do
       post 'users/self/pandata_events_token', controller: 'users', action: 'pandata_events_token'
 
       get 'dashboard/dashboard_cards', controller: 'users', action: 'dashboard_cards', as: :dashboard_dashboard_cards
+
+      get 'users/:id/graded_submissions', controller: 'users', action: 'user_graded_submissions', as: :user_submissions
 
       scope(controller: :user_observees) do
         get    'users/:user_id/observees', action: :index, as: 'user_observees'
@@ -2108,6 +2106,19 @@ CanvasRails::Application.routes.draw do
       get 'courses/:course_id/rubrics/:id', action: :show
       post 'courses/:course_id/rubrics', controller: :rubrics, action: :create
       put 'courses/:course_id/rubrics/:id', controller: :rubrics, action: :update
+      delete 'courses/:course_id/rubrics/:id', controller: :rubrics, action: :destroy
+    end
+
+    scope(controller: :rubric_associations) do
+      post 'courses/:course_id/rubric_associations', action: :create
+      put 'courses/:course_id/rubric_associations/:id', action: :update
+      delete 'courses/:course_id/rubric_associations/:id', action: :destroy
+    end
+
+    scope(controller: :rubric_assessment_api) do
+      post 'courses/:course_id/rubric_associations/:rubric_association_id/rubric_assessments', controller: :rubric_assessments, action: :create
+      put 'courses/:course_id/rubric_associations/:rubric_association_id/rubric_assessments/:id', controller: :rubric_assessments, action: :update
+      delete 'courses/:course_id/rubric_associations/:rubric_association_id/rubric_assessments/:id', controller: :rubric_assessments, action: :destroy
     end
 
     scope(controller: 'master_courses/master_templates') do
@@ -2160,8 +2171,11 @@ CanvasRails::Application.routes.draw do
         get "#{context.pluralize}/:#{context}_id/csp_settings", :action => :get_csp_settings
         put "#{context.pluralize}/:#{context}_id/csp_settings", :action => :set_csp_setting
       end
+      put "accounts/:account_id/csp_settings/lock", :action => :set_csp_lock
       post "accounts/:account_id/csp_settings/domains", :action => :add_domain
+      post "accounts/:account_id/csp_settings/domains/batch_create", :action => :add_multiple_domains
       delete "accounts/:account_id/csp_settings/domains", :action => :remove_domain
+      get "accounts/:account_id/csp_log", action: :csp_log
     end
   end
 
@@ -2227,6 +2241,7 @@ CanvasRails::Application.routes.draw do
 
     scope(controller: 'lti/ims/authentication') do
       post 'authorize_redirect', action: :authorize_redirect
+      get 'authorize_redirect', action: :authorize_redirect
       get 'authorize', action: :authorize, as: :lti_1_3_authorization
     end
 

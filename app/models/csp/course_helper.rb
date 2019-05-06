@@ -21,11 +21,15 @@ module Csp::CourseHelper
   end
 
   def csp_enabled?
-    !self.csp_disabled? && self.account.csp_enabled?
+    self.account.csp_enabled? && csp_inherited?
   end
 
   def csp_inherited?
-    !self.csp_disabled?
+    csp_locked? || !self.csp_disabled?
+  end
+
+  def csp_locked?
+    self.account.csp_locked?
   end
 
   def inherit_csp!
@@ -38,9 +42,10 @@ module Csp::CourseHelper
     self.save!
   end
 
-  def csp_whitelisted_domains
-    return [] unless csp_enabled?
-    (self.account.csp_whitelisted_domains + cached_tool_domains).uniq.sort
+  def csp_whitelisted_domains(request = nil, include_files:, include_tools:)
+    domains = account.csp_whitelisted_domains(request, include_files: include_files, include_tools: include_tools)
+    domains += cached_tool_domains if include_tools
+    domains.uniq.sort
   end
 
   def tool_domain_cache_key

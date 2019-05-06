@@ -104,7 +104,7 @@ export default class JsUploader {
     if (this.uploader) {
       this.resetUploader()
     }
-    const session = this.kSession.generateUploadOptions(['video', 'audio', 'webm'])
+    const session = this.kSession.generateUploadOptions(['video', 'audio', 'webm', 'video/webm', 'audio/webm'])
     this.uploader = new K5Uploader(session)
     this.uploader.addEventListener('K5.fileError', this.onFileError)
     this.uploader.addEventListener('K5.complete', this.onUploadComplete)
@@ -120,7 +120,7 @@ export default class JsUploader {
     if (!((e.title != null ? e.title.length : undefined) > 0)) {
       e.title = this.file.name
     }
-    this.addEntry(e)
+    this.addEntry(e, this.file.type.includes("audio"))
     return this.dialogManager.hide()
   }
 

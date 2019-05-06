@@ -16,153 +16,288 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import React from 'react';
-import { bool, func, string } from 'prop-types';
-import _ from 'underscore';
-import Button from '@instructure/ui-buttons/lib/components/Button';
-import LatePoliciesTabPanel from '../../../gradezilla/default_gradebook/components/LatePoliciesTabPanel';
-import GradebookSettingsModalApi from '../../../gradezilla/default_gradebook/apis/GradebookSettingsModalApi';
-import Modal, { ModalBody, ModalFooter, ModalHeader } from '@instructure/ui-overlays/lib/components/Modal';
-import Heading from '@instructure/ui-elements/lib/components/Heading';
-import TabList, { TabPanel } from '@instructure/ui-tabs/lib/components/TabList';
-import I18n from 'i18n!gradebook';
-import { showFlashAlert } from '../../../shared/FlashAlert';
+import React from 'react'
+import {bool, func, instanceOf, shape, string} from 'prop-types'
+import _ from 'underscore'
+import Button from '@instructure/ui-buttons/lib/components/Button'
+import Modal, {ModalBody, ModalFooter} from '@instructure/ui-overlays/lib/components/Modal'
+import TabList, {TabPanel} from '@instructure/ui-tabs/lib/components/TabList'
+import View from '@instructure/ui-layout/lib/components/View'
+import I18n from 'i18n!gradebook'
 
-class GradebookSettingsModal extends React.Component {
+import AdvancedTabPanel from './AdvancedTabPanel'
+import {
+  fetchLatePolicy,
+  createLatePolicy,
+  updateCourseSettings,
+  updateLatePolicy
+} from '../apis/GradebookSettingsModalApi'
+import PostPolicies from '../PostPolicies'
+import {setCoursePostPolicy} from '../PostPolicies/PostPolicyApi'
+import LatePoliciesTabPanel from './LatePoliciesTabPanel'
+import GradePostingPolicyTabPanel from './GradePostingPolicyTabPanel'
+import {showFlashAlert} from '../../../shared/FlashAlert'
+
+function isLatePolicySaveable({latePolicy: {changes, validationErrors}}) {
+  return !_.isEmpty(changes) && _.isEmpty(validationErrors)
+}
+
+function haveCourseSettingsChanged({props, state}) {
+  return Object.keys(state.courseSettings).some(
+    key => props.courseSettings[key] !== state.courseSettings[key]
+  )
+}
+
+function isPostPolicyChanged({props, state}) {
+  if (props.postPolicies == null) {
+    return false
+  }
+
+  const {postManually: oldPostManually} = props.postPolicies.coursePostPolicy
+  const {postManually: newPostManually} = state.coursePostPolicy
+
+  return oldPostManually !== newPostManually
+}
+
+function onSaveSettingsFailure() {
+  const message = I18n.t('An error occurred while saving your settings')
+  showFlashAlert({message, type: 'error'})
+  return Promise.reject(new Error(message))
+}
+
+function onSavePostPolicyFailure() {
+  const message = I18n.t('An error occurred while saving the course post policy')
+  showFlashAlert({message, type: 'error'})
+  return Promise.reject(new Error(message))
+}
+
+function onUpdateSuccess({close}) {
+  const message = I18n.t('Gradebook Settings updated')
+  showFlashAlert({message, type: 'success'})
+  close()
+  return Promise.resolve()
+}
+
+const MODAL_CONTENTS_HEIGHT = 550
+
+export default class GradebookSettingsModal extends React.Component {
   static propTypes = {
+    anonymousAssignmentsPresent: bool,
+    courseFeatures: shape({
+      finalGradeOverrideEnabled: bool.isRequired
+    }).isRequired,
     courseId: string.isRequired,
+    courseSettings: shape({
+      allowFinalGradeOverride: bool.isRequired
+    }).isRequired,
     locale: string.isRequired,
     onClose: func.isRequired,
+    onEntered: func,
     gradedLateSubmissionsExist: bool.isRequired,
-    onLatePolicyUpdate: func.isRequired
+    onCourseSettingsUpdated: func.isRequired,
+    onLatePolicyUpdate: func.isRequired,
+    postPolicies: instanceOf(PostPolicies)
   }
 
-  constructor (props) {
-    super(props);
-    this.state = {
-      isOpen: false,
-      latePolicy: { changes: {}, validationErrors: {} }
-    };
+  static defaultProps = {
+    onEntered() {}
   }
 
-  onFetchLatePolicySuccess = ({ data }) => {
-    this.changeLatePolicy({ ...this.state.latePolicy, data: data.latePolicy });
+  state = {
+    courseSettings: {
+      allowFinalGradeOverride: this.props.courseSettings.allowFinalGradeOverride
+    },
+    isOpen: false,
+    latePolicy: {changes: {}, validationErrors: {}},
+    coursePostPolicy: {
+      postManually: this.props.postPolicies && this.props.postPolicies.coursePostPolicy.postManually
+    },
+    processingRequests: false
+  }
+
+  onFetchLatePolicySuccess = ({data}) => {
+    this.changeLatePolicy({...this.state.latePolicy, data: data.latePolicy})
   }
 
   onFetchLatePolicyFailure = () => {
-    const message = I18n.t('An error occurred while loading late policies');
-    showFlashAlert({ message, type: 'error' });
+    const message = I18n.t('An error occurred while loading late policies')
+    showFlashAlert({message, type: 'error'})
   }
 
-  onUpdateLatePolicySuccess = () => {
-    const message = I18n.t('Late policies updated');
-    showFlashAlert({ message, type: 'success' });
-    this.props.onLatePolicyUpdate({...this.state.latePolicy.data, ...this.state.latePolicy.changes});
-    this.close();
-  }
-
-  onUpdateLatePolicyFailure = () => {
-    const message = I18n.t('An error occurred while updating late policies');
-    showFlashAlert({ message, type: 'error' });
-  }
-
-  handleUpdateButtonClicked = () => {
-    if (this.state.latePolicy.data.newRecord) {
-      this.createLatePolicy();
-    } else {
-      this.updateLatePolicy();
-    }
+  onSaveLatePolicyFailure = () => {
+    const message = I18n.t('An error occurred while updating late policies')
+    showFlashAlert({message, type: 'error'})
+    return Promise.reject(new Error(message))
   }
 
   fetchLatePolicy = () => {
-    GradebookSettingsModalApi
-      .fetchLatePolicy(this.props.courseId)
+    fetchLatePolicy(this.props.courseId)
       .then(this.onFetchLatePolicySuccess)
-      .catch(this.onFetchLatePolicyFailure);
+      .catch(this.onFetchLatePolicyFailure)
   }
 
-  createLatePolicy = () => {
-    GradebookSettingsModalApi
-      .createLatePolicy(this.props.courseId, this.state.latePolicy.changes)
-      .then(this.onUpdateLatePolicySuccess)
-      .catch(this.onUpdateLatePolicyFailure);
+  saveLatePolicy = () => {
+    const createOrUpdate = this.state.latePolicy.data.newRecord
+      ? createLatePolicy
+      : updateLatePolicy
+    return createOrUpdate(this.props.courseId, this.state.latePolicy.changes)
+      .then(() =>
+        this.props.onLatePolicyUpdate({
+          ...this.state.latePolicy.data,
+          ...this.state.latePolicy.changes
+        })
+      )
+      .catch(this.onSaveLatePolicyFailure)
   }
 
-  updateLatePolicy = () => {
-    GradebookSettingsModalApi
-      .updateLatePolicy(this.props.courseId, this.state.latePolicy.changes)
-      .then(this.onUpdateLatePolicySuccess)
-      .catch(this.onUpdateLatePolicyFailure);
+  saveCourseSettings = () =>
+    updateCourseSettings(this.props.courseId, this.state.courseSettings)
+      .then(response => {
+        this.props.onCourseSettingsUpdated(response.data)
+      })
+      .catch(error => {
+        onSaveSettingsFailure()
+        throw error
+      })
+
+  savePostPolicy = () =>
+    setCoursePostPolicy({
+      courseId: this.props.courseId,
+      postManually: this.state.coursePostPolicy.postManually
+    })
+      .then(response => {
+        if (response !== null) {
+          const {postManually} = response
+          this.props.postPolicies.setCoursePostPolicy({postManually})
+        }
+      })
+      .catch(onSavePostPolicyFailure)
+
+  handleUpdateButtonClicked = () => {
+    const promises = []
+
+    this.setState({processingRequests: true}, () => {
+      if (isLatePolicySaveable(this.state)) {
+        promises.push(this.saveLatePolicy())
+      }
+
+      if (haveCourseSettingsChanged(this)) {
+        promises.push(this.saveCourseSettings())
+      }
+
+      if (isPostPolicyChanged(this)) {
+        promises.push(this.savePostPolicy())
+      }
+
+      // can't use finally() to remove the duplication because we need to
+      // skip onUpdateSuccess if an earlier promise rejected and removing the
+      // last catch will mean these rejected promises are uncaught, which
+      // causes `Uncaught (in promise) Error` to be logged in the console
+      Promise.all(promises)
+        .then(() => onUpdateSuccess(this))
+        .then(() => this.setState({processingRequests: false}))
+        .catch(() => this.setState({processingRequests: false}))
+    })
   }
 
-  changeLatePolicy = (latePolicy) => {
-    this.setState({ latePolicy });
+  changeLatePolicy = latePolicy => {
+    this.setState({latePolicy})
   }
 
-  isUpdateButtonDisabled = () => {
-    const { latePolicy: { changes, validationErrors } } = this.state;
-    return _.isEmpty(changes) || !_.isEmpty(validationErrors);
+  changePostPolicy = coursePostPolicy => {
+    this.setState({coursePostPolicy})
+  }
+
+  handleCourseSettingsChange = courseSettings => {
+    this.setState({
+      courseSettings: {...this.state.courseSettings, ...courseSettings}
+    })
+  }
+
+  isUpdateButtonEnabled = () => {
+    if (this.state.processingRequests) return false
+    return (
+      haveCourseSettingsChanged(this) ||
+      isLatePolicySaveable(this.state) ||
+      isPostPolicyChanged(this)
+    )
   }
 
   open = () => {
-    this.setState({ isOpen: true });
+    this.setState({isOpen: true})
   }
 
   close = () => {
-    this.setState({ isOpen: false }, () => {
-      const latePolicy = { changes: {}, data: undefined, validationErrors: {} };
+    this.setState({isOpen: false}, () => {
+      const latePolicy = {changes: {}, data: undefined, validationErrors: {}}
       // need to reset the latePolicy state _after_ the modal is closed, otherwise
       // the spinner will be visible for a brief moment before the modal closes.
-      this.setState({ latePolicy });
-    });
+      this.setState({latePolicy})
+    })
   }
 
-  render () {
-    const { isOpen, latePolicy } = this.state;
+  render() {
+    const includeAdvancedTab = this.props.courseFeatures.finalGradeOverrideEnabled
 
     return (
       <Modal
-        size="large"
-        open={isOpen}
         label={I18n.t('Gradebook Settings')}
-        onOpen={this.fetchLatePolicy}
         onDismiss={this.close}
+        onEntered={this.props.onEntered}
         onExited={this.props.onClose}
+        onOpen={this.fetchLatePolicy}
+        open={this.state.isOpen}
+        size="large"
       >
         <ModalBody>
-          <TabList defaultSelectedIndex={0}>
-            <TabPanel id="late-policies-tab" title={I18n.t('Late Policies')}>
-              <LatePoliciesTabPanel
-                latePolicy={latePolicy}
-                changeLatePolicy={this.changeLatePolicy}
-                locale={this.props.locale}
-                showAlert={this.props.gradedLateSubmissionsExist}
-              />
-            </TabPanel>
-          </TabList>
+          <View as="div" height={MODAL_CONTENTS_HEIGHT}>
+            <TabList defaultSelectedIndex={0}>
+              <TabPanel title={I18n.t('Late Policies')}>
+                <LatePoliciesTabPanel
+                  latePolicy={this.state.latePolicy}
+                  changeLatePolicy={this.changeLatePolicy}
+                  locale={this.props.locale}
+                  showAlert={this.props.gradedLateSubmissionsExist}
+                />
+              </TabPanel>
+
+              {this.props.postPolicies != null && (
+                <TabPanel title={I18n.t('Grade Posting Policy')}>
+                  <GradePostingPolicyTabPanel
+                    anonymousAssignmentsPresent={this.props.anonymousAssignmentsPresent}
+                    onChange={this.changePostPolicy}
+                    settings={this.state.coursePostPolicy}
+                  />
+                </TabPanel>
+              )}
+
+              {includeAdvancedTab && (
+                <TabPanel title={I18n.t('Advanced')}>
+                  <AdvancedTabPanel
+                    courseSettings={this.state.courseSettings}
+                    onCourseSettingsChange={this.handleCourseSettingsChange}
+                  />
+                </TabPanel>
+              )}
+            </TabList>
+          </View>
         </ModalBody>
 
         <ModalFooter>
-          <Button
-            id="gradebook-settings-cancel-button"
-            onClick={this.close}
-            margin="0 small"
-          >
+          <Button id="gradebook-settings-cancel-button" onClick={this.close} margin="0 small">
             {I18n.t('Cancel')}
           </Button>
 
           <Button
             id="gradebook-settings-update-button"
             onClick={this.handleUpdateButtonClicked}
-            disabled={this.isUpdateButtonDisabled()}
+            disabled={!this.isUpdateButtonEnabled()}
             variant="primary"
           >
             {I18n.t('Update')}
           </Button>
         </ModalFooter>
       </Modal>
-    );
+    )
   }
 }
-
-export default GradebookSettingsModal;

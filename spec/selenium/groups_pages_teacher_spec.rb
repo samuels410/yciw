@@ -16,8 +16,8 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 require_relative 'common'
-require_relative 'announcements/announcement_index_page'
-require_relative 'announcements/announcement_new_edit_page'
+require_relative 'announcements/pages/announcement_index_page'
+require_relative 'announcements/pages/announcement_new_edit_page'
 require_relative 'helpers/groups_common'
 require_relative 'helpers/legacy_announcements_common'
 require_relative 'helpers/discussions_common'
@@ -254,6 +254,7 @@ describe "groups" do
       it_behaves_like 'pages_page', :teacher
 
       it "should allow teachers to create a page", priority: "1", test_id: 289993 do
+        skip_if_firefox('known issue with firefox https://bugzilla.mozilla.org/show_bug.cgi?id=1335085')
         get pages_page
         manually_create_wiki_page('stuff','it happens')
       end

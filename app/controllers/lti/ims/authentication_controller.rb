@@ -69,7 +69,7 @@ module Lti
       end
 
       def validate_current_user!
-        if Lti::Asset.opaque_identifier_for(@current_user) != oidc_params[:login_hint]
+        if Lti::Asset.opaque_identifier_for(@current_user, context: context) != oidc_params[:login_hint]
           set_oidc_error!('login_required', 'The user is not logged in')
         end
       end
@@ -126,7 +126,9 @@ module Lti
 
       def authorize_redirect_url
         url = URI.parse(lti_1_3_authorization_url(params: oidc_params))
-        url.host = canvas_domain
+        parts = canvas_domain.split(':')
+        url.host = parts.first
+        url.port = parts.last if parts.size > 1
         url.to_s
       end
 

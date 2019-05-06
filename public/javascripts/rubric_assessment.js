@@ -29,7 +29,7 @@ import 'jqueryui/dialog'
 import './jquery.instructure_misc_plugins' /* showIf */
 import './jquery.templateData'
 import './vendor/jquery.scrollTo'
-import 'compiled/jquery.rails_flash_notifications' // eslint-disable-line
+import 'compiled/jquery.rails_flash_notifications'
 import Rubric from 'jsx/rubrics/Rubric'
 import { fillAssessment, updateAssociationData } from 'jsx/rubrics/helpers'
 
@@ -213,7 +213,11 @@ window.rubricAssessment = {
   assessmentData: function($rubric) {
     $rubric = rubricAssessment.findRubric($rubric);
     var data = {};
-    data['rubric_assessment[user_id]'] = ENV.RUBRIC_ASSESSMENT.assessment_user_id || $rubric.find(".user_id").text();
+    if (ENV.RUBRIC_ASSESSMENT.assessment_user_id || $rubric.find(".user_id").length > 0) {
+      data['rubric_assessment[user_id]'] = ENV.RUBRIC_ASSESSMENT.assessment_user_id || $rubric.find(".user_id").text()
+    } else {
+      data['rubric_assessment[anonymous_id]'] = ENV.RUBRIC_ASSESSMENT.anonymous_id || $rubric.find(".anonymous_id").text()
+    }
     data['rubric_assessment[assessment_type]'] = ENV.RUBRIC_ASSESSMENT.assessment_type || $rubric.find(".assessment_type").text();
     if (ENV.nonScoringRubrics && this.currentAssessment !== undefined) {
       const assessment = this.currentAssessment
@@ -316,8 +320,12 @@ window.rubricAssessment = {
   populateRubric: function($rubric, data, submitted_data = null) {
     $rubric = rubricAssessment.findRubric($rubric);
     var id = $rubric.attr('id').substring(7);
-    $rubric.find(".user_id").text(ENV.RUBRIC_ASSESSMENT.assessment_user_id || data.user_id).end()
-      .find(".assessment_type").text(ENV.RUBRIC_ASSESSMENT.assessment_type || data.assessment_type);
+    if (ENV.RUBRIC_ASSESSMENT.assessment_user_id || data.user_id) {
+      $rubric.find(".user_id").text(ENV.RUBRIC_ASSESSMENT.assessment_user_id || data.user_id)
+    } else {
+      $rubric.find(".anonymous_id").text(ENV.RUBRIC_ASSESSMENT.anonymous_id || data.anonymous_id)
+    }
+    $rubric.find(".assessment_type").text(ENV.RUBRIC_ASSESSMENT.assessment_type || data.assessment_type);
 
     $rubric.find(".criterion_description").removeClass('completed').removeClass('original_completed').end()
       .find(".rating").removeClass('selected').removeClass('original_selected').end()
