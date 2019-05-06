@@ -317,7 +317,9 @@ class ConversationsController < ApplicationController
   # @argument recipients[] [Required, String]
   #   An array of recipient ids. These may be user ids or course/group ids
   #   prefixed with "course_" or "group_" respectively, e.g.
-  #   recipients[]=1&recipients[]=2&recipients[]=course_3
+  #   recipients[]=1&recipients[]=2&recipients[]=course_3. If the course/group
+  #   has over 100 enrollments, 'bulk_message' and 'group_conversation' must be
+  #   set to true.
   #
   # @argument subject [String]
   #   The subject of the conversation. This is ignored when reusing a
@@ -325,6 +327,9 @@ class ConversationsController < ApplicationController
   #
   # @argument body [Required, String]
   #   The message to be sent
+  #
+  # @argument force_new [Boolean]
+  #   Forces a new message to be created, even if there is an existing private conversation.
   #
   # @argument group_conversation [Boolean]
   #   Defaults to false. If true, this will be a group conversation (i.e. all
@@ -393,7 +398,7 @@ class ConversationsController < ApplicationController
 
     group_conversation     = value_to_boolean(params[:group_conversation])
     batch_private_messages = !group_conversation && @recipients.size > 1
-    batch_group_messages   = group_conversation && value_to_boolean(params[:bulk_message])
+    batch_group_messages   = (group_conversation && value_to_boolean(params[:bulk_message])) || value_to_boolean(params[:force_new])
     message                = build_message
 
     if !batch_group_messages && @recipients.size > Conversation.max_group_conversation_size
@@ -1134,7 +1139,7 @@ class ConversationsController < ApplicationController
     known = @current_user.address_book.known_users(users, context: context, conversation_id: params[:from_conversation_id])
     contexts.each{ |context| known.concat(@current_user.address_book.known_in_context(context)) }
     @recipients = known.uniq(&:id)
-    @recipients.reject!{|u| u.id == @current_user.id} unless @recipients == [@current_user]
+    @recipients.reject!{|u| u.id == @current_user.id} unless @recipients == [@current_user] && params[:recipients].count == 1
   end
 
   def infer_tags

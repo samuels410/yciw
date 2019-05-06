@@ -17,7 +17,7 @@
  */
 
 import React from 'react'
-import { mount, shallow } from 'old-enzyme-2.x-you-need-to-upgrade-this-spec-to-enzyme-3.x-by-importing-just-enzyme'
+import { mount, shallow } from 'enzyme'
 import ProficiencyRating from '../ProficiencyRating'
 
 const defaultProps = (props = {}) => (
@@ -37,7 +37,7 @@ const defaultProps = (props = {}) => (
 
 it('renders the ProficiencyRating component', () => {
   const wrapper = shallow(<ProficiencyRating {...defaultProps()}/>)
-  expect(wrapper.debug()).toMatchSnapshot()
+  expect(wrapper).toMatchSnapshot()
 })
 
 it('mastery checkbox is checked if mastery', () => {
@@ -55,7 +55,7 @@ it('mastery checkbox receives focus', () => {
         <ProficiencyRating {...defaultProps({focusField: 'mastery'})}/>
       </tbody>
     </table>)
-  expect(wrapper.find('RadioInput').find('input').node).toBe(document.activeElement)
+  expect(wrapper.find('RadioInput').find('input').instance()).toBe(document.activeElement)
 })
 
 it('clicking mastery checkbox triggers change', () => {

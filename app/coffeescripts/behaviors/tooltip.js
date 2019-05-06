@@ -34,6 +34,7 @@
 import _ from 'underscore'
 import $ from 'jquery'
 import htmlEscape from 'str/htmlEscape'
+import sanitizeHtml from 'jsx/shared/sanitizeHtml'
 import 'jqueryui/tooltip'
 
 const tooltipsToShortCirtuit = {}
@@ -100,7 +101,7 @@ $.widget('custom.timeoutTooltip', $.ui.tooltip, {
       // remove extra handlers we added, super will add them back
       this._off(target, 'mouseleave focusout keyup')
       apply()
-    }, 20)
+    }, 200)
     // this is from the jquery ui tooltip _open
     // we need to bind events to trigger close so that the
     // timeout is cleared when we mouseout / or leave focus
@@ -123,7 +124,7 @@ $.widget('custom.timeoutTooltip', $.ui.tooltip, {
       delete this.timeout
       return
     }
-    return this._superApply(arguments)
+    return this._superApply([event, true])
   },
 })
 
@@ -163,7 +164,7 @@ $('body').on('mouseenter focusin', '[data-tooltip]', function (event) {
 
   if ($this.data('html-tooltip-title')) {
     opts.content = function () {
-      return $.raw($(this).data('html-tooltip-title'))
+      return $.raw(sanitizeHtml($(this).data('html-tooltip-title')))
     }
     opts.items = '[data-html-tooltip-title]'
   }

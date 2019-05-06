@@ -188,6 +188,25 @@ describe "outcome gradebook" do
           result(@student_3, align2, 1)
         end
 
+        it 'keeps course mean after outcomes without results filter enabled' do
+          get "/courses/#{@course.id}/gradebook"
+          f('a[data-id=outcome]').click
+          wait_for_ajax_requests
+
+          # mean
+          expect(ff('.outcome-gradebook-container .headerRow_1 .outcome-score')).to have_size 2
+          expect(ff('.outcome-gradebook-container .headerRow_1 .outcome-score').first.text).to eq '2.33'
+          expect(ff('.outcome-gradebook-container .headerRow_1 .outcome-score').second.text).to eq '2.67'
+
+          f('#no_results_outcomes').click
+          wait_for_ajax_requests
+
+          # mean
+          expect(ff('.outcome-gradebook-container .headerRow_1 .outcome-score')).to have_size 2
+          expect(ff('.outcome-gradebook-container .headerRow_1 .outcome-score').first.text).to eq '2.33'
+          expect(ff('.outcome-gradebook-container .headerRow_1 .outcome-score').second.text).to eq '2.67'
+        end
+
         it "displays course mean and median" do
           get "/courses/#{@course.id}/gradebook"
           f('a[data-id=outcome]').click
@@ -264,12 +283,12 @@ describe "outcome gradebook" do
       it "should allow showing only a certain section" do
         get "/courses/#{@course.id}/gradebook"
         f('a[data-id=outcome]').click
-
         expect(ff('.outcome-student-cell-content')).to have_size 3
 
         choose_section = ->(name) do
           fj('.section-select-button:visible').click
           fj(".section-select-menu:visible a:contains('#{name}')").click
+          wait_for_ajaximations
         end
 
         choose_section.call "All Sections"
@@ -277,7 +296,6 @@ describe "outcome gradebook" do
 
         choose_section.call @other_section.name
         expect(fj('.section-select-button:visible')).to include_text(@other_section.name)
-
         expect(ff('.outcome-student-cell-content')).to have_size 1
 
         # verify that it remembers the section to show across page loads

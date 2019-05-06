@@ -221,6 +221,7 @@ window.rubricAssessment = {
         const pre = `rubric_assessment[criterion_${criteriaAssessment.criterion_id}]`
         const section = (key) => `${pre}${key}`
         const points = criteriaAssessment.points.value
+        data[section("[rating_id]")] = criteriaAssessment.id
         data[section("[points]")] = !Number.isNaN(points) ? points : undefined
         data[section("[description]")] = criteriaAssessment.description
         data[section("[comments]")] = criteriaAssessment.comments || ''
@@ -304,7 +305,7 @@ window.rubricAssessment = {
         </Rubric>, container.get(0))
       }
 
-      setCurrentAssessment(rubricAssessment.fillAssessment(ENV.rubric, assessment || {}))
+      setCurrentAssessment(rubricAssessment.fillAssessment(ENV.rubric, assessment || {}, ENV.RUBRIC_ASSESSMENT))
       const header = container.find('th').first()
       header.attr('tabindex', -1).focus()
     } else {
@@ -379,9 +380,11 @@ window.rubricAssessment = {
   },
 
   populateNewRubricSummary: function(container, assessment, rubricAssociation, editData) {
+    const el = container.get(0)
     if (ENV.nonScoringRubrics && ENV.rubric) {
+      ReactDOM.unmountComponentAtNode(el)
       if(assessment) {
-        const filled = rubricAssessment.fillAssessment(ENV.rubric, assessment || {})
+        const filled = rubricAssessment.fillAssessment(ENV.rubric, assessment || {}, ENV.RUBRIC_ASSESSMENT)
         ReactDOM.render(<Rubric
           customRatings={ENV.outcome_proficiency ? ENV.outcome_proficiency.ratings : []}
           rubric={ENV.rubric}
@@ -389,9 +392,9 @@ window.rubricAssessment = {
           rubricAssociation={rubricAssociation}
           isSummary={true}>
           {null}
-        </Rubric>, container.get(0))
+        </Rubric>, el)
       } else {
-        container.get(0).innerHTML = ''
+        el.innerHTML = ''
       }
     } else {
       rubricAssessment.populateRubricSummary(

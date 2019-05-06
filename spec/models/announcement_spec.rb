@@ -91,6 +91,11 @@ describe Announcement do
       expect(@announcement.visible_for?(@student1)).to be_truthy
     end
 
+    it "should be visible to section-limited students in specific section" do
+      @student1.enrollments.where(course_section_id: @section).update_all(limit_privileges_to_course_section: true)
+      expect(@announcement.visible_for?(@student1)).to be_truthy
+    end
+
     it "should not be visible to students not in specific section" do
       expect(@announcement.visible_for?(@student2)).to be_falsey
     end
@@ -102,9 +107,16 @@ describe Announcement do
       expect(Announcement.context_allows_user_to_create?(@course, @user, {})).to be_falsey
     end
 
-    it "should allow announcements on a group" do
-      group_with_user(:active_user => 1)
-      expect(Announcement.context_allows_user_to_create?(@group, @user, {})).to be_truthy
+    it "should not allow announcements creation by students on a group" do
+      course_with_student
+      group_with_user(is_public: true, :active_user => 1, :context => @course)
+      expect(Announcement.context_allows_user_to_create?(@group, @student, {})).to be_falsey
+    end
+
+    it "should allow announcements creation by teacher on a group" do
+      course_with_teacher(:active_all => true)
+      group_with_user(is_public: true, :active_user => 1, :context => @course)
+      expect(Announcement.context_allows_user_to_create?(@group, @teacher, {})).to be_truthy
     end
 
     it 'allows announcements to be viewed without :read_forum' do

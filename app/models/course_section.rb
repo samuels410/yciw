@@ -223,7 +223,7 @@ class CourseSection < ActiveRecord::Base
     @section_display_name ||= self.name
   end
 
-  def move_to_course(course, *opts)
+  def move_to_course(course, **opts)
     return self if self.course_id == course.id
     old_course = self.course
     self.course = course
@@ -232,34 +232,49 @@ class CourseSection < ActiveRecord::Base
     old_course.course_sections.reset
     course.course_sections.reset
     assignment_overrides.active.destroy_all
-    user_ids = self.all_enrollments.map(&:user_id).uniq
+    discussion_topic_section_visibilities.active.destroy_all
+
+    enrollment_data = self.all_enrollments.pluck(:id, :user_id)
+    enrollment_ids = enrollment_data.map(&:first)
+    user_ids = enrollment_data.map(&:last).uniq
 
     all_attrs = { course_id: course.id }
     if self.root_account_id_changed?
       all_attrs[:root_account_id] = self.root_account_id
     end
     self.save!
-    self.all_enrollments.update_all all_attrs
+    if enrollment_ids.any?
+      self.all_enrollments.update_all all_attrs
+      Enrollment.send_later_if_production(:batch_add_to_favorites, enrollment_ids)
+    end
+
     Assignment.suspend_due_date_caching do
       Assignment.where(context: [old_course, self.course]).touch_all
     end
-    EnrollmentState.send_later_if_production(:invalidate_states_for_course_or_section, self)
+    EnrollmentState.send_later_if_production(:invalidate_states_for_course_or_section, self, invalidate_access: true)
     User.send_later_if_production(:update_account_associations, user_ids) if old_course.account_id != course.account_id && !User.skip_updating_account_associations?
     if old_course.id != self.course_id && old_course.id != self.nonxlist_course_id
       old_course.send_later_if_production(:update_account_associations) unless Course.skip_updating_account_associations?
     end
 
     run_immediately = opts.include?(:run_jobs_immediately)
-    DueDateCacher.recompute_users_for_course(user_ids, course, nil, run_immediately: run_immediately, update_grades: true)
+    DueDateCacher.recompute_users_for_course(
+      user_ids,
+      course,
+      nil,
+      run_immediately: run_immediately,
+      update_grades: true,
+      executing_user: opts[:updating_user]
+    )
   end
 
-  def crosslist_to_course(course, *opts)
+  def crosslist_to_course(course, **opts)
     return self if self.course_id == course.id
     self.nonxlist_course_id ||= self.course_id
-    self.move_to_course(course, *opts)
+    self.move_to_course(course, **opts)
   end
 
-  def uncrosslist(*opts)
+  def uncrosslist(**opts)
     return unless self.nonxlist_course_id
     if self.nonxlist_course.workflow_state == "deleted"
       self.nonxlist_course.workflow_state = "claimed"
@@ -267,7 +282,7 @@ class CourseSection < ActiveRecord::Base
     end
     nonxlist_course = self.nonxlist_course
     self.nonxlist_course = nil
-    self.move_to_course(nonxlist_course, *opts)
+    self.move_to_course(nonxlist_course, **opts)
   end
 
   def crosslisted?
@@ -307,7 +322,7 @@ class CourseSection < ActiveRecord::Base
     cs = CourseSection.where(id: batch).select(:id, :workflow_state).to_a
     data = SisBatchRollBackData.build_dependent_data(sis_batch: sis_batch, contexts: cs, updated_state: 'deleted', batch_mode_delete: batch_mode)
     CourseSection.where(id: cs.map(&:id)).update_all(workflow_state: 'deleted', updated_at: Time.zone.now)
-    Enrollment.not_fake.where(course_section_id: cs.map(&:id)).active.find_in_batches do |e_batch|
+    Enrollment.where(course_section_id: cs.map(&:id)).active.find_in_batches do |e_batch|
       Shackles.activate(:master) do
         new_data = Enrollment::BatchStateUpdater.destroy_batch(e_batch, sis_batch: sis_batch, batch_mode: batch_mode)
         data.push(*new_data)

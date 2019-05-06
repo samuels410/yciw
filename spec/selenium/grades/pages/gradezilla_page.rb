@@ -52,7 +52,7 @@ class Gradezilla
     # ---------------------NEW-----------------------
     # assignment header column elements
     def assignment_header_menu_element(id)
-      f(".slick-header-column[id*='assignment_#{id}'] .Gradebook__ColumnHeaderAction [id*='Menu']")
+      f(".slick-header-column.assignment_#{id} .Gradebook__ColumnHeaderAction")
     end
 
     def assignment_header_menu_item_element(item_name)
@@ -81,7 +81,7 @@ class Gradezilla
     end
 
     def student_header_menu_main_element(menu)
-      fj("[role=menu][aria-labelledby*=Menu] button:contains('#{menu}')")
+      fj("[role=menu] button:contains('#{menu}')")
     end
 
     def student_header_submenu_item_element(sub_menu_item)
@@ -201,7 +201,7 @@ class Gradezilla
     end
 
     def expanded_popover_menu_selector
-      '[role="menu"][aria-labelledby*="Menu"]'
+      '[role="menu"]'
     end
 
     def expanded_popover_menu
@@ -214,6 +214,10 @@ class Gradezilla
 
     def grades_new_upload
       f('#new_gradebook_upload')
+    end
+
+    def loading_spinner
+      f('#spinner')
     end
 
     # actions
@@ -340,6 +344,16 @@ class Gradezilla
 
     def header_selector_by_col_index(n)
       f(".container_0 .slick-header-column:nth-child(#{n})")
+    end
+
+    def wait_for_spinner
+      begin
+        spinner = loading_spinner
+        keep_trying_until(3) { (spinner.displayed? == false) }
+      rescue Selenium::WebDriver::Error::TimeOutError
+        # ignore - sometimes spinner doesn't appear in Chrome
+      end
+      wait_for_ajaximations
     end
 
     # Semantic Methods for Gradebook Menus
@@ -503,6 +517,24 @@ class Gradezilla
 
     def gradebook_settings_btn_select
       gradebook_settings_button.click
+    end
+
+    def scores_scraped
+      class_names = ff('.total-cell.total_grade').map{ |grade| fxpath('..', grade).attribute("class") }
+      user_ids = class_names.map{|name| name.match('student_([0-9]+)')[1]}
+      total_grades = ff('.total-cell.total_grade .grades').map{ |grade| grade.text.split("%")[0] }
+      total_grades.map.with_index{ |grade, index| { user_id: user_ids[index].to_i, score: grade.to_f } }
+    end
+
+    def scores_api(course)
+      scores = Score.joins(:enrollment).merge(course.student_enrollments).where(course_score: true)
+      enrollments = course.student_enrollments
+      scores.map do |score|
+        {
+          user_id: enrollments.find(score.enrollment_id).user_id,
+          score: score.current_score
+        }
+      end
     end
 
     # -----------------------NEW-----------------------

@@ -21,12 +21,14 @@ import $ from 'jquery'
 import Button from '@instructure/ui-buttons/lib/components/Button'
 import CloseButton from '@instructure/ui-buttons/lib/components/CloseButton'
 import Heading from '@instructure/ui-elements/lib/components/Heading'
-import Modal, {ModalHeader, ModalBody, ModalFooter} from '@instructure/ui-overlays/lib/components/Modal'
+import Modal, {ModalHeader, ModalBody} from '@instructure/ui-overlays/lib/components/Modal'
 import Spinner from '@instructure/ui-elements/lib/components/Spinner'
 import View from '@instructure/ui-layout/lib/components/View'
 import React from 'react'
 import PropTypes from 'prop-types'
 import DeveloperKeyFormFields from './NewKeyForm'
+import NewKeyFooter from './NewKeyFooter'
+import LtiKeyFooter from './LtiKeyFooter'
 
 export default class DeveloperKeyModal extends React.Component {
   developerKeyUrl() {
@@ -56,6 +58,20 @@ export default class DeveloperKeyModal extends React.Component {
     return this.newForm && this.newForm.testClusterOnly
   }
 
+  saveCustomizations = () => {
+    const customFields = new FormData(this.submissionForm).get('custom_fields')
+    const { store, actions, createLtiKeyState, createOrEditDeveloperKeyState } = this.props
+
+    store.dispatch(actions.ltiKeysUpdateCustomizations(
+      createLtiKeyState.enabledScopes,
+      createLtiKeyState.disabledPlacements,
+      createOrEditDeveloperKeyState.developerKey.id,
+      createLtiKeyState.toolConfiguration,
+      customFields
+    ))
+    this.closeModal()
+  }
+
   submitForm = () => {
     const method = this.developerKey() ? 'put' : 'post'
     const formData = new FormData(this.submissionForm)
@@ -75,8 +91,8 @@ export default class DeveloperKeyModal extends React.Component {
       formData.append('developer_key[require_scopes]', true)
     }
 
-    if (!this.testClusterOnly) {
-      formData.append('developer_key[test_cluster_only]', false)
+    if (this.testClusterOnly !== undefined) {
+      formData.append('developer_key[test_cluster_only]', this.testClusterOnly)
     }
 
     this.props.store.dispatch(
@@ -84,11 +100,70 @@ export default class DeveloperKeyModal extends React.Component {
     )
   }
 
+  saveLtiToolConfiguration = () => {
+    const formData = new FormData(this.submissionForm)
+    let settings
+    try {
+      settings = JSON.parse(formData.get("tool_configuration"))
+    } catch(e) {
+      if (e instanceof SyntaxError) {
+        $.flashError(I18n.t('Json is not valid. Please submit properly formatted json.'))
+        return
+      }
+    }
+
+    this.props.store.dispatch(this.props.actions.saveLtiToolConfiguration({
+      account_id: this.props.ctx.params.contextId,
+      developer_key: {
+        name: formData.get("developer_key[name]"),
+        email: formData.get("developer_key[email]"),
+        notes: formData.get("developer_key[notes]"),
+        redirect_uris: formData.get("developer_key[redirect_uris]"),
+        test_cluster_only: this.testClusterOnly,
+        access_token_count: 0
+      },
+      settings,
+      settings_url: formData.get("tool_configuration_url"),
+    }))
+  }
+
+  get isLtiKey() {
+    return this.props.createLtiKeyState.isLtiKey
+  }
+
+  get isSaving() {
+    return this.props.createOrEditDeveloperKeyState.developerKeyCreateOrEditPending || this.props.createLtiKeyState.saveToolConfigurationPending
+  }
+
   modalBody() {
-    if (this.props.createOrEditDeveloperKeyState.developerKeyCreateOrEditPending) {
+    if (this.isSaving) {
       return this.spinner()
     }
     return this.developerKeyForm()
+  }
+
+  modalFooter() {
+    if (this.isLtiKey) {
+      const { createLtiKeyState, store, actions } = this.props
+      return(
+        <LtiKeyFooter
+          onCancelClick={this.closeModal}
+          onSaveClick={this.saveCustomizations}
+          onAdvanceToCustomization={this.saveLtiToolConfiguration}
+          customizing={createLtiKeyState.customizing}
+          disable={this.isSaving}
+          ltiKeysSetCustomizing={actions.ltiKeysSetCustomizing}
+          dispatch={store.dispatch}
+        />
+      )
+    }
+    return(
+      <NewKeyFooter
+        disable={this.isSaving}
+        onCancelClick={this.closeModal}
+        onSaveClick={this.submitForm}
+      />
+    )
   }
 
   spinner() {
@@ -104,9 +179,11 @@ export default class DeveloperKeyModal extends React.Component {
 
   developerKeyForm() {
     const {
+      createLtiKeyState,
       availableScopes,
       availableScopesPending,
-      createOrEditDeveloperKeyState: { developerKey }
+      createOrEditDeveloperKeyState: { developerKey },
+      actions
     } = this.props;
 
     return <DeveloperKeyFormFields
@@ -115,7 +192,10 @@ export default class DeveloperKeyModal extends React.Component {
       availableScopes={availableScopes}
       availableScopesPending={availableScopesPending}
       dispatch={this.props.store.dispatch}
-      listDeveloperKeyScopesSet={this.props.actions.listDeveloperKeyScopesSet}
+      listDeveloperKeyScopesSet={actions.listDeveloperKeyScopesSet}
+      setEnabledScopes={actions.ltiKeysSetEnabledScopes}
+      setDisabledPlacements={actions.ltiKeysSetDisabledPlacements}
+      createLtiKeyState={createLtiKeyState}
     />
   }
 
@@ -127,8 +207,10 @@ export default class DeveloperKeyModal extends React.Component {
   }
 
   closeModal = () => {
-    this.props.store.dispatch(this.props.actions.developerKeysModalClose())
-    this.props.store.dispatch(this.props.actions.editDeveloperKey())
+    const { actions, store } = this.props
+    store.dispatch(actions.developerKeysModalClose())
+    store.dispatch(actions.resetLtiState())
+    store.dispatch(actions.editDeveloperKey())
   }
 
   render() {
@@ -147,12 +229,7 @@ export default class DeveloperKeyModal extends React.Component {
             <Heading>{I18n.t('Key Settings')}</Heading>
           </ModalHeader>
           <ModalBody>{this.modalBody()}</ModalBody>
-          <ModalFooter>
-            <Button onClick={this.closeModal}>{I18n.t('Cancel')}</Button>&nbsp;
-            <Button onClick={this.submitForm} variant="primary">
-              {I18n.t('Save Key')}
-            </Button>
-          </ModalFooter>
+          {this.modalFooter()}
         </Modal>
       </div>
     )
@@ -170,10 +247,20 @@ DeveloperKeyModal.propTypes = {
     dispatch: PropTypes.func.isRequired
   }).isRequired,
   actions: PropTypes.shape({
+    ltiKeysSetCustomizing: PropTypes.func.isRequired,
     createOrEditDeveloperKey: PropTypes.func.isRequired,
     developerKeysModalClose: PropTypes.func.isRequired,
     editDeveloperKey: PropTypes.func.isRequired,
-    listDeveloperKeyScopesSet: PropTypes.func.isRequired
+    listDeveloperKeyScopesSet: PropTypes.func.isRequired,
+    saveLtiToolConfiguration: PropTypes.func.isRequired,
+    resetLtiState: PropTypes.func.isRequired
+  }).isRequired,
+  createLtiKeyState: PropTypes.shape({
+    isLtiKey: PropTypes.bool.isRequired,
+    customizing: PropTypes.bool.isRequired,
+    toolConfiguration: PropTypes.object.isRequired,
+    toolConfigurationUrl: PropTypes.string.isRequired,
+    saveToolConfigurationPending: PropTypes.bool.isRequired
   }).isRequired,
   createOrEditDeveloperKeyState: PropTypes.shape({
     developerKeyCreateOrEditSuccessful: PropTypes.bool.isRequired,

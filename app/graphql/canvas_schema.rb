@@ -18,6 +18,7 @@
 
 class CanvasSchema < GraphQL::Schema
   query Types::QueryType
+  mutation Types::MutationType
 
   use GraphQL::Batch
 
@@ -41,6 +42,7 @@ class CanvasSchema < GraphQL::Schema
     when Enrollment then Types::EnrollmentType
     when Submission then Types::SubmissionType
     when Group then Types::GroupType
+    when GroupCategory then Types::GroupSetType
     when GradingPeriod then Types::GradingPeriodType
     when ContextModule then Types::ModuleType
     when WikiPage then Types::PageType

@@ -247,7 +247,7 @@ describe "assignment groups" do
     let(:assignment_name) { "Do this" }
     let(:assignment_points) { "13" }
     let(:time) {Time.zone.local(2018,2,7,4,15)}
-    let(:current_time) {format_time_for_view(time)}
+    let(:current_time) {format_time_for_view(time, :medium)}
 
     before :each do
       @course.require_assignment_group
@@ -270,11 +270,10 @@ describe "assignment groups" do
       end
     end
 
-    it 'persisted the correct values of the assignment', priority: '1', test_id: 210083 do
+    it 'persists the correct values of the assignment', priority: '1', test_id: 210083 do
       assignment = assignment_group.reload.assignments.last
       expect(assignment.name).to eq "Do this"
-      # Frontend automatically changes selected time to include 59 seconds
-      expect(assignment.due_at).to eq time.change({ sec: 59 })
+      expect(assignment.due_at).to eq time.change({ sec: 0 })
     end
 
     it 'reflects the new assignment in the Assignments Index page', priority: '1', test_id: 210083 do

@@ -19,7 +19,7 @@ import * as Actions from '../index';
 import * as SidebarActions from '../sidebar-actions';
 import moxios from 'moxios';
 import moment from 'moment-timezone';
-import {isPromise, moxiosWait, moxiosRespond} from '../../test-utils';
+import {isPromise, moxiosWait, moxiosRespond} from 'jest-moxios-utils';
 import { initialize as alertInitialize } from '../../utilities/alertUtils';
 
 jest.mock('../../utilities/apiUtils', () => ({
@@ -313,21 +313,6 @@ describe('api actions', () => {
         expect(request.config.method).toBe('post');
         expect(request.url).toBe('/api/v1/planner_notes');
         expect(JSON.parse(request.config.data)).toMatchObject({some: 'data', transformedToApi: true});
-      });
-    });
-
-    it('does set default time of 11:59 pm for planner date at midnight', () => {
-      const TZ = "Atlantic/Azores";
-      const plannerItem = simpleItem({date: moment.tz(TZ).startOf('day').toISOString()});
-      Actions.savePlannerItem(plannerItem)(() => {}, () => {return {timeZone: TZ};});
-      return moxiosWait((request) => {
-        expect(request.config.method).toBe('post');
-        expect(request.url).toBe('/api/v1/planner_notes');
-        expect(JSON.parse(request.config.data).transformedToApi).toBeTruthy();
-        const result = moment(JSON.parse(request.config.data).date).tz(TZ);
-        expect(result.hours()).toEqual(23);
-        expect(result.minutes()).toEqual(59);
-        expect(result.seconds()).toEqual(59);
       });
     });
 

@@ -21,6 +21,7 @@
 %>
 <%
   currently_peer_reviewing = @assessment_request.try(:assigned?)
+  submission_comments = @submission.visible_submission_comments_for(@current_user)
   js_bundle :submissions
   css_bundle :submission
   js_env({
@@ -77,7 +78,7 @@
                     <% if @submission.excused? %>
                       <%= t "Excused" %>
                     <% else %>
-                      <%= i18n_grade(round_if_whole @submission.entered_grade) %>
+                      <%= i18n_grade(round_if_whole(@submission.entered_grade), @submission.grading_type) %>
                     <% end %>
                   </span>
                 <% end %>
@@ -99,9 +100,9 @@
                 <th><%= I18n.t('Final grade:') %></td>
                 <td class="bold">
                   <% if can_do(@assignment, @current_user, :grade) %>
-                    <span class="published_grade"><%= i18n_grade(round_if_whole @submission.grade) %></span>
+                    <span class="published_grade"><%= i18n_grade(round_if_whole(@submission.grade), @submission.grading_type) %></span>
                   <% elsif @submission.user_can_read_grade?(@current_user, session) %>
-                    <span class="grade"><%= i18n_grade(round_if_whole @submission.published_grade) %></span>
+                    <span class="grade"><%= i18n_grade(round_if_whole(@submission.published_grade), @submission.grading_type) %></span>
                   <% end %>
 
                   <% if @assignment.grading_type == 'points' %>
@@ -164,6 +165,16 @@
               <span class="submission-missing-pill"></span>
             <% end %>
           <% end %>
+          <% if @assignment.allowed_attempts&.> 0 %>
+            <div class="submission-details-header__attempts_info">
+              <span class="bold"><%= t :attempts, 'Attempts' %></span>
+              <span><%= @submission.attempt || 0 %></span>
+            </div>
+            <div class="submission-details-header__attempts_info">
+              <span class="bold"><%= t :allowed_attempts, 'Allowed Attempts' %></span>
+              <span><%= @assignment.allowed_attempts + (@submission.extra_attempts || 0) %></span>
+            </div>
+          <% end %>
         </div>
       </div>
       <div class="ic-Action-header__Secondary ic-Action-header__Secondary--auto">
@@ -174,7 +185,7 @@
           </a>
         <% end %>
         <% if @assignment.expects_submission? && can_do(@assignment, @current_user, :submit) && @current_user == @submission.user %>
-          <a href="<%= context_url(@context, :context_assignment_url, @assignment.id) %>#submit" class="Button Button--primary" >
+          <a href="<%= context_url(@context, :context_assignment_url, @assignment.id) %>#submit" class="Button Button--primary" <%= 'disabled' if @submission&.attempts_left == 0 %>>
             <%= @submission.has_submission? ? t('links.resubmit', "Re-submit Assignment") : t('links.submit', "Submit Assignment") %>
           </a>
         <% end %>
@@ -261,7 +272,7 @@
     </div>
     <div class="submission-details-comments" style="word-wrap: break-word; min-width: 1%;">
       <div style="background-color: #fff;">
-        <a href="#" class="comments_link" style="display: none; <%= 'font-weight: bold;' unless @submission.submission_comments.empty? %>">Comments <% unless @submission.submission_comments.empty? %>(<%= @submission.submission_comments.length %>)<% end %></a>
+        <a href="#" class="comments_link" style="display: none; <%= 'font-weight: bold;' unless submission_comments.empty? %>">Comments <% unless submission_comments.empty? %>(<%= submission_comments.length %>)<% end %></a>
         <div class="comments">
           <button type="button" class="btn button-secondary cancel_comment_button" style="display: none; float: <%= direction('right') %>; margin-<%= direction('right') %>:0 !important;"><%= image_tag("delete_circle.png", :alt => t('Delete')) %></button>
           <div class="comment_list" aria-live="polite" style="padding: 10px; clear:right;">
@@ -273,13 +284,20 @@
               <% end %>
               <br/><br/>
             <% end %>
-            <% @submission.submission_comments.each do |comment| %>
+            <% submission_comments.each do |comment| %>
               <% if can_do(comment, @current_user, :read) %>
+                <%
+                  author_name = comment_author_name_for(comment)
+                  created_at = datetime_string(comment.created_at)
+                %>
               <div class="comment <%= 'draft' if comment.draft? %>" id="submission_comment_<%= comment.id %>" style="margin-bottom: 10px;">
                 <div class="comment" style="color: #444;">
                   <% if comment.media_comment_id %>
                     <div class="comment_media">
-                      <%= t('media_comment_link', "This is a media comment, *click here to view*.", :wrapper => '<br/><a href="#" class="play_comment_link media-comment">\1</a>.') %>
+                      <%= t(
+                        "This is a media comment, *click here to view*.",
+                        wrapper: "<br/><a data-author='#{author_name}' data-created_at='#{created_at}' href='#' class='play_comment_link media-comment'>\1</a>.")
+                      %>
                       <span class="media_comment_id" style="display: none;"><%= comment.media_comment_id %></span>
                       <div class="media_comment_content">
                       </div>
@@ -297,9 +315,9 @@
                 </div>
                 <div style="text-align: <%= direction('right') %>; font-size: 0.8em; color: #888;">
                   <span class="author_name">
-                    <%= comment_author_name_for(comment) %>
+                    <%= author_name %>
                   </span>,
-                  <span class="posted_at"><%= datetime_string(comment.created_at) %></span>
+                  <span class="posted_at"><%= created_at %></span>
                 </div>
               </div>
               <% end %>

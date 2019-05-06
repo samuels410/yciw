@@ -241,6 +241,37 @@ describe CourseSection, "moving to new course" do
     expect(course3.workflow_state).to eq 'created'
   end
 
+  it "should preserve favorites when crosslisting" do
+    account1 = Account.create!(:name => "1")
+    account2 = Account.create!(:name => "2")
+    course1 = account1.courses.create!
+    course2 = account2.courses.create!
+    course2.assert_section
+
+    cs = course1.course_sections.create!
+    u = user_factory(:active_all => true)
+    e = course1.enroll_user(u, 'StudentEnrollment', :section => cs, :enrollment_state => 'active')
+    u.favorites.where(:context_type => 'Course', :context_id => course1).first_or_create!
+
+    cs.crosslist_to_course(course2)
+    expect(u.favorites.where(:context_type => "Course", :context_id => course2).exists?).to eq true
+  end
+
+  it "removes discussion visibilites on crosslist" do
+    course = course_factory({ :course_name => "Course 1", :active_all => true })
+    section = course.course_sections.create!
+    course.save!
+    announcement1 = Announcement.create!(:title => "some topic", :message => "blah",
+      :context => course, :is_section_specific => true, :course_sections => [section])
+    visibility = announcement1.reload.discussion_topic_section_visibilities.first
+
+    course2 = course_factory
+    section.crosslist_to_course(course2)
+
+    expect(visibility.reload).to be_deleted
+    expect(section.reload).to be_valid
+  end
+
   describe '#delete_enrollments_if_deleted' do
     let(:account) { Account.create!(name: '1') }
     let(:course) { account.courses.create! }
@@ -299,8 +330,8 @@ describe CourseSection, "moving to new course" do
     course1.reload
 
     expect(DueDateCacher).to receive(:recompute_users_for_course).
-      with([u.id], course2, nil, run_immediately: true, update_grades: true)
-    cs.move_to_course(course2, :run_jobs_immediately)
+      with([u.id], course2, nil, run_immediately: true, update_grades: true, executing_user: nil)
+    cs.move_to_course(course2, run_jobs_immediately: true)
   end
 
   it 'should call DueDateCacher.recompute_users_for_course with run_immediately false if without :run_jobs_immediately' do
@@ -317,7 +348,7 @@ describe CourseSection, "moving to new course" do
     course1.reload
 
     expect(DueDateCacher).to receive(:recompute_users_for_course).
-      with([u.id], course2, nil, run_immediately: false, update_grades: true)
+      with([u.id], course2, nil, run_immediately: false, update_grades: true, executing_user: nil)
     cs.move_to_course(course2)
   end
 
@@ -501,10 +532,23 @@ describe CourseSection, "moving to new course" do
       @section.save!
     end
 
-    it "should invalidate if course" do
+    it "should invalidate if cross-listed" do
       other_course = course_factory(active_all: true)
       expect(EnrollmentState).to receive(:update_enrollment).with(@enrollment).once
       @section.crosslist_to_course(other_course)
+    end
+
+    it "should invalidate access if section is cross-listed" do
+      @course.update_attributes(:workflow_state => "available", :restrict_student_future_view => true,
+        :restrict_enrollments_to_course_dates => true, :start_at => 1.day.from_now)
+      expect(@enrollment.enrollment_state.reload.restricted_access?).to eq true
+
+      other_course = course_factory(active_all: true)
+      other_course.update_attributes(:restrict_enrollments_to_course_dates => true, :start_at => 1.day.from_now)
+
+      @section.crosslist_to_course(other_course)
+
+      expect(@enrollment.enrollment_state.reload.restricted_access?).to eq false
     end
   end
 end

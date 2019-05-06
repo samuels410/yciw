@@ -16,7 +16,8 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-# @API Planner Note
+# @API Planner
+# @subtopic Planner Notes
 #
 # API for creating, accessing and updating Planner Notes. PlannerNote are used
 # to set reminders and notes to self about courses or general events.
@@ -87,7 +88,6 @@
 
 class PlannerNotesController < ApplicationController
   include Api::V1::PlannerNote
-  include PlannerHelper
 
   before_action :require_user
   before_action :require_planner_enabled
@@ -168,7 +168,7 @@ class PlannerNotesController < ApplicationController
     render json: {errors: e.message.as_json}, status: :bad_request
   end
 
-  # @API Show a PlannerNote
+  # @API Show a planner note
   #
   # Retrieve a planner note for the current user
   #
@@ -178,7 +178,7 @@ class PlannerNotesController < ApplicationController
     render json: planner_note_json(note, @current_user, session)
   end
 
-  # @API Update a PlannerNote
+  # @API Update a planner note
   #
   # Update a planner note for the current user
   # @argument title [Optional, String]

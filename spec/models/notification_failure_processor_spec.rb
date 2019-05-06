@@ -33,6 +33,7 @@ describe NotificationFailureProcessor do
 
   def mock_queue(bare_failure_summaries)
     queue = double
+    expect(queue).to receive(:before_request)
     expectation = expect(queue).to receive(:poll)
     bare_failure_summaries.each do |s|
       expectation = expectation.and_yield(mock_failure_summary(s))
@@ -50,12 +51,12 @@ describe NotificationFailureProcessor do
 
       failure_queue = mock_queue([
         {
-          global_id: messages[0].id,
+          global_id: messages[0].notification_service_id,
           error_context: nil,
           error: 'Error from mail system'
         },
         {
-          global_id: messages[1].id,
+          global_id: messages[1].notification_service_id,
           error_context: nil,
           error: 'Error from SNS system'
         }
@@ -98,7 +99,7 @@ describe NotificationFailureProcessor do
 
       failure_queue = mock_queue([
         {
-          global_id: @message.id,
+          global_id: @message.notification_service_id,
           error_context: bad_arn,
           error: 'EndpointDisabled: Endpoint is disabled'
         },
@@ -138,6 +139,33 @@ describe NotificationFailureProcessor do
       expect{ nfp.process }.not_to raise_error
     end
 
+    it "breaks out early when exceeding its timeline" do
+      nfp = NotificationFailureProcessor.new
+      allow(NotificationFailureProcessor).to receive(:config).and_return({
+                                                                           access_key: 'key',
+                                                                           secret_access_key: 'secret'
+                                                                         })
+      queue = double
+      before_request = nil
+      expect(queue).to receive(:before_request) do |&block|
+        before_request = block
+      end
+      reached = false
+      expect(queue).to receive(:poll) do
+        before_request.call
+        reached = true
+        Timecop.travel(10.minutes.from_now)
+        before_request.call
+        raise "not reached"
+      end
+      allow(nfp).to receive(:notification_failure_queue).and_return(queue)
+
+      Timecop.freeze do
+        expect { nfp.process }.to throw_symbol(:stop_polling)
+      end
+      expect(reached).to eq true
+    end
+
     context 'shards' do
       specs_require_sharding
 
@@ -146,7 +174,7 @@ describe NotificationFailureProcessor do
         message.save!
         failure_queue = mock_queue([
           {
-            global_id: message.global_id,
+            global_id: message.notification_service_id,
             error_context: nil,
             error: 'Error from mail system'
           }

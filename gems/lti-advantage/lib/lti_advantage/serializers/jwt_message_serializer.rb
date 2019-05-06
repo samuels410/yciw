@@ -19,10 +19,11 @@ module LtiAdvantage::Serializers
   class JwtMessageSerializer
     IMS_CLAIM_PREFIX = 'https://purl.imsglobal.org/spec/lti/claim/'.freeze
     DL_CLAIM_PREFIX = 'https://purl.imsglobal.org/spec/lti-dl/claim/'.freeze
+    NRPS_CLAIM_URL = 'https://purl.imsglobal.org/spec/lti-nrps/claim/namesroleservice'.freeze
+    AGS_CLAIM_URL = 'https://purl.imsglobal.org/spec/lti-ags/claim/endpoint'.freeze
 
     STANDARD_IMS_CLAIMS = %w(
       context
-      custom
       custom
       deployment_id
       launch_presentation
@@ -33,12 +34,16 @@ module LtiAdvantage::Serializers
       roles
       tool_platform
       version
+      lti11_legacy_user_id
     ).freeze
 
     DEEP_LINKING_CLAIMS = %w(
       deep_linking_settings
       content_items
     ).freeze
+
+    NAMES_AND_ROLES_SERVICE_CLAIM = 'names_and_roles_service'.freeze
+    ASSIGNMENT_AND_GRADE_SERVICE_CLAIM = 'assignment_and_grade_service'.freeze
 
     def initialize(object)
       @object = object
@@ -62,6 +67,10 @@ module LtiAdvantage::Serializers
           "#{IMS_CLAIM_PREFIX}#{key}"
         elsif DEEP_LINKING_CLAIMS.include?(key)
           "#{DL_CLAIM_PREFIX}#{key}"
+        elsif NAMES_AND_ROLES_SERVICE_CLAIM == key
+          NRPS_CLAIM_URL
+        elsif ASSIGNMENT_AND_GRADE_SERVICE_CLAIM == key
+          AGS_CLAIM_URL
         else
           key
         end

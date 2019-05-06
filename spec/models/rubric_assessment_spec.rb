@@ -255,6 +255,42 @@ describe RubricAssessment do
         })
         expect(LearningOutcomeResult.last.hidden).to be true
       end
+
+      it "does not update outcomes on a peer assessment" do
+        criterion_id = "criterion_#{@rubric.data[0][:id]}".to_sym
+        expect do
+          @association.assess({
+            :user => @student,
+            :assessor => @student,
+            :artifact => @assignment.find_or_create_submission(@student),
+            :assessment => {
+              :assessment_type => 'peer_review',
+              criterion_id => {
+                :points => "3"
+              }
+            }
+          })
+        end.to_not change { LearningOutcomeResult.count }
+      end
+
+      it "does not update outcomes on a provisional grade" do
+        criterion_id = "criterion_#{@rubric.data[0][:id]}".to_sym
+        expect do
+          submission = @assignment.find_or_create_submission(@student)
+          provisional_grade = submission.find_or_create_provisional_grade!(@teacher, grade: 3)
+          @association.assess({
+            :user => @student,
+            :assessor => @student,
+            :artifact => provisional_grade,
+            :assessment => {
+              :assessment_type => 'grading',
+              criterion_id => {
+                :points => "3"
+              }
+            }
+          })
+        end.to_not change { LearningOutcomeResult.count }
+      end
     end
 
     it "should not update scores if not used for grading" do
@@ -303,6 +339,44 @@ describe RubricAssessment do
       expect(assessment.artifact.user).to eql(@student)
       expect(assessment.artifact.grader).to eql(nil)
       expect(assessment.artifact.score).to eql(nil)
+    end
+
+    describe "when saving comments is requested" do
+      it "saves comments normally" do
+        criterion_id = "criterion_#{@rubric.data[0][:id]}".to_sym
+        @association.assess({
+          :user => @student,
+          :assessor => @student,
+          :artifact => @assignment.find_or_create_submission(@student),
+          :assessment => {
+            :assessment_type => 'grading',
+            criterion_id => {
+              :points => "3",
+              :comments => "Some comment",
+              :save_comment => '1'
+            }
+          }
+        })
+        expect(@association.summary_data[:saved_comments]["crit1"]).to eq(["Some comment"])
+      end
+
+      it "does not save comments for peer assessments" do
+        criterion_id = "criterion_#{@rubric.data[0][:id]}".to_sym
+        @association.assess({
+          :user => @student,
+          :assessor => @student,
+          :artifact => @assignment.find_or_create_submission(@student),
+          :assessment => {
+            :assessment_type => 'peer_review',
+            criterion_id => {
+              :points => "3",
+              :comments => "Some obscene comment",
+              :save_comment => '1'
+            }
+          }
+        })
+        expect(@association.summary_data).to be_nil
+      end
     end
 
     describe "for assignment requiring anonymous peer reviews" do

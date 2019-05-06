@@ -40,7 +40,7 @@ class ContextExternalTool < ActiveRecord::Base
   attr_accessor :config_type, :config_url, :config_xml
 
   before_save :infer_defaults, :validate_vendor_help_link
-  after_save :touch_context, :check_global_navigation_cache
+  after_save :touch_context, :check_global_navigation_cache, :clear_tool_domain_cache
   validate :check_for_xml_error
 
   workflow do
@@ -88,7 +88,19 @@ class ContextExternalTool < ActiveRecord::Base
       settings['content_migration'].key?('import_start_url')
   end
 
+  def lti_1_3_enabled?
+    use_1_3? && context.root_account.feature_enabled?(:lti_1_3)
+  end
+
   def extension_setting(type, property = nil)
+    val = calclulate_extension_setting(type, property)
+    if val && property == :icon_url
+      val = nil if (URI.parse(val) rescue nil).nil? # make sure it's a valid url
+    end
+    val
+  end
+
+  def calclulate_extension_setting(type, property = nil)
     return settings[property] unless type
     type = type.to_sym
     return settings[type] unless property && settings[type]
@@ -288,6 +300,14 @@ class ContextExternalTool < ActiveRecord::Base
     @config_errors << [:config_url, "Invalid URL"]
   rescue ActiveRecord::RecordInvalid => e
     @config_errors += Array(e.record.errors)
+  end
+
+  def use_1_3?
+    settings.fetch(:use_1_3, settings['use_1_3'])
+  end
+
+  def use_1_3=(bool)
+    settings[:use_1_3] = bool
   end
 
   def custom_fields_string=(str)
@@ -741,6 +761,12 @@ class ContextExternalTool < ActiveRecord::Base
       %w{members admins}.each do |visibility|
         Rails.cache.delete("external_tools/global_navigation/#{self.context.asset_string}/#{visibility}")
       end
+    end
+  end
+
+  def clear_tool_domain_cache
+    if self.saved_change_to_domain? || self.saved_change_to_url?
+      self.context.clear_tool_domain_cache
     end
   end
 

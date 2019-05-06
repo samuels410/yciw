@@ -409,8 +409,18 @@ class CoursesController < ApplicationController
   #     'current_period_unposted_final_grade' (see Enrollment documentation for
   #     more information on these fields). In addition, when this argument is
   #     passed, the course will have a 'has_grading_periods' attribute
-  #     on it. This argument is ignored if the course is configured to hide final
-  #     grades or if the total_scores argument is not included.
+  #     on it. This argument is ignored if the total_scores argument is not
+  #     included. If the course is configured to hide final grades, the
+  #     following fields are not returned:
+  #     'totals_for_all_grading_periods_option',
+  #     'current_period_computed_current_score',
+  #     'current_period_computed_final_score',
+  #     'current_period_computed_current_grade',
+  #     'current_period_computed_final_grade',
+  #     'current_period_unposted_current_score',
+  #     'current_period_unposted_final_score',
+  #     'current_period_unposted_current_grade', and
+  #     'current_period_unposted_final_grade'
   #   - "term": Optional information to include with each Course. When
   #     term is given, the information for the enrollment term for each course
   #     is returned.
@@ -853,8 +863,7 @@ class CoursesController < ApplicationController
   #   'StudentEnrollment', 'TeacherEnrollment', 'TaEnrollment', 'ObserverEnrollment',
   #   or 'DesignerEnrollment'.
   #
-  # @argument include[] [String, "email"|"enrollments"|"locked"|"avatar_url"|"test_student"|"bio"|"custom_links"|"current_grading_period_scores"]
-  #   - "email": Optional user email.
+  # @argument include[] [String, "enrollments"|"locked"|"avatar_url"|"test_student"|"bio"|"custom_links"|"current_grading_period_scores"]
   #   - "enrollments":
   #   Optionally include with each Course the user's current and invited
   #   enrollments. If the user is enrolled as a student, and the account has
@@ -927,7 +936,7 @@ class CoursesController < ApplicationController
         end
 
         users = Api.paginate(users, self, api_v1_course_users_url)
-        includes = Array(params[:include]).concat(['sis_user_id'])
+        includes = Array(params[:include]).concat(['sis_user_id', 'email'])
 
         # user_json_preloads loads both active/accepted and deleted
         # group_memberships when passed "group_memberships: true." In a
@@ -1077,17 +1086,16 @@ class CoursesController < ApplicationController
   def todo_items
     get_context
     if authorized_action(@context, @current_user, :read)
-      bookmark = BookmarkedCollection::SimpleBookmarker.new(Assignment, :due_at, :id)
+      bookmark = Plannable::Bookmarker.new(Assignment, false, [:due_at, :created_at], :id)
 
       grading_scope = @current_user.assignments_needing_grading(:contexts => [@context], scope_only: true).
-        reorder(:due_at, :id)
+        reorder(:due_at, :id).preload(:external_tool_tag, :rubric_association, :rubric, :discussion_topic, :quiz).eager_load(:duplicate_of)
       submitting_scope = @current_user.
         assignments_needing_submitting(
           :contexts => [@context],
           include_ungraded: true,
-          limit: ToDoListPresenter::ASSIGNMENT_LIMIT,
           scope_only: true).
-        reorder(:due_at, :id)
+        reorder(:due_at, :id).preload(:external_tool_tag, :rubric_association, :rubric, :discussion_topic, :quiz).eager_load(:duplicate_of)
 
       grading_collection = BookmarkedCollection.wrap(bookmark, grading_scope)
       grading_collection = BookmarkedCollection.transform(grading_collection) do |a|
@@ -1104,7 +1112,7 @@ class CoursesController < ApplicationController
       ]
 
       if Array(params[:include]).include? 'ungraded_quizzes'
-        quizzes_bookmark = BookmarkedCollection::SimpleBookmarker.new(Quizzes::Quiz, :due_at, :id)
+        quizzes_bookmark = Plannable::Bookmarker.new(Quizzes::Quiz, false, [:due_at, :created_at], :id)
         quizzes_scope = @current_user.
           ungraded_quizzes(
             :contexts => [@context],
@@ -1206,14 +1214,16 @@ class CoursesController < ApplicationController
   #     "hide_distribution_graphs": false,
   #     "lock_all_announcements": true
   #   }
+  def api_settings
+    get_context
+    if authorized_action @context, @current_user, :read
+      render :json => course_settings_json(@context)
+    end
+  end
+
   def settings
     get_context
     if authorized_action(@context, @current_user, :read_as_admin)
-      if api_request?
-        render :json => course_settings_json(@context)
-        return
-      end
-
       load_all_contexts(:context => @context)
 
       @all_roles = Role.custom_roles_and_counts_for_course(@context, @current_user, true)
@@ -1245,6 +1255,7 @@ class CoursesController < ApplicationController
         },
         LTI_LAUNCH_URL: course_tool_proxy_registration_path(@context),
         MEMBERSHIP_SERVICE_FEATURE_FLAG_ENABLED: @context.root_account.feature_enabled?(:membership_service_for_lti_tools),
+        LTI_13_TOOLS_FEATURE_FLAG_ENABLED: @context.root_account.feature_enabled?(:lti_1_3),
         CONTEXT_BASE_URL: "/courses/#{@context.id}",
         PUBLISHING_ENABLED: @publishing_enabled,
         COURSE_IMAGES_ENABLED: @context.feature_enabled?(:course_card_images)
@@ -1252,19 +1263,17 @@ class CoursesController < ApplicationController
 
       set_tutorial_js_env
 
-      if @context.root_account.feature_enabled?(:master_courses)
-        master_template = @context.master_course_templates.for_full_course.first
-        restrictions_by_object_type = master_template&.default_restrictions_by_type_for_api || {}
-        message =!MasterCourses::MasterTemplate.is_master_course?(@context) && why_cant_i_enable_master_course(@context)
-        message ||= ''
-        js_env({
-          IS_MASTER_COURSE: MasterCourses::MasterTemplate.is_master_course?(@context),
-          DISABLED_BLUEPRINT_MESSAGE: message,
-          BLUEPRINT_RESTRICTIONS: master_template&.default_restrictions || { :content => true },
-          USE_BLUEPRINT_RESTRICTIONS_BY_OBJECT_TYPE: master_template&.use_default_restrictions_by_type || false,
-          BLUEPRINT_RESTRICTIONS_BY_OBJECT_TYPE: restrictions_by_object_type
-        })
-      end
+      master_template = @context.master_course_templates.for_full_course.first
+      restrictions_by_object_type = master_template&.default_restrictions_by_type_for_api || {}
+      message = !MasterCourses::MasterTemplate.is_master_course?(@context) && why_cant_i_enable_master_course(@context)
+      message ||= ''
+      js_env({
+        IS_MASTER_COURSE: MasterCourses::MasterTemplate.is_master_course?(@context),
+        DISABLED_BLUEPRINT_MESSAGE: message,
+        BLUEPRINT_RESTRICTIONS: master_template&.default_restrictions || { :content => true },
+        USE_BLUEPRINT_RESTRICTIONS_BY_OBJECT_TYPE: master_template&.use_default_restrictions_by_type || false,
+        BLUEPRINT_RESTRICTIONS_BY_OBJECT_TYPE: restrictions_by_object_type
+      })
 
       @course_settings_sub_navigation_tools = ContextExternalTool.all_tools_for(@context,
         :type => :course_settings_sub_navigation,
@@ -1341,11 +1350,13 @@ class CoursesController < ApplicationController
     @course.send_later_if_production_enqueue_args(:touch_content_if_public_visibility_changed,
       { :priority => Delayed::LOW_PRIORITY }, changes)
 
-    if @course.save
-      Auditors::Course.record_updated(@course, @current_user, changes, source: :api)
-      render :json => course_settings_json(@course)
-    else
-      render :json => @course.errors, :status => :bad_request
+    DueDateCacher.with_executing_user(@current_user) do
+      if @course.save
+        Auditors::Course.record_updated(@course, @current_user, changes, source: :api)
+        render :json => course_settings_json(@course)
+      else
+        render :json => @course.errors, :status => :bad_request
+      end
     end
   end
 
@@ -1396,7 +1407,9 @@ class CoursesController < ApplicationController
   def accept_enrollment(enrollment)
     if @current_user && enrollment.user == @current_user
       if enrollment.workflow_state == 'invited'
-        enrollment.accept!
+        DueDateCacher.with_executing_user(@current_user) do
+          enrollment.accept!
+        end
         @pending_enrollment = nil
         flash[:notice] = t('notices.invitation_accepted', 'Invitation accepted!  Welcome to %{course}!', :course => @context.name)
       end
@@ -1647,6 +1660,11 @@ class CoursesController < ApplicationController
   #   - "observed_users": include observed users in the enrollments
   #   - "course_image": Optional course image data for when there is a course image
   #     and the course image feature flag has been enabled
+  #
+  # @argument teacher_limit [Integer]
+  #   The maximum number of teacher enrollments to show.
+  #   If the course contains more teachers than this, instead of giving the teacher
+  #   enrollments, the count of teachers will be given under a _teacher_count_ key.
   #
   # @returns Course
   def show
@@ -1907,7 +1925,7 @@ class CoursesController < ApplicationController
     get_context
     @enrollment = @context.enrollments.find(params[:id])
     if @enrollment.can_be_deleted_by(@current_user, @context, session)
-      if (!@enrollment.defined_by_sis? || @context.grants_right?(@current_user, session, :manage_account_settings)) && @enrollment.destroy
+      if (!@enrollment.defined_by_sis? || @context.grants_any_right?(@current_user, session, :manage_account_settings, :manage_sis)) && @enrollment.destroy
         render :json => @enrollment
       else
         render :json => @enrollment, :status => :bad_request
@@ -1948,6 +1966,7 @@ class CoursesController < ApplicationController
       limit_privileges = value_to_boolean(enrollment_options[:limit_privileges_to_course_section])
       enrollment_options[:limit_privileges_to_course_section] = limit_privileges
       enrollment_options[:role] = custom_role if custom_role
+      enrollment_options[:updating_user] = @current_user
 
       list =
         if params[:user_tokens]
@@ -2006,7 +2025,7 @@ class CoursesController < ApplicationController
     @enrollment = @context.enrollments.find(params[:id])
     can_move = [StudentEnrollment, ObserverEnrollment].include?(@enrollment.class) && @context.grants_right?(@current_user, session, :manage_students)
     can_move ||= @context.grants_right?(@current_user, session, :manage_admin_users)
-    can_move &&= @context.grants_right?(@current_user, session, :manage_account_settings) if @enrollment.defined_by_sis?
+    can_move &&= @context.grants_any_right?(@current_user, session, :manage_account_settings, :manage_sis) if @enrollment.defined_by_sis?
     if can_move
       respond_to do |format|
         # ensure user_id,section_id,type,associated_user_id is unique (this
@@ -2436,7 +2455,6 @@ class CoursesController < ApplicationController
       end
       blueprint_keys = [:blueprint_restrictions, :use_blueprint_restrictions_by_object_type, :blueprint_restrictions_by_object_type]
       if blueprint_keys.any?{|k| params[:course].has_key?(k)} && MasterCourses::MasterTemplate.is_master_course?(@course)
-        return unless authorized_action(@course.account, @current_user, :manage_master_courses)
         template = MasterCourses::MasterTemplate.full_template_for(@course)
 
         if params[:course].has_key?(:use_blueprint_restrictions_by_object_type)
@@ -2457,8 +2475,9 @@ class CoursesController < ApplicationController
           template.default_restrictions_by_type = parsed_restrictions_by_type
         end
 
-        if template.changed? && !template.save
-          @course.errors.add(:master_course_restrictions, t("Invalid restrictions"))
+        if template.changed?
+          return unless authorized_action(@course.account, @current_user, :manage_master_courses)
+          @course.errors.add(:master_course_restrictions, t("Invalid restrictions")) unless template.save
         end
       end
 
@@ -2935,7 +2954,7 @@ class CoursesController < ApplicationController
     enrollments_by_course = Api.paginate(enrollments_by_course, self, paginate_url) if api_request?
     courses = enrollments_by_course.map(&:first).map(&:course)
     preloads = %i/account root_account/
-    preloads << :teachers if includes.include?('teachers')
+    preload_teachers(courses) if includes.include?('teachers')
     preloads << :grading_standard if includes.include?('total_scores')
     preloads << :account if includes.include?('subaccount') || includes.include?('account')
     if includes.include?('current_grading_period_scores')

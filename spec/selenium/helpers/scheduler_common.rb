@@ -135,7 +135,7 @@ module SchedulerCommon
   def open_select_courses_modal(course_name)
     f('#FindAppointmentButton').click
     click_option('.ic-Input', course_name)
-    f('.ReactModal__Footer-Actions .btn').click
+    f('[role="dialog"][aria-label="Select Course"] button[type="submit"]').click
   end
 
   # This method closes the modal only when it is already opened. If not, it will open the modal
@@ -151,7 +151,9 @@ module SchedulerCommon
   def click_appointment_link
     f('.view_calendar_link').click
     fj('.agenda-wrapper.active:visible')
-    wait_for_ajaximations
+    # wait for loading spinner, then wait for it to not be displayed
+    wait_for(method: nil, timeout: 3) { f('#refresh_calendar_link').displayed? }
+    wait_for(method: nil, timeout: 15) { !f('#refresh_calendar_link').displayed? }
   end
 
   def click_al_option(option_selector, offset=0)

@@ -50,4 +50,67 @@ describe Lti::AppUtil do
 
   end
 
+  describe ".display_template" do
+    it "renders the default template if the type is invalid" do
+      expect(Lti::AppUtil.display_template("blah_blah_blah")).to eq(Lti::AppUtil::TOOL_DISPLAY_TEMPLATES["default"])
+    end
+
+    it "renders the specified display_type if the type is valid" do
+      acceptable_types = %w[borderless full_width in_context default full_width_in_context]
+
+      acceptable_types.each do |type|
+        expect(Lti::AppUtil.display_template(type)).to eq(Lti::AppUtil::TOOL_DISPLAY_TEMPLATES[type])
+      end
+    end
+
+    it "renders the display_override if provided" do
+      expect(Lti::AppUtil.display_template("default", display_override: "full_width")).to eq(Lti::AppUtil::TOOL_DISPLAY_TEMPLATES["full_width"])
+    end
+  end
+
+  describe '.allowed?' do
+    it 'allows candidate if white- and blacklists are nil' do
+      expect(Lti::AppUtil).to be_allowed('foo', nil, nil)
+    end
+
+    it 'allows candidate if white- and blacklists are empty' do
+      expect(Lti::AppUtil).to be_allowed('foo', [], [])
+    end
+
+    it 'allows candidate if present in whitelist and not in blacklist' do
+      expect(Lti::AppUtil).to be_allowed('foo', ['foo'], ['bar'])
+    end
+
+    it 'disallows candidate if present in blacklist and not in whitelist' do
+      expect(Lti::AppUtil).to_not be_allowed('foo', ['bar'], ['foo'])
+    end
+
+    it 'disallows candidate if present in white- and blacklist' do
+      expect(Lti::AppUtil).to_not be_allowed('foo', ['foo'], ['foo'])
+    end
+
+    it 'disallows candidate if whitelist empty and blacklist wildcarded' do
+      expect(Lti::AppUtil).to_not be_allowed('foo', [], ['*'])
+    end
+
+    it 'disallows candidate if whitelist empty and is present blacklist' do
+      expect(Lti::AppUtil).to_not be_allowed('foo', [], ['foo'])
+    end
+
+    it 'disallows candidate if absent from both white- and blacklists' do
+      expect(Lti::AppUtil).to_not be_allowed('foo', ['bar'], ['baz'])
+    end
+
+    it 'disallows candidate if absent from whitelist and blacklist is empty' do
+      expect(Lti::AppUtil).to_not be_allowed('foo', ['bar'], [])
+    end
+
+    it 'allows candidate if present in multi-valued whitelist and not present in multi-valued blacklist' do
+      expect(Lti::AppUtil).to be_allowed('foo', ['bar', 'foo', 'baz'], ['bap','bam','ban'])
+    end
+
+    it 'disallows candidate if present in multi-valued blacklist and not present in multi-valued whitelist' do
+      expect(Lti::AppUtil).to_not be_allowed('foo', ['bap','bam','ban'], ['bar', 'foo', 'baz'])
+    end
+  end
 end

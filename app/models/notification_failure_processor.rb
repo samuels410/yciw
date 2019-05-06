@@ -26,7 +26,11 @@ class NotificationFailureProcessor
   POLL_PARAMS = %i(idle_timeout wait_time_seconds visibility_timeout).freeze
   DEFAULT_CONFIG = {
     notification_failure_queue_name: 'notification-service-failures',
-    idle_timeout: 10
+    # stop the loop if no message received for 10s
+    idle_timeout: 10,
+    # stop the loop (and wait for it to process the job again) if we've been running
+    # for this long
+    iteration_high_water: 300
   }.freeze
 
   def self.config
@@ -47,6 +51,11 @@ class NotificationFailureProcessor
 
   def process
     return nil unless self.class.enabled?
+    start_time = Time.now
+    notification_failure_queue.before_request do |_stats|
+      throw :stop_polling if Time.now - start_time > config[:iteration_high_water]
+    end
+
     notification_failure_queue.poll(config.slice(*POLL_PARAMS)) do |failure_summary_json|
       summary = parse_failure_summary(failure_summary_json)
       process_failure_summary(summary) if summary
@@ -67,12 +76,14 @@ class NotificationFailureProcessor
     is_disabled_endpoint = error_message.include? "EndpointDisabled"
     error_context = summary['error_context']
 
-    if Message.where(id: global_id).exists?
-      message = Message.find(global_id)
-
+    message_id, timestamp = Message.parse_notification_service_id(global_id)
+    scope = Message.where(:id => message_id)
+    scope = scope.at_timestamp(timestamp) if timestamp
+    message = scope.take
+    if message
       message.set_transmission_error
       message.transmission_errors = error_message if error_message
-      message.save!
+      message.save_using_update_all
 
       # clean up disabled push endpoints
       if is_disabled_endpoint
@@ -86,6 +97,7 @@ class NotificationFailureProcessor
     return @notification_failure_queue if defined?(@notification_failure_queue)
     conf = Canvas::AWS.validate_v2_config(config, 'notification_failures.yml').dup
     conf.except!(*POLL_PARAMS)
+    conf.delete(:iteration_high_water)
     conf.delete(:initial_timeout) # old, no longer supported poll param
     queue_name = conf.delete(:notification_failure_queue_name)
     sqs = Aws::SQS::Client.new(conf)

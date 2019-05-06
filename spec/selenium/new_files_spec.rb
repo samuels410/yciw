@@ -170,6 +170,7 @@ describe "better_file_browsing" do
     include_context "public course as a logged out user"
 
     it "should display course files", priority: "1", test_id: 270032 do
+      public_course.attachments.create!(:filename => "somefile.doc", :uploaded_data => StringIO.new('test'))
       get "/courses/#{public_course.id}/files"
       expect(f('.ef-main')).to be_displayed
     end
@@ -333,8 +334,8 @@ describe "better_file_browsing" do
         set_value f('.UsageRightsSelectBox__creativeCommons'), 'cc_by'
       end
       set_value f('#copyrightHolder'), 'Test User'
-      f('.ReactModal__Footer-Actions .btn-primary').click
-      expect(f("body")).not_to contain_css('.ReactModal__Content')
+      f('.UsageRightsDialog__Footer-Actions button[type="submit"]').click
+      expect(f("body")).not_to contain_css('.UsageRightsDialog__Content')
     end
 
     def verify_usage_rights_ui_updates(iconClass = 'icon-files-creative-commons')

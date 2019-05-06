@@ -240,30 +240,32 @@ describe AssignmentsController do
       before(:each) do
         @course.enable_feature!(:moderated_grading)
 
-        @editable_assignment = @course.assignments.create!(
+        @assignment = @course.assignments.create!(
           moderated_grading: true,
           grader_count: 2,
           final_grader: @teacher
         )
 
-        user_session(@teacher)
         ta_in_course(active_all: true)
-
-        @noneditable_assignment = @course.assignments.create!(
-          moderated_grading: true,
-          grader_count: 2,
-          final_grader: @ta
-        )
       end
 
-      it "sets the 'update' attribute for an editable assignment to true" do
+      it "sets the 'update' attribute to true when user is the final grader" do
+        user_session(@teacher)
         get 'index', params: {course_id: @course.id}
-        expect(assignment_permissions[@editable_assignment.id][:update]).to eq(true)
+        expect(assignment_permissions[@assignment.id][:update]).to eq(true)
       end
 
-      it "sets the 'update' attribute for a non-editable assignment to false" do
+      it "sets the 'update' attribute to true when user has the Select Final Grade permission" do
+        user_session(@ta)
         get 'index', params: {course_id: @course.id}
-        expect(assignment_permissions[@noneditable_assignment.id][:update]).to eq(false)
+        expect(assignment_permissions[@assignment.id][:update]).to eq(true)
+      end
+
+      it "sets the 'update' attribute to false when user does not have the Select Final Grade permission" do
+        @course.account.role_overrides.create!(permission: :select_final_grade, enabled: false, role: ta_role)
+        user_session(@ta)
+        get 'index', params: {course_id: @course.id}
+        expect(assignment_permissions[@assignment.id][:update]).to eq(false)
       end
     end
   end
@@ -528,6 +530,14 @@ describe AssignmentsController do
       allow_any_instance_of(Course).to receive(:vericite_pledge).and_return(pledge)
       get 'show', params: {:course_id => @course.id, :id => a.id}
       expect(assigns[:similarity_pledge]).to eq pledge
+    end
+
+    it 'uses the closest pledge when vericite is enabled but no pledge is set' do
+      user_session(@student)
+      a = @course.assignments.create(:title => "some assignment", vericite_enabled: true)
+      allow(@course).to receive(:vericite_pledge).and_return("")
+      get 'show', params: {:course_id => @course.id, :id => a.id}
+      expect(assigns[:similarity_pledge]).to eq "This assignment submission is my own, original work"
     end
 
     it 'uses the turnitin pledge if turnitin is enabled' do

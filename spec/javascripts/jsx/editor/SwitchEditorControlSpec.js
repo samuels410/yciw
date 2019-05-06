@@ -18,7 +18,7 @@
 
 import React from 'react'
 import ReactDOM from 'react-dom'
-import TestUtils from 'react-addons-test-utils'
+import TestUtils from 'react-dom/test-utils'
 import SwitchEditorControl from 'jsx/editor/SwitchEditorControl'
 import RichContentEditor from 'jsx/shared/rce/RichContentEditor'
 
@@ -37,9 +37,9 @@ test('changes text on each click', () => {
   const element = React.createElement(SwitchEditorControl, {textarea})
   const component = TestUtils.renderIntoDocument(element)
   const link = TestUtils.findRenderedDOMComponentWithTag(component, 'a')
-  equal(link.className, 'switch-views__link__html')
+  equal(link.className, 'switch-views__link switch-views__link__html')
   TestUtils.Simulate.click(ReactDOM.findDOMNode(link))
-  equal(link.className, 'switch-views__link__rce')
+  equal(link.className, 'switch-views__link switch-views__link__rce')
 })
 
 test('passes textarea through to editor for toggling', () => {

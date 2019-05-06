@@ -22,7 +22,6 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
   self.table_name = 'quiz_submissions'
 
   include Workflow
-  include PlannerHelper
 
   attr_readonly :quiz_id, :user_id
   attr_accessor :grader_id
@@ -73,7 +72,7 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
   def update_planner_override
     return unless self.saved_change_to_workflow_state?
     return unless self.workflow_state == "complete"
-    complete_planner_override_for_quiz_submission(self)
+    PlannerHelper.complete_planner_override_for_quiz_submission(self)
   end
 
   serialize :quiz_data
@@ -640,6 +639,7 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
 
   def update_scores(params)
     original_score = self.score
+    original_workflow_state = self.workflow_state
     params = (params || {}).with_indifferent_access
     self.manually_scored = false
     self.grader_id = params[:grader_id]
@@ -727,7 +727,7 @@ class Quizzes::QuizSubmission < ActiveRecord::Base
 
     self.reload
     grader = Quizzes::SubmissionGrader.new(self)
-    if grader.outcomes_require_update(self, original_score)
+    if grader.outcomes_require_update(self, original_score, original_workflow_state)
       grader.track_outcomes(version.model.attempt)
     end
     true

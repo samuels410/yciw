@@ -43,6 +43,7 @@ define [
   'jsx/assignments/AssignmentConfigurationTools'
   'jsx/assignments/ModeratedGradingFormFieldGroup'
   'jsx/assignments/AssignmentExternalTools'
+  '../../../jsx/shared/helpers/returnToHelper'
   'jqueryui/dialog'
   'jquery.toJSON'
   '../../jquery.rails_flash_notifications'
@@ -52,7 +53,12 @@ define [
   VeriCiteSettings, TurnitinSettingsDialog, preventDefault, MissingDateDialog,
   AssignmentGroupSelector, GroupCategorySelector, toggleAccessibly,
   RCEKeyboardShortcuts, ConditionalRelease, deparam, SisValidationHelper,
-  SimilarityDetectionTools, ModeratedGradingFormFieldGroup, AssignmentExternalTools) ->
+  SimilarityDetectionTools, ModeratedGradingFormFieldGroup,
+  AssignmentExternalTools, returnToHelper) ->
+
+  ###
+  xsslint safeString.identifier srOnly
+  ###
 
   RichContentEditor.preloadRemoteModule()
 
@@ -188,8 +194,13 @@ define [
 
     checkboxAccessibleAdvisory: (box) ->
       label = box.parent()
-      advisory = label.find('span.screenreader-only.accessible_label')
-      advisory = $('<span class="screenreader-only accessible_label"></span>').appendTo(label) unless advisory.length
+      srOnly = if box == @$peerReviewsBox || box == @$groupCategoryBox || box == @$anonymousGradingBox
+        ""
+      else
+        "screenreader-only"
+
+      advisory = label.find('div.accessible_label')
+      advisory = $("<div class='#{srOnly} accessible_label' style='font-size: 0.9em'></div>").appendTo(label) unless advisory.length
       advisory
 
     setImplicitCheckboxValue: (box, value) ->
@@ -232,7 +243,7 @@ define [
       else if @assignment.anonymousGrading() || @assignment.gradersAnonymousToGraders()
         @disableCheckbox(@$groupCategoryBox, I18n.t('Group assignments cannot be enabled for anonymously graded assignments'))
       else if !@assignment.moderatedGrading()
-        @enableCheckbox(@$groupCategoryBox)
+        @enableCheckbox(@$groupCategoryBox) if @model.canGroup()
 
     togglePeerReviewsAndGroupCategoryEnabled: =>
       if @assignment.moderatedGrading()
@@ -240,7 +251,7 @@ define [
         @disableCheckbox(@$groupCategoryBox, I18n.t("Group assignments cannot be enabled for moderated assignments"))
       else
         @enableCheckbox(@$peerReviewsBox)
-        @enableCheckbox(@$groupCategoryBox)
+        @enableCheckbox(@$groupCategoryBox) if @model.canGroup()
       @renderModeratedGradingFormFieldGroup()
 
     setDefaultsIfNew: =>
@@ -382,42 +393,43 @@ define [
         e.preventDefault()
         RichContentEditor.callOnRCE(@$description, 'toggle')
         # hide the clicked link, and show the other toggle link.
-        $(e.currentTarget).siblings('.rte_switch_views_link').andSelf().toggle()
+        $(e.currentTarget).siblings('.rte_switch_views_link').andSelf().toggle().focus()
 
     addTinyMCEKeyboardShortcuts: =>
       keyboardShortcutsView = new RCEKeyboardShortcuts()
       keyboardShortcutsView.render().$el.insertBefore($(".rte_switch_views_link:first"))
 
     # -- Data for Submitting --
-    _dueAtHasChanged: (dueAt) =>
-      originalDueAt = new Date(@model.dueAt())
-      newDueAt = new Date(dueAt)
+    _datesDifferIgnoringSeconds: (newDate, originalDate) =>
+      newWithoutSeconds = new Date(newDate)
+      originalWithoutSeconds = new Date(originalDate)
 
       # Since a user can't edit the seconds field in the UI and the form also
       # thinks that the seconds is always set to 00, we compare by everything
       # except seconds.
-      originalDueAt.setSeconds(0)
-      newDueAt.setSeconds(0)
-      originalDueAt.getTime() != newDueAt.getTime()
+      originalWithoutSeconds.setSeconds(0)
+      newWithoutSeconds.setSeconds(0)
+      originalWithoutSeconds.getTime() != newWithoutSeconds.getTime()
 
-    _getDueAt: (defaultDates) ->
-      # The UI doesn't allow settings seconds to 59, but when a new assignment
-      # is created, the seconds are set to 59. Thus, to avoid issues where
-      # the date is edited after creation, we set seconds to 59 behind the
-      # scenes here. However, to ensure that we don't fudge with specifically
-      # set seconds value through the assignments api, if the date is not
-      # changed in the UI form, we keep the previous seconds value.
-      date = defaultDates?.get('due_at')
-      return null unless date
+    _adjustDateValue: (newDate, originalDate) ->
+      # If the minutes value of the due date is 59, set the seconds to 59 so
+      # the assignment ends up due one second before the following hour.
+      # Otherwise, set it to 0 seconds.
+      #
+      # If the user has not changed the due date, don't touch the seconds value
+      # (so that we don't clobber a due date set by the API).
+      # debugger
+      return null unless newDate
 
-      due_at = new Date(date)
+      adjustedDate = new Date(newDate)
+      originalDate = new Date(originalDate)
 
-      if @_dueAtHasChanged(date)
-        due_at.setSeconds(59)
+      if @_datesDifferIgnoringSeconds(adjustedDate, originalDate)
+        adjustedDate.setSeconds(if adjustedDate.getMinutes() == 59 then 59 else 0)
       else
-        due_at.setSeconds(new Date(@model.dueAt()).getSeconds())
+        adjustedDate.setSeconds(originalDate.getSeconds())
 
-      due_at.toISOString()
+      adjustedDate.toISOString()
 
     getFormData: =>
       data = super
@@ -429,10 +441,17 @@ define [
       # should update the date fields.. pretty hacky.
       unless data.post_to_sis
         data.post_to_sis = false
+
       defaultDates = @dueDateOverrideView.getDefaultDueDate()
-      data.lock_at = defaultDates?.get('lock_at') or null
-      data.unlock_at = defaultDates?.get('unlock_at') or null
-      data.due_at = @_getDueAt(defaultDates)
+      if defaultDates?
+        data.due_at = @_adjustDateValue(defaultDates.get('due_at'), @model.dueAt())
+        data.lock_at = @_adjustDateValue(defaultDates.get('lock_at'), @model.lockAt())
+        data.unlock_at = @_adjustDateValue(defaultDates.get('unlock_at'), @model.unlockAt())
+      else
+        data.due_at = null
+        data.lock_at = null
+        data.unlock_at = null
+
       data.only_visible_to_overrides = !@dueDateOverrideView.overridesContainDefault()
       data.assignment_overrides = @dueDateOverrideView.getOverrides()
       data.published = true if @shouldPublish
@@ -652,7 +671,7 @@ define [
       window.location = @locationAfterSave(deparam())
 
     locationAfterSave: (params) ->
-      return params['return_to'] if params['return_to']?
+      return params['return_to'] if returnToHelper.isValid(params['return_to'])
       @model.get 'html_url'
 
     redirectAfterCancel: ->
@@ -660,7 +679,7 @@ define [
       window.location = location if location
 
     locationAfterCancel: (params) ->
-      return params['return_to'] if params['return_to']?
+      return params['return_to'] if returnToHelper.isValid(params['return_to'])
       return ENV.CANCEL_TO if ENV.CANCEL_TO?
       null
 

@@ -324,7 +324,6 @@ describe ContentMigration do
       q1 = @copy_from.quizzes.create!(:title => 'quiz1')
       bank = different_course.assessment_question_banks.create!(:title => 'bank')
       bank2 = @copy_from.account.assessment_question_banks.create!(:title => 'bank2')
-      bank2.assessment_question_bank_users.create!(:user => @user)
       bank3 = different_account.assessment_question_banks.create!(:title => 'bank3')
       group = q1.quiz_groups.create!(:name => "group", :pick_count => 3, :question_points => 5.0)
       group.assessment_question_bank = bank
@@ -1106,6 +1105,19 @@ equation: <img class="equation_image" title="Log_216" src="/equation_images/Log_
       q2 = @copy_to.assessment_questions.first
       expect(q2.question_data['correct_comments_html']).to eq text
       expect(q2.question_data['answers'].first['comments_html']).to eq text
+    end
+
+    it "should copy neutral feedback for file upload questions" do
+      q = @copy_from.quizzes.create!(:title => "q")
+      data = {"question_type" => "file_upload_question", 'name' => 'test question', "neutral_comments_html" => "<i>comment</i>", "neutral_comments" => "comment"}
+      qq = q.quiz_questions.create!(:question_data => data)
+
+      run_course_copy
+
+      q2 = @copy_to.quizzes.first
+      qq2 = q2.quiz_questions.first
+      expect(qq2.question_data['neutral_comments_html']).to eq data['neutral_comments_html']
+      expect(qq2.question_data['neutral_comments']).to eq data['neutral_comments']
     end
 
     describe "assignment overrides" do

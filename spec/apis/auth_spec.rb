@@ -24,6 +24,7 @@ describe "API Authentication", type: :request do
 
   before :once do
     @key = DeveloperKey.create!
+    enable_developer_key_account_binding!(@key)
   end
 
   before :each do
@@ -142,7 +143,7 @@ describe "API Authentication", type: :request do
           expect(response.header[content_type_key]).to eq 'application/json; charset=utf-8'
           json = JSON.parse(response.body)
           token = json['access_token']
-          expect(json['user']).to eq({ 'id' => @user.id, 'global_id' => @user.global_id.to_s, 'name' => 'test1@example.com' })
+          expect(json['user']).to eq({ 'id' => @user.id, 'global_id' => @user.global_id.to_s, 'name' => 'test1@example.com', 'effective_locale' => 'en' })
           reset!
 
           # try an api call
@@ -356,7 +357,7 @@ describe "API Authentication", type: :request do
             expect(response.header[content_type_key]).to eq 'application/json; charset=utf-8'
             json = JSON.parse(response.body)
             @token = json['access_token']
-            expect(json['user']).to eq({ 'id' => @user.id, 'global_id' => @user.global_id.to_s, 'name' => 'test1@example.com' })
+            expect(json['user']).to eq({ 'id' => @user.id, 'global_id' => @user.global_id.to_s, 'name' => 'test1@example.com', 'effective_locale' => 'en' })
             reset!
           end
 
@@ -709,6 +710,7 @@ describe "API Authentication", type: :request do
             user_with_pseudonym(:active_user => true, :username => 'test1@example.com', :password => 'test1234', account: @account)
             course_with_teacher(:user => @user, account: @account)
             developer_key = DeveloperKey.create!(account: @account, redirect_uri: "http://www.example.com/my_uri")
+            enable_developer_key_account_binding!(developer_key)
             @token = @user.access_tokens.create!(:developer_key => developer_key)
 
             allow(LoadAccount).to receive(:default_domain_root_account).and_return(@account)
@@ -724,6 +726,7 @@ describe "API Authentication", type: :request do
             user_with_pseudonym(:active_user => true, :username => 'test1@example.com', :password => 'test1234', account: @sub_account1)
             course_with_teacher(:user => @user, account: @sub_account1)
             developer_key = DeveloperKey.create!(account: @account, redirect_uri: "http://www.example.com/my_uri")
+            enable_developer_key_account_binding!(developer_key)
             @token = @user.access_tokens.create!(:developer_key => developer_key)
 
             allow(LoadAccount).to receive(:default_domain_root_account).and_return(@account)
@@ -755,6 +758,7 @@ describe "API Authentication", type: :request do
       it "should work for an access token from a different shard with the developer key on the default shard" do
         @shard1.activate do
           @account = Account.create!
+          enable_default_developer_key!
           user_with_pseudonym(:active_user => true, :username => 'test1@example.com', :password => 'test1234', :account => @account)
           course_with_teacher(:user => @user, :account => @account)
           @token = @user.access_tokens.create!(:developer_key => DeveloperKey.default)
@@ -776,6 +780,7 @@ describe "API Authentication", type: :request do
           # create the dev key on a different account
           account2 = Account.create!
           developer_key = DeveloperKey.create!(account: account2, redirect_uri: "http://www.example.com/my_uri")
+          enable_developer_key_account_binding!(developer_key)
           @token = @user.access_tokens.create!(:developer_key => developer_key)
           expect(@token.developer_key.shard).to be @shard1
 
@@ -820,6 +825,7 @@ describe "API Authentication", type: :request do
         'integration_id' => nil,
         'time_zone' => 'Etc/UTC',
         'locale' => nil,
+        'effective_locale' => 'en',
         'calendar' => { 'ics' => "http://www.example.com/feeds/calendars/user_#{@student.uuid}.ics" }
       })
 
@@ -842,6 +848,7 @@ describe "API Authentication", type: :request do
           'integration_id' => nil,
           'time_zone' => 'Etc/UTC',
           'locale' => nil,
+          'effective_locale' => 'en',
           'calendar' => { 'ics' => "http://www.example.com/feeds/calendars/user_#{@student.uuid}.ics" }
       })
 
@@ -862,6 +869,7 @@ describe "API Authentication", type: :request do
           'integration_id' => nil,
           'time_zone' => 'Etc/UTC',
           'locale' => nil,
+          'effective_locale' => 'en',
           'calendar' => { 'ics' => "http://www.example.com/feeds/calendars/user_#{@student.uuid}.ics" }
       })
     end
@@ -888,6 +896,7 @@ describe "API Authentication", type: :request do
         'primary_email' => "blah@example.com",
         'time_zone' => 'Etc/UTC',
         'locale' => nil,
+        'effective_locale' => 'en',
         'calendar' => { 'ics' => "http://www.example.com/feeds/calendars/user_#{@student.uuid}.ics" },
       })
     end
@@ -915,6 +924,7 @@ describe "API Authentication", type: :request do
           'primary_email' => "blah@example.com",
           'time_zone' => 'Etc/UTC',
           'locale' => nil,
+          'effective_locale' => 'en',
           'calendar' => { 'ics' => "http://www.example.com/feeds/calendars/user_#{@student.uuid}.ics" },
       })
     end

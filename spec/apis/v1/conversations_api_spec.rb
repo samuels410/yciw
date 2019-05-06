@@ -46,6 +46,15 @@ describe ConversationsController, type: :request do
     u
   end
 
+  def observer_in_course(options = {})
+    section = options.delete(:section)
+    u = User.create(options)
+    enrollment = @course.enroll_user(u, 'ObserverEnrollment', :section => section)
+    enrollment.workflow_state = 'active'
+    enrollment.save
+    u
+  end
+
   context "conversations" do
     it "should return the conversation list" do
       @c1 = conversation(@bob, :workflow_state => 'read')
@@ -606,6 +615,19 @@ describe ConversationsController, type: :request do
           { :controller => 'conversations', :action => 'create', :format => 'json' },
           { :recipients => [@bob.id], :body => "test", :context_code => "course_#{course2.id}" })
         expect(json3.first["id"]).to_not eq conv1.id # should make a new one
+      end
+
+      it "should create a new conversation if force_new parameter is provided" do
+        json = api_call(:post, "/api/v1/conversations",
+          { :controller => 'conversations', :action => 'create', :format => 'json' },
+          { :recipients => [@bob.id], :body => "test", :subject => "subject_1", :force_new => "true" })
+        conv1 = Conversation.find(json.first["id"])
+
+        json2 = api_call(:post, "/api/v1/conversations",
+          { :controller => 'conversations', :action => 'create', :format => 'json' },
+          { :recipients => [@bob.id], :body => "test", :subject => "subject_2", :force_new => "true" })
+        conv2 = Conversation.find(json2.first["id"])
+        expect(conv2.id).to_not eq conv1.id # should make a new one
       end
 
       it "should not break trying to pull cached conversations for re-use" do
@@ -2371,7 +2393,7 @@ describe ConversationsController, type: :request do
     end
 
     it 'returns an error when the user_id is not provided' do
-      @c1.all_messages.first()
+      message = @c1.all_messages.first()
 
       raw_api_call(:put, "/api/v1/conversations/restore",
               { :controller => "conversations", :action => "restore_message", :format => "json",
@@ -2381,7 +2403,7 @@ describe ConversationsController, type: :request do
     end
 
     it 'returns an error when the conversation_id is not provided' do
-      @c1.all_messages.first()
+      message = @c1.all_messages.first()
 
       raw_api_call(:put, "/api/v1/conversations/restore",
               { :controller => "conversations", :action => "restore_message", :format => "json",

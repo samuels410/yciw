@@ -21,7 +21,6 @@ import configureAxios from '../utilities/configureAxios';
 import { alert } from '../utilities/alertUtils';
 import formatMessage from '../format-message';
 import parseLinkHeader from 'parse-link-header';
-import { makeEndOfDayIfMidnight } from '../utilities/dateUtils';
 import { maybeUpdateTodoSidebar } from './sidebar-actions';
 
 import {
@@ -136,12 +135,6 @@ export const dismissOpportunity = (id, plannerOverride) => {
       saveNewPlannerOverride(apiOverride);
     promise = promise.then(response => {
       dispatch(dismissedOpportunity(response.data));
-
-      // TODO: When splitting into dismissed not dismissed tabs this needs to change
-      if(!getState().loading.allOpportunitiesLoaded && !getState().loading.loadingOpportunities && getState().opportunities.items.filter((opp) => {
-        return opp.planner_override && !opp.planner_override.dismissed;
-      }).length < 10)
-        dispatch(getNextOpportunities());
     })
     .catch((error) => {
       alert(formatMessage('An error occurred attempting to dismiss the opportunity.'), true);
@@ -152,9 +145,6 @@ export const dismissOpportunity = (id, plannerOverride) => {
 
 export const savePlannerItem = (plannerItem) => {
   return (dispatch, getState) => {
-    plannerItem.date = makeEndOfDayIfMidnight(plannerItem.date, getState().timeZone);
-    plannerItem.date = plannerItem.date.toISOString();
-
     const isNewItem = !plannerItem.id;
     const overrideData = getOverrideDataOnItem(plannerItem);
     dispatch(savingPlannerItem({item: plannerItem, isNewItem}));

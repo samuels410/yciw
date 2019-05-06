@@ -26,7 +26,7 @@ import 'jquery.instructure_misc_plugins' // ifExists, showIf
 import 'jquery.loadingImg'
 import 'vendor/jquery.scrollTo'
 import 'jqueryui/datepicker'
-import * as mathml from 'mathml'
+import {isMathJaxLoaded, reloadElement, loadMathJax, isMathMLOnPage} from 'mathml'
 
 let specialDatesAreHidden = false
 
@@ -283,7 +283,7 @@ const bindToEditSyllabus = function () {
     RichContentEditor.callOnRCE($course_syllabus_body, 'toggle')
     // hide the clicked link, and show the other toggle link.
     // todo: replace .andSelf with .addBack when JQuery is upgraded.
-    $(ev.currentTarget).siblings('.toggle_views_link').andSelf().toggle()
+    $(ev.currentTarget).siblings('.toggle_views_link').andSelf().toggle().focus();
   })
 
   $edit_course_syllabus_form.on('click', '.cancel_button', (ev) => {
@@ -313,11 +313,11 @@ const bindToEditSyllabus = function () {
       $course_syllabus.loadingImage('remove').html(data.course.syllabus_body)
       $course_syllabus.data('syllabus_body', data.course.syllabus_body)
       $course_syllabus_details.hide()
-      if (mathml.isMathMLOnPage()) {
-        if (mathml.isMathJaxLoaded()) {
-          mathml.reloadElement('content')
+      if (isMathMLOnPage()) {
+        if (isMathJaxLoaded()) {
+          reloadElement('content')
         } else {
-          mathml.loadMathJax('MML_HTMLorMML.js')
+          loadMathJax('MML_HTMLorMML.js')
         }
       }
     },

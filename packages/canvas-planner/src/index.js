@@ -33,6 +33,8 @@ import {
  } from './actions';
 import { registerScrollEvents } from './utilities/scrollUtils';
 import { initialize as initializeAlerts } from './utilities/alertUtils';
+import { initializeContent } from './utilities/contentUtils';
+import { initializeDateTimeFormatters } from './utilities/dateUtils';
 import moment from 'moment-timezone';
 import {DynamicUiManager, DynamicUiProvider, specialFallbackFocusId} from './dynamic-ui';
 
@@ -69,6 +71,9 @@ const defaultOptions = {
 };
 
 const defaultEnv = {};
+
+const plannerHeaderId = "dashboard_header_container";
+const plannerNewActivityButtonId = "new_activity_button"
 
 function mergeDefaultOptions (options) {
   const newOpts = {...defaultOptions, ...options};
@@ -112,6 +117,12 @@ function initializeCourseAndGroupColors (options) {
 // flashError,                  <required>
 // flashMessage,                <required>
 // srFlashMessage,              <required>
+// convertApiUserContent,       <required - conversion to make user content from api work properly>
+// dateTimeFormatters: {        <optional - canvas methods for date and time formatting>
+//   dateString,                <optional>
+//   timeString,                <optional>
+//   datetimeString,            <optional>
+// },
 // externalFallbackFocusable,   <optional - element where focus goes when it should go before planner>
 // getActiveApp,                <optional - method to get the current dashboard>
 // changeDashboardView,         <optional - method to change the current dashboard>
@@ -131,6 +142,10 @@ export function initializePlanner (options) {
     throw new Error('flash message callbacks are required options for initializePlanner');
   }
 
+  if (!options.convertApiUserContent) {
+    throw new Error('convertApiUserContent is a required option for initializePlanner');
+  }
+
   externalPlannerActive = () => options.getActiveApp() === 'planner';
 
   i18n.init(options.env.MOMENT_LOCALE);
@@ -141,14 +156,12 @@ export function initializePlanner (options) {
     visualErrorCallback: flashError,
     srAlertCallback: srFlashMessage,
   });
+  initializeContent(options);
+  initializeDateTimeFormatters(options.dateTimeFormatters);
 
-  const stickyElement = document.getElementById('dashboard_header_container');
-  if (stickyElement) {
-    const stickyElementRect = stickyElement.getBoundingClientRect();
-    options.stickyOffset = stickyElementRect.bottom - stickyElementRect.top + 24;
-    dynamicUiManager.setStickyOffset(options.stickyOffset);
-  }
-
+  options.plannerNewActivityButtonId = plannerNewActivityButtonId;
+  dynamicUiManager.setOffsetElementIds(plannerHeaderId, plannerNewActivityButtonId);
+    
   if (options.externalFallbackFocusable) {
     dynamicUiManager.registerAnimatable(
       'item', externalFocusableWrapper(options.externalFallbackFocusable), -1, [specialFallbackFocusId('item')]
@@ -177,7 +190,6 @@ function render (element) {
       <Provider store={store}>
         <PlannerApp
           appRef={app => dynamicUiManager.setApp(app)}
-          stickyOffset={initializedOptions.stickyOffset}
           changeDashboardView={initializedOptions.changeDashboardView}
           plannerActive={plannerActive}
           currentUser={store.getState().currentUser}
@@ -199,6 +211,7 @@ function renderHeader (element, auxElement) {
       <Provider store={store}>
         <PlannerHeader
           stickyZIndex={initializedOptions.stickyZIndex}
+          stickyButtonId={initializedOptions.plannerNewActivityButtonId}
           timeZone={initializedOptions.env.TIMEZONE}
           locale={initializedOptions.env.MOMENT_LOCALE}
           ariaHideElement={ariaHideElement}

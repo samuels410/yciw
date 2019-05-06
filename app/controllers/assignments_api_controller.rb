@@ -138,6 +138,10 @@
 #         "ratings": {
 #           "type": "array",
 #           "items": { "$ref": "RubricRating" }
+#         },
+#         "ignore_for_scoring": {
+#           "type": "boolean",
+#           "example": true
 #         }
 #       }
 #     }
@@ -565,6 +569,41 @@
 #           "description": "Boolean indicating if the assignment is moderated.",
 #           "example": true,
 #           "type": "boolean"
+#         },
+#         "grader_count": {
+#           "description": "The maximum number of provisional graders who may issue grades for this assignment. Only relevant for moderated assignments. Must be a positive value, and must be set to 1 if the course has fewer than two active instructors. Otherwise, the maximum value is the number of active instructors in the course minus one, or 10 if the course has more than 11 active instructors.",
+#           "example": 3,
+#           "type": "integer"
+#         },
+#         "final_grader_id": {
+#           "description": "The user ID of the grader responsible for choosing final grades for this assignment. Only relevant for moderated assignments.",
+#           "example": 3,
+#           "type": "integer"
+#         },
+#         "grader_comments_visible_to_graders": {
+#           "description": "Boolean indicating if provisional graders' comments are visible to other provisional graders. Only relevant for moderated assignments.",
+#           "example": true,
+#           "type": "boolean"
+#         },
+#         "graders_anonymous_to_graders": {
+#           "description": "Boolean indicating if provisional graders' identities are hidden from other provisional graders. Only relevant for moderated assignments with grader_comments_visible_to_graders set to true.",
+#           "example": true,
+#           "type": "boolean"
+#         },
+#         "grader_names_visible_to_final_grader": {
+#           "description": "Boolean indicating if provisional grader identities are visible to the final grader. Only relevant for moderated assignments.",
+#           "example": true,
+#           "type": "boolean"
+#         },
+#         "anonymous_grading": {
+#           "description": "Boolean indicating if the assignment is graded anonymously. If true, graders cannot see student identities.",
+#           "example": true,
+#           "type": "boolean"
+#         },
+#         "allowed_attempts": {
+#           "description": "The number of submission attempts a student can make for this assignment. -1 is considered unlimited.",
+#           "example": 2,
+#           "type": "integer"
 #         }
 #       }
 #     }
@@ -576,7 +615,7 @@ class AssignmentsApiController < ApplicationController
   include Api::V1::AssignmentOverride
 
   # @API List assignments
-  # Returns the paginated list of assignments for the current context.
+  # Returns the paginated list of assignments for the current course or assignment group.
   # @argument include[] [String, "submission"|"assignment_visibility"|"all_dates"|"overrides"|"observed_users"]
   #   Associations to include with the assignment. The "assignment_visibility" option
   #   requires that the Differentiated Assignments course feature be turned on. If
@@ -673,7 +712,13 @@ class AssignmentsApiController < ApplicationController
       end
       scope = scope.reorder(Arel.sql("#{Assignment.best_unicode_collation_key('assignments.title')}, assignment_groups.position, assignments.position, assignments.id")) if params[:order_by] == 'name'
 
-      assignments = Api.paginate(scope, self, api_v1_course_assignments_url(@context))
+      assignments = if params[:assignment_group_id].present?
+        assignment_group_id = params[:assignment_group_id]
+        scope = scope.where(assignment_group_id: assignment_group_id)
+        Api.paginate(scope, self, api_v1_course_assignment_group_assignments_url(@context, assignment_group_id))
+      else
+        Api.paginate(scope, self, api_v1_course_assignments_url(@context))
+      end
 
       if params[:assignment_ids] && assignments.length != params[:assignment_ids].length
         invalid_ids = params[:assignment_ids] - assignments.map(&:id).map(&:to_s)
@@ -935,6 +980,9 @@ class AssignmentsApiController < ApplicationController
   # @argument assignment[moderated_grading] [Boolean]
   #   Whether this assignment is moderated.
   #
+  # @argument assignment[allowed_attempts] [Integer]
+  #   The number of submission attempts allowed for this assignment. Set to -1 for unlimited attempts.
+  #
   # @returns Assignment
   def create
     @assignment = @context.assignments.build
@@ -1090,6 +1138,10 @@ class AssignmentsApiController < ApplicationController
   #
   # @argument assignment[moderated_grading] [Boolean]
   #   Whether this assignment is moderated.
+  #
+  # @argument assignment[allowed_attempts] [Integer]
+  #   The number of submission attempts allowed for this assignment. Set to -1 or null for
+  #   unlimited attempts.
   #
   # @returns Assignment
   def update

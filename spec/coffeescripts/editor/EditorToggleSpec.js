@@ -124,6 +124,14 @@ test('replaceTextArea', function() {
   ok($.fn.detach.calledOn(et.textAreaContainer), 'removes container')
 })
 
+test('getContent removes MathML', () => {
+  containerDiv.append(
+    $('<div>Math image goes here</div><div class="hidden-readable">MathML goes here</div>')
+  )
+  const et = new EditorToggle(containerDiv)
+  equal(et.getContent(), '<div>Math image goes here</div>')
+})
+
 test('edit', function() {
   const fresh = {}
   const content = 'content'
@@ -159,4 +167,16 @@ test('edit', function() {
 
   ok(RichContentEditor.freshNode.calledWith(textArea), 'gets fresh node')
   equal(et.textArea, fresh, 'sets @textArea to fresh node')
+})
+
+test('shows keyboard shortcuts and toggle link in the appropriate tab order', () => {
+  const fresh = {}
+  sandbox.stub(RichContentEditor, 'loadNewEditor')
+  sandbox.stub(RichContentEditor, 'freshNode').returns(fresh)
+
+  const et = new EditorToggle(containerDiv)
+  et.edit()
+  const focusableItems = $(':focusable').toArray()
+  ok(focusableItems[0].className, 'tinymce-keyboard-shortcuts-toggle')
+  ok(focusableItems[1].className, 'switch-views__link switch-views__link__html')
 })

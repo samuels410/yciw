@@ -60,6 +60,7 @@ module Api::V1::Assignment
       omit_from_final_grade
       anonymous_instructor_annotations
       anonymous_grading
+      allowed_attempts
     )
   }.freeze
 
@@ -141,6 +142,7 @@ module Api::V1::Assignment
     hash['has_submitted_submissions'] = assignment.has_submitted_submissions?
     hash['due_date_required'] = assignment.due_date_required?
     hash['max_name_length'] = assignment.max_name_length
+    hash['allowed_attempts'] = -1 if assignment.allowed_attempts.nil?
 
     unless opts[:exclude_response_fields].include?('in_closed_grading_period')
       hash['in_closed_grading_period'] = assignment.in_closed_grading_period?
@@ -265,7 +267,7 @@ module Api::V1::Assignment
       if assignment.rubric
         rubric = assignment.rubric
         hash['rubric'] = rubric.data.map do |row|
-          row_hash = row.slice(:id, :points, :description, :long_description)
+          row_hash = row.slice(:id, :points, :description, :long_description, :ignore_for_scoring)
           row_hash["criterion_use_range"] = row[:criterion_use_range] || false
           row_hash["ratings"] = row[:ratings].map do |c|
             rating_hash = c.slice(:id, :points, :description, :long_description)
@@ -423,6 +425,7 @@ module Api::V1::Assignment
     integration_id
     omit_from_final_grade
     anonymous_instructor_annotations
+    allowed_attempts
   ).freeze
 
   API_ALLOWED_TURNITIN_SETTINGS = %w(
@@ -464,7 +467,7 @@ module Api::V1::Assignment
     end
 
     calc_grades = calculate_grades ? value_to_boolean(calculate_grades) : true
-    DueDateCacher.recompute(prepared_create[:assignment], update_grades: calc_grades)
+    DueDateCacher.recompute(prepared_create[:assignment], update_grades: calc_grades, executing_user: user)
     response
   rescue ActiveRecord::RecordInvalid
     false
@@ -498,7 +501,7 @@ module Api::V1::Assignment
     end
 
     if @overrides_affected.to_i > 0 || cached_due_dates_changed
-      DueDateCacher.recompute(prepared_update[:assignment], update_grades: true)
+      DueDateCacher.recompute(prepared_update[:assignment], update_grades: true, executing_user: user)
     end
 
     response
@@ -597,6 +600,13 @@ module Api::V1::Assignment
       assignment.errors.add(change, I18n.t("cannot be changed because this assignment is due in a closed grading period"))
     end
     false
+  end
+
+  def assignment_mute_status_valid?(assignment, assignment_params)
+    return true unless assignment_params.include?("muted") && assignment.moderated_grading?
+
+    # A moderated assignment may not be unmuted until grades have been published
+    assignment.grades_published? || value_to_boolean(assignment_params["muted"])
   end
 
   def update_from_params(assignment, assignment_params, user, context = assignment.context)
@@ -896,6 +906,7 @@ module Api::V1::Assignment
     return false unless assignment_group_id_valid?(assignment, assignment_params)
     return false unless assignment_dates_valid?(assignment, assignment_params)
     return false unless submission_types_valid?(assignment, assignment_params)
+    return false unless assignment_mute_status_valid?(assignment, assignment_params)
     true
   end
 
@@ -903,6 +914,9 @@ module Api::V1::Assignment
     if plagiarism_capable?(assignment_params)
       tool = assignment_configuration_tool(assignment_params)
       assignment.tool_settings_tool = tool
+    elsif assignment.persisted? && assignment.assignment_configuration_tool_lookups.present?
+      # Destroy subscriptions and tool associations
+      assignment.send_later_if_production(:clear_tool_settings_tools)
     end
   end
 

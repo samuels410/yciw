@@ -320,6 +320,29 @@ describe SplitUsers do
       expect(submission2.reload.user).to eq user2
     end
 
+    it 'should handle conflicting submissions other way too' do
+      course1.enroll_student(user1, enrollment_state: 'active')
+      course1.enroll_student(user2, enrollment_state: 'active')
+      assignment = course1.assignments.new(title: "some assignment")
+      assignment.workflow_state = "published"
+      assignment.save
+      valid_attributes = {
+        grade: "1.5",
+        grader: @teacher,
+        url: "www.instructure.com"
+      }
+      submission1 = assignment.submissions.find_by!(user: user1)
+      submission1.update!(valid_attributes)
+      submission2 = assignment.submissions.find_by!(user: user2)
+
+      UserMerge.from(user1).into(user2)
+      expect(submission1.reload.user).to eq user2
+      expect(submission2.reload.user).to eq user1
+      SplitUsers.split_db_users(user2)
+      expect(submission1.reload.user).to eq user1
+      expect(submission2.reload.user).to eq user2
+    end
+
     it 'should not blow up on deleted courses' do
       course1.enroll_student(user1, enrollment_state: 'active')
       UserMerge.from(user1).into(user2)
@@ -403,6 +426,23 @@ describe SplitUsers do
         @user2.reload
         expect(user1.communication_channels.map { |cc| [cc.path, cc.workflow_state] }.sort).to eq user1_ccs
         expect(@user2.communication_channels.map { |cc| [cc.path, cc.workflow_state] }.sort).to eq user2_ccs
+      end
+
+      it 'should handle enrollments across shards' do
+        user1 = user_with_pseudonym(username: 'user1@example.com', active_all: 1)
+        e = course1.enroll_user(user1)
+        @shard1.activate do
+          account = Account.create!
+          @user2 = user_with_pseudonym(username: 'user2@example.com', active_all: 1, account: account)
+          @p2 = @pseudonym
+          @shard1_course = account.courses.create!
+          @e = @shard1_course.enroll_user(@user2)
+          UserMerge.from(user1).into(@user2)
+        end
+        SplitUsers.split_db_users(@user2)
+
+        expect(e.reload.user).to eq user1
+        expect(@e.reload.user).to eq @user2
       end
 
       it "should work with cross-shard submissions" do

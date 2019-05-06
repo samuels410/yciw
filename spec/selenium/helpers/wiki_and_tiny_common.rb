@@ -89,8 +89,7 @@ module WikiAndTinyCommon
   end
 
   def save_wiki
-    f('form.edit-form button.submit').click
-    wait_for_ajax_requests
+    wait_for_new_page_load { f('form.edit-form button.submit').click }
     get "/courses/#{@course.id}/pages/front-page/edit"
   end
 
@@ -143,10 +142,10 @@ module WikiAndTinyCommon
   def add_canvas_image(el, folder, filename)
     dialog = activate_editor_embed_image(el)
     fj('a[href="#tabUploaded"]:visible').click
-    folder_el = fj(".treeLabel:contains(#{folder.inspect})")
-    folder_el.click unless folder_el['class'].split.include?('expanded')
-    expect(f('.treeFile', dialog)).to be_displayed
-    file_el = f(".treeFile[title=\"#{filename}\"]", dialog)
+    folder_el = fj(".file-browser__tree button:contains('#{folder}')")
+    folder_el.click unless folder_el['aria-expanded'] == 'true'
+    expect(fj(".file-browser__tree li:contains('#{filename}') button", dialog)).to be_displayed
+    file_el = fj(".file-browser__tree li:contains('#{filename}') button", dialog)
     expect(file_el).not_to be_nil
     file_el.click
     wait_for_ajaximations
@@ -216,5 +215,30 @@ module WikiAndTinyCommon
   def shift_click_button(selector)
     el = f(selector)
     driver.action.key_down(:shift).click(el).key_up(:shift).perform
+  end
+
+  def visit_front_page(course)
+    get "/courses/#{course.id}/pages/front-page/edit"
+  end
+
+  def edit_wiki_css
+    f("form.edit-form .edit-content")
+  end
+
+  def wysiwyg_state_setup(course, text = "1\n2\n3", val: false, html: false)
+    visit_front_page(course)
+    wait_for_tiny(edit_wiki_css)
+
+    if val == true
+      add_text_to_tiny(text)
+      validate_link(text)
+    else
+      if html
+        add_html_to_tiny(text)
+      else
+        add_text_to_tiny_no_val(text)
+      end
+      select_all_wiki
+    end
   end
 end

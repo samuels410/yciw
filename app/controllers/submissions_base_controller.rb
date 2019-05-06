@@ -124,18 +124,9 @@ class SubmissionsBaseController < ApplicationController
 
           format.html { redirect_to course_assignment_url(@context, @assignment) }
 
-          comments_include = if @assignment.can_view_other_grader_comments?(@current_user)
-            :all_submission_comments
-          elsif admin_in_context
-            :submission_comments
-          else
-            :visible_submission_comments
-          end
-
           json_args = Submission.json_serialization_full_parameters({
-            :except => [:quiz_submission,:submission_history],
-            :comments => comments_include
-          }).merge(:permissions => { :user => @current_user, :session => session, :include_permissions => false })
+            except: [:quiz_submission, :submission_history]
+          }).merge(permissions: { user: @current_user, session: session, include_permissions: false })
           json_args[:methods] << :provisional_grade_id if provisional
 
           submissions_json = @submissions.map do |submission|
@@ -144,7 +135,7 @@ class SubmissionsBaseController < ApplicationController
               assignment: @assignment,
               avatars: service_enabled?(:avatars),
               submissions: @submissions,
-              submission_comments: submission_json[:submission].delete(comments_include),
+              submission_comments: submission.visible_submission_comments_for(@current_user),
               current_user: @current_user,
               course: @context
             )
@@ -169,6 +160,26 @@ class SubmissionsBaseController < ApplicationController
     end
   end
 
+  def turnitin_report
+    plagiarism_report('turnitin')
+  end
+
+  def resubmit_to_turnitin
+    resubmit_to_plagiarism('turnitin')
+  end
+
+  def vericite_report
+    plagiarism_report('vericite')
+  end
+
+  def resubmit_to_vericite
+    resubmit_to_plagiarism('vericite')
+  end
+
+  def originality_report
+    plagiarism_report('originality_report')
+  end
+
   private
 
   def update_student_entered_score(score)
@@ -183,5 +194,72 @@ class SubmissionsBaseController < ApplicationController
     if @context.root_account.feature_enabled?(:non_scoring_rubrics)
       @context.account.resolved_outcome_proficiency&.as_json
     end
+  end
+
+  def legacy_plagiarism_report(submission, asset_string, type)
+    plag_data = type == 'vericite' ? submission.vericite_data : submission.turnitin_data
+
+    if plag_data.dig(asset_string, :report_url).present?
+      polymorphic_url([:retrieve, @context, :external_tools], url: plag_data[asset_string][:report_url], display:'borderless')
+    elsif type == 'vericite'
+      # VeriCite URL
+      submission.vericite_report_url(asset_string, @current_user, session)
+    else
+      # Turnitin URL
+      submission.turnitin_report_url(asset_string, @current_user)
+    end
+  rescue
+    # vericite_report_url or turnitin_report_url may throw an error
+    nil
+  end
+
+  protected
+  def plagiarism_report(type)
+    return head(:bad_request) if @submission.blank?
+
+    @asset_string = params[:asset_string]
+    if authorized_action(@submission, @current_user, :read)
+      url = if type == 'originality_report'
+        @submission.originality_report_url(@asset_string, @current_user)
+      else
+        legacy_plagiarism_report(@submission, @asset_string, type)
+      end
+
+      if url
+        redirect_to url
+      else
+        flash[:error] = t('errors.no_report', "Couldn't find a report for that submission item")
+        redirect_to default_plagiarism_redirect_url
+      end
+    end
+  end
+
+  def resubmit_to_plagiarism(type)
+    return head(:bad_request) if @submission.blank?
+
+    if authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
+      Canvas::LiveEvents.plagiarism_resubmit(@submission)
+
+      if type == 'vericite'
+        # VeriCite
+        @submission.resubmit_to_vericite
+        message = t("Successfully resubmitted to VeriCite.")
+      else
+        # turnitin
+        @submission.resubmit_to_turnitin
+        message = t("Successfully resubmitted to turnitin.")
+      end
+      respond_to do |format|
+        format.html do
+          flash[:notice] = message
+          redirect_to default_plagiarism_redirect_url
+        end
+        format.json { head :no_content }
+      end
+    end
+  end
+
+  def default_plagiarism_redirect_url
+    named_context_url(@context, :context_assignment_submission_url, @assignment.id, @submission.user_id)
   end
 end

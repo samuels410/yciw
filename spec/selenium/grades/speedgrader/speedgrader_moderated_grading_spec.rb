@@ -49,13 +49,11 @@ describe "speed grader" do
       wait_for_ajaximations
       f('svg[name="IconFeedback"]').find_element(:xpath, '../../parent::button').click
       f("textarea[data-selenium='criterion_comments_text']").send_keys(comment)
-      fj("button:contains('Update Comment'):visible").click
       wait_for_ajaximations
       f('.criterion_points input').send_keys(score.to_s)
       f('.criterion_points input').send_keys(:tab)
-      sleep 0.5
       wait_for_ajaximations
-      scroll_into_view('.save_rubric_button')
+      scroll_to(f('.save_rubric_button'))
       save_rubric_button = f('#rubric_full .save_rubric_button')
       save_rubric_button.click
       wait_for_ajaximations
@@ -72,9 +70,9 @@ describe "speed grader" do
       time = 5.minutes.from_now
       Timecop.freeze(time) do
         replace_content f('#grading-box-extended'), "8", tab_out: false
-        wait_for_ajaximations
         f('.gradebookHeader--rightside').click
       end
+      wait_for_ajaximations
       provisional_grade = @submission.provisional_grades.find_by!(scorer: @user)
       expect(provisional_grade.grade).to eq '8'
 
@@ -150,7 +148,8 @@ describe "speed grader" do
       @assignment.grade_student(@student, grader: other_ta, provisional: true, score: 7)
 
       get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}"
-      expect(driver.current_url).to_not match %r{/courses/#{@course.id}/gradebook/speed_grader}
+      expect(f('#grading-box-extended')).not_to be_displayed
+      expect(f('#not_gradeable_message')).to be_displayed
     end
 
     it "should lock a provisional grader out if graded by someone else while switching students" do

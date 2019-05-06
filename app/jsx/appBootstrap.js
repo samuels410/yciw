@@ -40,10 +40,10 @@ if (process.env.NODE_ENV !== 'production' && process.env.DEPRECATION_SENTRY_DSN)
   const Raven = require('raven-js')
   Raven.config(process.env.DEPRECATION_SENTRY_DSN, {
     release: process.env.GIT_COMMIT
-  }).install();
+  }).install()
 
-  const setupRavenConsoleLoggingPlugin = require('../jsx/shared/helpers/setupRavenConsoleLoggingPlugin');
-  setupRavenConsoleLoggingPlugin(Raven, { loggerName: 'console' });
+  const setupRavenConsoleLoggingPlugin = require('../jsx/shared/helpers/setupRavenConsoleLoggingPlugin')
+  setupRavenConsoleLoggingPlugin(Raven, {loggerName: 'console'})
 }
 
 // setup the inst-ui default theme
@@ -51,5 +51,42 @@ if (ENV.use_high_contrast) {
   canvasHighContrastTheme.use()
 } else {
   const brandvars = window.CANVAS_ACTIVE_BRAND_VARIABLES || {}
-  canvasBaseTheme.use({ overrides: brandvars })
+
+  // Set CSS transitions to 0ms in Selenium and JS tests
+  let transitionOverride = {}
+  if (process.env.NODE_ENV === 'test' || window.INST.environment === 'test') {
+    transitionOverride = {
+      transitions: {
+        duration: '0ms'
+      }
+    }
+  }
+
+  canvasBaseTheme.use({
+    overrides: {...transitionOverride, ...brandvars}
+  })
+}
+
+if (process.env.NODE_ENV === 'test' || window.INST.environment === 'test') {
+  // This is for the `wait_for_ajax_requests` method in selenium
+  window.__CANVAS_IN_FLIGHT_XHR_REQUESTS__ = 0
+  const send = XMLHttpRequest.prototype.send
+  XMLHttpRequest.prototype.send = function() {
+    window.__CANVAS_IN_FLIGHT_XHR_REQUESTS__++
+    // 'loadend' gets fired after both successful and errored requests
+    this.addEventListener('loadend', () => {
+      window.__CANVAS_IN_FLIGHT_XHR_REQUESTS__--
+      window.dispatchEvent(new CustomEvent('canvasXHRComplete'))
+    })
+    return send.apply(this, arguments)
+  }
+
+  // and this so it also tracks `fetch` requests
+  const fetch = window.fetch
+  window.fetch = function() {
+    window.__CANVAS_IN_FLIGHT_XHR_REQUESTS__++
+    const promise = fetch.apply(this, arguments)
+    promise.finally(() => window.__CANVAS_IN_FLIGHT_XHR_REQUESTS__--)
+    return promise
+  }
 }

@@ -19,12 +19,12 @@
 import 'jquery.instructure_date_and_time'
 import parseLinkHeader from '../../shared/parseLinkHeader';
 
-const FETCH_HISTORY_START = 'FETCH_HISTORY_START';
-const FETCH_HISTORY_SUCCESS = 'FETCH_HISTORY_SUCCESS';
-const FETCH_HISTORY_FAILURE = 'FETCH_HISTORY_FAILURE';
-const FETCH_HISTORY_NEXT_PAGE_START = 'FETCH_HISTORY_NEXT_PAGE_START';
-const FETCH_HISTORY_NEXT_PAGE_SUCCESS = 'FETCH_HISTORY_NEXT_PAGE_SUCCESS';
-const FETCH_HISTORY_NEXT_PAGE_FAILURE = 'FETCH_HISTORY_NEXT_PAGE_FAILURE';
+export const FETCH_HISTORY_START = 'FETCH_HISTORY_START';
+export const FETCH_HISTORY_SUCCESS = 'FETCH_HISTORY_SUCCESS';
+export const FETCH_HISTORY_FAILURE = 'FETCH_HISTORY_FAILURE';
+export const FETCH_HISTORY_NEXT_PAGE_START = 'FETCH_HISTORY_NEXT_PAGE_START';
+export const FETCH_HISTORY_NEXT_PAGE_SUCCESS = 'FETCH_HISTORY_NEXT_PAGE_SUCCESS';
+export const FETCH_HISTORY_NEXT_PAGE_FAILURE = 'FETCH_HISTORY_NEXT_PAGE_FAILURE';
 
 function indexById (collection = []) {
   return collection.reduce((acc, item) => {
@@ -46,12 +46,25 @@ function formatHistoryItems (data) {
   const users = indexById(data.users);
   const assignments = indexById(data.assignments);
 
-  return historyItems.map(item => (
-    {
-      anonymous: item.graded_anonymously,
-      assignment: assignments[item.links.assignment] ? assignments[item.links.assignment].name : '',
+  return historyItems.map(item => {
+    let assignment;
+
+    if (assignments[item.links.assignment]) {
+      assignment = {
+        anonymousGrading: assignments[item.links.assignment].anonymous_grading,
+        gradingType: assignments[item.links.assignment].grading_type,
+        muted: assignments[item.links.assignment].muted,
+        name: assignments[item.links.assignment].name
+      };
+    } else {
+      assignment = {};
+    }
+
+    return {
+      assignment,
       date: item.created_at,
-      displayAsPoints: assignments[item.links.assignment] ? assignments[item.links.assignment].grading_type === 'points' : false,
+      displayAsPoints: assignment ? assignment.gradingType === 'points' : false,
+      gradedAnonymously: item.graded_anonymously,
       grader: users[item.links.grader] ? users[item.links.grader].name : '',
       gradeAfter: item.grade_after || '',
       gradeBefore: item.grade_before || '',
@@ -61,17 +74,17 @@ function formatHistoryItems (data) {
       pointsPossibleBefore: item.points_possible_before ? item.points_possible_before.toString() : '–',
       pointsPossibleCurrent: pointsPossibleCurrent(assignments, item),
       student: users[item.links.student] ? users[item.links.student].name : '',
-    }
-  ));
+    };
+  });
 }
 
-function fetchHistoryStart () {
+export function fetchHistoryStart () {
   return {
     type: FETCH_HISTORY_START
   };
 }
 
-function fetchHistorySuccess ({ events, linked: { assignments, users }}, { link }) {
+export function fetchHistorySuccess ({ events, linked: { assignments, users }}, { link }) {
   return {
     type: FETCH_HISTORY_SUCCESS,
     payload: {
@@ -81,19 +94,19 @@ function fetchHistorySuccess ({ events, linked: { assignments, users }}, { link 
   };
 }
 
-function fetchHistoryFailure () {
+export function fetchHistoryFailure () {
   return {
     type: FETCH_HISTORY_FAILURE
   };
 }
 
-function fetchHistoryNextPageStart () {
+export function fetchHistoryNextPageStart () {
   return {
     type: FETCH_HISTORY_NEXT_PAGE_START
   };
 }
 
-function fetchHistoryNextPageSuccess ({ events, linked: { assignments, users }}, { link }) {
+export function fetchHistoryNextPageSuccess ({ events, linked: { assignments, users }}, { link }) {
   return {
     type: FETCH_HISTORY_NEXT_PAGE_SUCCESS,
     payload: {
@@ -103,23 +116,8 @@ function fetchHistoryNextPageSuccess ({ events, linked: { assignments, users }},
   };
 }
 
-function fetchHistoryNextPageFailure () {
+export function fetchHistoryNextPageFailure () {
   return {
     type: FETCH_HISTORY_NEXT_PAGE_FAILURE
   };
 }
-
-export default {
-  FETCH_HISTORY_START,
-  FETCH_HISTORY_SUCCESS,
-  FETCH_HISTORY_FAILURE,
-  FETCH_HISTORY_NEXT_PAGE_START,
-  FETCH_HISTORY_NEXT_PAGE_SUCCESS,
-  FETCH_HISTORY_NEXT_PAGE_FAILURE,
-  fetchHistoryStart,
-  fetchHistorySuccess,
-  fetchHistoryFailure,
-  fetchHistoryNextPageStart,
-  fetchHistoryNextPageSuccess,
-  fetchHistoryNextPageFailure,
-};

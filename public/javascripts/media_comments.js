@@ -21,8 +21,6 @@ import _ from 'underscore'
 import pubsub from 'vendor/jquery.ba-tinypubsub'
 import $ from 'jquery'
 import htmlEscape from './str/htmlEscape'
-import mediaCommentsTemplate from 'jst/MediaComments'
-import JsUploader from 'compiled/media_comments/js_uploader'
 import 'compiled/jquery/mediaComment'
 import './jquery.ajaxJSON'
 import 'jqueryui/dialog'
@@ -267,6 +265,7 @@ import 'jqueryui/tabs'
     lastInit = lastInit || new Date();
     mediaType = mediaType || "any";
     opts = opts || {};
+
     var user_name = $.trim($("#identity .user_name").text() || "");
     if(user_name) {
       user_name = user_name + ": " + (new Date()).toString("ddd MMM d, yyyy");
@@ -343,7 +342,8 @@ import 'jqueryui/tabs'
           partnerData: $.mediaComment.partnerData(),
           partner_data: $.mediaComment.partnerData(),
           entryName:temporaryName,
-          soundcodec: 'Speex'
+          soundcodec: 'Speex',
+          autoPreview: '0'
         };
 
         var params = {
@@ -479,14 +479,35 @@ import 'jqueryui/tabs'
               }
             }
           }, 20);
-    } // END mediaCommentReady function
+    } // END mediaCommentReady functionk5uploader
 
     // Do JS uploader is appropriate
     if (INST.kalturaSettings.js_uploader) {
-      var JsUploader = require('compiled/media_comments/js_uploader');
-      jsUploader = new JsUploader(mediaType, opts);
-      jsUploader.onReady = mediaCommentReady;
-      jsUploader.addEntry = addEntry;
+       const JsUploader = require('compiled/media_comments/js_uploader')
+       jsUploader = new JsUploader(mediaType, opts)
+       jsUploader.onReady = mediaCommentReady
+       jsUploader.addEntry = addEntry
+
+       if (ENV.ARC_RECORDING_FEATURE_ENABLED) {
+         const Browser = require('jsx/shared/browserUtils')
+         const currentBrowser = Browser.getBrowser()
+         if (
+           (currentBrowser.name === 'Chrome' && Number(currentBrowser.version) >= 68) ||
+           (currentBrowser.name === 'Firefox' && Number(currentBrowser.version) >= 61)
+         ) {
+           import('jsx/media_recorder/renderRecorder').then((renderCanvasMediaRecorder) => {
+             let tryToRenderInterval
+             const renderFunc = () => {
+               const e = document.getElementById('record_media_tab')
+               if (e) {
+                 renderCanvasMediaRecorder(e, jsUploader.doUploadByFile)
+                 clearInterval(tryToRenderInterval)
+               }
+             }
+             tryToRenderInterval = setInterval(renderFunc, 10)
+           })
+        }
+      }
     }
 
     var now = new Date();

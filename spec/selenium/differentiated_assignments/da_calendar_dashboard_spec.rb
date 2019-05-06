@@ -39,13 +39,15 @@ describe "interaction with differentiated assignments on the dashboard and calen
       it "should show assignments with an override in the To Do section" do
         create_section_override_for_assignment(@da_assignment, due_at: 4.days.from_now)
         get "/"
-        expect(f("#right-side")).to include_text("Turn in DA assignment")
+        expect(f("#right-side")).to include_text("DA assignment")
       end
       it "should not show inaccessible assignments in Recent activity" do
         create_section_override_for_assignment(@da_assignment, course_section: @section1)
         get "/"
         f('#DashboardOptionsMenu_Container button').click
         fj('span[role="menuitemradio"]:contains("Recent Activity")').click
+        dashboard = f('#dashboard-activity')
+        keep_trying_until { dashboard.displayed? }
         expect(f("#not_right_side .no_recent_messages")).to include_text("No Recent Messages")
       end
     end
@@ -60,7 +62,7 @@ describe "interaction with differentiated assignments on the dashboard and calen
       it "should show assignments with an override in the To Do section" do
         create_section_override_for_assignment(@da_assignment)
         get "/courses/#{@course.id}"
-        expect(f(".to-do-list")).to include_text("Turn in DA assignment")
+        expect(f("#planner-todosidebar-item-list")).to include_text("DA assignment")
       end
     end
 
@@ -111,6 +113,8 @@ describe "interaction with differentiated assignments on the dashboard and calen
         get "/"
         f('#DashboardOptionsMenu_Container button').click
         fj('span[role="menuitemradio"]:contains("Recent Activity")').click
+        dashboard = f('#dashboard-activity')
+        keep_trying_until { dashboard.displayed? }
         expect(f("#not_right_side .no_recent_messages")).to include_text("No Recent Messages")
       end
     end

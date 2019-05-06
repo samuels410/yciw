@@ -33,9 +33,9 @@ describe UsersController, type: :request do
   end
 
   before :once do
-    @teacher = course_with_teacher(:active_all => true, :user => user_with_pseudonym(:active_all => true))
+    course_with_teacher(:active_all => true, :user => user_with_pseudonym(:active_all => true))
     @teacher_course = @course
-    @student_course = course_factory(active_all: true)
+    @student_course = course_factory(active_course: true)
     @student_course.enroll_student(@user).accept!
     # an assignment i need to submit (needs_submitting)
     @a1 = Assignment.create!(:context => @student_course, :due_at => 6.days.from_now, :title => 'required work', :submission_types => 'online_text_entry', :points_possible => 10)
@@ -135,6 +135,24 @@ describe UsersController, type: :request do
     expect(strip_secure_params(json.second)).to eq strip_secure_params(@a2_json)
   end
 
+  it 'should not crash when mixing items with/without due dates (users controller)' do
+    @a2.update_attributes(due_at: nil)
+    api_call(:get, "/api/v1/users/self/todo",
+             controller: "users", action: "todo_items", format: "json")
+    expect(response).to be_successful
+  end
+
+  it 'should not crash when mixing items with/without due dates (courses controller)' do
+    @teacher_course.enroll_student(@teacher).accept!
+    @a2.update_attributes(due_at: nil)
+    Assignment.create!(context: @teacher_course, due_at: 1.day.from_now, title: 'text', submission_types: 'online_text_entry', points_possible: 15)
+    api_call(:get, "/api/v1/courses/#{@teacher_course.id}/todo",
+             controller: "courses", action: "todo_items",
+             format: "json", per_page: 5,
+             course_id: @teacher_course.to_param)
+    expect(response).to be_successful
+  end
+
   it "should ignore a todo item permanently" do
     api_call(:delete, @a2_json['ignore_permanently'],
              :controller => "users", :action => "ignore_item",
@@ -174,6 +192,7 @@ describe UsersController, type: :request do
   end
 
   it "should ignore excused assignments for students" do
+    @student_course.enroll_teacher(@teacher)
     @a1.grade_student(@me, excuse: true, grader: @teacher)
 
     json = api_call(:get, "/api/v1/courses/#{@student_course.id}/todo",
@@ -302,45 +321,74 @@ describe UsersController, type: :request do
   end
 
   context 'with pagination' do
-    before :each do
-      @teacher = course_with_teacher(:active_all => true, :user => user_with_pseudonym(:active_all => true))
+    before :once do
+      @teacher = course_with_teacher(active_all: true).user
       @teacher_course = @course
-      @student_course = course_factory(active_all: true)
-      @student_course.enroll_student(@user).accept!
+      @student_course = course_factory(active_course: true)
+      @student_course.enroll_student(@teacher).accept(true)
       # an assignment i need to submit (needs_submitting)
-      @student_assignment_ids = []
-      10.times do
-        a = Assignment.create!(:context => @student_course,
-                               :due_at => 6.days.from_now,
-                               :title => 'required work',
-                               :submission_types => 'online_text_entry',
-                               :points_possible => 10)
-        @student_assignment_ids << a.id
+      batch = []
+      [120, 13, 147, 79, 161, 119, 81, 57, 134, 21].each do |i|
+        batch << {
+          context_type: 'Course',
+          context_id: @student_course.id,
+          due_at: i.hours.from_now, # randomized due dates for the next 7ish days
+          title: 'required work',
+          submission_types: 'online_text_entry',
+          points_possible: 10,
+          workflow_state: 'published'
+        }
       end
+      Assignment.bulk_insert(batch)
+      @student_assignments = @student_course.assignments
+      batch = []
+      @student_assignments.each do |a|
+        batch << {
+          cached_due_date: a.due_date,
+          assignment_id: a.id,
+          user_id: @teacher.id,
+          workflow_state: 'unsubmitted'
+        }
+      end
+      Submission.bulk_insert(batch)
 
       # an assignment i created, and a student who submits the assignment (needs_grading)
-      @me = @user
       @student = user_factory(active_all: true)
-      @user = @me
       @teacher_course.enroll_student(@student).accept!
-      @teacher_assignment_ids = []
-      10.times do
-        a = Assignment.create!(:context => @teacher_course,
-                               :due_at => 1.day.from_now,
-                               :title => 'text',
-                               :submission_types => 'online_text_entry',
-                               :points_possible => 15)
-        a.submit_homework(@student, :submission_type => 'online_text_entry', :body => 'done')
-        @teacher_assignment_ids << a.id
+      batch = []
+      [89, 10, 39, 6, 34, 55, 95, 103, 126, 107].each do |i|
+        batch << {
+          context_type: 'Course',
+          context_id: @teacher_course.id,
+          due_at: i.hours.from_now, # randomized due dates for the next 7ish days
+          title: 'text',
+          submission_types: 'online_text_entry',
+          points_possible: 15,
+          workflow_state: 'published'
+        }
       end
+      Assignment.bulk_insert(batch)
+      @teacher_assignments = @teacher_course.assignments
+      batch = []
+      @teacher_assignments.each do |a|
+        batch << {
+          cached_due_date: a.due_at,
+          assignment_id: a.id,
+          user_id: @student.id,
+          workflow_state: 'submitted',
+          submission_type: 'online_text_entry',
+          body: 'done'
+        }
+      end
+      Submission.bulk_insert(batch)
+      @user = @teacher
     end
 
     it "paginates (users controller)" do
-      response_ids = []
       json = api_call(:get, "/api/v1/users/self/todo",
                       :controller => "users", :action => "todo_items",
                       :format => "json", :per_page => 10)
-      json.each { |todo| response_ids << todo['assignment']['id'] }
+      response_ids = json.map { |todo| todo['assignment']['id'] }
 
       json_next = follow_pagination_link('next', {
         controller: 'users',
@@ -348,18 +396,17 @@ describe UsersController, type: :request do
         format: 'json',
         per_page: 10
       })
-      json_next.each { |todo| response_ids << todo['assignment']['id'] }
+      response_ids += json_next.map { |todo| todo['assignment']['id'] }
 
-      expect(response_ids - @teacher_assignment_ids - @student_assignment_ids).to be_empty
+      expect(response_ids).to eq((@teacher_assignments + @student_assignments).sort_by(&:due_at).map(&:id))
     end
 
     it "paginated (courses controller)" do
-      response_ids = []
       json = api_call(:get, "/api/v1/courses/#{@student_course.id}/todo",
                       :controller => "courses", :action => "todo_items",
                       :format => "json", :per_page => 5,
                       :course_id => @student_course.to_param)
-      json.each { |todo| response_ids << todo['assignment']['id'] }
+      response_ids = json.map { |todo| todo['assignment']['id'] }
       json_next = follow_pagination_link('next', {
         controller: 'courses',
         action: 'todo_items',
@@ -367,9 +414,9 @@ describe UsersController, type: :request do
         per_page: 5,
         :course_id => @student_course.to_param
       })
-      json_next.each { |todo| response_ids << todo['assignment']['id'] }
+      response_ids += json_next.map { |todo| todo['assignment']['id'] }
 
-      expect(response_ids - @student_assignment_ids).to be_empty
+      expect(response_ids).to eq(@student_assignments.sort_by(&:due_at).map(&:id))
     end
   end
 

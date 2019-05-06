@@ -16,7 +16,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 import Enzyme from 'enzyme'
-import Adapter from 'enzyme-adapter-react-14'
+import Adapter from 'enzyme-adapter-react-16'
 import { canvas } from '@instructure/ui-themes/lib'
 import en_US from 'timezone/en_US'
 import './jsx/spec-support/specProtection'
@@ -94,7 +94,7 @@ if (process.env.JSPEC_PATH) {
 } else {
   if (!process.env.JSPEC_GROUP || (process.env.JSPEC_GROUP === 'coffee')) {
     // run specs for ember screenreader gradebook
-    requireAll(require.context('../../app/coffeescripts', !!'includeSubdirectories', /\.spec.coffee$/))
+    requireAll(require.context('../../app/coffeescripts', !!'includeSubdirectories', /\.spec.js$/))
 
     requireAll(require.context('../coffeescripts', !!'includeSubdirectories', /Spec.js$/))
     requireAll(require.context('../coffeescripts', !!'includeSubdirectories', /Spec.coffee$/))

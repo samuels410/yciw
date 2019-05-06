@@ -33,9 +33,9 @@ describe AssignmentsHelper do
       expect(assignment_publishing_enabled?(@assignment, @student)).to be_falsey
     end
 
-    it "is false if the assignment already has submissions" do
+    it "is true if the assignment already has submissions and is unpublished" do
       @assignment.submissions.find_by!(user_id: @student).update!(submission_type: 'online_url')
-      expect(assignment_publishing_enabled?(@assignment, @teacher)).to be_falsey
+      expect(assignment_publishing_enabled?(@assignment, @teacher)).to be_truthy
     end
 
     it "is true otherwise" do
@@ -117,6 +117,51 @@ describe AssignmentsHelper do
         turnitin_shared_secret: nil
       })
       expect(turnitin_active?).to be_falsey
+    end
+  end
+
+  describe "#assignment_submission_button" do
+    before do
+      student_in_course
+      assignment_model(course: @course)
+      @assignment.update_attribute(:submission_types, "online_upload")
+      allow(self).to receive(:can_do).and_return true
+    end
+
+    context "the submission has 0 attempts left" do
+      it "returns a disabled button" do
+        @assignment.update_attribute(:allowed_attempts, 2)
+        submission = @assignment.submissions.find_by!(user_id: @student)
+        submission.update_attribute(:attempt, 2)
+        button = assignment_submission_button(@assignment, @student, submission)
+        expect(button["disabled"]).to eq("disabled")
+      end
+    end
+
+    context "the submission has > 0 attempts left" do
+      it "returns an enabled button" do
+        @assignment.update_attribute(:allowed_attempts, 2)
+        submission = @assignment.submissions.find_by!(user_id: @student)
+        submission.update_attribute(:attempt, 1)
+        button = assignment_submission_button(@assignment, @student, submission)
+        expect(button["disabled"]).to be_nil
+      end
+    end
+
+    context "the submission has unlimited attempts" do
+      it "returns an enabled button" do
+        @assignment.update_attribute(:allowed_attempts, -1)
+        submission = @assignment.submissions.find_by!(user_id: @student)
+        submission.update_attribute(:attempt, 3)
+        button = assignment_submission_button(@assignment, @student, submission)
+        expect(button["disabled"]).to be_nil
+      end
+    end
+  end
+
+  describe "#i18n_grade" do
+    it "returns nil when passed a nil grade and a grading_type of pass_fail" do
+      expect(i18n_grade(nil, "pass_fail")).to be nil
     end
   end
 end

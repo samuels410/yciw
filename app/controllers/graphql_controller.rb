@@ -29,6 +29,7 @@ class GraphQLController < ApplicationController
       current_user: @current_user,
       session: session,
       request: request,
+      in_app: in_app?,
       tracers: [
         Tracers::DatadogTracer.new(
           request.host_with_port.sub(':', '_'),
@@ -52,6 +53,7 @@ class GraphQLController < ApplicationController
   end
 
   def graphiql
+    @page_title = "GraphiQL"
     render :graphiql, layout: 'bare'
   end
 end

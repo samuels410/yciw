@@ -41,13 +41,13 @@ _.toPairs(rubrics).forEach(([key, rubric]) => {
         const component = (mods) => shallow(<Criterion {...{ ...props, ...mods }} />)
 
         it('renders the root component as expected', () => {
-          expect(component().debug()).toMatchSnapshot()
+          expect(component()).toMatchSnapshot()
         })
 
         subComponents.forEach((name) => {
           it(`renders the ${name} sub-component(s) as expected`, () => {
             component().find(name)
-              .forEach((el) => expect(el.shallow().debug()).toMatchSnapshot())
+              .forEach((el) => expect(el.shallow()).toMatchSnapshot())
           })
         })
       }
@@ -97,27 +97,16 @@ describe('Criterion', () => {
     expectState(false)
   })
 
-  it('only shows instructor comments in sidebar when relevant', () => {
-    // in particular, we only show the comment sidebar when:
-    // - there are comments
-    // - the rubric is not free-form
-    // - we are not assessing the rubric
-    // - the rubric is not in summary mode
-    const comments = (changes) => shallow(
+  it('does not have a threshold when mastery_points is null / there is no outcome', () => {
+    const nullified = { ...rubrics.points.criteria[1], mastery_points: null }
+    const el = shallow(
       <Criterion
-        assessment={assessments.points.data[1]}
-        criterion={rubrics.points.criteria[1]}
+        criterion={nullified}
         freeForm={false}
-        {...changes}
       />
-    ).find('CommentText')
+    )
 
-    expect(comments()).toHaveLength(1)
-    const noComments = { ...assessments.points.data[1], comments: undefined }
-    expect(comments({ assessment: noComments })).toHaveLength(0)
-    expect(comments({ freeForm: true })).toHaveLength(0)
-    expect(comments({ onAssessmentChange: () => {} })).toHaveLength(0)
-    expect(comments({ isSummary: true })).toHaveLength(0)
+    expect(el.find('Threshold')).toHaveLength(0)
   })
 
   it('does not have a points column when hasPointsColumn is false', () => {
@@ -131,6 +120,21 @@ describe('Criterion', () => {
     )
 
     expect(el.find('td')).toHaveLength(1)
+  })
+
+  it('only shows comments when they exist or editComments is true', () => {
+    const withAssessment= (changes) => shallow(
+      <Criterion
+        assessment={{ ...assessments.points.data[1], ...changes }}
+        onAssessmentChange={sinon.spy()}
+        criterion={rubrics.points.criteria[1]}
+        freeForm={false}
+      />
+    ).find('Ratings').prop('footer')
+
+    expect(withAssessment({ comments: 'blah', editComments: false })).toBeDefined()
+    expect(withAssessment({ comments: '', editComments: true })).toBeDefined()
+    expect(withAssessment({ comments: '', editComments: false })).toBeNull()
   })
 
   it('allows extra credit for outcomes when enabled', () => {
@@ -166,13 +170,13 @@ describe('Criterion', () => {
       const el = points({ criterion, onAssessmentChange })
       const onPointChange = el.find('Points').prop('onPointChange')
 
-      onPointChange('10')
-      onPointChange('10.245')
-      onPointChange('blergh')
+      onPointChange({points: '10', description: 'good', id: '1'})
+      onPointChange({points: '10.245', description: 'better', id: '2'})
+      onPointChange({points: 'blergh', description: 'invalid', id: '3'})
       expect(onAssessmentChange.args).toEqual([
-        [{ points: { text: '10', valid: true, value: 10 } }],
-        [{ points: { text: '10.245', valid: true, value: 10.245 } } ],
-        [{ points: { text: 'blergh', valid: false, value: undefined } }],
+        [{description: 'good', id: '1', points: { text: '10', valid: true, value: 10 } }],
+        [{description: 'better', id: '2', points: { text: '10.245', valid: true, value: 10.245 } } ],
+        [{description: 'invalid', id: '3', points: { text: 'blergh', valid: false, value: undefined } }]
       ])
     })
 

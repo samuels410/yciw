@@ -21,6 +21,13 @@ require 'canvas_mimetype_fu'
 require 'rubygems/package'
 require 'zlib'
 
+module SkipStrictOctCheck
+  def strict_oct(str)
+    str.oct
+  end
+end
+Gem::Package::TarHeader.singleton_class.prepend(SkipStrictOctCheck) # jeez who the heck thought it was a good idea to use rubygems code for this
+
 class CanvasUnzip
 
   class CanvasUnzipError < ::StandardError; end
@@ -106,6 +113,9 @@ class CanvasUnzip
     file = File.open(archive_filename)
     mime_type = File.mime_type?(file)
 
+    # on some systems `file` fails to recognize a zip file with no entries; fall back on using the extension
+    mime_type = File.mime_type?(archive_filename) if mime_type == 'application/octet-stream'
+
     if ['application/x-gzip', 'application/gzip'].include? mime_type
       file = Zlib::GzipReader.new(file)
       mime_type = 'application/x-tar' # it may not actually be a tar though, so rescue if there's a problem
@@ -129,7 +139,7 @@ class CanvasUnzip
         raise UnknownArchiveType, "invalid tar"
       end
     else
-      raise UnknownArchiveType, "unknown mime type #{mime_type}"
+      raise UnknownArchiveType, "unknown mime type #{mime_type} for archive #{File.basename(archive_filename)}"
     end
   end
 

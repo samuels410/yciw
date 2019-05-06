@@ -142,6 +142,8 @@ class FilesController < ApplicationController
     :api_create, :api_create_success, :api_create_success_cors, :show_thumbnail
   ]
 
+  before_action :open_limited_cors, only: [:show]
+
   prepend_around_action :load_pseudonym_from_policy, only: :create
   skip_before_action :verify_authenticity_token, only: :api_create
   before_action :verify_api_id, only: [
@@ -379,7 +381,6 @@ class FilesController < ApplicationController
       css_bundle :react_files
       js_env({
         :FILES_CONTEXTS => files_contexts,
-        :NEW_FOLDER_TREE => @context.feature_enabled?(:use_new_tree),
         :COURSE_ID => context.id.to_s
       })
       log_asset_access([ "files", @context ], "files", "other")
@@ -458,7 +459,10 @@ class FilesController < ApplicationController
     end
     params[:include] = Array(params[:include])
     if authorized_action(@attachment,@current_user,:read)
-      render :json => attachment_json(@attachment, @current_user, {}, { include: params[:include], omit_verifier_in_app: !value_to_boolean(params[:use_verifiers]) })
+      json = attachment_json(@attachment, @current_user, {}, { include: params[:include], omit_verifier_in_app: !value_to_boolean(params[:use_verifiers]) })
+
+      json.merge!(doc_preview_json(@attachment, @current_user))
+      render :json => json
     end
   end
 
@@ -471,12 +475,12 @@ class FilesController < ApplicationController
     # @current_user.attachments.find , since it might not actually be a user
     # attachment.
     # this implicit context magic happens in ApplicationController#get_context
-    if @context && !@context.is_a?(User)
-      # note that Attachment#find has special logic to find overwriting files; see FindInContextAssociation
-      @attachment = @context.attachments.find(params[:id])
-    else
+    if @context.nil? || @current_user.nil? || @context == @current_user
       @attachment = Attachment.find(params[:id])
       @skip_crumb = true unless @context
+    else
+      # note that Attachment#find has special logic to find overwriting files; see FindInContextAssociation
+      @attachment = @context.attachments.find(params[:id])
     end
 
     params[:download] ||= params[:preview]
@@ -498,14 +502,9 @@ class FilesController < ApplicationController
       return
     end
 
-
-    verifier_checker = Attachments::Verification.new(@attachment)
-    if (params[:verifier] && verifier_checker.valid_verifier_for_permission?(params[:verifier], :read, session)) ||
-        @attachment.attachment_associations.where(:context_type => 'Submission').
-          any? { |aa| aa.context && aa.context.grants_right?(@current_user, session, :read) } ||
-        authorized_action(@attachment, @current_user, :read)
-
+    if read_allowed(@attachment, @current_user, session, params)
       @attachment.ensure_media_object
+      verifier_checker = Attachments::Verification.new(@attachment)
 
       if params[:download]
         if (params[:verifier] && verifier_checker.valid_verifier_for_permission?(params[:verifier], :download, session)) ||
@@ -870,25 +869,22 @@ class FilesController < ApplicationController
     if params[:progress_id]
       progress = Progress.find(params[:progress_id])
 
-      # TODO: The `submit_assignment` param is used to help in backwards compat for fixing auto submissions,
-      # can be removed in the next release.
-      if params[:submit_assignment].to_s == 'true'
-        if progress.tag == 'upload_via_url'
-          assignment = progress.context
-          homework_service = Services::SubmitHomeworkService.new(@attachment, assignment)
-          begin
-            homework_service.submit(progress.created_at, params[:eula_agreement_timestamp])
-            homework_service.deliver_email
+      # If the upload is for an Assignment, submit it
+      if progress.tag == 'upload_via_url' && progress.context.is_a?(Assignment)
+        assignment = progress.context
+        homework_service = Services::SubmitHomeworkService.new(@attachment, assignment)
+        begin
+          homework_service.submit(progress.created_at, params[:eula_agreement_timestamp])
+          homework_service.deliver_email
 
-            progress.complete unless progress.failed?
-          rescue => error
-            error_id = Canvas::Errors.capture_exception(self.class.name, error)[:error_report]
-            progress.message = "Unexpected error, ID: #{error_id || 'unknown'}"
-            progress.save
-            progress.fail
-            logger.error "Error submitting a file: #{error} - #{error.backtrace}"
-            homework_service.failure_email
-          end
+          progress.complete unless progress.failed?
+        rescue => error
+          error_id = Canvas::Errors.capture_exception(self.class.name, error)[:error_report]
+          progress.message = "Unexpected error, ID: #{error_id || 'unknown'}"
+          progress.save
+          progress.fail
+          logger.error "Error submitting a file: #{error} - #{error.backtrace}"
+          homework_service.failure_email
         end
       end
 
@@ -1110,7 +1106,11 @@ class FilesController < ApplicationController
 
 
   # @API Delete file
-  # Remove the specified file
+  # Remove the specified file. Unlike most other DELETE endpoints, using this
+  # endpoint will result in comprehensive, irretrievable destruction of the file.
+  # It should be used with the `replace` parameter set to true in cases where the
+  # file preview also needs to be destroyed (such as to remove files that violate
+  # privacy laws).
   #
   # @argument replace [boolean]
   #   This action is irreversible.
@@ -1137,7 +1137,7 @@ class FilesController < ApplicationController
       end
     end
     if can_do(@attachment, @current_user, :delete)
-      return render_unauthorized_action if master_courses? && editing_restricted?(@attachment)
+      return render_unauthorized_action if editing_restricted?(@attachment)
       @attachment.destroy
       respond_to do |format|
         format.html {
@@ -1202,6 +1202,26 @@ class FilesController < ApplicationController
     headers['Access-Control-Allow-Methods'] = 'POST, PUT, DELETE, GET, OPTIONS'
     headers['Access-Control-Request-Method'] = '*'
     headers['Access-Control-Allow-Headers'] = 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Accept-Encoding'
+  end
+
+  def open_limited_cors
+    headers['Access-Control-Allow-Origin'] = '*'
+    headers['Access-Control-Allow-Methods'] = 'GET, HEAD'
+  end
+
+  def read_allowed(attachment, user, session, params)
+    if params[:verifier]
+      verifier_checker = Attachments::Verification.new(attachment)
+      return true if verifier_checker.valid_verifier_for_permission?(params[:verifier], :read, session)
+    end
+
+    submissions = attachment.attachment_associations.where(context_type: "Submission").preload(:context).map(&:context).compact
+    return true if submissions.any? { |submission| submission.grants_right?(user, session, :read) }
+
+    course = Assignment.find(params[:assignment_id]).course unless params[:assignment_id].nil?
+    return true if course&.grants_right?(user, session, :read)
+
+    authorized_action(attachment, user, :read)
   end
 
   def strong_attachment_params

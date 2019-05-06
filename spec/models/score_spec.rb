@@ -270,4 +270,44 @@ describe Score do
       expect(score.grants_right? @enrollment.user, :read).to eq false
     end
   end
+
+  describe "final grade override" do
+    describe "#effective_final_score" do
+      it "returns the override score when one is present" do
+        score.update!(override_score: 88)
+        expect(score.effective_final_score).to eq 88
+      end
+
+      it "returns the calculated final score when no override is present" do
+        expect(score.effective_final_score).to eq 74
+      end
+    end
+
+    describe "#effective_final_score_lower_bound" do
+      it "returns the lowest possible score in the matching grading scheme, if grading schemes enabled" do
+        score.update!(override_score: 89)
+        allow(score.course).to receive(:grading_standard_enabled?).and_return(true)
+        expect(score.effective_final_score_lower_bound).to eq 87
+      end
+
+      it "returns the effective final score if grading schemes are not enabled" do
+        score.update!(override_score: 89)
+        allow(score.course).to receive(:grading_standard_enabled?).and_return(false)
+        expect(score.effective_final_score_lower_bound).to eq 89
+      end
+    end
+
+    describe "#effective_final_grade" do
+      it "returns a grade commensurate with the override score when one is present" do
+        score.update!(override_score: 88)
+        allow(score.course).to receive(:grading_standard_enabled?).and_return(true)
+        expect(score.effective_final_grade).to eq 'B+'
+      end
+
+      it "returns the calculated final grade when no override score is present" do
+        allow(score.course).to receive(:grading_standard_enabled?).and_return(true)
+        expect(score.effective_final_grade).to eq 'C'
+      end
+    end
+  end
 end

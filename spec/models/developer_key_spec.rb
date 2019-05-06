@@ -71,27 +71,37 @@ describe DeveloperKey do
 
   describe 'callbacks' do
     describe 'public_jwk validations' do
-      subject { developer_key_saved }
-
-      before { subject.public_jwk = {invalid: 'test'} }
-
-      it 'verifies public_jwk kty is "RSA"' do
-        expect(subject.save).to eq false
+      subject do
+        developer_key_saved.save
       end
 
-      it 'adds an error message whn public_jwk is invalid' do
-        subject.public_jwk = {invalid: 'test'}
-        subject.save
-        expect(subject.errors[:public_jwk]).to include 'Must use RSA kty'
+      before { developer_key_saved.generate_rsa_keypair! }
+
+      context 'when the kty is not "RSA"' do
+        before { developer_key_saved.public_jwk['kty'] = 'foo' }
+
+        it { is_expected.to eq false }
+      end
+
+      context 'when the alg is not "RS256"' do
+        before { developer_key_saved.public_jwk['alg'] = 'foo' }
+
+        it { is_expected.to eq false }
+      end
+
+      context 'when required claims are missing' do
+        before { developer_key_saved.update public_jwk: {foo: 'bar'} }
+
+        it { is_expected.to eq false }
       end
     end
 
-    it 'does not validate scopes' do
+    it 'does validate scopes' do
       expect do
         DeveloperKey.create!(
           scopes: ['not_a_valid_scope']
         )
-      end.not_to raise_exception
+      end.to raise_exception ActiveRecord::RecordInvalid
     end
 
     context 'when api token scoping FF is enabled' do
@@ -100,7 +110,39 @@ describe DeveloperKey do
           url:GET|/api/v1/audit/grade_change/courses/:course_id/assignments/:assignment_id/graders/:grader_id)
       end
 
-      before { Account.site_admin.enable_feature!(:developer_key_management_and_scoping) }
+      describe 'before_save' do
+        subject do
+          key.save!
+          key.require_scopes
+        end
+
+        context 'when a public jwk is set' do
+          let(:key) do
+            developer_key_not_saved.generate_rsa_keypair!
+            developer_key_not_saved
+          end
+
+          it { is_expected.to eq true }
+        end
+
+        context 'when a public jwk is not set' do
+          let(:key) { developer_key_not_saved }
+
+          it { is_expected.to eq false }
+        end
+
+        context 'when a key requires scopes but has no public jwk' do
+          let(:key) do
+            developer_key_not_saved.update!(
+              require_scopes: true,
+              public_jwk: nil
+            )
+            developer_key_not_saved
+          end
+
+          it { is_expected.to eq true }
+        end
+      end
 
       describe 'after_update' do
         let(:user) { user_model }
@@ -134,12 +176,6 @@ describe DeveloperKey do
           developer_key_with_scopes.update!(scopes: valid_scopes.push("url:PUT|/api/v1/courses/:course_id/quizzes/:id"))
           expect(developer_key_with_scopes.access_tokens).to match_array [access_token]
         end
-
-        it 'does not delete the associated access tokens if feature flags are off' do
-          Account.site_admin.disable_feature!(:developer_key_management_and_scoping)
-          developer_key_with_scopes.update!(scopes: [valid_scopes.first])
-          expect(developer_key_with_scopes.access_tokens).to match_array [access_token]
-        end
       end
 
       it 'raises an error if scopes contain invalid scopes' do
@@ -156,16 +192,6 @@ describe DeveloperKey do
             scopes: valid_scopes
           )
         end.not_to raise_exception
-      end
-
-      it 'does not set "require_scopes" to true if scopes are present and require_scopes is false' do
-        key = DeveloperKey.create!(scopes: valid_scopes, require_scopes: false)
-        expect(key.require_scopes).to eq false
-      end
-
-      it 'does not set "require_scopes" to false if scopes are blank and require_scopes is true' do
-        key = DeveloperKey.create!(require_scopes: true)
-        expect(key.require_scopes).to eq true
       end
     end
 
@@ -476,7 +502,6 @@ describe DeveloperKey do
 
   context "Account scoped keys" do
     shared_examples "authorized_for_account?" do
-
       it "should allow access to its own account" do
         expect(@key.authorized_for_account?(Account.find(@account.id))).to be true
       end
@@ -499,6 +524,7 @@ describe DeveloperKey do
 
         @not_sub_account = Account.create!
         @key = DeveloperKey.create!(:redirect_uri => "http://example.com/a/b", account: @account)
+        enable_developer_key_account_binding!(@key)
       end
 
       include_examples "authorized_for_account?"
@@ -532,6 +558,7 @@ describe DeveloperKey do
 
         @not_sub_account = Account.create!
         @key = DeveloperKey.create!(:redirect_uri => "http://example.com/a/b", account: @account)
+        enable_developer_key_account_binding!(@key)
       end
 
       include_examples "authorized_for_account?"

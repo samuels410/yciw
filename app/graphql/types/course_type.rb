@@ -73,7 +73,7 @@ module Types
         required: false
     end
 
-    implements GraphQL::Relay::Node.interface
+    implements GraphQL::Types::Relay::Node
     implements Interfaces::TimestampInterface
 
     field :_id, ID, "legacy canvas id", method: :id, null: false
@@ -175,6 +175,20 @@ module Types
       else
         nil
       end
+    end
+
+    field :group_sets_connection, GroupSetType.connection_type, <<~DOC, null: true
+      Project group sets for this course.
+    DOC
+    def group_sets_connection
+      if course.grants_right? current_user, :manage_groups
+        course.group_categories.where(role: nil)
+      end
+    end
+
+    field :term, TermType, null: true
+    def term
+      load_association(:enrollment_term)
     end
 
     field :permissions, CoursePermissionsType,

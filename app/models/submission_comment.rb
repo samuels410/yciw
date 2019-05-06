@@ -36,6 +36,7 @@ class SubmissionComment < ActiveRecord::Base
   alias_attribute :body, :comment
 
   attr_writer :updating_user
+  attr_accessor :grade_posting_in_progress
 
   belongs_to :submission
   belongs_to :author, :class_name => 'User'
@@ -51,11 +52,14 @@ class SubmissionComment < ActiveRecord::Base
   before_save :set_edited_at
   after_save :update_participation
   after_save :check_for_media_object
-  after_save :record_save_audit_event
   after_update :publish_other_comments_in_this_group
   after_destroy :delete_other_comments_in_this_group
-  after_destroy :record_deletion_audit_event
   after_commit :update_submission
+
+  with_options if: -> { auditable? && updating_user_present? } do
+    after_save :record_save_audit_event
+    after_destroy :record_deletion_audit_event
+  end
 
   serialize :cached_attachments
 
@@ -317,12 +321,22 @@ class SubmissionComment < ActiveRecord::Base
     submission.user
   end
 
+  def auditable?
+    !draft? && submission.assignment.auditable? && !grade_posting_in_progress
+  end
+
   protected
   def skip_group_callbacks!
     @skip_group_callbacks = true
   end
 
   private
+  def updating_user_present?
+    # For newly-created comments, the updating user is always the commenter
+    updating_user = saved_change_to_id? ? author : @updating_user
+    updating_user.present?
+  end
+
   def skip_group_callbacks?
     !!@skip_group_callbacks
   end
@@ -334,10 +348,7 @@ class SubmissionComment < ActiveRecord::Base
   end
 
   def record_save_audit_event
-    # For newly-created comments, the updating user is always the commenter
     updating_user = saved_change_to_id? ? author : @updating_user
-    return unless updating_user && record_changes?
-
     event_type = event_type_for_save
     changes_to_save = auditable_changes(event_type: event_type)
     return if changes_to_save.empty?
@@ -374,8 +385,6 @@ class SubmissionComment < ActiveRecord::Base
   end
 
   def record_deletion_audit_event
-    return unless @updating_user && record_changes?
-
     AnonymousOrModerationEvent.create!(
       assignment: submission.assignment,
       submission: submission,
@@ -383,9 +392,5 @@ class SubmissionComment < ActiveRecord::Base
       event_type: :submission_comment_deleted,
       payload: {id: id}
     )
-  end
-
-  def record_changes?
-    !draft? && submission.assignment.auditable?
   end
 end

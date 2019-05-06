@@ -2,6 +2,9 @@
   "add_to_do_7def3c37": {
     "message": "Legg til gjeremål"
   },
+  "address_3159962f": {
+    "message": "Adresse:"
+  },
   "all_day_fb42c4fc": {
     "message": "Heile dagen"
   },
@@ -51,7 +54,10 @@
     "message": "{ assignmentType } { title }, påminning om frist den { datetime }."
   },
   "beginning_of_your_to_do_history_61ef2dce": {
-    "message": "Starten på gjeremålhistorikken din"
+    "message": "Starten på gjeremålshistorikken din"
+  },
+  "calendar_a8563bb2": {
+    "message": "Kalender:"
   },
   "calendar_event_89aadc1c": {
     "message": "Kalenderhending"
@@ -65,6 +71,9 @@
   "close_opportunity_center_popup_9907d981": {
     "message": "Lukk popup-menyen med val"
   },
+  "count_plural_0_opportunities_one_opportunity_other_bb1698f6": {
+    "message": "{ count, plural,\n     =0 {# opportunities}\n    one {# opportunity}\n  other {# opportunities}\n}. Klikk for å opne popup-meny med val. "
+  },
   "count_plural_one_show_completed_item_other_show_co_8d0d0ae5": {
     "message": "{ count, plural,\n    one {Vis # fullført element}\n  other {Vis # fullførte elementer}\n}"
   },
@@ -72,7 +81,7 @@
     "message": "Emne"
   },
   "course_to_do_bcbbab54": {
-    "message": "{ course } GJEREMÅL"
+    "message": "{ course } Gjeremål"
   },
   "date_at_time_dbdb1b99": {
     "message": "{ date } klokka { time }"
@@ -86,11 +95,17 @@
   "date_is_required_8660ec22": {
     "message": "Dato er obligatorisk"
   },
+  "date_time_d9fbf2d7": {
+    "message": "Dato og tidspunkt:"
+  },
   "delete_a6efa79d": {
     "message": "Slett"
   },
   "details_98a31b68": {
     "message": "Detaljar"
+  },
+  "details_a6f427c3": {
+    "message": "Detaljar:"
   },
   "discussion_6719c51d": {
     "message": "Diskusjon"
@@ -188,6 +203,9 @@
   "loading_planner_items_947a813d": {
     "message": "Lastar planelement"
   },
+  "location_3b6ff307": {
+    "message": "Plassering:"
+  },
   "looks_like_there_isn_t_anything_here_d9bcef49": {
     "message": "Ser ikkje ut som om det finns noko her"
   },
@@ -257,6 +275,9 @@
   "peer_review_74f26a13": {
     "message": "Fagfellevurdering"
   },
+  "peer_review_for_itemtitle_358cb413": {
+    "message": "Fagfellevurdering for { itemTitle }"
+  },
   "points_bceb5005": {
     "message": "poeng"
   },
@@ -296,6 +317,12 @@
   "startdate_to_enddate_d245175b": {
     "message": "{ startDate } til { endDate }"
   },
+  "startdatetime_enddatetime_20abc10e": {
+    "message": "{ startDateTime } - { endDateTime }"
+  },
+  "startdatetime_endtime_49741bbe": {
+    "message": "{ startDateTime } - { endTime }"
+  },
   "starttime_to_endtime_d7cc249d": {
     "message": "{ startTime } til { endTime }"
   },
@@ -303,7 +330,7 @@
     "message": "Innlevert"
   },
   "success_to_do_created_e34ed395": {
-    "message": "Vellukka: Å gjere-oversikt er oppretta"
+    "message": "Vellukka: Gjeremålsliste er oppretta"
   },
   "task_16b0ef38": {
     "message": "Oppgåve"
@@ -330,7 +357,7 @@
     "message": "Gjeremål: { date }"
   },
   "to_do_items_loading_d1cdfcd5": {
-    "message": "Lastar innhald i Å gjere-oversikta"
+    "message": "Lastar innhald i gjeremålslista"
   },
   "today_76e10f9c": {
     "message": "I dag"

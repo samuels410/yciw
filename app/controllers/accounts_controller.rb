@@ -658,7 +658,7 @@ class AccountsController < ApplicationController
     @courses = Api.paginate(@courses, self, api_v1_account_courses_url, page_opts)
 
     ActiveRecord::Associations::Preloader.new.preload(@courses, [:account, :root_account, course_account_associations: :account])
-    ActiveRecord::Associations::Preloader.new.preload(@courses, [:teachers]) if includes.include?("teachers")
+    preload_teachers(@courses) if includes.include?("teachers")
     ActiveRecord::Associations::Preloader.new.preload(@courses, [:enrollment_term]) if includes.include?("term")
 
     if includes.include?("total_students")
@@ -987,6 +987,7 @@ class AccountsController < ApplicationController
         APP_CENTER: { enabled: Canvas::Plugin.find(:app_center).enabled? },
         LTI_LAUNCH_URL: account_tool_proxy_registration_path(@account),
         MEMBERSHIP_SERVICE_FEATURE_FLAG_ENABLED: @account.root_account.feature_enabled?(:membership_service_for_lti_tools),
+        LTI_13_TOOLS_FEATURE_FLAG_ENABLED: @account.root_account.feature_enabled?(:lti_1_3),
         CONTEXT_BASE_URL: "/accounts/#{@context.id}",
         MASKED_APP_CENTER_ACCESS_TOKEN: @account.settings[:app_center_access_token].try(:[], 0...5),
         PERMISSIONS: {
@@ -1065,7 +1066,7 @@ class AccountsController < ApplicationController
     @user = api_find(User, params[:user_id])
     raise ActiveRecord::RecordNotFound unless @account.user_account_associations.where(user_id: @user).exists?
     if @user.allows_user_to_remove_from_account?(@account, @current_user)
-      @user.remove_from_root_account(@account)
+      @user.remove_from_root_account(@account, updating_user: @current_user)
       flash[:notice] = t(:user_deleted_message, "%{username} successfully deleted", :username => @user.name)
       respond_to do |format|
         format.html { redirect_to account_users_url(@account) }
@@ -1104,7 +1105,7 @@ class AccountsController < ApplicationController
     associated_courses = associated_courses.for_term(@term) if @term
     @associated_courses_count = associated_courses.count
     @hide_enrollmentless_courses = params[:hide_enrollmentless_courses] == "1"
-    @only_master_courses = (params[:only_master_courses] == "1") && master_courses?
+    @only_master_courses = (params[:only_master_courses] == "1")
     @courses_sort_orders = [
       {
         key: "name_asc",
@@ -1250,13 +1251,11 @@ class AccountsController < ApplicationController
   def build_course_stats
     courses_to_fetch_users_for = @courses
 
-    if master_courses?
-      templates = MasterCourses::MasterTemplate.active.for_full_course.where(:course_id => @courses).to_a
-      if templates.any?
-        MasterCourses::MasterTemplate.preload_index_data(templates)
-        @master_template_index = templates.index_by(&:course_id)
-        courses_to_fetch_users_for = courses_to_fetch_users_for.reject{|c| @master_template_index[c.id]} # don't fetch the counts for the master/blueprint courses
-      end
+    templates = MasterCourses::MasterTemplate.active.for_full_course.where(:course_id => @courses).to_a
+    if templates.any?
+      MasterCourses::MasterTemplate.preload_index_data(templates)
+      @master_template_index = templates.index_by(&:course_id)
+      courses_to_fetch_users_for = courses_to_fetch_users_for.reject{|c| @master_template_index[c.id]} # don't fetch the counts for the master/blueprint courses
     end
 
     teachers = TeacherEnrollment.for_courses_with_user_name(courses_to_fetch_users_for).where.not(:enrollments => {:workflow_state => %w{rejected deleted}})

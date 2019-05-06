@@ -31,7 +31,7 @@ class Course < ActiveRecord::Base
   include OutcomeImportContext
 
   attr_accessor :teacher_names, :master_course
-  attr_writer :student_count, :primary_enrollment_type, :primary_enrollment_role_id, :primary_enrollment_rank, :primary_enrollment_state, :primary_enrollment_date, :invitation, :master_migration
+  attr_writer :student_count, :teacher_count, :primary_enrollment_type, :primary_enrollment_role_id, :primary_enrollment_rank, :primary_enrollment_state, :primary_enrollment_date, :invitation, :master_migration
 
   time_zone_attribute :time_zone
   def time_zone
@@ -63,6 +63,8 @@ class Course < ActiveRecord::Base
   has_many :prior_enrollments, -> { preload(:user, :course).where(workflow_state: 'completed') }, class_name: 'Enrollment'
   has_many :prior_users, :through => :prior_enrollments, :source => :user
   has_many :prior_students, -> { where(enrollments: { type: ['StudentEnrollment', 'StudentViewEnrollment'], workflow_state: 'completed' }) }, through: :enrollments, source: :user
+
+  has_many :participating_enrollments, -> { where(enrollments: { workflow_state: 'active' }).preload(:user) }, class_name: 'Enrollment', inverse_of: :course
 
   has_many :participating_students, -> { where(enrollments: { type: ['StudentEnrollment', 'StudentViewEnrollment'], workflow_state: 'active' }) }, through: :enrollments, source: :user
   has_many :participating_students_by_date, -> { where(enrollments: { type: ['StudentEnrollment', 'StudentViewEnrollment'], workflow_state: 'active' }).
@@ -124,6 +126,7 @@ class Course < ActiveRecord::Base
   has_many :all_users, -> { distinct }, through: :all_enrollments, source: :user
   has_many :current_users, -> { distinct }, through: :current_enrollments, source: :user
   has_many :all_current_users, -> { distinct }, through: :all_current_enrollments, source: :user
+  has_many :active_users, -> { distinct }, through: :participating_enrollments, source: :user
   has_many :group_categories, -> {where(deleted_at: nil) }, as: :context, inverse_of: :context
   has_many :all_group_categories, :class_name => 'GroupCategory', :as => :context, :inverse_of => :context
   has_many :groups, :as => :context, :inverse_of => :context
@@ -237,9 +240,9 @@ class Course < ActiveRecord::Base
 
   include ContentNotices
   define_content_notice :import_in_progress,
-    icon_class: 'icon-import-content',
-    alert_class: 'alert-info import-in-progress-notice',
-    template: 'courses/import_in_progress_notice',
+    text: -> { t('One or more items are currently being imported. They will be shown in the course below once they are available.') },
+    link_text: -> { t('Import Status') },
+    link_target: ->(course) { "/courses/#{course.to_param}/content_migrations" },
     should_show: ->(course, user) do
       course.grants_right?(user, :manage_content)
     end
@@ -288,7 +291,7 @@ class Course < ActiveRecord::Base
 
   def update_account_associations_if_changed
     if (self.saved_change_to_root_account_id? || self.saved_change_to_account_id?) && !self.class.skip_updating_account_associations?
-      send_now_or_later_if_production(new_record? ? :now : :later, :update_account_associations)
+      send_now_or_later_if_production(saved_change_to_id? ? :now : :later, :update_account_associations)
     end
   end
 
@@ -341,7 +344,12 @@ class Course < ActiveRecord::Base
       tags = self.context_module_tags.active.joins(:context_module).where(:context_modules => {:workflow_state => 'active'})
     end
 
-    DifferentiableAssignment.scope_filter(tags, user, self, is_teacher: user_is_teacher)
+    scope = DifferentiableAssignment.scope_filter(tags, user, self, is_teacher: user_is_teacher)
+    unless user_is_teacher
+      scope = scope.where("content_tags.content_type <> ? OR content_tags.content_id IN (?)", "DiscussionTopic",
+        self.discussion_topics.published.visible_to_student_sections(user).select(:id))
+    end
+    scope
   end
 
   def sequential_module_item_ids
@@ -430,7 +438,7 @@ class Course < ActiveRecord::Base
   end
 
   def image
-    if self.image_id.present?
+    @image ||= if self.image_id.present?
       self.shard.activate do
         self.attachments.active.where(id: self.image_id).take&.public_download_url
       end
@@ -1119,7 +1127,7 @@ class Course < ActiveRecord::Base
         update_all_grading_period_scores: update_all_grading_period_scores
       )
     else
-      inst_job_opts = {}
+      inst_job_opts = { max_attempts: 10 }
       if student_ids.blank? && grading_period_id.nil? && update_all_grading_period_scores && update_course_score
         # if we have all default args, let's queue this job in a singleton to avoid duplicates
         inst_job_opts[:singleton] = "recompute_student_scores:#{global_id}"
@@ -1719,7 +1727,9 @@ class Course < ActiveRecord::Base
                      :grade_publishing_message => nil,
                      :last_publish_attempt_at => last_publish_attempt_at)
 
-    send_later_if_production(:send_final_grades_to_endpoint, publishing_user, user_ids_to_publish)
+    send_later_if_production_enqueue_args(:send_final_grades_to_endpoint,
+                                          { n_strand: ["send_final_grades_to_endpoint", global_root_account_id] },
+                                          publishing_user, user_ids_to_publish)
     send_at(last_publish_attempt_at + settings[:success_timeout].to_i.seconds, :expire_pending_grade_publishing_statuses, last_publish_attempt_at) if should_kick_off_grade_publishing_timeout?
   end
 
@@ -1757,11 +1767,17 @@ class Course < ActiveRecord::Base
       raise e
     end
 
+    default_timeout = Setting.get('send_final_grades_to_endpoint_timelimit', 15.seconds.to_s).to_f
+
+    timeout_options = { raise_on_timeout: true, fallback_timeout_length: default_timeout }
+
     posts_to_make.each do |enrollment_ids, res, mime_type, headers={}|
       begin
         posted_enrollment_ids += enrollment_ids
         if res
-          SSLCommon.post_data(settings[:publish_endpoint], res, mime_type, headers )
+          Canvas.timeout_protection("send_final_grades_to_endpoint:#{global_root_account_id}", timeout_options) do
+            SSLCommon.post_data(settings[:publish_endpoint], res, mime_type, headers )
+          end
         end
         Enrollment.where(:id => enrollment_ids).update_all(:grade_publishing_status => (should_kick_off_grade_publishing_timeout? ? "publishing" : "published"), :grade_publishing_message => nil)
       rescue => e
@@ -2235,7 +2251,7 @@ class Course < ActiveRecord::Base
   end
 
   def self.clonable_attributes
-    [ :group_weighting_scheme, :grading_standard_id, :is_public, :public_syllabus,
+    [ :group_weighting_scheme, :grading_standard_id, :is_public, :is_public_to_auth_users, :public_syllabus,
       :public_syllabus_to_auth, :allow_student_wiki_edits, :show_public_context_messages,
       :syllabus_body, :allow_student_forum_attachments, :lock_all_announcements,
       :default_wiki_editing_roles, :allow_student_organized_groups,
@@ -2365,7 +2381,7 @@ class Course < ActiveRecord::Base
     case visibility_level
     when :full, :limited
       scope
-    when :sections
+    when :sections, :sections_limited
       scope.where("enrollments.course_section_id IN (?) OR (enrollments.limit_privileges_to_course_section=? AND enrollments.type IN ('TeacherEnrollment', 'TaEnrollment', 'DesignerEnrollment'))",
                   visibilities.map{|s| s[:course_section_id]}, false)
     when :restricted
@@ -2411,6 +2427,8 @@ class Course < ActiveRecord::Base
     when :sections then scope.where(enrollments: { course_section_id: visibilities.map {|s| s[:course_section_id] } })
     when :restricted then scope.where(enrollments: { user_id: (visibilities.map { |s| s[:associated_user_id] }.compact + [user]) })
     when :limited then scope.where(enrollments: { type: ['StudentEnrollment', 'TeacherEnrollment', 'TaEnrollment', 'StudentViewEnrollment'] })
+    when :sections_limited then scope.where(enrollments: { course_section_id: visibilities.map {|s| s[:course_section_id] } }).
+      where(enrollments: { type: ['StudentEnrollment', 'TeacherEnrollment', 'TaEnrollment', 'StudentViewEnrollment'] })
     else scope.none
     end
   end
@@ -2419,7 +2437,7 @@ class Course < ActiveRecord::Base
   def course_section_visibility(user, opts={})
     visibilities = section_visibilities_for(user, opts)
     visibility = enrollment_visibility_level_for(user, visibilities)
-    if [:full, :limited, :restricted, :sections].include?(visibility)
+    if [:full, :limited, :restricted, :sections, :sections_limited].include?(visibility)
       enrollment_types = ['StudentEnrollment', 'StudentViewEnrollment', 'ObserverEnrollment']
       if [:restricted, :sections].include?(visibility) || (
           visibilities.any? && visibilities.all? { |v| enrollment_types.include? v[:type] }
@@ -2468,7 +2486,11 @@ class Course < ActiveRecord::Base
     if granted_permissions.empty?
       :restricted # e.g. observer, can only see admins in the course
     elsif visibilities.present? && visibility_limited_to_course_sections?(user, visibilities)
-      :sections
+      if granted_permissions.eql? [:read_roster]
+        :sections_limited
+      else
+        :sections
+      end
     elsif granted_permissions.eql? [:read_roster]
       :limited
     else
@@ -2612,7 +2634,7 @@ class Course < ActiveRecord::Base
   end
 
   def tabs_available(user=nil, opts={})
-    opts.reverse_merge!(:include_external => true)
+    opts.reverse_merge!(:include_external => true, include_hidden_unused: true)
     cache_key = [user, opts].cache_key
     @tabs_available ||= {}
     @tabs_available[cache_key] ||= uncached_tabs_available(user, opts)
@@ -2654,6 +2676,10 @@ class Course < ActiveRecord::Base
       tabs.delete_if {|t| t[:id] == TAB_SETTINGS }
       tabs << settings_tab
 
+      if opts[:only_check]
+        tabs = tabs.select { |t| opts[:only_check].include?(t[:id]) }
+      end
+
       check_for_permission = lambda do |*permissions|
         permissions.any? do |permission|
           if opts[:precalculated_permissions]&.has_key?(permission)
@@ -2664,75 +2690,83 @@ class Course < ActiveRecord::Base
         end
       end
 
-      tabs.each do |tab|
-        tab[:hidden_unused] = true if tab[:id] == TAB_MODULES && !active_record_types[:modules]
-        tab[:hidden_unused] = true if tab[:id] == TAB_FILES && !active_record_types[:files]
-        tab[:hidden_unused] = true if tab[:id] == TAB_QUIZZES && !active_record_types[:quizzes]
-        tab[:hidden_unused] = true if tab[:id] == TAB_ASSIGNMENTS && !active_record_types[:assignments]
-        tab[:hidden_unused] = true if tab[:id] == TAB_PAGES && !active_record_types[:pages] && !allow_student_wiki_edits
-        tab[:hidden_unused] = true if tab[:id] == TAB_CONFERENCES && !active_record_types[:conferences] && !check_for_permission.call(:create_conferences)
-        tab[:hidden_unused] = true if tab[:id] == TAB_ANNOUNCEMENTS && !active_record_types[:announcements]
-        tab[:hidden_unused] = true if tab[:id] == TAB_OUTCOMES && !active_record_types[:outcomes]
-        tab[:hidden_unused] = true if tab[:id] == TAB_DISCUSSIONS && !active_record_types[:discussions] && !allow_student_discussion_topics
+      delete_unless = lambda do |tabs_to_check, *permissions|
+        matched_tabs = tabs.select { |t| tabs_to_check.include?(t[:id]) }
+        tabs -= matched_tabs if matched_tabs.present? && !check_for_permission.call(*permissions)
+      end
+
+      tabs_that_can_be_marked_hidden_unused = [
+        {id: TAB_MODULES, relation: :modules},
+        {id: TAB_FILES, relation: :files},
+        {id: TAB_QUIZZES, relation: :quizzes},
+        {id: TAB_ASSIGNMENTS, relation: :assignments},
+        {id: TAB_ANNOUNCEMENTS, relation: :announcements},
+        {id: TAB_OUTCOMES, relation: :outcomes},
+        {id: TAB_PAGES, relation: :pages, additional_check: -> { allow_student_wiki_edits }},
+        {id: TAB_CONFERENCES, relation: :conferences, additional_check: -> { check_for_permission.call(:create_conferences) }},
+        {id: TAB_DISCUSSIONS, relation: :discussions, additional_check: -> { allow_student_discussion_topics }}
+      ].select{ |hidable_tab| tabs.any?{ |t| t[:id] == hidable_tab[:id] } }
+
+      if tabs_that_can_be_marked_hidden_unused.present?
+        ar_types = active_record_types(only_check: tabs_that_can_be_marked_hidden_unused.map{|t| t[:relation]})
+        tabs_that_can_be_marked_hidden_unused.each do |t|
+          if !ar_types[t[:relation]] && (!t[:additional_check] || !t[:additional_check].call)
+            # that means there are none of this type of thing in the DB
+            if opts[:include_hidden_unused] || opts[:for_reordering] || opts[:api]
+              tabs.detect{ |tab| tab[:id] == t[:id] }[:hidden_unused] = true
+            else
+              tabs.delete_if{ |tab| tab[:id] == t[:id] }
+            end
+          end
+        end
       end
 
       # remove tabs that the user doesn't have access to
       unless opts[:for_reordering]
-        unless check_for_permission.call(:read, :manage_content)
-          tabs.delete_if { |t| t[:id] == TAB_HOME }
-          tabs.delete_if { |t| t[:id] == TAB_ANNOUNCEMENTS }
-          tabs.delete_if { |t| t[:id] == TAB_PAGES }
-          tabs.delete_if { |t| t[:id] == TAB_OUTCOMES }
-          tabs.delete_if { |t| t[:id] == TAB_CONFERENCES }
-          tabs.delete_if { |t| t[:id] == TAB_COLLABORATIONS }
-          tabs.delete_if { |t| t[:id] == TAB_MODULES }
-        end
-        unless check_for_permission.call(:participate_as_student, :read_as_admin)
-          tabs.delete_if{ |t| t[:visibility] == 'members' }
-        end
-        unless check_for_permission.call(:read, :manage_content, :manage_assignments)
-          tabs.delete_if { |t| t[:id] == TAB_ASSIGNMENTS }
-          tabs.delete_if { |t| t[:id] == TAB_QUIZZES }
-        end
-        unless check_for_permission.call(:read, :read_syllabus, :manage_content, :manage_assignments)
-          tabs.delete_if { |t| t[:id] == TAB_SYLLABUS }
-        end
-        tabs.delete_if{ |t| t[:visibility] == 'admins' } unless check_for_permission.call(:read_as_admin)
-        if check_for_permission.call(:manage_content, :manage_assignments)
-          tabs.detect { |t| t[:id] == TAB_ASSIGNMENTS }[:manageable] = true
-          tabs.detect { |t| t[:id] == TAB_SYLLABUS }[:manageable] = true
-          tabs.detect { |t| t[:id] == TAB_QUIZZES }[:manageable] = true
-        end
-        tabs.delete_if { |t| t[:hidden] && t[:external] } unless opts[:api] && check_for_permission.call(:read_as_admin)
-        tabs.delete_if { |t| t[:id] == TAB_GRADES } unless check_for_permission.call(:read_grades, :view_all_grades, :manage_grades)
-        tabs.detect { |t| t[:id] == TAB_GRADES }[:manageable] = true if check_for_permission.call(:view_all_grades, :manage_grades)
-        tabs.delete_if { |t| t[:id] == TAB_PEOPLE } unless check_for_permission.call(:read_roster, :manage_students, :manage_admin_users)
-        tabs.detect { |t| t[:id] == TAB_PEOPLE }[:manageable] = true if check_for_permission.call(:manage_students, :manage_admin_users)
-        tabs.delete_if { |t| t[:id] == TAB_FILES } unless check_for_permission.call(:read, :manage_files)
-        tabs.detect { |t| t[:id] == TAB_FILES }[:manageable] = true if check_for_permission.call(:manage_files)
-        tabs.delete_if { |t| t[:id] == TAB_DISCUSSIONS } unless check_for_permission.call(:read_forum, :post_to_forum, :create_forum, :moderate_forum)
-        tabs.detect { |t| t[:id] == TAB_DISCUSSIONS }[:manageable] = true if check_for_permission.call(:moderate_forum)
-        tabs.delete_if { |t| t[:id] == TAB_SETTINGS } unless check_for_permission.call(:read_as_admin)
+        delete_unless.call([TAB_HOME, TAB_ANNOUNCEMENTS, TAB_PAGES, TAB_OUTCOMES, TAB_CONFERENCES, TAB_COLLABORATIONS, TAB_MODULES], :read, :manage_content)
 
-        unless check_for_permission.call(:read_announcements)
-          tabs.delete_if { |t| t[:id] == TAB_ANNOUNCEMENTS }
-        end
+        member_only_tabs = tabs.select{ |t| t[:visibility] == 'members' }
+        tabs -= member_only_tabs if member_only_tabs.present? && !check_for_permission.call(:participate_as_student, :read_as_admin)
 
-        if !user || !check_for_permission.call(:manage_content)
-          # remove outcomes tab for logged-out users or non-students
-          unless check_for_permission.call(:participate_as_student, :read_as_admin)
-            tabs.delete_if { |t| t[:id] == TAB_OUTCOMES }
-          end
+        delete_unless.call([TAB_ASSIGNMENTS, TAB_QUIZZES], :read, :manage_content, :manage_assignments)
+        delete_unless.call([TAB_SYLLABUS], :read, :read_syllabus, :manage_content, :manage_assignments)
 
-          # remove hidden tabs from students
-          unless check_for_permission.call(:read_as_admin)
-            tabs.delete_if {|t| (t[:hidden] || (t[:hidden_unused] && !opts[:include_hidden_unused])) && !t[:manageable] }
-          end
+        admin_only_tabs = tabs.select{ |t| t[:visibility] == 'admins' }
+        tabs -= admin_only_tabs if admin_only_tabs.present? && !check_for_permission.call(:read_as_admin)
+
+        hidden_exteral_tabs = tabs.select{ |t| t[:hidden] && t[:external] }
+        tabs -= hidden_exteral_tabs if hidden_exteral_tabs.present? && !(opts[:api] && check_for_permission.call(:read_as_admin))
+
+        delete_unless.call([TAB_GRADES], :read_grades, :view_all_grades, :manage_grades)
+        delete_unless.call([TAB_PEOPLE], :read_roster, :manage_students, :manage_admin_users)
+        delete_unless.call([TAB_FILES], :read, :manage_files)
+        delete_unless.call([TAB_DISCUSSIONS], :read_forum, :post_to_forum, :create_forum, :moderate_forum)
+        delete_unless.call([TAB_SETTINGS], :read_as_admin)
+        delete_unless.call([TAB_ANNOUNCEMENTS], :read_announcements)
+
+        # remove outcomes tab for logged-out users or non-students
+        outcome_tab = tabs.detect { |t| t[:id] == TAB_OUTCOMES }
+        tabs.delete(outcome_tab) if outcome_tab && (!user || !check_for_permission.call(:manage_content, :participate_as_student, :read_as_admin))
+
+        # remove hidden tabs from students
+        additional_checks = {
+          TAB_ASSIGNMENTS => [:manage_content, :manage_assignments],
+          TAB_SYLLABUS => [:manage_content, :manage_assignments],
+          TAB_QUIZZES => [:manage_content, :manage_assignments],
+          TAB_GRADES => [:view_all_grades, :manage_grades],
+          TAB_PEOPLE => [:manage_students, :manage_admin_users],
+          TAB_FILES => [:manage_files],
+          TAB_DISCUSSIONS => [:moderate_forum]
+        }
+        tabs.reject! do |t|
+          # tab shouldn't be shown to non-admins
+          (t[:hidden] || t[:hidden_unused]) &&
+          # not an admin user
+          (!user || !check_for_permission.call(:manage_content, :read_as_admin)) &&
+          # can't do any of the additional things required
+          (!additional_checks[t[:id]] || !check_for_permission.call(*additional_checks[t[:id]]))
         end
       end
-      # Uncommenting these lines will always put hidden links after visible links
-      # tabs.each_with_index{|t, i| t[:sort_index] = i }
-      # tabs = tabs.sort_by{|t| [t[:hidden_unused] || t[:hidden] ? 1 : 0, t[:sort_index]] } if !self.tab_configuration || self.tab_configuration.empty?
       tabs
     end
   end
@@ -2809,6 +2843,8 @@ class Course < ActiveRecord::Base
     end
   end
 
+  include Csp::CourseHelper
+
   # unfortunately we decided to pluralize this in the API after the fact...
   # so now we pluralize it everywhere except the actual settings hash and
   # course import/export :(
@@ -2870,7 +2906,7 @@ class Course < ActiveRecord::Base
   def reset_content
     Course.transaction do
       new_course = Course.new
-      self.attributes.delete_if{|k,v| [:id, :created_at, :updated_at, :syllabus_body, :wiki_id, :default_view, :tab_configuration, :lti_context_id, :workflow_state].include?(k.to_sym) }.each do |key, val|
+      self.attributes.delete_if{|k,v| [:id, :created_at, :updated_at, :syllabus_body, :wiki_id, :default_view, :tab_configuration, :lti_context_id, :workflow_state, :latest_outcome_import_id].include?(k.to_sym) }.each do |key, val|
         new_course.write_attribute(key, val)
       end
       new_course.workflow_state = (self.admins.any? ? 'claimed' : 'created')
@@ -3074,7 +3110,7 @@ class Course < ActiveRecord::Base
     end
   end
 
-  %w{student_count primary_enrollment_type primary_enrollment_role_id primary_enrollment_rank primary_enrollment_state primary_enrollment_date invitation}.each do |method|
+  %w{student_count teacher_count primary_enrollment_type primary_enrollment_role_id primary_enrollment_rank primary_enrollment_state primary_enrollment_date invitation}.each do |method|
     class_eval <<-RUBY
       def #{method}
         read_attribute(:#{method}) || @#{method}

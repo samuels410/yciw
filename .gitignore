@@ -58,19 +58,9 @@ yarn-error.log
 
 # user docker compose overrides
 docker-compose.local.*
-/public/optimized/
-/public/javascripts/jsx/
-/public/javascripts/jst/
-/public/javascripts/compiled/
-/spec/javascripts/compiled/
-/config/build.js
-/.idea/*
-.idea/yciw.iml
-.idea/.rakeTasks
 
 # sub-packages
 /packages/*/node_modules
-/packages/*/copy-of-what-gets-published-to-npm-registry
 /packages/canvas-planner/lib
 /packages/canvas-planner/es
 /packages/canvas-planner/coverage/

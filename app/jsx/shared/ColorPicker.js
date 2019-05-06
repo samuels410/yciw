@@ -18,6 +18,7 @@
 
 import $ from 'jquery'
 import React from 'react'
+import createReactClass from 'create-react-class';
 import ReactDOM from 'react-dom'
 import PropTypes from 'prop-types'
 import ReactModal from 'react-modal'
@@ -27,6 +28,7 @@ import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReade
 import I18n from 'i18n!calendar_color_picker'
 import CourseNicknameEdit from './CourseNicknameEdit'
 import classnames from 'classnames'
+import {isRTL} from './helpers/rtlHelper'
 import 'compiled/jquery.rails_flash_notifications'
 
   export const PREDEFINED_COLORS = [
@@ -55,7 +57,7 @@ import 'compiled/jquery.rails_flash_notifications'
     return this.state.currentColor === color.hexcode;
   }
 
-  var ColorPicker = React.createClass({
+  var ColorPicker = createReactClass({
 
     // ===============
     //     CONFIG
@@ -455,9 +457,11 @@ import 'compiled/jquery.rails_flash_notifications'
       var styleObj = {
         content: {
           position: 'absolute',
-          left: this.props.positions.left - 174,
           top: this.props.positions.top - 96,
-          right: 0,
+          right: 'auto',
+          left: isRTL()
+            ? 100 - this.props.positions.left
+            : this.props.positions.left - 174,
           bottom: 0,
           overflow: 'visible',
           padding: 0,

@@ -69,7 +69,7 @@ class SisBatch < ActiveRecord::Base
       batch.user = user
       batch.save
 
-      att = create_data_attachment(batch, attachment, t(:upload_filename, "sis_upload_%{id}.zip", :id => batch.id))
+      att = create_data_attachment(batch, attachment)
       batch.attachment = att
 
       yield batch if block_given?
@@ -80,12 +80,12 @@ class SisBatch < ActiveRecord::Base
     end
   end
 
-  def self.create_data_attachment(batch, data, display_name)
+  def self.create_data_attachment(batch, data, display_name=nil)
     batch.shard.activate do
       Attachment.new.tap do |att|
         Attachment.skip_3rd_party_submits(true)
         att.context = batch
-        att.display_name = display_name
+        att.display_name = display_name if display_name
         Attachments::Storage.store_for_attachment(att, data)
         att.save!
       end
@@ -378,7 +378,7 @@ class SisBatch < ActiveRecord::Base
     @has_errors = self.sis_batch_errors.exists?
     import_finished = !(@has_errors && self.sis_batch_errors.failed.exists?) if import_finished
     finalize_workflow_state(import_finished)
-    write_errors_to_file
+    self.send_later_if_production_enqueue_args(:write_errors_to_file, {max_attempts: 5}) if @has_errors
     populate_old_warnings_and_errors
     statistics
     self.progress = 100 if import_finished
@@ -404,19 +404,80 @@ class SisBatch < ActiveRecord::Base
   def statistics
     stats = {}
     stats[:total_state_changes] = roll_back_data.count
-    SisBatchRollBackData::RESTORE_ORDER.each do |type|
+    # add statistics with all types but only query types that were imported.
+    stats = add_zero_stats(stats)
+    types = roll_back_data.distinct.order(:context_type).pluck(:context_type)
+    types.each do |type|
       stats[type.to_sym] = {}
-      deleted_state = case type
-                      when CommunicationChannel
-                        'retired'
-                      else
-                        'deleted'
-                      end
-      stats[type.to_sym][:created] = roll_back_data.where(context_type: type).where(previous_workflow_state: 'non-existent').count
-      stats[type.to_sym][:deleted] = roll_back_data.where(context_type: type).where(updated_workflow_state: deleted_state).count
+      stats[type.to_sym][:created] = roll_back_data.where(context_type: type).
+        where(previous_workflow_state: ['non-existent', 'creation_pending'],
+              updated_workflow_state: stat_active_state(type)).count
+
+      stats[type.to_sym][:restored] = roll_back_data.where(context_type: type).
+        where(previous_workflow_state: stat_restored_from(type),
+              updated_workflow_state: stat_active_state(type)).count
+      if ['Course', 'Enrollment'].include? type
+        stats[type.to_sym][:concluded] = roll_back_data.
+          where(context_type: type, updated_workflow_state: 'completed').count
+      end
+
+      if type == 'Enrollment'
+        stats[type.to_sym][:deactivated] = roll_back_data.
+          where(context_type: type, updated_workflow_state: 'inactive').count
+      end
+
+      stats[type.to_sym][:deleted] = roll_back_data.where(context_type: type).
+        where(updated_workflow_state: stat_deleted_state(type)).count
     end
     self.data ||= {}
     self.data[:statistics] = stats
+  end
+
+  def add_zero_stats(stats)
+    SisBatchRollBackData::RESTORE_ORDER.each do |type|
+      stats[type.to_sym] = {}
+      stats[type.to_sym][:created] = 0
+      stats[type.to_sym][:restored] = 0
+      stats[type.to_sym][:concluded] = 0 if ['Course', 'Enrollment'].include? type
+      stats[type.to_sym][:deactivated] = 0 if type == 'Enrollment'
+      stats[type.to_sym][:deleted] = 0
+    end
+    stats
+  end
+
+  def stat_active_state(type)
+    case type
+    when GroupMembership
+      'accepted'
+    when Group
+      'available'
+    when Course
+      ['claimed', 'created', 'available']
+    else
+      'active'
+    end
+  end
+
+  def stat_deleted_state(type)
+    case type
+    when CommunicationChannel
+      'retired'
+    else
+      'deleted'
+    end
+  end
+
+  def stat_restored_from(type)
+    case type
+    when CommunicationChannel
+      ['retired', 'unconfirmed']
+    when Course
+      ['completed', 'deleted']
+    when Enrollment
+      ['inactive', 'completed', 'rejected', 'deleted']
+    else
+      'deleted'
+    end
   end
 
   def batch_mode_terms
@@ -640,7 +701,6 @@ class SisBatch < ActiveRecord::Base
   end
 
   def write_errors_to_file
-    return unless @has_errors
     file = temp_error_file_path
     CSV.open(file, "w") do |csv|
       csv << %w(sis_import_id file message row)
@@ -658,6 +718,7 @@ class SisBatch < ActiveRecord::Base
       Rack::Test::UploadedFile.new(file, 'csv', true),
       "sis_errors_attachment_#{id}.csv"
     )
+    self.save! if Rails.env.production?
   end
 
   def temp_error_file_path
@@ -727,7 +788,9 @@ class SisBatch < ActiveRecord::Base
               # restore the items and return the ids of the items that changed
               ids = type.constantize.connection.select_values(restore_sql(type, data.map(&:to_restore_array)))
               if type == 'Enrollment'
-                ids.each_slice(1000) {|slice| Enrollment::BatchStateUpdater.send_later(:run_call_backs_for, slice)}
+                ids.each_slice(1000) do |slice|
+                  Enrollment::BatchStateUpdater.send_later_enqueue_args(:run_call_backs_for, {n_strand: "restore_states_batch_updater:#{account.global_id}}"}, slice)
+                end
               end
               count += update_restore_progress(restore_progress, data, count, total)
             else
@@ -744,7 +807,9 @@ class SisBatch < ActiveRecord::Base
                   end
                 end
               end
-              successful_ids.each_slice(1000) {|slice| Enrollment::BatchStateUpdater.send_later(:run_call_backs_for, slice)}
+              successful_ids.each_slice(1000) do |slice|
+                Enrollment::BatchStateUpdater.send_later_enqueue_args(:run_call_backs_for, {n_strand: "restore_states_batch_updater:#{account.global_id}}"}, slice)
+              end
               count += update_restore_progress(restore_progress, data - failed_data, count, total)
               roll_back_data.active.where(id: failed_data).update_all(workflow_state: 'failed', updated_at: Time.zone.now)
             end

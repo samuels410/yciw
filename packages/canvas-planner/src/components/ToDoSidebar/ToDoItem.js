@@ -30,10 +30,10 @@ import AnnouncementIcon from '@instructure/ui-icons/lib/Line/IconAnnouncement';
 import DiscussionIcon from   '@instructure/ui-icons/lib/Line/IconDiscussion';
 import NoteIcon from         '@instructure/ui-icons/lib/Line/IconNote';
 import CalendarIcon from     '@instructure/ui-icons/lib/Line/IconCalendarMonth';
-import PageIcon from         '@instructure/ui-icons/lib/Line/IconMsWord';
+import PageIcon from         '@instructure/ui-icons/lib/Line/IconDocument';
 import PeerReviewIcon from '@instructure/ui-icons/lib/Line/IconPeerReview';
 
-import { formatDateAtTimeWithoutYear } from '../../utilities/dateUtils';
+import { dateTimeString } from '../../utilities/dateUtils';
 import formatMessage from '../../format-message';
 import { func, shape, object, arrayOf, number, string } from 'prop-types';
 
@@ -85,14 +85,21 @@ export default class ToDoItem extends React.Component {
 
     toDisplay.push(
       <ListItem key="date">
-        {formatDateAtTimeWithoutYear(dueAt, this.props.timeZone)}
+        {dateTimeString(dueAt, this.props.timeZone)}
       </ListItem>
     );
     return toDisplay;
   }
 
+  itemTitle () {
+    if (this.props.item.type === 'Peer Review') {
+      return formatMessage('Peer Review for {itemTitle}', {itemTitle: this.props.item.title});
+    } 
+    return this.props.item.title;
+  }
+
   render () {
-    const title = <Text size="small" lineHeight="fit">{this.props.item.title}</Text>;
+    const title = <Text size="small" lineHeight="fit">{this.itemTitle()}</Text>;
     const titleComponent = this.props.item.html_url ? (
       <Link linkRef={(elt) => {this.linkRef = elt;}} href={this.props.item.html_url}>{title}</Link>
     ) : (

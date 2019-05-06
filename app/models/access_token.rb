@@ -86,6 +86,10 @@ class AccessToken < ActiveRecord::Base
     Canvas::Security.encryption_keys.map { |key| Canvas::Security.hmac_sha1(token, key) }
   end
 
+  def self.visible_tokens(tokens)
+    tokens.reject { |token| token.developer_key.internal_service }
+  end
+
   def usable?(token_key = :crypted_token)
     # true if
     # developer key is usable AND
@@ -231,7 +235,7 @@ class AccessToken < ActiveRecord::Base
   def must_only_include_valid_scopes
     return true if scopes.nil?
     errors.add(:scopes, "must match accepted scopes") unless scopes.all? {|scope| TokenScopes.all_scopes.include?(scope)}
-    if developer_key.owner_account.feature_enabled?(:developer_key_management_and_scoping) && developer_key.require_scopes?
+    if developer_key.require_scopes?
       errors.add(:scopes, 'requested scopes must match scopes on developer key') unless scopes.all? { |scope| developer_key.scopes.include?(scope) }
     end
   end

@@ -17,15 +17,15 @@
 #
 
 module Types
-  SectionType = GraphQL::ObjectType.define do
-    name "Section"
+  class SectionType < ApplicationObjectType
+    graphql_name "Section"
 
-    implements GraphQL::Relay::Node.interface
-    interfaces [Interfaces::TimestampInterface]
+    implements GraphQL::Types::Relay::Node
+    implements Interfaces::TimestampInterface
 
     global_id_field :id
-    field :_id, !types.ID, "legacy canvas id", property: :id
+    field :_id, ID, "legacy canvas id", null: false, method: :id
 
-    field :name, !types.String
+    field :name, String, null: false
   end
 end

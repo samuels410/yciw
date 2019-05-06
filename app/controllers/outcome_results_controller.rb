@@ -186,6 +186,7 @@
 
 class OutcomeResultsController < ApplicationController
   include Api::V1::OutcomeResults
+  include Outcomes::Enrollments
   include Outcomes::ResultAnalytics
 
   before_action :require_user
@@ -335,12 +336,18 @@ class OutcomeResultsController < ApplicationController
   private
 
   def find_results(opts = {})
-    find_outcome_results(@current_user, users: @users, context: @context, outcomes: @outcomes, **opts)
+    find_outcome_results(
+      @current_user,
+      users: opts[:all_users] ? @all_users : @users,
+      context: @context,
+      outcomes: @outcomes,
+      **opts
+    )
   end
 
-  def user_rollups(_opts = {})
+  def user_rollups(opts = {})
     excludes = Api.value_to_array(params[:exclude]).uniq
-    @results = find_results.preload(:user)
+    @results = find_results(opts).preload(:user)
     outcome_results_rollups(@results, @users, excludes)
   end
 
@@ -411,7 +418,9 @@ class OutcomeResultsController < ApplicationController
   end
 
   def include_outcomes
-    outcome_results_include_outcomes_json(@outcomes)
+    percents = {}
+    percents = rating_percents(user_rollups(all_users: true)) if params[:rating_percents] == 'true'
+    outcome_results_include_outcomes_json(@outcomes, percents)
   end
 
   def include_outcome_groups
@@ -453,12 +462,7 @@ class OutcomeResultsController < ApplicationController
     reject! "users not specified and no access to all grades", :forbidden unless params[:user_ids]
     user_id_params = Api.value_to_array(params[:user_ids])
     user_ids = Api.map_ids(user_id_params, users_for_outcome_context, @domain_root_account, @current_user)
-    enrollments = @context.enrollments.where(user_id: user_ids)
-    enrollment_user_ids = enrollments.map(&:user_id).uniq
-    reject! "specified users not enrolled" unless enrollment_user_ids.length == user_ids.length
-    reject! "not authorized to read grades for specified users", :forbidden unless enrollments.all? do |e|
-      e.grants_right?(@current_user, session, :read_grades)
-    end
+    verify_readable_grade_enrollments(user_ids)
   end
 
   def verify_aggregate_parameter
@@ -568,6 +572,9 @@ class OutcomeResultsController < ApplicationController
     end
     @users ||= users_for_outcome_context.to_a
     @users.sort! {|a,b| a.id <=> b.id} unless params[:sort_by]
+    # cache all users, since pagination in #user_rollups_json may remove some
+    # when we need all users when calculating rating percents
+    @all_users = @users
   end
 
   def users_for_outcome_context

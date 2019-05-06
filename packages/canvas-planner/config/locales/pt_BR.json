@@ -5,6 +5,9 @@
   "add_to_do_7def3c37": {
     "message": "Adicionar à Lista de Tarefas"
   },
+  "address_3159962f": {
+    "message": "Endereço:"
+  },
   "all_day_fb42c4fc": {
     "message": "Dia inteiro"
   },
@@ -50,8 +53,14 @@
   "assignmenttype_title_posted_datetime_cab69444": {
     "message": "{ assignmentType } { title } postado { datetime }."
   },
+  "assignmenttype_title_reminder_datetime_33fa66d5": {
+    "message": "{ assignmentType } { title }, lembrete { datetime }."
+  },
   "beginning_of_your_to_do_history_61ef2dce": {
     "message": "Começo do seu histórico de tarefas"
+  },
+  "calendar_a8563bb2": {
+    "message": "Calendário:"
   },
   "calendar_event_89aadc1c": {
     "message": "Evento do calendário"
@@ -61,6 +70,12 @@
   },
   "close_d634289d": {
     "message": "Fechar"
+  },
+  "close_opportunity_center_popup_9907d981": {
+    "message": "Fechar popup do Centro de Oportunidades"
+  },
+  "count_plural_0_opportunities_one_opportunity_other_bb1698f6": {
+    "message": "{ count, plural,\n     =0 {# oportunidades}\n    one {# oportunidade}\n  other {# oportunidades}\n}. Clique para abrir o popup do Centro de Oportunidades."
   },
   "count_plural_one_show_completed_item_other_show_co_8d0d0ae5": {
     "message": "{ count, plural,\n    one {Mostrar # item completo}\n  other {Mostrar # itens completos}\n}"
@@ -83,11 +98,17 @@
   "date_is_required_8660ec22": {
     "message": "Data é necessária"
   },
+  "date_time_d9fbf2d7": {
+    "message": "Data e Hora:"
+  },
   "delete_a6efa79d": {
     "message": "Excluir"
   },
   "details_98a31b68": {
     "message": "Detalhes"
+  },
+  "details_a6f427c3": {
+    "message": "Detalhes:"
   },
   "discussion_6719c51d": {
     "message": "Discussão"
@@ -97,6 +118,12 @@
   },
   "dismiss_opportunityname_5995176f": {
     "message": "Descartar { opportunityName }"
+  },
+  "dismissed_8b0b1fc9": {
+    "message": "Descartado"
+  },
+  "dismissed_opportunities_f0826640": {
+    "message": "Oportunidades descartadas"
   },
   "due_5d7267be": {
     "message": "Vencimento:"
@@ -179,6 +206,9 @@
   "loading_planner_items_947a813d": {
     "message": "Carregando itens do planejador"
   },
+  "location_3b6ff307": {
+    "message": "Local:"
+  },
   "looks_like_there_isn_t_anything_here_d9bcef49": {
     "message": "Parece que não há nada aqui"
   },
@@ -191,11 +221,17 @@
   "my_grades_98834476": {
     "message": "Minhas notas"
   },
+  "new_13daf639": {
+    "message": "Novo"
+  },
   "new_activity_8b84847d": {
     "message": "Nova atividade"
   },
   "new_activity_for_title_14c9c3af": {
     "message": "Nova atividade para { title }"
+  },
+  "new_opportunities_7d349c4d": {
+    "message": "Novas oportunidades"
   },
   "next_month_749b1778": {
     "message": "Próximo mês"
@@ -208,6 +244,9 @@
   },
   "nothing_for_now_e3e3ce2a": {
     "message": "Nada no momento"
+  },
+  "nothing_here_needs_attention_c4eaded6": {
+    "message": "Nada aqui precisa de atenção."
   },
   "nothing_more_to_do_b665da42": {
     "message": "Nada mais para fazer"
@@ -236,6 +275,12 @@
   "page_50c4823d": {
     "message": "Página"
   },
+  "peer_review_74f26a13": {
+    "message": "Revisão por colegas"
+  },
+  "peer_review_for_itemtitle_358cb413": {
+    "message": "Revisão por colegas para { itemTitle }"
+  },
   "points_bceb5005": {
     "message": "pontos"
   },
@@ -250,6 +295,9 @@
   },
   "quiz_e0dcce8f": {
     "message": "Questionário"
+  },
+  "reminder_date_4564d12d": {
+    "message": "Lembrete: { date }"
   },
   "replies_4a8577c8": {
     "message": "Respostas"
@@ -272,6 +320,12 @@
   "startdate_to_enddate_d245175b": {
     "message": "{ startDate } a { endDate }"
   },
+  "startdatetime_enddatetime_20abc10e": {
+    "message": "{ startDateTime } - { endDateTime }"
+  },
+  "startdatetime_endtime_49741bbe": {
+    "message": "{ startDateTime } - { endTime }"
+  },
   "starttime_to_endtime_d7cc249d": {
     "message": "{ startTime } a { endTime }"
   },
@@ -286,6 +340,9 @@
   },
   "the_date_and_time_this_to_do_is_due_74c823d4": {
     "message": "A data e hora desta tarefa venceu"
+  },
+  "there_are_no_points_associated_with_this_item_449c712a": {
+    "message": "Não há pontos associados a este item."
   },
   "time_2b5aac58": {
     "message": "Tempo"

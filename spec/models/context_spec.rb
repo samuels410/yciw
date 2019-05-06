@@ -16,7 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-require File.expand_path(File.dirname(__FILE__) + '/../spec_helper.rb')
+require File.expand_path(File.dirname(__FILE__) + '/../sharding_spec_helper.rb')
 
 describe Context do
   context "find_by_asset_string" do
@@ -218,6 +218,72 @@ describe Context do
         { name: 'MMM', rubrics: 1},
         { name: 'ZZZ', rubrics: 1}
       ])
+    end
+
+    context "sharding" do
+      specs_require_sharding
+
+      it "should retrieve rubrics from other shard courses the teacher belongs to" do
+        course1 = Course.create!(:name => 'c1')
+        course2 = Course.create!(:name => 'c2')
+        course3 = @shard1.activate do
+          a = Account.create!
+          Course.create!(:name => 'c3', :account => a)
+        end
+        user = user_factory(:active_all => true)
+        [course1, course2, course3].each do |c|
+          c.shard.activate do
+            r = Rubric.create!(context: c, title: 'testing')
+            RubricAssociation.create!(context: c, rubric: r, purpose: :bookmark, association_object: c)
+            c.enroll_user(user, "TeacherEnrollment", :enrollment_state => "active")
+          end
+        end
+        expected = -> { [
+          { name: 'c1', rubrics: 1, context_code: course1.asset_string},
+          { name: 'c2', rubrics: 1, context_code: course2.asset_string},
+          { name: 'c3', rubrics: 1, context_code: course3.asset_string}
+        ] }
+        expect(course1.rubric_contexts(user)).to match_array(expected.call)
+        @shard1.activate do
+          expect(course2.rubric_contexts(user)).to match_array(expected.call)
+        end
+      end
+    end
+  end
+
+  describe "#active_record_types" do
+    let(:course) { Course.create! }
+
+    it "looks at the 'everything' cache if asking for just one thing and doesn't have a cache for that" do
+
+      # it should look first for the cache for just the thing we are asking for
+      expect(Rails.cache).to receive(:read).
+        with(['active_record_types3', [:assignments], course].cache_key).
+        and_return(nil)
+
+      # if that ^ returns nil, it should then look for for the "everything" cache
+      expect(Rails.cache).to receive(:read).
+        with(['active_record_types3', 'everything', course].cache_key).
+        and_return({
+          other_thing_we_are_not_asking_for: true,
+          assignments: "the cached value for :assignments from the 'everything' cache"
+        })
+
+      expect(course.active_record_types(only_check: [:assignments])).to eq({
+        assignments: "the cached value for :assignments from the 'everything' cache"
+      })
+    end
+
+    it "raises an ArgumentError if you pass (only_check: [])" do
+      expect{
+        course.active_record_types(only_check: [])
+      }.to raise_exception ArgumentError
+    end
+
+    it "raises an ArgumentError if you pass bogus values as only_check" do
+      expect{
+        course.active_record_types(only_check: [:bogus_type, :other_bogus_tab])
+      }.to raise_exception ArgumentError
     end
   end
 

@@ -166,19 +166,19 @@ describe SisImportsApiController, type: :request do
                                     "error_count"=>0,
                                     "warning_count"=>0 },
                       "statistics" => {"total_state_changes"=>2,
-                                       "Account"=>{"created"=>0, "deleted"=>0},
-                                       "EnrollmentTerm"=>{"created"=>0, "deleted"=>0},
-                                       "AbstractCourse"=>{"created"=>0, "deleted"=>0},
-                                       "Course"=>{"created"=>0, "deleted"=>0},
-                                       "CourseSection"=>{"created"=>0, "deleted"=>0},
-                                       "GroupCategory"=>{"created"=>0, "deleted"=>0},
-                                       "Group"=>{"created"=>0, "deleted"=>0},
-                                       "Pseudonym"=>{"created"=>1, "deleted"=>0},
-                                       "CommunicationChannel"=>{"created"=>1, "deleted"=>0},
-                                       "Enrollment"=>{"created"=>0, "deleted"=>0},
-                                       "GroupMembership"=>{"created"=>0, "deleted"=>0},
-                                       "UserObserver"=>{"created"=>0, "deleted"=>0},
-                                       "AccountUser"=>{"created"=>0, "deleted"=>0}}},
+                                       "Account"=>{"created"=>0, "restored"=>0, "deleted"=>0},
+                                       "EnrollmentTerm"=>{"created"=>0, "restored"=>0, "deleted"=>0},
+                                       "AbstractCourse"=>{"created"=>0, "restored"=>0, "deleted"=>0},
+                                       "Course"=>{"created"=>0, "concluded"=>0, "restored"=>0, "deleted"=>0},
+                                       "CourseSection"=>{"created"=>0, "restored"=>0, "deleted"=>0},
+                                       "GroupCategory"=>{"created"=>0, "restored"=>0, "deleted"=>0},
+                                       "Group"=>{"created"=>0, "restored"=>0, "deleted"=>0},
+                                       "Pseudonym"=>{"created"=>1, "restored"=>0, "deleted"=>0},
+                                       "CommunicationChannel"=>{"created"=>1, "restored"=>0, "deleted"=>0},
+                                       "Enrollment"=>{"created"=>0, "concluded"=>0, "deactivated"=>0, "restored"=>0, "deleted"=>0},
+                                       "GroupMembership"=>{"created"=>0, "restored"=>0, "deleted"=>0},
+                                       "UserObserver"=>{"created"=>0, "restored"=>0, "deleted"=>0},
+                                       "AccountUser"=>{"created"=>0, "restored"=>0, "deleted"=>0}}},
           "progress" => 100,
           "id" => batch.id,
           "workflow_state"=>"imported",
@@ -207,6 +207,20 @@ describe SisImportsApiController, type: :request do
 
     params = {controller: 'progress', action: 'show', id: json['id'].to_param, format: 'json'}
     api_call(:get, "/api/v1/progress/#{json['id']}", params, {}, {}, expected_status: 200)
+  end
+
+  it 'should show current running sis import' do
+    batch = @account.sis_batches.create!
+    json = api_call(:get, "/api/v1/accounts/#{@account.id}/sis_imports/importing",
+                    {controller: 'sis_imports_api', action: 'importing', format: 'json',
+                     account_id: @account.id.to_s})
+    expect(json["sis_imports"]).to eq []
+    batch.workflow_state = 'importing'
+    batch.save!
+    json = api_call(:get, "/api/v1/accounts/#{@account.id}/sis_imports/importing",
+                    {controller: 'sis_imports_api', action: 'importing', format: 'json',
+                     account_id: @account.id.to_s})
+    expect(json["sis_imports"].first['id']).to eq batch.id
   end
 
   it 'should abort batch on abort' do
@@ -713,19 +727,19 @@ describe SisImportsApiController, type: :request do
                                                 "error_count"=>0,
                                                 "warning_count"=>0 },
                                   "statistics" => {"total_state_changes"=>1,
-                                                   "Account"=>{"created"=>1, "deleted"=>0},
-                                                   "EnrollmentTerm"=>{"created"=>0, "deleted"=>0},
-                                                   "AbstractCourse"=>{"created"=>0, "deleted"=>0},
-                                                   "Course"=>{"created"=>0, "deleted"=>0},
-                                                   "CourseSection"=>{"created"=>0, "deleted"=>0},
-                                                   "GroupCategory"=>{"created"=>0, "deleted"=>0},
-                                                   "Group"=>{"created"=>0, "deleted"=>0},
-                                                   "Pseudonym"=>{"created"=>0, "deleted"=>0},
-                                                   "CommunicationChannel"=>{"created"=>0, "deleted"=>0},
-                                                   "Enrollment"=>{"created"=>0, "deleted"=>0},
-                                                   "GroupMembership"=>{"created"=>0, "deleted"=>0},
-                                                   "UserObserver"=>{"created"=>0, "deleted"=>0},
-                                                   "AccountUser"=>{"created"=>0, "deleted"=>0}}},
+                                                   "Account"=>{"created"=>1, "restored"=>0, "deleted"=>0},
+                                                   "EnrollmentTerm"=>{"created"=>0, "restored"=>0, "deleted"=>0},
+                                                   "AbstractCourse"=>{"created"=>0, "restored"=>0, "deleted"=>0},
+                                                   "Course"=>{"created"=>0, "concluded"=>0, "restored"=>0, "deleted"=>0},
+                                                   "CourseSection"=>{"created"=>0, "restored"=>0, "deleted"=>0},
+                                                   "GroupCategory"=>{"created"=>0, "restored"=>0, "deleted"=>0},
+                                                   "Group"=>{"created"=>0, "restored"=>0, "deleted"=>0},
+                                                   "Pseudonym"=>{"created"=>0, "restored"=>0, "deleted"=>0},
+                                                   "CommunicationChannel"=>{"created"=>0, "restored"=>0, "deleted"=>0},
+                                                   "Enrollment"=>{"created"=>0, "concluded"=>0, "deactivated"=>0, "restored"=>0, "deleted"=>0},
+                                                   "GroupMembership"=>{"created"=>0, "restored"=>0, "deleted"=>0},
+                                                   "UserObserver"=>{"created"=>0, "restored"=>0, "deleted"=>0},
+                                                   "AccountUser"=>{"created"=>0, "restored"=>0, "deleted"=>0}}},
                       "progress" => 100,
                       "id" => batch.id,
                       "workflow_state"=>"imported",
