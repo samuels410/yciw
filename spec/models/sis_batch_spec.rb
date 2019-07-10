@@ -65,6 +65,34 @@ describe SisBatch do
     end
   end
 
+  it 'should see pending imports as not completed' do
+    batch = process_csv_data([%{user_id,login_id,status
+                                user_1,user_1,active},
+                              %{course_id,short_name,long_name,term_id,status
+                                course_1,course_1,course_1,term_1,active}])
+    ParallelImporter.where(sis_batch_id: batch).update_all(workflow_state: 'pending')
+    expect(batch.parallel_importers.not_completed.count).to eq 2
+  end
+
+  it 'should restore scores when restoring enrollments' do
+    course = @account.courses.create!(name: 'one', sis_source_id: 'c1')
+    user = user_with_managed_pseudonym(account: @account, sis_user_id: 'u1')
+    enrollment = course.enroll_user(user, 'StudentEnrollment', enrollment_state: 'active')
+    assignment = assignment_model(course: course)
+    submission = assignment.find_or_create_submission(user)
+    submission.submission_type = "online_quiz"
+    submission.save!
+    batch = process_csv_data([%{course_id,user_id,role,status,section_id
+                                c1,u1,student,deleted,}])
+    expect(submission.reload.workflow_state).to eq 'deleted'
+    expect(enrollment.reload.workflow_state).to eq 'deleted'
+    expect(enrollment.scores.exists?).to eq false
+    batch.restore_states_for_batch
+    expect(submission.reload.workflow_state).to eq 'submitted'
+    expect(enrollment.reload.workflow_state).to eq 'active'
+    expect(enrollment.scores.exists?).to eq true
+  end
+
   it "should not add attachments to the list" do
     create_csv_data(['abc']) { |batch| expect(batch.attachment.position).to be_nil}
     create_csv_data(['abc']) { |batch| expect(batch.attachment.position).to be_nil}
@@ -832,6 +860,69 @@ test_4,TC 104,Test Course 104,,term1,active
       expect(b3.generated_diff_id).to be_nil
       expect(b4.data[:diffed_against_sis_batch_id]).to eq b2.id
       expect(b4.generated_diff_id).to_not be_nil
+    end
+
+    it 'should not diff outside of diff row count threshold' do
+      b1 = process_csv_data([
+        %{course_id,short_name,long_name,account_id,term_id,status
+        test_1,TC 101,Test Course 101,,term1,active
+        test_4,TC 104,Test Course 104,,term1,active
+      }], diffing_data_set_identifier: 'default')
+
+      # only one row change
+      b2 = process_csv_data([
+        %{course_id,short_name,long_name,account_id,term_id,status
+        test_1,TC 101,Test Course 101,,term1,active
+        test_4,TC 104,Test Course 104b,,term1,active
+      }], diffing_data_set_identifier: 'default', diff_row_count_threshold: 1)
+
+      # whoops two row changes
+      b2b = process_csv_data([
+        %{course_id,short_name,long_name,account_id,term_id,status
+        test_1,TC 101,Test Course 101b,,term1,active
+        test_4,TC 104,Test Course 104c,,term1,active
+      }], diffing_data_set_identifier: 'default', diff_row_count_threshold: 1)
+      expect(b2b).to be_imported_with_messages
+      expect(b2b.processing_warnings.first.last).to include("Diffing not performed")
+
+      # whoops left out the whole file, don't delete everything.
+      b3 = process_csv_data([
+        %{course_id,short_name,long_name,account_id,term_id,status
+      }], diffing_data_set_identifier: 'default', diff_row_count_threshold: 1)
+      expect(b3).to be_imported_with_messages
+      expect(b3.processing_warnings.first.last).to include("Diffing not performed")
+
+      # no change threshold, _should_ delete everything maybe?
+      b4 = process_csv_data([
+        %{course_id,short_name,long_name,account_id,term_id,status
+      }], diffing_data_set_identifier: 'default')
+
+      expect(b2.data[:diffed_against_sis_batch_id]).to eq b1.id
+      expect(b2.generated_diff_id).not_to be_nil
+      expect(b3.data[:diffed_against_sis_batch_id]).to be_nil
+      expect(b3.generated_diff_id).to be_nil
+      expect(b4.data[:diffed_against_sis_batch_id]).to eq b2.id
+      expect(b4.generated_diff_id).to_not be_nil
+    end
+
+    it "should mark files separately when created for diffing" do
+      f1 = %{course_id,short_name,long_name,account_id,term_id,status
+        test_1,TC 101,Test Course 101,,term1,active}
+      b1 = process_csv_data([f1], diffing_data_set_identifier: 'default')
+
+      f2 = %{course_id,short_name,long_name,account_id,term_id,status
+        test_1,TC 101,Test Course 101,,term1,active
+        test_4,TC 104,Test Course 104,,term1,active}
+      b2 = process_csv_data([f2], diffing_data_set_identifier: 'default')
+
+      uploaded = b2.downloadable_attachments(:uploaded)
+      expect(uploaded.count).to eq 1
+      expect(uploaded.first.open.read).to match_ignoring_whitespace(f2)
+      diffed = b2.downloadable_attachments(:diffed)
+      expect(diffed.count).to eq 1
+      expected_diff = %{course_id,short_name,long_name,account_id,term_id,status
+        test_4,TC 104,Test Course 104,,term1,active}
+      expect(diffed.first.open.read).to match_ignoring_whitespace(expected_diff)
     end
 
     it 'should compare files for diffing correctly' do

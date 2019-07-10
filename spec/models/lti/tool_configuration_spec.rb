@@ -224,6 +224,35 @@ module Lti
       end
     end
 
+    describe 'after_update' do
+      subject { tool_configuration.update!(changes) }
+
+      before { tool_configuration.update!(developer_key: developer_key) }
+
+      context 'when a change to the settings hash was made' do
+        let(:changed_settings) do
+          s = settings
+          s['title'] = 'new title!'
+          s
+        end
+        let(:changes) { {settings: changed_settings} }
+
+        it 'calls update_external_tools! on the developer key' do
+          expect(developer_key).to receive(:update_external_tools!)
+          subject
+        end
+      end
+
+      context 'when a change to the settings hash was not made' do
+        let(:changes) { {disabled_placements: []} }
+
+        it 'does not call update_external_tools! on the developer key' do
+          expect(developer_key).not_to receive(:update_external_tools!)
+          subject
+        end
+      end
+    end
+
     describe '#new_external_tool' do
       subject{ tool_configuration.new_external_tool(context) }
 
@@ -392,21 +421,30 @@ module Lti
       end
     end
 
-    describe '#create_tool_and_key!' do
+    describe '#create_tool_config_and_key!' do
       let_once(:account) { Account.create! }
       let(:params) do
         {
           settings: settings
         }
       end
-      let(:tool_configuration) { described_class.create_tool_and_key!(account, params) }
+      let(:tool_configuration) { described_class.create_tool_config_and_key!(account, params) }
 
       it 'creates a dev key' do
-        expect { described_class.create_tool_and_key! account, params }.to change(DeveloperKey, :count).by(1)
+        expect { described_class.create_tool_config_and_key! account, params }.to change(DeveloperKey, :count).by(1)
       end
 
       it 'correctly sets custom_fields' do
         expect(tool_configuration.settings['custom_fields']).to eq settings['custom_fields']
+      end
+
+      context 'when the account is site admin' do
+        let_once(:account) { Account.site_admin }
+
+        it 'does not set the account on the key' do
+          config = described_class.create_tool_config_and_key! account, params
+          expect(config.developer_key.account).to be_nil
+        end
       end
 
       context 'when tool_config creation fails' do
@@ -414,7 +452,7 @@ module Lti
 
         it 'does not create dev key' do
           expect(DeveloperKey.where(account: account).count).to eq 0
-          expect { described_class.create_tool_and_key! account, params }.to raise_error ActiveRecord::RecordInvalid
+          expect { described_class.create_tool_config_and_key! account, params }.to raise_error ActiveRecord::RecordInvalid
           expect(DeveloperKey.where(account: account).count).to eq 0
         end
       end

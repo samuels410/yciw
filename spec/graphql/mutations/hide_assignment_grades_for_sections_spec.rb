@@ -111,6 +111,13 @@ describe Mutations::HideAssignmentGradesForSections do
       expect(result.dig("errors", 0, "message")).to eql expected_error
     end
 
+    it "allows hiding by section for assignments that are no longer anonymized" do
+      assignment.update!(anonymous_grading: true)
+      assignment.post_submissions
+      result = execute_query(mutation_str(assignment_id: assignment.id, section_ids: [section1.id]), context)
+      expect(result.dig("errors")).to be nil
+    end
+
     it "does not allow hiding by section for moderated assignments that have not had grades published yet" do
       assignment.update!(moderated_grading: true, grader_count: 2, final_grader: teacher)
       result = execute_query(mutation_str(assignment_id: assignment.id, section_ids: [section1.id]), context)
@@ -126,6 +133,7 @@ describe Mutations::HideAssignmentGradesForSections do
     end
 
     describe "hiding the grades" do
+      let(:hide_submissions_job) { Delayed::Job.where(tag:"Assignment#hide_submissions").order(:id).last }
       let(:section1_student_submission) { assignment.submissions.find_by(user: @section1_student) }
       let(:section2_student_submission) { assignment.submissions.find_by(user: @section2_student) }
 
@@ -137,7 +145,6 @@ describe Mutations::HideAssignmentGradesForSections do
 
       it "hides the assignment grades for the specified section" do
         execute_query(mutation_str(assignment_id: assignment.id, section_ids: [section2.id]), context)
-        hide_submissions_job = Delayed::Job.where(tag: "Assignment#hide_submissions").order(:id).last
         hide_submissions_job.invoke_job
         expect(section2_student_submission.reload).not_to be_posted
       end
@@ -149,8 +156,29 @@ describe Mutations::HideAssignmentGradesForSections do
 
       it "returns the progress" do
         result = execute_query(mutation_str(assignment_id: assignment.id, section_ids: [section2.id]), context)
-        progress = Progress.where(tag: "hide_assignment_grades_for_sections").order(:id).last
+        progress = Progress.find(result.dig("data", "hideAssignmentGradesForSections", "progress", "_id"))
         expect(result.dig("data", "hideAssignmentGradesForSections", "progress", "_id").to_i).to be progress.id
+      end
+
+      it "stores the assignment id of submissions hidden on the Progress object" do
+        result = execute_query(mutation_str(assignment_id: assignment.id, section_ids: [section1.id]), context)
+        hide_submissions_job.invoke_job
+        progress = Progress.find(result.dig("data", "hideAssignmentGradesForSections", "progress", "_id"))
+        expect(progress.results[:assignment_id]).to eq assignment.id
+      end
+
+      it "stores the posted_at of submissions hidden on the Progress object" do
+        result = execute_query(mutation_str(assignment_id: assignment.id, section_ids: [section1.id]), context)
+        hide_submissions_job.invoke_job
+        progress = Progress.find(result.dig("data", "hideAssignmentGradesForSections", "progress", "_id"))
+        expect(progress.results[:posted_at]).to eq section1_student_submission.reload.posted_at
+      end
+
+      it "stores the user ids of submissions hidden on the Progress object" do
+        result = execute_query(mutation_str(assignment_id: assignment.id, section_ids: [section1.id]), context)
+        hide_submissions_job.invoke_job
+        progress = Progress.find(result.dig("data", "hideAssignmentGradesForSections", "progress", "_id"))
+        expect(progress.results[:user_ids]).to match_array [@section1_student.id]
       end
 
       it "returns the sections" do

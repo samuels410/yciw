@@ -19,9 +19,9 @@
 class AccountReport < ActiveRecord::Base
   include Workflow
 
-  belongs_to :account
-  belongs_to :user
-  belongs_to :attachment
+  belongs_to :account, inverse_of: :account_reports
+  belongs_to :user, inverse_of: :account_reports
+  belongs_to :attachment, inverse_of: :account_report
   has_many :account_report_runners, inverse_of: :account_report, autosave: false
   has_many :account_report_rows, inverse_of: :account_report, autosave: false
 
@@ -57,9 +57,10 @@ class AccountReport < ActiveRecord::Base
     state :deleted
   end
 
-  scope :complete, -> {where(progress: 100)}
-  scope :most_recent, -> {order(updated_at: :desc).limit(1)}
-  scope :active, -> {where.not(workflow_state: 'deleted')}
+  scope :complete, -> { where(progress: 100) }
+  scope :running, -> { where(workflow_state: 'running') }
+  scope :most_recent, -> { order(updated_at: :desc).limit(1) }
+  scope :active, -> { where.not(workflow_state: 'deleted') }
 
   alias_method :destroy_permanently!, :destroy
   def destroy
@@ -68,13 +69,13 @@ class AccountReport < ActiveRecord::Base
   end
 
   def self.delete_old_rows_and_runners
-    cleanup = AccountReportRow.where("created_at<?", 30.days.ago).limit(10_000)
+    cleanup = AccountReportRow.where("created_at<?", 28.days.ago).limit(10_000)
     until cleanup.delete_all < 10_000; end
     # There is a FK between rows and runners, skipping 2 days to avoid conflicts
     # for a long running report or a big backlog of queued reports.
     # This avoids the join to check for rows so that it can run faster in a
     # periodic job.
-    cleanup = AccountReportRunner.where("created_at<?", 28.days.ago).limit(10_000)
+    cleanup = AccountReportRunner.where("created_at<?", 30.days.ago).limit(10_000)
     until cleanup.delete_all < 10_000; end
   end
 
@@ -113,6 +114,10 @@ class AccountReport < ActiveRecord::Base
                         n_strand: proc {|ar| ['account_reports', ar.account.root_account.global_id]}
 
   def has_parameter?(key)
+    self.parameters.is_a?(Hash) && self.parameters[key].presence
+  end
+
+  def value_for_param(key)
     self.parameters.is_a?(Hash) && self.parameters[key].presence
   end
 

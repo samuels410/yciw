@@ -47,8 +47,10 @@ class CanvasSchema < GraphQL::Schema
     when CourseSection then Types::SectionType
     when User then Types::UserType
     when Enrollment then Types::EnrollmentType
+    when EnrollmentTerm then Types::TermType
     when Submission then Types::SubmissionType
     when SubmissionComment then Types::SubmissionCommentType
+    when SubmissionDraft then Types::SubmissionDraftType
     when Group then Types::GroupType
     when GroupCategory then Types::GroupSetType
     when GradingPeriod then Types::GradingPeriodType

@@ -360,7 +360,7 @@ module Canvas::LiveEvents
       account_uuid: assoc.account.uuid,
       created_at: assoc.created_at,
       updated_at: assoc.updated_at,
-      is_admin: !(assoc.account.root_account.all_account_users_for(assoc.user).empty?),
+      is_admin: !(assoc.account.root_account.cached_all_account_users_for(assoc.user).empty?),
     })
   end
 
@@ -443,7 +443,7 @@ module Canvas::LiveEvents
       grader_id = submission.global_grader_id
     end
 
-    sis_pseudonym = SisPseudonym.for(submission.user, submission.assignment.root_account, type: :trusted, require_sis: false)
+    sis_pseudonym = SisPseudonym.for(submission.user, submission.assignment.context, type: :trusted, require_sis: false)
 
     post_event_stringified('grade_change', {
       submission_id: submission.global_id,

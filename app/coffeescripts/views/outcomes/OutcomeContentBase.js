@@ -33,7 +33,7 @@ export default class OutcomeContentBase extends ValidatedFormView {
       // Hack: trick Babel/TypeScript into allowing this before super.
       if (false) { super(); }
       let thisFn = (() => { return this; }).toString();
-      let thisName = thisFn.slice(thisFn.indexOf('return') + 6 + 1, thisFn.lastIndexOf(';')).trim();
+      let thisName = thisFn.match(/_this\d*/)[0];
       eval(`${thisName} = this;`);
     }
     this._cleanUpTiny = this._cleanUpTiny.bind(this)
@@ -261,8 +261,10 @@ export default class OutcomeContentBase extends ValidatedFormView {
   }
 
   addTinyMCEKeyboardShortcuts() {
-    const keyboardShortcutsView = new RCEKeyboardShortcuts()
-    return keyboardShortcutsView.render().$el.insertBefore($('.rte_switch_views_link:first'))
+    if (!ENV.use_rce_enhancements) {
+      const keyboardShortcutsView = new RCEKeyboardShortcuts()
+      return keyboardShortcutsView.render().$el.insertBefore($('.rte_switch_views_link:first'))
+    }
   }
 
   // Called from subclasses in render.

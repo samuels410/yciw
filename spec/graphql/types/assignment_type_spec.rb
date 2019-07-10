@@ -179,6 +179,40 @@ describe Types::AssignmentType do
   describe "submissionsConnection" do
     let_once(:other_student) { student_in_course(course: course, active_all: true).user }
 
+    # This is kind of a catch-all test the assignment.submissionsConnection
+    # graphql plumbing. The submission search specs handle testing the
+    # implementation. This makes sure the graphql inputs are hooked up right.
+    # Other tests below were already here to test specific cases, and I think
+    # they still have value as a sanity check.
+    it "plumbs through filter options to SubmissionSearch" do
+      allow(SubmissionSearch).to receive(:new).and_call_original
+      assignment_type.resolve(<<~GQL, current_user: teacher)
+        submissionsConnection(
+          filter: {
+            states: submitted,
+            sectionIds: 42,
+            enrollmentTypes: StudentEnrollment,
+            userSearch: foo,
+            scoredLessThan: 3
+            scoredMoreThan: 1
+          }
+          orderBy: {field: username, direction: descending}
+        ) { nodes { _id } }
+      GQL
+      expect(SubmissionSearch).to have_received(:new).with(assignment, teacher, nil, {
+        states: ["submitted"],
+        section_ids: ["42"],
+        enrollment_types: ["StudentEnrollment"],
+        user_search: 'foo',
+        scored_less_than: 3.0,
+        scored_more_than: 1.0,
+        order_by: [{
+          field: "username",
+          direction: "descending"
+        }]
+      })
+    end
+
     it "returns 'real' submissions from with permissions" do
       submission1 = assignment.submit_homework(student, {:body => "sub1", :submission_type => "online_text_entry"})
       submission2 = assignment.submit_homework(other_student, {:body => "sub1", :submission_type => "online_text_entry"})
@@ -196,6 +230,21 @@ describe Types::AssignmentType do
           current_user: student
         )
       ).to eq [submission1.id.to_s]
+    end
+
+    it "returns nil when not logged in" do
+      course.update(is_public: true)
+
+      expect(
+        assignment_type.resolve("_id", current_user: nil)
+      ).to eq assignment.id.to_s
+
+      expect(
+        assignment_type.resolve(
+          "submissionsConnection { nodes { _id } }",
+          current_user: nil
+        )
+      ).to be_nil
     end
 
     it "can filter submissions according to workflow state" do

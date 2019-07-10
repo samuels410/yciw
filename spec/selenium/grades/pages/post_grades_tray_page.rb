@@ -18,30 +18,49 @@
 require_relative '../../common'
 
 module PostGradesTray
-  include SeleniumDependencies
+  extend SeleniumDependencies
 
-  def full_content
-    # content finder similar to detail tray
-    # f('#SubmissionTray__Content')
+  def self.full_content
+    fj("h3:contains('Post Grades')")
   end
 
-  def unposted_count_indicator
-    # Todo add locator for unposted_count_indicator
+  def self.unposted_count_indicator
+    fxpath("//span[@data-cid='Badge']/span")
   end
 
-  def unposted_count
+  def self.unposted_count
     unposted_count_indicator.text
   end
 
-  def post_button
-    # TODO: post button locator
+  def self.post_button
+    fj("button:contains('Post')")
   end
 
-  def post_type_radio_button(type)
-    # TODO: locator similar to fj(".SubmissionTray__RadioInput label:contains('#{type}')")
+  def self.post_type_radio_button(type)
+    fj("label:contains(#{type})")
   end
 
-  def select_section(section_name)
-    # TODO: locator for showing sections and for section checkbox
+  def self.specific_sections_toggle
+    fj("label:contains('Specific Sections')")
+  end
+
+  def self.section_checkbox(section_name)
+    fj("label:contains(#{section_name})")
+  end
+
+  def self.select_section(section_name)
+    specific_sections_toggle.click
+    section_checkbox(section_name).click
+  end
+
+  def self.spinner
+    fxpath("//div[@data-cid='Spinner']")
+  end
+
+  def self.post_grades
+    post_button.click
+    spinner
+    run_jobs
+    wait_for_no_such_element { PostGradesTray.spinner }
   end
 end

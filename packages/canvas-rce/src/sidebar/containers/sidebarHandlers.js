@@ -20,9 +20,12 @@ import { changeTab, changeAccordion } from "../actions/ui";
 import { fetchInitialPage, fetchNextPage } from "../actions/data";
 import { fetchImages } from "../actions/images";
 import {
+  createMediaServerSession,
   fetchFolders,
+  openOrCloseUploadForm,
+  saveMediaRecording,
   uploadPreflight,
-  openOrCloseUploadForm
+  uploadToMediaFolder
 } from "../actions/upload";
 import { searchFlickr, openOrCloseFlickrForm } from "../actions/flickr";
 import { toggle as toggleFolder } from "../actions/files";
@@ -42,6 +45,10 @@ export default function propsFromDispatch(dispatch) {
     flickrSearch: term => dispatch(searchFlickr(term)),
     toggleFlickrForm: () => dispatch(openOrCloseFlickrForm()),
     toggleUploadForm: () => dispatch(openOrCloseUploadForm()),
-    toggleNewPageForm: () => dispatch(openOrCloseNewPageForm())
+    toggleNewPageForm: () => dispatch(openOrCloseNewPageForm()),
+    startMediaUpload: (tabContext, fileMetaProps) =>
+      dispatch(uploadToMediaFolder(tabContext, fileMetaProps)),
+    createMediaServerSession: () => dispatch(createMediaServerSession()),
+    saveMediaRecording: (file, editor, dismiss) => dispatch(saveMediaRecording(file, editor, dismiss))
   };
 }

@@ -234,7 +234,7 @@ describe Api::V1::User do
       @account2 = Account.create!
       @user.pseudonyms.create!(:unique_id => 'abc', :account => @account2)
       @pseudonym = @user.pseudonyms.create!(:unique_id => 'xyz', :account => Account.default)
-      allow(SisPseudonym).to receive(:for).with(@user, Account.default, type: :implicit, require_sis: false).and_return(@pseudonym)
+      allow(SisPseudonym).to receive(:for).with(@user, Account.default, type: :implicit, require_sis: false, root_account: Account.default).and_return(@pseudonym)
       expect(@test_api.user_json(@user, @admin, {}, [], Account.default)).to eq({
           'name' => 'User',
           'sortable_name' => 'User',
@@ -2641,6 +2641,18 @@ PUBLIC
       })
 
       expect(json.count).to eq 1
+    end
+
+    it 'will include the assignment when asked for' do
+      json = api_call_as_user(@student1, :get, "/api/v1/users/#{@student1.id}/graded_submissions?include[]=assignment", {
+        id: @student1.to_param,
+        controller: 'users',
+        action: 'user_graded_submissions',
+        format: 'json',
+        include: ['assignment']
+      })
+      expect(json.count).to eq 3
+      expect(json[0]['assignment']['id']).to eq @most_recent_submission.assignment.id
     end
   end
 

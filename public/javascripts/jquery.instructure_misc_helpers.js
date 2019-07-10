@@ -17,7 +17,7 @@
  */
 
 import INST from './INST'
-import I18n from 'i18n!instructure'
+import I18n from 'i18n!instructure_misc_helpers'
 import $ from 'jquery'
 import _ from 'underscore'
 import htmlEscape from './str/htmlEscape'
@@ -108,43 +108,6 @@ import './vendor/jquery.scrollTo'
   $.titleize = function(string) {
     var res = (string || "").replace(/([A-Z])/g, " $1").replace(/_/g, " ").replace(/\s+/, " ").replace(/^\s/, "");
     return $.map(res.split(/\s/), function(word) { return (word[0] || "").toUpperCase() + word.substring(1); }).join(" ");
-  };
-
-  $.parseUserAgentString = function(userAgent) {
-    userAgent = (userAgent || "").toLowerCase();
-    var data = {
-      version: (userAgent.match( /.+(?:me|ox|it|ra|ie|er|rv|version)[\/: ]([\d.]+)/ ) || [0,null])[1],
-      chrome: /chrome/.test( userAgent ),
-      safari: /webkit/.test( userAgent ),
-      opera: /opera/.test( userAgent ),
-      msie: (/msie/.test( userAgent ) || (/trident/.test( userAgent ))) && !(/opera/.test( userAgent )),
-      firefox: /firefox/.test( userAgent),
-      mozilla: /mozilla/.test( userAgent ) && !(/(compatible|webkit)/.test( userAgent )),
-      speedgrader: /speedgrader/.test( userAgent )
-    };
-    var browser = null;
-    if(data.chrome) {
-      browser = "Chrome";
-    } else if(data.safari) {
-      browser = "Safari";
-    } else if(data.opera) {
-      browser = "Opera";
-    } else if(data.msie) {
-      browser = "Internet Explorer";
-    } else if(data.firefox) {
-      browser = "Firefox";
-    } else if(data.mozilla) {
-      browser = "Mozilla";
-    } else if(data.speedgrader) {
-      browser = "SpeedGrader for iPad";
-    }
-    if (!browser) {
-      browser = I18n.t('browsers.unrecognized', "Unrecognized Browser");
-    } else if(data.version) {
-      data.version = data.version.split(/\./).slice(0,2).join(".");
-      browser = browser + " " + data.version;
-    }
-    return browser;
   };
 
   $.fileSize = function(bytes) {
@@ -244,97 +207,6 @@ import './vendor/jquery.scrollTo'
         $dialog.find("input:visible:first").focus().select();
       },
       width: 400
-    });
-  };
-
-  $.findImageForService = function(service_type, callback) {
-    var $dialog = $("#instructure_image_search");
-    $dialog.find("button").attr('disabled', false);
-    if( !$dialog.length ) {
-      $dialog = $("<div id='instructure_image_search'/>")
-                  .append("<form id='image_search_form' class='form-inline' style='margin-bottom: 5px;'>" +
-                            "<img src='/images/flickr_creative_commons_small_icon.png'/>&nbsp;&nbsp;" + 
-                            "<input type='text' class='query' style='width: 250px;' placeholder='" +
-                            htmlEscape(I18n.t('tooltips.enter_search_terms', "enter search terms")) + "'/>" + 
-                            "<button class='btn' type='submit'>" +
-                            htmlEscape(I18n.t('buttons.search', "Search")) + "</button></form>")
-                  .append("<div class='results' style='max-height: 240px; overflow: auto;'/>");
-
-      $dialog.find("form").submit(function(event) {
-        event.preventDefault();
-        event.stopPropagation();
-        var now = new Date();
-        $dialog.find("button").attr('disabled', true);
-        $dialog.find(".results").empty().append(htmlEscape(I18n.t('status.searching', "Searching...")));
-        $dialog.bind('search_results', function(event, data) {
-          $dialog.find("button").attr('disabled', false);
-          if(data && data.photos && data.photos.photo) {
-            $dialog.find(".results").empty();
-            for(var idx in data.photos.photo) {
-              var photo = data.photos.photo[idx],
-                  image_url = "https://farm" + photo.farm + ".static.flickr.com/" + photo.server + "/" + photo.id + "_" + photo.secret + "_s.jpg",
-                  big_image_url = "https://farm" + photo.farm + ".static.flickr.com/" + photo.server + "/" + photo.id + "_" + photo.secret + ".jpg",
-                  source_url = "https://secure.flickr.com/photos/" + photo.owner + "/" + photo.id;
-
-              $dialog.find(".results").append(
-                $('<div class="image" style="float: left; padding: 2px; cursor: pointer;"/>')
-                .append($('<img/>', {
-                  data: {
-                    source: source_url,
-                    big_image_url: big_image_url
-                  },
-                  'class': "image_link",
-                  src: image_url,
-                  tabindex: "0",
-                  title: "embed " + (photo.title || ""),
-                  alt: photo.title || ""
-                }))
-              );
-            }
-          } else {
-            $dialog.find(".results").empty().append(htmlEscape(I18n.t('errors.search_failed', "Search failed, please try again.")));
-          }
-        });
-        var query = encodeURIComponent($dialog.find(".query").val());
-        // this request will be handled by window.jsonFlickerApi()
-        $.getScript("https://secure.flickr.com/services/rest/?method=flickr.photos.search&format=json&api_key=734839aadcaa224c4e043eaf74391e50&per_page=25&license=1,2,3,4,5,6&sort=relevance&text=" + query);
-      });
-
-      var insertImage = function(image){
-        $dialog.dialog('close');
-        callback({
-          image_url: $(image).data('big_image_url') || $(image).attr('src'),
-          link_url: $(image).data('source'),
-          title: $(image).attr('alt')
-        });
-      }
-
-      $dialog.delegate('.image_link', 'click', function(event) {
-        event.preventDefault();
-        insertImage(this);
-      });
-
-      $dialog.delegate('.image_link','keyup', function(event) {
-        event.preventDefault();
-        var code = event.keyCode || event.which;
-        if(code == 13) { //Enter keycode
-          insertImage(this);
-        }
-      });
-    }
-    $dialog.find("form img").attr('src', '/images/' + service_type + '_small_icon.png');
-    var url = $("#editor_tabs .bookmark_search_url").attr('href');
-    url = $.replaceTags(url, 'service_type', service_type);
-    $dialog.data('reference_url', url || '')
-    $dialog.find(".results").empty();
-    $dialog.find(".query").val("");
-    $dialog.dialog({
-      title: I18n.t('titles.image_search', "Image Search: %{service_name}", {service_name: $.titleize(service_type)}),
-      width: 440,
-      open: function() {
-        $dialog.find("input:visible:first").focus().select();
-      },
-      height: 320
     });
   };
 

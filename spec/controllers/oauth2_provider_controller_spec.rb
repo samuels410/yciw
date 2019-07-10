@@ -503,7 +503,7 @@ describe Oauth2ProviderController do
 
     context 'client_credentials' do
       let(:grant_type) { 'client_credentials' }
-      let(:aud) { Rails.application.routes.url_helpers.oauth2_token_url(host: 'test.host', protocol: 'https://') }
+      let(:aud) { Rails.application.routes.url_helpers.oauth2_token_url(host: 'test.host') }
       let(:iat) { 1.minute.ago.to_i }
       let(:exp) { 10.minutes.from_now.to_i }
       let(:signing_key) { JSON::JWK.new(key.private_jwk) }
@@ -551,7 +551,7 @@ describe Oauth2ProviderController do
         end
 
         context 'with aud as an array' do
-          let(:aud) { [Rails.application.routes.url_helpers.oauth2_token_url(host: 'test.host', protocol: 'https://'), 'doesnotexist'] }
+          let(:aud) { [Rails.application.routes.url_helpers.oauth2_token_url(host: 'test.host'), 'doesnotexist'] }
 
           it { is_expected.to have_http_status 200 }
         end
@@ -679,4 +679,29 @@ describe Oauth2ProviderController do
       expect(response.location).not_to match(/state=/)
     end
   end
+
+  describe 'DELETE token' do
+    let_once(:key) do
+      d = DeveloperKey.create! :redirect_uri => 'https://example.com'
+      enable_developer_key_account_binding!(d)
+      d
+    end
+    let_once(:user) { user_with_pseudonym(:active_all => 1, :password => 'qwertyuiop') }
+    let(:token) { user.access_tokens.create!(developer_key: key) }
+
+    it "deletes the token" do
+      delete :destroy, params: {access_token: token.full_token}
+      expect(AccessToken.not_deleted.exists?(token.id)).to be(false)
+    end
+
+    it "doesn't need a cope to delete the token" do
+      key.require_scopes = true
+      key.save!
+      delete :destroy, params: {access_token: token.full_token}
+      expect(AccessToken.not_deleted.exists?(token.id)).to be(false)
+    end
+
+
+  end
+
 end

@@ -198,6 +198,10 @@ module WikiAndTinyCommon
     wait_for_ajax_requests
   end
 
+  def tiny_rce_ifr_id
+    f('.tox-editor-container iframe')['id']
+  end
+
   def wiki_page_body_ifr_id
     f('.mce-container iframe')['id']
   end
@@ -219,6 +223,10 @@ module WikiAndTinyCommon
 
   def visit_front_page_edit(course)
     get "/courses/#{course.id}/pages/front-page/edit"
+  end
+
+  def visit_existing_wiki_edit(course, page_name)
+    get "/courses/#{course.id}/pages/#{page_name}/edit"
   end
 
   def visit_new_announcement_page(course)

@@ -92,6 +92,21 @@ describe Lti::LtiAdvantageAdapter do
       end
     end
 
+    context 'when target_link_uri is set' do
+      let(:launch_url) { 'https://www.cool-tool.com/test?foo=bar' }
+      let(:opts) do
+        {
+          resource_type: 'course_navigation',
+          domain: 'test.com',
+          launch_url: launch_url
+        }
+      end
+
+      it 'sets the target_link_uri in the id_token' do
+        expect(params['https://purl.imsglobal.org/spec/lti/claim/target_link_uri']).to eq launch_url
+      end
+    end
+
     it "generates a resource link request if the tool's resource type setting is 'ResourceLinkRequest'" do
       expect(params["https://purl.imsglobal.org/spec/lti/claim/message_type"]).to eq "LtiResourceLinkRequest"
     end
@@ -116,18 +131,15 @@ describe Lti::LtiAdvantageAdapter do
     it 'sets the domain in the message hint' do
       expect(Canvas::Security.decode_jwt(login_message['lti_message_hint'])['canvas_domain']).to eq 'test.com'
     end
-  end
 
-  describe '#generate_post_payload_for_assignment' do
-    let(:outcome_service_url) { 'https://www.outcome_service_url.com' }
-    let(:legacy_outcome_service_url) { 'https://www.legacy_url.com' }
-    let(:lti_turnitin_outcomes_placement_url) { 'https://www.turnitin.com' }
-    let(:params) { JSON.parse(fetch_and_delete_launch(course, verifier)) }
-    let(:verifier) do
-      jws = adapter.generate_post_payload_for_homework_submission(assignment)['lti_message_hint']
-      Canvas::Security.decode_jwt(jws)['verifier']
+    context 'when a "launch_url" is set in the options hash' do
+      let(:launch_url) { 'https://www.cool-took.com/launch?with_query_params=true' }
+      let(:opts) { {launch_url: launch_url} }
+
+      it('uses the launch_url as the target_link_uri') do
+        expect(login_message['target_link_uri']).to eq launch_url
+      end
     end
-    let(:expander_opts) { super().merge(assignment: assignment) }
   end
 
   describe '#launch_url' do

@@ -16,48 +16,96 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import htmlEscape from "escape-html";
-import formatMessage from "../../../format-message";
-import clickCallback from "./clickCallback";
+import $ from 'jquery'
+import htmlEscape from 'escape-html'
 
-tinymce.create("tinymce.plugins.InstructureImagePlugin", {
-  init: function(ed) {
+import formatMessage from '../../../format-message'
+import bridge from '../../../bridge'
+import TrayController from './ImageOptionsTray/TrayController'
+import clickCallback from './clickCallback'
+
+const PLUGIN_KEY = 'images'
+
+import {globalRegistry} from '../instructure-context-bindings/BindingRegistry'
+
+const trayController = new TrayController()
+
+tinymce.create('tinymce.plugins.InstructureImagePlugin', {
+  init(editor) {
     // Register commands
-    ed.addCommand(
+    editor.addCommand(
       "mceInstructureImage",
-      clickCallback.bind(this, ed, document)
+      clickCallback.bind(this, editor, document)
     );
 
     // Register buttons
-    ed.addButton("instructure_image", {
-      title: htmlEscape(
+    editor.ui.registry.addMenuButton("instructure_image", {
+      tooltip: htmlEscape(
         formatMessage({
-          default: "Embed Image",
+          default: "Images",
           description: "Title for RCE button to embed an image"
         })
       ),
-      cmd: "mceInstructureImage",
+
       icon: "image",
-      onPostRender: function() {
-        // highlight our button when an image is selected
-        var btn = this;
-        ed.on("NodeChange", function(event) {
-          btn.active(
-            event.nodeName == "IMG" && event.className != "equation_image"
-          );
-        });
+
+      fetch(callback) {
+        const items = [
+          {
+            type: 'menuitem',
+            text: formatMessage('Upload Image'),
+            onAction: () => editor.execCommand('mceInstructureImage'),
+          },
+
+          {
+            type: 'menuitem',
+            text: formatMessage('Course Images'), // This item needs to be adjusted to be user/context aware, i.e. User Images
+            onAction() {
+              editor.focus(true) // activate the editor without changing focus
+              bridge.showTrayForPlugin(PLUGIN_KEY)
+            }
+          }
+        ]
+        callback(items);
       }
     });
+
+    /*
+     * Register the Image "Options" button that will open the Image Options
+     * tray.
+     */
+    const buttonAriaLabel = formatMessage('Show image options')
+    editor.ui.registry.addButton('instructure-image-options', {
+      onAction(buttonApi) {
+        // show the tray
+        trayController.showTrayForEditor(editor)
+      },
+
+      onSetup(buttonApi) {
+        globalRegistry.bindToolbarToEditor(editor, buttonAriaLabel)
+      },
+
+      text: formatMessage('Options'),
+      tooltip: buttonAriaLabel
+    });
+
+    const defaultFocusSelector = `.tox-pop__dialog button[aria-label="${buttonAriaLabel}"]`
+    globalRegistry.addContextKeydownListener(editor, defaultFocusSelector)
+
+    function isImageElement($el) {
+      return $el.nodeName.toLowerCase() === 'img'
+    }
+
+    editor.ui.registry.addContextToolbar('instructure-image-toolbar', {
+      items: 'instructure-image-options',
+      position: 'node',
+      predicate: isImageElement,
+      scope: 'node'
+    })
   },
 
-  getInfo: function() {
-    return {
-      longname: "Instructure image",
-      author: "Instructure",
-      authorurl: "http://instructure.com",
-      infourl: "http://instructure.com",
-      version: "1"
-    };
+  destroy() {
+    trayController.hideTrayForEditor(editor)
   }
 });
 

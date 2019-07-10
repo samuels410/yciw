@@ -19,7 +19,7 @@ import React from 'react'
 import ReactDOM from 'react-dom'
 import $ from 'jquery'
 
-import {mockAssignment} from '../../test-utils'
+import {mockAssignment, legacyMockSubmission} from '../../test-utils'
 import StepContainer from '../StepContainer'
 
 beforeAll(() => {
@@ -37,7 +37,12 @@ afterEach(() => {
 
 it('will render the availaible step container if assignment is not locked', () => {
   const assignment = mockAssignment({lockInfo: {isLocked: false}})
-  ReactDOM.render(<StepContainer assignment={assignment} />, document.getElementById('fixtures'))
+  const submission = legacyMockSubmission()
+  submission.state = 'unsubmitted'
+  ReactDOM.render(
+    <StepContainer assignment={assignment} submission={submission} />,
+    document.getElementById('fixtures')
+  )
 
   const expectedElement = $('.in-progress')
   const unexpectedElement = $('.unavailable')
@@ -45,9 +50,12 @@ it('will render the availaible step container if assignment is not locked', () =
   expect(unexpectedElement).toHaveLength(0)
 })
 
-it('will render the unavailaible step container if assignment is locked', () => {
+it('will render the unavailable step container if assignment is locked', () => {
   const assignment = mockAssignment({lockInfo: {isLocked: true}})
-  ReactDOM.render(<StepContainer assignment={assignment} />, document.getElementById('fixtures'))
+  ReactDOM.render(
+    <StepContainer assignment={assignment} submission={legacyMockSubmission()} />,
+    document.getElementById('fixtures')
+  )
 
   const expectedElement = $('.unavailable')
   const unexpectedElement = $('.in-progress')
@@ -56,22 +64,26 @@ it('will render the unavailaible step container if assignment is locked', () => 
 })
 
 it('will render collapsed label if steps is collapsed', () => {
-  const label = 'TEST'
   const assignment = mockAssignment({lockInfo: {isLocked: false}})
   ReactDOM.render(
-    <StepContainer assignment={assignment} isCollapsed collapsedLabel={label} />,
+    <StepContainer assignment={assignment} submission={legacyMockSubmission()} isCollapsed />,
     document.getElementById('fixtures')
   )
 
   const expectedElement = $('.steps-main-status-label')
-  expect(expectedElement.text()).toBe(label)
+  expect(expectedElement.text()).toBe('Submitted')
 })
 
 it('will not render collapsed label if steps is collapsed', () => {
   const label = 'TEST'
   const assignment = mockAssignment({lockInfo: {isLocked: false}})
   ReactDOM.render(
-    <StepContainer assignment={assignment} isCollapsed={false} collapsedLabel={label} />,
+    <StepContainer
+      assignment={assignment}
+      isCollapsed={false}
+      submission={legacyMockSubmission()}
+      collapsedLabel={label}
+    />,
     document.getElementById('fixtures')
   )
 

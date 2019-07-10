@@ -25,15 +25,45 @@ import TruncateText from '@instructure/ui-elements/lib/components/TruncateText'
 import View from '@instructure/ui-layout/lib/components/View'
 import I18n from 'i18n!post_grades_tray'
 
+import Layout from './Layout'
+import {EVERYONE, GRADED} from './PostTypes'
+import {
+  postAssignmentGrades,
+  postAssignmentGradesForSections,
+  resolvePostAssignmentGradesStatus
+} from './Api'
+import {showFlashAlert} from '../../shared/FlashAlert'
+
+function initialShowState() {
+  return {
+    postBySections: false,
+    postType: EVERYONE,
+    postingGrades: false,
+    open: true,
+    selectedSectionIds: [],
+    submissions: []
+  }
+}
+
 export default class PostAssignmentGradesTray extends PureComponent {
   constructor(props) {
     super(props)
 
     this.dismiss = this.dismiss.bind(this)
     this.show = this.show.bind(this)
+    this.postBySectionsChanged = this.postBySectionsChanged.bind(this)
+    this.postTypeChanged = this.postTypeChanged.bind(this)
+    this.onPostClick = this.onPostClick.bind(this)
+    this.sectionSelectionChanged = this.sectionSelectionChanged.bind(this)
 
     this.state = {
-      open: false
+      postBySections: false,
+      postType: EVERYONE,
+      postingGrades: false,
+      onExited() {},
+      open: false,
+      selectedSectionIds: [],
+      submissions: []
     }
   }
 
@@ -43,27 +73,115 @@ export default class PostAssignmentGradesTray extends PureComponent {
 
   show(context) {
     this.setState({
-      ...context,
-      open: true
+      ...initialShowState(),
+      ...context
     })
   }
 
-  render() {
-    if (!this.state.assignment) {
-      return null
+  postBySectionsChanged(postBySections) {
+    this.setState({postBySections, selectedSectionIds: []})
+  }
+
+  postTypeChanged(event) {
+    const postType = event.target.value
+
+    if (postType === EVERYONE || postType === GRADED) {
+      this.setState({postType})
+    }
+  }
+
+  async onPostClick() {
+    const {assignment, selectedSectionIds} = this.state
+    const options = {gradedOnly: this.state.postType === GRADED}
+    let postRequest
+    let successMessage
+
+    if (this.state.postBySections) {
+      if (selectedSectionIds.length === 0) {
+        showFlashAlert({
+          message: I18n.t('At least one section must be selected to post grades by section.'),
+          type: 'error'
+        })
+        return
+      }
+
+      postRequest = postAssignmentGradesForSections(assignment.id, selectedSectionIds, options)
+      successMessage = I18n.t(
+        'Success! Grades have been posted for the selected sections of %{assignmentName}.',
+        {assignmentName: assignment.name}
+      )
+    } else {
+      postRequest = postAssignmentGrades(assignment.id, options)
+      successMessage = I18n.t(
+        'Success! Grades have been posted to %{postedTo} for %{assignmentName}.',
+        {
+          assignmentName: assignment.name,
+          postedTo: options.gradedOnly ? 'everyone graded' : 'everyone'
+        }
+      )
     }
 
-    const {assignment, onExited} = this.state
+    this.setState({postingGrades: true})
+
+    try {
+      const progress = await postRequest
+      const postedSubmissionInfo = await resolvePostAssignmentGradesStatus(progress)
+      this.dismiss()
+      this.state.onPosted(postedSubmissionInfo)
+      showFlashAlert({
+        message: successMessage,
+        type: 'success'
+      })
+    } catch (error) {
+      showFlashAlert({
+        message: I18n.t('There was a problem posting assignment grades.'),
+        type: 'error'
+      })
+      this.setState({postingGrades: false})
+    }
+  }
+
+  sectionSelectionChanged(selected, sectionId) {
+    const {selectedSectionIds} = this.state
+
+    if (selected) {
+      this.setState({selectedSectionIds: [...selectedSectionIds, sectionId]})
+    } else {
+      this.setState({
+        selectedSectionIds: selectedSectionIds.filter(
+          selectedSection => selectedSection !== sectionId
+        )
+      })
+    }
+  }
+
+  render() {
+    const {
+      assignment,
+      onExited,
+      open,
+      postBySections,
+      postingGrades,
+      postType,
+      sections,
+      selectedSectionIds,
+      submissions
+    } = this.state
+    const unpostedCount = submissions.filter(submission => submission.postedAt == null).length
+
+    if (!assignment) {
+      return null
+    }
 
     return (
       <Tray
         label={I18n.t('Post grades tray')}
         onExited={onExited}
-        open={this.state.open}
+        open={open}
         placement="end"
       >
         <View as="div" padding="small">
-          <Flex as="div" alignItems="start" margin="0 0 medium 0">
+          <Flex as="div" alignItems="start" margin="0 0 small 0">
             <FlexItem>
               <CloseButton onClick={this.dismiss}>{I18n.t('Close')}</CloseButton>
             </FlexItem>
@@ -75,6 +193,21 @@ export default class PostAssignmentGradesTray extends PureComponent {
             </FlexItem>
           </Flex>
         </View>
+
+        <Layout
+          assignment={assignment}
+          dismiss={this.dismiss}
+          onPostClick={this.onPostClick}
+          postBySections={postBySections}
+          postBySectionsChanged={this.postBySectionsChanged}
+          postType={postType}
+          postTypeChanged={this.postTypeChanged}
+          postingGrades={postingGrades}
+          sections={sections}
+          sectionSelectionChanged={this.sectionSelectionChanged}
+          selectedSectionIds={selectedSectionIds}
+          unpostedCount={unpostedCount}
+        />
       </Tray>
     )
   }

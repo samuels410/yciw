@@ -277,7 +277,7 @@ class AccountsController < ApplicationController
   before_action :require_user, :only => [:index, :terms_of_service, :help_links]
   before_action :reject_student_view_student
   before_action :get_context
-  before_action :rich_content_service_config, only: [:settings]
+  before_action :rce_js_env, only: [:settings]
 
   include Api::V1::Account
   include CustomSidebarLinksHelper
@@ -550,7 +550,7 @@ class AccountsController < ApplicationController
     end
 
     sortable_name_col = User.sortable_name_order_by_clause('users')
-    
+
     order = if params[:sort] == 'course_name'
               "#{Course.best_unicode_collation_key('courses.name')}"
             elsif params[:sort] == 'sis_course_id'
@@ -652,19 +652,23 @@ class AccountsController < ApplicationController
 
     page_opts = {}
     page_opts[:total_entries] = nil if params[:search_term] # doesn't calculate a total count
-    @courses = Api.paginate(@courses, self, api_v1_account_courses_url, page_opts)
 
-    ActiveRecord::Associations::Preloader.new.preload(@courses, [:account, :root_account, course_account_associations: :account])
-    preload_teachers(@courses) if includes.include?("teachers")
-    ActiveRecord::Associations::Preloader.new.preload(@courses, [:enrollment_term]) if includes.include?("term") || includes.include?('concluded')
+    all_precalculated_permissions = nil
+    Shackles.activate(:slave) do
+      @courses = Api.paginate(@courses, self, api_v1_account_courses_url, page_opts)
 
-    if includes.include?("total_students")
-      student_counts = StudentEnrollment.not_fake.where("enrollments.workflow_state NOT IN ('rejected', 'completed', 'deleted', 'inactive')").
-        where(:course_id => @courses).group(:course_id).distinct.count(:user_id)
-      @courses.each {|c| c.student_count = student_counts[c.id] || 0 }
+      ActiveRecord::Associations::Preloader.new.preload(@courses, [:account, :root_account, course_account_associations: :account])
+      preload_teachers(@courses) if includes.include?("teachers")
+      ActiveRecord::Associations::Preloader.new.preload(@courses, [:enrollment_term]) if includes.include?("term") || includes.include?('concluded')
+
+      if includes.include?("total_students")
+        student_counts = StudentEnrollment.not_fake.where("enrollments.workflow_state NOT IN ('rejected', 'completed', 'deleted', 'inactive')").
+          where(:course_id => @courses).group(:course_id).distinct.count(:user_id)
+        @courses.each {|c| c.student_count = student_counts[c.id] || 0 }
+      end
+      all_precalculated_permissions = @current_user.precalculate_permissions_for_courses(@courses, [:read_sis, :manage_sis])
     end
 
-    all_precalculated_permissions = @current_user.precalculate_permissions_for_courses(@courses, [:read_sis, :manage_sis])
     render :json => @courses.map { |c| course_json(c, @current_user, session, includes, nil,
       precalculated_permissions: all_precalculated_permissions&.dig(c.global_id)) }
   end
@@ -839,7 +843,7 @@ class AccountsController < ApplicationController
             hash.assert_valid_keys ["text", "subtext", "url", "available_to", "type", "id"]
             hash
           end
-          @account.settings[:custom_help_links] = Account::HelpLinks.process_links_before_save(sorted_help_links)
+          @account.settings[:custom_help_links] = @account.help_links_builder.process_links_before_save(sorted_help_links)
           @account.settings[:new_custom_help_links] = true
         end
 
@@ -944,23 +948,28 @@ class AccountsController < ApplicationController
     end
   end
 
+  def reports_tab
+    @available_reports = AccountReport.available_reports if @account.grants_right?(@current_user, @session, :read_reports)
+    if @available_reports
+      @root_account = @account.root_account
+      @account.shard.activate do
+        scope = @account.account_reports.active.where("report_type=name").most_recent
+        @last_complete_reports = AccountReport.from("unnest('{#{@available_reports.keys.join(',')}}'::text[]) report_types (name),
+                LATERAL (#{scope.complete.to_sql}) account_reports ").
+          order("report_types.name").
+          preload(:attachment).
+          index_by(&:report_type)
+        @last_reports = AccountReport.from("unnest('{#{@available_reports.keys.join(',')}}'::text[]) report_types (name),
+                LATERAL (#{scope.to_sql}) account_reports ").
+          order("report_types.name").
+          index_by(&:report_type)
+      end
+    end
+    render :layout => false
+  end
+
   def settings
     if authorized_action(@account, @current_user, :read)
-      @available_reports = AccountReport.available_reports if @account.grants_right?(@current_user, @session, :read_reports)
-      if @available_reports
-        @account.shard.activate do
-          scope = @account.account_reports.active.where("report_type=name").most_recent
-          @last_complete_reports = AccountReport.from("unnest('{#{@available_reports.keys.join(',')}}'::text[]) report_types (name),
-                LATERAL (#{scope.complete.to_sql}) account_reports ").
-              order("report_types.name").
-              preload(:attachment).
-              index_by(&:report_type)
-          @last_reports = AccountReport.from("unnest('{#{@available_reports.keys.join(',')}}'::text[]) report_types (name),
-                LATERAL (#{scope.to_sql}) account_reports ").
-              order("report_types.name").
-              index_by(&:report_type)
-        end
-      end
       load_course_right_side
       @account_users = @account.account_users.active
       ActiveRecord::Associations::Preloader.new.preload(@account_users, user: :communication_channels)
@@ -976,10 +985,11 @@ class AccountsController < ApplicationController
 
       @announcements = @account.announcements.order(:created_at).paginate(page: params[:page], per_page: 50)
       @external_integration_keys = ExternalIntegrationKey.indexed_keys_for(@account)
-
       js_env({
         APP_CENTER: { enabled: Canvas::Plugin.find(:app_center).enabled? },
         LTI_LAUNCH_URL: account_tool_proxy_registration_path(@account),
+        EXTERNAL_TOOLS_CREATE_URL: url_for(controller: :external_tools, action: :create, account_id: @context.id),
+        TOOL_CONFIGURATION_SHOW_URL: account_show_tool_configuration_url(account_id: @context.id, developer_key_id: ':developer_key_id'),
         MEMBERSHIP_SERVICE_FEATURE_FLAG_ENABLED: @account.root_account.feature_enabled?(:membership_service_for_lti_tools),
         LTI_13_TOOLS_FEATURE_FLAG_ENABLED: @account.root_account.feature_enabled?(:lti_1_3),
         CONTEXT_BASE_URL: "/accounts/#{@context.id}",
@@ -1362,11 +1372,6 @@ class AccountsController < ApplicationController
   end
   private :format_avatar_count
 
-  protected
-  def rich_content_service_config
-    rce_js_env(:basic)
-  end
-
   private
 
   def ensure_sis_max_name_length_value!(account_settings)
@@ -1462,7 +1467,7 @@ class AccountsController < ApplicationController
       help_link_name: @account.settings[:help_link_name] || default_help_link_name,
       help_link_icon: @account.settings[:help_link_icon] || 'help',
       CUSTOM_HELP_LINKS: @account.help_links || [],
-      DEFAULT_HELP_LINKS: Account::HelpLinks.instantiate_links(Account::HelpLinks.default_links)
+      DEFAULT_HELP_LINKS: @account.help_links_builder.instantiate_links(@account.help_links_builder.default_links)
     }
   end
 

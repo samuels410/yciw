@@ -23,46 +23,49 @@ import Layout from 'jsx/grading/HideAssignmentGradesTray/Layout'
 
 QUnit.module('HideAssignmentGradesTray Layout', suiteHooks => {
   let $container
-  let context
 
-  function assignmentFixture() {
+  function getHeader() {
+    return [...$container.querySelectorAll('h3')].find($header =>
+      $header.textContent.includes('Hide Grades')
+    )
+  }
+
+  function getAnonymousText() {
+    const hideText = 'You can only hide grades for everyone when the assignment is anonymous.'
+    return [...$container.querySelectorAll('div')].find($el => $el.textContent === hideText)
+  }
+
+  function getUnreleasedGradesAlertText() {
+    const hideText =
+      'Hiding grades is not allowed because grades have not been released for this assignment.'
+    return [...$container.querySelectorAll('div')].find($p => $p.textContent === hideText)
+  }
+
+  function layoutProps({assignment, ...props} = {}) {
     return {
-      gradesPublished: true,
-      id: '2301',
-      name: 'Math 1.1'
+      assignment: {
+        anonymousGrading: false,
+        gradesPublished: true,
+        ...assignment
+      },
+      dismiss() {},
+      hideBySections: true,
+      hideBySectionsChanged() {},
+      hidingGrades: false,
+      onHideClick() {},
+      sections: [{id: '2001', name: 'Freshmen'}, {id: '2002', name: 'Sophomores'}],
+      sectionSelectionChanged() {},
+      selectedSectionIds: [],
+      ...props
     }
   }
 
-  function getCloseButton() {
-    return [...$container.querySelectorAll('button')].find(
-      $button => $button.textContent === 'Close'
-    )
-  }
-
-  function getHideButton() {
-    return [...$container.querySelectorAll('button')].find(
-      $button => $button.textContent === 'Hide'
-    )
-  }
-
-  function getHideText() {
-    const hideText =
-      'Hiding grades is not allowed because no grades have been posted for this assignment.'
-    return [...$container.querySelectorAll('p')].find($p => $p.textContent === hideText)
-  }
-
-  function mountComponent() {
-    ReactDOM.render(<Layout {...context} />, $container)
+  function mountComponent(props = {}) {
+    ReactDOM.render(<Layout {...layoutProps(props)} />, $container)
   }
 
   suiteHooks.beforeEach(() => {
     $container = document.body.appendChild(document.createElement('div'))
-    context = {
-      assignment: assignmentFixture(),
-      dismiss: () => {},
-      hidingGrades: false,
-      onHideClick: () => {}
-    }
   })
 
   suiteHooks.afterEach(() => {
@@ -70,44 +73,49 @@ QUnit.module('HideAssignmentGradesTray Layout', suiteHooks => {
     $container.remove()
   })
 
-  test('clicking "Close" button calls the dismiss prop', () => {
-    const dismissSpy = sinon.spy()
-    context.dismiss = dismissSpy
+  test('header is present', () => {
     mountComponent()
-    getCloseButton().click()
-    strictEqual(dismissSpy.callCount, 1)
+    ok(getHeader())
   })
 
-  test('"Hide" button is disabled when grades have yet to be published', () => {
-    const unpublishedAssignment = {...assignmentFixture(), gradesPublished: false}
-    context.assignment = unpublishedAssignment
-    mountComponent()
-    strictEqual(getHideButton().disabled, true)
+  QUnit.module('"Unreleased grades" message behavior', () => {
+    test('when "gradesPublished" is false, unreleased grades message is present', () => {
+      mountComponent({assignment: {gradesPublished: false}})
+      ok(getUnreleasedGradesAlertText())
+    })
+
+    test('when "gradesPublished" is true, unreleased grades message is hidden', () => {
+      mountComponent({assignment: {gradesPublished: true}})
+      notOk(getUnreleasedGradesAlertText())
+    })
   })
 
-  test('descriptive text exists when grades have yet to be published', () => {
-    const unpublishedAssignment = {...assignmentFixture(), gradesPublished: false}
-    context.assignment = unpublishedAssignment
-    mountComponent()
-    ok(getHideText())
-  })
+  QUnit.module('"for everyone when assignment is anonymous" text behavior', () => {
+    test('when "gradesPublished" and "anonymousGrading" are true and at least one section, anonymous descriptive text is present', () => {
+      mountComponent({
+        assignment: {
+          gradesPublished: true,
+          anonymousGrading: true
+        },
+        sections: [{id: '2001', name: 'Freshmen'}]
+      })
 
-  test('"Hide" button is disabled when hidingGrades is true', () => {
-    context.hidingGrades = true
-    mountComponent()
-    strictEqual(getHideButton().disabled, true)
-  })
+      ok(getAnonymousText())
+    })
 
-  test('descriptive text does not exist when grades have been published', () => {
-    mountComponent()
-    notOk(getHideText())
-  })
+    test('when "gradesPublished" is false, anonymous descriptive text is hidden', () => {
+      mountComponent({assignment: {gradesPublished: false}})
+      notOk(getAnonymousText())
+    })
 
-  test('clicking "Hide" button calls the onHideClick prop', () => {
-    const onHideClickSpy = sinon.spy()
-    context.onHideClick = onHideClickSpy
-    mountComponent()
-    getHideButton().click()
-    strictEqual(onHideClickSpy.callCount, 1)
+    test('when "sections" are empty, anonymous descriptive text is hidden', () => {
+      mountComponent({sections: []})
+      notOk(getAnonymousText())
+    })
+
+    test('when "anonymousGrading" is false, anonymous descriptive text is hidden', () => {
+      mountComponent({assignment: {anonymousGrading: false}})
+      notOk(getAnonymousText())
+    })
   })
 })

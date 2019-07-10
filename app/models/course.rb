@@ -214,7 +214,7 @@ class Course < ActiveRecord::Base
   after_save :update_final_scores_on_weighting_scheme_change
   after_save :update_account_associations_if_changed
   after_save :update_enrollment_states_if_necessary
-  after_save :touch_students_if_necessary
+  after_save :clear_caches_if_necessary
   after_commit :update_cached_due_dates
 
   after_update :clear_cached_short_name, :if => :saved_change_to_course_code?
@@ -557,7 +557,6 @@ class Course < ActiveRecord::Base
         user_ids_to_update_account_associations += update_account_associations(courses_or_course_ids_slice, opts)
       end
     else
-
       if courses_or_course_ids.first.is_a? Course
         courses = courses_or_course_ids
         ActiveRecord::Associations::Preloader.new.preload(courses, :course_sections => :nonxlist_course)
@@ -639,6 +638,7 @@ class Course < ActiveRecord::Base
           CourseAccountAssociation.where(:id => to_delete).delete_all
         end
       end
+      Course.clear_cache_keys(course_ids_to_update_user_account_associations, :account_associations)
 
       user_ids_to_update_account_associations = Enrollment.
           where("course_id IN (?) AND workflow_state<>'deleted'", course_ids_to_update_user_account_associations).
@@ -655,7 +655,7 @@ class Course < ActiveRecord::Base
   end
 
   def associated_accounts
-    Rails.cache.fetch(["associated_accounts", self]) do
+    Rails.cache.fetch_with_batched_keys("associated_accounts", batch_object: self, batched_keys: :account_associations) do
       Shackles.activate(:slave) do
         if association(:course_account_associations).loaded? && !association(:non_unique_associated_accounts).loaded?
           accounts = course_account_associations.map(&:account).uniq
@@ -786,41 +786,35 @@ class Course < ActiveRecord::Base
   # in the course.
   def user_is_admin?(user)
     return unless user
-    RequestCache.cache('user_is_admin', self, user) do
-      Rails.cache.fetch([self, user, "course_user_is_admin"].cache_key) do
-        self.enrollments.for_user(user).active_by_date.of_admin_type.exists?
-      end
+    fetch_on_enrollments('user_is_admin', user) do
+      self.enrollments.for_user(user).active_by_date.of_admin_type.exists?
     end
   end
 
   def user_is_instructor?(user)
     return unless user
-    RequestCache.cache('user_is_instructor', self, user) do
-      Rails.cache.fetch([self, user, "course_user_is_instructor"].cache_key) do
-        self.enrollments.for_user(user).active_by_date.of_instructor_type.exists?
-      end
+    fetch_on_enrollments('user_is_instructor', user) do
+      self.enrollments.for_user(user).active_by_date.of_instructor_type.exists?
     end
   end
 
   def user_is_student?(user, opts = {})
     return unless user
 
-    RequestCache.cache('user_is_student', self, user, opts) do
-      Rails.cache.fetch([self, user, "course_user_is_student", opts].cache_key) do
-        enroll_types = ["StudentEnrollment"]
-        enroll_types << "StudentViewEnrollment" if opts[:include_fake_student]
+    fetch_on_enrollments('user_is_student', user, opts) do
+      enroll_types = ["StudentEnrollment"]
+      enroll_types << "StudentViewEnrollment" if opts[:include_fake_student]
 
-        enroll_scope = self.enrollments.for_user(user).where(:type => enroll_types)
-        if opts[:include_future]
-          enroll_scope = enroll_scope.active_or_pending_by_date_ignoring_access
-        elsif opts[:include_all]
-          enroll_scope = enroll_scope.not_inactive_by_date_ignoring_access
-        else
-          return false unless self.available?
-          enroll_scope = enroll_scope.active_by_date
-        end
-        enroll_scope.exists?
+      enroll_scope = self.enrollments.for_user(user).where(:type => enroll_types)
+      if opts[:include_future]
+        enroll_scope = enroll_scope.active_or_pending_by_date_ignoring_access
+      elsif opts[:include_all]
+        enroll_scope = enroll_scope.not_inactive_by_date_ignoring_access
+      else
+        return false unless self.available?
+        enroll_scope = enroll_scope.active_by_date
       end
+      enroll_scope.exists?
     end
   end
 
@@ -850,13 +844,8 @@ class Course < ActiveRecord::Base
       return preloaded_user_has_been?(user, %w{TaEnrollment TeacherEnrollment})
     end
     # enrollments should be on the course's shard
-    RequestCache.cache('user_has_been_instructor', self, user) do
-      self.shard.activate do
-        Rails.cache.fetch([self, user, "course_user_has_been_instructor"].cache_key) do
-          # active here is !deleted; it still includes concluded, etc.
-          self.instructor_enrollments.active.where(user_id: user).exists?
-        end
-      end
+    fetch_on_enrollments('user_has_been_instructor', user) do
+      self.instructor_enrollments.active.where(user_id: user).exists? # active here is !deleted; it still includes concluded, etc.
     end
   end
 
@@ -866,11 +855,8 @@ class Course < ActiveRecord::Base
       return preloaded_user_has_been?(user, %w{TaEnrollment TeacherEnrollment DesignerEnrollment})
     end
 
-    RequestCache.cache('user_has_been_admin', self, user) do
-      Rails.cache.fetch([self, user, "course_user_has_been_admin"].cache_key) do
-        # active here is !deleted; it still includes concluded, etc.
-        self.admin_enrollments.active.where(user_id: user).exists?
-      end
+    fetch_on_enrollments('user_has_been_admin', user) do
+      self.admin_enrollments.active.where(user_id: user).exists? # active here is !deleted; it still includes concluded, etc.
     end
   end
 
@@ -880,11 +866,8 @@ class Course < ActiveRecord::Base
       return preloaded_user_has_been?(user, "ObserverEnrollment")
     end
 
-    RequestCache.cache('user_has_been_observer', self, user) do
-      Rails.cache.fetch([self, user, "course_user_has_been_observer"].cache_key) do
-        # active here is !deleted; it still includes concluded, etc.
-        self.observer_enrollments.shard(self).active.where(user_id: user).exists?
-      end
+    fetch_on_enrollments('user_has_been_observer', user) do
+      self.observer_enrollments.shard(self).active.where(user_id: user).exists? # active here is !deleted; it still includes concluded, etc.
     end
   end
 
@@ -894,10 +877,8 @@ class Course < ActiveRecord::Base
       return preloaded_user_has_been?(user, %w{StudentEnrollment StudentViewEnrollment})
     end
 
-    RequestCache.cache('user_has_been_student', self, user) do
-      Rails.cache.fetch([self, user, "course_user_has_been_student"].cache_key) do
-        self.all_student_enrollments.where(user_id: user).exists?
-      end
+    fetch_on_enrollments('user_has_been_student', user) do
+      self.all_student_enrollments.where(user_id: user).exists?
     end
   end
 
@@ -909,10 +890,8 @@ class Course < ActiveRecord::Base
       end
     end
 
-    RequestCache.cache('user_has_no_enrollments', self, user) do
-      Rails.cache.fetch([self, user, "course_user_has_no_enrollments"].cache_key) do
-        !enrollments.where(user_id: user).exists?
-      end
+    fetch_on_enrollments('user_has_no_enrollments', user) do
+      !enrollments.where(user_id: user).exists?
     end
   end
 
@@ -1054,8 +1033,12 @@ class Course < ActiveRecord::Base
         Enrollment.where(:course_id => self).update_all(:root_account_id => self.root_account_id)
       end
 
-      Enrollment.where(:course_id => self).touch_all
-      User.where(id: Enrollment.where(course_id: self).select(:user_id)).touch_all
+      self.class.connection.after_transaction_commit do
+        Enrollment.where(:course_id => self).touch_all
+        user_ids = Enrollment.where(course_id: self).distinct.pluck(:user_id).sort
+        User.touch_and_clear_cache_keys(user_ids, :enrollments)
+      end
+
       data
     end
   end
@@ -1328,7 +1311,7 @@ class Course < ActiveRecord::Base
       Enrollment.where(id: e_batch.map(&:id)).update_all(workflow_state: 'deleted', updated_at: Time.zone.now)
       EnrollmentState.where(:enrollment_id => e_batch.map(&:id)).
         update_all(["state = ?, state_is_current = ?, lock_version = lock_version + 1", 'deleted', true])
-      User.where(id: user_ids).touch_all
+      User.touch_and_clear_cache_keys(user_ids, :enrollments)
       User.send_later_if_production(:update_account_associations, user_ids) if user_ids.any?
     end
     c_data = SisBatchRollBackData.build_dependent_data(sis_batch: sis_batch, contexts: courses, updated_state: 'deleted', batch_mode_delete: batch_mode)
@@ -1647,26 +1630,35 @@ class Course < ActiveRecord::Base
   end
 
   def account_users_for(user)
-    return [] unless user
     @associated_account_ids ||= (self.associated_accounts + root_account.account_chain(include_site_admin: true)).
         uniq.map { |a| a.active? ? a.id : nil }.compact
-    @account_users ||= {}
-    @account_users[user.global_id] ||= Shard.partition_by_shard(@associated_account_ids) do |account_chain_ids|
+    Shard.partition_by_shard(@associated_account_ids) do |account_chain_ids|
       if account_chain_ids == [Account.site_admin.id]
         Account.site_admin.account_users_for(user)
       else
         AccountUser.active.where(:account_id => account_chain_ids, :user_id => user).to_a
       end
     end
-    @account_users[user.global_id] ||= []
-    @account_users[user.global_id]
+  end
+
+  def cached_account_users_for(user)
+    return [] unless user
+    @account_users ||= {}
+    @account_users[user.global_id] ||= begin
+      key = ['account_users_for_course_and_user', user.cache_key(:account_users), Account.cache_key_for_id(account_id, :account_chain)].cache_key
+      Rails.cache.fetch_with_batched_keys(key, batch_object: self, batched_keys: :account_associations, skip_cache_if_disabled: true) do
+        aus = account_users_for(user)
+        aus.each{|au| au.instance_variable_set(:@association_cache, {})}
+        aus
+      end
+    end
   end
 
   def account_membership_allows(user, permission = nil)
     return false unless user
 
     @membership_allows ||= {}
-    @membership_allows[[user.id, permission]] ||= self.account_users_for(user).any? { |au| permission.nil? || au.has_permission_to?(self, permission) }
+    @membership_allows[[user.id, permission]] ||= self.cached_account_users_for(user).any? { |au| permission.nil? || au.has_permission_to?(self, permission) }
   end
 
   def teacherless?
@@ -2072,6 +2064,7 @@ class Course < ActiveRecord::Base
       e.self_enrolled = self_enrolled
       e.start_at = start_at
       e.end_at = end_at
+      e.sis_pseudonym_id = opts[:sis_pseudonym_id]
       if e.changed?
         e.need_touch_user = true if opts[:skip_touch_user]
         transaction do
@@ -2392,33 +2385,39 @@ class Course < ActiveRecord::Base
 
   def self.serialization_excludes; [:uuid]; end
 
+  # helper method to DRY-up some similar methods that all can be cached based on a user's enrollments
+  def fetch_on_enrollments(key, user, opts=nil)
+    self.shard.activate do
+      RequestCache.cache(key, user, self, opts) do
+        Rails.cache.fetch_with_batched_keys([key, self.global_asset_string, opts].compact.cache_key, batch_object: user, batched_keys: :enrollments) do
+          yield
+        end
+      end
+    end
+  end
 
   ADMIN_TYPES = %w{TeacherEnrollment TaEnrollment DesignerEnrollment}
   def section_visibilities_for(user, opts={})
-    RequestCache.cache('section_visibilities_for', user, self, opts) do
-      shard.activate do
-        Rails.cache.fetch(['section_visibilities_for', user, self, opts].cache_key) do
-          workflow_not = opts[:excluded_workflows] || 'deleted'
+    fetch_on_enrollments('section_visibilities_for', user, opts) do
+      workflow_not = opts[:excluded_workflows] || 'deleted'
 
-          enrollment_rows = all_enrollments.
-            where(user: user).
-            where.not(workflow_state: workflow_not).
-            pluck(
-              :course_section_id,
-              :limit_privileges_to_course_section,
-              :type,
-              :associated_user_id)
+      enrollment_rows = all_enrollments.
+        where(user: user).
+        where.not(workflow_state: workflow_not).
+        pluck(
+          :course_section_id,
+          :limit_privileges_to_course_section,
+          :type,
+          :associated_user_id)
 
-          enrollment_rows.map do |section_id, limit_privileges, type, associated_user_id|
-            {
-              :course_section_id => section_id,
-              :limit_privileges_to_course_section => limit_privileges,
-              :type => type,
-              :associated_user_id => associated_user_id,
-              :admin => ADMIN_TYPES.include?(type)
-            }
-          end
-        end
+      enrollment_rows.map do |section_id, limit_privileges, type, associated_user_id|
+        {
+          :course_section_id => section_id,
+          :limit_privileges_to_course_section => limit_privileges,
+          :type => type,
+          :associated_user_id => associated_user_id,
+          :admin => ADMIN_TYPES.include?(type)
+        }
       end
     end
   end
@@ -3023,8 +3022,10 @@ class Course < ActiveRecord::Base
       # association
       Enrollment.where(:course_id => self).update_all(:course_id => new_course.id, :updated_at => Time.now.utc)
       user_ids = new_course.all_enrollments.pluck(:user_id)
+      self.class.connection.after_transaction_commit do
+        User.touch_and_clear_cache_keys(user_ids, :enrollments)
+      end
       Shard.partition_by_shard(user_ids) do |sharded_user_ids|
-        User.where(id: sharded_user_ids).touch_all
         Favorite.where(:user_id => sharded_user_ids, :context_type => "Course", :context_id => self.id).
           update_all(:context_id => new_course.id, :updated_at => Time.now.utc)
       end
@@ -3234,27 +3235,22 @@ class Course < ActiveRecord::Base
     end
   end
 
-  def touch_admins_later
-    send_later_enqueue_args(:touch_admins, { :run_at => 15.seconds.from_now, :singleton => "course_touch_admins_#{global_id}" })
+  def clear_todo_list_cache_later(association_type)
+    raise "invalid association" unless self.association(association_type).klass == User
+    send_later_enqueue_args(:clear_todo_list_cache, { :run_at => 15.seconds.from_now, :singleton => "course_clear_cache_#{global_id}_#{association_type}" }, association_type)
   end
 
-  def touch_admins
-    User.where(id: self.admins).touch_all
+  def clear_todo_list_cache(association_type)
+    raise "invalid association" unless self.association(association_type).klass == User
+    self.send(association_type).clear_cache_keys(:todo_list)
   end
 
-  def touch_students_if_necessary
-    # to update the cached current enrollments
-    if saved_change_to_workflow_state? && (workflow_state == 'available' || workflow_state_before_last_save == 'available')
-      touch_students_later if self.students.exists?
-    end
+  def touch_admins # TODO remove after existing jobs run
+    clear_todo_list_cache(:admins)
   end
 
-  def touch_students_later
-    send_later_enqueue_args(:touch_students, { :run_at => 15.seconds.from_now, :singleton => "course_touch_students_#{global_id}" })
-  end
-
-  def touch_students
-    User.where(id: self.students).touch_all
+  def clear_caches_if_necessary
+    self.clear_cache_key(:account_associations) if saved_change_to_root_account_id? || saved_change_to_account_id?
   end
 
   def list_students_by_sortable_name?

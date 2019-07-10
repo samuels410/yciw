@@ -24,6 +24,7 @@ import * as FinalGradeOverrideApi from '../../FinalGradeOverrides/FinalGradeOver
 import CourseSettings from '../../CourseSettings'
 import FinalGradeOverrides from '../../FinalGradeOverrides'
 import StudentContentDataLoader from '../StudentContentDataLoader'
+import NaiveRequestDispatch from '../NaiveRequestDispatch'
 
 describe('Gradebook StudentContentDataLoader', () => {
   const exampleData = {
@@ -49,6 +50,7 @@ describe('Gradebook StudentContentDataLoader', () => {
   let gradebook
   let options
   let server
+  let dispatch
 
   function latchPromise() {
     const latch = {}
@@ -103,6 +105,8 @@ describe('Gradebook StudentContentDataLoader', () => {
       submissionsChunkSize: 2,
       submissionsUrl: urls.submissions
     }
+
+    dispatch = new NaiveRequestDispatch()
   })
 
   afterEach(() => {
@@ -112,7 +116,7 @@ describe('Gradebook StudentContentDataLoader', () => {
 
   describe('.load()', () => {
     async function load(studentIds) {
-      dataLoader = new StudentContentDataLoader(options)
+      dataLoader = new StudentContentDataLoader(options, dispatch)
       await dataLoader.load(studentIds || exampleData.studentIds)
     }
 
@@ -210,6 +214,13 @@ describe('Gradebook StudentContentDataLoader', () => {
         const submissionsRequest = server.findRequest(urls.submissions)
         const params = paramsFromRequest(submissionsRequest)
         expect(params.response_fields).toContain('cached_due_date')
+      })
+
+      it('includes "posted_at" in response fields', async () => {
+        await load()
+        const submissionsRequest = server.findRequest(urls.submissions)
+        const params = paramsFromRequest(submissionsRequest)
+        expect(params.response_fields).toContain('posted_at')
       })
 
       it('calls the submissions chunk callback for each chunk of submissions', async () => {

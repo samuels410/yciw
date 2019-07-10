@@ -16,22 +16,66 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Billboard from '@instructure/ui-billboard/lib/components/Billboard'
-import Button from '@instructure/ui-buttons/lib/components/Button'
+import AssignmentAlert from './AssignmentAlert'
+import {
+  AssignmentShape,
+  CREATE_SUBMISSION,
+  STUDENT_VIEW_QUERY,
+  SubmissionShape
+} from '../assignmentData'
 import {chunk} from 'lodash'
 import {DEFAULT_ICON, getIconByType} from '../../../shared/helpers/mimeClassIconHelper'
-import FileDrop from '@instructure/ui-forms/lib/components/FileDrop'
-import Grid, {GridCol, GridRow} from '@instructure/ui-layout/lib/components/Grid'
 import I18n from 'i18n!assignments_2'
-import IconTrash from '@instructure/ui-icons/lib/Line/IconTrash'
+import LoadingIndicator from '../../shared/LoadingIndicator'
 import mimeClass from 'compiled/util/mimeClass'
+import {Mutation} from 'react-apollo'
 import React, {Component} from 'react'
+import {submissionFileUploadUrl, uploadFiles} from '../../../shared/upload_file'
+
+import Billboard from '@instructure/ui-billboard/lib/components/Billboard'
+import Button from '@instructure/ui-buttons/lib/components/Button'
+import FileDrop from '@instructure/ui-forms/lib/components/FileDrop'
+import Flex, {FlexItem} from '@instructure/ui-layout/lib/components/Flex'
+import Grid, {GridCol, GridRow} from '@instructure/ui-layout/lib/components/Grid'
+import IconTrash from '@instructure/ui-icons/lib/Line/IconTrash'
 import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
+import Text from '@instructure/ui-elements/lib/components/Text'
+import theme from '@instructure/ui-themes/lib/canvas/base'
 
 export default class ContentUploadTab extends Component {
+  static propTypes = {
+    assignment: AssignmentShape,
+    submission: SubmissionShape
+  }
+
+  loadDraftFiles = () => {
+    if (this.props.submission.submissionDraft) {
+      return this.props.submission.submissionDraft.attachments.map(attachment => ({
+        id: attachment._id,
+        mimeClass: attachment.mimeClass,
+        name: attachment.displayName,
+        preview: attachment.thumbnailUrl
+      }))
+    } else {
+      return []
+    }
+  }
+
   state = {
-    files: [],
-    messages: []
+    files: this.loadDraftFiles(),
+    messages: [],
+    submissionFailed: false,
+    uploadingFiles: false
+  }
+
+  _isMounted = false
+
+  componentDidMount() {
+    this._isMounted = true
+  }
+
+  componentWillUnmount() {
+    this._isMounted = false
   }
 
   handleDropAccepted = files => {
@@ -59,7 +103,7 @@ export default class ContentUploadTab extends Component {
   handleRemoveFile = e => {
     e.preventDefault()
     const fileId = parseInt(e.currentTarget.id, 10)
-    const fileIndex = this.state.files.findIndex(file => file.id === fileId)
+    const fileIndex = this.state.files.findIndex(file => parseInt(file.id, 10) === fileId)
 
     this.setState(
       prevState => ({
@@ -76,6 +120,10 @@ export default class ContentUploadTab extends Component {
     )
   }
 
+  shouldDisplayThumbnail = file => {
+    return (file.mimeClass || mimeClass(file.type)) === 'image' && file.preview
+  }
+
   ellideString = title => {
     if (title.length > 21) {
       return `${title.substr(0, 9)}${I18n.t('...')}${title.substr(-9)}`
@@ -90,7 +138,24 @@ export default class ContentUploadTab extends Component {
         <Billboard
           heading={I18n.t('Upload File')}
           hero={DEFAULT_ICON}
-          message={I18n.t('Drag and drop, or click to browse your computer')}
+          message={
+            <Flex direction="column">
+              {this.props.assignment.allowedExtensions.length ? (
+                <FlexItem>
+                  {I18n.t('File permitted: %{fileTypes}', {
+                    fileTypes: this.props.assignment.allowedExtensions
+                      .map(ext => ext.toUpperCase())
+                      .join(', ')
+                  })}
+                </FlexItem>
+              ) : null}
+              <FlexItem padding="small 0 0">
+                <Text size="small">
+                  {I18n.t('Drag and drop, or click to browse your computer')}
+                </Text>
+              </FlexItem>
+            </Flex>
+          }
         />
       </div>
     )
@@ -109,7 +174,7 @@ export default class ContentUploadTab extends Component {
                     heading={I18n.t('Uploaded')}
                     headingLevel="h3"
                     hero={
-                      mimeClass(file.type) === 'image' ? (
+                      this.shouldDisplayThumbnail(file) ? (
                         <img
                           alt={I18n.t('%{filename} preview', {filename: file.name})}
                           height="75"
@@ -149,17 +214,141 @@ export default class ContentUploadTab extends Component {
     )
   }
 
+  updateAssignmentCache = (cache, submission) => {
+    const {assignment} = cache.readQuery({
+      query: STUDENT_VIEW_QUERY,
+      variables: {
+        assignmentLid: this.props.assignment._id
+      }
+    })
+
+    assignment.submissionsConnection.nodes = assignment.submissionsConnection.nodes.concat([
+      submission.data.createSubmission.submission
+    ])
+
+    cache.writeQuery({
+      query: STUDENT_VIEW_QUERY,
+      variables: {
+        assignmentLid: this.props.assignment._id
+      },
+      data: {assignment}
+    })
+  }
+
+  renderAlert = (data, error) => {
+    if (error) {
+      return (
+        <AssignmentAlert
+          errorMessage={I18n.t('Error sending submission')}
+          onDismiss={() => this.setState({submissionFailed: false, uploadingFiles: false})}
+        />
+      )
+    }
+    if (data) {
+      return <AssignmentAlert successMessage={I18n.t('Submission sent')} />
+    }
+  }
+
+  submitAssignment = createSubmission => {
+    this.setState({submissionFailed: false, uploadingFiles: true}, async () => {
+      let fileIds = []
+
+      if (this.state.files.length) {
+        try {
+          const attachments = await uploadFiles(
+            this.state.files,
+            submissionFileUploadUrl(this.props.assignment)
+          )
+          fileIds = attachments.map(attachment => attachment.id)
+        } catch (err) {
+          if (this._isMounted) {
+            this.setState({submissionFailed: true, uploadingFiles: false})
+          }
+          return
+        }
+      }
+      await createSubmission({
+        variables: {
+          id: this.props.assignment._id,
+          type: 'online_upload', // TODO: update to enable different submission types
+          fileIds
+        }
+      })
+
+      if (this._isMounted) {
+        this.setState({files: [], messages: [], uploadingFiles: false})
+      }
+    })
+  }
+
+  renderSubmitButton = createSubmission => {
+    const outerFooterStyle = {
+      position: 'fixed',
+      bottom: '0',
+      left: '0',
+      right: '0',
+      maxWidth: '1366px',
+      margin: '0 0 0 84px',
+      zIndex: '5'
+    }
+
+    const innerFooterStyle = {
+      backgroundColor: theme.variables.colors.white,
+      borderColor: theme.variables.colors.borderMedium,
+      borderTop: `1px solid ${theme.variables.colors.borderMedium}`,
+      textAlign: 'right',
+      margin: `0 ${theme.variables.spacing.medium}`
+    }
+
+    return (
+      <div style={outerFooterStyle}>
+        <div style={innerFooterStyle}>
+          <Button
+            variant="primary"
+            margin="xx-small 0"
+            onClick={() => this.submitAssignment(createSubmission)}
+          >
+            {I18n.t('Submit')}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   render() {
     return (
-      <FileDrop
-        allowMultiple
-        enablePreview
-        id="inputFileDrop"
-        label={this.state.files.length ? this.renderUploadedFiles() : this.renderEmptyUpload()}
-        messages={this.state.messages}
-        onDropAccepted={this.handleDropAccepted}
-        onDropRejected={this.handleDropRejected}
-      />
+      <Mutation mutation={CREATE_SUBMISSION} update={this.updateAssignmentCache}>
+        {(createSubmission, {data, error}) => (
+          <React.Fragment>
+            {this.renderAlert(data, error || this.state.submissionFailed)}
+            {/* TODO: replace loading indicator with a progress bar */}
+            {this.state.uploadingFiles && !error && !this.state.submissionFailed && (
+              <LoadingIndicator />
+            )}
+            {!this.state.uploadingFiles && !this.state.submissionFailed && (
+              <React.Fragment>
+                <FileDrop
+                  accept={
+                    this.props.assignment.allowedExtensions.length
+                      ? this.props.assignment.allowedExtensions
+                      : ''
+                  }
+                  allowMultiple
+                  enablePreview
+                  id="inputFileDrop"
+                  label={
+                    this.state.files.length ? this.renderUploadedFiles() : this.renderEmptyUpload()
+                  }
+                  messages={this.state.messages}
+                  onDropAccepted={this.handleDropAccepted}
+                  onDropRejected={this.handleDropRejected}
+                />
+                {this.state.files.length !== 0 && this.renderSubmitButton(createSubmission)}
+              </React.Fragment>
+            )}
+          </React.Fragment>
+        )}
+      </Mutation>
     )
   }
 }

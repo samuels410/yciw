@@ -46,13 +46,14 @@ RSpec.describe Lti::ToolConfigurationsApiController, type: :controller do
   end
   let(:new_url) { 'https://www.new-url.com/test' }
   let(:dev_key_id) { developer_key.id }
+  let(:privacy_level) { 'public' }
   let(:params) do
     {
       developer_key: dev_key_params,
       account_id: sub_account.id,
       developer_key_id: dev_key_id,
       tool_configuration: {
-        privacy_level: 'public',
+        privacy_level: privacy_level,
         settings: settings
       }
     }.compact
@@ -95,6 +96,7 @@ RSpec.describe Lti::ToolConfigurationsApiController, type: :controller do
       )
     end
     let(:url) { 'https://www.mytool.com/config/json' }
+    let(:privacy_level) { 'public' }
     let(:params) do
       {
         developer_key: dev_key_params,
@@ -104,7 +106,7 @@ RSpec.describe Lti::ToolConfigurationsApiController, type: :controller do
           settings_url: url,
           disabled_placements: ['course_navigation', 'account_navigation'],
           custom_fields: "foo=bar\r\nkey=value",
-          privacy_level: 'public'
+          privacy_level: privacy_level
         }
       }
     end
@@ -387,6 +389,40 @@ RSpec.describe Lti::ToolConfigurationsApiController, type: :controller do
       end
     end
 
+    context 'when there are associated tools' do
+      shared_examples_for 'an action that updates installed tools' do
+        subject { installed_tool.reload.workflow_state }
+
+        let(:installed_tool) do
+          t = tool_configuration.new_external_tool(context)
+          t.save!
+          t
+        end
+        let(:context) { raise 'set in examples' }
+        let(:privacy_level) { 'anonymous' }
+
+        before do
+          installed_tool
+          put :update, params: params
+          run_jobs
+        end
+
+        it { is_expected.to eq privacy_level }
+      end
+
+      context 'when tool in an account' do
+        it_behaves_like 'an action that updates installed tools' do
+          let(:context) { tool_configuration.developer_key.account }
+        end
+      end
+
+      context 'when tool is in a course' do
+        it_behaves_like 'an action that updates installed tools' do
+          let(:context) { course_model }
+        end
+      end
+    end
+
     it_behaves_like 'an endpoint that validates public_jwk' do
       let(:make_request) { put :update, params: params }
     end
@@ -405,16 +441,37 @@ RSpec.describe Lti::ToolConfigurationsApiController, type: :controller do
 
     before do
       tool_configuration
+      account.developer_key_account_bindings.
+        find_by(developer_key: developer_key).
+        update!(workflow_state: 'on')
     end
 
-    it_behaves_like 'an action that requires manage developer keys'
-
-    context do
+    context 'when tool configuration does not exist' do
       let(:tool_configuration) { nil }
       it_behaves_like 'an endpoint that requires an existing tool configuration'
     end
 
-    context 'when the tool configuration exists' do
+    context 'when the requested key is not enable in the context' do
+      let(:disabled_key) { DeveloperKey.create!(account: sub_account) }
+      let(:dev_key_id) { disabled_key.id }
+
+      it 'responds with "unauthorized"' do
+        subject
+        expect(response).to be_unauthorized
+      end
+    end
+
+    context 'when the current user does not have "lti_add_edit"' do
+      let(:student) { student_in_course(active_all: true).user }
+      before { user_session(student) }
+
+      it 'responds with "unauthorized"' do
+        subject
+        expect(response).to be_unauthorized
+      end
+    end
+
+    context 'when the tool configuration exists and key is enabled' do
       it 'renders the tool configuration' do
         subject
         expect(config_from_response).to eq tool_configuration

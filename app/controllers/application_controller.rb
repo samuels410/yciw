@@ -54,8 +54,6 @@ class ApplicationController < ActionController::Base
   include Canvas::RequestForgeryProtection
   protect_from_forgery with: :exception
 
-  # load_user checks masquerading permissions, so this needs to be cleared first
-  before_action :clear_cached_contexts
   prepend_before_action :load_user, :load_account
   # make sure authlogic is before load_user
   skip_before_action :activate_authlogic
@@ -79,6 +77,8 @@ class ApplicationController < ActionController::Base
   before_action :init_body_classes
   after_action :set_response_headers
   after_action :update_enrollment_last_activity_at
+  # multiple actions might be called on a single controller instance in specs
+  before_action :clear_js_env if Rails.env.test?
 
   add_crumb(proc {
     title = I18n.t('links.dashboard', 'My Dashboard')
@@ -91,6 +91,10 @@ class ApplicationController < ActionController::Base
 
     crumb.html_safe
   }, :root_path, class: 'home')
+
+  def clear_js_env
+    @js_env = nil
+  end
 
   ##
   # Sends data from rails to JavaScript
@@ -130,7 +134,7 @@ class ApplicationController < ActionController::Base
       ]
 
       @js_env = {
-        ASSET_HOST: Canvas::Cdn.config.host,
+        ASSET_HOST: Canvas::Cdn.add_brotli_to_host_if_supported(request),
         active_brand_config_json_url: active_brand_config_url('json'),
         url_to_what_gets_loaded_inside_the_tinymce_editor_css: editor_css,
         url_for_high_contrast_tinymce_editor_css: editor_hc_css,
@@ -142,6 +146,7 @@ class ApplicationController < ActionController::Base
         k12: k12?,
         use_responsive_layout: use_responsive_layout?,
         use_rce_enhancements: @context.try(:feature_enabled?, :rce_enhancements),
+        use_unsplash_image_search: PluginSetting.settings_for_plugin(:unsplash)&.dig('access_key')&.present?,
         help_link_name: help_link_name,
         help_link_icon: help_link_icon,
         use_high_contrast: @current_user.try(:prefers_high_contrast?),
@@ -155,7 +160,6 @@ class ApplicationController < ActionController::Base
           show_feedback_link: show_feedback_link?,
           enable_profiles: (@domain_root_account && @domain_root_account.settings[:enable_profiles] != false)
         },
-        ARC_RECORDING_FEATURE_ENABLED: (@domain_root_account && @domain_root_account.feature_enabled?(:integrate_arc_rce)),
       }
       @js_env[:current_user] = @current_user ? Rails.cache.fetch(['user_display_json', @current_user].cache_key, :expires_in => 1.hour) { user_display_json(@current_user, :profile, [:avatar_is_fallback]) } : {}
       @js_env[:page_view_update_url] = page_view_path(@page_view.id, page_view_token: @page_view.token) if @page_view
@@ -188,9 +192,8 @@ class ApplicationController < ActionController::Base
   helper_method :js_env
 
   # add keys to JS environment necessary for the RCE at the given risk level
-  def rce_js_env(risk_level, root_account: @domain_root_account, domain: request.env['HTTP_HOST'])
-    rce_env_hash = Services::RichContent.env_for(root_account,
-                                            risk_level: risk_level,
+  def rce_js_env(domain: request.env['HTTP_HOST'])
+    rce_env_hash = Services::RichContent.env_for(
                                             user: @current_user,
                                             domain: domain,
                                             real_user: @real_current_user,
@@ -665,6 +668,39 @@ class ApplicationController < ActionController::Base
     set_no_cache_headers
   end
 
+  def verified_user_check
+    if @domain_root_account&.user_needs_verification?(@current_user) # disable tools before verification
+      if @current_user
+        render_unverified_error(
+          t("user not authorized to perform that action until verifying email"),
+          t("Complete registration by clicking the “finish the registration process” link sent to your email."))
+      else
+        render_unverified_error(
+          t("must be logged in and registered to perform that action"),
+          t("Please Log in to view this content"))
+      end
+      false
+    else
+      true
+    end
+  end
+
+  def render_unverified_error(json_message, flash_message)
+    respond_to do |format|
+      format.json do
+        render json: {
+          status: 'unverified',
+          errors: [{ message: json_message }]
+        }, status: :unauthorized
+      end
+      format.all do
+        flash[:warning] = flash_message
+        redirect_to_referrer_or_default(root_url)
+      end
+    end
+    set_no_cache_headers
+  end
+
   # To be used as a before_action, requires controller or controller actions
   # to have their urls scoped to a context in order to be valid.
   # So /courses/5/assignments or groups/1/assignments would be valid, but
@@ -809,6 +845,7 @@ class ApplicationController < ActionController::Base
         .for_user(@context)
         .current
         .active_by_date
+      enrollment_scope = enrollment_scope.where(:course_id => @observed_course_ids) if @observed_course_ids
       include_groups = !!opts[:include_groups]
       group_ids = nil
 
@@ -838,12 +875,14 @@ class ApplicationController < ActionController::Base
 
       groups = []
       if include_groups
+        group_scope = @context.current_groups
+        group_scope = group_scope.where(:context_type => "Course", :context_id => @observed_course_ids) if @observed_course_ids
         if group_ids
           Shard.partition_by_shard(group_ids) do |shard_group_ids|
-            groups += @context.current_groups.shard(Shard.current).where(:id => shard_group_ids).to_a
+            groups += group_scope.shard(Shard.current).where(:id => shard_group_ids).to_a
           end
         else
-          groups = @context.current_groups.shard(opts[:cross_shard] ? @context.in_region_associated_shards : Shard.current).to_a
+          groups = group_scope.shard(opts[:cross_shard] ? @context.in_region_associated_shards : Shard.current).to_a
         end
       end
       groups = @context.filter_visible_groups_for_user(groups)
@@ -1110,10 +1149,6 @@ class ApplicationController < ActionController::Base
   def set_no_cache_headers
     response.headers["Pragma"] = "no-cache"
     response.headers["Cache-Control"] = "no-cache, no-store"
-  end
-
-  def clear_cached_contexts
-    RoleOverride.clear_cached_contexts
   end
 
   def set_page_view
@@ -1617,6 +1652,9 @@ class ApplicationController < ActionController::Base
                                                         tool: @tool})
 
         adapter = if @tool.use_1_3?
+          # Use the resource URL as the target_link_uri
+          opts[:launch_url] = @resource_url
+
           Lti::LtiAdvantageAdapter.new(
             tool: @tool,
             user: @current_user,
@@ -1912,7 +1950,7 @@ class ApplicationController < ActionController::Base
         context: context,
         user: user,
         preloaded_attachments: {},
-        in_app: Setting.get("skip_verifier_if_in_app", "true") == "true" && in_app?,
+        in_app: in_app?,
         is_public: is_public
       ).processed_url
     end
@@ -2117,14 +2155,10 @@ class ApplicationController < ActionController::Base
   end
 
   def browser_supported?
-    # the user_agent gem likes to (ab)use objects and metaprogramming, so
-    # we just do this check once per session. or maybe more than once, if
-    # you upgrade your browser and it treats session cookie expiration
-    # rules as a suggestion
     key = request.user_agent.to_s.sum # keep cookie size in check. a legitimate collision here would be 1. extremely unlikely and 2. not a big deal
     if key != session[:browser_key]
       session[:browser_key] = key
-      session[:browser_supported] = Browser.supported?(request.user_agent)
+      session[:browser_supported] = BrowserSupport.supported?(request.user_agent)
     end
     session[:browser_supported]
   end
@@ -2224,7 +2258,8 @@ class ApplicationController < ActionController::Base
       end
 
       hash[:WIKI_PAGE] = wiki_page_json(@page, @current_user, session, true, :deep_check_if_needed => true, :master_course_status => mc_status)
-      hash[:WIKI_PAGE_REVISION] = (current_version = @page.versions.current) ? StringifyIds.stringify_id(current_version.number) : nil
+      version_number = Rails.cache.fetch(['page_version', @page].cache_key) { @page.versions.maximum(:number) }
+      hash[:WIKI_PAGE_REVISION] = version_number && StringifyIds.stringify_id(version_number)
       hash[:WIKI_PAGE_SHOW_PATH] = named_context_url(@context, :context_wiki_page_path, @page)
       hash[:WIKI_PAGE_EDIT_PATH] = named_context_url(@context, :edit_context_wiki_page_path, @page)
       hash[:WIKI_PAGE_HISTORY_PATH] = named_context_url(@context, :context_wiki_page_revisions_path, @page)
@@ -2238,6 +2273,7 @@ class ApplicationController < ActionController::Base
     js_env hash
   end
 
+  ASSIGNMENT_GROUPS_TO_FETCH_PER_PAGE_ON_ASSIGNMENTS_INDEX = 50
   def set_js_assignment_data
     rights = [:manage_assignments, :manage_grades, :read_grades, :manage]
     permissions = @context.rights_status(@current_user, *rights)
@@ -2246,6 +2282,21 @@ class ApplicationController < ActionController::Base
     permissions[:by_assignment_id] = @context.assignments.map do |assignment|
       [assignment.id, {update: assignment.user_can_update?(@current_user, session)}]
     end.to_h
+
+    current_user_has_been_observer_in_this_course = @context.user_has_been_observer?(@current_user)
+
+    prefetch_xhr(api_v1_course_assignment_groups_url(
+      @context,
+      include: [
+        'assignments',
+        'discussion_topic',
+        (permissions[:manage] || current_user_has_been_observer_in_this_course) && 'all_dates',
+        permissions[:manage] && 'module_ids'
+      ].reject(&:blank?),
+      exclude_response_fields: ['description', 'rubric'],
+      override_assignment_dates: !permissions[:manage],
+      per_page: ASSIGNMENT_GROUPS_TO_FETCH_PER_PAGE_ON_ASSIGNMENTS_INDEX
+    ), id: 'assignment_groups_url')
 
     js_env({
       :URLS => {
@@ -2264,8 +2315,9 @@ class ApplicationController < ActionController::Base
       :assignment_menu_tools => external_tools_display_hashes(:assignment_menu),
       :discussion_topic_menu_tools => external_tools_display_hashes(:discussion_topic_menu),
       :quiz_menu_tools => external_tools_display_hashes(:quiz_menu),
-      :current_user_has_been_observer_in_this_course => @context.user_has_been_observer?(@current_user),
+      :current_user_has_been_observer_in_this_course => current_user_has_been_observer_in_this_course,
       :observed_student_ids => ObserverEnrollment.observed_student_ids(@context, @current_user),
+      apply_assignment_group_weights: @context.apply_group_weights?,
     })
 
     conditional_release_js_env(includes: :active_rules)
@@ -2376,6 +2428,11 @@ class ApplicationController < ActionController::Base
 
     StringifyIds.recursively_stringify_ids(ctx)
     LiveEvents.set_context(ctx)
+  end
+
+  # makes it so you can use the prefetch_xhr erb helper from controllers. They'll be rendered in _head.html.erb
+  def prefetch_xhr(*args)
+    (@xhrs_to_prefetch_from_controller ||= []) << args
   end
 
   def teardown_live_events_context

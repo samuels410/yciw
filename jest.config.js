@@ -43,7 +43,11 @@ module.exports = {
     'jest-canvas-mock',
     '<rootDir>/jest/jest-setup.js'
   ],
-  setupTestFrameworkScriptFile: '<rootDir>/jest/jest-setup-framework.js',
+  setupFilesAfterEnv: [
+    'react-testing-library/cleanup-after-each',
+    'jest-dom/extend-expect',
+    './app/jsx/__tests__/ValidatedApolloCleanup'
+  ],
   testMatch: [
     '**/__tests__/**/?(*.)(spec|test).js'
   ],
@@ -56,6 +60,7 @@ module.exports = {
     '^i18n': '<rootDir>/jest/i18nTransformer.js',
     '^.+\\.coffee': '<rootDir>/jest/coffeeTransformer.js',
     '^.+\\.handlebars': '<rootDir>/jest/handlebarsTransformer.js',
-    '^.+\\.jsx?$': 'babel-jest'
+    '^.+\\.jsx?$': 'babel-jest',
+    '\\.graphql$': 'jest-raw-loader'
   },
 }

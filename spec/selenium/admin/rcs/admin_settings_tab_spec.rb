@@ -21,7 +21,6 @@ describe "admin settings tab" do
   include_context "in-process server selenium tests"
   before :once do
     account_admin_user
-    enable_all_rcs Account.default
   end
 
   before :each do
@@ -418,8 +417,9 @@ describe "admin settings tab" do
 
       help_links = Account.default.help_links
       expect(help_links).to include(help_link.merge(:type => "custom"))
-      expect(help_links & Account::HelpLinks.instantiate_links(Account::HelpLinks.default_links)).to eq(
-                                                                                                       Account::HelpLinks.instantiate_links(Account::HelpLinks.default_links))
+      expect(help_links & Account.default.help_links_builder.instantiate_links(Account.default.help_links_builder.default_links)).to eq(
+        Account.default.help_links_builder.instantiate_links(Account.default.help_links_builder.default_links)
+      )
 
       get "/accounts/#{Account.default.id}/settings"
 
@@ -430,8 +430,8 @@ describe "admin settings tab" do
       click_submit
 
       new_help_links = Account.default.help_links
-      expect(new_help_links.map { |x| x[:id] }).to_not include(Account::HelpLinks.default_links.first[:id].to_s)
-      expect(new_help_links.map { |x| x[:id] }).to include(Account::HelpLinks.default_links.last[:id].to_s)
+      expect(new_help_links.map { |x| x[:id] }).to_not include(Account.default.help_links_builder.default_links.first[:id].to_s)
+      expect(new_help_links.map { |x| x[:id] }).to include(Account.default.help_links_builder.default_links.last[:id].to_s)
       expect(new_help_links.last).to include(help_link)
     end
 
@@ -552,7 +552,6 @@ describe "admin settings tab" do
 
   it "shows all feature flags that are expected to be visible" do
     course_with_admin_logged_in(:account => Account.site_admin)
-    enable_all_rcs @course.account
     provision_quizzes_next @course
 
     get "/accounts/#{Account.site_admin.id}/settings"

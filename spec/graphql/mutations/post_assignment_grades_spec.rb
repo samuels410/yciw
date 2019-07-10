@@ -25,8 +25,9 @@ describe Mutations::PostAssignmentGrades do
   let(:student) { course.enroll_user(User.create!, "StudentEnrollment", enrollment_state: "active").user }
   let(:teacher) { course.enroll_user(User.create!, "TeacherEnrollment", enrollment_state: "active").user }
 
-  def mutation_str(assignment_id: nil)
+  def mutation_str(assignment_id: nil, graded_only: nil)
     input_string = assignment_id ? "assignmentId: #{assignment_id}" : ""
+    input_string += ", gradedOnly: #{graded_only}" unless graded_only.nil?
 
     <<~GQL
       mutation {
@@ -92,6 +93,8 @@ describe Mutations::PostAssignmentGrades do
     end
 
     describe "posting the grades" do
+      let(:post_submissions_job) { Delayed::Job.where(tag:"Assignment#post_submissions").order(:id).last }
+
       before(:each) do
         @student_submission = assignment.submissions.find_by(user: student)
       end
@@ -110,8 +113,29 @@ describe Mutations::PostAssignmentGrades do
 
       it "returns the progress" do
         result = execute_query(mutation_str(assignment_id: assignment.id), context)
-        progress = Progress.where(tag: "post_assignment_grades").order(:id).last
+        progress = Progress.find(result.dig("data", "postAssignmentGrades", "progress", "_id"))
         expect(result.dig("data", "postAssignmentGrades", "progress", "_id").to_i).to be progress.id
+      end
+
+      it "stores the assignment id of submissions hidden on the Progress object" do
+        result = execute_query(mutation_str(assignment_id: assignment.id), context)
+        post_submissions_job.invoke_job
+        progress = Progress.find(result.dig("data", "postAssignmentGrades", "progress", "_id"))
+        expect(progress.results[:assignment_id]).to eq assignment.id
+      end
+
+      it "stores the posted_at of submissions hidden on the Progress object" do
+        result = execute_query(mutation_str(assignment_id: assignment.id), context)
+        post_submissions_job.invoke_job
+        progress = Progress.find(result.dig("data", "postAssignmentGrades", "progress", "_id"))
+        expect(progress.results[:posted_at]).to eq @student_submission.reload.posted_at
+      end
+
+      it "stores the user ids of submissions hidden on the Progress object" do
+        result = execute_query(mutation_str(assignment_id: assignment.id), context)
+        post_submissions_job.invoke_job
+        progress = Progress.find(result.dig("data", "postAssignmentGrades", "progress", "_id"))
+        expect(progress.results[:user_ids]).to match_array [student.id]
       end
     end
   end
@@ -127,6 +151,49 @@ describe Mutations::PostAssignmentGrades do
     it "does not return data for the related submissions" do
       result = execute_query(mutation_str(assignment_id: assignment.id), context)
       expect(result.dig("data", "postAssignmentGrades")).to be nil
+    end
+  end
+
+  describe "graded_only" do
+    let(:context) { { current_user: teacher } }
+    let(:post_submissions_job) { Delayed::Job.where(tag: "Assignment#post_submissions").order(:id).last }
+    let(:student2) { course.enroll_user(User.create!, "StudentEnrollment", enrollment_state: "active").user }
+
+    before(:each) do
+      @student1_submission = assignment.submissions.find_by(user: student)
+      @student2_submission = assignment.submissions.find_by(user: student2)
+      assignment.grade_student(student, grader: teacher, score: 100)
+    end
+
+    it "returns an error when assignment is anonymous and posting by graded only" do
+      assignment.update!(anonymous_grading: true)
+      result = execute_query(mutation_str(assignment_id: assignment.id, graded_only: true), context)
+      expected_error = "Anonymous assignments cannot be posted by graded only"
+      expect(result.dig("errors", 0, "message")).to eql expected_error
+    end
+
+    it "posts the graded submissions if graded_only is true" do
+      execute_query(mutation_str(assignment_id: assignment.id, graded_only: true), context)
+      post_submissions_job.invoke_job
+      expect(@student1_submission.reload).to be_posted
+    end
+
+    it "does not post the ungraded submissions if graded_only is true" do
+      execute_query(mutation_str(assignment_id: assignment.id, graded_only: true), context)
+      post_submissions_job.invoke_job
+      expect(@student2_submission.reload).not_to be_posted
+    end
+
+    it "posts all the submissions if graded_only is false" do
+      execute_query(mutation_str(assignment_id: assignment.id, graded_only: false), context)
+      post_submissions_job.invoke_job
+      expect(assignment.submissions).to all(be_posted)
+    end
+
+    it "posts all the submissions if graded_only is not present" do
+      execute_query(mutation_str(assignment_id: assignment.id), context)
+      post_submissions_job.invoke_job
+      expect(assignment.submissions).to all(be_posted)
     end
   end
 end

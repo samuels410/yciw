@@ -23,7 +23,8 @@ class EportfoliosController < ApplicationController
   include EportfolioPage
   before_action :require_user, :only => [:index, :user_index]
   before_action :reject_student_view_student
-  before_action :rich_content_service_config
+  before_action :verified_user_check, :only => [:index, :user_index, :create]
+  before_action :rce_js_env
   before_action :get_eportfolio, :except => [:index, :user_index, :create]
 
   def index
@@ -129,15 +130,19 @@ class EportfoliosController < ApplicationController
 
   def reorder_categories
     if authorized_action(@portfolio, @current_user, :update)
-      @portfolio.eportfolio_categories.build.update_order(params[:order].split(","))
+      order = []
+      params[:order].split(",").each { |id| order << Shard.relative_id_for(id, Shard.current, @portfolio.shard) }
+      @portfolio.eportfolio_categories.build.update_order(order)
       render :json => @portfolio.eportfolio_categories.map{|c| [c.id, c.position]}, :status => :ok
     end
   end
 
   def reorder_entries
     if authorized_action(@portfolio, @current_user, :update)
+      order = []
+      params[:order].split(",").each { |id| order << Shard.relative_id_for(id, Shard.current, @portfolio.shard) }
       @category = @portfolio.eportfolio_categories.find(params[:eportfolio_category_id])
-      @category.eportfolio_entries.build.update_order(params[:order].split(","))
+      @category.eportfolio_entries.build.update_order(order)
       render :json => @portfolio.eportfolio_entries.map{|c| [c.id, c.position]}, :status => :ok
     end
   end
@@ -210,9 +215,6 @@ class EportfoliosController < ApplicationController
   end
 
   protected
-  def rich_content_service_config
-    rce_js_env(:basic)
-  end
 
   def eportfolio_params
     params.require(:eportfolio).permit(:name, :public)

@@ -23,7 +23,6 @@ import tinyRCE from "./tinyRCE";
 import normalizeProps from "./normalizeProps";
 import formatMessage from "../format-message";
 import Bridge from "../bridge";
-import skin from "tinymce-light-skin";
 
 if (!process.env.BUILD_LOCALE) {
   formatMessage.setup({
@@ -34,12 +33,6 @@ if (!process.env.BUILD_LOCALE) {
 }
 
 export function renderIntoDiv(target, props, renderCallback) {
-  if (!props.skin) {
-    skin.useCanvas();
-  }
-  // prevent tinymce from loading the theme
-  tinyRCE.DOM.loadCSS = () => {};
-
   // normalize props
   props = normalizeProps(props, tinyRCE);
 

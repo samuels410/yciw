@@ -6,6 +6,45 @@ The Change Log Archive page displays previous API changes in the [API Change Log
 The release date indicates the date that the API code was made available in the production environment.
 
 <div class="changelog"></div>
+## 2019-03-30
+### Changes
+| API Calls | Function |  |
+|----------------------|----------------------|--------------------------|
+| [Content Migrations API] | Update a Content Migration Endpoint | Clarified the endpoint takes same arguments as creating a migration<br><br>Clarified that updating the content migration will also be used when importing content selectively |
+
+[Content Migrations API]: content_migrations.html
+
+### Additions
+| API Calls | Function |  |
+|----------------------|----------------------|--------------------------|
+| [Content Migrations API] | Create a Content Migration Endpoint | Added selective_import parameter
+|                          | List Items for Selective Import Endpoint | Added endpoint
+
+[Content Migrations API]: content_migrations.html
+
+## 2019-03-09
+### Changes
+| API Calls | Function |  |
+|----------------------|----------------------|--------------------------|
+| [SIS Imports API] | Imports SIS Data Endpoint | Added change_threshold parameter
+
+[SIS Imports API]: sis_imports.html
+
+### Removals
+| API Responses | Function |      |
+|----------------------|----------------------|--------------------------|
+| [Users API] | To Do Items Endpoint | Removed mention of user dashboard, as this API call is not used for the dashboard
+
+[Users API]: users.html
+
+## 2019-02-16
+### Additions
+| API Responses | Function |      |
+|----------------------|----------------------|--------------------------|
+| [Users API] | Edit a User Endpoint | Added [user]title and [user]bio parameters
+
+[Users API]: users.html
+
 ## 2019-01-26
 
 ### Changes

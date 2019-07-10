@@ -19,6 +19,8 @@
 import React from 'react'
 import {arrayOf, bool, func, instanceOf, number, shape, string} from 'prop-types'
 import IconMoreSolid from '@instructure/ui-icons/lib/Solid/IconMore'
+import IconEyeLine from '@instructure/ui-icons/lib/Line/IconEye'
+import IconOffSolid from '@instructure/ui-icons/lib/Solid/IconOff'
 import Button from '@instructure/ui-buttons/lib/components/Button'
 import Grid, {GridCol, GridRow} from '@instructure/ui-layout/lib/components/Grid'
 import Link from '@instructure/ui-elements/lib/components/Link'
@@ -29,7 +31,7 @@ import Menu, {
 } from '@instructure/ui-menu/lib/components/Menu'
 import Text from '@instructure/ui-elements/lib/components/Text'
 import 'message_students'
-import I18n from 'i18n!gradebook'
+import I18n from 'i18n!gradezilla'
 import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
 import MessageStudentsWhoHelper from '../../../shared/helpers/messageStudentsWhoHelper'
 import ColumnHeader from './ColumnHeader'
@@ -58,7 +60,7 @@ function SecondaryDetailLine(props) {
         </Text>
       </span>
 
-      {props.assignment.muted && (
+      {!props.postPoliciesEnabled && props.assignment.muted && (
         <span>
           &nbsp;
           <Text size="x-small" transform="uppercase" weight="bold">
@@ -76,7 +78,8 @@ SecondaryDetailLine.propTypes = {
     muted: bool.isRequired,
     pointsPossible: number,
     published: bool.isRequired
-  }).isRequired
+  }).isRequired,
+  postPoliciesEnabled: bool.isRequired
 }
 
 export default class AssignmentColumnHeader extends ColumnHeader {
@@ -91,6 +94,7 @@ export default class AssignmentColumnHeader extends ColumnHeader {
       muted: bool.isRequired,
       name: string.isRequired,
       pointsPossible: number,
+      postManually: bool.isRequired,
       published: bool.isRequired,
       submissionTypes: arrayOf(string).isRequired
     }).isRequired,
@@ -101,11 +105,13 @@ export default class AssignmentColumnHeader extends ColumnHeader {
     }).isRequired,
 
     hideGradesAction: shape({
+      hasGradesToHide: bool.isRequired,
       onSelect: func.isRequired
     }).isRequired,
 
     postGradesAction: shape({
-      enabled: bool.isRequired,
+      featureEnabled: bool.isRequired,
+      hasGradesToPost: bool.isRequired,
       onSelect: func.isRequired
     }).isRequired,
 
@@ -130,9 +136,11 @@ export default class AssignmentColumnHeader extends ColumnHeader {
         isInactive: bool.isRequired,
         id: string.isRequired,
         name: string.isRequired,
+        sortableName: string.isRequired,
         submission: shape({
           excused: bool.isRequired,
           latePolicyStatus: string,
+          postedAt: instanceOf(Date),
           score: number,
           submittedAt: instanceOf(Date)
         }).isRequired
@@ -265,6 +273,7 @@ export default class AssignmentColumnHeader extends ColumnHeader {
         latePolicyStatus,
         name: student.name,
         score,
+        sortableName: student.sortableName,
         submittedAt
       }
     })
@@ -377,8 +386,15 @@ export default class AssignmentColumnHeader extends ColumnHeader {
           <span data-menu-item-id="set-default-grade">{I18n.t('Set Default Grade')}</span>
         </MenuItem>
 
-        {this.props.postGradesAction.enabled ? (
-          <MenuItem onSelect={this.postGrades}>{I18n.t('Post grades')}</MenuItem>
+        {this.props.postGradesAction.featureEnabled ? (
+          <MenuItem
+            disabled={!this.props.postGradesAction.hasGradesToPost}
+            onSelect={this.postGrades}
+          >
+            {this.props.postGradesAction.hasGradesToPost
+              ? I18n.t('Post grades')
+              : I18n.t('All grades posted')}
+          </MenuItem>
         ) : (
           <MenuItem
             disabled={this.props.muteAssignmentAction.disabled}
@@ -392,8 +408,15 @@ export default class AssignmentColumnHeader extends ColumnHeader {
           </MenuItem>
         )}
 
-        {this.props.postGradesAction.enabled && (
-          <MenuItem onSelect={this.hideGrades}>{I18n.t('Hide grades')}</MenuItem>
+        {this.props.postGradesAction.featureEnabled && (
+          <MenuItem
+            disabled={!this.props.hideGradesAction.hasGradesToHide}
+            onSelect={this.hideGrades}
+          >
+            {this.props.hideGradesAction.hasGradesToHide
+              ? I18n.t('Hide grades')
+              : I18n.t('All grades hidden')}
+          </MenuItem>
         )}
 
         {!this.props.enterGradesAsSetting.hidden && <MenuItemSeparator />}
@@ -432,9 +455,9 @@ export default class AssignmentColumnHeader extends ColumnHeader {
           </MenuItem>
         )}
 
-        {this.props.postGradesAction.enabled && <MenuItemSeparator />}
+        {this.props.postGradesAction.featureEnabled && <MenuItemSeparator />}
 
-        {this.props.postGradesAction.enabled && (
+        {this.props.postGradesAction.featureEnabled && (
           <MenuItem onSelect={this.showGradePostingPolicy}>
             {I18n.t('Grade Posting Policy')}
           </MenuItem>
@@ -443,8 +466,34 @@ export default class AssignmentColumnHeader extends ColumnHeader {
     )
   }
 
+  renderUnpostedSubmissionsIcon() {
+    if (!this.props.submissionsLoaded) {
+      return null
+    }
+
+    const submissions = this.props.students.map(student => student.submission)
+    const postableSubmissionsPresent = submissions.some(
+      submission => submission.score != null && submission.postedAt == null
+    )
+
+    // Assignment is manually-posted and has no graded-but-unposted submissions
+    // (i.e., no unposted submissions that are in a suitable state to post)
+    if (this.props.assignment.postManually && !postableSubmissionsPresent) {
+      return <IconEyeLine size="x-small" />
+    }
+
+    // Assignment has at least one hidden submission that can be posted
+    // (regardless of whether it's manually or automatically posted)
+    if (postableSubmissionsPresent) {
+      return <IconOffSolid color="warning" size="x-small" />
+    }
+
+    return null
+  }
+
   render() {
     const classes = `Gradebook__ColumnHeaderAction ${this.state.menuShown ? 'menuShown' : ''}`
+    const postPoliciesEnabled = this.props.postGradesAction.featureEnabled
 
     return (
       <div
@@ -455,8 +504,10 @@ export default class AssignmentColumnHeader extends ColumnHeader {
         <div style={{flex: 1, minWidth: '1px'}}>
           <Grid colSpacing="none" hAlign="space-between" vAlign="middle">
             <GridRow>
-              <GridCol textAlign="center" width="auto">
-                <div className="Gradebook__ColumnHeaderIndicators" />
+              <GridCol textAlign="center" width="auto" vAlign="top">
+                <div className="Gradebook__ColumnHeaderIndicators">
+                  {postPoliciesEnabled && this.renderUnpostedSubmissionsIcon()}
+                </div>
               </GridCol>
 
               <GridCol textAlign="center">
@@ -465,7 +516,10 @@ export default class AssignmentColumnHeader extends ColumnHeader {
                     {this.renderAssignmentLink()}
                   </span>
 
-                  <SecondaryDetailLine assignment={this.props.assignment} />
+                  <SecondaryDetailLine
+                    assignment={this.props.assignment}
+                    postPoliciesEnabled={postPoliciesEnabled}
+                  />
                 </span>
               </GridCol>
 

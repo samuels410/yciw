@@ -16,13 +16,12 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import _ from 'underscore'
 import $ from 'jquery'
 import React from 'react'
 import PropTypes from 'prop-types'
 import Modal from './modal'
 import ModalContent from './modal-content'
-import I18n from 'i18n!external_tools'
+import I18n from 'i18n!external_toolsModalLauncher'
 import iframeAllowances from '../external_apps/lib/iframeAllowances'
 
 export default class ExternalToolModalLauncher extends React.Component {

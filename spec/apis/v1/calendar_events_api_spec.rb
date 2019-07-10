@@ -50,6 +50,39 @@ describe CalendarEventsApiController, type: :request do
       expect(json.first.slice('title', 'start_at', 'id')).to eql({'id' => e2.id, 'title' => '2', 'start_at' => '2012-01-08T12:00:00Z'})
     end
 
+    it 'should hide location attributes when user is not logged in a public course' do
+      @me = nil
+      @user = nil
+      @course.update_attributes(:is_public => true, :indexed => true)
+      @course.calendar_events.create(
+        :title => '2',
+        :start_at => '2012-01-08 12:00:00',
+        :location_address => 'test_address2',
+        :location_name => 'steven house'
+      )
+
+      json = api_call(:get, "/api/v1/calendar_events?start_date=2012-01-08&end_date=2012-01-08&context_codes[]=course_#{@course.id}", {
+        :controller => 'calendar_events_api', :action => 'index', :format => 'json',
+        :context_codes => ["course_#{@course.id}"], :start_date => '2012-01-08', :end_date => '2012-01-08'
+      })
+      expect(json.first.slice('location_address', 'location_name')).to eql({})
+    end
+
+    it 'should show location attributes when user logged in a public course' do
+      @course.update_attributes(:is_public => true, :indexed => true)
+      evt = @course.calendar_events.create(
+        :title => '2',
+        :start_at => '2012-01-08 12:00:00',
+        :location_address => 'test_address2',
+        :location_name => 'steven house'
+      )
+      json = api_call(:get, "/api/v1/calendar_events?start_date=2012-01-08&end_date=2012-01-08&context_codes[]=course_#{@course.id}", {
+        :controller => 'calendar_events_api', :action => 'index', :format => 'json',
+        :context_codes => ["course_#{@course.id}"], :start_date => '2012-01-08', :end_date => '2012-01-08'
+      })
+      expect(json.first.slice('location_address', 'location_name')).to eql({'location_address' => evt.location_address, 'location_name' => evt.location_name})
+    end
+
     it 'orders result set by start_at' do
       e2 = @course.calendar_events.create(:title => 'second', :start_at => '2012-01-08 12:00:00')
       e1 = @course.calendar_events.create(:title => 'first', :start_at => '2012-01-07 12:00:00')
@@ -2202,6 +2235,63 @@ describe CalendarEventsApiController, type: :request do
         controller: 'calendar_events_api', action: 'user_index', format: 'json', type: 'assignment', include: ['submission'],
         context_codes: @contexts, all_events: true, user_id: @student.id})
       expect(json.first['assignment']['submission']).not_to be_nil
+    end
+  end
+
+  context "user_index (but for partial observers)" do
+    before :once do
+      @observed_course = @course
+      @student = user_factory(active_all: true, active_state: 'active')
+      @observed_course.enroll_student(@student, enrollment_state: 'active')
+      @observer = user_factory(active_all: true, active_state: 'active')
+      @observed_course.enroll_user(@observer, 'ObserverEnrollment',
+        enrollment_state: 'active', associated_user_id: @student.id)
+
+      @observed_event = @observed_course.calendar_events.create!(:title => "observed", :workflow_state => 'active')
+
+      @unobserved_course = course_factory(active_all: true)
+      @unobserved_course.enroll_student(@student, enrollment_state: 'active')
+
+      @me = @observer
+    end
+
+    it "should return observee's calendar events in the observed course" do
+      json = api_call(:get,
+        "/api/v1/users/#{@student.id}/calendar_events?all_events=true&context_codes[]=course_#{@observed_course.id}", {
+          controller: 'calendar_events_api', action: 'user_index', format: 'json',
+          all_events: true, user_id: @student.id, context_codes: ["course_#{@observed_course.id}"]})
+      expect(json.length).to eql 1
+      expect(json.first["id"]).to eq @observed_event.id
+    end
+
+    it "should fail trying to get calendar events in a course the observer isn't in observing them in" do
+      json = api_call(:get,
+        "/api/v1/users/#{@student.id}/calendar_events?all_events=true&context_codes[]=course_#{@observed_course.id}&context_codes[]=course_#{@unobserved_course.id}", {
+          controller: 'calendar_events_api', action: 'user_index', format: 'json',
+          all_events: true, user_id: @student.id, context_codes: ["course_#{@observed_course.id}", "course_#{@unobserved_course.id}"]},
+          {}, {}, {:expected_status => 401})
+    end
+
+    it "should return observee's calendar events in a group in the observed course" do
+      group = @observed_course.groups.create!
+      group.add_user(@student)
+      event = group.calendar_events.create!(:title => "group", :workflow_state => 'active')
+      json = api_call(:get,
+        "/api/v1/users/#{@student.id}/calendar_events?all_events=true&context_codes[]=group_#{group.id}", {
+          controller: 'calendar_events_api', action: 'user_index', format: 'json',
+          all_events: true, user_id: @student.id, context_codes: ["group_#{group.id}"]})
+      expect(json.length).to eql 1
+      expect(json.first["id"]).to eq event.id
+    end
+
+    it "should fail trying to get calendar events for a group in a course the observer isn't in observing them in" do
+      group = @unobserved_course.groups.create!
+      group.add_user(@student)
+      json = api_call(:get,
+        "/api/v1/users/#{@student.id}/calendar_events?all_events=true&context_codes[]=group_#{group.id}", {
+          controller: 'calendar_events_api', action: 'user_index', format: 'json',
+          all_events: true, user_id: @student.id, context_codes: ["group_#{group.id}"]},
+          {}, {}, {:expected_status => 401})
     end
   end
 

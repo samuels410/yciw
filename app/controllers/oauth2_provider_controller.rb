@@ -86,7 +86,7 @@ class Oauth2ProviderController < ApplicationController
 
   def deny
     params = { error: "access_denied" }
-    params[:state] = session[:oauth2][:state] if session[:oauth2][:state]
+    params[:state] = session[:oauth2][:state] if session[:oauth2].key? :state
     redirect_to Canvas::Oauth::Provider.final_redirect(self, params)
   end
 
@@ -100,7 +100,7 @@ class Oauth2ProviderController < ApplicationController
     elsif grant_type == "refresh_token"
       Canvas::Oauth::GrantTypes::RefreshToken.new(client_id, secret, params)
     elsif grant_type == 'client_credentials'
-      Canvas::Oauth::GrantTypes::ClientCredentials.new(params, request.host)
+      Canvas::Oauth::GrantTypes::ClientCredentials.new(params, request.host, request.protocol)
     else
       Canvas::Oauth::GrantTypes::BaseType.new(client_id, secret, params)
     end

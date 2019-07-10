@@ -97,6 +97,7 @@ class DiscussionTopic < ActiveRecord::Base
   after_save :schedule_delayed_transitions
   after_save :update_materialized_view_if_changed
   after_save :recalculate_progressions_if_sections_changed
+  after_save :sync_attachment_with_publish_state
   after_update :clear_streams_if_not_published
   after_create :create_participant
   after_create :create_materialized_view
@@ -220,9 +221,18 @@ class DiscussionTopic < ActiveRecord::Base
     @should_schedule_lock_at = nil
   end
 
+  def sync_attachment_with_publish_state
+    if (self.saved_change_to_workflow_state? || self.saved_change_to_locked? || self.saved_change_to_attachment_id?) && self.attachment
+      unless self.attachment.hidden? # if it's already hidden leave alone
+        locked = !!(unpublished? || not_available_yet? || not_available_anymore?)
+        self.attachment.update_attribute(:locked, locked)
+      end
+    end
+  end
+
   def update_subtopics
     if !self.deleted? && (self.has_group_category? || !!self.group_category_id_before_last_save)
-      send_later_if_production :refresh_subtopics
+      send_later_if_production_enqueue_args(:refresh_subtopics, :singleton => "refresh_subtopics_#{self.global_id}")
     end
   end
 
@@ -231,7 +241,7 @@ class DiscussionTopic < ActiveRecord::Base
     category = self.group_category
 
     if category && self.root_topic_id.blank? && !self.deleted?
-      category.groups.active.each do |group|
+      category.groups.active.order(:id).each do |group|
         sub_topics << ensure_child_topic_for(group)
       end
     end
@@ -1359,7 +1369,7 @@ class DiscussionTopic < ActiveRecord::Base
   def low_level_locked_for?(user, opts={})
     return false if opts[:check_policies] && self.grants_right?(user, :read_as_admin)
 
-    Rails.cache.fetch(locked_cache_key(user), :expires_in => 1.minute) do
+    RequestCache.cache(locked_request_cache_key(user)) do
       locked = false
       if (self.delayed_post_at && self.delayed_post_at > Time.now)
         locked = {object: self, unlock_at: delayed_post_at}
@@ -1397,12 +1407,6 @@ class DiscussionTopic < ActiveRecord::Base
         user_context_module_progressions: progressions,
       })
     end
-  end
-
-  def clear_locked_cache(user)
-    super
-    Rails.cache.delete(assignment.locked_cache_key(user)) if assignment
-    Rails.cache.delete(root_topic.locked_cache_key(user)) if root_topic
   end
 
   def entries_for_feed(user, podcast_feed=false)

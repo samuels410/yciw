@@ -19,11 +19,10 @@
 import PropTypes from "prop-types";
 
 import React, { Component } from "react";
-import Checkbox from "@instructure/ui-forms/lib/components/Checkbox";
-import Container from "@instructure/ui-layout/lib/components/View";
-import TextInput from "@instructure/ui-forms/lib/components/TextInput";
+import { Checkbox, TextInput } from '@instructure/ui-forms'
+import {View} from "@instructure/ui-layout";
 import formatMessage from "../../format-message";
-import ScreenReaderContent from "@instructure/ui-a11y/lib/components/ScreenReaderContent";
+import { ScreenReaderContent } from '@instructure/ui-a11y'
 
 export default class AltTextForm extends Component {
   static propTypes = {
@@ -93,13 +92,13 @@ export default class AltTextForm extends Component {
           name="alt_text"
           disabled={this.state.decorativeSelected}
         />
-        <Container margin="x-small 0" display="block">
+        <View margin="x-small 0" display="block">
           <Checkbox
             label={decorative_label}
             name="decorative"
             onChange={this.handleDecorativeCheckbox}
           />
-        </Container>
+        </View>
       </div>
     );
   }
