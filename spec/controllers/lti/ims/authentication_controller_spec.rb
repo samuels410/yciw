@@ -23,12 +23,13 @@ describe Lti::Ims::AuthenticationController do
 
   let(:developer_key) {
     key = DeveloperKey.create!(
-      redirect_uris: ['https://redirect.tool.com'],
+      redirect_uris: redirect_uris,
       account: context
     )
     enable_developer_key_account_binding!(key)
     key
   }
+  let(:redirect_uris) { ['https://redirect.tool.com'] }
   let(:user) { user_model }
   let(:redirect_domain) { 'redirect.instructure.com' }
   let(:verifier) { SecureRandom.hex 64 }
@@ -211,6 +212,19 @@ describe Lti::Ims::AuthenticationController do
         subject
         expect(assigns.dig(:id_token, :state)).to eq state
       end
+
+      context 'when there are additional query params on the redirect_uri' do
+        let(:redirect_uris) { ['https://redirect.tool.com?must_be_present=true'] }
+        let(:redirect_uri) { 'https://redirect.tool.com?must_be_present=true&foo=bar' }
+
+        before do
+          developer_key.update!(redirect_uris: redirect_uris)
+        end
+
+        it 'launches succesfully' do
+          expect(subject['nonce']).to eq nonce
+        end
+      end
     end
 
     context 'when there are non redirect_uri errors' do
@@ -247,7 +261,7 @@ describe Lti::Ims::AuthenticationController do
         let(:login_hint) { 'not_the_correct_lti_id' }
 
         it_behaves_like 'non redirect_uri errors' do
-          let(:expected_message) { "The user is not logged in" }
+          let(:expected_message) { "Must have an active user session" }
           let(:expected_error) { "login_required" }
         end
       end
@@ -260,10 +274,29 @@ describe Lti::Ims::AuthenticationController do
           let(:expected_error) { "unauthorized_client" }
         end
       end
+
+      context 'when key has no bindings to the context' do
+        before do
+          developer_key.developer_key_account_bindings.destroy_all
+        end
+
+        it_behaves_like 'non redirect_uri errors' do
+          let(:expected_message) { "Client not authorized in requested context" }
+          let(:expected_error) { "unauthorized_client" }
+        end
+      end
     end
 
     context 'when the developer key redirect uri does not match' do
       before { developer_key.update!(redirect_uris: ['https://www.not-matching.com']) }
+
+      it_behaves_like 'redirect_uri errors' do
+        let(:expected_message) { 'Invalid redirect_uri' }
+      end
+    end
+
+    context 'when the developer key reidrect uri contains a query string' do
+      let(:redirect_uris) { ['https://redirect.tool.com?must_be_present=true'] }
 
       it_behaves_like 'redirect_uri errors' do
         let(:expected_message) { 'Invalid redirect_uri' }

@@ -23,7 +23,6 @@ import Avatar from '@instructure/ui-elements/lib/components/Avatar'
 import Button from '@instructure/ui-buttons/lib/components/Button'
 import View from '@instructure/ui-layout/lib/components/View'
 import Heading from '@instructure/ui-elements/lib/components/Heading'
-import Link from '@instructure/ui-elements/lib/components/Link'
 import List, {ListItem} from '@instructure/ui-elements/lib/components/List'
 
 function readCookie(key) {
@@ -60,21 +59,21 @@ export default function ProfileTray({
         {[
           profileEnabled && (
             <ListItem key="profile">
-              <Link href="/profile">{I18n.t('Profile')}</Link>
+              <Button variant="link" theme={{mediumPadding: '0', mediumHeight: '1.5rem'}} href="/profile">{I18n.t('Profile')}</Button>
             </ListItem>
           ),
           <ListItem key="settings">
-            <Link href="/profile/settings">{I18n.t('Settings')}</Link>
+            <Button variant="link" theme={{mediumPadding: '0', mediumHeight: '1.5rem'}} href="/profile/settings">{I18n.t('Settings')}</Button>
           </ListItem>,
           <ListItem key="notifications">
-            <Link href="/profile/communication">{I18n.t('Notifications')}</Link>
+            <Button variant="link" theme={{mediumPadding: '0', mediumHeight: '1.5rem'}} href="/profile/communication">{I18n.t('Notifications')}</Button>
           </ListItem>,
           <ListItem key="files">
-            <Link href="/files">{I18n.t('Files')}</Link>
+            <Button variant="link" theme={{mediumPadding: '0', mediumHeight: '1.5rem'}} href="/files">{I18n.t('Files')}</Button>
           </ListItem>,
           eportfoliosEnabled && (
             <ListItem key="eportfolios">
-              <Link href="/dashboard/eportfolios">{I18n.t('ePortfolios')}</Link>
+              <Button variant="link" theme={{mediumPadding: '0', mediumHeight: '1.5rem'}} href="/dashboard/eportfolios">{I18n.t('ePortfolios')}</Button>
             </ListItem>
           )
         ].filter(Boolean)}

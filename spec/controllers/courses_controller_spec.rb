@@ -543,10 +543,76 @@ describe CoursesController do
     end
   end
 
+  describe 'observer_pairing_codes' do
+    before :once do
+      course_with_teacher(active_all: true)
+      student_in_course(course: @course, active_all: true)
+      @teacher.name = "teacher"
+      @teacher.save!
+    end
+
+    it "returns unauthorized if self registration is off" do
+      user_session(@teacher)
+      @course.root_account.root_account.role_overrides.create!(role: teacher_role, enabled: true, permission: :generate_observer_pairing_code)
+      ObserverPairingCode.create(user: @student, expires_at: 1.day.from_now, code: SecureRandom.hex(3))
+      get :observer_pairing_codes_csv, params: {course_id: @course.id}
+      expect(response).to be_unauthorized
+    end
+
+    it "returns unauthorized if role does not have permission" do
+      user_session(@teacher)
+      @course.root_account.root_account.role_overrides.create!(role: teacher_role, enabled: false, permission: :generate_observer_pairing_code)
+      @teacher.account.canvas_authentication_provider.update_attribute(:self_registration, true)
+      ObserverPairingCode.create(user: @student, expires_at: 1.day.from_now, code: SecureRandom.hex(3))
+      get :observer_pairing_codes_csv, params: {course_id: @course.id}
+      expect(response).to be_unauthorized
+    end
+
+    it "generates an observer pairing codes csv" do
+      user_session(@teacher)
+      @course.root_account.root_account.role_overrides.create!(role: teacher_role, enabled: true, permission: :generate_observer_pairing_code)
+      @teacher.account.canvas_authentication_provider.update_attribute(:self_registration, true)
+      get :observer_pairing_codes_csv, params: {course_id: @course.id}
+      expect(response).to be_successful
+      expect(response.header['Content-Type']).to eql("text/csv")
+      expect(response.body.split(",").last.strip).to eql(ObserverPairingCode.last.expires_at.to_s)
+      expect(response.body.split(",")[-2]).to include(ObserverPairingCode.last.code)
+    end
+
+    it "generates observer pairing codes only for students" do
+      user_session(@teacher)
+      @course.root_account.root_account.role_overrides.create!(role: teacher_role, enabled: true, permission: :generate_observer_pairing_code)
+      @teacher.account.canvas_authentication_provider.update_attribute(:self_registration, true)
+      get :observer_pairing_codes_csv, params: {course_id: @course.id}
+      expect(response).to be_successful
+      expect(response.header['Content-Type']).to eql("text/csv")
+      expect(response.body).to include(@student.name)
+      expect(response.body.include?(@teacher.name)).to be_falsey
+      expect(response.body.split(",").last.strip).to eql(ObserverPairingCode.last.expires_at.to_s)
+      expect(response.body.split(",")[-2]).to include(ObserverPairingCode.last.code)
+    end
+  end
+
   describe "GET 'settings'" do
     before :once do
       course_with_teacher(active_all: true)
       student_in_course(active_all: true)
+    end
+
+    it 'sets the external tools create url' do
+      user_session(@teacher)
+      get 'settings', params: {:course_id => @course.id}
+      expect(controller.js_env[:EXTERNAL_TOOLS_CREATE_URL]).to eq(
+        "http://test.host/courses/#{@course.id}/external_tools"
+      )
+    end
+
+    it 'sets the tool configuration show url' do
+      user_session(@teacher)
+      get 'settings', params: {:course_id => @course.id}
+      expect(controller.js_env[:TOOL_CONFIGURATION_SHOW_URL]).to eq(
+        "http://test.host/api/lti/courses/#{@course.id}/developer_keys/:developer_key_id/tool_configuration"
+      )
     end
 
     it "should set tool creation permissions true for roles that are granted rights" do
@@ -1965,7 +2031,9 @@ describe CoursesController do
 
   describe "POST 'unconclude'" do
     it "should unconclude the course" do
-      course_with_teacher_logged_in(:active_all => true)
+      course_factory(:active_all => true)
+      account_admin_user(:active_all => true)
+      user_session(@admin)
       delete 'destroy', params: {:id => @course.id, :event => 'conclude'}
       expect(response).to be_redirect
       expect(@course.reload).to be_completed
@@ -2226,6 +2294,28 @@ describe CoursesController do
       feed = Atom::Feed.load_feed(response.body) rescue nil
       expect(feed).not_to be_nil
       expect(feed.entries).to be_empty
+    end
+
+    it "respects assignment overrides" do
+      @assignment.update_attribute :only_visible_to_overrides, true
+      @a0 = @assignment
+      graded_discussion_topic(context: @course)
+      @topic.assignment.update_attribute :only_visible_to_overrides, true
+
+      get 'public_feed', params: {:feed_code => @enrollment.feed_code}, :format => 'atom'
+      feed = Atom::Feed.load_feed(response.body) rescue nil
+      expect(feed).not_to be_nil
+      expect(feed.entries.map(&:id).join(" ")).not_to include @a0.asset_string
+      expect(feed.entries.map(&:id).join(" ")).not_to include @topic.asset_string
+
+      assignment_override_model :assignment => @a0, :set => @enrollment.course_section
+      assignment_override_model :assignment => @topic.assignment, :set => @enrollment.course_section
+
+      get 'public_feed', params: {:feed_code => @enrollment.feed_code}, :format => 'atom'
+      feed = Atom::Feed.load_feed(response.body) rescue nil
+      expect(feed).not_to be_nil
+      expect(feed.entries.map(&:id).join(" ")).to include @a0.asset_string
+      expect(feed.entries.map(&:id).join(" ")).to include @topic.asset_string
     end
   end
 
@@ -2591,6 +2681,22 @@ describe CoursesController do
       json = json_parse(response.body)
       expect(json.count).to eq(1)
       expect(json[0]).to include({ "id" => student1.id, "uuid" => student1.uuid })
+    end
+
+    it 'can sort uesrs' do
+      student1.update!(name: 'Student B')
+      student2.update!(name: 'Student A')
+
+      user_session(teacher)
+      get 'users', params: {
+        course_id: course.id,
+        format: 'json',
+        enrollment_role: 'StudentEnrollment',
+        sort: 'username'
+      }
+      json = json_parse(response.body)
+      expect(json[0]).to include({ 'id' => student2.id })
+      expect(json[1]).to include({ 'id' => student1.id })
     end
   end
 end

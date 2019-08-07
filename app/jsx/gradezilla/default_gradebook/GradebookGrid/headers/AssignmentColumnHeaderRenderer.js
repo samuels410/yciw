@@ -18,6 +18,7 @@
 
 import React from 'react'
 import ReactDOM from 'react-dom'
+import {isHidden} from '../../../../grading/helpers/SubmissionHelper'
 import {optionsForGradingType} from '../../../shared/EnterGradesAsSetting'
 import AssignmentColumnHeader from './AssignmentColumnHeader'
 
@@ -25,14 +26,16 @@ function getSubmission(student, assignmentId) {
   const submission = student[`assignment_${assignmentId}`]
 
   if (!submission) {
-    return {excused: false, latePolicyStatus: null, score: null, submittedAt: null}
+    return {excused: false, latePolicyStatus: null, postedAt: null, score: null, submittedAt: null}
   }
 
   return {
     excused: submission.excused,
     latePolicyStatus: submission.late_policy_status,
+    postedAt: submission.posted_at,
     score: submission.score,
-    submittedAt: submission.submitted_at
+    submittedAt: submission.submitted_at,
+    workflowState: submission.workflow_state
   }
 }
 
@@ -54,6 +57,7 @@ function getProps(column, gradebook, options) {
     id: student.id,
     isInactive: student.isInactive,
     name: student.name,
+    sortableName: student.sortable_name,
     submission: getSubmission(student, assignmentId)
   }))
 
@@ -69,6 +73,7 @@ function getProps(column, gradebook, options) {
       muted: assignment.muted,
       name: assignment.name,
       pointsPossible: assignment.points_possible,
+      postManually: assignment.post_manually,
       published: assignment.published,
       submissionTypes: assignment.submission_types
     },
@@ -96,6 +101,7 @@ function getProps(column, gradebook, options) {
     },
 
     hideGradesAction: {
+      hasGradesToHide: students.some(student => student.submission.postedAt != null),
       onSelect(onExited) {
         if (gradebook.postPolicies) {
           gradebook.postPolicies.showHideAssignmentGradesTray({assignmentId, onExited})
@@ -104,7 +110,8 @@ function getProps(column, gradebook, options) {
     },
 
     postGradesAction: {
-      enabled: gradebook.postPolicies != null,
+      featureEnabled: gradebook.postPolicies != null,
+      hasGradesToPost: students.some(student => isHidden(student.submission)),
       onSelect(onExited) {
         if (gradebook.postPolicies) {
           gradebook.postPolicies.showPostAssignmentGradesTray({assignmentId, onExited})

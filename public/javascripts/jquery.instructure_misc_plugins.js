@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU Affero General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-import I18n from 'i18n!instructure'
+import I18n from 'i18n!instructure_misc_plugins'
 import $ from 'jquery'
 import htmlEscape from './str/htmlEscape'
 import authenticity_token from 'compiled/behaviors/authenticity_token'
@@ -318,17 +318,6 @@ import './vendor/jquery.scrollTo'
   $.fn.log = function (msg) {
     console.log("%s: %o", msg, this);
     return this;
-  };
-
-  $.fn.chevronCrumbs = function(options) {
-    return this.each(function() {
-      $(this).show()
-        .addClass("chevron-crumbs")
-        .children().not("#hide-scratch")
-          .addClass('chevron-crumb')
-          .append('<span class="chevron-outer"><span class="chevron-inner"></span></span>')
-          .filter(".active").prev().addClass("before-active");
-    });
   };
 
   // this is used if you want to fill the browser window with something inside #content but you want to also leave the footer and header on the page.

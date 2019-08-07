@@ -17,14 +17,22 @@
  */
 
 import $ from 'jquery'
-import I18n from 'i18n!gradebook'
+import I18n from 'i18n!gradezilla'
 import 'jquery.instructure_misc_helpers' // $.toSentence
 
 function getSecondaryDisplayInfo(student, secondaryInfo, options) {
   if (options.shouldShowSections() && secondaryInfo === 'section') {
-    const sectionNames = student.sections.map(sectionId => options.getSection(sectionId).name)
+    const sectionNames = student.sections
+      .filter(options.isVisibleSection)
+      .map(sectionId => options.getSection(sectionId).name)
     return $.toSentence(sectionNames.sort())
   }
+
+  if (options.shouldShowGroups() && secondaryInfo === 'group') {
+    const groupNames = student.group_ids.map(groupId => options.getGroup(groupId).name)
+    return $.toSentence(groupNames.sort())
+  }
+
   return {
     login_id: student.login_id,
     sis_id: student.sis_user_id,
@@ -82,14 +90,23 @@ export default class StudentCellFormatter {
       getSection(sectionId) {
         return gradebook.sections[sectionId]
       },
+      getGroup(groupId) {
+        return gradebook.studentGroups[groupId]
+      },
       getSelectedPrimaryInfo() {
         return gradebook.getSelectedPrimaryInfo()
       },
       getSelectedSecondaryInfo() {
         return gradebook.getSelectedSecondaryInfo()
       },
+      isVisibleSection(sectionId) {
+        return gradebook.sections[sectionId] != null
+      },
       shouldShowSections() {
         return gradebook.showSections()
+      },
+      shouldShowGroups() {
+        return gradebook.showStudentGroups()
       }
     }
   }

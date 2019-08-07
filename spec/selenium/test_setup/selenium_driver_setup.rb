@@ -228,7 +228,7 @@ module SeleniumDriverSetup
 
     HEADLESS_DEFAULTS = {
       dimensions: "1920x1080x24",
-      reuse: false,
+      reuse: true,
       destroy_at_exit: true,
       video: {
         provider: :ffmpeg,
@@ -261,8 +261,8 @@ module SeleniumDriverSetup
       display = 20 + test_number
 
       self.headless = Headless.new(HEADLESS_DEFAULTS.merge({
-        display: display
-      }))
+                                                             display: display
+                                                           }))
       headless.start
       puts "Setting up DISPLAY=#{ENV['DISPLAY']}"
     end
@@ -330,7 +330,7 @@ module SeleniumDriverSetup
 
     def ruby_chrome_driver
       puts "Thread: provisioning local chrome driver"
-      Chromedriver.set_version "2.38"
+      Chromedriver.set_version "74.0.3729.6"
       chrome_options = Selenium::WebDriver::Chrome::Options.new
       chrome_options.add_argument('--disable-impl-side-painting')
 

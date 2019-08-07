@@ -24,7 +24,6 @@ import tinyRCE from "./tinyRCE";
 import normalizeProps from "./normalizeProps";
 import formatMessage from "../format-message";
 import Bridge from "../bridge";
-import skin from "tinymce-light-skin";
 
 export default class CanvasRce extends Component {
   static propTypes = {
@@ -37,10 +36,6 @@ export default class CanvasRce extends Component {
   };
 
   componentWillMount() {
-    if (!this.props.skin) {
-      skin.useCanvas();
-    }
-    tinyRCE.DOM.loadCSS = () => {};
     this.normalizedProps = normalizeProps(this.props.rceProps, tinyRCE);
     formatMessage.setup({ locale: this.normalizedProps.language });
   }

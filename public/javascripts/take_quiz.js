@@ -506,7 +506,6 @@ import 'compiled/behaviors/quiz_selectmenu'
       .delegate(":checkbox,:radio", 'change', function(event) {
         var $answer = $(this).parents(".answer");
         if (lastAnswerSelected == $answer[0]) {
-          $answer.find(":checkbox,:radio").blur();
           quizSubmission.updateSubmission();
         }
       })
@@ -792,4 +791,6 @@ import 'compiled/behaviors/quiz_selectmenu'
     $('.loading').hide();
   });
 
-  $('.essay_question .answers .rce_links').append((new KeyboardShortcuts()).render().el);
+  if (!ENV.use_rce_enhancements) {
+    $('.essay_question .answers .rce_links').append((new KeyboardShortcuts()).render().el);
+  }

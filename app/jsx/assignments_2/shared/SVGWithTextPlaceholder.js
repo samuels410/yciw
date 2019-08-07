@@ -16,7 +16,6 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 import React from 'react'
-import View from '@instructure/ui-layout/lib/components/View'
 import Text from '@instructure/ui-elements/lib/components/Text'
 import {string} from 'prop-types'
 
@@ -24,12 +23,11 @@ SVGWithTextPlaceholder.propTypes = {
   text: string.isRequired,
   url: string.isRequired
 }
+
 function SVGWithTextPlaceholder(props) {
   return (
     <div className="svg-placeholder-container">
-      <View margin="small auto" maxWidth="16rem" display="block">
-        <img alt="" src={props.url} />
-      </View>
+      <img alt="" src={props.url} style={{width: '400px'}} />
       <Text weight="bold" as="div" margin="x-small auto">
         {props.text}
       </Text>

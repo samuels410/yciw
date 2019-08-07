@@ -41,14 +41,21 @@ it("pulls everyone else's dates from the assignment", () => {
     }
   })
 
-  const {getByText} = render(<EveryoneElse assignment={assignment} onChangeAssignment={() => {}} />)
+  const {getByText} = render(
+    <EveryoneElse
+      assignment={assignment}
+      onChangeAssignment={() => {}}
+      onValidate={() => true}
+      invalidMessage={() => undefined}
+    />
+  )
   expect(getByText('Everyone else')).toBeInTheDocument()
 
   const due = `Due: ${tz.format(aDueAt, I18n.t('#date.formats.full'))}`
   expect(getByText(due, {exact: false})).toBeInTheDocument()
 
   const unlock = `${tz.format(aUnlockAt, I18n.t('#date.formats.short'))}`
-  const lock = `to ${tz.format(aLockAt, I18n.t('#date.formats.full'))}`
+  const lock = `to ${tz.format(aLockAt, I18n.t('#date.formats.short'))}`
   expect(getByText(unlock)).toBeInTheDocument()
   expect(getByText(lock)).toBeInTheDocument()
 })

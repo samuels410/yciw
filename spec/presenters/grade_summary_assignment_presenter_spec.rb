@@ -236,4 +236,62 @@ describe GradeSummaryAssignmentPresenter do
       expect(presenter.late?).to eq('foo')
     end
   end
+
+  describe "#hide_grade_from_student?" do
+    context "when post policies are enabled" do
+      before(:each) { @course.enable_feature!(:new_gradebook) }
+      before(:each) { PostPolicy.enable_feature! }
+
+      context "when assignment posts manually" do
+        before(:each) do
+          @assignment.ensure_post_policy(post_manually: true)
+        end
+
+        it "returns false when the student's submission is posted" do
+          @submission.update!(posted_at: Time.zone.now)
+          expect(presenter).not_to be_hide_grade_from_student
+        end
+
+        it "returns true when the student's submission is not posted" do
+          @submission.update!(posted_at: nil)
+          expect(presenter).to be_hide_grade_from_student
+        end
+      end
+
+      context "when assignment posts automatically" do
+        before(:each) do
+          @assignment.ensure_post_policy(post_manually: false)
+        end
+
+        it "returns false when the student's submission is posted" do
+          @submission.update!(posted_at: Time.zone.now)
+          expect(presenter).not_to be_hide_grade_from_student
+        end
+
+        it "returns false when the student's submission is not posted" do
+          @submission.update!(posted_at: nil)
+          expect(presenter).not_to be_hide_grade_from_student
+        end
+
+        it "returns true when the student's submission is graded and not posted" do
+          @assignment.grade_student(@student, grader: @teacher, score: 5)
+          @submission.reload
+          @submission.update!(posted_at: nil)
+          expect(presenter).to be_hide_grade_from_student
+        end
+      end
+    end
+
+    context "when post policies are not enabled" do
+      it "returns false when the assignment is unmuted" do
+        @assignment.unmute!
+        expect(presenter).not_to be_hide_grade_from_student
+      end
+
+      it "returns true when the assignment is muted" do
+        @assignment.mute!
+        expect(presenter).to be_hide_grade_from_student
+      end
+    end
+  end
 end

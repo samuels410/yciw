@@ -21,6 +21,7 @@ class Mutations::PostAssignmentGradesForSections < Mutations::BaseMutation
 
   argument :assignment_id, ID, required: true, prepare: GraphQLHelpers.relay_or_legacy_id_prepare_func("Assignment")
   argument :section_ids, [ID], required: true, prepare: GraphQLHelpers.relay_or_legacy_ids_prepare_func("Section")
+  argument :graded_only, Boolean, required: false
 
   field :assignment, Types::AssignmentType, null: true
   field :progress, Types::ProgressType, null: true
@@ -36,7 +37,7 @@ class Mutations::PostAssignmentGradesForSections < Mutations::BaseMutation
     end
 
     verify_authorized_action!(assignment, :grade)
-    raise GraphQL::ExecutionError, "Post Policies feature not enabled" unless course.feature_enabled?(:post_policies)
+    raise GraphQL::ExecutionError, "Post Policies feature not enabled" unless course.post_policies_enabled?
 
     unless assignment.grades_published?
       raise GraphQL::ExecutionError, "Assignments under moderation cannot be posted by section before grades are published"
@@ -47,12 +48,21 @@ class Mutations::PostAssignmentGradesForSections < Mutations::BaseMutation
       raise GraphQL::ExecutionError, "Invalid section ids"
     end
 
-    student_ids = course.student_enrollments.where(course_section: sections).pluck(:user_id)
-    submission_ids = assignment.submissions.active.where(user_id: student_ids).pluck(:id)
+    visible_enrollments = course.apply_enrollment_visibility(course.student_enrollments, current_user, sections)
+
+    submissions_scope = input[:graded_only] ? assignment.submissions.graded : assignment.submissions
+    submissions_scope = submissions_scope.joins(user: :enrollments).merge(visible_enrollments)
+
     progress = course.progresses.new(tag: "post_assignment_grades_for_sections")
 
     if progress.save
-      progress.process_job(assignment, :post_submissions, {preserve_method_args: true}, submission_ids: submission_ids)
+      progress.process_job(
+        assignment,
+        :post_submissions,
+        {preserve_method_args: true},
+        progress: progress,
+        submission_ids: submissions_scope.pluck(:id)
+      )
       return {assignment: assignment, progress: progress, sections: sections}
     else
       raise GraphQL::ExecutionError, "Error posting assignment grades for sections"

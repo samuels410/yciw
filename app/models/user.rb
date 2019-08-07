@@ -34,7 +34,7 @@ class User < ActiveRecord::Base
   include UserLearningObjectScopes
   include PermissionsHelper
 
-  attr_accessor :previous_id, :menu_data, :gradebook_importer_submissions, :prior_enrollment
+  attr_accessor :previous_id, :gradebook_importer_submissions, :prior_enrollment
 
   before_save :infer_defaults
   before_validation :ensure_lti_id, on: :update
@@ -99,7 +99,7 @@ class User < ActiveRecord::Base
   has_many :access_tokens, -> { where(:workflow_state => "active").preload(:developer_key) }
   has_many :notification_endpoints, :through => :access_tokens
   has_many :context_external_tools, -> { order(:name) }, as: :context, inverse_of: :context, dependent: :destroy
-  has_many :lti_results, inverse_of: :user, class_name: 'Lti::Result'
+  has_many :lti_results, inverse_of: :user, class_name: 'Lti::Result', dependent: :destroy
 
   has_many :student_enrollments
   has_many :ta_enrollments
@@ -145,7 +145,7 @@ class User < ActiveRecord::Base
   has_many :media_objects, :as => :context, :inverse_of => :context
   has_many :user_generated_media_objects, :class_name => 'MediaObject'
   has_many :user_notes
-  has_many :account_reports
+  has_many :account_reports, inverse_of: :user
   has_many :stream_item_instances, :dependent => :delete_all
   has_many :all_conversations, -> { preload(:conversation) }, class_name: 'ConversationParticipant'
   has_many :conversation_batches, -> { preload(:root_conversation_message) }
@@ -805,11 +805,24 @@ class User < ActiveRecord::Base
   end
 
   def email_cache_key
-    ['user_email', self].cache_key
+    ['user_email', self.global_id].cache_key
+  end
+
+  def cached_active_emails
+    self.shard.activate do
+      Rails.cache.fetch(active_emails_cache_key) do
+        self.communication_channels.active.email.pluck(:path)
+      end
+    end
+  end
+
+  def active_emails_cache_key
+    ['active_user_emails', self.global_id].cache_key
   end
 
   def clear_email_cache!
     Rails.cache.delete(email_cache_key)
+    Rails.cache.delete(active_emails_cache_key)
   end
 
   def email_cached?
@@ -1146,7 +1159,7 @@ class User < ActiveRecord::Base
     return false unless account.root_account?
 
     Rails.cache.fetch(['has_subset_of_account_permissions', self, user, account].cache_key, :expires_in => 60.minutes) do
-      account_users = account.all_account_users_for(self)
+      account_users = account.cached_all_account_users_for(self)
       account_users.all? do |account_user|
         account_user.is_subset_of?(user)
       end
@@ -1461,14 +1474,6 @@ class User < ActiveRecord::Base
     end
   end
 
-  def watched_conversations_intro?
-    preferences[:watched_conversations_intro] == true
-  end
-
-  def watched_conversations_intro(value=true)
-    preferences[:watched_conversations_intro] = value
-  end
-
   def send_scores_in_emails?(root_account)
     preferences[:send_scores_in_emails] == true && root_account.settings[:allow_sending_scores_in_emails] != false
   end
@@ -1519,10 +1524,6 @@ class User < ActiveRecord::Base
 
   def default_notifications_disabled?
     !!preferences[:default_notifications_disabled]
-  end
-
-  def use_new_conversations?
-    true
   end
 
   def uuid
@@ -1688,14 +1689,6 @@ class User < ActiveRecord::Base
     end
   end
 
-  def cached_active_emails
-    self.shard.activate do
-      Rails.cache.fetch([self, 'active_emails'].cache_key) do
-        self.communication_channels.active.email.map(&:path)
-      end
-    end
-  end
-
   def temporary_invitations
     cached_active_emails.map { |email| Enrollment.cached_temporary_invitations(email).dup.reject { |e| e.user_id == self.id } }.flatten
   end
@@ -1707,7 +1700,9 @@ class User < ActiveRecord::Base
   def cached_current_enrollments(opts={})
     RequestCache.cache('cached_current_enrollments', self, opts) do
       enrollments = self.shard.activate do
-        res = Rails.cache.fetch([self, 'current_enrollments3', opts[:include_future], ApplicationController.region ].cache_key) do
+        res = Rails.cache.fetch_with_batched_keys(
+            ['current_enrollments4', opts[:include_future], ApplicationController.region ].cache_key,
+            batch_object: self, batched_keys: :enrollments) do
           scope = (opts[:include_future] ? self.enrollments.current_and_future : self.enrollments.current_and_invited)
           scope.shard(in_region_associated_shards).to_a
         end
@@ -1743,32 +1738,44 @@ class User < ActiveRecord::Base
   end
 
   def has_active_enrollment?
+    return @_has_active_enrollment if defined?(@_has_active_enrollment)
     # don't need an expires_at here because user will be touched upon enrollment activation
-    Rails.cache.fetch([self, 'has_active_enrollment', ApplicationController.region ].cache_key) do
+    @_has_active_enrollment = Rails.cache.fetch([self, 'has_active_enrollment', ApplicationController.region ].cache_key) do
       self.enrollments.shard(in_region_associated_shards).current.active_by_date.exists?
     end
   end
 
   def has_future_enrollment?
-    Rails.cache.fetch([self, 'has_future_enrollment', ApplicationController.region ].cache_key, :expires_in => 1.hour) do
+    return @_has_future_enrollment if defined?(@_has_future_enrollment)
+    @_has_future_enrollment = Rails.cache.fetch([self, 'has_future_enrollment', ApplicationController.region ].cache_key, :expires_in => 1.hour) do
       self.enrollments.shard(in_region_associated_shards).active_or_pending_by_date.exists?
     end
   end
 
-  def group_membership_key
-    [self, 'current_group_memberships', ApplicationController.region].cache_key
-  end
-
   def cached_current_group_memberships
     @cached_current_group_memberships ||= self.shard.activate do
-      Rails.cache.fetch(group_membership_key) do
+      Rails.cache.fetch_with_batched_keys(['current_group_memberships', ApplicationController.region].cache_key, batch_object: self, batched_keys: :groups) do
         self.current_group_memberships.shard(self.in_region_associated_shards).to_a
       end
     end
   end
 
+  def cached_current_group_memberships_by_date
+    @cached_current_group_memberships_by_date ||= self.shard.activate do
+      Rails.cache.fetch_with_batched_keys(['current_group_memberships_by_date', ApplicationController.region].cache_key, batch_object: self, batched_keys: [:enrollments, :groups]) do
+        Shard.with_each_shard(self.in_region_associated_shards) do
+          GroupMembership.where(:user_id => self).joins(:group).
+            joins("LEFT OUTER JOIN #{Enrollment.quoted_table_name} ON enrollments.user_id=group_memberships.user_id AND enrollments.course_id=groups.context_id AND groups.context_type='Course'").
+            joins("LEFT OUTER JOIN #{EnrollmentState.quoted_table_name} ON enrollment_states.enrollment_id=enrollments.id").
+            where("group_memberships.workflow_state='accepted' AND groups.workflow_state<>'deleted' AND COALESCE(enrollment_states.state,'active') IN ('invited','active')").to_a
+        end
+      end
+    end
+  end
+
   def has_student_enrollment?
-    Rails.cache.fetch([self, 'has_student_enrollment', ApplicationController.region ].cache_key) do
+    return @_has_student_enrollment if defined?(@_has_student_enrollment)
+    @_has_student_enrollment = Rails.cache.fetch_with_batched_keys(['has_student_enrollment', ApplicationController.region ].cache_key, batch_object: self, batched_keys: :enrollments) do
       self.enrollments.shard(in_region_associated_shards).where(:type => %w{StudentEnrollment StudentViewEnrollment}).
         where.not(:workflow_state => %w{rejected inactive deleted}).exists?
     end
@@ -1776,7 +1783,8 @@ class User < ActiveRecord::Base
 
   def non_student_enrollment?
     # We should be able to remove this method when the planner works for teachers/other course roles
-    Rails.cache.fetch([self, 'has_non_student_enrollment', ApplicationController.region ].cache_key) do
+    return @_non_student_enrollment if defined?(@_non_student_enrollment)
+    @_non_student_enrollment = Rails.cache.fetch_with_batched_keys(['has_non_student_enrollment', ApplicationController.region ].cache_key, batch_object: self, batched_keys: :enrollments) do
       self.enrollments.shard(in_region_associated_shards).where.not(type: %w{StudentEnrollment StudentViewEnrollment ObserverEnrollment}).
         where.not(workflow_state: %w{rejected inactive deleted}).exists?
     end
@@ -1822,7 +1830,7 @@ class User < ActiveRecord::Base
     @cached_course_ids ||= {}
     @cached_course_ids[type] ||=
       self.shard.activate do
-        Rails.cache.fetch([self, "cached_course_ids", type, ApplicationController.region].cache_key) do
+        Rails.cache.fetch_with_batched_keys(["cached_course_ids", type, ApplicationController.region].cache_key, batch_object: self, batched_keys: :enrollments) do
           yield(self.enrollments.shard(in_region_associated_shards)).distinct.pluck(:course_id)
         end
       end
@@ -1831,7 +1839,7 @@ class User < ActiveRecord::Base
 
   def participating_enrollments
     @participating_enrollments ||= self.shard.activate do
-      Rails.cache.fetch([self, 'participating_enrollments', ApplicationController.region].cache_key) do
+      Rails.cache.fetch_with_batched_keys([self, 'participating_enrollments', ApplicationController.region].cache_key, batch_object: self, batched_keys: :enrollments) do
         self.enrollments.shard(in_region_associated_shards).current.active_by_date.to_a
       end
     end
@@ -2275,10 +2283,12 @@ class User < ActiveRecord::Base
     # the results.
     return user_roles(root_account, true) if exclude_deleted_accounts
 
-    return @roles if @roles
-    root_account.shard.activate do
-      @roles = Rails.cache.fetch(['user_roles_for_root_account4', self, root_account].cache_key) do
-        user_roles(root_account)
+    RequestCache.cache('user_roles', self, root_account) do
+      root_account.shard.activate do
+        base_key = ['user_roles_for_root_account5', root_account.global_id].cache_key
+        Rails.cache.fetch_with_batched_keys(base_key, batch_object: self, batched_keys: [:enrollments, :account_users]) do
+          user_roles(root_account)
+        end
       end
     end
   end
@@ -2368,52 +2378,11 @@ class User < ActiveRecord::Base
   # Public: Reset the user's cached unread conversations count.
   #
   # Returns nothing.
-  def reset_unread_conversations_counter
-    unread_count = conversations.unread.count
+  def reset_unread_conversations_counter(unread_count=nil)
+    unread_count ||= conversations.unread.count
     if self.unread_conversations_count != unread_count
       self.class.where(:id => id).update_all(:unread_conversations_count => unread_count)
     end
-  end
-
-  def set_menu_data(enrollment_uuid)
-    return @menu_data if @menu_data
-    coalesced_enrollments = []
-
-    cached_enrollments = self.cached_current_enrollments(:include_enrollment_uuid => enrollment_uuid, :preload_dates => true)
-    cached_enrollments.each do |e|
-
-      next if e.state_based_on_date == :inactive
-
-      if e.state_based_on_date == :completed
-        has_completed_enrollment = true
-        next
-      end
-
-      existing_enrollment_info = coalesced_enrollments.find { |en|
-        # coalesce together enrollments for the same course and the same state
-        en[:enrollment].course == e.course && en[:enrollment].workflow_state == e.workflow_state
-      }
-
-      if existing_enrollment_info
-        existing_enrollment_info[:types] << e.readable_type
-        existing_enrollment_info[:sortable] = [existing_enrollment_info[:sortable] || CanvasSort::Last, [e.rank_sortable, e.state_sortable, 0 - e.id]].min
-      else
-        coalesced_enrollments << { :enrollment => e, :sortable => [e.rank_sortable, e.state_sortable, 0 - e.id], :types => [ e.readable_type ] }
-      end
-    end
-    coalesced_enrollments = coalesced_enrollments.sort_by{|e| e[:sortable] }
-    active_enrollments = coalesced_enrollments.map{ |e| e[:enrollment] }
-
-    cached_group_memberships = self.cached_current_group_memberships
-    coalesced_group_memberships = Canvas::ICU.collate_by(cached_group_memberships.
-      select{ |gm| gm.active_given_enrollments?(active_enrollments) }) { |gm| gm.group.name }
-
-    @menu_data = {
-      :group_memberships => coalesced_group_memberships,
-      :group_memberships_count => cached_group_memberships.length,
-      :accounts => self.adminable_accounts,
-      :accounts_count => self.adminable_accounts.length,
-    }
   end
 
   # Public: Returns a unique list of favorite context type ids relative to the active shard.
@@ -2606,7 +2575,7 @@ class User < ActiveRecord::Base
     if pseudonym_hint
       mfa_settings = pseudonym_hint.account.mfa_settings
       return :required if mfa_settings == :required ||
-          mfa_settings == :required_for_admins && !pseudonym_hint.account.all_account_users_for(self).empty?
+          mfa_settings == :required_for_admins && !pseudonym_hint.account.cached_all_account_users_for(self).empty?
     end
 
     result = self.pseudonyms.shard(self).preload(:account).map(&:account).uniq.map do |account|
@@ -2619,7 +2588,7 @@ class User < ActiveRecord::Base
           # if pseudonym_hint is given, and we got to here, we don't need
           # to redo the expensive all_account_users_for check
           if (pseudonym_hint && pseudonym_hint.account == account) ||
-              account.all_account_users_for(self).empty?
+              account.cached_all_account_users_for(self).empty?
             1
           else
             # short circuit the entire method
@@ -2735,9 +2704,14 @@ class User < ActiveRecord::Base
   end
 
   def current_active_groups?
-    return true if self.current_groups.preload(:context).any?(&:context_available?)
-    return true if self.current_groups.shard(self.in_region_associated_shards).preload(:context).any?(&:context_available?)
-    false
+    return @_current_active_groups if defined?(@_current_active_groups)
+    @_current_active_groups = self.shard.activate do
+      Rails.cache.fetch_with_batched_keys(['current_active_groups', ApplicationController.region].cache_key, batch_object: self, batched_keys: :groups) do
+        return true if self.current_groups.preload(:context).any?(&:context_available?)
+        return true if self.current_groups.shard(self.in_region_associated_shards).preload(:context).any?(&:context_available?)
+        false
+      end
+    end
   end
 
   def all_active_pseudonyms(reload=false)
@@ -2838,7 +2812,7 @@ class User < ActiveRecord::Base
     roles << 'student' unless (enrollment_types & %w[StudentEnrollment StudentViewEnrollment]).empty?
     roles << 'teacher' unless (enrollment_types & %w[TeacherEnrollment TaEnrollment DesignerEnrollment]).empty?
     roles << 'observer' unless (enrollment_types & %w[ObserverEnrollment]).empty?
-    account_users = root_account.all_account_users_for(self)
+    account_users = root_account.cached_all_account_users_for(self)
 
     if exclude_deleted_accounts
       account_users = account_users.select { |a| a.account.workflow_state == 'active' }

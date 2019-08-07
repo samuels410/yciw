@@ -38,7 +38,7 @@ class Oauth2ProviderController < ApplicationController
     raise Canvas::Oauth::RequestError, :invalid_client_id unless provider.has_valid_key?
     raise Canvas::Oauth::RequestError, :invalid_redirect unless provider.has_valid_redirect?
     if provider.key.require_scopes?
-      raise Canvas::Oauth::RequestError, :invalid_scope unless provider.valid_scopes?
+      raise Canvas::Oauth::InvalidScopeError, provider.missing_scopes unless provider.valid_scopes?
     end
 
     session[:oauth2] = provider.session_hash
@@ -86,7 +86,7 @@ class Oauth2ProviderController < ApplicationController
 
   def deny
     params = { error: "access_denied" }
-    params[:state] = session[:oauth2][:state] if session[:oauth2][:state]
+    params[:state] = session[:oauth2][:state] if session[:oauth2].key? :state
     redirect_to Canvas::Oauth::Provider.final_redirect(self, params)
   end
 
@@ -100,7 +100,7 @@ class Oauth2ProviderController < ApplicationController
     elsif grant_type == "refresh_token"
       Canvas::Oauth::GrantTypes::RefreshToken.new(client_id, secret, params)
     elsif grant_type == 'client_credentials'
-      Canvas::Oauth::GrantTypes::ClientCredentials.new(params, request.host)
+      Canvas::Oauth::GrantTypes::ClientCredentials.new(params, request.host, request.protocol)
     else
       Canvas::Oauth::GrantTypes::BaseType.new(client_id, secret, params)
     end
@@ -121,10 +121,19 @@ class Oauth2ProviderController < ApplicationController
   end
 
   def destroy
-    logout_current_user if params[:expire_sessions]
+    if params[:expire_sessions]
+      if session[:login_aac]
+        # The AAC could have been deleted since the user logged in
+        aac = AuthenticationProvider.where(id: session[:login_aac]).first
+        redirect = aac.try(:user_logout_redirect, self, @current_user)
+      end
+      logout_current_user
+    end
     return render :json => { :message => "can't delete OAuth access token when not using an OAuth access token" }, :status => 400 unless @access_token
     @access_token.destroy
-    render :json => {}
+    response = {}
+    response[:forward_url] = redirect if redirect
+    render json: response
   end
 
   private

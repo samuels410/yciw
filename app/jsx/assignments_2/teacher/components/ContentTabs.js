@@ -22,12 +22,15 @@ import I18n from 'i18n!assignments_2'
 import TabList, {TabPanel} from '@instructure/ui-tabs/lib/components/TabList'
 import {TeacherAssignmentShape} from '../assignmentData'
 import Details from './Details'
-import Students from './Students'
+import StudentsSearcher from './StudentsTab/StudentsSearcher'
+import {Img} from '@instructure/ui-elements'
 
 ContentTabs.propTypes = {
   assignment: TeacherAssignmentShape.isRequired,
+  onMessageStudentsClick: func.isRequired,
   onChangeAssignment: func.isRequired,
   onValidate: func.isRequired,
+  invalidMessage: func.isRequired,
   readOnly: bool
 }
 
@@ -44,13 +47,25 @@ export default function ContentTabs(props) {
           assignment={assignment}
           onChangeAssignment={props.onChangeAssignment}
           onValidate={props.onValidate}
+          invalidMessage={props.invalidMessage}
           readOnly={props.readOnly}
         />
       </TabPanel>
-      <TabPanel title={I18n.t('Grading')}>Grading</TabPanel>
-      <TabPanel title={I18n.t('Rubric')}>Rubric</TabPanel>
+      <TabPanel title={I18n.t('Grading')}>
+        <div style={{width: '680px'}}>
+          <Img src="/images/assignments2_grading_static.png" />
+        </div>
+      </TabPanel>
+      <TabPanel title={I18n.t('Rubric')}>
+        <div style={{width: '730px'}}>
+          <Img src="/images/assignments2_rubric_static.png" />
+        </div>
+      </TabPanel>
       <TabPanel title={I18n.t('Students')}>
-        <Students assignment={assignment} />
+        <StudentsSearcher
+          onMessageStudentsClick={props.onMessageStudentsClick}
+          assignment={assignment}
+        />
       </TabPanel>
     </TabList>
   )

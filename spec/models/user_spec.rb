@@ -826,17 +826,17 @@ describe User do
     end
 
     it 'is true if there are no account users for this root account' do
-      account = double(:root_account? => true, :all_account_users_for => [])
+      account = double(:root_account? => true, :cached_all_account_users_for => [])
       expect(user.has_subset_of_account_permissions?(other_user, account)).to be_truthy
     end
 
     it 'is true when all account_users for current user are subsets of target user' do
-      account = double(:root_account? => true, :all_account_users_for => [double(:is_subset_of? => true)])
+      account = double(:root_account? => true, :cached_all_account_users_for => [double(:is_subset_of? => true)])
       expect(user.has_subset_of_account_permissions?(other_user, account)).to be_truthy
     end
 
     it 'is false when any account_user for current user is not a subset of target user' do
-      account = double(:root_account? => true, :all_account_users_for => [double(:is_subset_of? => false)])
+      account = double(:root_account? => true, :cached_all_account_users_for => [double(:is_subset_of? => false)])
       expect(user.has_subset_of_account_permissions?(other_user, account)).to be_falsey
     end
   end
@@ -1551,6 +1551,22 @@ describe User do
           course2.enroll_student(user)
         end
         expect(user.cached_current_enrollments).to eq [e1, e2]
+      end
+
+      it "should properly update when using new redis cache keys" do
+        skip("requires redis") unless Canvas.redis_enabled?
+        enable_cache(:redis_store) do
+          user = User.create!
+          course1 = Account.default.courses.create!(:workflow_state => "available")
+          e1 = course1.enroll_student(user, :enrollment_state => "active")
+          expect(user.cached_current_enrollments).to eq [e1]
+          e2 = @shard1.activate do
+            account2 = Account.create!
+            course2 = account2.courses.create!(:workflow_state => "available")
+            course2.enroll_student(user, :enrollment_state => "active")
+          end
+          expect(user.cached_current_enrollments).to eq [e1, e2]
+        end
       end
     end
   end
@@ -2705,6 +2721,19 @@ describe User do
 
     it 'should show if user has group_membership' do
       expect(@student.current_active_groups?).to eq true
+    end
+
+    it "excludes groups in concluded courses with current_group_memberships_by_date" do
+      ag = Account.default.groups.create! name: "ag"
+      ag.users << @student
+      ag.save!
+      expect(@student.cached_current_group_memberships_by_date.map(&:group)).to match_array([@group, ag])
+
+      @course.start_at = 1.year.ago
+      @course.conclude_at = 1.hour.ago
+      @course.restrict_enrollments_to_course_dates = true
+      @course.save!
+      expect(User.find(@student.id).cached_current_group_memberships_by_date.map(&:group)).to match_array([ag])
     end
 
   end

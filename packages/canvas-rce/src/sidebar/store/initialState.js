@@ -49,6 +49,7 @@ export default function(props = {}) {
     folders,
     upload,
     images,
+    documents,
     flickr,
     newPageLinkExpanded
   } = props;
@@ -58,7 +59,7 @@ export default function(props = {}) {
   props = { ...props, contextType };
 
   // default to API source
-  if (source === undefined) {
+  if (source == null) {
     source = new RceApiSource({
       jwt: jwt,
       refreshToken: refreshToken,
@@ -90,6 +91,10 @@ export default function(props = {}) {
     images = source.initializeImages(props);
   }
 
+  if (documents === undefined) {
+    documents = source.initializeDocuments(props);
+  }
+
   if (newPageLinkExpanded === undefined) {
     newPageLinkExpanded = false;
   }
@@ -105,6 +110,7 @@ export default function(props = {}) {
     folders,
     upload,
     images,
+    documents,
     flickr,
     newPageLinkExpanded
   };

@@ -21,7 +21,6 @@ import createReactClass from 'create-react-class'
 import ReactDOM from 'react-dom'
 import $ from 'jquery'
 import I18n from 'i18n!student_groups'
-import natcompare from 'compiled/util/natcompare'
 import Spinner from '@instructure/ui-elements/lib/components/Spinner'
 import UserCollection from 'compiled/collections/UserCollection'
 import ContextGroupCollection from 'compiled/collections/ContextGroupCollection'
@@ -40,8 +39,7 @@ const StudentView = createReactClass({
       filter: '',
       loading: false,
       userCollection: new UserCollection(null, {
-        params: {enrollment_type: 'student'},
-        comparator: natcompare.byGet('sortable_name')
+        params: {enrollment_type: 'student', per_page: 15, sort: 'username'}
       }),
       groupCollection: new ContextGroupCollection([], {course_id: ENV.course_id})
     }
@@ -248,6 +246,7 @@ const StudentView = createReactClass({
 
     return (
       <div>
+        <h1 className="screenreader-only">{I18n.t('Groups')}</h1>
         <div
           id="group_categories_tabs"
           className="ui-tabs-minimal ui-tabs ui-widget ui-widget-content ui-corner-all"

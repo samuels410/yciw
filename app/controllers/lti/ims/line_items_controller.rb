@@ -18,7 +18,7 @@
 module Lti
   module Ims
     # @API Line Items
-    # @internal
+    #
     # Line Item API for IMS Assignment and Grade Services
     #
     # @model LineItem
@@ -47,14 +47,18 @@ module Lti
     #            "type": "string"
     #          },
     #          "resourceId": {
-    #            "description": "A Tool Provider specified id for the Line Item.
-    #                            Multiple line items can share the same resourceId within a given context",
+    #            "description": "A Tool Provider specified id for the Line Item. Multiple line items can share the same resourceId within a given context",
     #            "example": "50",
     #            "type": "string"
     #          },
     #          "resourceLinkId": {
     #            "description": "The resource link id the Line Item is attached to",
     #            "example": "50",
+    #            "type": "string"
+    #          },
+    #          "https://canvas.instructure.com/lti/submission_type": {
+    #            "description": "The extension that defines the submission_type of the line_item. Only returns if set through the line_item create endpoint.",
+    #            "example": "{\n\t\"type\":\"external_tool\",\n\t\"external_tool_url\":\"https://my.launch.url\",\n}",
     #            "type": "string"
     #          }
     #       }
@@ -75,6 +79,14 @@ module Lti
 
       MIME_TYPE = 'application/vnd.ims.lis.v2.lineitem+json'.freeze
       CONTAINER_MIME_TYPE = 'application/vnd.ims.lis.v2.lineitemcontainer+json'.freeze
+
+      rescue_from ActionController::BadRequest do |e|
+        unless Rails.env.production?
+          logger.error(e.message)
+          Lti::Errors::ErrorLogger.log_error(e)
+        end
+        render json: {error: e.message}, status: :bad_request
+      end
 
       # @API Create a Line Item
       # Create a new Line Item
@@ -98,6 +110,23 @@ module Lti
       # @argument resourceLinkId [String]
       #   The resource link id the Line Item should be attached to. This value should
       #   match the LTI id of the Canvas assignment associated with the tool.
+      #
+      # @argument https://canvas.instructure.com/lti/submission_type [Optional, object]
+      #   (EXTENSION) - Optional block to set Assignment Submission Type when creating a new assignment is created.
+      #   type - 'none' or 'external_tool'::
+      #   external_tool_url - Submission URL only used when type: 'external_tool'::
+      # @example_request
+      #   {
+      #     "scoreMaximum": 100.0,
+      #     "label": "LineItemLabel1",
+      #     "resourceId": 1,
+      #     "tag": "MyTag",
+      #     "resourceLinkId": "1",
+      #     "https://canvas.instructure.com/lti/submission_type": {
+      #       "type": "external_tool",
+      #       "external_tool_url": "https://my.launch.url"
+      #     }
+      #   }
       #
       # @returns LineItem
       def create
@@ -166,7 +195,7 @@ module Lti
       # @returns LineItem
       def index
         line_items = Api.paginate(
-          Lti::LineItem.where(index_query).eager_load(:resource_link),
+          Lti::LineItem.active.where(index_query).eager_load(:resource_link),
           self,
           lti_line_item_index_url(course_id: context.id),
           pagination_args
@@ -189,7 +218,8 @@ module Lti
 
       def line_item_params
         @_line_item_params ||= begin
-          params.permit(%i(resourceId resourceLinkId scoreMaximum label tag)).transform_keys do |k|
+          params.permit(%i(resourceId resourceLinkId scoreMaximum label tag),
+                        Lti::LineItem::AGS_EXT_SUBMISSION_TYPE => [:type, :external_tool_url]).transform_keys do |k|
             k.to_s.underscore
           end.except(:resource_link_id)
         end
@@ -248,7 +278,7 @@ module Lti
       end
 
       def check_for_bad_resource_link
-        resource_link.line_items.blank? ||
+        resource_link.line_items.active.blank? ||
         assignment&.context != context ||
         !assignment&.active?
       end

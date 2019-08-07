@@ -27,7 +27,7 @@ describe("contentRendering", () => {
         href: "/some/path",
         url: "/other/path",
         title: "Here Be Links",
-        contents: "Click On Me"
+        text: "Click On Me"
       };
     });
 
@@ -58,7 +58,7 @@ describe("contentRendering", () => {
     });
 
     it("defaults contents to title", () => {
-      link.contents = undefined;
+      link.text = undefined;
       const rendered = contentRendering.renderLink(link);
       assert.equal(
         rendered,
@@ -67,10 +67,28 @@ describe("contentRendering", () => {
     });
 
     it("defaults contents to 'Link' if no title either", () => {
-      link.contents = undefined;
+      link.text = undefined;
       link.title = undefined;
       const rendered = contentRendering.renderLink(link);
       assert.equal(rendered, '<a href="/some/path" title="Link">Link</a>');
+    });
+
+    it("renders the link with all attributes", () => {
+      const doc = {
+        class: "instructure_file_link instructure_scribd_file",
+        href: "/some/path",
+        target: "_blank",
+        rel: "noopener",
+        text: "somefile.pdf"
+      }
+      const rendered = contentRendering.renderLink(doc, doc.text)
+      assert.equal(
+        rendered,
+        '<a ' +
+        'href="/some/path" target="_blank" rel="noopener" title="Link" ' +
+        'class="instructure_file_link instructure_scribd_file">' +
+        'somefile.pdf</a>'
+      );
     });
   });
 
@@ -120,7 +138,7 @@ describe("contentRendering", () => {
       const rendered = contentRendering.renderImage(image);
       assert.equal(
         rendered,
-        '<a href="http://someurl" target="_blank"><img alt="Here Be Images" src="/some/path"/></a>'
+        '<a href="http://someurl" target="_blank" rel="noopener noreferrer"><img alt="Here Be Images" src="/some/path"/></a>'
       );
     });
   });

@@ -16,7 +16,7 @@
 // with this program. If not, see <http://www.gnu.org/licenses/>.
 //
 
-import I18n from 'i18n!outcomes'
+import I18n from 'i18n!outcomesFindDialog'
 import $ from 'jquery'
 import _ from 'underscore'
 import OutcomeGroup from '../../models/OutcomeGroup'
@@ -36,7 +36,7 @@ export default class FindDialog extends DialogBaseView {
       // Hack: trick Babel/TypeScript into allowing this before super.
       if (false) { super(); }
       let thisFn = (() => { return this; }).toString();
-      let thisName = thisFn.slice(thisFn.indexOf('return') + 6 + 1, thisFn.lastIndexOf(';')).trim();
+      let thisName = thisFn.match(/_this\d*/)[0];
       eval(`${thisName} = this;`);
     }
     this.updateSelection = this.updateSelection.bind(this)

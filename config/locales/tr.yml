@@ -451,7 +451,7 @@ tr:
         consortium_autocreate_web_of_trust: "Yeni hesaplar oluştururken otomatik olarak bir güven ağı oluştur"
         consortium_can_create_own_accounts: "Konsorsiyum yöneticileri yeni root hesaplar oluşturabilir"
         consortium_parent_account: "Konsorsiyum üst hesabı"
-        shard_per_account: "Her yeni root hesabı için yeni bir parça oluştur"
+        shard_per_account: "Her yeni kök hesabı için yeni bir parça oluştur"
       license: Lisans
       license_type: "Lisans Türü"
       new_account_domain_title: "Yeni Hesap Alan Adı"
@@ -1031,6 +1031,18 @@ tr:
         default: 
           recently_deleted_courses: 
             text: "Bu rapor son 30 gündeki silinen tüm dönem içerisindeki dersleri vermektedir. Oluşturulan CSV dosyasında ders kimliği , ders öbs numarası, dersin kısa ismi, ders ismi ve dersin başlama bitiş tarihleri yer almaktadır."
+    reports_tab: 
+      headers: 
+        report_last_run: "Son Çalıştırılma"
+        report_name: Name
+      headings: 
+        sections: Raporlar
+      links: 
+        configure_report: Yapılandır...
+        run_report: "Raporu Çalıştır"
+      open_report_description: "Açık Rapor Açıklaması"
+      report_last_run_never: Asla
+      report_running: "Rapor oluşturuluyor. *Tamamlandığında bir eposta alacaksınız.*"
     retry_login: "Tekrar Oturum Aç"
     root_accounts: 
       labels: 
@@ -1374,7 +1386,7 @@ tr:
         one: "İşlenmeyi bekleyen %{count} toplu işlem."
         other: "İşlenmeyi bekleyen %{count} toplu işlem."
       pending_batches_title: "Bekleyen Toplu İşlemler"
-      process_data_button: "İşlem Verisi"
+      process_data_button: "Veriyi İşle"
       select_file_instructions: |-
           İçeri aktarmak istediğiniz zip dosyasını seçin.
           Bu zip dosyalarının oluşturulması ile ilgili açıklama için [lütfen bu
@@ -1753,7 +1765,7 @@ tr:
   all_students_have_taken_the_quiz_b558f8b4: "Tüm öğrenciler bu kısa sınavı aldı"
   all_students_have_taken_the_survey_494f9f42: "Tüm öğrenciler bu anketi aldı"
   all_submissions_must_have_a_selected_grade_3a84e5a9: "Tüm gönderilerin seçilmiş bir notu olmalı."
-  all_terms_cd27b0fb: "Tüm Koşullar"
+  all_terms_cd27b0fb: "Tüm Dönemler"
   all_timezones_5e8afa7b: "Tüm zaman dilimleri"
   all_weights_must_be_greater_than_or_equal_to_0_cc2dcdf1: "Tüm ağırlıklar 0'a eşit ya da daha büyük olmalıdır"
   allow_a_moderator_to_review_multiple_independent_g_752c4b90: "Bir moderatör seçili gönderiler için çoklu bağımsız notları inceleyebilsin"
@@ -5647,7 +5659,7 @@ tr:
       course_overrides_term: "Herhangi bir dönem hazır ayarının üzerine yazılacaktır."
       course_settings_title: "Ders Ayarları"
       deatils: 
-        move_course: "Bu ders için yeni bir root hesabı seçin. Dersi taşıdıktan sonra bu ders için yeni bir bölüm belirtmek isteyebilirsiniz."
+        move_course: "Bu ders için yeni bir kök hesabı seçin. Dersi taşıdıktan sonra bu ders için yeni bir bölüm belirtmek isteyebilirsiniz."
       drag_details: "Çoğu sayfanın etkisizleştirilmesi bu sayfayı ziyaret eden öğrencilerin dersin ana sayfasına yönlendirilmesine neden olacaktır."
       drag_to_hide: "Öğrencilerden gizlemek için öğeleri buraya sürükleyin."
       enrollment_count: 
@@ -5710,8 +5722,8 @@ tr:
         restrict_enrollments_to_course_dates: "Öğrenciler derse yalnızca bu tarihler arasında katılabilirler"
         restrict_student_future_view: "Başlangıç tarihinden önce öğrencilerin bu dersi görmesine izin verme"
         restrict_student_past_view: "Bitiş tarihinden sonra öğrencilerin bu dersi görmesine izin verme"
-        root_account: "Root Hesabı"
-        root_account_id: "Root Hesabı"
+        root_account: "Kök Hesabı"
+        root_account_id: "Kök Hesabı"
         show_announcements_on_home_page: "Canvas ana sayfasında en son duyuruları göster"
         sis_source_id: "ÖBS ID"
         start_at: Başlangıç
@@ -6257,7 +6269,7 @@ tr:
   deactivate_this_key_3e79a2b5: "Bu anahtarı etkisiz kıl"
   deactivate_user_86c09036: "Kullanıcıyı etkisiz kıl"
   debugging_f98fcd74: "Hata  Ayıklaması"
-  decaying_average_8bf6a0dd: "Düşüş Ortalaması"
+  decaying_average_8bf6a0dd: "Azalan Ortalama"
   decorative_image_3c28aa7d: "Dekoratif Görsel"
   decrease_indent_d9cf469d: "İçerden başlatma sınırını azalt"
   decrease_indent_de6343ab: "İçerden başlatma sınırını azalt"
@@ -6562,7 +6574,7 @@ tr:
       sort_by_likes: "Beğenme durumuna göre sırala"
       topic_title: "Konu Başlığı"
       until: "Şu zamana kadar"
-      use_for_grading: Değerlendirildi
+      use_for_grading: Notlandırmalı
       users_must_post_before_seeing_replies: "Kullanıcılar cevapları görmeden önce gönderi yapmalıdırlar"
     entry: 
       authors_name: "Yazar adı"
@@ -6927,7 +6939,7 @@ tr:
     one: "Şunun için izinleri düzenle: %{itemName}"
     other: "%{count} öğe için izinleri düzenle"
   edit_quiz_ededddd8: "Kısa Sınavı Düzenle"
-  edit_rating_c2ac31e5: "Oyları düzenle"
+  edit_rating_c2ac31e5: "Dereceyi düzenle"
   edit_role_1e96ad20: "Rolü Düzenle"
   edit_rubric: 
     buttons: 
@@ -6948,7 +6960,7 @@ tr:
       read_only_rubric: "İzniniz olmadığı ya da birden fazla yerde kullanıldığı için bu yönergeyi düzenleyemezsiniz. Yapacağınız değişiklikler eski yönergeyi baz alan yeni bir yönerge oluşturacaktır. Devam etmek istiyor musunuz?"
     titles: 
       criterion_long_description: "Kriterin Uzun Açıklaması"
-      edit_rubric_rating: "Oyları Düzenle"
+      edit_rubric_rating: "Dereceyi Düzenle"
       find_existing_rubric: "Varolan Denetim Listesi Bul"
   edit_survey_b0d6890d: "Anketi Düzenle"
   edit_this_announcement_ae6e17b3: "Bu Duyuruyu Düzenle"
@@ -7044,6 +7056,7 @@ tr:
   ember_modules_description: "Ember'de yeniden yazılan Modüller. Harici konumlardan sürüklemeyi etkinleştirmek için gömülü sürükle bırak API'sini kullanır."
   enable_6f5d1328: Etkinleştir
   enable_and_lock_e6099cc2: "Aktif ve Kilitli"
+  enable_course_as_a_blueprint_course_8515ffd5: "Dersi şablon ders olarak etkinleştir."
   enable_dashboard_images_for_courses_5af458b0: "Dersler için Yönetim Paneli Görsellerini Etkinleştir"
   enable_feature_title_987d8e9a: "Şu özelliği etkinleştir: %{title}"
   enable_gradebook_list_students_by_sortable_name: "Öğrencileri Not Defterinde sıralanmış isimleri ile listeleyin. Sıralanmış isimler varsayılan olarak 'Soy adı, Adı' şeklindedir fakat ayarlarda değiştirilebilir."
@@ -8008,6 +8021,7 @@ tr:
     keyboard_close_menu: "Güncel etkin ödev menüsünü kapat"
     keyboard_comment_desc: "Etkin gönderiye yorum yap"
     keyboard_sort_desc: "Güncel etkin sütundaki ızgara üzerinde sıralayın"
+    mic_blocked_message: "Mikrofonu kullanma izni engellenmiş. Değiştirmek için chrome://settings/contentExceptions\\#media-stream"
     mute_assignment: "Ödevi Beklet"
     no_assignments_have_points_warning: "Bir ödevde olası puanlar olmadıkça not hesaplanamaz"
     no_submission_time: "ödev gönderme zamanı yok"
@@ -9037,6 +9051,7 @@ tr:
   html5_first_videos_description: |-
       Varsayılan olarak, Canvas videoları oynatmak için önce Flash'ı deneyecek. Önce HTML5'i
       kullanıp sonra Flash'a dönmek için bu seçeneği etkinleştirin.
+  html5_media_recorder_in_rce_bb59b78f: "Zengin Metin Editöründe HTML5 Medya Kaydedici"
   html_editor_fb2ab713: "HTML Düzenleyici"
   i_agree_to_the_terms_of_use_and_privacy_policy_f41760cc: "*Kullanım şartları* ve **gizlilik politikasını** Kabul Ediyorum."
   i_cb2f5130: i
@@ -9133,6 +9148,9 @@ tr:
   include_this_assignment_s_grades_when_posting_to_y_6bff3323: "Okulunuzun Öğrenc Bilgi Sistemine göderirken bu ödevin notlarını da dahil et"
   include_unpublished_assignments_83ebbaec: "Yayınlanmamış Ödevleri Dahil et"
   include_unpublished_courses_7a0e7aab: "Yayınlanmamış Dersleri Dahil Et"
+  incompleteregistration: 
+    get_started: Başlayın
+    welcome_to_canvas: "Canvas'a Hoşgeldiniz"
   incorrect_answer_7c17e63b: "Yanlış Cevap"
   incorrect_username_and_or_password_2de73abb: "Yanlış kullanıcı adı ve/veya şifre"
   increase_indent_6af90f7c: "İçerden başlama sınırını artır"
@@ -9339,6 +9357,7 @@ tr:
   key_settings_44df6a41: "Anahtar Ayarları"
   keyboard_shortcuts_ed1844bd: "Klavye Kısayolları"
   kind_7f0a88c4: Tür
+  label_3c9a991: "%{label}:"
   labels: 
     lock_module_until: "Bu tarihe kadar kilitle"
   last_enrollment_activity_10fe15ba: "Son Derse Kayıt Etkinliği"
@@ -11730,6 +11749,7 @@ tr:
   more_information_3dfb76b5: "Daha fazla bilgi "
   more_than_999_submissions_need_grading_bc087dd0: "999'dan fazla gönderinin notlandırılması gerek"
   more_than_a19b440: "%{more_than}+"
+  most_recent_result_counts_as_calculation_int_of_ma_d2fc1d19: "En güncel puan yeterlik ağırlığının %{calculation_int} olarak alınır ve diğer tüm sonuçların%{remainder}hesaplanır. Tek bir puan varsa alınan tek puan gösterilir."
   most_recent_score_13a87e8c: "En Güncel Puan"
   move_abf00365: Taşı
   move_assignment_name_aa253f26: "%{name} Ödevini Taşı"
@@ -12317,6 +12337,7 @@ tr:
     confirm: 
       delete: "Silmek istediğinize emin misiniz?"
       import_group: "\"%{group}\" grubunu \"%{target}\" grubuna aktarsın mı ? "
+      import_outcome: "\"%{outcome}\" öğrenme çıktısı \"%{outcome}\" grubuna aktarılsın mı?"
     criteria: 
       does_not_meet_expectations: "Beklentileri Karşılamıyor"
       exceeds_expectations: "Beklentilerin Üstünde"
@@ -14737,6 +14758,7 @@ tr:
     ? "true"
     : Doğru
   quizzes_7e598f57: "Kısa sınavlar"
+  quizzes_next_27c59ce3: Quizzes.Next
   range_8760934b: "Aralık: "
   range_name_90614433: "Aralık adı"
   ratings_2433172b: Oranlar
@@ -14802,7 +14824,7 @@ tr:
   recent_activity_51239235: "En Son Etkinlik"
   recent_student: 
     last_logged_in: "son oturum %{last_login}"
-  recentint_remainderint_decaying_average_79bc09fb: "%{recentInt}/%{remainderInt} Düşüş Ortalaması"
+  recentint_remainderint_decaying_average_79bc09fb: "%{recentInt}/%{remainderInt} Azalan Ortalama"
   recently_deleted_courses_title: "Son Silinen Dersler"
   recipient_input: 
     context_search_placeholder: "Bir isim, ders ya da grup girin"
@@ -15260,6 +15282,8 @@ tr:
     enrollments_teachers: Öğretmenler
     student_groups: "Öğrenci Grupları"
   search_280d00bd: Ara
+  search_by_title_or_author_273a8f49: "Başlık veya yazara göre ara"
+  search_by_title_short_name_or_sis_id_fe84aa12: "Başlık, kısa ad ya da ÖBS ID'ye göre ara"
   search_by_user_dd3ad189: "Kullanıcıya göre ara"
   search_entries_or_author_63fb0a86: "Girdi ya da yazar arayın"
   search_for_files_7541fb28: "Dosyaları ara"
@@ -15350,6 +15374,7 @@ tr:
         current_enrollments: "Varolan Kayıtlar"
         decrosslist_section: "Bu Bölümü Çarpraz Listeden Kaldır"
   see_rubric_results_62a6447d: "Değerlendirme listesi sonuçlarına bak"
+  see_some_lti_tools_that_work_great_with_canvas_53e92091: "Canvas ile sorunsuz çalışan bazı Harici Araçlar"
   select_content: "İçerik Seçiniz"
   select_content_checkbox: 
     select_content_error: "Bir içerik seçeneği seçmelisiniz"

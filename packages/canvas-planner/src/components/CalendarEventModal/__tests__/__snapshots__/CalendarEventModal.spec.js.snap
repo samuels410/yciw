@@ -35,15 +35,25 @@ exports[`renders 1`] = `
       ellipsis={false}
       level="h2"
     >
-      <Link
+      <Button
         as="button"
+        buttonRef={[Function]}
+        cursor="pointer"
+        fluidWidth={false}
         href="http://example.com"
-        iconPlacement="start"
-        linkRef={[Function]}
-        variant="default"
+        margin="0"
+        size="large"
+        theme={
+          Object {
+            "largeHeight": "normal",
+            "largePadding": "0",
+          }
+        }
+        type="button"
+        variant="link"
       >
         event title
-      </Link>
+      </Button>
     </Heading>
     <CloseButton
       buttonRef={[Function]}
@@ -80,6 +90,7 @@ exports[`renders 1`] = `
           Calendar:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -104,6 +115,7 @@ exports[`renders 1`] = `
           Date & Time:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -128,6 +140,7 @@ exports[`renders 1`] = `
           Location:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -152,6 +165,7 @@ exports[`renders 1`] = `
           Address:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -225,15 +239,25 @@ exports[`renders with allDay 1`] = `
       ellipsis={false}
       level="h2"
     >
-      <Link
+      <Button
         as="button"
+        buttonRef={[Function]}
+        cursor="pointer"
+        fluidWidth={false}
         href="http://example.com"
-        iconPlacement="start"
-        linkRef={[Function]}
-        variant="default"
+        margin="0"
+        size="large"
+        theme={
+          Object {
+            "largeHeight": "normal",
+            "largePadding": "0",
+          }
+        }
+        type="button"
+        variant="link"
       >
         event title
-      </Link>
+      </Button>
     </Heading>
     <CloseButton
       buttonRef={[Function]}
@@ -270,6 +294,7 @@ exports[`renders with allDay 1`] = `
           Calendar:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -294,6 +319,7 @@ exports[`renders with allDay 1`] = `
           Date & Time:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -318,6 +344,7 @@ exports[`renders with allDay 1`] = `
           Location:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -342,6 +369,7 @@ exports[`renders with allDay 1`] = `
           Address:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -415,15 +443,25 @@ exports[`renders with only the startTime 1`] = `
       ellipsis={false}
       level="h2"
     >
-      <Link
+      <Button
         as="button"
+        buttonRef={[Function]}
+        cursor="pointer"
+        fluidWidth={false}
         href="http://example.com"
-        iconPlacement="start"
-        linkRef={[Function]}
-        variant="default"
+        margin="0"
+        size="large"
+        theme={
+          Object {
+            "largeHeight": "normal",
+            "largePadding": "0",
+          }
+        }
+        type="button"
+        variant="link"
       >
         event title
-      </Link>
+      </Button>
     </Heading>
     <CloseButton
       buttonRef={[Function]}
@@ -460,6 +498,7 @@ exports[`renders with only the startTime 1`] = `
           Calendar:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -484,6 +523,7 @@ exports[`renders with only the startTime 1`] = `
           Date & Time:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -508,6 +548,7 @@ exports[`renders with only the startTime 1`] = `
           Location:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -532,6 +573,7 @@ exports[`renders with only the startTime 1`] = `
           Address:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -605,15 +647,25 @@ exports[`renders with user displayName for calendar 1`] = `
       ellipsis={false}
       level="h2"
     >
-      <Link
+      <Button
         as="button"
+        buttonRef={[Function]}
+        cursor="pointer"
+        fluidWidth={false}
         href="http://example.com"
-        iconPlacement="start"
-        linkRef={[Function]}
-        variant="default"
+        margin="0"
+        size="large"
+        theme={
+          Object {
+            "largeHeight": "normal",
+            "largePadding": "0",
+          }
+        }
+        type="button"
+        variant="link"
       >
         event title
-      </Link>
+      </Button>
     </Heading>
     <CloseButton
       buttonRef={[Function]}
@@ -650,6 +702,7 @@ exports[`renders with user displayName for calendar 1`] = `
           Calendar:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -674,6 +727,7 @@ exports[`renders with user displayName for calendar 1`] = `
           Date & Time:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -698,6 +752,7 @@ exports[`renders with user displayName for calendar 1`] = `
           Location:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -722,6 +777,7 @@ exports[`renders with user displayName for calendar 1`] = `
           Address:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -795,15 +851,25 @@ exports[`renders without address 1`] = `
       ellipsis={false}
       level="h2"
     >
-      <Link
+      <Button
         as="button"
+        buttonRef={[Function]}
+        cursor="pointer"
+        fluidWidth={false}
         href="http://example.com"
-        iconPlacement="start"
-        linkRef={[Function]}
-        variant="default"
+        margin="0"
+        size="large"
+        theme={
+          Object {
+            "largeHeight": "normal",
+            "largePadding": "0",
+          }
+        }
+        type="button"
+        variant="link"
       >
         event title
-      </Link>
+      </Button>
     </Heading>
     <CloseButton
       buttonRef={[Function]}
@@ -840,6 +906,7 @@ exports[`renders without address 1`] = `
           Calendar:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -864,6 +931,7 @@ exports[`renders without address 1`] = `
           Date & Time:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -888,6 +956,7 @@ exports[`renders without address 1`] = `
           Location:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -961,15 +1030,25 @@ exports[`renders without details 1`] = `
       ellipsis={false}
       level="h2"
     >
-      <Link
+      <Button
         as="button"
+        buttonRef={[Function]}
+        cursor="pointer"
+        fluidWidth={false}
         href="http://example.com"
-        iconPlacement="start"
-        linkRef={[Function]}
-        variant="default"
+        margin="0"
+        size="large"
+        theme={
+          Object {
+            "largeHeight": "normal",
+            "largePadding": "0",
+          }
+        }
+        type="button"
+        variant="link"
       >
         event title
-      </Link>
+      </Button>
     </Heading>
     <CloseButton
       buttonRef={[Function]}
@@ -1006,6 +1085,7 @@ exports[`renders without details 1`] = `
           Calendar:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -1030,6 +1110,7 @@ exports[`renders without details 1`] = `
           Date & Time:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -1054,6 +1135,7 @@ exports[`renders without details 1`] = `
           Location:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -1078,6 +1160,7 @@ exports[`renders without details 1`] = `
           Address:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -1132,15 +1215,25 @@ exports[`renders without location 1`] = `
       ellipsis={false}
       level="h2"
     >
-      <Link
+      <Button
         as="button"
+        buttonRef={[Function]}
+        cursor="pointer"
+        fluidWidth={false}
         href="http://example.com"
-        iconPlacement="start"
-        linkRef={[Function]}
-        variant="default"
+        margin="0"
+        size="large"
+        theme={
+          Object {
+            "largeHeight": "normal",
+            "largePadding": "0",
+          }
+        }
+        type="button"
+        variant="link"
       >
         event title
-      </Link>
+      </Button>
     </Heading>
     <CloseButton
       buttonRef={[Function]}
@@ -1177,6 +1270,7 @@ exports[`renders without location 1`] = `
           Calendar:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -1201,6 +1295,7 @@ exports[`renders without location 1`] = `
           Date & Time:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"
@@ -1225,6 +1320,7 @@ exports[`renders without location 1`] = `
           Address:
         </Text>
         <View
+          debug={false}
           display="auto"
           margin="0 0 0 x-small"
           overflowX="visible"

@@ -145,7 +145,7 @@ class SubmissionsController < SubmissionsBaseController
   # All online turn-in submission types are supported in this API. However,
   # there are a few things that are not yet supported:
   #
-  # * Files can be submitted based on a file ID of a user or group file. However, there is no API yet for listing the user and group files, or uploading new files via the API. A file upload API is coming soon.
+  # * Files can be submitted based on a file ID of a user or group file or through the {api:SubmissionsApiController#create_file file upload API}. However, there is no API yet for listing the user and group files.
   # * Media comments can be submitted, however, there is no API yet for creating a media comment to submit.
   # * Integration with Google Docs is not yet supported.
   #
@@ -199,12 +199,6 @@ class SubmissionsController < SubmissionsBaseController
     @assignment = AssignmentOverrideApplicator.assignment_overridden_for(@assignment, @current_user)
 
     return unless authorized_action(@assignment, @current_user, :submit)
-
-    if @assignment.locked_for?(@current_user) && !@assignment.grants_right?(@current_user, :update)
-      flash[:notice] = t('errors.can_not_submit_locked_assignment', "You can't submit an assignment when it is locked")
-      redirect_to named_context_url(@context, :context_assignment_url, @assignment.id)
-      return
-    end
 
     @group = @assignment.group_category.group_for(@current_user) if @assignment.has_group_category?
 

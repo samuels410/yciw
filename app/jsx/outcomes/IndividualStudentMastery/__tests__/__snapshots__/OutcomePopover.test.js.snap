@@ -48,6 +48,7 @@ exports[`renders correctly with no custom outcomeProficiency 1`] = `
     <PopoverTrigger>
       <Link
         as="button"
+        disabled={false}
         iconPlacement="start"
         linkRef={[Function]}
         onClick={[Function]}
@@ -76,6 +77,7 @@ exports[`renders correctly with no custom outcomeProficiency 1`] = `
     <PopoverContent>
       <View
         as="div"
+        debug={false}
         display="auto"
         maxWidth="30rem"
         overflowX="visible"
@@ -112,6 +114,16 @@ exports[`renders correctly with no custom outcomeProficiency 1`] = `
               grow={true}
               shrink={true}
             >
+              <div
+                style={
+                  Object {
+                    "overflowWrap": "break-word",
+                    "wordWrap": "break-word",
+                  }
+                }
+              >
+                My outcome
+              </div>
               <div>
                 Last Assessment: 
                 <DatetimeDisplay
@@ -243,6 +255,7 @@ exports[`renders correctly with no results 1`] = `
     <PopoverTrigger>
       <Link
         as="button"
+        disabled={false}
         iconPlacement="start"
         linkRef={[Function]}
         onClick={[Function]}
@@ -271,6 +284,7 @@ exports[`renders correctly with no results 1`] = `
     <PopoverContent>
       <View
         as="div"
+        debug={false}
         display="auto"
         maxWidth="30rem"
         overflowX="visible"
@@ -307,6 +321,16 @@ exports[`renders correctly with no results 1`] = `
               grow={true}
               shrink={true}
             >
+              <div
+                style={
+                  Object {
+                    "overflowWrap": "break-word",
+                    "wordWrap": "break-word",
+                  }
+                }
+              >
+                My outcome
+              </div>
               <div>
                 Last Assessment: 
                 No submissions
@@ -435,6 +459,7 @@ exports[`renders the OutcomePopover component 1`] = `
     <PopoverTrigger>
       <Link
         as="button"
+        disabled={false}
         iconPlacement="start"
         linkRef={[Function]}
         onClick={[Function]}
@@ -463,6 +488,7 @@ exports[`renders the OutcomePopover component 1`] = `
     <PopoverContent>
       <View
         as="div"
+        debug={false}
         display="auto"
         maxWidth="30rem"
         overflowX="visible"
@@ -499,6 +525,16 @@ exports[`renders the OutcomePopover component 1`] = `
               grow={true}
               shrink={true}
             >
+              <div
+                style={
+                  Object {
+                    "overflowWrap": "break-word",
+                    "wordWrap": "break-word",
+                  }
+                }
+              >
+                My outcome
+              </div>
               <div>
                 Last Assessment: 
                 <DatetimeDisplay

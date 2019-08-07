@@ -10,54 +10,102 @@ The API Change Log includes adjustments to the Canvas API documentation as part 
 - This page documents API changes for the last four releases. For prior releases, view the [API Change Log archive page](file.changelog_archive.html).
 
 <div class="changelog"></div>
-## 2019-04-20
+## 2019-07-31
 ### Additions
-| API Calls | Function |  |
+| OAuth2 | File |     |
 |----------------------|----------------------|--------------------------|
-| [Submissions API] | Grade or Comment on a Submission Endpoint | Rubric_assessment parameter: Added rubric_assessment[criterion_id][rating_id] sub-parameter<br><br>Added rating IDs to example rubric in description
-|  [Users API]         | Update User Settings Endpoint | Hide_dashcard_color_overlays: Added parameter
+| [OAuth2 Overview] | Description | Added link to LTI Advantage documentation and section for accessing LTI Advantage Services |
 
+[OAuth2 Overview]: file.oauth.html
+
+<p></p>
+
+| Resources | Function |     |
+|----------------------|----------------------|--------------------------|
+| [Assignments API] | List Assignments Endpoint | Added post_to_sis parameter |
+
+[Assignments API]: assignments.html
+
+<p></p>
+
+| SIS | File |  |
+|----------------------|----------------------|--------------------------|
+| [SIS CSV Format] | Logins.csv | Added file |
+
+[SIS CSV Format]: file.sis_csv.html
+
+### Changes
+| SIS | File |  |
+|----------------------|----------------------|--------------------------|
+| [SIS CSV Format] | Courses.csv | Clarified description for account_id to specify that new courses will be attached to the root account if not specified |
+
+[SIS CSV Format]: file.sis_csv.html
+
+## 2019-07-13
+### Additions
+| Basics | File |  |
+|----------------------|----------------------|--------------------------|
+| [GraphQL] |  | Added file |
+
+[GraphQL]: file.graphql.html
+
+<p></p>
+
+| External Tools | Function |  |
+|----------------------|----------------------|--------------------------|
+| [Variable Substitutions] | Canvas.course.sectionRestricted | Added variable that corresponds with whether the user was enrolled with the restriction to only interact with users in their own section |
+
+[Variable Substitutions]: file.tools_variable_substitutions.html
+
+<p></p>
+
+| Resources | Function |  |
+|----------------------|----------------------|--------------------------|
+| [Assignments API] | Assignment Object | Added posted_manually parameter |
+| [Submissions API] | Submissions Object | Added posted_at parameter |
+
+[Assignments API]: assignments.html
 [Submissions API]: submissions.html
-[Users API]: users.html
 
-
-## 2019-03-30
 ### Changes
-| API Calls | Function |  |
+| Resources | Function |  |
 |----------------------|----------------------|--------------------------|
-| [Content Migrations API] | Update a Content Migration Endpoint | Clarified the endpoint takes same arguments as creating a migration<br><br>Clarified that updating the content migration will also be used when importing content selectively |
+| [Assignments API] | Assignment Object | Muted parameter: Updated description for muted parameter regarding Old and New Gradebooks |
+| [Conversations API] | Create a Conversation Endpoint | Group_conversation parameter: updated description to indicate the value must be set to true if the number of recipients is over the set maximum (100) |
 
-[Content Migrations API]: content_migrations.html
-
-### Additions
-| API Calls | Function |  |
-|----------------------|----------------------|--------------------------|
-| [Content Migrations API] | Create a Content Migration Endpoint | Added selective_import parameter
-|                          | List Items for Selective Import Endpoint | Added endpoint
-
-[Content Migrations API]: content_migrations.html
-
-
-## 2019-03-09
-### Changes
-| API Calls | Function |  |
-|----------------------|----------------------|--------------------------|
-| [SIS Imports API] | Imports SIS Data Endpoint | Change_threshold parameter: added clarification for diffing percentage calculation
-
-[SIS Imports API]: sis_imports.html
+[Assignments API]: assignments.html
+[Conversations API]: conversations.html
 
 ### Removals
-| API Responses | Function |      |
+| Resources | Function |  |
 |----------------------|----------------------|--------------------------|
-| [Users API] | To Do Items Endpoint | Removed mention of user dashboard, as this API call is not used for the dashboard
+| [Assignments API] | Create an Assignment Endpoint | Assignment[muted] parameter: deprecated for New Gradebook, to be removed 2020-01-18<br><br>This parameter may only still be used with the Old Gradebook |
 
-[Users API]: users.html
+[Assignments API]: assignments.html
 
-
-## 2019-02-16
+## 2019-06-22
 ### Additions
-| API Responses | Function |      |
+| Resources | Function |  |
 |----------------------|----------------------|--------------------------|
-| [Users API] | Edit a User Endpoint | Added [user]title and [user]bio parameters
+| [Users API] | List Users in Account Endpoint | Added enrollment_type parameter |
 
-[Users API]: users.html
+[Users API]: Users.html
+
+
+## 2019-06-01
+### Additions
+| Resources | Function |  |
+|----------------------|----------------------|--------------------------|
+| [Files API] | Get Uploaded Media Folder for User Endpoint | Added endpoint |
+| [Originality Report API] | Create an Originality Report<br><br>Edit an Originality Report | Added originality_report[error_message] parameter
+|                     | Originality Report Object | Returns Error_report |
+
+[Files API]: files.html
+[Originality Report API]: originality_reports.html
+
+### Removals
+| Resources | Function |  |
+|----------------------|----------------------|--------------------------|
+| [File Uploads] | Uploading via POST Process | Step 3: Deprecated POST requests in favor of GET requests for forward compatibility
+
+[File Uploads]: file.file_uploads.html

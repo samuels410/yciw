@@ -38,6 +38,7 @@ class CommunicationChannel < ActiveRecord::Base
   validate :validate_email, if: lambda { |cc| cc.path_type == TYPE_EMAIL && cc.new_record? }
   validate :not_otp_communication_channel, :if => lambda { |cc| cc.path_type == TYPE_SMS && cc.retired? && !cc.new_record? }
   after_commit :check_if_bouncing_changed
+  after_save :clear_user_email_cache
 
   acts_as_list :scope => :user
 
@@ -53,6 +54,10 @@ class CommunicationChannel < ActiveRecord::Base
   TYPE_PUSH     = 'push'
 
   RETIRE_THRESHOLD = 1
+
+  def clear_user_email_cache
+    self.user.clear_email_cache! if self.path_type == TYPE_EMAIL
+  end
 
   def self.country_codes
     # [country code, name, true if email should be used instead of Twilio]
@@ -131,7 +136,7 @@ class CommunicationChannel < ActiveRecord::Base
       'cspire1.com' => { name: 'C Spire', country_code: 1 }.with_indifferent_access.freeze,
       'cingularme.com' => { name: 'Cingular', country_code: 1 }.with_indifferent_access.freeze,
       'mobile.celloneusa.com' => { name: 'CellularOne', country_code: 1 }.with_indifferent_access.freeze,
-      'sms.mycricket.com' => { name: 'Cricket', country_code: 1 }.with_indifferent_access.freeze,
+      'mms.cricketwireless.net' => { name: 'Cricket', country_code: 1 }.with_indifferent_access.freeze,
       'messaging.nextel.com' => { name: 'Nextel', country_code: 1 }.with_indifferent_access.freeze,
       'messaging.sprintpcs.com' => { name: 'Sprint PCS', country_code: 1 }.with_indifferent_access.freeze,
       'tmomail.net' => { name: 'T-Mobile', country_code: 1 }.with_indifferent_access.freeze,

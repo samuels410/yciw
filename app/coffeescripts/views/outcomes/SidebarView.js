@@ -16,7 +16,7 @@
 // with this program. If not, see <http://www.gnu.org/licenses/>.
 //
 
-import I18n from 'i18n!outcomes'
+import I18n from 'i18n!outcomesSidebarView'
 import $ from 'jquery'
 import _ from 'underscore'
 import Backbone from 'Backbone'
@@ -33,7 +33,7 @@ export default class SidebarView extends Backbone.View {
       // Hack: trick Babel/TypeScript into allowing this before super.
       if (false) { super(); }
       let thisFn = (() => { return this; }).toString();
-      let thisName = thisFn.slice(thisFn.indexOf('return') + 6 + 1, thisFn.lastIndexOf(';')).trim();
+      let thisName = thisFn.match(/_this\d*/)[0];
       eval(`${thisName} = this;`);
     }
     this.resetSidebar = this.resetSidebar.bind(this)

@@ -28,6 +28,7 @@ QUnit.module('SubmissionStatus - Pills', function(hooks) {
     props = {
       assignment: {
         muted: false,
+        postManually: false,
         published: true
       },
       isConcluded: false,
@@ -35,12 +36,15 @@ QUnit.module('SubmissionStatus - Pills', function(hooks) {
       isInClosedGradingPeriod: false,
       isInNoGradingPeriod: false,
       isNotCountedForScore: false,
+      postPoliciesEnabled: false,
       submission: {
+        assignmentId: '1',
         excused: false,
         late: false,
         missing: false,
+        postedAt: null,
         secondsLate: 0,
-        assignmentId: '1'
+        workflowState: 'unsubmitted'
       }
     }
   })
@@ -53,7 +57,7 @@ QUnit.module('SubmissionStatus - Pills', function(hooks) {
     return shallow(<SubmissionStatus {...props} />)
   }
 
-  test('shows the "Muted" pill when the assignment is muted', function() {
+  test('shows the "Muted" pill when the assignment is muted and not postPoliciesEnabled', function() {
     props.assignment.muted = true
     wrapper = mountComponent()
     const mutedPills = wrapper
@@ -140,6 +144,58 @@ QUnit.module('SubmissionStatus - Pills', function(hooks) {
 
     strictEqual(pills.length, 0)
   })
+
+  QUnit.module('Post Policies enabled', postPoliciesEnabledHooks => {
+    function getHiddenPills() {
+      return wrapper
+        .find('Pill')
+        .getElements()
+        .filter(node => node.props.text === 'Hidden')
+    }
+
+    postPoliciesEnabledHooks.beforeEach(() => {
+      props.postPoliciesEnabled = true
+    })
+
+    test('does not show the "Muted" pill when the assignment is muted', function() {
+      props.assignment.muted = true
+      wrapper = mountComponent()
+      const mutedPills = wrapper
+        .find('Pill')
+        .getElements()
+        .filter(node => node.props.text === 'Muted')
+
+      strictEqual(mutedPills.length, 0)
+    })
+
+    test('shows the "Hidden" pill when the submission is graded and not posted', function() {
+      props.submission.score = 1
+      props.submission.workflowState = 'graded'
+      wrapper = mountComponent()
+      const hiddenPills = getHiddenPills()
+      strictEqual(hiddenPills.length, 1)
+    })
+
+    test('does not show the "Hidden" pill when the submission is not graded', function() {
+      props.submission.workflowState = 'unsubmitted'
+      wrapper = mountComponent()
+      const hiddenPills = getHiddenPills()
+      strictEqual(hiddenPills.length, 0)
+    })
+
+    test('does not show the "Hidden" pill when the submission is posted', function() {
+      props.submission.postedAt = new Date()
+      wrapper = mountComponent()
+      const hiddenPills = getHiddenPills()
+      strictEqual(hiddenPills.length, 0)
+    })
+
+    test('does not show the "Hidden" pill when the submission is not graded nor posted', function() {
+      wrapper = mountComponent()
+      const hiddenPills = getHiddenPills()
+      strictEqual(hiddenPills.length, 0)
+    })
+  })
 })
 
 QUnit.module('SubmissionStatus - Grading Period not in any grading period warning', hooks => {
@@ -151,6 +207,7 @@ QUnit.module('SubmissionStatus - Grading Period not in any grading period warnin
     props = {
       assignment: {
         muted: false,
+        postManually: false,
         published: true
       },
       isConcluded: false,
@@ -158,12 +215,14 @@ QUnit.module('SubmissionStatus - Grading Period not in any grading period warnin
       isInClosedGradingPeriod: false,
       isInNoGradingPeriod: false,
       isNotCountedForScore: false,
+      postPoliciesEnabled: false,
       submission: {
         excused: false,
         late: false,
         missing: false,
         secondsLate: 0,
-        assignmentId: '1'
+        assignmentId: '1',
+        workflowState: 'unsubmitted'
       }
     }
   })
@@ -208,6 +267,7 @@ QUnit.module('SubmissionStatus - Grading Period is a closed warning', hooks => {
     props = {
       assignment: {
         muted: false,
+        postManually: false,
         published: true
       },
       isConcluded: false,
@@ -215,12 +275,14 @@ QUnit.module('SubmissionStatus - Grading Period is a closed warning', hooks => {
       isInClosedGradingPeriod: false,
       isInNoGradingPeriod: false,
       isNotCountedForScore: false,
+      postPoliciesEnabled: false,
       submission: {
         excused: false,
         late: false,
         missing: false,
         secondsLate: 0,
-        assignmentId: '1'
+        assignmentId: '1',
+        workflowState: 'unsubmitted'
       }
     }
   })
@@ -265,6 +327,7 @@ QUnit.module('SubmissionStatus - Grading Period is in another period warning', h
     props = {
       assignment: {
         muted: false,
+        postManually: false,
         published: true
       },
       isConcluded: false,
@@ -272,12 +335,14 @@ QUnit.module('SubmissionStatus - Grading Period is in another period warning', h
       isInClosedGradingPeriod: false,
       isInNoGradingPeriod: false,
       isNotCountedForScore: false,
+      postPoliciesEnabled: false,
       submission: {
         excused: false,
         late: false,
         missing: false,
         secondsLate: 0,
-        assignmentId: '1'
+        assignmentId: '1',
+        workflowState: 'unsubmitted'
       }
     }
   })
@@ -322,6 +387,7 @@ QUnit.module('SubmissionStatus - Concluded Enrollment Warning', function(hooks) 
     props = {
       assignment: {
         muted: false,
+        postManually: false,
         published: true
       },
       isConcluded: false,
@@ -329,12 +395,14 @@ QUnit.module('SubmissionStatus - Concluded Enrollment Warning', function(hooks) 
       isInClosedGradingPeriod: false,
       isInNoGradingPeriod: false,
       isNotCountedForScore: false,
+      postPoliciesEnabled: false,
       submission: {
         excused: false,
         late: false,
         missing: false,
         secondsLate: 0,
-        assignmentId: '1'
+        assignmentId: '1',
+        workflowState: 'unsubmitted'
       }
     }
   })
@@ -379,6 +447,7 @@ QUnit.module('SubmissionStatus - Not calculated in final grade', hooks => {
     props = {
       assignment: {
         muted: false,
+        postManually: false,
         published: true
       },
       isConcluded: false,
@@ -386,12 +455,14 @@ QUnit.module('SubmissionStatus - Not calculated in final grade', hooks => {
       isInClosedGradingPeriod: false,
       isInNoGradingPeriod: false,
       isNotCountedForScore: false,
+      postPoliciesEnabled: false,
       submission: {
         excused: false,
         late: false,
         missing: false,
         secondsLate: 0,
-        assignmentId: '1'
+        assignmentId: '1',
+        workflowState: 'unsubmitted'
       }
     }
   })

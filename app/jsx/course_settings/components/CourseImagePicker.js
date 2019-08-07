@@ -21,20 +21,22 @@ import PropTypes from 'prop-types'
 import I18n from 'i18n!course_images'
 import _ from 'underscore'
 import Spinner from '@instructure/ui-elements/lib/components/Spinner'
+import {Tabs} from '@instructure/ui-tabs'
 import UploadArea from './UploadArea'
 import FlickrSearch from '../../shared/FlickrSearch'
+import ImageSearch from '../../shared/ImageSearch'
 
 export default class CourseImagePicker extends React.Component {
   static propTypes = {
     courseId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
     handleFileUpload: PropTypes.func,
-    handleFlickrUrlUpload: PropTypes.func,
+    handleImageSearchUrlUpload: PropTypes.func,
     uploadingImage: PropTypes.bool
   }
 
   static defaultProps = {
     handleFileUpload: () => {},
-    handleFlickrUrlUpload: () => {},
+    handleImageSearchUrlUpload: () => {},
     uploadingImage: false
   }
 
@@ -69,36 +71,54 @@ export default class CourseImagePicker extends React.Component {
 
   render() {
     return (
-      <div
-        className="CourseImagePicker"
-        onDrop={this.onDrop}
-        onDragLeave={this.onDragLeave}
-        onDragOver={this.onDragEnter}
-        onDragEnter={this.onDragEnter}
-      >
-        {this.props.uploadingImage && (
-          <div className="CourseImagePicker__Overlay">
-            <Spinner title="Loading" />
-          </div>
-        )}
-        {this.state.draggingFile && (
-          <div className="DraggingOverlay CourseImagePicker__Overlay">
-            <div className="DraggingOverlay__Content">
-              <div className="DraggingOverlay__Icon">
-                <i className="icon-upload" />
+      <Tabs margin="large auto" size="large">
+        <Tabs.Panel title={I18n.t('Computer')}>
+          <div
+            className="CourseImagePicker"
+            onDrop={this.onDrop}
+            onDragLeave={this.onDragLeave}
+            onDragOver={this.onDragEnter}
+            onDragEnter={this.onDragEnter}
+          >
+            {this.props.uploadingImage && (
+              <div className="CourseImagePicker__Overlay">
+                <Spinner title="Loading" />
               </div>
-              <div className="DraggingOverlay__Instructions">{I18n.t('Drop Image')}</div>
+            )}
+            {this.state.draggingFile && (
+              <div className="DraggingOverlay CourseImagePicker__Overlay">
+                <div className="DraggingOverlay__Content">
+                  <div className="DraggingOverlay__Icon">
+                    <i className="icon-upload" />
+                  </div>
+                  <div className="DraggingOverlay__Instructions">{I18n.t('Drop Image')}</div>
+                </div>
+              </div>
+            )}
+            <div className="CourseImagePicker__Content">
+              <UploadArea
+                courseId={this.props.courseId}
+                handleFileUpload={this.props.handleFileUpload}
+              />
             </div>
           </div>
+        </Tabs.Panel>
+        {ENV.use_unsplash_image_search ? (
+          <Tabs.Panel title={I18n.t('Unsplash')}>
+            <ImageSearch
+              selectImage={(imageUrl, confirmationId) =>
+                this.props.handleImageSearchUrlUpload(imageUrl, confirmationId)
+              }
+            />
+          </Tabs.Panel>
+        ) : (
+          <Tabs.Panel title={I18n.t('Flickr')}>
+            <FlickrSearch
+              selectImage={imageUrl => this.props.handleImageSearchUrlUpload(imageUrl)}
+            />
+          </Tabs.Panel>
         )}
-        <div className="CourseImagePicker__Content">
-          <UploadArea
-            courseId={this.props.courseId}
-            handleFileUpload={this.props.handleFileUpload}
-          />
-          <FlickrSearch selectImage={flickrUrl => this.props.handleFlickrUrlUpload(flickrUrl)} />
-        </div>
-      </div>
+      </Tabs>
     )
   }
 }

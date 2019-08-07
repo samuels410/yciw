@@ -21,7 +21,8 @@ import {bool, number, shape, string, arrayOf} from 'prop-types'
 export function GetAssignmentEnvVariables() {
   const defaults = {
     assignmentUrl: '',
-    currentUserId: null,
+    courseId: null,
+    currentUser: null,
     modulePrereq: null,
     moduleUrl: ''
   }
@@ -34,7 +35,8 @@ export function GetAssignmentEnvVariables() {
   }`
   defaults.assignmentUrl = `${baseUrl}/assignments`
   defaults.moduleUrl = `${baseUrl}/modules`
-  defaults.currentUserId = ENV.current_user_id
+  defaults.currentUser = ENV.current_user
+  defaults.courseId = ENV.context_asset_string.split('_')[1]
 
   if (ENV.PREREQS.items && ENV.PREREQS.items.length !== 0 && ENV.PREREQS.items[0].prev) {
     const prereq = ENV.PREREQS.items[0].prev
@@ -50,10 +52,126 @@ export function GetAssignmentEnvVariables() {
   return {...defaults}
 }
 
-export const STUDENT_VIEW_QUERY = gql`
-  query GetAssignment($assignmentLid: ID!) {
+function errorFields() {
+  return `
+    attribute
+    message
+  `
+}
+
+function attachmentFields() {
+  return `
+    _id
+    displayName
+    id
+    mimeClass
+    thumbnailUrl
+    url
+  `
+}
+
+function attachmentFieldsWithPreviewURL() {
+  return `
+    ${attachmentFields()}
+    submissionPreviewUrl(submissionId: $submissionID)
+  `
+}
+
+function submissionDraftFields() {
+  return `
+    _id
+    attachments {
+      ${attachmentFields()}
+    }
+  `
+}
+
+function baseSubmissionFields() {
+  return `
+    attachments {
+      ${attachmentFieldsWithPreviewURL()}
+    }
+    attempt
+    deductedPoints
+    enteredGrade
+    grade
+    gradingStatus
+    latePolicyStatus
+    state
+    submissionStatus
+    submittedAt
+    submissionDraft {
+      ${submissionDraftFields()}
+    }
+  `
+}
+
+function submissionFields() {
+  return `
+    id
+    ${baseSubmissionFields()}
+  `
+}
+
+function submissionHistoryFields() {
+  return `
+    pageInfo {
+      hasPreviousPage
+      startCursor
+    }
+    nodes {
+      ${baseSubmissionFields()}
+    }
+  `
+}
+
+function submissionCommentQueryParams() {
+  return `
+    _id
+    comment
+    updatedAt
+    mediaObject {
+      id
+      title
+      mediaType
+      mediaSources {
+        src: url
+        type: contentType
+        height
+        width
+      }
+    }
+    author {
+      avatarUrl
+      shortName
+    }
+    attachments {
+      ${attachmentFields()}
+    }`
+}
+
+export const SUBMISSION_ID_QUERY = gql`
+  query GetAssignmentSubmissionID($assignmentLid: ID!) {
     assignment: legacyNode(type: Assignment, _id: $assignmentLid) {
       ... on Assignment {
+        submissionsConnection(
+          last: 1
+          filter: {states: [unsubmitted, graded, pending_review, submitted]}
+        ) {
+          nodes {
+            id
+          }
+        }
+      }
+    }
+  }
+`
+
+export const STUDENT_VIEW_QUERY = gql`
+  query GetAssignment($assignmentLid: ID!, $submissionID: ID!) {
+    assignment: legacyNode(type: Assignment, _id: $assignmentLid) {
+      ... on Assignment {
+        _id
         description
         dueAt
         lockAt
@@ -63,6 +181,7 @@ export const STUDENT_VIEW_QUERY = gql`
         unlockAt
         gradingType
         allowedAttempts
+        allowedExtensions
         assignmentGroup {
           name
         }
@@ -78,13 +197,7 @@ export const STUDENT_VIEW_QUERY = gql`
           filter: {states: [unsubmitted, graded, pending_review, submitted]}
         ) {
           nodes {
-            id
-            deductedPoints
-            enteredGrade
-            grade
-            gradingStatus
-            latePolicyStatus
-            submissionStatus
+            ${submissionFields()}
           }
         }
       }
@@ -93,34 +206,71 @@ export const STUDENT_VIEW_QUERY = gql`
 `
 
 export const SUBMISSION_COMMENT_QUERY = gql`
-  query GetSubmissionComments($submissionId: ID!) {
+  query GetSubmissionComments($submissionId: ID!, $submissionAttempt: Int!) {
     submissionComments: node(id: $submissionId) {
       ... on Submission {
-        commentsConnection {
+        commentsConnection(filter: {forAttempt: $submissionAttempt}) {
           nodes {
-            _id
-            comment
-            updatedAt
-            mediaObject {
-              id
-              title
-              mediaType
-              mediaSources {
-                src: url
-                type: contentType
-              }
-            }
-            author {
-              avatarUrl
-              shortName
-            }
-            attachments {
-              _id
-              displayName
-              mimeClass
-              url
-            }
+            ${submissionCommentQueryParams()}
           }
+        }
+      }
+    }
+  }
+`
+
+export const CREATE_SUBMISSION_COMMENT = gql`
+  mutation CreateSubmissionComment(
+    $id: ID!,
+    $submissionAttempt: Int!,
+    $comment: String!,
+    $fileIds: [ID!]
+  ) {
+    createSubmissionComment(input: {
+      submissionId: $id,
+      attempt: $submissionAttempt,
+      comment: $comment,
+      fileIds: $fileIds
+    }) {
+      submissionComment {
+        ${submissionCommentQueryParams()}
+      }
+    }
+  }
+`
+
+export const CREATE_SUBMISSION = gql`
+  mutation CreateSubmission($assignmentLid: ID!, $submissionID: ID!, $type: OnlineSubmissionType!, $fileIds: [ID!]) {
+    createSubmission(input: {assignmentId: $assignmentLid, submissionType: $type, fileIds: $fileIds}) {
+      submission {
+        ${submissionFields()}
+      }
+      errors {
+        ${errorFields()}
+      }
+    }
+  }
+`
+
+export const CREATE_SUBMISSION_DRAFT = gql`
+  mutation CreateSubmissionDraft($id: ID!, $attempt: Int!, $fileIds: [ID!]) {
+    createSubmissionDraft(input: {submissionId: $id, attempt: $attempt, fileIds: $fileIds}) {
+      submissionDraft {
+        ${submissionDraftFields()}
+      }
+      errors {
+        ${errorFields()}
+      }
+    }
+  }
+`
+
+export const SUBMISSION_HISTORIES_QUERY = gql`
+  query NextSubmission($submissionID: ID!, $cursor: String) {
+    node(id: $submissionID) {
+      ... on Submission {
+        submissionHistoriesConnection(before: $cursor, last: 5, filter: {includeCurrentSubmission: false}) {
+          ${submissionHistoryFields()}
         }
       }
     }
@@ -130,8 +280,26 @@ export const SUBMISSION_COMMENT_QUERY = gql`
 export const AttachmentShape = shape({
   _id: string,
   displayName: string,
+  id: string,
   mimeClass: string,
+  submissionPreviewUrl: string,
+  thumbnailUrl: string,
   url: string
+})
+
+export const SubmissionDraftShape = shape({
+  _id: string,
+  attachments: arrayOf(AttachmentShape)
+})
+
+export const MediaObjectShape = shape({
+  id: string,
+  title: string,
+  mediaType: string,
+  mediaSources: shape({
+    src: string,
+    type: string
+  })
 })
 
 export const CommentShape = shape({
@@ -146,17 +314,8 @@ export const CommentShape = shape({
   updatedAt: string
 })
 
-export const MediaObjectShape = shape({
-  id: string,
-  title: string,
-  mediaType: string,
-  mediaSources: shape({
-    src: string,
-    type: string
-  })
-})
-
-export const StudentAssignmentShape = shape({
+export const AssignmentShape = shape({
+  _id: string,
   description: string,
   dueAt: string,
   lockAt: string,
@@ -166,13 +325,18 @@ export const StudentAssignmentShape = shape({
   unlockAt: string,
   gradingType: string,
   allowedAttempts: number,
+  allowedExtensions: arrayOf(string),
   assignmentGroup: shape({
-    name: string.isRequired
-  }).isRequired,
+    name: string
+  }),
   env: shape({
     assignmentUrl: string.isRequired,
     moduleUrl: string.isRequired,
-    currentUserId: string,
+    currentUser: shape({
+      display_name: string,
+      avatar_image_url: string,
+      id: string
+    }),
     modulePrereq: shape({
       title: string.isRequired,
       link: string.isRequired
@@ -186,21 +350,37 @@ export const StudentAssignmentShape = shape({
       id: string.isRequired,
       name: string.isRequired
     }).isRequired
-  ).isRequired,
+  ).isRequired
+})
+
+export const SubmissionShape = shape({
+  commentsConnection: shape({
+    nodes: arrayOf(CommentShape)
+  }),
+  attempt: number,
+  deductedPoints: number,
+  enteredGrade: string,
+  grade: string,
+  gradingStatus: string,
+  id: string,
+  latePolicyStatus: string,
+  state: string,
+  submissionDraft: SubmissionDraftShape,
+  submissionStatus: string,
+  submittedAt: string
+})
+
+export const InitialQueryShape = shape({
+  ...AssignmentShape.propTypes,
   submissionsConnection: shape({
-    nodes: arrayOf(
-      shape({
-        commentsConnection: shape({
-          nodes: arrayOf(CommentShape)
-        }),
-        id: string,
-        deductedPoints: number,
-        enteredGrade: string,
-        grade: string,
-        gradingStatus: string,
-        latePolicyStatus: string,
-        submissionStatus: string
-      })
-    ).isRequired
+    nodes: arrayOf(SubmissionShape)
+  })
+})
+
+export const SubmissionHistoriesQueryShape = shape({
+  node: shape({
+    submissionHistoriesConnection: shape({
+      nodes: arrayOf(SubmissionShape)
+    })
   })
 })

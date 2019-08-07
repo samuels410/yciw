@@ -879,6 +879,18 @@ describe CoursesController, type: :request do
         expect(new_course).to be_available
       end
 
+      it "doesn't allow creating a published course for unverified users if account requires it" do
+        @account.settings[:require_confirmed_email] = true
+        @account.save!
+
+        json = api_call(:post, @resource_path,
+          @resource_params,
+          { :account_id => @account.id, :offer => true, :course => { :name => 'Test Course' } },
+          {}, {:expected_status => 401}
+        )
+        expect(json["status"]).to eq "unverified"
+      end
+
       it "doesn't offer a course if passed a false 'offer' parameter" do
         json = api_call(:post, @resource_path,
                         @resource_params,
@@ -1124,9 +1136,19 @@ describe CoursesController, type: :request do
       it "should allow updating only the offer parameter" do
         @course.workflow_state = "claimed"
         @course.save!
+
         api_call(:put, @path, @params, {:offer => 1})
+
         @course.reload
         expect(@course.workflow_state).to eq "available"
+      end
+
+      it "doesn't allow creating a published course for unverified users if account requires it" do
+        Account.default.tap{|a| a.settings[:require_confirmed_email] = true; a.save!}
+        @course.update_attribute(:workflow_state, "claimed")
+
+        json = api_call(:put, @path, @params, {:offer => 1}, {}, {:expected_status => 401})
+        expect(json["status"]).to eq "unverified"
       end
 
       it "should be able to update the storage_quota" do
@@ -3568,6 +3590,7 @@ describe CoursesController, type: :request do
           'allow_student_discussion_topics' => true,
           'allow_student_forum_attachments' => false,
           'allow_student_discussion_editing' => true,
+          'filter_speed_grader_by_student_group' => false,
           'grading_standard_enabled' => false,
           'grading_standard_id' => nil,
           'allow_student_organized_groups' => true,
@@ -3586,6 +3609,7 @@ describe CoursesController, type: :request do
 
       it "should update settings" do
         @course.enable_feature!(:new_gradebook)
+        @course.root_account.enable_feature!(:filter_speed_grader_by_student_group)
         @course.enable_feature!(:final_grades_override)
         expect(Auditors::Course).to receive(:record_updated).
           with(anything, anything, anything, source: :api)
@@ -3601,6 +3625,7 @@ describe CoursesController, type: :request do
           :allow_student_forum_attachments => true,
           :allow_student_discussion_editing => false,
           :allow_student_organized_groups => false,
+          :filter_speed_grader_by_student_group => true,
           :hide_distribution_graphs => true,
           :hide_final_grades => true,
           :lock_all_announcements => true,
@@ -3614,6 +3639,7 @@ describe CoursesController, type: :request do
           'allow_student_discussion_topics' => false,
           'allow_student_forum_attachments' => true,
           'allow_student_discussion_editing' => false,
+          'filter_speed_grader_by_student_group' => true,
           'grading_standard_enabled' => false,
           'grading_standard_id' => nil,
           'allow_student_organized_groups' => false,
@@ -3659,6 +3685,7 @@ describe CoursesController, type: :request do
           'allow_student_discussion_topics' => true,
           'allow_student_forum_attachments' => false,
           'allow_student_discussion_editing' => true,
+          'filter_speed_grader_by_student_group' => false,
           'grading_standard_enabled' => false,
           'grading_standard_id' => nil,
           'allow_student_organized_groups' => true,

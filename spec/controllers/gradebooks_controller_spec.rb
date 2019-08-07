@@ -1,4 +1,3 @@
-# encoding: utf-8
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -17,7 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-require File.expand_path(File.dirname(__FILE__) + '/../sharding_spec_helper')
+require_relative '../sharding_spec_helper'
 
 describe GradebooksController do
   before :once do
@@ -194,6 +193,14 @@ describe GradebooksController do
       get :grade_summary, params: { course_id: @course.id, id: @student.id }
       order = assigns[:js_env][:current_assignment_sort_order]
       expect(order).to eq :due_at
+    end
+
+    it "includes the post_policies_enabled in the ENV" do
+      @course.enable_feature!(:new_gradebook)
+      PostPolicy.enable_feature!
+      user_session(@teacher)
+      get :grade_summary, params: { course_id: @course.id, id: @student.id }
+      expect(assigns[:js_env][:post_policies_enabled]).to be true
     end
 
     it "includes the current grading period id in the ENV" do
@@ -795,6 +802,25 @@ describe GradebooksController do
       describe "course_settings" do
         let(:course_settings) { gradebook_options.fetch(:course_settings) }
 
+        describe "filter_speed_grader_by_student_group" do
+          before :once do
+            @course.enable_feature!(:new_gradebook)
+            @course.root_account.enable_feature!(:filter_speed_grader_by_student_group)
+          end
+
+          it "sets filter_speed_grader_by_student_group to true when filter_speed_grader_by_student_group? is true" do
+            @course.update!(filter_speed_grader_by_student_group: true)
+            get :show, params: { course_id: @course.id }
+            expect(course_settings.fetch(:filter_speed_grader_by_student_group)).to be true
+          end
+
+          it "sets filter_speed_grader_by_student_group to false when filter_speed_grader_by_student_group? is false" do
+            @course.update!(filter_speed_grader_by_student_group: false)
+            get :show, params: { course_id: @course.id }
+            expect(course_settings.fetch(:filter_speed_grader_by_student_group)).to be false
+          end
+        end
+
         describe "allow_final_grade_override" do
           before :once do
             @course.enable_feature!(:new_gradebook)
@@ -915,7 +941,7 @@ describe GradebooksController do
 
       it "sets post_policies_enabled to true when Post Policies are enabled" do
         @course.enable_feature!(:new_gradebook)
-        @course.enable_feature!(:post_policies)
+        PostPolicy.enable_feature!
         get :show, params: { course_id: @course.id }
         expect(gradebook_options[:post_policies_enabled]).to be(true)
       end
@@ -936,7 +962,7 @@ describe GradebooksController do
       describe "post_policies_enabled" do
         it "is set to true if New Gradebook is enabled and post policies are enabled" do
           @course.enable_feature!(:new_gradebook)
-          @course.enable_feature!(:post_policies)
+          PostPolicy.enable_feature!
 
           get :show, params: {course_id: @course.id}
           expect(assigns[:js_env][:GRADEBOOK_OPTIONS][:post_policies_enabled]).to be true
@@ -958,16 +984,16 @@ describe GradebooksController do
       describe "post_manually" do
         it "is set to true if post policies are enabled and the course is manually-posted" do
           @course.enable_feature!(:new_gradebook)
-          @course.enable_feature!(:post_policies)
+          PostPolicy.enable_feature!
 
-          @course.post_policies.create!(post_manually: true)
+          @course.default_post_policy.update!(post_manually: true)
           get :show, params: {course_id: @course.id}
           expect(assigns[:js_env][:GRADEBOOK_OPTIONS][:post_manually]).to be true
         end
 
         it "is set to false if post policies are enabled and the course is not manually-posted" do
           @course.enable_feature!(:new_gradebook)
-          @course.enable_feature!(:post_policies)
+          PostPolicy.enable_feature!
 
           get :show, params: {course_id: @course.id}
           expect(assigns[:js_env][:GRADEBOOK_OPTIONS][:post_manually]).to be false
@@ -978,6 +1004,30 @@ describe GradebooksController do
 
           get :show, params: {course_id: @course.id}
           expect(assigns[:js_env][:GRADEBOOK_OPTIONS]).not_to have_key(:post_manually)
+        end
+      end
+
+      describe "student_groups" do
+        let(:category) { @course.group_categories.create!(name: "category") }
+        let(:category2) { @course.group_categories.create!(name: "another category") }
+
+        let(:group_categories_json) { assigns[:js_env][:GRADEBOOK_OPTIONS][:student_groups] }
+
+        before(:each) do
+          category.create_groups(2)
+          category2.create_groups(2)
+        end
+
+        it "includes the student group categories for the course" do
+          get :show, params: {course_id: @course.id}
+          expect(group_categories_json.pluck("id")).to contain_exactly(category.id, category2.id)
+        end
+
+        it "includes the groups within each category" do
+          get :show, params: {course_id: @course.id}
+
+          category2_json = group_categories_json.find { |category_json| category_json["id"] == category2.id }
+          expect(category2_json["groups"].pluck("id")).to match_array(category2.groups.pluck(:id))
         end
       end
 
@@ -1072,6 +1122,26 @@ describe GradebooksController do
             get :show, params: {course_id: @course.id}
             expect(graded_late_submissions_exist).to be false
           end
+        end
+      end
+
+      describe "sections" do
+        before(:each) do
+          @course.course_sections.create!
+          Enrollment.limit_privileges_to_course_section!(@course, @teacher, true)
+        end
+
+        let(:returned_section_ids) { gradebook_options.fetch(:sections).pluck(:id) }
+
+        it "only includes course sections visible to the user when new gradebook is enabled" do
+          @course.enable_feature!(:new_gradebook)
+          get :show, params: {course_id: @course.id}
+          expect(returned_section_ids).to contain_exactly(@course.default_section.id)
+        end
+
+        it "includes all course sections when new gradebook is disabled" do
+          get :show, params: {course_id: @course.id}
+          expect(returned_section_ids).to match_array(@course.course_sections.pluck(:id))
         end
       end
     end
@@ -1226,7 +1296,7 @@ describe GradebooksController do
 
       it "doesn't enable context cards when feature is off" do
         get :show, params: {course_id: @course.id}
-        expect(assigns[:js_env][:STUDENT_CONTEXT_CARDS_ENABLED]).to eq false
+        expect(assigns[:js_env][:STUDENT_CONTEXT_CARDS_ENABLED]).to be_falsey
       end
 
       it "enables context cards when feature is on" do
@@ -2035,6 +2105,16 @@ describe GradebooksController do
         get :speed_grader, params: { course_id: @course, assignment_id: @assignment }
         expect(js_env[:can_view_audit_trail]).to be false
       end
+
+      it 'includes MANAGE_GRADES' do
+        get :speed_grader, params: { course_id: @course, assignment_id: @assignment }
+        expect(js_env.fetch(:MANAGE_GRADES)).to be true
+      end
+
+      it 'includes READ_AS_ADMIN' do
+        get :speed_grader, params: { course_id: @course, assignment_id: @assignment }
+        expect(js_env.fetch(:READ_AS_ADMIN)).to be true
+      end
     end
 
     it 'sets disable_unmute_assignment to false if the assignment is not muted' do
@@ -2103,7 +2183,8 @@ describe GradebooksController do
         before(:each) { @course.enable_feature!(:new_gradebook) }
 
         it "is set to true if the Post Policies feature is enabled" do
-          @course.enable_feature!(:post_policies)
+          @course.enable_feature!(:new_gradebook)
+          PostPolicy.enable_feature!
 
           get "speed_grader", params: {course_id: @course, assignment_id: @assignment}
           expect(assigns[:js_env][:post_policies_enabled]).to be true

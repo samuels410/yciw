@@ -16,16 +16,14 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import I18n from 'i18n!assignments_2_student_header_date_title'
-
-import React from 'react'
-import Heading from '@instructure/ui-elements/lib/components/Heading'
-import Text from '@instructure/ui-elements/lib/components/Text'
-import {bool} from 'prop-types'
-
-import {StudentAssignmentShape} from '../assignmentData'
-import FriendlyDatetime from '../../../shared/FriendlyDatetime'
+import {AssignmentShape} from '../assignmentData'
 import AvailabilityDates from '../../shared/AvailabilityDates'
+import {bool} from 'prop-types'
+import FriendlyDatetime from '../../../shared/FriendlyDatetime'
+import Heading from '@instructure/ui-elements/lib/components/Heading'
+import I18n from 'i18n!assignments_2_student_header_date_title'
+import React from 'react'
+import Text from '@instructure/ui-elements/lib/components/Text'
 import {TruncateText} from '@instructure/ui-elements'
 
 function DateTitle(props) {
@@ -35,7 +33,11 @@ function DateTitle(props) {
     <React.Fragment>
       <Heading margin="0 small 0 0" level="h1" as="h2" data-test-id="title">
         {/* We put 100 here because using auto maxes out at one line and the input for the assignment name never exeeds 100 */}
-        <TruncateText maxLines={isSticky ? 1 : 100} truncate="word" ellipsis="...">
+        <TruncateText
+          maxLines={isSticky ? 1 : 100}
+          truncate={isSticky ? 'character' : 'word'}
+          ellipsis="..."
+        >
           {assignment.name}
         </TruncateText>
       </Heading>
@@ -61,7 +63,7 @@ function DateTitle(props) {
 }
 
 DateTitle.propTypes = {
-  assignment: StudentAssignmentShape,
+  assignment: AssignmentShape,
   isSticky: bool.isRequired
 }
 

@@ -22,8 +22,7 @@ import PropTypes from 'prop-types'
 import DueDateTokenWrapper from '../due_dates/DueDateTokenWrapper'
 import DueDateCalendars from '../due_dates/DueDateCalendars'
 import DueDateRemoveRowLink from '../due_dates/DueDateRemoveRowLink'
-import I18n from 'i18n!assignments'
-import $ from 'jquery'
+import I18n from 'i18n!DueDateRow'
 
 class DueDateRow extends React.Component {
   static propTypes = {

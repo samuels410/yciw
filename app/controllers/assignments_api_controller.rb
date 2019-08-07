@@ -420,7 +420,7 @@
 #           "description" : "(optional, Third Party integration data for assignment)"
 #         },
 #         "muted": {
-#           "description": "whether the assignment is muted",
+#           "description": "For courses using Old Gradebook, indicates whether the assignment is muted. For courses using New Gradebook, true if the assignment has any unposted submissions, otherwise false. To see the posted status of submissions, check the 'posted_attribute' on Submission.",
 #           "type": "boolean"
 #         },
 #         "points_possible": {
@@ -604,6 +604,11 @@
 #           "description": "The number of submission attempts a student can make for this assignment. -1 is considered unlimited.",
 #           "example": 2,
 #           "type": "integer"
+#         },
+#         "post_manually": {
+#           "description": "Whether the assignment has manual posting enabled. Only relevant for courses using New Gradebook.",
+#           "example": true,
+#           "type": "boolean"
 #         }
 #       }
 #     }
@@ -631,6 +636,8 @@ class AssignmentsApiController < ApplicationController
   # @argument assignment_ids[] if set, return only assignments specified
   # @argument order_by [String, "position"|"name"]
   #   Determines the order of the assignments. Defaults to "position".
+  # @argument post_to_sis [Boolean]
+  #   Return only assignments that have post_to_sis set or not set.
   # @returns [Assignment]
   def index
     error_or_array= get_assignments(@current_user)
@@ -720,6 +727,8 @@ class AssignmentsApiController < ApplicationController
         submissions_for_user = scope.with_submissions_for_user(users).flat_map(&:submissions)
         scope = SortsAssignments.bucket_filter(scope, params[:bucket], session, user, @current_user, @context, submissions_for_user)
       end
+
+      scope = scope.where(post_to_sis: value_to_boolean(params[:post_to_sis])) if params[:post_to_sis] && authorized_action(@context, user, :manage_assignments)
 
       if params[:assignment_ids]
         if params[:assignment_ids].length > Api.max_per_page
@@ -963,11 +972,12 @@ class AssignmentsApiController < ApplicationController
   #   The assignment group id to put the assignment in.
   #   Defaults to the top assignment group in the course.
   #
-  # @argument assignment[muted] [Boolean]
+  # @deprecated_argument assignment[muted] [Boolean] NOTICE 2019-07-13 EFFECTIVE 2020-01-18
   #   Whether this assignment is muted.
   #   A muted assignment does not send change notifications
   #   and hides grades from students.
   #   Defaults to false.
+  #   May only be set if the course is using Old Gradebook.
   #
   # @argument assignment[assignment_overrides][] [AssignmentOverride]
   #   List of overrides for the assignment.
@@ -996,6 +1006,34 @@ class AssignmentsApiController < ApplicationController
   #
   # @argument assignment[moderated_grading] [Boolean]
   #   Whether this assignment is moderated.
+  #
+  # @argument assignment[grader_count] [Integer]
+  #  The maximum number of provisional graders who may issue grades for this
+  #  assignment. Only relevant for moderated assignments. Must be a positive
+  #  value, and must be set to 1 if the course has fewer than two active
+  #  instructors. Otherwise, the maximum value is the number of active
+  #  instructors in the course minus one, or 10 if the course has more than 11
+  #  active instructors.
+  #
+  # @argument assignment[final_grader_id] [Integer]
+  #  The user ID of the grader responsible for choosing final grades for this
+  #  assignment. Only relevant for moderated assignments.
+  #
+  # @argument assignment[grader_comments_visible_to_graders] [Boolean]
+  #  Boolean indicating if provisional graders' comments are visible to other
+  #  provisional graders. Only relevant for moderated assignments.
+  #
+  # @argument assignment[graders_anonymous_to_graders] [Boolean]
+  #  Boolean indicating if provisional graders' identities are hidden from
+  #  other provisional graders. Only relevant for moderated assignments.
+  #
+  # @argument assignment[graders_names_visible_to_final_grader] [Boolean]
+  #  Boolean indicating if provisional grader identities are visible to the
+  #  the final grader. Only relevant for moderated assignments.
+  #
+  # @argument assignment[anonymous_grading] [Boolean]
+  #  Boolean indicating if the assignment is graded anonymously. If true,
+  #  graders cannot see student identities.
   #
   # @argument assignment[allowed_attempts] [Integer]
   #   The number of submission attempts allowed for this assignment. Set to -1 for unlimited attempts.
@@ -1123,11 +1161,12 @@ class AssignmentsApiController < ApplicationController
   #   The assignment group id to put the assignment in.
   #   Defaults to the top assignment group in the course.
   #
-  # @argument assignment[muted] [Boolean]
+  # @deprecated_argument assignment[muted] [Boolean] NOTICE 2019-07-13 EFFECTIVE 2020-01-18
   #   Whether this assignment is muted.
   #   A muted assignment does not send change notifications
   #   and hides grades from students.
   #   Defaults to false.
+  #   May only be set if the course is using Old Gradebook.
   #
   # @argument assignment[assignment_overrides][] [AssignmentOverride]
   #   List of overrides for the assignment.
@@ -1155,6 +1194,34 @@ class AssignmentsApiController < ApplicationController
   #
   # @argument assignment[moderated_grading] [Boolean]
   #   Whether this assignment is moderated.
+  #
+  # @argument assignment[grader_count] [Integer]
+  #  The maximum number of provisional graders who may issue grades for this
+  #  assignment. Only relevant for moderated assignments. Must be a positive
+  #  value, and must be set to 1 if the course has fewer than two active
+  #  instructors. Otherwise, the maximum value is the number of active
+  #  instructors in the course minus one, or 10 if the course has more than 11
+  #  active instructors.
+  #
+  # @argument assignment[final_grader_id] [Integer]
+  #  The user ID of the grader responsible for choosing final grades for this
+  #  assignment. Only relevant for moderated assignments.
+  #
+  # @argument assignment[grader_comments_visible_to_graders] [Boolean]
+  #  Boolean indicating if provisional graders' comments are visible to other
+  #  provisional graders. Only relevant for moderated assignments.
+  #
+  # @argument assignment[graders_anonymous_to_graders] [Boolean]
+  #  Boolean indicating if provisional graders' identities are hidden from
+  #  other provisional graders. Only relevant for moderated assignments.
+  #
+  # @argument assignment[graders_names_visible_to_final_grader] [Boolean]
+  #  Boolean indicating if provisional grader identities are visible to the
+  #  the final grader. Only relevant for moderated assignments.
+  #
+  # @argument assignment[anonymous_grading] [Boolean]
+  #  Boolean indicating if the assignment is graded anonymously. If true,
+  #  graders cannot see student identities.
   #
   # @argument assignment[allowed_attempts] [Integer]
   #   The number of submission attempts allowed for this assignment. Set to -1 or null for

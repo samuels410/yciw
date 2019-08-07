@@ -527,6 +527,19 @@ module Lti
       it "should return previous lti context_ids" do
         expect(subject.recursively_fetch_previous_lti_context_ids.split(",")).to match_array %w{abc def ghi}
       end
+
+      it "should invalidate cache on last copied migration" do
+        enable_cache do
+          expect(subject.recursively_fetch_previous_lti_context_ids.split(",")).to match_array %w{abc def ghi}
+          @c4 = Course.create!(:root_account => root_account, :account => account, :lti_context_id => 'jkl')
+          @c1.content_migrations.create!(:workflow_state => 'imported', :source_course => @c4)
+          expect(subject.recursively_fetch_previous_lti_context_ids.split(",")).to match_array %w{abc def ghi} # not copied into subject course yet
+
+          @c5 = Course.create!(:root_account => root_account, :account => account, :lti_context_id => 'mno')
+          course.content_migrations.create!(:workflow_state => 'imported', :source_course => @c5) # direct copy
+          expect(subject.recursively_fetch_previous_lti_context_ids.split(",")).to match_array %w{abc def ghi jkl mno}
+        end
+      end
     end
 
     describe "section substitutions" do
@@ -541,12 +554,22 @@ module Lti
         # course.reload
 
         user.save!
-        multiple_student_enrollment(user, @sec1, course: course)
-        multiple_student_enrollment(user, @sec2, course: course)
+        @e1 = multiple_student_enrollment(user, @sec1, course: course)
+        @e2 = multiple_student_enrollment(user, @sec2, course: course)
       end
 
       it "should return all canvas section ids" do
         expect(subject.section_ids).to eq [@sec1.id, @sec2.id].sort.join(',')
+      end
+
+      it "should return section restricted if all enrollments are restricted" do
+        [@e1, @e2].each{|e| e.update_attribute(:limit_privileges_to_course_section, true)}
+        expect(subject.section_restricted).to eq true
+      end
+
+      it "should not return section restricted if only one is" do
+        @e1.update_attribute(:limit_privileges_to_course_section, true)
+        expect(subject.section_restricted).to eq false
       end
 
       it "should return all canvas section sis ids" do
@@ -555,7 +578,7 @@ module Lti
     end
 
     context "email" do
-      let(:course) { Course.create!(root_account: root_account, account: account) }
+      let(:course) { Course.create!(root_account: root_account, account: account, workflow_state: 'available') }
 
       let(:tool) do
         ContextExternalTool.create!(
@@ -600,6 +623,31 @@ module Lti
           sub_helper = SubstitutionsHelper.new(course, root_account, user, tool)
           sis_pseudonym
           expect(sub_helper.email).to eq sis_email
+        end
+
+        it "returns the email for the courses enrollment if there is one." do
+          tool = class_double("Lti::ToolProxy")
+          p = sis_pseudonym
+          # moving account so that if the pseudonym was not tied to enrollment
+          # it would return 'test@foo.com' instead of sis_email
+          p.account = Account.create!
+          p.save!
+          course.enroll_user(user, 'StudentEnrollment', {sis_pseudonym_id: p.id, enrollment_state: 'active'})
+          sub_helper = SubstitutionsHelper.new(course, root_account, user, tool)
+          expect(sub_helper.email).to eq sis_email
+        end
+
+        it "only returns active logins" do
+          tool = class_double("Lti::ToolProxy")
+          p = sis_pseudonym
+          # moving account so that if the pseudonym was not tied to enrollment
+          # it would return 'test@foo.com' instead of sis_email if it was active
+          p.account = Account.create!
+          p.workflow_state = 'deleted'
+          p.save!
+          course.enroll_user(user, 'StudentEnrollment', {sis_pseudonym_id: p.id, enrollment_state: 'active'})
+          sub_helper = SubstitutionsHelper.new(course, root_account, user, tool)
+          expect(sub_helper.email).to eq 'test@foo.com'
         end
 
         context "prefer_sis_email" do

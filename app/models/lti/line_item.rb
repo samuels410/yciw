@@ -17,6 +17,8 @@
 #
 
 class Lti::LineItem < ApplicationRecord
+  include Canvas::SoftDeletable
+
   validates :score_maximum, :label, :assignment, presence: true
   validates :score_maximum, numericality: true
   validates :client_id, presence: true
@@ -37,6 +39,10 @@ class Lti::LineItem < ApplicationRecord
            foreign_key: :lti_line_item_id,
            dependent: :destroy
 
+  before_destroy :destroy_resource_link, if: :assignment_line_item? # assignment will destroy all the other line_items of a resourceLink
+
+  AGS_EXT_SUBMISSION_TYPE = 'https://canvas.instructure.com/lti/submission_type'.freeze
+
   def assignment_line_item?
     return true if resource_link.blank?
     resource_link.line_items.order(:created_at).first.id == self.id
@@ -44,17 +50,40 @@ class Lti::LineItem < ApplicationRecord
 
   def self.create_line_item!(assignment, context, tool, params)
     self.transaction do
-      a = assignment.presence || Assignment.create!(
+      assignment_attr = {
         context: context,
         name: params[:label],
         points_possible: params[:score_maximum],
         submission_types: 'none'
-      )
+      }
+
+      submission_type = params[AGS_EXT_SUBMISSION_TYPE]
+      unless submission_type.nil?
+        if Assignment::OFFLINE_SUBMISSION_TYPES.include?(submission_type[:type].to_sym)
+          assignment_attr[:submission_types] = submission_type[:type]
+          assignment_attr[:external_tool_tag_attributes] = {
+            url: submission_type[:external_tool_url]
+          }
+
+          params = extract_extensions(params)
+        else
+          raise ActionController::BadRequest, "Invalid submission_type for new assignment: #{submission_type[:type]}"
+        end
+      end
+
+      a = assignment.presence || Assignment.create!(assignment_attr)
       opts = {assignment: a}.merge(params)
       opts[:client_id] = tool.developer_key.global_id
       self.create!(opts)
     end
   end
+
+  def self.extract_extensions(params)
+    hsh = params.to_unsafe_h
+    hsh[:extensions] = { AGS_EXT_SUBMISSION_TYPE => hsh.delete(AGS_EXT_SUBMISSION_TYPE) }
+    hsh
+  end
+  private_class_method :extract_extensions
 
   private
 
@@ -68,11 +97,16 @@ class Lti::LineItem < ApplicationRecord
 
   def set_client_id_if_possible
     return if client_id.present?
-    self.client_id = resource_link.context_external_tool.developer_key&.global_id unless lti_resource_link_id.blank?
+    self.client_id = resource_link.current_external_tool(assignment.context)&.developer_key&.global_id unless lti_resource_link_id.blank?
     self.client_id ||= assignment&.external_tool_tag&.content&.developer_key&.global_id
   end
 
   def client_id_is_global?
-    self.client_id > Shard::IDS_PER_SHARD
+    client_id.present? && client_id > Shard::IDS_PER_SHARD
+  end
+
+  # this is to prevent orphaned (ie undeleted state) line_items when an assignment is destroyed
+  def destroy_resource_link
+    self.resource_link&.destroy
   end
 end

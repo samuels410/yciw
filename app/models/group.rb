@@ -26,6 +26,8 @@ class Group < ActiveRecord::Base
   validates :context_id, :context_type, :account_id, :root_account_id, :workflow_state, :uuid, presence: true
   validates_allowed_transitions :is_public, false => true
 
+  validates :sis_source_id, uniqueness: {scope: :root_account}, allow_nil: true
+
   # use to skip queries in can_participate?, called by policy block
   attr_accessor :can_participate
 
@@ -360,6 +362,7 @@ class Group < ActiveRecord::Base
     new_group_memberships = all_group_memberships - old_group_memberships
     new_group_memberships.sort_by!(&:user_id)
     users.sort_by!(&:id)
+    User.clear_cache_keys(user_ids, :groups)
     users.each {|user| clear_permissions_cache(user) }
 
     if self.context_available?

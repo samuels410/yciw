@@ -26,9 +26,10 @@ describe Mutations::PostAssignmentGradesForSections do
   let(:section2) { course.course_sections.create! }
   let(:teacher) { course.enroll_user(User.create!, "TeacherEnrollment", enrollment_state: "active").user }
 
-  def mutation_str(assignment_id: nil, section_ids: nil)
+  def mutation_str(assignment_id: nil, section_ids: nil, graded_only: nil)
     input_string = assignment_id ? "assignmentId: #{assignment_id}" : ""
-    input_string += " sectionIds: #{section_ids}" unless section_ids.nil?
+    input_string += ", sectionIds: #{section_ids}" unless section_ids.nil?
+    input_string += ", gradedOnly: #{graded_only}" unless graded_only.nil?
 
     <<~GQL
       mutation {
@@ -58,7 +59,8 @@ describe Mutations::PostAssignmentGradesForSections do
   end
 
   before(:each) do
-    course.enable_feature!(:post_policies)
+    course.enable_feature!(:new_gradebook)
+    PostPolicy.enable_feature!
     @section1_student = section1.enroll_user(User.create!, "StudentEnrollment", "active").user
     @section2_student = section2.enroll_user(User.create!, "StudentEnrollment", "active").user
   end
@@ -67,7 +69,7 @@ describe Mutations::PostAssignmentGradesForSections do
     let(:context) { { current_user: teacher } }
 
     it "requires that the PostPolicy feature be enabled" do
-      course.disable_feature!(:post_policies)
+      PostPolicy.disable_feature!
       result = execute_query(mutation_str(assignment_id: assignment.id, section_ids: [section1.id]), context)
       expect(result.dig("errors", 0, "message")).to eql "Post Policies feature not enabled"
     end
@@ -126,6 +128,7 @@ describe Mutations::PostAssignmentGradesForSections do
     end
 
     describe "posting the grades" do
+      let(:post_submissions_job) { Delayed::Job.where(tag:"Assignment#post_submissions").order(:id).last }
       let(:section1_student_submission) { assignment.submissions.find_by(user: @section1_student) }
       let(:section2_student_submission) { assignment.submissions.find_by(user: @section2_student) }
 
@@ -143,8 +146,29 @@ describe Mutations::PostAssignmentGradesForSections do
 
       it "returns the progress" do
         result = execute_query(mutation_str(assignment_id: assignment.id, section_ids: [section2.id]), context)
-        progress = Progress.where(tag: "post_assignment_grades_for_sections").order(:id).last
+        progress = Progress.find(result.dig("data", "postAssignmentGradesForSections", "progress", "_id"))
         expect(result.dig("data", "postAssignmentGradesForSections", "progress", "_id").to_i).to be progress.id
+      end
+
+      it "stores the assignment id of submissions hidden on the Progress object" do
+        result = execute_query(mutation_str(assignment_id: assignment.id, section_ids: [section1.id]), context)
+        post_submissions_job.invoke_job
+        progress = Progress.find(result.dig("data", "postAssignmentGradesForSections", "progress", "_id"))
+        expect(progress.results[:assignment_id]).to eq assignment.id
+      end
+
+      it "stores the posted_at of submissions hidden on the Progress object" do
+        result = execute_query(mutation_str(assignment_id: assignment.id, section_ids: [section1.id]), context)
+        post_submissions_job.invoke_job
+        progress = Progress.find(result.dig("data", "postAssignmentGradesForSections", "progress", "_id"))
+        expect(progress.results[:posted_at]).to eq section1_student_submission.reload.posted_at
+      end
+
+      it "stores the user ids of submissions hidden on the Progress object" do
+        result = execute_query(mutation_str(assignment_id: assignment.id, section_ids: [section1.id]), context)
+        post_submissions_job.invoke_job
+        progress = Progress.find(result.dig("data", "postAssignmentGradesForSections", "progress", "_id"))
+        expect(progress.results[:user_ids]).to match_array [@section1_student.id]
       end
 
       it "returns the sections" do
@@ -157,6 +181,68 @@ describe Mutations::PostAssignmentGradesForSections do
       it "does not post the assignment grades for the sections not specified" do
         execute_query(mutation_str(assignment_id: assignment.id, section_ids: [section2.id]), context)
         expect(section1_student_submission).not_to be_posted
+      end
+
+      context "when the poster has limited visibility" do
+        let(:ta) { User.create! }
+
+        before(:each) do
+          course.enroll_ta(ta, enrollment_state: "active", section: section1, limit_privileges_to_course_section: true)
+        end
+
+        it "does not post grades for the requested sections if the user cannot see them" do
+          execute_query(mutation_str(assignment_id: assignment.id, section_ids: [section1.id, section2.id]), {current_user: ta})
+          post_submissions_job.invoke_job
+          expect(assignment.submission_for_student(@section2_student).posted_at).to be nil
+        end
+
+        it "stores only the user ids of affected students on the Progress object" do
+          result = execute_query(mutation_str(assignment_id: assignment.id, section_ids: [section1.id, section2.id]), {current_user: ta})
+          post_submissions_job.invoke_job
+          progress = Progress.find(result.dig("data", "postAssignmentGradesForSections", "progress", "_id"))
+          expect(progress.results[:user_ids]).to match_array [@section1_student.id]
+        end
+      end
+    end
+
+    describe "graded_only" do
+      let(:section1_user_ids) { section1.enrollments.pluck(:user_id) }
+      let(:section1_submissions) { assignment.submissions.where(user_id: section1_user_ids) }
+
+      before(:each) do
+        section1_student2 = User.create!
+        section1.enroll_user(section1_student2, "StudentEnrollment", "active")
+        @student1_submission = assignment.submissions.find_by(user: @section1_student)
+        @student2_submission = assignment.submissions.find_by(user: section1_student2)
+        assignment.grade_student(@section1_student, grader: teacher, score: 100)
+      end
+
+      it "posts the graded submissions if graded_only is true" do
+        execute_query(mutation_str(assignment_id: assignment.id, section_ids:[section1.id], graded_only: true), context)
+        post_submissions_job = Delayed::Job.where(tag: "Assignment#post_submissions").order(:id).last
+        post_submissions_job.invoke_job
+        expect(@student1_submission.reload).to be_posted
+      end
+
+      it "does not post the ungraded submissions if graded_only is true" do
+        execute_query(mutation_str(assignment_id: assignment.id, section_ids:[section1.id], graded_only: true), context)
+        post_submissions_job = Delayed::Job.where(tag: "Assignment#post_submissions").order(:id).last
+        post_submissions_job.invoke_job
+        expect(@student2_submission.reload).not_to be_posted
+      end
+
+      it "posts all the submissions if graded_only is false" do
+        execute_query(mutation_str(assignment_id: assignment.id, section_ids:[section1.id], graded_only: false), context)
+        post_submissions_job = Delayed::Job.where(tag: "Assignment#post_submissions").order(:id).last
+        post_submissions_job.invoke_job
+        expect(section1_submissions).to all(be_posted)
+      end
+
+      it "posts all the sections' submissions if graded_only is not present" do
+        execute_query(mutation_str(assignment_id: assignment.id, section_ids:[section1.id]), context)
+        post_submissions_job = Delayed::Job.where(tag: "Assignment#post_submissions").order(:id).last
+        post_submissions_job.invoke_job
+        expect(section1_submissions).to all(be_posted)
       end
     end
   end

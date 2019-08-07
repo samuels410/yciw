@@ -40,7 +40,13 @@ const publishCourse = () => {
     course: {event: 'offer'}
   }).then(() => {
     window.location.reload()
-  })
+  }).catch((e) => {
+    if (e.response.status == 401 && e.response.data.status == 'unverified') {
+      $.flashWarning(I18n.t('Complete registration by clicking the “finish the registration process” link sent to your email.'))
+    } else {
+      $.flashError(I18n.t('An error ocurred while publishing course'))
+    }
+  });
 }
 
 
@@ -151,7 +157,7 @@ const addToDoSidebar = (parent) => {
   renderToDoSidebar(parent)
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+$(() => {
   const todo_container = document.querySelector('.todo-list')
   if (todo_container) {
     addToDoSidebar(todo_container)

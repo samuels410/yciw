@@ -74,6 +74,16 @@ describe "/gradebooks/speed_grader" do
     expect(rendered).to include '<span id="speed_grader_settings_mount_point"></span>'
   end
 
+  it "includes a mount point for hide assignment grades tray" do
+    render template: 'gradebooks/speed_grader', locals: locals
+    expect(rendered).to include '<div id="hide-assignment-grades-tray"></div>'
+  end
+
+  it "includes a mount point for post assignment grades tray" do
+    render template: 'gradebooks/speed_grader', locals: locals
+    expect(rendered).to include '<div id="post-assignment-grades-tray"></div>'
+  end
+
   it "includes a link back to the gradebook (gradebook by default)" do
     render template: 'gradebooks/speed_grader', locals: locals
     expect(rendered).to include "a href=\"http://test.host/courses/#{@course.id}/gradebook\""
@@ -225,6 +235,20 @@ describe "/gradebooks/speed_grader" do
     it "is rendered when anonymous grading is not enabled" do
       @assignment.update!(anonymous_grading: false)
       expect(html.at_css("#hide_student_names")).to be_present
+    end
+  end
+
+  describe "hidden submission pill" do
+    it "is included when post policies are enabled" do
+      render template: 'gradebooks/speed_grader', locals: locals
+      html = Nokogiri::HTML.fragment(response.body)
+      expect(html.at_css("#speed_grader_hidden_submission_pill_mount_point")).to be_present
+    end
+
+    it "is not included when post policies are not enabled" do
+      render template: 'gradebooks/speed_grader', locals: locals.merge({post_policies_enabled: false})
+      html = Nokogiri::HTML.fragment(response.body)
+      expect(html.at_css("#speed_grader_hidden_submission_pill_mount_point")).not_to be_present
     end
   end
 end

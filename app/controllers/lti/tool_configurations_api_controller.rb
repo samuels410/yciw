@@ -38,9 +38,11 @@
 class Lti::ToolConfigurationsApiController < ApplicationController
   include Api::V1::ExternalTools
 
-  before_action :require_context, only: [:create]
+  before_action :require_context, only: [:create, :show]
   before_action :require_user
-  before_action :require_manage_developer_keys
+  before_action :require_manage_developer_keys, except: :show
+  before_action :require_key_in_context, only: :show
+  before_action :require_lti_add_edit, only: :show
   before_action :require_tool_configuration, only: [:show, :update, :destroy]
 
   # @API Create Tool configuration
@@ -64,8 +66,7 @@ class Lti::ToolConfigurationsApiController < ApplicationController
   #   JSON representation of the developer key fields
   #   to use when creating the developer key for the
   #   tool configuraiton. Valid fields are: "name",
-  #   "email", "notes", "test_cluster_only", "scopes",
-  #   "require_scopes".
+  #   "email", "notes", "test_cluster_only", "scopes".
   #
   # @argument disabled_placements [Array]
   #   An array of strings indicating which Canvas
@@ -80,7 +81,7 @@ class Lti::ToolConfigurationsApiController < ApplicationController
   # @returns ToolConfiguration
   def create
     developer_key_redirect_uris
-    tool_config = Lti::ToolConfiguration.create_tool_and_key!(account, tool_configuration_params)
+    tool_config = Lti::ToolConfiguration.create_tool_config_and_key!(account, tool_configuration_params)
     update_developer_key!(tool_config, developer_key_redirect_uris)
     render json: Lti::ToolConfigurationSerializer.new(tool_config)
   end
@@ -104,8 +105,7 @@ class Lti::ToolConfigurationsApiController < ApplicationController
   #   JSON representation of the developer key fields
   #   to use when updating the developer key for the
   #   tool configuraiton. Valid fields are: "name",
-  #   "email", "notes", "test_cluster_only", "scopes",
-  #   "require_scopes".
+  #   "email", "notes", "test_cluster_only", "scopes".
   #
   # @argument disabled_placements [Array]
   #   An array of strings indicating which Canvas
@@ -146,6 +146,14 @@ class Lti::ToolConfigurationsApiController < ApplicationController
 
   private
 
+  def require_key_in_context
+    head :unauthorized unless developer_key.usable_in_context?(@context)
+  end
+
+  def require_lti_add_edit
+    head :unauthorized unless @context.grants_right?(@current_user, :lti_add_edit)
+  end
+
   def manual_custom_fields
     {
       custom_fields: ContextExternalTool.find_custom_fields_from_string(tool_configuration_params[:custom_fields])
@@ -156,7 +164,9 @@ class Lti::ToolConfigurationsApiController < ApplicationController
     developer_key = tool_config.developer_key
     developer_key.redirect_uris = redirect_uris unless redirect_uris.nil?
     developer_key.public_jwk = tool_config.settings['public_jwk']
+    developer_key.public_jwk_url = tool_config.settings['public_jwk_url']
     developer_key.oidc_initiation_url = tool_config.settings['oidc_initiation_url']
+    developer_key.is_lti_key = true
     developer_key.update!(developer_key_params)
   end
 
@@ -186,7 +196,7 @@ class Lti::ToolConfigurationsApiController < ApplicationController
 
   def developer_key_params
     return {} unless params.key? :developer_key
-    params.require(:developer_key).permit(:name, :email, :notes, :redirect_uris, :test_cluster_only, :require_scopes, scopes: [])
+    params.require(:developer_key).permit(:name, :email, :notes, :redirect_uris, :test_cluster_only, scopes: [])
   end
 
   def developer_key_redirect_uris

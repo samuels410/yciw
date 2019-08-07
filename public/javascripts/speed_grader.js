@@ -20,6 +20,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom'
 import Alert from '@instructure/ui-alerts/lib/components/Alert'
+import Button from '@instructure/ui-buttons/lib/components/Button'
 import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
 import TextArea from '@instructure/ui-forms/lib/components/TextArea'
 import OutlierScoreHelper from 'jsx/grading/helpers/OutlierScoreHelper'
@@ -30,9 +31,12 @@ import numberHelper from 'jsx/shared/helpers/numberHelper'
 import GradeFormatHelper from 'jsx/gradebook/shared/helpers/GradeFormatHelper'
 import AssessmentAuditButton from 'jsx/speed_grader/AssessmentAuditTray/components/AssessmentAuditButton'
 import AssessmentAuditTray from 'jsx/speed_grader/AssessmentAuditTray'
+import originalityReportSubmissionKey from 'jsx/gradebook/shared/helpers/originalityReportSubmissionKey'
+import PostPolicies from 'jsx/speed_grader/PostPolicies'
 import SpeedGraderProvisionalGradeSelector from 'jsx/speed_grader/SpeedGraderProvisionalGradeSelector'
 import SpeedGraderPostGradesMenu from 'jsx/speed_grader/SpeedGraderPostGradesMenu'
 import SpeedGraderSettingsMenu from 'jsx/speed_grader/SpeedGraderSettingsMenu'
+import {isHidden} from 'jsx/grading/helpers/SubmissionHelper'
 import studentViewedAtTemplate from 'jst/speed_grader/student_viewed_at'
 import submissionsDropdownTemplate from 'jst/speed_grader/submissions_dropdown'
 import speechRecognitionTemplate from 'jst/speed_grader/speech_recognition'
@@ -41,11 +45,12 @@ import IconUpload from '@instructure/ui-icons/lib/Line/IconUpload'
 import IconWarning from '@instructure/ui-icons/lib/Line/IconWarning'
 import IconCheckMarkIndeterminate from '@instructure/ui-icons/lib/Line/IconCheckMarkIndeterminate'
 import View from '@instructure/ui-layout/lib/components/View'
+import Pill from '@instructure/ui-elements/lib/components/Pill'
 import Text from '@instructure/ui-elements/lib/components/Text'
 import round from 'compiled/util/round'
 import _ from 'underscore'
 import INST from './INST'
-import I18n from 'i18n!gradebook'
+import I18n from 'i18n!speed_grader'
 import natcompare from 'compiled/util/natcompare'
 import $ from 'jquery'
 import qs from 'qs'
@@ -93,6 +98,8 @@ const SPEED_GRADER_SUBMISSION_COMMENTS_DOWNLOAD_MOUNT_POINT =
   'speed_grader_submission_comments_download_mount_point'
 const SPEED_GRADER_POST_GRADES_MENU_MOUNT_POINT = 'speed_grader_post_grades_menu_mount_point'
 const SPEED_GRADER_SETTINGS_MOUNT_POINT = 'speed_grader_settings_mount_point'
+const SPEED_GRADER_HIDDEN_SUBMISSION_PILL_MOUNT_POINT =
+  'speed_grader_hidden_submission_pill_mount_point'
 const ASSESSMENT_AUDIT_BUTTON_MOUNT_POINT = 'speed_grader_assessment_audit_button_mount_point'
 const ASSESSMENT_AUDIT_TRAY_MOUNT_POINT = 'speed_grader_assessment_audit_tray_mount_point'
 
@@ -487,6 +494,29 @@ function initDropdown() {
   }
 }
 
+function setupPostPolicies() {
+  if (!ENV.post_policies_enabled) return
+  const {jsonData} = window
+  const gradesPublished = !jsonData.moderated_grading || jsonData.grades_published_at != null
+
+  EG.postPolicies = new PostPolicies({
+    assignment: {
+      anonymousGrading: jsonData.anonymous_grading,
+      gradesPublished,
+      id: jsonData.id,
+      name: jsonData.title
+    },
+    sections: jsonData.context.active_course_sections,
+    updateSubmission: EG.setOrUpdateSubmission,
+    afterUpdateSubmission() {
+      renderPostGradesMenu()
+      EG.showGrade()
+    }
+  })
+
+  renderPostGradesMenu()
+}
+
 function setupHeader({showMuteButton = true}) {
   const elements = {
     nav: $gradebook_header.find('#prev-student-button, #next-student-button'),
@@ -690,21 +720,47 @@ function unmountCommentTextArea() {
 
 function renderProgressIcon(attachment) {
   const mountPoint = document.getElementById('react_pill_container')
-  let icon = []
-  switch (attachment.upload_status) {
-    case 'pending':
-      icon = [<IconUpload />, I18n.t('Uploading Submission')]
-      break
-    case 'failed':
-      icon = [<IconWarning />, I18n.t('Submission Failed to Submit')]
-      break
-    case 'success':
-      break
-    default:
-      icon = [<IconCheckMarkIndeterminate />, I18n.t('No File Submitted')]
+  const iconAndTipMap = {
+    pending: {
+      icon: <IconUpload />,
+      tip: I18n.t('Uploading Submission')
+    },
+    failed: {
+      icon: <IconWarning />,
+      tip: I18n.t('Submission Failed to Submit')
+    },
+    default: {
+      icon: <IconCheckMarkIndeterminate />,
+      tip: I18n.t('No File Submitted')
+    }
   }
 
-  ReactDOM.render(<Tooltip tip={icon[1]}>{icon[0]}</Tooltip>, mountPoint)
+  if (attachment.upload_status === 'success') {
+    ReactDOM.unmountComponentAtNode(mountPoint)
+  } else {
+    const {icon, tip} = iconAndTipMap[attachment.upload_status] || iconAndTipMap.default
+    const tooltip = (
+      <Tooltip tip={tip} on={['click', 'hover', 'focus']}>
+        <Button variant="icon" icon={icon}>
+          <ScreenReaderContent>toggle tooltip</ScreenReaderContent>
+        </Button>
+      </Tooltip>
+    )
+    ReactDOM.render(tooltip, mountPoint)
+  }
+}
+
+function renderHiddenSubmissionPill(submission) {
+  const mountPoint = document.getElementById(SPEED_GRADER_HIDDEN_SUBMISSION_PILL_MOUNT_POINT)
+
+  if (isHidden(submission)) {
+    ReactDOM.render(
+      <Pill variant="warning" text={I18n.t('Hidden')} margin="0 0 small" />,
+      mountPoint
+    )
+  } else {
+    ReactDOM.unmountComponentAtNode(mountPoint)
+  }
 }
 
 function renderCommentTextArea() {
@@ -776,7 +832,7 @@ function initCommentBox() {
       ),
       mic_blocked: I18n.t(
         'mic_blocked_message',
-        'Permission to use microphone is blocked. To change, go to chrome://settings/contentExceptions#media-stream'
+        'Permission to use microphone is blocked. To change, go to chrome://settings/content/microphone'
       ),
       no_speech: I18n.t(
         'nodetect_message',
@@ -1322,10 +1378,7 @@ EG = {
       initDropdown()
       initGroupAssignmentMode()
       setupHandleStatePopped()
-
-      if (ENV.post_policies_enabled) {
-        renderPostGradesMenu()
-      }
+      setupPostPolicies()
     }
   },
 
@@ -1343,6 +1396,11 @@ EG = {
       initialStudentId = extractStudentIdFromHash(document.location.hash)
     }
     document.location.hash = ''
+
+    const attemptParam = utils.getParam('attempt')
+    if (attemptParam) {
+      EG.initialVersion = parseInt(attemptParam, 10) - 1
+    }
 
     // Check if this student ID "resolves" to a different one (e.g., it's an
     // invalid ID, or is in a group with someone else as a representative).
@@ -1472,23 +1530,12 @@ EG = {
   },
 
   goToStudent(studentIdentifier, historyBehavior = null) {
-    const hideStudentNames = utils.shouldHideStudentNames()
     const student = jsonData.studentMap[studentIdentifier]
 
     if (student) {
       $selectmenu.selectmenu('value', student[anonymizableId])
       if (!this.currentStudent || this.currentStudent[anonymizableId] !== student[anonymizableId]) {
-        handleStudentOrSectionSelected(studentIdentifier, historyBehavior)
-      }
-
-      if (hideStudentNames || isAnonymous || !student.avatar_path) {
-        $avatar_image.hide()
-      } else {
-        // If there's any kind of delay in loading the user's avatar, it's
-        // better to show a blank image than the previous student's image.
-        const $new_image = $avatar_image.clone().show()
-        $avatar_image.after($new_image.attr('src', student.avatar_path)).remove()
-        $avatar_image = $new_image
+        EG.handleStudentChanged(historyBehavior)
       }
     }
   },
@@ -1540,6 +1587,20 @@ EG = {
       $full_width_container.disableWhileLoading(this.fetchProvisionalGrades())
     } else {
       this.showStudent()
+    }
+
+    this.setCurrentStudentAvatar()
+  },
+
+  setCurrentStudentAvatar() {
+    if (utils.shouldHideStudentNames() || isAnonymous || !this.currentStudent.avatar_path) {
+      $avatar_image.hide()
+    } else {
+      // If there's any kind of delay in loading the user's avatar, it's
+      // better to show a blank image than the previous student's image.
+      const $new_image = $avatar_image.clone().show()
+      $avatar_image.after($new_image.attr('src', this.currentStudent.avatar_path)).remove()
+      $avatar_image = $new_image
     }
   },
 
@@ -1760,13 +1821,10 @@ EG = {
       })
 
       const defaultInfoMessage = I18n.t(
-          'turnitin.info_message',
-          'This file is still being processed by the plagiarism detection tool associated with the assignment. Please check back later to see the score.'
-        ),
-        defaultErrorMessage = I18n.t(
-          'turnitin.error_message',
-          'There was an error submitting to the similarity detection service. Please try resubmitting the file before contacting support.'
-        )
+        'turnitin.info_message',
+        'This file is still being processed by the plagiarism detection tool associated with the assignment. Please check back later to see the score.'
+      )
+      const defaultErrorMessage = SpeedgraderHelpers.plagiarismErrorMessage(turnitinAsset)
       const $turnitinInfo = $(
         turnitinInfoTemplate({
           assetString,
@@ -1923,7 +1981,8 @@ EG = {
       submission.turnitin_data && submission.turnitin_data.provider === 'vericite'
 
     SpeedgraderHelpers.plagiarismResubmitButton(
-      submission.has_originality_score,
+      submission.has_originality_score &&
+        Object.values(submission.turnitin_data).every(tiid => tiid.status !== 'error'),
       $('#plagiarism_platform_info_container')
     )
 
@@ -1959,8 +2018,14 @@ EG = {
       var $turnitinScoreContainer = $grade_container.find('.turnitin_score_container').empty(),
         $turnitinInfoContainer = $grade_container.find('.turnitin_info_container').empty(),
         assetString = `submission_${submission.id}`,
+        turnitinAsset = null
+
+      if (turnitinEnabled && submission.turnitin_data) {
         turnitinAsset =
-          turnitinEnabled && submission.turnitin_data && submission.turnitin_data[assetString]
+          submission.turnitin_data[originalityReportSubmissionKey(submission)] ||
+          submission.turnitin_data[assetString]
+      }
+
       // There might be a previous submission that was text_entry, but the
       // current submission is an upload. The turnitin asset for the text
       // entry would still exist
@@ -1975,6 +2040,8 @@ EG = {
         )
       }
     }
+
+    let studentViewedAtHTML = ''
 
     // handle the files
     $submission_files_list.empty()
@@ -2004,13 +2071,11 @@ EG = {
         inlineableAttachments.push(attachment)
       }
 
-      let viewedAtHTML = ''
       if (!jsonData.anonymize_students || isAdmin) {
-        viewedAtHTML = studentViewedAtTemplate({
+        studentViewedAtHTML = studentViewedAtTemplate({
           viewed_at: $.datetimeString(attachment.viewed_at)
         })
       }
-      $submission_attachment_viewed_at.html($.raw(viewedAtHTML))
 
       if (browserableCssClasses.test(attachment.mime_class)) {
         browserableAttachments.push(attachment)
@@ -2078,9 +2143,11 @@ EG = {
 
       renderProgressIcon(attachment)
     })
+    $submission_attachment_viewed_at.html($.raw(studentViewedAtHTML))
 
     $submission_files_container.showIf(
-      submission.versioned_attachments && submission.versioned_attachments.length
+      submission.submission_type === 'online_text_entry' ||
+        (submission.versioned_attachments && submission.versioned_attachments.length)
     )
 
     let preview_attachment = null
@@ -2211,7 +2278,7 @@ EG = {
         })
       })
     }
-    $multiple_submissions.html($.raw(innerHTML))
+    $multiple_submissions.html($.raw(innerHTML || ''))
     StatusPill.renderPills()
   },
 
@@ -2220,8 +2287,17 @@ EG = {
     const currentSubmission = this.currentStudent.submission
     if (currentSubmission && currentSubmission.workflow_state !== 'unsubmitted') {
       this.refreshSubmissionsToView()
-      const lastIndex = currentSubmission.submission_history.length - 1
-      $(`#submission_to_view option:eq(${lastIndex})`).attr('selected', 'selected')
+      let index = currentSubmission.submission_history.length - 1
+
+      if (EG.hasOwnProperty('initialVersion')) {
+        if (EG.initialVersion >= 0 && EG.initialVersion <= index) {
+          index = EG.initialVersion
+          currentSubmission.currentSelectedIndex = index
+        }
+        delete EG.initialVersion
+      }
+
+      $(`#submission_to_view option:eq(${index})`).attr('selected', 'selected')
       $submission_details.show()
     } else {
       // there's no submission
@@ -3069,6 +3145,11 @@ EG = {
       $score.text('')
     }
 
+    if (ENV.post_policies_enabled) {
+      if (ENV.MANAGE_GRADES || (jsonData.context.concluded && ENV.READ_AS_ADMIN)) {
+        renderHiddenSubmissionPill(submission)
+      }
+    }
     EG.updateStatsInHeader()
   },
 
@@ -3597,25 +3678,38 @@ function renderSettingsMenu() {
     showHelpMenuItem: ENV.show_help_menu_item
   }
 
-  const settingsMenu = <SpeedGraderSettingsMenu {...props} />
-  ReactDOM.render(settingsMenu, document.getElementById(SPEED_GRADER_SETTINGS_MOUNT_POINT))
+  const mountPoint = document.getElementById(SPEED_GRADER_SETTINGS_MOUNT_POINT)
+  ReactDOM.render(<SpeedGraderSettingsMenu {...props} />, mountPoint)
+}
+
+function teardownSettingsMenu() {
+  const mountPoint = document.getElementById(SPEED_GRADER_SETTINGS_MOUNT_POINT)
+  ReactDOM.unmountComponentAtNode(mountPoint)
 }
 
 function renderPostGradesMenu() {
+  const {submissionsMap} = window.jsonData
   const submissions = window.jsonData.studentsWithSubmissions.map(student => student.submission)
-  const allowHidingGrades = submissions.some(submission => submission.posted_at != null)
-  const allowPostingGrades = submissions.some(submission => submission.posted_at == null)
+  const allowHidingGrades = submissions.some(submission => submission && submission.posted_at != null)
+  const allowPostingGrades = submissions.some(submission => submission && submission.posted_at == null)
+
+  function onHideGrades() {
+    EG.postPolicies.showHideAssignmentGradesTray({submissionsMap})
+  }
+
+  function onPostGrades() {
+    EG.postPolicies.showPostAssignmentGradesTray({submissionsMap, submissions})
+  }
 
   const props = {
     allowHidingGrades,
     allowPostingGrades,
-    onHideGrades: () => {},
-    onPostGrades: () => {}
+    onHideGrades,
+    onPostGrades
   }
 
-  const postGradesMenu = <SpeedGraderPostGradesMenu {...props} />
   ReactDOM.render(
-    postGradesMenu,
+    <SpeedGraderPostGradesMenu {...props} />,
     document.getElementById(SPEED_GRADER_POST_GRADES_MENU_MOUNT_POINT)
   )
 }
@@ -3680,6 +3774,11 @@ export default {
       EG.tearDownAssessmentAuditTray()
     }
 
+    if (EG.postPolicies) {
+      EG.postPolicies.destroy()
+    }
+
+    teardownSettingsMenu()
     teardownHandleStatePopped()
     teardownBeforeLeavingSpeedgrader()
   },

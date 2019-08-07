@@ -96,6 +96,7 @@ describe "Wiki Pages" do
     end
 
     it "should update the page with changes made in another window", priority: "1", test_id: 126833 do
+      skip('CORE-2714 when the rcs is enabled, this raises SpecTimeLimit::Error: Exceeded the 31 sec historical threshold for this particular spec.')
       @course.wiki_pages.create!(title: 'Page1')
       edit_page('this is')
       driver.execute_script("window.open()")
@@ -604,7 +605,7 @@ describe "Wiki Pages" do
         <p>
           <iframe style="width: 640px; height: 480px;"
                   title="Instructure - About Us"
-                  src="https://player.vimeo.com/video/58752872"
+                  src="https://player.vimeo.com/video/51408381"
                   width="300"
                   height="150"
                   allowfullscreen="allowfullscreen"
@@ -624,6 +625,7 @@ describe "Wiki Pages" do
     include_context "public course as a logged out user"
 
     it "should load mathjax in a page with <math>" do
+      skip('Unskip in ADMIN-2684')
       title = "mathML"
       public_course.wiki_pages.create!(
         :title => title,

@@ -16,7 +16,6 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import _ from 'underscore'
 import I18n from 'i18n!external_tools'
 import React from 'react'
 import PropTypes from 'prop-types'
@@ -47,9 +46,6 @@ export default class ExternalToolsTable extends React.Component {
     store.addChangeListener(this.onChange)
     if (!store.getState().isLoaded) {
       store.fetch();
-    }
-    if (store.getState().lti13LoadStatus !== 'success') {
-      store.fetch13Tools()
     }
   }
 
@@ -127,7 +123,9 @@ export default class ExternalToolsTable extends React.Component {
                 </th>
               </tr>
             </thead>
-            <tbody className="collectionViewItems">{this.trs()}</tbody>
+            <tbody className="collectionViewItems">
+              {this.trs()}
+            </tbody>
           </table>
         </InfiniteScroll>
       </div>

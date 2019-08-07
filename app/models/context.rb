@@ -256,6 +256,19 @@ module Context
       object ||= context.attachments.find_by_id(file_id) # attachments.find_by_id uses the replacement hackery
     when 'wiki_pages'
       object = context.wiki.find_page(CGI.unescape(params[:id]), include_deleted: true)
+    when 'external_tools'
+      if params[:action] == "retrieve"
+        tool_url = CGI.parse(URI.parse(url).query)["url"].first rescue nil
+        object = ContextExternalTool.find_external_tool(tool_url, context) if tool_url
+      elsif params[:id]
+        object = ContextExternalTool.find_external_tool_by_id(params[:id], context)
+      end
+    when 'context_modules'
+      if %w(item_redirect item_redirect_mastery_paths choose_mastery_path).include?(params[:action])
+        object = context.context_module_tags.find_by(id: params[:id])
+      else
+        object = context.context_modules.find_by(id: params[:id])
+      end
     else
       object = context.try(params[:controller].sub(/^.+\//, ''))&.find_by(id: params[:id])
     end
@@ -280,6 +293,19 @@ module Context
     case context
     when Account
       context
+    when Course
+      get_account(context.account)
+    when CourseSection
+      get_account(context.course)
+    when Group
+      get_account(context.context)
+    end
+  end
+
+  def self.get_account_or_parent_account(context)
+    case context
+    when Account
+      context.root_account? ? context : context.parent_account
     when Course
       get_account(context.account)
     when CourseSection

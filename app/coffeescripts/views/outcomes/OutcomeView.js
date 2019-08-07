@@ -16,7 +16,7 @@
 // with this program. If not, see <http://www.gnu.org/licenses/>.
 //
 
-import I18n from 'i18n!outcomes'
+import I18n from 'i18n!OutcomeView'
 import numberHelper from 'jsx/shared/helpers/numberHelper'
 import $ from 'jquery'
 import _ from 'underscore'
@@ -26,7 +26,7 @@ import outcomeTemplate from 'jst/outcomes/outcome'
 import outcomeFormTemplate from 'jst/outcomes/outcomeForm'
 import criterionTemplate from 'jst/outcomes/_criterion'
 import criterionHeaderTemplate from 'jst/outcomes/_criterionHeader'
-import confirmOutcomeEditModal, {showConfirmOutcomeEdit} from 'jsx/outcomes/ConfirmOutcomeEditModal'
+import {showConfirmOutcomeEdit} from 'jsx/outcomes/ConfirmOutcomeEditModal'
 import { addCriterionInfoButton } from 'jsx/outcomes/CriterionInfo'
 import 'jqueryui/dialog'
 
@@ -70,7 +70,7 @@ export default class OutcomeView extends OutcomeContentBase {
       // Hack: trick Babel/TypeScript into allowing this before super.
       if (false) { super(); }
       let thisFn = (() => { return this; }).toString();
-      let thisName = thisFn.slice(thisFn.indexOf('return') + 6 + 1, thisFn.lastIndexOf(';')).trim();
+      let thisName = thisFn.match(/_this\d*/)[0];
       eval(`${thisName} = this;`);
     }
     this.editRating = this.editRating.bind(this)
@@ -283,7 +283,10 @@ export default class OutcomeView extends OutcomeContentBase {
       case 'edit':
       case 'add':
         this.$el.html(
-          outcomeFormTemplate(_.extend(data, {calculationMethods: this.model.calculationMethods()}))
+          outcomeFormTemplate(_.extend(data, {
+            calculationMethods: this.model.calculationMethods(),
+            use_rce_enhancements: ENV.use_rce_enhancements
+        }))
         )
 
         addCriterionInfoButton(this.$el.find("#react-info-link")[0])

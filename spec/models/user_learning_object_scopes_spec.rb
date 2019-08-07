@@ -667,6 +667,13 @@ describe UserLearningObjectScopes do
       expect(@ta.assignments_needing_grading(scope_only: true)).not_to include assignment
     end
 
+    it 'should not count submissions for inactive students when they have active enrollments in other courses' do
+      @course1.enroll_student(@student_b).update_attribute(:workflow_state, 'inactive')
+      assignment = @course1.assignments.first
+      assignment.grade_student(@student_a, grade: "1", grader: @teacher)
+      expect(@teacher.assignments_needing_grading(scope_only: true)).not_to include assignment
+    end
+
     it "should limit the number of returned assignments" do
       assignment_ids = create_records(Assignment, Array.new(20) do |x|
         {
@@ -755,6 +762,47 @@ describe UserLearningObjectScopes do
       it "should not include submissions from students without visibility" do
         expect(@teacher.assignments_needing_grading.length).to eq 2
       end
+    end
+  end
+
+  context "#submissions_needing_grading_count" do
+    before :once do
+      course_with_teacher(active_all: true)
+      @sectionb = @course.course_sections.create!(name: 'section B')
+      @student_a = user_with_pseudonym(active_all: true, name: 'StudentA', username: 'studentA@instructure.com')
+      @student_b = user_with_pseudonym(active_all: true, name: 'StudentB', username: 'studentB@instructure.com')
+      @course.enroll_student(@student_a).update_attributes(workflow_state: 'active')
+      @sectionb.enroll_user(@student_b, 'StudentEnrollment', 'active')
+    end
+
+    it 'should show counts for all submissions a grader can see' do
+      assignment_model(course: @course, submission_types: ['online_text_entry'])
+      [@student_a, @student_b].each do |student|
+        @assignment.submit_homework student, body: "submission for #{student.name}"
+      end
+
+      expect(@teacher.submissions_needing_grading_count).to eq 2
+    end
+
+    it 'should not show counts for submissions that a grader can\'t see due to enrollment visibility' do
+      @enrollment.update_attributes(limit_privileges_to_course_section: true) # limit the teacher to only see one of the students
+      assignment_model(course: @course, submission_types: ['online_text_entry'])
+      [@student_a, @student_b].each do |student|
+        @assignment.submit_homework student, body: "submission for #{student.name}"
+      end
+
+      expect(@teacher.submissions_needing_grading_count).to eq 1
+    end
+
+    it 'should not show counts for submissions in a section where the grader is enrolled but is not a grader' do
+      @enrollment.update_attributes(limit_privileges_to_course_section: true)
+      @sectionb.enroll_user(@teacher, 'StudentEnrollment', 'active')
+      assignment_model(course: @course, submission_types: ['online_text_entry'])
+      [@student_a, @student_b].each do |student|
+        @assignment.submit_homework student, body: "submission for #{student.name}"
+      end
+
+      expect(@teacher.submissions_needing_grading_count).to eq 1
     end
   end
 

@@ -97,7 +97,8 @@ class GradeCalculator
         except(:order, :select).
         for_user(@user_ids).
         where(assignment_id: @assignments).
-        select("submissions.id, user_id, assignment_id, score, excused, submissions.workflow_state")
+        select("submissions.id, user_id, assignment_id, score, excused, submissions.workflow_state, submissions.posted_at").
+        preload(:assignment)
 
       Rails.logger.debug "GRADE CALCULATOR - submissions: #{submissions.size} - #{Time.zone.now.to_i}"
       submissions
@@ -119,12 +120,11 @@ class GradeCalculator
     scores_prior_to_compute = Score.where(enrollment: @enrollments.map(&:id), assignment_group_id: nil, course_score: true).to_a
     save_scores
     update_score_statistics
-    invalidate_caches
     create_course_grade_alerts(scores_prior_to_compute)
     # The next line looks weird, but it is intended behaviour.  Its
-    # saying "if we're on the branch not calculating muted scores, run
+    # saying "if we're on the branch not calculating hidden scores, run
     # the branch that does."
-    calculate_muted_scores if @ignore_muted
+    calculate_hidden_scores if @ignore_muted
     calculate_course_score if @update_course_score
   end
 
@@ -298,8 +298,8 @@ class GradeCalculator
     GradeCalculator.new(@user_ids, @course, opts).compute_and_save_scores
   end
 
-  def calculate_muted_scores
-    # re-run this calculator, except include muted assignments
+  def calculate_hidden_scores
+    # re-run this calculator, except include muted assignments/unposted submissions
     compute_branch(ignore_muted: false)
   end
 
@@ -457,9 +457,9 @@ class GradeCalculator
   def update_values_for(column, updates: {}, key: :grade)
     return unless column
 
-    actual_updates = user_specific_updates(updates: updates, default_value: column, key: key)
+    actual_updates = user_specific_updates(updates: updates, default_value: "excluded.#{column}", key: key)
 
-    "#{column} = CASE enrollment_id #{actual_updates} END"
+    "#{column} = CASE excluded.enrollment_id #{actual_updates} END"
   end
 
   def insert_values_for(column, updates: {}, key: :grade)
@@ -500,19 +500,17 @@ class GradeCalculator
   def save_course_and_grading_period_scores
     return if @only_update_course_gp_metadata
 
-    # Construct upsert statement to update existing Scores or create them if needed,
-    # for course and grading period Scores.
+    # Depending on whether we're updating course scores or grading period
+    # scores, we need to check our inserted values against different uniqueness
+    # constraints
+    conflict_target = if @grading_period.present?
+      "(enrollment_id, grading_period_id) WHERE grading_period_id IS NOT NULL"
+    else
+      "(enrollment_id) WHERE course_score"
+    end
+
+    # Update existing course and grading period Scores or create them if needed.
     Score.connection.execute("
-      UPDATE #{Score.quoted_table_name}
-          SET
-            #{columns_to_insert_or_update[:update_values].join(', ')},
-            updated_at = #{updated_at},
-            -- if workflow_state was previously deleted for some reason, update it to active
-            workflow_state = COALESCE(NULLIF(workflow_state, 'deleted'), 'active')
-          WHERE
-            enrollment_id IN (#{joined_enrollment_ids}) AND
-            assignment_group_id IS NULL AND
-            #{@grading_period ? "grading_period_id = #{@grading_period.id}" : 'course_score IS TRUE'};
       INSERT INTO #{Score.quoted_table_name}
           (
             enrollment_id, grading_period_id,
@@ -527,13 +525,14 @@ class GradeCalculator
             #{updated_at} as created_at,
             #{updated_at} as updated_at
           FROM #{Enrollment.quoted_table_name} enrollments
-          LEFT OUTER JOIN #{Score.quoted_table_name} scores on
-            scores.enrollment_id = enrollments.id AND
-            scores.assignment_group_id IS NULL AND
-            #{@grading_period ? "scores.grading_period_id = #{@grading_period.id}" : 'scores.course_score IS TRUE'}
           WHERE
-            enrollments.id IN (#{joined_enrollment_ids}) AND
-            scores.id IS NULL;
+            enrollments.id IN (#{joined_enrollment_ids})
+      ON CONFLICT #{conflict_target}
+      DO UPDATE SET
+          #{columns_to_insert_or_update[:update_values].join(', ')},
+          updated_at = excluded.updated_at,
+          -- if workflow_state was previously deleted for some reason, update it to active
+          workflow_state = COALESCE(NULLIF(excluded.workflow_state, 'deleted'), 'active')
     ")
   end
 
@@ -545,23 +544,6 @@ class GradeCalculator
     return unless @ignore_muted
 
     ScoreMetadata.connection.execute("
-      UPDATE #{ScoreMetadata.quoted_table_name} metadata
-        SET
-          calculation_details = CASE enrollments.user_id
-            #{@dropped_updates.map do |user_id, dropped|
-              "WHEN #{user_id} THEN cast('#{dropped.to_json}' as json)"
-            end.join(' ')}
-            ELSE calculation_details
-          END,
-          updated_at = #{updated_at}
-        FROM #{Score.quoted_table_name} scores
-        INNER JOIN #{Enrollment.quoted_table_name} enrollments ON
-          enrollments.id = scores.enrollment_id
-        WHERE
-          scores.enrollment_id IN (#{joined_enrollment_ids}) AND
-          scores.assignment_group_id IS NULL AND
-          #{@grading_period ? "scores.grading_period_id = #{@grading_period.id}" : 'scores.course_score IS TRUE'} AND
-          metadata.score_id = scores.id;
       INSERT INTO #{ScoreMetadata.quoted_table_name}
         (score_id, calculation_details, created_at, updated_at)
         SELECT
@@ -582,77 +564,73 @@ class GradeCalculator
         WHERE
           scores.enrollment_id IN (#{joined_enrollment_ids}) AND
           scores.assignment_group_id IS NULL AND
-          #{@grading_period ? "scores.grading_period_id = #{@grading_period.id}" : 'scores.course_score IS TRUE'} AND
-          metadata.id IS NULL;
+          #{@grading_period ? "scores.grading_period_id = #{@grading_period.id}" : 'scores.course_score IS TRUE'}
+      ON CONFLICT (score_id)
+      DO UPDATE SET
+        calculation_details = excluded.calculation_details,
+        updated_at = excluded.updated_at
+      ;
     ")
   end
 
   def assignment_group_columns_to_insert_or_update
     return @assignment_group_columns_to_insert_or_update if defined? @assignment_group_columns_to_insert_or_update
 
-    column_list = { value_names: [], update_columns: [], update_values: [], insert_columns: [], insert_values: [] }
+    column_list = {
+      insert_columns: [],
+      insert_values: [],
+      update_columns: [],
+      update_values: [],
+      value_names: []
+    }
 
     unless @only_update_points
       column_list[:value_names] << 'current_score'
-      column_list[:update_columns] << "#{current_score_column} = val.current_score"
+      column_list[:update_columns] << "#{current_score_column} = excluded.current_score"
       column_list[:insert_columns] << "val.current_score AS #{current_score_column}"
 
       column_list[:value_names] << 'final_score'
-      column_list[:update_columns] << "#{final_score_column} = val.final_score"
+      column_list[:update_columns] << "#{final_score_column} = excluded.final_score"
       column_list[:insert_columns] << "val.final_score AS #{final_score_column}"
     end
 
     column_list[:value_names] << 'current_points'
-    column_list[:update_columns] << "#{points_column(:current)} = val.current_points"
+    column_list[:update_columns] << "#{points_column(:current)} = excluded.current_points"
     column_list[:insert_columns] << "val.current_points AS #{points_column(:current)}"
 
     column_list[:value_names] << 'final_points'
-    column_list[:update_columns] << "#{points_column(:final)} = val.final_points"
+    column_list[:update_columns] << "#{points_column(:final)} = excluded.final_points"
     column_list[:insert_columns] << "val.final_points AS #{points_column(:final)}"
 
     @assignment_group_columns_to_insert_or_update = column_list
   end
 
   def save_assignment_group_scores(score_values, dropped_values)
-    # Construct upsert statement to update existing Scores or create them if needed,
-    # for assignment group Scores.
+    # Update existing assignment group Scores or create them if needed.
     Score.connection.execute("
-      UPDATE #{Score.quoted_table_name} scores
-          SET
-            #{assignment_group_columns_to_insert_or_update[:update_columns].join(', ')},
-            updated_at = #{updated_at},
-            workflow_state = COALESCE(NULLIF(workflow_state, 'deleted'), 'active')
-          FROM (VALUES #{score_values}) val
-            (
-              enrollment_id,
-              assignment_group_id,
-              #{assignment_group_columns_to_insert_or_update[:value_names].join(', ')}
-            )
-          WHERE val.enrollment_id = scores.enrollment_id AND
-            val.assignment_group_id = scores.assignment_group_id;
       INSERT INTO #{Score.quoted_table_name} (
-          enrollment_id, assignment_group_id,
-          #{assignment_group_columns_to_insert_or_update[:value_names].join(', ')},
-          course_score, created_at, updated_at
+        enrollment_id, assignment_group_id,
+        #{assignment_group_columns_to_insert_or_update[:value_names].join(', ')},
+        course_score, created_at, updated_at
+      )
+        SELECT
+          val.enrollment_id AS enrollment_id,
+          val.assignment_group_id as assignment_group_id,
+          #{assignment_group_columns_to_insert_or_update[:insert_columns].join(', ')},
+          FALSE AS course_score,
+          #{updated_at} AS created_at,
+          #{updated_at} AS updated_at
+        FROM (VALUES #{score_values}) val
+          (
+            enrollment_id,
+            assignment_group_id,
+            #{assignment_group_columns_to_insert_or_update[:value_names].join(', ')}
           )
-          SELECT
-            val.enrollment_id AS enrollment_id,
-            val.assignment_group_id as assignment_group_id,
-            #{assignment_group_columns_to_insert_or_update[:insert_columns].join(', ')},
-            FALSE AS course_score,
-            #{updated_at} AS created_at,
-            #{updated_at} AS updated_at
-          FROM (VALUES #{score_values}) val
-            (
-              enrollment_id,
-              assignment_group_id,
-              #{assignment_group_columns_to_insert_or_update[:value_names].join(', ')}
-            )
-          LEFT OUTER JOIN #{Score.quoted_table_name} sc ON
-            sc.enrollment_id = val.enrollment_id AND
-            sc.assignment_group_id = val.assignment_group_id
-          WHERE
-            sc.id IS NULL;
+      ON CONFLICT (enrollment_id, assignment_group_id) WHERE assignment_group_id IS NOT NULL
+      DO UPDATE SET
+        #{assignment_group_columns_to_insert_or_update[:update_columns].join(', ')},
+        updated_at = excluded.updated_at,
+        workflow_state = COALESCE(NULLIF(excluded.workflow_state, 'deleted'), 'active')
     ")
 
     # We only save score metadata for posted grades. This means, if we're
@@ -661,17 +639,6 @@ class GradeCalculator
     # score metadata for unposted grades.
     if @ignore_muted
       ScoreMetadata.connection.execute("
-        UPDATE #{ScoreMetadata.quoted_table_name} md
-          SET
-            calculation_details = CAST(val.calculation_details as json),
-            updated_at = #{updated_at}
-          FROM (VALUES #{dropped_values}) val
-            (enrollment_id, assignment_group_id, calculation_details)
-          INNER JOIN #{Score.quoted_table_name} scores ON
-            scores.enrollment_id = val.enrollment_id AND
-            scores.assignment_group_id = val.assignment_group_id
-          WHERE
-            scores.id = md.score_id;
         INSERT INTO #{ScoreMetadata.quoted_table_name}
           (score_id, calculation_details, created_at, updated_at)
           SELECT
@@ -684,10 +651,11 @@ class GradeCalculator
           LEFT OUTER JOIN #{Score.quoted_table_name} scores ON
             scores.enrollment_id = val.enrollment_id AND
             scores.assignment_group_id = val.assignment_group_id
-          LEFT OUTER JOIN #{ScoreMetadata.quoted_table_name} metadata ON
-            metadata.score_id = scores.id
-          WHERE
-            metadata.id IS NULL;
+        ON CONFLICT (score_id)
+        DO UPDATE SET
+          calculation_details = excluded.calculation_details,
+          updated_at = excluded.updated_at
+        ;
       ")
     end
   end
@@ -725,8 +693,8 @@ class GradeCalculator
       group_submissions = assignments.map do |a|
         s = submissions_by_assignment_id[a.id]
 
-        # ignore submissions for muted assignments
-        s = nil if @ignore_muted && a.muted?
+        # ignore unposted submissions and all submissions for muted assignments
+        s = nil if ignore_submission?(submission: s, assignment: a)
 
         # ignore pending_review quiz submissions
         s = nil if ignore_ungraded && s.try(:pending_review?)
@@ -788,7 +756,7 @@ class GradeCalculator
     if never_drop_ids.present? || @ignore_muted
       cant_drop, submissions = submissions.partition do |submission|
         assignment = submission[:assignment]
-        (@ignore_muted && assignment.muted?) || never_drop_ids.include?(assignment.id)
+        ignore_submission?(submission: submission[:submission], assignment: assignment) || never_drop_ids.include?(assignment.id)
       end
     end
 
@@ -828,11 +796,11 @@ class GradeCalculator
   end
 
   def keep_highest(submissions, cant_drop, keep, max_total)
-    keep_helper(submissions, cant_drop, keep, max_total) { |*args| big_f_best(*args) }
+    keep_helper(submissions, cant_drop, keep, max_total, keep_mode: :highest) { |*args| big_f_best(*args) }
   end
 
   def keep_lowest(submissions, cant_drop, keep, max_total)
-    keep_helper(submissions, cant_drop, keep, max_total) { |*args| big_f_worst(*args) }
+    keep_helper(submissions, cant_drop, keep, max_total, keep_mode: :lowest) { |*args| big_f_worst(*args) }
   end
 
   # @submissions: set of droppable submissions
@@ -841,30 +809,51 @@ class GradeCalculator
   # @max_total: the highest number of points possible
   # @big_f_blk: sorting block for the big_f function
   # returns +keep+ +submissions+
-  def keep_helper(submissions, cant_drop, keep, max_total, &big_f_blk)
+  def keep_helper(submissions, cant_drop, keep, max_total, keep_mode: nil, &big_f_blk)
     return submissions if submissions.size <= keep
 
     unpointed, pointed = (submissions + cant_drop).partition { |s|
       s[:total].zero?
     }
-    grades = pointed.map { |s| s[:score].to_f / s[:total] }.sort
 
-    q_high = estimate_q_high(pointed, unpointed, grades)
-    q_low  = grades.first
-    q_mid  = (q_low + q_high) / 2
+    kept = nil
+    if pointed.empty? && keep_mode == :lowest
+      # this is a really dumb situation that we saw in the wild.  17
+      # assignments, 2 of them have points possible, the rest have 0
+      # points possible with drop rules of drop 8 lowest and drop 7
+      # highest.
+      #
+      # In drop_pointed above, the call to keep_highest that
+      # goes here ends up eliminating the pointed assignments, so when
+      # keep_lowest is called, we end up here with unpointed
+      # assignments which completely breaks math. estimate_q_high
+      # comes back as NaN and q_low is nil.  "(nil + NaN)/2" means
+      # you're gonna have a bad time.
+      #
+      # What we'll do instead is just sort by score like
+      # drop_unpointed above, and drop the unpointed
+      # ones up to keep.
+      kept = unpointed.sort_by { |s| s[:score].to_f }[-keep,keep]
+    else
+      grades = pointed.map { |s| s[:score].to_f / s[:total] }.sort
 
-    x, kept = big_f_blk.call(q_mid, submissions, cant_drop, keep)
-    threshold = 1 / (2 * keep * max_total**2)
-    until q_high - q_low < threshold
-      x < 0 ?
-        q_high = q_mid :
-        q_low  = q_mid
-      q_mid = (q_low + q_high) / 2
-
-      # bail if we can't can't ever satisfy the threshold (floats!)
-      break if q_mid == q_high || q_mid == q_low
+      q_high = estimate_q_high(pointed, unpointed, grades)
+      q_low  = grades.first
+      q_mid  = (q_low + q_high) / 2
 
       x, kept = big_f_blk.call(q_mid, submissions, cant_drop, keep)
+      threshold = 1 / (2 * keep * max_total**2)
+      until q_high - q_low < threshold
+        x < 0 ?
+          q_high = q_mid :
+          q_low  = q_mid
+        q_mid = (q_low + q_high) / 2
+
+        # bail if we can't can't ever satisfy the threshold (floats!)
+        break if q_mid == q_high || q_mid == q_low
+
+        x, kept = big_f_blk.call(q_mid, submissions, cant_drop, keep)
+      end
     end
 
     kept
@@ -974,8 +963,15 @@ class GradeCalculator
     }
   end
 
-  # If you need to invalidate caches with associated classes, put those calls here.
-  def invalidate_caches
-    GradeSummaryPresenter.invalidate_cache(@course)
+  def ignore_submission?(submission:, assignment:)
+    return false unless @ignore_muted
+
+    if @course.post_policies_enabled?
+      # If we decided to ignore this submission earlier in this run (see
+      # create_group_sums), it will be nil, in which case keep ignoring it
+      submission.blank? || !submission.posted?
+    else
+      assignment.muted?
+    end
   end
 end

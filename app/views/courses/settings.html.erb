@@ -321,6 +321,17 @@
         </td>
       <% end %>
       </tr>
+      <% if @context.feature_enabled?(:new_gradebook) && @context.root_account.feature_enabled?(:filter_speed_grader_by_student_group) %>
+        <tr>
+          <td class="form-label">
+            <label for="course_large_course"><%= t("Large Course:") %></label>
+          </td>
+          <td id="course_large_course">
+            <%= f.check_box :filter_speed_grader_by_student_group, disabled: !can_manage %>
+            <%= f.label :filter_speed_grader_by_student_group, t("Launch SpeedGrader Filtered by Student Group") %>
+          </td>
+        </tr>
+      <% end %>
       <tr>
         <td class="form-label">
           <label for="course_grading_scheme"><%= before_label('grading_scheme', %{Grading Scheme}) %></label>
@@ -618,7 +629,7 @@
       <h3 class="screenreader-only"><%= t('Enabled Links') %></h3>
       <ul id="nav_enabled_list" class="nav_list connectedSortable">
         <% tabs.select {|t| !t[:hidden] }.each do |tab|  %>
-          <li aria-label="<%= tab[:label] %>" class="navitem <%= 'enabled' if tab[:id] != Course::TAB_HOME %> <%= tab[:label].downcase %>"
+          <li aria-label="<%= tab[:label] %>" class="navitem <%= 'enabled' if tab[:id] != Course::TAB_HOME %>"
               id="nav_edit_tab_id_<%= tab[:id] %>"
           >
             <%= tab[:label] %>

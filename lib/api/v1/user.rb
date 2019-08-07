@@ -52,8 +52,9 @@ module Api::V1::User
       enrollment_json_opts = {current_grading_period_scores: includes.include?('current_grading_period_scores')}
       if includes.include?('sis_user_id') || (!excludes.include?('pseudonym') && user_json_is_admin?(context, current_user))
         include_root_account = @domain_root_account.trust_exists?
-        sis_context = enrollment || @domain_root_account
-        pseudonym = SisPseudonym.for(user, sis_context, type: :implicit, require_sis: false)
+        course_or_section = @context if (@context.is_a?(Course) || @context.is_a?(CourseSection))
+        sis_context = enrollment || course_or_section || @domain_root_account
+        pseudonym = SisPseudonym.for(user, sis_context, type: :implicit, require_sis: false, root_account: @domain_root_account, in_region: true)
         enrollment_json_opts[:sis_pseudonym] = pseudonym if pseudonym&.sis_user_id
         # the sis fields on pseudonym are poorly named -- sis_user_id is
         # the id in the SIS import data, where on every other table
@@ -262,12 +263,11 @@ module Api::V1::User
         json[:course_integration_id] = enrollment.course.integration_id
         json[:sis_section_id] = enrollment.course_section.sis_source_id
         json[:section_integration_id] = enrollment.course_section.integration_id
-        pseudonym = opts.key?(:sis_pseudonym) ? opts[:sis_pseudonym] : sis_pseudonym_for(enrollment.user, enrollment)
+        pseudonym = opts.key?(:sis_pseudonym) ? opts[:sis_pseudonym] : SisPseudonym.for(enrollment.user, enrollment, type: :trusted, root_account: @domain_root_account)
         json[:sis_user_id] = pseudonym.try(:sis_user_id)
       end
       json[:html_url] = course_user_url(enrollment.course_id, enrollment.user_id)
-      user_includes = includes.include?('avatar_url') ? ['avatar_url'] : []
-      user_includes << 'group_ids' if includes.include?('group_ids')
+      user_includes = includes & %w{avatar_url group_ids uuid}
 
       json[:user] = user_json(enrollment.user, user, session, user_includes, @context, nil, []) if includes.include?(:user)
       if includes.include?('locked')
@@ -358,10 +358,6 @@ module Api::V1::User
 
   def user_can_read_sis_data?(user, context)
     sis_id_context(context).grants_right?(user, :read_sis) || @domain_root_account.grants_right?(user, :manage_sis)
-  end
-
-  def sis_pseudonym_for(user, context=@domain_root_account)
-    SisPseudonym.for(user, context, type: :trusted)
   end
 
   def group_ids(user)

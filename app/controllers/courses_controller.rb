@@ -777,6 +777,7 @@ class CoursesController < ApplicationController
           @course.require_assignment_group rescue nil
           # offer updates the workflow state, saving the record without doing validation callbacks
           if api_request? and value_to_boolean(params[:offer])
+            return unless verified_user_check
             @course.offer
             Auditors::Course.record_published(@course, @current_user, source: :api)
           end
@@ -853,6 +854,9 @@ class CoursesController < ApplicationController
   # @argument search_term [String]
   #   The partial name or full ID of the users to match and return in the results list.
   #
+  # @argument sort [String, "username"|"last_login"|"email"|"sis_id"]
+  #   When set, sort the results of the search based on the given field.
+  #
   # @argument enrollment_type[] [String, "teacher"|"student"|"student_view"|"ta"|"observer"|"designer"]
   #   When set, only return users where the user is enrolled as this type.
   #   "student_view" implies include[]=test_student.
@@ -914,7 +918,7 @@ class CoursesController < ApplicationController
         #backcompat limit param
         params[:per_page] ||= params[:limit]
 
-        search_params = params.slice(:search_term, :enrollment_role, :enrollment_role_id, :enrollment_type, :enrollment_state)
+        search_params = params.slice(:search_term, :enrollment_role, :enrollment_role_id, :enrollment_type, :enrollment_state, :sort)
         include_inactive = @context.grants_right?(@current_user, session, :read_as_admin) && value_to_boolean(params[:include_inactive])
 
         search_params[:include_inactive_enrollments] = true if include_inactive
@@ -1270,6 +1274,8 @@ class CoursesController < ApplicationController
           enabled: Canvas::Plugin.find(:app_center).enabled?
         },
         LTI_LAUNCH_URL: course_tool_proxy_registration_path(@context),
+        EXTERNAL_TOOLS_CREATE_URL: url_for(controller: :external_tools, action: :create, course_id: @context.id),
+        TOOL_CONFIGURATION_SHOW_URL: course_show_tool_configuration_url(course_id: @context.id, developer_key_id: ':developer_key_id'),
         MEMBERSHIP_SERVICE_FEATURE_FLAG_ENABLED: @context.root_account.feature_enabled?(:membership_service_for_lti_tools),
         LTI_13_TOOLS_FEATURE_FLAG_ENABLED: @context.root_account.feature_enabled?(:lti_1_3),
         CONTEXT_BASE_URL: "/courses/#{@context.id}",
@@ -1317,6 +1323,9 @@ class CoursesController < ApplicationController
   # @argument allow_student_organized_groups [Boolean]
   #   Let students organize their own groups
   #
+  # @argument filter_speed_grader_by_student_group [Boolean]
+  #   Filter SpeedGrader to only the selected student group
+  #
   # @argument hide_final_grades [Boolean]
   #   Hide totals in student grades summary
   #
@@ -1354,6 +1363,7 @@ class CoursesController < ApplicationController
       :allow_student_discussion_topics,
       :allow_student_forum_attachments,
       :allow_student_discussion_editing,
+      :filter_speed_grader_by_student_group,
       :show_total_grade_as_points,
       :allow_student_organized_groups,
       :hide_final_grades,
@@ -1376,6 +1386,29 @@ class CoursesController < ApplicationController
         render :json => @course.errors, :status => :bad_request
       end
     end
+  end
+
+  def observer_pairing_codes_csv
+    get_context
+    return render_unauthorized_action unless @context.root_account.self_registration? && @context.grants_right?(@current_user, :generate_observer_pairing_code)
+    res = CSV.generate do |csv|
+      csv << [
+        I18n.t('Last Name'),
+        I18n.t('First Name'),
+        I18n.t('Pairing Code'),
+        I18n.t('Expires At'),
+      ]
+      @context.students.each do |u|
+        opc = ObserverPairingCode.create(user: u, expires_at: 1.week.from_now, code: SecureRandom.hex(3))
+        row = []
+        row << opc.user.last_name
+        row << opc.user.first_name
+        row << '="' + opc.code + '"'
+        row << opc.expires_at
+        csv << row
+      end
+    end
+    send_data res, type: 'text/csv', filename: "#{@context.course_code}_Pairing_Codes.csv"
   end
 
   def update_nav
@@ -1816,7 +1849,7 @@ class CoursesController < ApplicationController
           add_crumb(t('#crumbs.modules', "Modules"))
           load_modules
         when 'syllabus'
-          rce_js_env(:sidebar)
+          rce_js_env
           add_crumb(t('#crumbs.syllabus', "Syllabus"))
           @groups = @context.assignment_groups.active.order(
             :position,
@@ -2335,7 +2368,7 @@ class CoursesController < ApplicationController
     params[:course][:event] = :offer if params[:offer].present?
 
     if params[:course][:event] && params[:course].keys.size == 1
-      if authorized_action(@course, @current_user, :change_course_state)
+      if authorized_action(@course, @current_user, :change_course_state) && verified_user_check
         if process_course_event
           render_update_success
         else
@@ -2439,6 +2472,7 @@ class CoursesController < ApplicationController
       end
 
       if params[:course][:event] && @course.grants_right?(@current_user, session, :change_course_state)
+        return unless verified_user_check
         unless process_course_event
           render_update_failure
           return
@@ -2676,18 +2710,17 @@ class CoursesController < ApplicationController
       f.updated = Time.now
       f.id = course_url(@context)
     end
-    unless Setting.get('public_feed_disabled', 'false') == 'true'
-      @entries = []
-      @entries.concat @context.assignments.published
-      @entries.concat @context.calendar_events.active
-      @entries.concat(@context.discussion_topics.published.select{ |dt|
-        !dt.locked_for?(@current_user, :check_policies => true)
-      })
-      @entries.concat @context.wiki_pages.published
-      @entries = @entries.sort_by{|e| e.updated_at}
-      @entries.each do |entry|
-        feed.entries << entry.to_atom(:context => @context)
-      end
+
+    @entries = []
+    @entries.concat Assignments::ScopedToUser.new(@context, @current_user, @context.assignments.published).scope
+    @entries.concat @context.calendar_events.active
+    @entries.concat DiscussionTopic::ScopedToUser.new(@context, @current_user, @context.discussion_topics.published).scope.select{ |dt|
+      !dt.locked_for?(@current_user, :check_policies => true)
+    }
+    @entries.concat WikiPages::ScopedToUser.new(@context, @current_user, @context.wiki_pages.published).scope
+    @entries = @entries.sort_by{|e| e.updated_at}
+    @entries.each do |entry|
+      feed.entries << entry.to_atom(:context => @context)
     end
     respond_to do |format|
       format.atom { render :plain => feed.to_xml }
@@ -2837,7 +2870,7 @@ class CoursesController < ApplicationController
       pg_scope.delete_all
       OriginalityReport.where(:submission_id => @fake_student.all_submissions).delete_all
       AnonymousOrModerationEvent.where(submission: @fake_student.all_submissions).destroy_all
-      @fake_student.all_submissions.preload(:all_submission_comments, :lti_result, :versions).destroy_all
+      @fake_student.all_submissions.preload(:all_submission_comments, :submission_drafts, :lti_result, :versions).destroy_all
       @fake_student.quiz_submissions.each{|qs| qs.events.destroy_all}
       @fake_student.quiz_submissions.destroy_all
 
@@ -3126,7 +3159,7 @@ class CoursesController < ApplicationController
       :restrict_student_past_view, :restrict_student_future_view, :grading_standard, :grading_standard_enabled,
       :locale, :integration_id, :hide_final_grades, :hide_distribution_graphs, :lock_all_announcements, :public_syllabus,
       :public_syllabus_to_auth, :course_format, :time_zone, :organize_epub_by_content_type, :enable_offline_web_export,
-      :show_announcements_on_home_page, :home_page_announcement_limit, :allow_final_grade_override
+      :show_announcements_on_home_page, :home_page_announcement_limit, :allow_final_grade_override, :filter_speed_grader_by_student_group
     )
   end
 end

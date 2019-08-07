@@ -21,6 +21,7 @@ class GradebooksController < ApplicationController
   include GradebooksHelper
   include KalturaHelper
   include Api::V1::AssignmentGroup
+  include Api::V1::GroupCategory
   include Api::V1::Submission
   include Api::V1::CustomGradebookColumn
   include Api::V1::Section
@@ -127,7 +128,8 @@ class GradebooksController < ApplicationController
       student_outcome_gradebook_enabled: @context.feature_enabled?(:student_outcome_gradebook),
       student_id: @presenter.student_id,
       students: @presenter.students.as_json(include_root: false),
-      outcome_proficiency: outcome_proficiency
+      outcome_proficiency: outcome_proficiency,
+      post_policies_enabled: @context.post_policies_enabled?
     }
 
     if @context.feature_enabled?(:final_grades_override)
@@ -323,7 +325,6 @@ class GradebooksController < ApplicationController
     last_exported_attachment = @last_exported_gradebook_csv.try(:attachment)
     grading_standard = @context.grading_standard_or_default
     {
-      STUDENT_CONTEXT_CARDS_ENABLED: @domain_root_account.feature_enabled?(:student_context_cards),
       GRADEBOOK_OPTIONS: {
         api_max_per_page: per_page,
         chunk_size: Setting.get('gradebook2.submissions_chunk_size', '10').to_i,
@@ -411,6 +412,7 @@ class GradebooksController < ApplicationController
         sections: sections_json(@context.active_course_sections, @current_user, session, [], allow_sis_ids: true),
         settings_update_url: api_v1_course_gradebook_settings_update_url(@context),
         settings: gradebook_settings.fetch(@context.id, {}),
+        student_groups: group_categories_json(@context.group_categories, @current_user, session, {include: ['groups']}),
         login_handle_name: @context.root_account.settings[:login_handle_name],
         sis_name: @context.root_account.settings[:sis_name],
         version: params.fetch(:version, nil),
@@ -420,6 +422,7 @@ class GradebooksController < ApplicationController
   end
 
   def set_gradebook_env
+    set_student_context_cards_js_env
     env = old_gradebook_env
 
     if new_gradebook_enabled?
@@ -647,6 +650,8 @@ class GradebooksController < ApplicationController
         @outer_frame = true
         log_asset_access([ "speed_grader", @context ], "grades", "other")
         env = {
+          MANAGE_GRADES: @context.grants_right?(@current_user, session, :manage_grades),
+          READ_AS_ADMIN: @context.grants_right?(@current_user, session, :read_as_admin),
           CONTEXT_ACTION_SOURCE: :speed_grader,
           can_view_audit_trail: @assignment.can_view_audit_trail?(@current_user),
           settings_url: speed_grader_settings_course_gradebook_path,
@@ -679,7 +684,8 @@ class GradebooksController < ApplicationController
 
         if new_gradebook_enabled?
           env[:selected_section_id] = gradebook_settings.dig(@context.id, 'filter_rows_by', 'section_id')
-          env[:post_policies_enabled] = true if @context.feature_enabled?(:post_policies)
+          env[:post_policies_enabled] = true if @context.post_policies_enabled?
+          env[:selected_student_group_id] = gradebook_settings.dig(@context.id, 'filter_rows_by', 'student_group_id')
         end
 
         if @assignment.quiz
@@ -744,7 +750,7 @@ class GradebooksController < ApplicationController
   end
 
   def change_gradebook_column_size
-    if authorized_action(@context, @current_user, :manage_grades)
+    if authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
       unless @current_user.preferences.key?(:gradebook_column_size)
         @current_user.preferences[:gradebook_column_size] = {}
       end
@@ -756,7 +762,7 @@ class GradebooksController < ApplicationController
   end
 
   def save_gradebook_column_order
-    if authorized_action(@context, @current_user, :manage_grades)
+    if authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
       unless @current_user.preferences.key?(:gradebook_column_order)
         @current_user.preferences[:gradebook_column_order] = {}
       end
@@ -809,6 +815,13 @@ class GradebooksController < ApplicationController
   end
   helper_method :multiple_assignment_groups?
 
+  def student_groups?
+    return @student_groups if defined?(@student_groups)
+
+    @student_groups = @context.groups.any?
+  end
+  helper_method :student_groups?
+
   private
 
   def outcome_proficiency
@@ -830,11 +843,14 @@ class GradebooksController < ApplicationController
       value_to_boolean(user_preference)
     end
 
+    visible_sections = @context.sections_visible_to(@current_user)
+
     new_gradebook_options = {
       colors: gradebook_settings.fetch(:colors, {}),
 
       course_settings: {
-        allow_final_grade_override: allow_final_grade_override
+        allow_final_grade_override: allow_final_grade_override,
+        filter_speed_grader_by_student_group: @context.filter_speed_grader_by_student_group?
       },
 
       final_grade_override_enabled: @context.feature_enabled?(:final_grades_override),
@@ -843,9 +859,10 @@ class GradebooksController < ApplicationController
       grading_schemes: GradingStandard.for(@context).as_json(include_root: false),
       late_policy: @context.late_policy.as_json(include_root: false),
       new_gradebook_development_enabled: new_gradebook_development_enabled?,
-      post_policies_enabled: @context.feature_enabled?(:post_policies)
+      post_policies_enabled: @context.post_policies_enabled?,
+      sections: sections_json(visible_sections, @current_user, session, [], allow_sis_ids: true)
     }
-    new_gradebook_options[:post_manually] = @context.post_manually? if @context.feature_enabled?(:post_policies)
+    new_gradebook_options[:post_manually] = @context.post_manually? if @context.post_policies_enabled?
 
     {GRADEBOOK_OPTIONS: new_gradebook_options}
   end

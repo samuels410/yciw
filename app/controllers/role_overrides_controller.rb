@@ -491,7 +491,6 @@ class RoleOverridesController < ApplicationController
     unless result
       return render json: {message: t('Permission must be enabled for someone')}, status: :bad_request
     end
-    RoleOverride.clear_cached_contexts
     render :json => role_json(@context, @role, @current_user, session)
   end
 
@@ -675,6 +674,7 @@ class RoleOverridesController < ApplicationController
 
     # Add group_permissions
     RoleOverride.manageable_permissions(context).each do |p|
+      next if !context.root_account? && p[0].to_s == 'manage_developer_keys'
       # NOTE: p[1][:label_v2].call could eventually be removed if we copied everything over to :label
       hash = {:label => p[1].key?(:label_v2) ? p[1][:label_v2].call : p[1][:label].call, :permission_name => p[0]}
       if p[1][:account_only]

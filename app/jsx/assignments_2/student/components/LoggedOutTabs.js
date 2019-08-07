@@ -16,22 +16,23 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import React from 'react'
+import {AssignmentShape} from '../assignmentData'
+import Flex, {FlexItem} from '@instructure/ui-layout/lib/components/Flex'
 import I18n from 'i18n!assignments_2_logged_out_tabs'
+import LoginActionPrompt from './LoginActionPrompt'
+import React from 'react'
 import TabList, {TabPanel} from '@instructure/ui-tabs/lib/components/TabList'
 import Text from '@instructure/ui-elements/lib/components/Text'
-import Flex, {FlexItem} from '@instructure/ui-layout/lib/components/Flex'
-import {StudentAssignmentShape} from '../assignmentData'
-import LoginActionPrompt from './LoginActionPrompt'
 
 LoggedOutTabs.propTypes = {
-  assignment: StudentAssignmentShape
+  assignment: AssignmentShape
 }
 
 function LoggedOutTabs(props) {
   return (
     <div>
       <TabList defaultSelectedIndex={0} variant="minimal">
+        {/* Alwasy attempt 1, cause there is no submission for logged out users */}
         <TabPanel title={I18n.t('Attempt 1')}>
           <Flex as="header" alignItems="center" justifyItems="center" direction="column">
             <FlexItem>

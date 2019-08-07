@@ -636,64 +636,6 @@ describe ApplicationHelper do
 
   end
 
-
-  describe "include_head_js" do
-    before do
-      allow(helper).to receive(:js_bundles).and_return([[:some_bundle], [:some_plugin_bundle, :some_plugin], [:another_bundle, nil]])
-    end
-
-    it "creates the correct javascript tags" do
-      allow(helper).to receive(:js_env).and_return({
-        BIGEASY_LOCALE: 'nb_NO',
-        MOMENT_LOCALE: 'nb',
-        TIMEZONE: 'America/La_Paz',
-        CONTEXT_TIMEZONE: 'America/Denver'
-      })
-      base_url = helper.use_optimized_js? ? 'dist/webpack-production' : 'dist/webpack-dev'
-      allow(Canvas::Cdn::RevManifest).to receive(:webpack_url_for).with(base_url + '/vendor.js').and_return('vendor_url')
-      allow(Canvas::Cdn::RevManifest).to receive(:revved_url_for).with('timezone/America/La_Paz.js').and_return('La_Paz_url')
-      allow(Canvas::Cdn::RevManifest).to receive(:revved_url_for).with('timezone/America/Denver.js').and_return('Denver_url')
-      allow(Canvas::Cdn::RevManifest).to receive(:revved_url_for).with('timezone/nb_NO.js').and_return('nb_NO_url')
-      allow(Canvas::Cdn::RevManifest).to receive(:webpack_url_for).with(base_url + '/moment/locale/nb.js').and_return('nb_url')
-      allow(Canvas::Cdn::RevManifest).to receive(:webpack_url_for).with(base_url + '/appBootstrap.js').and_return('app_bootstrap_url')
-      allow(Canvas::Cdn::RevManifest).to receive(:webpack_url_for).with(base_url + '/common.js').and_return('common_url')
-      allow(Canvas::Cdn::RevManifest).to receive(:webpack_url_for).with(base_url + '/some_bundle.js').and_return('some_bundle_url')
-      allow(Canvas::Cdn::RevManifest).to receive(:webpack_url_for).with(base_url + '/some_plugin-some_plugin_bundle.js').and_return('plugin_url')
-      allow(Canvas::Cdn::RevManifest).to receive(:webpack_url_for).with(base_url + '/another_bundle.js').and_return('another_bundle_url')
-
-      expect(helper.include_head_js).to eq %{
-<script src="/vendor_url" defer="defer"></script>
-<script src="/La_Paz_url" defer="defer"></script>
-<script src="/Denver_url" defer="defer"></script>
-<script src="/nb_NO_url" defer="defer"></script>
-<script src="/nb_url" defer="defer"></script>
-<script src="/app_bootstrap_url" defer="defer"></script>
-<script src="/common_url" defer="defer"></script>
-<script src="/some_bundle_url" defer="defer"></script>
-<script src="/plugin_url" defer="defer"></script>
-<script src="/another_bundle_url" defer="defer"></script>
-      }.strip
-    end
-  end
-
-  describe "include_js_bundles" do
-    before do
-      allow(helper).to receive(:js_bundles).and_return([[:some_bundle], [:some_plugin_bundle, :some_plugin], [:another_bundle, nil]])
-    end
-    it "creates the correct javascript tags" do
-      base_url = helper.use_optimized_js? ? 'dist/webpack-production' : 'dist/webpack-dev'
-      allow(Canvas::Cdn::RevManifest).to receive(:webpack_url_for).with(base_url + '/some_bundle.js').and_return('some_bundle_url')
-      allow(Canvas::Cdn::RevManifest).to receive(:webpack_url_for).with(base_url + '/some_plugin-some_plugin_bundle.js').and_return('plugin_url')
-      allow(Canvas::Cdn::RevManifest).to receive(:webpack_url_for).with(base_url + '/another_bundle.js').and_return('another_bundle_url')
-
-      expect(helper.include_js_bundles).to eq %{
-<script src="/some_bundle_url" defer="defer"></script>
-<script src="/plugin_url" defer="defer"></script>
-<script src="/another_bundle_url" defer="defer"></script>
-      }.strip
-    end
-  end
-
   describe "map_groups_for_planner" do
     context "with planner enabled" do
       before(:each) do
@@ -1090,6 +1032,18 @@ describe ApplicationHelper do
     end
   end
 
+  describe "#prefetch_xhr" do
+    it "inserts a script tag that will have a `fetch` call with the right id, url, and options" do
+      expect(prefetch_xhr('some_url', id: 'some_id', options: {headers: {"x-some-header": "some-value"}})).to eq(
+"<script>
+//<![CDATA[
+(window.prefetched_xhrs = (window.prefetched_xhrs || {}))[\"some_id\"] = fetch(\"some_url\", {\"credentials\":\"same-origin\",\"headers\":{\"Accept\":\"application/json+canvas-string-ids, application/json\",\"x-some-header\":\"some-value\"}})
+//]]>
+</script>"
+      )
+    end
+  end
+
   describe "#alt_text_for_login_logo" do
     before :each do
       @domain_root_account = Account.default
@@ -1108,16 +1062,17 @@ describe ApplicationHelper do
 
   context "content security policy enabled" do
 
-    let(:sub_account) { Account.default.sub_accounts.create! }
+    let(:account) { Account.create!(name: 'csp_account')}
+    let(:sub_account) { account.sub_accounts.create! }
     let(:sub_2_account) { sub_account.sub_accounts.create! }
     let(:headers) {{}}
     let(:js_env) {{}}
 
     before do
-      Account.default.enable_feature!(:javascript_csp)
+      account.enable_feature!(:javascript_csp)
 
-      Account.default.add_domain!("root_account.test")
-      Account.default.add_domain!("root_account2.test")
+      account.add_domain!("root_account.test")
+      account.add_domain!("root_account2.test")
       sub_account.add_domain!("sub_account.test")
       sub_2_account.add_domain!("sub_2_account.test")
 
@@ -1127,7 +1082,7 @@ describe ApplicationHelper do
 
     context "on root account" do
       before do
-        allow(helper).to receive(:csp_context).and_return(Account.default)
+        allow(helper).to receive(:csp_context).and_return(account)
       end
 
       it "doesn't set the CSP report only header if not configured" do
@@ -1138,12 +1093,12 @@ describe ApplicationHelper do
       end
 
       it "sets the CSP full header when active" do
-        Account.default.enable_csp!
+        account.enable_csp!
 
         helper.include_custom_meta_tags
         expect(headers['Content-Security-Policy']).to eq "frame-src 'self' localhost root_account.test root_account2.test"
         expect(headers).to_not have_key('Content-Security-Policy-Report-Only')
-        expect(js_env[:csp]).to eq "frame-src 'self' localhost root_account.test root_account2.test; script-src 'self' 'unsafe-eval' 'unsafe-inline' localhost root_account.test root_account2.test"
+        expect(js_env[:csp]).to eq "frame-src 'self' localhost root_account.test root_account2.test; script-src 'self' 'unsafe-eval' 'unsafe-inline' localhost root_account.test root_account2.test; object-src 'self' localhost root_account.test root_account2.test"
       end
 
       it "includes the report URI" do
@@ -1154,7 +1109,7 @@ describe ApplicationHelper do
 
       it "includes the report URI when active" do
         allow(helper).to receive(:csp_report_uri).and_return("; report-uri https://somewhere/")
-        Account.default.enable_csp!
+        account.enable_csp!
         helper.include_custom_meta_tags
         expect(headers['Content-Security-Policy']).to eq "frame-src 'self' localhost root_account.test root_account2.test; report-uri https://somewhere/"
       end

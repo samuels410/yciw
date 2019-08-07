@@ -20,6 +20,7 @@ class Mutations::PostAssignmentGrades < Mutations::BaseMutation
   graphql_name "PostAssignmentGrades"
 
   argument :assignment_id, ID, required: true, prepare: GraphQLHelpers.relay_or_legacy_id_prepare_func("Assignment")
+  argument :graded_only, Boolean, required: false
 
   field :assignment, Types::AssignmentType, null: true
   field :progress, Types::ProgressType, null: true
@@ -33,17 +34,30 @@ class Mutations::PostAssignmentGrades < Mutations::BaseMutation
     end
 
     verify_authorized_action!(assignment, :grade)
-    raise GraphQL::ExecutionError, "Post Policies feature not enabled" unless course.feature_enabled?(:post_policies)
+    raise GraphQL::ExecutionError, "Post Policies feature not enabled" unless course.post_policies_enabled?
 
     unless assignment.grades_published?
       raise GraphQL::ExecutionError, "Assignments under moderation cannot be posted before grades are published"
     end
 
-    submission_ids = assignment.submissions.active.pluck(:id)
+    if input[:graded_only] && assignment.anonymous_grading
+      raise GraphQL::ExecutionError, "Anonymous assignments cannot be posted by graded only"
+    end
+
+    submissions_scope = input[:graded_only] ? assignment.submissions.graded : assignment.submissions
+    submissions_scope = course.apply_enrollment_visibility(submissions_scope.joins(user: :enrollments), current_user)
+
+    submission_ids = submissions_scope.pluck(:id)
     progress = course.progresses.new(tag: "post_assignment_grades")
 
     if progress.save
-      progress.process_job(assignment, :post_submissions, {preserve_method_args: true}, submission_ids: submission_ids)
+      progress.process_job(
+        assignment,
+        :post_submissions,
+        {preserve_method_args: true},
+        progress: progress,
+        submission_ids: submission_ids
+      )
       return {assignment: assignment, progress: progress}
     else
       raise GraphQL::ExecutionError, "Error posting assignment grades"

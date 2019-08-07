@@ -17,13 +17,13 @@
  */
 
 import React from 'react'
-import {render, waitForElement} from 'react-testing-library'
+import {render, waitForElement, fireEvent} from 'react-testing-library'
 import TeacherQuery from '../../TeacherQuery'
 import TeacherView from '../../TeacherView'
 
 import {mockAssignment} from '../../../test-utils'
 
-import {MockedProvider} from 'react-apollo/test-utils'
+import CanvasValidatedMockedProvider from 'jsx/__tests__/CanvasValidatedMockedProvider'
 import {TEACHER_QUERY} from '../../../assignmentData'
 
 export function renderTeacherQuery(assignment, additionalApolloMocks = []) {
@@ -42,9 +42,9 @@ export function renderTeacherQuery(assignment, additionalApolloMocks = []) {
     ...additionalApolloMocks
   ]
   const fns = render(
-    <MockedProvider mocks={mocks} addTypename={false}>
+    <CanvasValidatedMockedProvider mocks={mocks} addTypename={false}>
       <TeacherQuery assignmentLid={assignment.lid} />
-    </MockedProvider>
+    </CanvasValidatedMockedProvider>
   )
   return fns
 }
@@ -58,12 +58,16 @@ export async function renderTeacherQueryAndWaitForResult(assignment, additionalA
 export function renderTeacherView(
   assignment = mockAssignment(),
   additionalApolloMocks = [],
-  teacherViewProps = {}
+  teacherViewProps = {},
+  activeTabName = null
 ) {
   const fns = render(
-    <MockedProvider mocks={additionalApolloMocks} addTypename={false}>
+    <CanvasValidatedMockedProvider mocks={additionalApolloMocks} addTypename={false}>
       <TeacherView assignment={assignment} {...teacherViewProps} />
-    </MockedProvider>
+    </CanvasValidatedMockedProvider>
   )
+  if (activeTabName) {
+    fireEvent.click(fns.getByText(new RegExp(activeTabName, 'i')))
+  }
   return fns
 }

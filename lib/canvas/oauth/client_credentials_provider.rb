@@ -18,16 +18,15 @@
 
 module Canvas::Oauth
   class ClientCredentialsProvider < Provider
-    AUD_PROTOCOL = 'https://'.freeze
-
-    def initialize(jwt, host, scopes = nil)
+    def initialize(jwt, host, scopes = nil, protocol = 'http://')
       @client_id = JSON::JWT.decode(jwt, :skip_verification)[:sub]
       @scopes = scopes || []
       @expected_aud = Rails.application.routes.url_helpers.oauth2_token_url(
         host: host,
-        protocol: AUD_PROTOCOL
+        protocol: protocol
       )
-      if key.nil? || key.public_jwk.nil?
+      @errors = []
+      if key.nil? || (key.public_jwk.nil? && key.public_jwk_url.nil?)
         @invalid_key = true
       else
         decoded_jwt(jwt)
@@ -50,10 +49,13 @@ module Canvas::Oauth
 
     def error_message
       return 'JWS signature invalid.' if @invalid_key
+      return "JWK Error: #{errors.first.message}" if errors.present?
       validator.error_message
     end
 
     private
+
+    attr_accessor :errors
 
     def validator
       @validator ||= Canvas::Security::JwtValidator.new(
@@ -70,9 +72,21 @@ module Canvas::Oauth
     end
 
     def decoded_jwt(jwt = nil)
-      @decoded_jwt ||= JSON::JWT.decode(jwt, JSON::JWK.new(key.public_jwk), :RS256)
+      @decoded_jwt ||= if key.public_jwk_url.present?
+          get_jwk_from_url(jwt)
+        else
+          JSON::JWT.decode(jwt, JSON::JWK.new(key.public_jwk), :RS256)
+        end
     rescue JSON::JWS::VerificationFailed, JSON::JWS::UnexpectedAlgorithm
       @invalid_key = true
+    end
+
+    def get_jwk_from_url(jwt = nil)
+      pub_jwk_from_url = HTTParty.get(key.public_jwk_url)
+      JSON::JWT.decode(jwt, JSON::JWK::Set.new(pub_jwk_from_url.parsed_response))
+    rescue JSON::JWT::Exception => e
+      errors << e
+      raise JSON::JWS::VerificationFailed
     end
 
     def generate_jwt

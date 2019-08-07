@@ -52,10 +52,14 @@ class GradeSummaryAssignmentPresenter
     (submission.present? ? @summary.unread_submission_ids.include?(submission.id) : false)
   end
 
+  def hide_grade_from_student?
+    return assignment.muted? unless assignment.course&.post_policies_enabled?
+    assignment.post_manually? ? !submission.posted? : (submission.graded? && !submission.posted?)
+  end
+
   def graded?
-    submission &&
-      (submission.grade || submission.excused?) &&
-      !assignment.muted?
+    return false if submission.blank?
+    (submission.grade || submission.excused?) && !hide_grade_from_student?
   end
 
   def is_letter_graded?
@@ -79,7 +83,7 @@ class GradeSummaryAssignmentPresenter
   end
 
   def has_no_score_display?
-    assignment.muted? || submission.nil?
+    hide_grade_from_student? || submission.nil?
   end
 
   def original_points
@@ -95,11 +99,13 @@ class GradeSummaryAssignmentPresenter
   end
 
   def has_scoring_details?
-    submission && submission.score && assignment.points_possible && assignment.points_possible > 0 && !assignment.muted?
+    return false unless submission&.score.present? && assignment&.points_possible.present?
+    assignment.points_possible > 0 && !hide_grade_from_student?
   end
 
   def has_grade_distribution?
-    assignment && assignment.points_possible && assignment.points_possible > 0 && !assignment.muted?
+    return false if assignment&.points_possible.blank?
+    assignment.points_possible > 0 && !hide_grade_from_student?
   end
 
   def has_rubric_assessments?
@@ -197,6 +203,7 @@ class GradeSummaryAssignmentPresenter
       plag_data = submission.originality_data
     end
     t = if is_text_entry?
+          plag_data[OriginalityReport.submission_asset_key(submission)] ||
           plag_data[submission.asset_string]
         elsif is_online_upload? && file
           plag_data[file.asset_string]

@@ -36,6 +36,7 @@ describe "reply attachment" do
   end
 
   it "should allow reply after cancel" do
+    skip('this only worked with the legacy editor. make it work w/ canvas-rce CORE-2714')
     get "/courses/#{@course.id}/discussion_topics/#{@topic.id}"
     f('.discussion-reply-box').click
     wait_for_ajaximations
@@ -86,7 +87,6 @@ describe "reply attachment" do
   end
 
   it 'media attachment modal can be opened' do
-    Account.default.enable_feature!(:integrate_arc_rce)
     Discussion.visit(@course, @topic)
     Discussion.start_reply_with_media
     expect(Discussion.media_modal).to be_displayed

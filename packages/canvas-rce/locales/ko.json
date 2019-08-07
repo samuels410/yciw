@@ -1,4 +1,10 @@
 {
+  "add_8523c19b": {
+    "message": "추가"
+  },
+  "all_4321c3a1": {
+    "message": "전부"
+  },
   "announcement_list_da155734": {
     "message": "공지 목록"
   },
@@ -8,14 +14,14 @@
   "assignments_1e02582c": {
     "message": "과제"
   },
-  "background_color_press_down_to_select_ef99fdac": {
-    "message": "배경색, 선택하려면 누름"
-  },
   "cancel_file_upload_9903e7b9": {
     "message": "Cancel file upload"
   },
   "cancel_image_upload_2c771950": {
     "message": "Cancel image upload"
+  },
+  "canvas_plugins_705a5016": {
+    "message": "Canvas 플러그 인"
   },
   "cc_attribution_f6de631f": {
     "message": "CC 유형"
@@ -56,14 +62,23 @@
   "click_to_insert_a_link_to_this_item_39794098": {
     "message": "Click to insert a link to this item."
   },
+  "close_d634289d": {
+    "message": "닫기"
+  },
   "close_flickr_form_b32e600a": {
     "message": "Close Flickr form"
   },
   "collaborations_5c56c15f": {
     "message": "협업"
   },
+  "content_type_2cf90d95": {
+    "message": "내용 유형"
+  },
   "course_navigation_dd035109": {
     "message": "과목 탐색"
+  },
+  "decrease_indent_de6343ab": {
+    "message": "들여쓰기 축소"
   },
   "discussions_a5f96392": {
     "message": "토론"
@@ -71,11 +86,17 @@
   "discussions_index_6c36ced": {
     "message": "토론 색인"
   },
+  "done_54e3d4b6": {
+    "message": "마침"
+  },
   "embed_image_1080badc": {
     "message": "이미지 포함"
   },
   "enter_search_terms_e397b1f0": {
     "message": "검색 용어 입력"
+  },
+  "external_links_3d9f074e": {
+    "message": "외부 링크"
   },
   "file_upload_form_4aaad554": {
     "message": "File Upload Form"
@@ -89,23 +110,23 @@
   "folder_705fd2d7": {
     "message": "폴더"
   },
-  "font_size_press_down_to_select_6c25dc2d": {
-    "message": "글자 크기, 선택하려면 누름"
-  },
-  "formatting_press_down_to_select_df728c30": {
-    "message": "서식, 선택하려면 누름"
-  },
   "grades_a61eba0a": {
     "message": "평점"
   },
   "group_navigation_99f191a": {
     "message": "그룹 탐색"
   },
+  "header_f28f73db": {
+    "message": "머리글"
+  },
   "image_upload_form_7b74079a": {
     "message": "Image Upload Form"
   },
   "images_7ce26570": {
     "message": "이미지"
+  },
+  "increase_indent_6d550a4a": {
+    "message": "들여쓰기 확대"
   },
   "insert_equella_links_49a8dacd": {
     "message": "Insert Equella Links"
@@ -115,6 +136,12 @@
   },
   "insert_math_equation_57c6e767": {
     "message": "Insert Math Equation"
+  },
+  "invalid_file_type_881cc9b2": {
+    "message": "유효하지 않은 파일 유형"
+  },
+  "keyboard_shortcuts_ed1844bd": {
+    "message": "키보드 단축키"
   },
   "link_7262adec": {
     "message": "Link"
@@ -137,6 +164,9 @@
   "loading_25990131": {
     "message": "로드하는 중..."
   },
+  "loading_bde52856": {
+    "message": "로드 중"
+  },
   "loading_failed_b3524381": {
     "message": "Loading failed..."
   },
@@ -145,6 +175,9 @@
   },
   "no_results_940393cf": {
     "message": "No results."
+  },
+  "options_3ab0ea65": {
+    "message": "옵션"
   },
   "pages_e5414c2c": {
     "message": "페이지"
@@ -155,8 +188,14 @@
   "quizzes_7e598f57": {
     "message": "퀴즈"
   },
-  "rich_text_area_press_alt_f8_for_help_58f0f2c3": {
-    "message": "Rich Text Area. Press ALT+F8 for help"
+  "record_7c9448b": {
+    "message": "녹음/녹화"
+  },
+  "recording_98da6bda": {
+    "message": "녹음/녹화"
+  },
+  "save_11a80ec3": {
+    "message": "저장"
   },
   "search_280d00bd": {
     "message": "검색"
@@ -167,11 +206,17 @@
   "select_a_folder_to_upload_your_file_into_b82d12b": {
     "message": "Select a folder to upload your file into"
   },
+  "sort_by_e75f9e3e": {
+    "message": "정렬 조건"
+  },
+  "start_over_f7552aa9": {
+    "message": "새로 시작"
+  },
+  "submit_a3cc6859": {
+    "message": "제출"
+  },
   "syllabus_f191f65b": {
     "message": "요강"
-  },
-  "text_color_press_down_to_select_8f5ad9b5": {
-    "message": "텍스트 색, 선택하려면 누름"
   },
   "upload_8b403d05": {
     "message": "업로드"
@@ -181,6 +226,12 @@
   },
   "upload_a_new_image_890df275": {
     "message": "새 이미지 업로드"
+  },
+  "upload_file_fd2361b8": {
+    "message": "파일 업로드"
+  },
+  "url_22a5f3b8": {
+    "message": "URL"
   },
   "what_would_you_like_to_call_the_new_page_d7e4488a": {
     "message": "새 페이지의 이름은 무엇입니까?"

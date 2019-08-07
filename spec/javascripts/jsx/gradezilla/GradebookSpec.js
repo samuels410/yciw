@@ -2189,6 +2189,7 @@ QUnit.module('Gradebook#getFilterSettingsViewOptionsMenuProps', {
     this.gradebook.gradingPeriodSet = {id: '1501'}
     this.gradebook.setContextModules([{id: '2601'}, {id: '2602'}])
     this.gradebook.sections_enabled = true
+    this.gradebook.studentGroupsEnabled = true
     sandbox.stub(this.gradebook, 'renderViewOptionsMenu')
     sandbox.stub(this.gradebook, 'renderFilters')
     sandbox.stub(this.gradebook, 'saveSettings')
@@ -2197,37 +2198,49 @@ QUnit.module('Gradebook#getFilterSettingsViewOptionsMenuProps', {
 
 test('includes available filters', function() {
   const props = this.gradebook.getFilterSettingsViewOptionsMenuProps()
-  deepEqual(props.available, ['assignmentGroups', 'gradingPeriods', 'modules', 'sections'])
+  deepEqual(props.available, [
+    'assignmentGroups',
+    'gradingPeriods',
+    'modules',
+    'sections',
+    'studentGroups'
+  ])
 })
 
 test('available filters exclude assignment groups when only one exists', function() {
   this.gradebook.setAssignmentGroups({301: {name: 'Assignments'}})
   const props = this.gradebook.getFilterSettingsViewOptionsMenuProps()
-  deepEqual(props.available, ['gradingPeriods', 'modules', 'sections'])
+  deepEqual(props.available, ['gradingPeriods', 'modules', 'sections', 'studentGroups'])
 })
 
 test('available filters exclude assignment groups when not loaded', function() {
   this.gradebook.setAssignmentGroups(undefined)
   const props = this.gradebook.getFilterSettingsViewOptionsMenuProps()
-  deepEqual(props.available, ['gradingPeriods', 'modules', 'sections'])
+  deepEqual(props.available, ['gradingPeriods', 'modules', 'sections', 'studentGroups'])
 })
 
 test('available filters exclude grading periods when no grading period set exists', function() {
   this.gradebook.gradingPeriodSet = null
   const props = this.gradebook.getFilterSettingsViewOptionsMenuProps()
-  deepEqual(props.available, ['assignmentGroups', 'modules', 'sections'])
+  deepEqual(props.available, ['assignmentGroups', 'modules', 'sections', 'studentGroups'])
 })
 
 test('available filters exclude modules when none exist', function() {
   this.gradebook.setContextModules([])
   const props = this.gradebook.getFilterSettingsViewOptionsMenuProps()
-  deepEqual(props.available, ['assignmentGroups', 'gradingPeriods', 'sections'])
+  deepEqual(props.available, ['assignmentGroups', 'gradingPeriods', 'sections', 'studentGroups'])
 })
 
 test('available filters exclude sections when only one exists', function() {
   this.gradebook.sections_enabled = false
   const props = this.gradebook.getFilterSettingsViewOptionsMenuProps()
-  deepEqual(props.available, ['assignmentGroups', 'gradingPeriods', 'modules'])
+  deepEqual(props.available, ['assignmentGroups', 'gradingPeriods', 'modules', 'studentGroups'])
+})
+
+test('available filters exclude student groups when none exist', function() {
+  this.gradebook.studentGroupsEnabled = false
+  const props = this.gradebook.getFilterSettingsViewOptionsMenuProps()
+  deepEqual(props.available, ['assignmentGroups', 'gradingPeriods', 'modules', 'sections'])
 })
 
 test('includes selected filters', function() {
@@ -2942,6 +2955,134 @@ test('does not render when filter is not selected', function() {
     'assignment group menu reference has been removed'
   )
   strictEqual(this.container.children.length, 0, 'rendered elements have been removed')
+})
+
+QUnit.module('Gradebook#updateStudentGroupFilterVisibility', hooks => {
+  let gradebook
+  let container
+
+  hooks.beforeEach(() => {
+    const studentGroupFilterContainerSelector = 'student-group-filter-container'
+    $fixtures.innerHTML = `<div id="${studentGroupFilterContainerSelector}"></div>`
+    container = $fixtures.querySelector(`#${studentGroupFilterContainerSelector}`)
+
+    const studentGroups = [
+      {
+        groups: [{id: '1', name: 'First Group Set 1'}, {id: '2', name: 'First Group Set 2'}],
+        id: '1',
+        name: 'First Group Set'
+      },
+      {
+        groups: [{id: '3', name: 'Second Group Set 1'}, {id: '4', name: 'Second Group Set 2'}],
+        id: '2',
+        name: 'Second Group Set'
+      }
+    ]
+
+    gradebook = createGradebook({student_groups: studentGroups})
+    gradebook.studentGroupsEnabled = true
+    gradebook.setSelectedViewOptionsFilters(['studentGroups'])
+  })
+
+  hooks.afterEach(() => {
+    $fixtures.innerHTML = ''
+  })
+
+  test('renders the section select when not already rendered', () => {
+    gradebook.updateStudentGroupFilterVisibility()
+    ok(container.children.length > 0, 'student group menu was rendered')
+  })
+
+  test('stores a reference to the section select when it is rendered', () => {
+    gradebook.updateStudentGroupFilterVisibility()
+    ok(gradebook.studentGroupFilterMenu, 'student group menu reference has been stored')
+  })
+
+  test('does not render when there are no student groups', () => {
+    gradebook.studentGroupsEnabled = false
+    gradebook.updateStudentGroupFilterVisibility()
+    notOk(gradebook.studentGroupFilterMenu, 'student group menu reference has not been stored')
+    strictEqual(container.children.length, 0, 'nothing was rendered')
+  })
+
+  test('does not render when filter is not selected', () => {
+    gradebook.setSelectedViewOptionsFilters(['assignmentGroups'])
+    gradebook.updateStudentGroupFilterVisibility()
+    notOk(gradebook.studentGroupFilterMenu, 'student group menu reference has been removed')
+    strictEqual(container.children.length, 0, 'rendered elements have been removed')
+  })
+
+  test('renders the group select with group categories at the top level', () => {
+    gradebook.updateStudentGroupFilterVisibility()
+    const studentGroupCategories = gradebook.studentGroupFilterMenu.props.items
+    deepEqual(studentGroupCategories.map(group => group.id), ['1', '2'])
+  })
+
+  test('renders the group select with all groups', () => {
+    gradebook.updateStudentGroupFilterVisibility()
+    const studentGroupCategories = gradebook.studentGroupFilterMenu.props.items
+    const studentGroups = _.flatten(studentGroupCategories.map(category => category.children))
+    deepEqual(studentGroups.map(group => group.id), ['1', '2', '3', '4'])
+  })
+
+  test('unescapes student group category names', () => {
+    gradebook.updateStudentGroupFilterVisibility()
+    const studentGroupCategories = gradebook.studentGroupFilterMenu.props.items
+    deepEqual(studentGroupCategories.map(section => section.name), [
+      'First Group Set',
+      'Second Group Set'
+    ])
+  })
+
+  test('unescapes student group names', () => {
+    gradebook.updateStudentGroupFilterVisibility()
+    const studentGroupCategories = gradebook.studentGroupFilterMenu.props.items
+    const studentGroups = _.flatten(studentGroupCategories.map(category => category.children))
+    deepEqual(studentGroups.map(section => section.name), [
+      'First Group Set 1',
+      'First Group Set 2',
+      'Second Group Set 1',
+      'Second Group Set 2'
+    ])
+  })
+
+  test('sets the student group select to show the saved "filter rows by" setting', () => {
+    gradebook.setFilterRowsBySetting('studentGroupId', '4')
+    gradebook.updateStudentGroupFilterVisibility()
+    strictEqual(gradebook.studentGroupFilterMenu.props.selectedItemId, '4')
+  })
+
+  test('sets the student group select as disabled when students are not loaded', () => {
+    gradebook.updateStudentGroupFilterVisibility()
+    strictEqual(gradebook.studentGroupFilterMenu.props.disabled, true)
+  })
+
+  test('sets the section select as not disabled when students are loaded', () => {
+    gradebook.setStudentsLoaded(true)
+    gradebook.updateStudentGroupFilterVisibility()
+    strictEqual(gradebook.studentGroupFilterMenu.props.disabled, false)
+  })
+
+  test('updates the disabled state of the rendered section select', () => {
+    gradebook.updateStudentGroupFilterVisibility()
+    gradebook.setStudentsLoaded(true)
+    gradebook.updateStudentGroupFilterVisibility()
+    strictEqual(gradebook.studentGroupFilterMenu.props.disabled, false)
+  })
+
+  test('renders only one section select when updated', () => {
+    gradebook.updateStudentGroupFilterVisibility()
+    gradebook.updateStudentGroupFilterVisibility()
+    ok(gradebook.studentGroupFilterMenu, 'student group menu reference has been stored')
+    strictEqual(container.children.length, 1, 'only one section select is rendered')
+  })
+
+  test('removes the section select when filter is deselected', () => {
+    gradebook.setSelectedViewOptionsFilters(['assignmentGroups'])
+    gradebook.updateStudentGroupFilterVisibility()
+    notOk(gradebook.studentGroupFilterMenu, 'student group menu reference has been stored')
+    strictEqual(container.children.length, 0, 'nothing was rendered')
+  })
 })
 
 QUnit.module('Menus', {
@@ -4073,6 +4214,12 @@ test('uses Grid Support to update the column headers', function() {
   strictEqual(this.gradebook.gradebookGrid.gridSupport.columns.updateColumnHeaders.callCount, 1)
 })
 
+test('takes an optional array of column ids', function() {
+  this.gradebook.updateColumnHeaders(['2301', '2401'])
+  const {args} = this.gradebook.gradebookGrid.gridSupport.columns.updateColumnHeaders.firstCall
+  deepEqual(args[0], ['2301', '2401'])
+})
+
 QUnit.module('Gradebook#listRowIndicesForStudentIds')
 
 test('returns a row index for each student id', function() {
@@ -4181,6 +4328,52 @@ test('has no effect when the grid has not been initialized', function() {
   this.gradebook.gradebookGrid.grid = null
   this.gradebook.invalidateRowsForStudentIds(['1101'])
   ok(true, 'no error was thrown')
+})
+
+QUnit.module('Gradebook#updateTotalGradeColumn', hooks => {
+  let gradebook
+
+  hooks.beforeEach(() => {
+    const columns = [
+      {id: 'student', type: 'student'},
+      {id: 'assignment_232', type: 'assignment'},
+      {id: 'total_grade', type: 'total_grade'},
+      {id: 'assignment_group_12', type: 'assignment'}
+    ]
+    gradebook = createGradebook()
+    gradebook.gridData.rows = [{id: '1101'}, {id: '1102'}]
+    sinon.stub(gradebook.courseContent.students, 'listStudentIds').returns(['1101', '1102'])
+
+    gradebook.gradebookGrid.grid = {
+      updateCell: sinon.stub(),
+      getColumns() {
+        return columns
+      }
+    }
+  })
+
+  test('makes exactly one update for each currently loaded student', () => {
+    gradebook.updateTotalGradeColumn()
+    strictEqual(gradebook.gradebookGrid.grid.updateCell.callCount, 2)
+  })
+
+  test('includes the row index of the student when updating', () => {
+    gradebook.updateTotalGradeColumn()
+    const rows = _.map(gradebook.gradebookGrid.grid.updateCell.args, args => args[0])
+    deepEqual(rows, [0, 1])
+  })
+
+  test('includes the index of the total_grade column when updating', () => {
+    gradebook.updateTotalGradeColumn()
+    const rows = _.map(gradebook.gradebookGrid.grid.updateCell.args, args => args[1])
+    deepEqual(rows, [2, 2])
+  })
+
+  test('has no effect when the grid has not been initialized', () => {
+    gradebook.gradebookGrid.grid = null
+    gradebook.updateTotalGradeColumn()
+    ok(true, 'no error was thrown')
+  })
 })
 
 QUnit.module('Gradebook Rows', function() {
@@ -4778,6 +4971,38 @@ QUnit.module('Gradebook "Enter Grades as" Setting', function(suiteHooks) {
         strictEqual(gradebook.gradebookGrid.invalidate.callCount, 1)
       })
       gradebook.updateEnterGradesAsSetting('2301', 'percent')
+    })
+  })
+
+  QUnit.module('#postAssignmentGradesTrayOpenChanged', hooks => {
+    let updateGridStub
+
+    hooks.beforeEach(() => {
+      const assignment = {id: '2301'}
+      const column = gradebook.buildAssignmentColumn(assignment)
+      gradebook.gridData.columns.definitions[column.id] = column
+      updateGridStub = sinon.stub(gradebook, 'updateGrid')
+    })
+
+    hooks.afterEach(() => {
+      updateGridStub.restore()
+    })
+
+    test('sets the column definition postAssignmentGradesTrayOpenForAssignmentId', () => {
+      gradebook.postAssignmentGradesTrayOpenChanged({assignmentId: '2301', isOpen: true})
+      const columnId = gradebook.getAssignmentColumnId('2301')
+      const definition = gradebook.gridData.columns.definitions[columnId]
+      strictEqual(definition.postAssignmentGradesTrayOpenForAssignmentId, true)
+    })
+
+    test('calls updateGrid if a corresponding column is found', () => {
+      gradebook.postAssignmentGradesTrayOpenChanged({assignmentId: '2301', isOpen: true})
+      strictEqual(updateGridStub.callCount, 1)
+    })
+
+    test('does not call updateGrid if a corresponding column is not found', () => {
+      gradebook.postAssignmentGradesTrayOpenChanged({assignmentId: '2399', isOpen: true})
+      strictEqual(updateGridStub.callCount, 0)
     })
   })
 })
@@ -6528,6 +6753,20 @@ QUnit.module('Gradebook#getSubmissionTrayProps', function(suiteHooks) {
 
     const props = gradebook.getSubmissionTrayProps(gradebook.student('1101'))
     notOk(props.pendingGradeInfo)
+  })
+
+  test('sets postPoliciesEnabled to false when post_policies_enabled is false', () => {
+    gradebook.options.post_policies_enabled = false
+    gradebook.setSubmissionTrayState(true, '1101', '2301')
+    const props = gradebook.getSubmissionTrayProps(gradebook.student('1101'))
+    strictEqual(props.postPoliciesEnabled, false)
+  })
+
+  test('sets postPoliciesEnabled to true when post_policies_enabled is true', () => {
+    gradebook.options.post_policies_enabled = true
+    gradebook.setSubmissionTrayState(true, '1101', '2301')
+    const props = gradebook.getSubmissionTrayProps(gradebook.student('1101'))
+    strictEqual(props.postPoliciesEnabled, true)
   })
 })
 
@@ -8915,7 +9154,7 @@ QUnit.module('Gradebook#gotAllAssignmentGroups', hooks => {
   })
 })
 
-QUnit.module('Gradebook#handleAssignmentMutingChange', hooks => {
+QUnit.module('Gradebook#handleSubmissionPostedChange', hooks => {
   let columnId
   let server
   let options
@@ -8944,14 +9183,14 @@ QUnit.module('Gradebook#handleAssignmentMutingChange', hooks => {
 
   test('resets grading', () => {
     sinon.stub(gradebook, 'resetGrading')
-    gradebook.handleAssignmentMutingChange({id: '2301'})
+    gradebook.handleSubmissionPostedChange({id: '2301'})
     strictEqual(gradebook.resetGrading.callCount, 1)
     gradebook.resetGrading.restore()
   })
 
   test('when sorted by an anonymous assignment, gradebook changes sort', () => {
     gradebook.setSortRowsBySetting(columnId, 'grade', 'ascending')
-    gradebook.handleAssignmentMutingChange({id: '2301', anonymize_students: true})
+    gradebook.handleSubmissionPostedChange({id: '2301', anonymize_students: true})
     deepEqual(gradebook.getSortRowsBySetting(), sortByStudentNameSettings)
   })
 
@@ -8962,7 +9201,7 @@ QUnit.module('Gradebook#handleAssignmentMutingChange', hooks => {
       'grade',
       'ascending'
     )
-    gradebook.handleAssignmentMutingChange({
+    gradebook.handleSubmissionPostedChange({
       id: '2301',
       anonymize_students: true,
       assignment_group_id: groupId
@@ -8972,22 +9211,46 @@ QUnit.module('Gradebook#handleAssignmentMutingChange', hooks => {
 
   test('when sorted by total grade, gradebook changes sort', () => {
     gradebook.setSortRowsBySetting('total_grade', 'grade', 'ascending')
-    gradebook.handleAssignmentMutingChange({id: '2301', anonymize_students: true})
+    gradebook.handleSubmissionPostedChange({id: '2301', anonymize_students: true})
     deepEqual(gradebook.getSortRowsBySetting(), sortByStudentNameSettings)
   })
 
   test('when assignment is not anonymous, gradebook does not change sort', () => {
     gradebook.setSortRowsBySetting(columnId, 'grade', 'ascending')
     const sortSettings = gradebook.getSortRowsBySetting()
-    gradebook.handleAssignmentMutingChange({id: '2301', anonymize_students: false})
+    gradebook.handleSubmissionPostedChange({id: '2301', anonymize_students: false})
     deepEqual(gradebook.getSortRowsBySetting(), sortSettings)
   })
 
   test('when gradebook is sorted by an unrelated column, gradebook does not change sort', () => {
     gradebook.setSortRowsBySetting(gradebook.getAssignmentColumnId('2222'), 'grade', 'ascending')
     const sortSettings = gradebook.getSortRowsBySetting()
-    gradebook.handleAssignmentMutingChange({id: '2301', anonymize_students: true})
+    gradebook.handleSubmissionPostedChange({id: '2301', anonymize_students: true})
     deepEqual(gradebook.getSortRowsBySetting(), sortSettings)
+  })
+})
+
+QUnit.module('Gradebook#getSubmission', hooks => {
+  let gradebook
+
+  hooks.beforeEach(() => {
+    gradebook = createGradebook()
+    gradebook.students = {
+      1101: {id: '1101', assignment_201: {score: 10, possible: 20}, assignment_202: {}},
+      1102: {id: '1102', assignment_201: {}}
+    }
+  })
+
+  test('returns the submission when the student and submission are both present', () => {
+    deepEqual(gradebook.getSubmission('1101', '201'), {score: 10, possible: 20})
+  })
+
+  test('returns undefined when the student is present but the submission is not', () => {
+    strictEqual(gradebook.getSubmission('1101', '999'), undefined)
+  })
+
+  test('returns undefined when the student is not present', () => {
+    strictEqual(gradebook.getSubmission('2202', '201'), undefined)
   })
 })
 

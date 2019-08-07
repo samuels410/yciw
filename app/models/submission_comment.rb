@@ -49,7 +49,7 @@ class SubmissionComment < ActiveRecord::Base
   validates_length_of :comment, :minimum => 1, :allow_nil => true, :allow_blank => true
   validates_each :attempt do |record, attr, value|
     next if value.nil?
-    if record.submission.attempt.nil? || value > record.submission.attempt
+    if value > (record.submission.attempt || 0)
       record.errors.add(attr, 'attempt must not be larger than number of submission attempts')
     end
   end
@@ -159,11 +159,9 @@ class SubmissionComment < ActiveRecord::Base
     p.dispatch :submission_comment
     p.to do
       course_id = /\d+/.match(submission.context_code).to_s.to_i
-      section_ended =
-        Enrollment.where({
-                           user_id: submission.user.id
-                         }).section_ended(course_id).length > 0
-      unless section_ended
+      active_participant =
+        Enrollment.where(user_id: submission.user.id, :course_id => course_id).active_by_date.exists?
+      if active_participant
         ([submission.user] + User.observing_students_in_course(submission.user, submission.assignment.context)) - [author]
       end
     end
@@ -208,7 +206,7 @@ class SubmissionComment < ActiveRecord::Base
     # The student who owns the submission can't see drafts or hidden comments (or,
     # generally, any instructor comments if the assignment is muted)
     if submission.user_id == user.id
-      return false if draft? || hidden? || assignment.muted?
+      return false if draft? || hidden? || !submission.posted?
 
       # Generally the student should see only non-provisional comments--but they should
       # also see provisional comments from the final grader if grades are published
@@ -361,11 +359,15 @@ class SubmissionComment < ActiveRecord::Base
       return if submission.assignment.deleted? || submission.assignment.muted?
       return if provisional_grade_id.present?
 
-      ContentParticipation.create_or_update({
-        :content => submission,
-        :user => submission.user,
-        :workflow_state => "unread",
-      })
+      self.class.connection.after_transaction_commit do
+        submission.user.clear_cache_key(:submissions)
+
+        ContentParticipation.create_or_update({
+          :content => submission,
+          :user => submission.user,
+          :workflow_state => "unread",
+        })
+      end
     end
   end
 

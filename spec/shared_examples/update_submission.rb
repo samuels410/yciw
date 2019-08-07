@@ -40,17 +40,170 @@ RSpec.shared_examples 'a submission update action' do |controller|
       assert_unauthorized
     end
 
-    it "should allow updating homework to add comments" do
-      course_with_student_logged_in(active_all: true)
-      @assignment = @course.assignments.create!(title: "some assignment", submission_types: "online_url,online_upload")
-      @submission = @assignment.submit_homework(@user)
-      @resource_pair = controller == :anonymous_submissions ? { anonymous_id: @submission.anonymous_id } : { id: @user.id }
-      @params = {course_id: @course.id, assignment_id: @assignment.id, submission: {comment: "some comment"}}.merge(@resource_pair)
-      put :update, params: @params
-      expect(response).to be_redirect
-      expect(assigns[:submission]).to eql(@submission)
-      expect(assigns[:submission].submission_comments.length).to be 1
-      expect(assigns[:submission].submission_comments.first.comment).to eql("some comment")
+    describe "adding a comment" do
+      let_once(:course) { Course.create! }
+      let_once(:assignment) { course.assignments.create! }
+      let_once(:student) { User.create! }
+      let_once(:teacher) { User.create! }
+
+      before(:once) do
+        course.enroll_student(student)
+        course.enroll_teacher(teacher)
+        course.enable_feature!(:new_gradebook)
+        PostPolicy.enable_feature!
+      end
+
+      it "should allow updating homework to add comments" do
+        submission = assignment.submit_homework(student)
+        resource_pair = controller == :anonymous_submissions ? { anonymous_id: submission.anonymous_id } : { id: student.id }
+        params = {course_id: course.id, assignment_id: assignment.id, submission: {comment: "some comment"}}.merge(resource_pair)
+        user_session(student)
+        put :update, params: params
+        expect(response).to be_redirect
+        expect(assigns[:submission]).to eql(submission)
+        expect(assigns[:submission].submission_comments.length).to be 1
+        expect(assigns[:submission].submission_comments.first.comment).to eql("some comment")
+      end
+
+      it "teacher adding a comment posts the submission when assignment posts automatically" do
+        assignment.ensure_post_policy(post_manually: false)
+        submission = assignment.submit_homework(student)
+        resource_pair = controller == :anonymous_submissions ? { anonymous_id: submission.anonymous_id } : { id: student.id }
+        params = {course_id: course.id, assignment_id: assignment.id, submission: {comment: "some comment"}}.merge(resource_pair)
+        user_session(teacher)
+        put :update, params: params
+        expect(submission.reload).to be_posted
+      end
+
+      it "teacher adding a comment does not post the submission when assignment posts manually" do
+        assignment.ensure_post_policy(post_manually: true)
+        submission = assignment.submit_homework(student)
+        resource_pair = controller == :anonymous_submissions ? { anonymous_id: submission.anonymous_id } : { id: student.id }
+        params = {course_id: course.id, assignment_id: assignment.id, submission: {comment: "some comment"}}.merge(resource_pair)
+        user_session(teacher)
+        put :update, params: params
+        expect(submission.reload).not_to be_posted
+      end
+
+      it "teacher adding a comment to an unposted submission is hidden" do
+        assignment.ensure_post_policy(post_manually: true)
+        submission = assignment.submit_homework(student)
+        resource_pair = controller == :anonymous_submissions ? { anonymous_id: submission.anonymous_id } : { id: student.id }
+        params = {course_id: course.id, assignment_id: assignment.id, submission: {comment: "some comment"}}.merge(resource_pair)
+        user_session(teacher)
+        put :update, params: params
+        expect(submission.reload.submission_comments.first).to be_hidden
+      end
+
+      it "teacher adding a comment to a posted submission is not hidden" do
+        assignment.ensure_post_policy(post_manually: false)
+        submission = assignment.submit_homework(student)
+        resource_pair = controller == :anonymous_submissions ? { anonymous_id: submission.anonymous_id } : { id: student.id }
+        params = {course_id: course.id, assignment_id: assignment.id, submission: {comment: "some comment"}}.merge(resource_pair)
+        user_session(teacher)
+        put :update, params: params
+        expect(submission.reload.submission_comments.first).not_to be_hidden
+      end
+    end
+
+    describe "quiz submissions" do
+      let_once(:assignment) { course.assignments.create!(title: "quiz", submission_types: "online_quiz") }
+      let_once(:course) { Course.create! }
+      let_once(:resource_pair) { controller == :anonymous_submissions ? { anonymous_id: submission.anonymous_id } : { id: student.id } }
+      let_once(:student) { course.enroll_student(User.create!, enrollment_state: :active).user }
+      let_once(:submission) { assignment.submissions.find_by(user: student) }
+      let_once(:teacher) { course.enroll_teacher(User.create!, enrollment_state: :active).user }
+
+      before(:once) do
+        quiz = assignment.reload.quiz
+        quiz_submission = quiz.generate_submission(student)
+        quiz_submission.update!(workflow_state: "complete")
+        quiz_submission.update_scores(fudge_points: 10.0, grader_id: teacher.id)
+      end
+
+      context "current user is student" do
+        let(:current_user) { student }
+
+        before(:each) do
+          user_session(current_user)
+        end
+
+        it "renders the submission body with quiz submission data" do
+          params = {assignment_id: assignment.id, course_id: course.id, submission: {comment: "hi"}}.merge(resource_pair)
+          put :update, params: params, format: :json
+          submission_json = JSON.parse(response.body).select { |s| s["submission"]["id"] == submission.id }.first
+          expect(submission_json["submission"]["body"]).to eq submission.reload.body
+        end
+
+        it "renders the submission body with quiz submission data, when updating What-If scores" do
+          params = {assignment_id: assignment.id, course_id: course.id, submission: {student_entered_score: "2"}}.merge(resource_pair)
+          put :update, params: params, format: :json
+          submission_json = JSON.parse(response.body)
+          expect(submission_json["submission"]["body"]).to eq submission.reload.body
+        end
+
+        context "when assignment is muted" do
+          before(:once) do
+            assignment.update!(muted: true)
+          end
+
+          it "does not render the submission body" do
+            params = {assignment_id: assignment.id, course_id: course.id, submission: {comment: "hi"}}.merge(resource_pair)
+            put :update, params: params, format: :json
+            submission_json = JSON.parse(response.body).select { |s| s["submission"]["id"] == submission.id }.first
+            expect(submission_json["submission"]["body"]).to be_nil
+          end
+
+          it "does not render the submission body, when updating What-If scores" do
+            params = {assignment_id: assignment.id, course_id: course.id, submission: {student_entered_score: "2"}}.merge(resource_pair)
+            put :update, params: params, format: :json
+            submission_json = JSON.parse(response.body)
+            expect(submission_json["submission"]["body"]).to be_nil
+          end
+        end
+      end
+
+      context "current user is teacher" do
+        let(:current_user) { teacher }
+
+        before(:each) do
+          user_session(current_user)
+        end
+
+        it "renders the submission body with quiz submission data" do
+          params = {assignment_id: assignment.id, course_id: course.id, submission: {comment: "hi"}}.merge(resource_pair)
+          put :update, params: params, format: :json
+          submission_json = JSON.parse(response.body).select { |s| s["submission"]["id"] == submission.id }.first
+          expect(submission_json["submission"]["body"]).to eq submission.reload.body
+        end
+
+        it "renders the submission body with quiz submission data, when updating What-If scores" do
+          params = {assignment_id: assignment.id, course_id: course.id, submission: {student_entered_score: "2"}}.merge(resource_pair)
+          put :update, params: params, format: :json
+          submission_json = JSON.parse(response.body)
+          expect(submission_json["submission"]["body"]).to eq submission.reload.body
+        end
+
+        context "when assignment is muted" do
+          before(:once) do
+            assignment.update!(muted: true)
+          end
+
+          it "renders the submission body with quiz submission data" do
+            params = {assignment_id: assignment.id, course_id: course.id, submission: {comment: "hi"}}.merge(resource_pair)
+            put :update, params: params, format: :json
+            submission_json = JSON.parse(response.body).select { |s| s["submission"]["id"] == submission.id }.first
+            expect(submission_json["submission"]["body"]).to eq submission.reload.body
+          end
+
+          it "renders the submission body with quiz submission data, when updating What-If scores" do
+            params = {assignment_id: assignment.id, course_id: course.id, submission: {student_entered_score: "2"}}.merge(resource_pair)
+            put :update, params: params, format: :json
+            submission_json = JSON.parse(response.body)
+            expect(submission_json["submission"]["body"]).to eq submission.reload.body
+          end
+        end
+      end
     end
 
     it "should allow a non-enrolled admin to add comments" do

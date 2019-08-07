@@ -224,7 +224,7 @@ export class DiscussionRow extends Component {
     }
   }
 
-  getAccessibleTitle = () => {
+  getAccessibleTitle() {
     let result = `${this.props.discussion.title} `
     const availability = this.getAvailabilityString()
     if (availability) result += `${availability} `
@@ -592,6 +592,9 @@ export class DiscussionRow extends Component {
       <div className="ic-item-row__content-col">
         <Heading level="h3" margin="0">
           <a style={{color: 'inherit'}} className="discussion-title" ref={refFn} href={linkUrl}>
+            {this.props.discussion.read_state !== 'read' && (
+              <ScreenReaderContent>{I18n.t('unread,')}</ScreenReaderContent>
+            )}
             <span aria-hidden="true">{this.props.discussion.title}</span>
             <ScreenReaderContent>{this.getAccessibleTitle()}</ScreenReaderContent>
           </a>
@@ -755,14 +758,7 @@ export class DiscussionRow extends Component {
 
   renderBlueUnreadBadge() {
     if (this.props.discussion.read_state !== 'read') {
-      return (
-        <Badge
-          margin="0 small x-small 0"
-          standalone
-          type="notification"
-          formatOutput={() => <ScreenReaderContent>{I18n.t('Unread')}</ScreenReaderContent>}
-        />
-      )
+      return <Badge margin="0 small x-small 0" standalone type="notification" />
     } else {
       return (
         <View display="block" margin="0 small x-small 0">
@@ -773,10 +769,6 @@ export class DiscussionRow extends Component {
   }
 
   render() {
-    // necessary because discussions return html from RCE
-    const contentWrapper = document.createElement('span')
-    contentWrapper.innerHTML = this.props.discussion.message
-
     return (
       <div>
         <Grid startAt="medium" vAlign="middle" colSpacing="none">
@@ -834,7 +826,6 @@ const mapState = (state, ownProps) => {
   return Object.assign({}, ownProps, propsFromState)
 }
 
-/* eslint-disable new-cap */
 export const DraggableDiscussionRow = compose(
   DropTarget('Discussion', dropTarget, dConnect => ({
     connectDropTarget: dConnect.dropTarget()

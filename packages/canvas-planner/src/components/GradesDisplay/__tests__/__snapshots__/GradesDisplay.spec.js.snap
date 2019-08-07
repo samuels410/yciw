@@ -2,11 +2,13 @@
 
 exports[`does not render caveat if no courses have grading periods 1`] = `
 <View
+  debug={false}
   display="auto"
   overflowX="visible"
   overflowY="visible"
 >
   <View
+    debug={false}
     display="auto"
     overflowX="visible"
     overflowY="visible"
@@ -31,6 +33,7 @@ exports[`does not render caveat if no courses have grading periods 1`] = `
   </View>
   <View
     as="div"
+    debug={false}
     display="auto"
     key="1"
     margin="0 0 large 0"
@@ -46,23 +49,32 @@ exports[`does not render caveat if no courses have grading periods 1`] = `
         }
       }
     >
-      <Link
+      <Button
         as="button"
+        buttonRef={[Function]}
+        cursor="pointer"
+        fluidWidth={false}
         href="/courses/1/grades"
-        iconPlacement="start"
-        linkRef={[Function]}
-        variant="default"
+        margin="0"
+        size="small"
+        theme={
+          Object {
+            "smallHeight": "normal",
+            "smallPadding": "0",
+          }
+        }
+        type="button"
+        variant="link"
       >
         <Text
           as="span"
-          color="primary"
           letterSpacing="normal"
-          size="small"
+          size="medium"
           transform="uppercase"
         >
           Ticket to Ride 101
         </Text>
-      </Link>
+      </Button>
     </div>
     <Text
       as="div"
@@ -78,11 +90,13 @@ exports[`does not render caveat if no courses have grading periods 1`] = `
 
 exports[`renders a loading spinner when loading 1`] = `
 <View
+  debug={false}
   display="auto"
   overflowX="visible"
   overflowY="visible"
 >
   <View
+    debug={false}
     display="auto"
     overflowX="visible"
     overflowY="visible"
@@ -107,6 +121,7 @@ exports[`renders a loading spinner when loading 1`] = `
   </View>
   <View
     as="div"
+    debug={false}
     display="auto"
     margin="0 0 large 0"
     overflowX="visible"
@@ -125,6 +140,7 @@ exports[`renders a loading spinner when loading 1`] = `
 
 exports[`renders an ErrorAlert if there is an error loading grades 1`] = `
 <View
+  debug={false}
   display="auto"
   overflowX="visible"
   overflowY="visible"
@@ -135,6 +151,7 @@ exports[`renders an ErrorAlert if there is an error loading grades 1`] = `
     Error loading grades
   </ErrorAlert>
   <View
+    debug={false}
     display="auto"
     overflowX="visible"
     overflowY="visible"
@@ -162,11 +179,13 @@ exports[`renders an ErrorAlert if there is an error loading grades 1`] = `
 
 exports[`renders some course grades 1`] = `
 <View
+  debug={false}
   display="auto"
   overflowX="visible"
   overflowY="visible"
 >
   <View
+    debug={false}
     display="auto"
     overflowX="visible"
     overflowY="visible"
@@ -191,6 +210,7 @@ exports[`renders some course grades 1`] = `
   </View>
   <View
     as="div"
+    debug={false}
     display="auto"
     key="1"
     margin="0 0 large 0"
@@ -206,23 +226,32 @@ exports[`renders some course grades 1`] = `
         }
       }
     >
-      <Link
+      <Button
         as="button"
+        buttonRef={[Function]}
+        cursor="pointer"
+        fluidWidth={false}
         href="/courses/1/grades"
-        iconPlacement="start"
-        linkRef={[Function]}
-        variant="default"
+        margin="0"
+        size="small"
+        theme={
+          Object {
+            "smallHeight": "normal",
+            "smallPadding": "0",
+          }
+        }
+        type="button"
+        variant="link"
       >
         <Text
           as="span"
-          color="primary"
           letterSpacing="normal"
-          size="small"
+          size="medium"
           transform="uppercase"
         >
           Ticket to Ride 101
         </Text>
-      </Link>
+      </Button>
     </div>
     <Text
       as="div"
@@ -235,6 +264,7 @@ exports[`renders some course grades 1`] = `
   </View>
   <View
     as="div"
+    debug={false}
     display="auto"
     key="2"
     margin="0 0 large 0"
@@ -250,23 +280,32 @@ exports[`renders some course grades 1`] = `
         }
       }
     >
-      <Link
+      <Button
         as="button"
+        buttonRef={[Function]}
+        cursor="pointer"
+        fluidWidth={false}
         href="/courses/2/grades"
-        iconPlacement="start"
-        linkRef={[Function]}
-        variant="default"
+        margin="0"
+        size="small"
+        theme={
+          Object {
+            "smallHeight": "normal",
+            "smallPadding": "0",
+          }
+        }
+        type="button"
+        variant="link"
       >
         <Text
           as="span"
-          color="primary"
           letterSpacing="normal"
-          size="small"
+          size="medium"
           transform="uppercase"
         >
           Ingenious 101
         </Text>
-      </Link>
+      </Button>
     </div>
     <Text
       as="div"
@@ -279,6 +318,7 @@ exports[`renders some course grades 1`] = `
   </View>
   <View
     as="div"
+    debug={false}
     display="auto"
     key="3"
     margin="0 0 large 0"
@@ -294,23 +334,32 @@ exports[`renders some course grades 1`] = `
         }
       }
     >
-      <Link
+      <Button
         as="button"
+        buttonRef={[Function]}
+        cursor="pointer"
+        fluidWidth={false}
         href="/courses/3/grades"
-        iconPlacement="start"
-        linkRef={[Function]}
-        variant="default"
+        margin="0"
+        size="small"
+        theme={
+          Object {
+            "smallHeight": "normal",
+            "smallPadding": "0",
+          }
+        }
+        type="button"
+        variant="link"
       >
         <Text
           as="span"
-          color="primary"
           letterSpacing="normal"
-          size="small"
+          size="medium"
           transform="uppercase"
         >
           Settlers of Catan 201
         </Text>
-      </Link>
+      </Button>
     </div>
     <Text
       as="div"
@@ -323,6 +372,7 @@ exports[`renders some course grades 1`] = `
   </View>
   <View
     as="div"
+    debug={false}
     display="auto"
     overflowX="visible"
     overflowY="visible"

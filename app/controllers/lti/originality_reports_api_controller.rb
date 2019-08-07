@@ -92,6 +92,14 @@ module Lti
 #         "tool_setting": {
 #            "description": "A ToolSetting object containing optional 'resource_type_code' and 'resource_url'",
 #            "type": "ToolSetting"
+#         },
+#         "error_report": {
+#            "description": "A message describing the error. If set, the workflow_state will become 'error.'",
+#            "type": "String"
+#         },
+#         "submission_time": {
+#            "description": "The submitted_at date time of the submission.",
+#            "type": "datetime"
 #         }
 #       }
 #     }
@@ -153,6 +161,10 @@ module Lti
     #   May be set to "pending", "error", or "scored". If an originality score
     #   is provided a workflow state of "scored" will be inferred.
     #
+    # @argument originality_report[error_message] [String]
+    #   A message describing the error. If set, the "workflow_state"
+    #   will be set to "error."
+    #
     # @returns OriginalityReport
     def create
       begin
@@ -205,6 +217,10 @@ module Lti
     #   May be set to "pending", "error", or "scored". If an originality score
     #   is provided a workflow state of "scored" will be inferred.
     #
+    # @argument originality_report[error_message] [String]
+    #   A message describing the error. If set, the "workflow_state"
+    #   will be set to "error."
+    #
     # @returns OriginalityReport
     def update
       if @report.update_attributes(update_report_params)
@@ -242,18 +258,24 @@ module Lti
     end
 
     def create_attributes
-      [:originality_score,
-       :file_id,
-       :originality_report_file_id,
-       :originality_report_url,
-       :workflow_state].freeze
+      [
+        :originality_score,
+        :error_message,
+        :file_id,
+        :originality_report_file_id,
+        :originality_report_url,
+        :workflow_state
+      ].freeze
     end
 
     def update_attributes
-      [:originality_report_file_id,
-       :originality_report_url,
-       :originality_score,
-       :workflow_state].freeze
+      [
+        :error_message,
+        :originality_report_file_id,
+        :originality_report_url,
+        :originality_score,
+        :workflow_state
+      ].freeze
     end
 
     def lti_link_attributes
@@ -349,9 +371,18 @@ module Lti
     def find_originality_report
       raise ActiveRecord::RecordNotFound if submission.blank?
       @report = OriginalityReport.find_by(id: params[:id])
-      @report ||= (OriginalityReport.find_by(attachment_id: attachment&.id) if attachment.present?)
+      @report ||= report_by_attachment(attachment)
       return if params[:originality_report].blank? || attachment.present?
       @report ||= submission.originality_reports.find_by(attachment: nil) unless attachment_required?
+    end
+
+    def report_by_attachment(attachment)
+      return if attachment.blank?
+      if submission.present?
+        OriginalityReport.find_by(attachment_id: attachment&.id, submission: submission)
+      else
+        OriginalityReport.find_by(attachment_id: attachment&.id)
+      end
     end
 
     def report_in_context

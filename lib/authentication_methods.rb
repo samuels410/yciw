@@ -90,7 +90,8 @@ module AuthenticationMethods
       request_method = request.method.casecmp('HEAD') == 0 ? 'GET' : request.method.upcase
 
       if developer_key.try(:require_scopes)
-        if @access_token.url_scopes_for_method(request_method).any? { |scope| scope =~ request.path }
+        scope_patterns = @access_token.url_scopes_for_method(request_method).concat(AccessToken.always_allowed_scopes)
+        if scope_patterns.any? { |scope| scope =~ request.path }
           params.delete :include
           params.delete :includes
         else
@@ -281,7 +282,7 @@ module AuthenticationMethods
     rescue URI::Error
       return nil
     end
-    return nil unless uri.path[0] == '/'
+    return nil unless uri.path && uri.path[0] == '/'
     return "#{request.protocol}#{request.host_with_port}#{uri.path.sub(%r{/download$}, '')}" if uri.path =~ %r{/files/(\d+~)?\d+/download$}
     return "#{request.protocol}#{request.host_with_port}#{uri.path}#{uri.query && "?#{uri.query}"}#{uri.fragment && "##{uri.fragment}"}"
   end
@@ -306,9 +307,7 @@ module AuthenticationMethods
   protected :redirect_back_or_default
 
   def redirect_to_referrer_or_default(default)
-    redirect_to(:back)
-  rescue ActionController::RedirectBackError
-    redirect_to(default)
+    redirect_back(fallback_location: default)
   end
 
   def redirect_to_login

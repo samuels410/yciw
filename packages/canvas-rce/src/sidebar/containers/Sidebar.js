@@ -20,13 +20,14 @@ import Sidebar from "../components/Sidebar";
 import sidebarHandlers from "./sidebarHandlers";
 import { connect } from "react-redux";
 
-function propsFromState(state) {
+export function propsFromState(state) {
   let {
     ui,
     contextType,
     contextId,
     files,
     images,
+    documents,
     folders,
     rootFolderId,
     flickr,
@@ -54,6 +55,7 @@ function propsFromState(state) {
       collections,
       files,
       images,
+      documents,
       folders,
       rootFolderId,
       flickr,

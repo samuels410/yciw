@@ -16,20 +16,25 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
+# pre-build the graphql schema (which is expensive and slow) so that the first
+# request is not slow and terrible
+CanvasSchema.execute("{}")
+
 class GraphQLController < ApplicationController
   include Api::V1
 
   before_action :require_user, except: :execute
-
 
   def execute
     query = params[:query]
     variables = params[:variables] || {}
     context = {
       current_user: @current_user,
+      real_current_user: @real_current_user,
       session: session,
       request: request,
       in_app: in_app?,
+      request_id: (Thread.current[:context] || {})[:request_id],
       tracers: [
         Tracers::DatadogTracer.new(
           request.host_with_port.sub(':', '_'),

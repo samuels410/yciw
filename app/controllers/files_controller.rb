@@ -229,26 +229,7 @@ class FilesController < ApplicationController
   protected :check_file_access_flags
 
   def index
-    # This is only used by the old wiki sidebar, see
-    # public/javascripts/wikiSidebar.js#loadFolders
-    Shackles.activate(:slave) do
-      if request.format == :json
-        if authorized_action(@context.attachments.build, @current_user, :read)
-          root_folder = Folder.root_folders(@context).first
-          if authorized_action(root_folder, @current_user, :read)
-            file_structure = {
-              :folders => @context.active_folders.
-                reorder(Arel.sql("COALESCE(parent_folder_id, 0), COALESCE(position, 0), COALESCE(name, ''), created_at")).
-                select(:id, :parent_folder_id, :name)
-            }
-
-            render :json => file_structure
-          end
-        end
-      else
-        return react_files
-      end
-    end
+    return react_files
   end
 
   # @API List files
@@ -256,6 +237,11 @@ class FilesController < ApplicationController
   #
   # @argument content_types[] [String]
   #   Filter results by content-type. You can specify type/subtype pairs (e.g.,
+  #   'image/jpeg'), or simply types (e.g., 'image', which will match
+  #   'image/gif', 'image/jpeg', etc.).
+  #
+  # @argument exclude_content_types[] [String]
+  #   Exclude given content-types from your results. You can specify type/subtype pairs (e.g.,
   #   'image/jpeg'), or simply types (e.g., 'image', which will match
   #   'image/gif', 'image/jpeg', etc.).
   #
@@ -325,6 +311,10 @@ class FilesController < ApplicationController
 
         if params[:content_types].present?
           scope = scope.by_content_types(Array(params[:content_types]))
+        end
+
+        if params[:exclude_content_types].present?
+          scope = scope.by_exclude_content_types(Array(params[:exclude_content_types]))
         end
 
         url = @context ? context_files_url : api_v1_list_files_url(@folder)

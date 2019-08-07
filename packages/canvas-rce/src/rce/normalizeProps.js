@@ -20,7 +20,6 @@ import sanitizeEditorOptions from "./sanitizeEditorOptions";
 import wrapInitCb from "./wrapInitCb";
 import normalizeLocale from "./normalizeLocale";
 import editorLanguage from "./editorLanguage";
-import { contentStyle } from "tinymce-light-skin";
 
 export default function(props, tinymce, MutationObserver) {
   let initialEditorOptions = props.editorOptions(tinymce),
@@ -40,14 +39,24 @@ export default function(props, tinymce, MutationObserver) {
     editorOptions.language_url = "none";
   }
 
-  // needed so brandable_css (which only exists in canvas) can load
+  // It is expected that consumers provide their own content_css so that the
+  // styles inside the editor match the styles of the site it is going to be
+  // displayed in.
   if (props.editorOptions.content_css) {
-    editorOptions.content_css =
-      window.location.origin + props.editorOptions.content_css;
+    editorOptions.content_css = props.editorOptions.content_css;
   }
 
+  // tell tinymce that we're handling the skin
   editorOptions.skin = false;
-  editorOptions.content_style = contentStyle;
+
+  // when tiny formats menuitems with a style attribute, don't let it set the color so they get properly themed
+  editorOptions.preview_styles = 'font-family font-size font-weight font-style text-decoration text-transform border border-radius outline text-shadow'
+
+  // force tinyMCE to NOT use the "mobile" theme,
+  // see: https://stackoverflow.com/questions/54579110/is-it-possible-to-disable-the-mobile-ui-features-in-tinymce-5
+  editorOptions.mobile = { theme: "silver" };
+
+  // tell tinyMCE not to put its own branding in the footer of the editor
   editorOptions.branding = false;
 
   return {

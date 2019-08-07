@@ -31,7 +31,6 @@ describe "Wiki pages and Tiny WYSIWYG editor features" do
 
     before(:each) do
       course_with_teacher_logged_in
-      enable_all_rcs @course.account
       stub_rcs_config
     end
 
@@ -543,10 +542,14 @@ describe "Wiki pages and Tiny WYSIWYG editor features" do
     end
 
     it "should load mathjax if mathml" do
+      skip('CORE-2994')
       text = '<p><math> <mi>&pi;</mi> <mo>⁢</mo> <msup> <mi>r</mi> <mn>2</mn> </msup> </math></p>'
       wysiwyg_state_setup(@course, text, html: true)
       wait_for_new_page_load{f('button.submit').click}
-      mathjax_defined = driver.execute_script('return (window.MathJax !== undefined)')
+      mathjax_defined = false
+      keep_trying_until do
+        mathjax_defined = driver.execute_script('return (window.MathJax !== undefined)')
+      end
       expect(mathjax_defined).to eq true
     end
 

@@ -30,7 +30,8 @@ shared_context 'advantage services context' do
   let(:access_token_scopes) do
     %w(https://purl.imsglobal.org/spec/lti-ags/scope/lineitem
        https://purl.imsglobal.org/spec/lti-ags/scope/result.readonly
-       https://purl.imsglobal.org/spec/lti-nrps/scope/contextmembership.readonly).join(' ')
+       https://purl.imsglobal.org/spec/lti-nrps/scope/contextmembership.readonly
+       https://canvas.instructure.com/lti/public_jwk/scope/update).join(' ')
   end
   let(:access_token_signing_key) { Canvas::Security.encryption_key }
   let(:test_request_host) { 'test.host' }
@@ -39,7 +40,7 @@ shared_context 'advantage services context' do
     {
       iss: 'https://canvas.instructure.com',
       sub: developer_key.global_id,
-      aud: "https://#{test_request_host}/login/oauth2/token",
+      aud: "http://#{test_request_host}/login/oauth2/token",
       iat: timestamp,
       exp: (timestamp + 1.hour.to_i),
       nbf: (timestamp - 30),

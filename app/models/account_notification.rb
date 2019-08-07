@@ -22,6 +22,7 @@ class AccountNotification < ActiveRecord::Base
   belongs_to :user
   has_many :account_notification_roles, dependent: :destroy
   validates_length_of :message, :maximum => maximum_text_length, :allow_nil => false, :allow_blank => false
+  validates_length_of :subject, :maximum => maximum_string_length
   sanitize_field :message, CanvasSanitize::SANITIZE
 
   after_save :create_alert
@@ -99,7 +100,7 @@ class AccountNotification < ActiveRecord::Base
               Account.sub_account_ids_recursive(announcement.account_id) + [announcement.account_id]
             enrollments = Enrollment.where(user_id: user).active_or_pending.joins(:course).
               where(:courses => {:account_id => sub_account_ids_map[announcement.account_id]}).select(:role_id).to_a
-            account_users = announcement.account.root_account.all_account_users_for(user)
+            account_users = announcement.account.root_account.cached_all_account_users_for(user)
           end
         end
 

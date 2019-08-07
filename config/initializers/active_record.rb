@@ -189,7 +189,7 @@ class ActiveRecord::Base
 
   # little helper to keep checks concise and avoid a db lookup
   def has_asset?(asset, field = :context)
-    asset.id == send("#{field}_id") && asset.class.base_class.name == send("#{field}_type")
+    asset&.id == send("#{field}_id") && asset.class.base_class.name == send("#{field}_type")
   end
 
   def context_string(field = :context)
@@ -657,7 +657,14 @@ class ActiveRecord::Base
     return if objects.empty?
     hashed_objects = []
     excluded_columns << objects.first.class.primary_key if excluded_columns.delete('primary_key')
-    objects.each {|object| hashed_objects << object.attributes.except(excluded_columns.join(','))}
+    objects.each do |object|
+      hashed_objects << object.attributes.except(excluded_columns.join(',')).map do |(name, value)|
+        if (type = object.class.attribute_types[name]).is_a?(ActiveRecord::Type::Serialized)
+          value = type.serialize(value)
+        end
+        [name, value]
+      end.to_h
+    end
     objects.first.class.bulk_insert(hashed_objects)
   end
 
@@ -683,6 +690,8 @@ class ActiveRecord::Base
       self.where(primary_key => min_id..max_id).touch_all
     end
   end
+
+  scope :non_shadow, ->(key = primary_key) { where("#{key}<=?", Shard::IDS_PER_SHARD) }
 end
 
 module UsefulFindInBatches
@@ -851,97 +860,101 @@ ActiveRecord::Relation.class_eval do
   end
 
   def find_in_batches_with_temp_table(options = {})
-    can_do_it = Rails.env.production? ||
-      ActiveRecord::Base.in_migration ||
-      (!Rails.env.test? && connection.open_transactions > 0) ||
-      ActiveRecord::Base.in_transaction_in_test?
-    raise "find_in_batches_with_temp_table probably won't work outside a migration
-           and outside a transaction. Unfortunately, it's impossible to automatically
-           determine a better way to do it that will work correctly. You can try
-           switching to slave first (then switching to master if you modify anything
-           inside your loop), wrapping in a transaction (but be wary of locking records
-           for the duration of your query if you do any writes in your loop), or not
-           forcing find_in_batches to use a temp table (avoiding custom selects,
-           group, or order)." unless can_do_it
+    Shard.current.database_server.unshackle do
+      can_do_it = Rails.env.production? ||
+        ActiveRecord::Base.in_migration ||
+        Shackles.environment == :deploy ||
+        (!Rails.env.test? && connection.open_transactions > 0) ||
+        ActiveRecord::Base.in_transaction_in_test?
+      raise "find_in_batches_with_temp_table probably won't work outside a migration
+             and outside a transaction. Unfortunately, it's impossible to automatically
+             determine a better way to do it that will work correctly. You can try
+             switching to slave first (then switching to master if you modify anything
+             inside your loop), wrapping in a transaction (but be wary of locking records
+             for the duration of your query if you do any writes in your loop), or not
+             forcing find_in_batches to use a temp table (avoiding custom selects,
+             group, or order)." unless can_do_it
 
-    if options[:pluck]
-      pluck = Array(options[:pluck])
-      pluck_for_select = pluck.map do |column_name|
-        if column_name.is_a?(Symbol) && column_names.include?(column_name.to_s)
-          "#{connection.quote_local_table_name(table_name)}.#{connection.quote_column_name(column_name)}"
-        else
-          column_name.to_s
-        end
-      end
-      pluck = pluck.map(&:to_s)
-    end
-    batch_size = options[:batch_size] || 1000
-    if pluck
-      sql = select(pluck_for_select).to_sql
-    else
-      sql = to_sql
-    end
-    table = "#{table_name}_find_in_batches_temp_table_#{sql.hash.abs.to_s(36)}"
-    table = table[-63..-1] if table.length > 63
-    connection.execute "CREATE TEMPORARY TABLE #{table} AS #{sql}"
-    begin
-      index = "temp_primary_key"
-      case connection.adapter_name
-        when 'PostgreSQL'
-          begin
-            old_proc = connection.raw_connection.set_notice_processor {}
-            if pluck && pluck.any?{|p| p == primary_key.to_s}
-              connection.execute("CREATE INDEX #{connection.quote_local_table_name(index)} ON #{connection.quote_local_table_name(table)}(#{connection.quote_column_name(primary_key)})")
-              index = primary_key.to_s
-            else
-              pluck.unshift(index) if pluck
-              connection.execute "ALTER TABLE #{table}
-                               ADD temp_primary_key SERIAL PRIMARY KEY"
-            end
-          ensure
-            connection.raw_connection.set_notice_processor(&old_proc) if old_proc
+      if options[:pluck]
+        pluck = Array(options[:pluck])
+        pluck_for_select = pluck.map do |column_name|
+          if column_name.is_a?(Symbol) && column_names.include?(column_name.to_s)
+            "#{connection.quote_local_table_name(table_name)}.#{connection.quote_column_name(column_name)}"
+          else
+            column_name.to_s
           end
-        else
-          raise "Temp tables not supported!"
+        end
+        pluck = pluck.map(&:to_s)
       end
+      batch_size = options[:batch_size] || 1000
+      if pluck
+        sql = select(pluck_for_select).to_sql
+      else
+        sql = to_sql
+      end
+      table = "#{table_name}_find_in_batches_temp_table_#{sql.hash.abs.to_s(36)}"
+      table = table[-63..-1] if table.length > 63
 
-      includes = includes_values + preload_values
-      klass.unscoped do
-
-        quoted_plucks = pluck && pluck.map do |column_name|
-          # Rails 4.2 is going to try to quote them anyway but unfortunately not to the temp table, so just make it explicit
-          column_names.include?(column_name) ?
-            Arel.sql("#{connection.quote_local_table_name(table)}.#{connection.quote_column_name(column_name)}") : column_name
+      connection.execute "CREATE TEMPORARY TABLE #{table} AS #{sql}"
+      begin
+        index = "temp_primary_key"
+        case connection.adapter_name
+          when 'PostgreSQL'
+            begin
+              old_proc = connection.raw_connection.set_notice_processor {}
+              if pluck && pluck.any?{|p| p == primary_key.to_s}
+                connection.execute("CREATE INDEX #{connection.quote_local_table_name(index)} ON #{connection.quote_local_table_name(table)}(#{connection.quote_column_name(primary_key)})")
+                index = primary_key.to_s
+              else
+                pluck.unshift(index) if pluck
+                connection.execute "ALTER TABLE #{table}
+                                 ADD temp_primary_key SERIAL PRIMARY KEY"
+              end
+            ensure
+              connection.raw_connection.set_notice_processor(&old_proc) if old_proc
+            end
+          else
+            raise "Temp tables not supported!"
         end
 
-        if pluck
-          batch = klass.from(table).order(Arel.sql(index)).limit(batch_size).pluck(*quoted_plucks)
-        else
-          sql = "SELECT * FROM #{table} ORDER BY #{index} LIMIT #{batch_size}"
-          batch = klass.find_by_sql(sql)
-        end
-        while !batch.empty?
-          ActiveRecord::Associations::Preloader.new.preload(batch, includes) if includes
-          yield batch
-          break if batch.size < batch_size
+        includes = includes_values + preload_values
+        klass.unscoped do
+
+          quoted_plucks = pluck && pluck.map do |column_name|
+            # Rails 4.2 is going to try to quote them anyway but unfortunately not to the temp table, so just make it explicit
+            column_names.include?(column_name) ?
+              Arel.sql("#{connection.quote_local_table_name(table)}.#{connection.quote_column_name(column_name)}") : column_name
+          end
 
           if pluck
-            last_value = pluck.length == 1 ? batch.last : batch.last[pluck.index(index)]
-            batch = klass.from(table).order(Arel.sql(index)).where("#{index} > ?", last_value).limit(batch_size).pluck(*quoted_plucks)
+            batch = klass.from(table).order(Arel.sql(index)).limit(batch_size).pluck(*quoted_plucks)
           else
-            last_value = batch.last[index]
-            sql = "SELECT *
-               FROM #{table}
-               WHERE #{index} > #{last_value}
-               ORDER BY #{index} ASC
-               LIMIT #{batch_size}"
+            sql = "SELECT * FROM #{table} ORDER BY #{index} LIMIT #{batch_size}"
             batch = klass.find_by_sql(sql)
           end
+          while !batch.empty?
+            ActiveRecord::Associations::Preloader.new.preload(batch, includes) if includes
+            yield batch
+            break if batch.size < batch_size
+
+            if pluck
+              last_value = pluck.length == 1 ? batch.last : batch.last[pluck.index(index)]
+              batch = klass.from(table).order(Arel.sql(index)).where("#{index} > ?", last_value).limit(batch_size).pluck(*quoted_plucks)
+            else
+              last_value = batch.last[index]
+              sql = "SELECT *
+                 FROM #{table}
+                 WHERE #{index} > #{last_value}
+                 ORDER BY #{index} ASC
+                 LIMIT #{batch_size}"
+              batch = klass.find_by_sql(sql)
+            end
+          end
         end
-      end
-    ensure
-      if !$!.is_a?(ActiveRecord::StatementInvalid) || connection.open_transactions == 0
-        connection.execute "DROP TABLE #{table}"
+      ensure
+        if !$!.is_a?(ActiveRecord::StatementInvalid) || connection.open_transactions == 0
+          connection.execute "DROP TABLE #{table}"
+        end
       end
     end
   end
@@ -971,10 +984,14 @@ ActiveRecord::Relation.class_eval do
     scope
   end
 
+  def lock_in_order
+    lock(:no_key_update).order(:id).pluck(:id)
+  end
+
   def touch_all
     self.activate do |relation|
       relation.transaction do
-        ids_to_touch = relation.not_recently_touched.lock(:no_key_update).order(:id).pluck(:id)
+        ids_to_touch = relation.not_recently_touched.lock_in_order
         unscoped.where(id: ids_to_touch).update_all(updated_at: Time.now.utc) if ids_to_touch.any?
       end
     end
@@ -1288,7 +1305,7 @@ ActiveRecord::Associations::HasOneAssociation.class_eval do
 end
 
 class ActiveRecord::Migration
-  VALID_TAGS = [:predeploy, :postdeploy, :cassandra]
+  VALID_TAGS = [:predeploy, :postdeploy, :cassandra, :dynamodb]
   # at least one of these tags is required
   DEPLOY_TAGS = [:predeploy, :postdeploy]
 
@@ -1692,3 +1709,7 @@ if CANVAS_RAILS5_1
 
   ActiveRecord::Relation.prepend(EnforceRawSqlWhitelist)
 end
+
+ActiveRecord::Base.prepend(Canvas::CacheRegister::ActiveRecord::Base)
+ActiveRecord::Base.singleton_class.prepend(Canvas::CacheRegister::ActiveRecord::Base::ClassMethods)
+ActiveRecord::Relation.prepend(Canvas::CacheRegister::ActiveRecord::Relation)

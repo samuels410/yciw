@@ -243,7 +243,7 @@ require 'atom'
 #
 class DiscussionTopicsController < ApplicationController
   before_action :require_context_and_read_access, :except => :public_feed
-  before_action :rich_content_service_config
+  before_action :rce_js_env
 
   include Api::V1::DiscussionTopics
   include Api::V1::Assignment
@@ -377,6 +377,21 @@ class DiscussionTopicsController < ApplicationController
             locked.is_a?(Hash) ? locked[:can_view] : locked
           end
           js_env openTopics: open_topics, lockedTopics: locked_topics, newTopicURL: named_context_url(@context, :new_context_discussion_topic_url)
+        end
+
+        fetch_params = {
+          per_page: 50,
+          plain_messages: true,
+          include_assignment: true,
+          exclude_assignment_descriptions: true,
+          exclude_context_module_locked_topics: true,
+          page: "__page__"
+        }
+        fetch_params[:include] = ['sections_user_count', 'sections'] if @context.is_a?(Course)
+
+        discussion_topics_fetch_url = send("api_v1_#{@context.class.to_s.downcase}_discussion_topics_path", fetch_params)
+        @discussion_topics_urls_to_prefetch = (scope.count / fetch_params[:per_page].to_f).ceil.times.map do |i|
+          discussion_topics_fetch_url.gsub(fetch_params[:page], (i+1).to_s)
         end
 
         hash = {
@@ -686,7 +701,7 @@ class DiscussionTopicsController < ApplicationController
                 # Can moderate any topic
                 :MODERATE         => user_can_moderate
               },
-              :ROOT_URL => api_url.call('topic_view'),
+              :ROOT_URL => "#{api_url.call('topic_view')}?include_new_entries=1&include_enrollment_state=1&include_context_card_info=1",
               :ENTRY_ROOT_URL => api_url.call('topic_entry_list'),
               :REPLY_URL => api_url.call('add_reply', ':entry_id'),
               :ROOT_REPLY_URL => api_url.call('add_entry'),
@@ -709,6 +724,9 @@ class DiscussionTopicsController < ApplicationController
               :ASSIGNMENT_ID => @topic.assignment_id,
               :IS_GROUP => @topic.group_category_id?,
             }
+            # will fire off the xhr for this as soon as the page comes back.
+            # see app/coffeescripts/models/Topic#fetch for where it is consumed
+            prefetch_xhr(env_hash[:ROOT_URL])
 
             env_hash[:GRADED_RUBRICS_URL] = context_url(@topic.assignment.context, :context_assignment_rubric_url, @topic.assignment.id) if @topic.assignment
             if params[:hide_student_names]
@@ -738,9 +756,9 @@ class DiscussionTopicsController < ApplicationController
             end
             js_hash[:COURSE_ID] = @context.id if @context.is_a?(Course)
             js_hash[:CONTEXT_ACTION_SOURCE] = :discussion_topic
-            js_hash[:STUDENT_CONTEXT_CARDS_ENABLED] = @context.is_a?(Course) &&
-              @domain_root_account.feature_enabled?(:student_context_cards) &&
-              @context.grants_right?(@current_user, session, :manage)
+            if @context.is_a?(Course) && @context.grants_right?(@current_user, session, :manage)
+              set_student_context_cards_js_env
+            end
 
             append_sis_data(js_hash)
             js_env(js_hash)
@@ -826,7 +844,7 @@ class DiscussionTopicsController < ApplicationController
   #
   # @argument specific_sections [String]
   #   A comma-separated list of sections ids to which the discussion topic
-  #   should be made specific too.  If it is not desired to make the discussion
+  #   should be made specific to.  If it is not desired to make the discussion
   #   topic specific to sections, then this parameter may be omitted or set to
   #   "all".  Can only be present only on announcements and only those that are
   #   for a course (as opposed to a group).
@@ -1002,10 +1020,6 @@ class DiscussionTopicsController < ApplicationController
   end
 
   protected
-
-  def rich_content_service_config
-    rce_js_env(:highrisk)
-  end
 
   def cancel_redirect_url
     topic_type = @topic.is_announcement ? :announcements : :discussion_topics

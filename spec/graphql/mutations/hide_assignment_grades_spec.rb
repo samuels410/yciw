@@ -53,14 +53,15 @@ describe Mutations::HideAssignmentGrades do
   end
 
   before(:each) do
-    course.enable_feature!(:post_policies)
+    course.enable_feature!(:new_gradebook)
+    PostPolicy.enable_feature!
   end
 
   context "when user has grade permission" do
     let(:context) { { current_user: teacher } }
 
     it "requires that the PostPolicy feature be enabled" do
-      course.disable_feature!(:post_policies)
+      PostPolicy.disable_feature!
       result = execute_query(mutation_str(assignment_id: assignment.id), context)
       expect(result.dig("errors", 0, "message")).to eql "Post Policies feature not enabled"
     end
@@ -92,6 +93,8 @@ describe Mutations::HideAssignmentGrades do
     end
 
     describe "hiding the grades" do
+      let(:hide_submissions_job) { Delayed::Job.where(tag: "Assignment#hide_submissions").order(:id).last }
+
       before(:each) do
         @student_submission = assignment.submissions.find_by(user: student)
         @student_submission.update!(posted_at: Time.zone.now)
@@ -99,7 +102,6 @@ describe Mutations::HideAssignmentGrades do
 
       it "hides the assignment grades" do
         execute_query(mutation_str(assignment_id: assignment.id), context)
-        hide_submissions_job = Delayed::Job.where(tag: "Assignment#hide_submissions").order(:id).last
         hide_submissions_job.invoke_job
         expect(@student_submission.reload).not_to be_posted
       end
@@ -111,8 +113,54 @@ describe Mutations::HideAssignmentGrades do
 
       it "returns the progress" do
         result = execute_query(mutation_str(assignment_id: assignment.id), context)
-        progress = Progress.where(tag: "hide_assignment_grades").order(:id).last
+        progress = Progress.find(result.dig("data", "hideAssignmentGrades", "progress", "_id"))
         expect(result.dig("data", "hideAssignmentGrades", "progress", "_id").to_i).to be progress.id
+      end
+
+      it "stores the assignment id of submissions hidden on the Progress object" do
+        result = execute_query(mutation_str(assignment_id: assignment.id), context)
+        hide_submissions_job.invoke_job
+        progress = Progress.find(result.dig("data", "hideAssignmentGrades", "progress", "_id"))
+        expect(progress.results[:assignment_id]).to eq assignment.id
+      end
+
+      it "stores the posted_at of submissions hidden on the Progress object" do
+        result = execute_query(mutation_str(assignment_id: assignment.id), context)
+        hide_submissions_job.invoke_job
+        progress = Progress.find(result.dig("data", "hideAssignmentGrades", "progress", "_id"))
+        expect(progress.results[:posted_at]).to eq @student_submission.reload.posted_at
+      end
+
+      it "stores the user ids of submissions hidden on the Progress object" do
+        result = execute_query(mutation_str(assignment_id: assignment.id), context)
+        hide_submissions_job.invoke_job
+        progress = Progress.find(result.dig("data", "hideAssignmentGrades", "progress", "_id"))
+        expect(progress.results[:user_ids]).to match_array [student.id]
+      end
+
+      context "when the hider has limited visibility" do
+        let(:secret_student) { User.create! }
+        let(:secret_section) { course.course_sections.create! }
+
+        before(:each) do
+          Enrollment.limit_privileges_to_course_section!(course, teacher, true)
+          course.enroll_student(secret_student, enrollment_state: "active", section: secret_section)
+
+          assignment.submission_for_student(secret_student).update!(posted_at: Time.zone.now)
+        end
+
+        it "only hides grades for students that the user can see" do
+          execute_query(mutation_str(assignment_id: assignment.id), context)
+          hide_submissions_job.invoke_job
+          expect(assignment.submission_for_student(secret_student).posted_at).not_to be nil
+        end
+
+        it "stores only the user ids of affected students on the Progress object" do
+          result = execute_query(mutation_str(assignment_id: assignment.id), context)
+          hide_submissions_job.invoke_job
+          progress = Progress.find(result.dig("data", "hideAssignmentGrades", "progress", "_id"))
+          expect(progress.results[:user_ids]).to match_array [student.id]
+        end
       end
     end
   end

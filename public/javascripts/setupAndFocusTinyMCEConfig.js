@@ -17,7 +17,6 @@
  */
 
 import $ from 'jquery'
-import EditorAccessibility from 'compiled/editor/editorAccessibility'
 import INST from './INST'
 
 export default function setupAndFocusTinyMCEConfig (tinymce, autoFocus, enableBookmarkingOverride) {
@@ -50,9 +49,13 @@ export default function setupAndFocusTinyMCEConfig (tinymce, autoFocus, enableBo
           }
         });
 
-        ed.on('init', function(){
-          new EditorAccessibility(ed).accessiblize();
-        });
+        if (!ENV.use_rce_enhancements) {
+          ed.on('init', function(){
+            const getDefault = mod => mod.default ? mod.default : mod
+            const EditorAccessibility = getDefault(require('compiled/editor/editorAccessibility'))
+            new EditorAccessibility(ed).accessiblize();
+          });
+        }
 
         ed.on('init', function(){
           $(window).triggerHandler("resize");

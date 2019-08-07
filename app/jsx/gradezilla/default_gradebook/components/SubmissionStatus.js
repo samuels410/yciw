@@ -17,11 +17,12 @@
  */
 
 import React from 'react'
-import {bool, shape} from 'prop-types'
-import I18n from 'i18n!gradebook'
+import {bool, instanceOf, number, shape, string} from 'prop-types'
+import I18n from 'i18n!gradezilla'
 import View from '@instructure/ui-layout/lib/components/View'
 import Pill from '@instructure/ui-elements/lib/components/Pill'
 import Message from './SubmissionStatus/Message'
+import {isHidden} from '../../../grading/helpers/SubmissionHelper'
 
 export default class SubmissionStatus extends React.Component {
   static defaultProps = {
@@ -33,6 +34,7 @@ export default class SubmissionStatus extends React.Component {
   static propTypes = {
     assignment: shape({
       muted: bool.isRequired,
+      postManually: bool.isRequired,
       published: bool.isRequired
     }).isRequired,
     isConcluded: bool.isRequired,
@@ -40,17 +42,32 @@ export default class SubmissionStatus extends React.Component {
     isInNoGradingPeriod: bool.isRequired,
     isInOtherGradingPeriod: bool.isRequired,
     isNotCountedForScore: bool.isRequired,
+    postPoliciesEnabled: bool.isRequired,
     submission: shape({
       drop: bool,
-      excused: bool
+      excused: bool,
+      postedAt: instanceOf(Date),
+      score: number,
+      workflowState: string.isRequired
     }).isRequired
   }
 
   getStatusPills() {
-    const {assignment, submission} = this.props
+    const {assignment, postPoliciesEnabled, submission} = this.props
     const statusPillComponents = []
 
-    if (assignment.muted) {
+    if (postPoliciesEnabled) {
+      if (isHidden(submission)) {
+        statusPillComponents.push(
+          <Pill
+            key="hidden-submission"
+            variant="warning"
+            text={I18n.t('Hidden')}
+            margin="0 0 x-small"
+          />
+        )
+      }
+    } else if (assignment.muted) {
       statusPillComponents.push(
         <Pill
           key="muted-assignment"

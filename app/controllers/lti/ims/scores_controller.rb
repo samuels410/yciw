@@ -17,9 +17,6 @@
 
 module Lti::Ims
   # @API Score
-  # @internal
-  #
-  # TODO: remove internal flags
   #
   # Score API for IMS Assignment and Grade Services
   #
@@ -31,11 +28,10 @@ module Lti::Ims
   #          "userId": {
   #            "description": "The lti_user_id or the Canvas user_id",
   #            "example": "50 | 'abcasdf'",
-  #            "type": "number|string"
+  #            "type": "string"
   #          },
   #          "scoreGiven": {
-  #            "description": "The Current score received in the tool for this line item and user,
-  #                            scaled to the scoreMaximum",
+  #            "description": "The Current score received in the tool for this line item and user, scaled to the scoreMaximum",
   #            "example": "50",
   #            "type": "number"
   #          },
@@ -52,19 +48,14 @@ module Lti::Ims
   #            "description": "Date and time when the score was modified in the tool. Should use subsecond precision.",
   #            "example": "2017-04-16T18:54:36.736+00:00",
   #            "type": "string"
-  #          }
+  #          },
   #          "activityProgress": {
-  #            "description": "Indicate to Canvas the status of the user towards the activity's completion.
-  #                            Must be one of Initialized, Started, InProgress, Submitted, Completed",
+  #            "description": "Indicate to Canvas the status of the user towards the activity's completion. Must be one of Initialized, Started, InProgress, Submitted, Completed",
   #            "example": "Completed",
   #            "type": "string"
-  #          }
+  #          },
   #          "gradingProgress": {
-  #            "description": "Indicate to Canvas the status of the grading process.
-  #                            A value of PendingManual will require intervention by a grader.
-  #                            Values of NotReady, Failed, and Pending will cause the scoreGiven to be ignored.
-  #                            FullyGraded values will require no action.
-  #                            Possible values are NotReady, Failed, Pending, PendingManual, FullyGraded",
+  #            "description": "Indicate to Canvas the status of the grading process. A value of PendingManual will require intervention by a grader. Values of NotReady, Failed, and Pending will cause the scoreGiven to be ignored. FullyGraded values will require no action. Possible values are NotReady, Failed, Pending, PendingManual, FullyGraded",
   #            "example": "FullyGraded",
   #            "type": "string"
   #          }
@@ -84,7 +75,6 @@ module Lti::Ims
     MIME_TYPE = 'application/vnd.ims.lis.v1.score+json'.freeze
 
     # @API Create a Score
-    # @internal
     #
     # Create a new Result from the score params. If this is for the first created line_item for a
     # resourceLinkId, or it is a line item that is not attached to a resourceLinkId, then a submission
@@ -131,6 +121,17 @@ module Lti::Ims
     #
     # @returns resultUrl [String]
     #   The url to the result that was created.
+    #
+    # @example_request
+    #   {
+    #     "timestamp": "2017-04-16T18:54:36.736+00:00",
+    #     "scoreGiven": 83,
+    #     "scoreMaximum": 100,
+    #     "comment": "This is exceptional work.",
+    #     "activityProgress": "Completed",
+    #     "gradingProgress": "FullyGraded",
+    #     "userId": "5323497"
+    #   }
     def create
       update_or_create_result
       render json: { resultUrl: result_url }, content_type: MIME_TYPE
@@ -140,6 +141,7 @@ module Lti::Ims
 
     REQUIRED_PARAMS = %i[userId activityProgress gradingProgress timestamp].freeze
     OPTIONAL_PARAMS = %i[scoreGiven scoreMaximum comment].freeze
+    EXTENSION_PARAMS = [Lti::Result::AGS_EXT_SUBMISSION_URL].freeze
 
     def scopes_matcher
       self.class.all_of(TokenScopes::LTI_AGS_SCORE_SCOPE)
@@ -147,13 +149,19 @@ module Lti::Ims
 
     def scores_params
       @_scores_params ||= begin
-        update_params = params.permit(REQUIRED_PARAMS + OPTIONAL_PARAMS).transform_keys do |k|
+        update_params = params.permit(REQUIRED_PARAMS + OPTIONAL_PARAMS + EXTENSION_PARAMS).transform_keys do |k|
           k.to_s.underscore
-        end.except(:timestamp, :user_id, :score_given, :score_maximum)
-
+        end.except(:timestamp, :user_id, :score_given, :score_maximum).to_unsafe_h
+        update_params[:extensions] = extract_extensions(update_params)
         return update_params if ignore_score?
         update_params.merge(result_score: params[:scoreGiven], result_maximum: params[:scoreMaximum])
       end
+    end
+
+    def extract_extensions(update_params)
+      {
+        Lti::Result::AGS_EXT_SUBMISSION_URL => update_params.delete(Lti::Result::AGS_EXT_SUBMISSION_URL)
+      }.compact
     end
 
     def verify_required_params
@@ -178,11 +186,18 @@ module Lti::Ims
     end
 
     def score_submission
-      return unless !ignore_score? && line_item.assignment_line_item?
-      submission = line_item.assignment.grade_student(
-        user,
-        { score: submission_score, grader_id: -tool.id }
-      ).first
+      return unless line_item.assignment_line_item? && (!ignore_score? || url_extension?)
+
+      submission = if !ignore_score?
+        line_item.assignment.grade_student(
+          user,
+          { score: submission_score, grader_id: -tool.id }
+        ).first
+      else
+        line_item.assignment.find_or_create_submission(user)
+      end
+
+      submission.url = scores_params[:extensions][Lti::Result::AGS_EXT_SUBMISSION_URL]
       submission.save!
       submission.add_comment(comment: scores_params[:comment], skip_author: true) if scores_params[:comment].present?
       submission
@@ -212,7 +227,7 @@ module Lti::Ims
     end
 
     def result
-      @_result ||= Lti::Result.where(line_item: line_item, user: user).first
+      @_result ||= Lti::Result.active.where(line_item: line_item, user: user).first
     end
 
     def timestamp
@@ -221,6 +236,10 @@ module Lti::Ims
 
     def result_url
       lti_result_show_url(course_id: context.id, line_item_id: line_item.id, id: result.id)
+    end
+
+    def url_extension?
+      scores_params[:extensions].key?(Lti::Result::AGS_EXT_SUBMISSION_URL)
     end
   end
 end

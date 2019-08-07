@@ -38,6 +38,7 @@ describe('sources/api', () => {
         callback('freshJWT')
       }
     })
+    fetchMock.mock('/api/session', '{}')
   })
 
   afterEach(() => {
@@ -217,6 +218,26 @@ describe('sources/api', () => {
     })
   })
 
+  describe('fetchMediaFolder', () => {
+    let files;
+    beforeEach(() => {
+      files = [{id: 24}]
+      const body = {files}
+      sinon.stub(apiSource, 'fetchPage').returns(Promise.resolve(body))
+    })
+
+    afterEach(() => {
+      apiSource.fetchPage.restore()
+    })
+    it('calls fetchPage with the proper params', () => {
+      return apiSource.fetchMediaFolder({
+        contextType: 'course', contextId: '22'
+      }).then(() => {
+        sinon.assert.calledWith(apiSource.fetchPage, '/api/folders/media?contextType=course&contextId=22')
+      })
+    })
+  })
+
   describe('preflightUpload', () => {
     const uri = '/api/upload'
     let fileProps = {}
@@ -379,11 +400,7 @@ describe('sources/api', () => {
   })
 
   describe('getSession', () => {
-    const uri = '/api/session'
-
-    beforeEach(() => {
-      fetchMock.mock(uri, '{}')
-    })
+    const uri = '/api/session' // already mocked
 
     it('includes jwt in Authorization header', () => {
       return apiSource.getSession().then(() => {
@@ -488,6 +505,18 @@ describe('sources/api', () => {
         assert.equal(file.display_name, name)
         fileUrl.downloadToWrap.restore()
         fetchMock.restore()
+      })
+    })
+  })
+
+  describe('pingbackUnsplash', () => {
+    it('sends the given id to the proper route', () => {
+      const expectedUrl = "/api/unsplash/pingback?id=123"
+      fetchMock.mock(expectedUrl, 200)
+      return apiSource.pingbackUnsplash(123).then(() => {
+        assert.ok(fetchMock.done())
+        assert.ok(fetchMock.lastUrl() === expectedUrl)
+        fetchMock.restore();
       })
     })
   })

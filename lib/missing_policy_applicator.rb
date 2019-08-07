@@ -38,9 +38,8 @@ class MissingPolicyApplicator
       eager_load(:grading_period, assignment: { course: :late_policy }).
       for_enrollments(Enrollment.all_active_or_pending).
       missing.
-      merge(Assignment.submittable).
       where(score: nil, grade: nil, cached_due_date: 1.day.ago(now)..now,
-             late_policies: { missing_submission_deduction_enabled: true })
+            late_policies: { missing_submission_deduction_enabled: true })
   end
 
   # Given submissions must all be for the same assignment
@@ -54,6 +53,7 @@ class MissingPolicyApplicator
         score: score,
         grade: grade,
         graded_at: now,
+        posted_at: assignment.post_manually? ? nil : now,
         published_score: score,
         published_grade: grade,
         grade_matches_current_submission: true,

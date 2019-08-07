@@ -31,7 +31,6 @@ describe "submissions" do
     before(:once) do
       @due_date = Time.now.utc + 2.days
       course_with_student(active_all: true)
-      enable_all_rcs @course.account
       @assignment = @course.assignments.create!(:title => 'assignment 1', :name => 'assignment 1', :due_at => @due_date)
       @second_assignment = @course.assignments.create!(:title => 'assignment 2', :name => 'assignment 2', :due_at => nil)
       @third_assignment = @course.assignments.create!(:title => 'assignment 3', :name => 'assignment 3', :due_at => nil)
@@ -47,9 +46,9 @@ describe "submissions" do
       @assignment.update_attributes(submission_types: "online_text_entry")
       get "/courses/#{@course.id}/assignments/#{@assignment.id}"
 
-      f(".submit_assignment_link").click
+      wait_for_new_page_load { f(".submit_assignment_link").click }
       type_in_tiny("#submission_body", 'text')
-      f('button[type="submit"]').click
+      wait_for_new_page_load { f('button[type="submit"]').click }
 
       expect(f("#sidebar_content")).to include_text("Submitted!")
       expect(f("#content")).not_to contain_css(".error_text")
@@ -59,10 +58,10 @@ describe "submissions" do
       @assignment.update_attributes(submission_types: "online_text_entry")
       get "/courses/#{@course.id}/assignments/#{@assignment.id}"
 
-      f(".submit_assignment_link").click
+      wait_for_new_page_load { f(".submit_assignment_link").click }
       f('button[type="submit"]').click
 
-      expect(fj(".error_text")).to be
+      expect(f(".error_text")).to be
     end
 
     it "should show as not turned in when submission was auto created in speedgrader", priority: "1", test_id: 237025 do

@@ -68,7 +68,7 @@ class Account < ActiveRecord::Base
            inverse_of: :account,
            extend: AuthenticationProvider::FindWithType
 
-  has_many :account_reports
+  has_many :account_reports, inverse_of: :account
   has_many :grading_standards, -> { where("workflow_state<>'deleted'") }, as: :context, inverse_of: :context
   has_many :assessment_question_banks, -> { preload(:assessment_questions, :assessment_question_bank_users) }, as: :context, inverse_of: :context
   has_many :assessment_questions, :through => :assessment_question_banks
@@ -171,6 +171,7 @@ class Account < ActiveRecord::Base
   add_setting :sis_name, :root_only => true
   add_setting :sis_syncing, :boolean => true, :default => false, :inheritable => true
   add_setting :sis_default_grade_export, :boolean => true, :default => false, :inheritable => true
+  add_setting :include_integration_ids_in_gradebook_exports, :boolean => true, :default => false, :root_only => true
   add_setting :sis_require_assignment_due_date, :boolean => true, :default => false, :inheritable => true
   add_setting :sis_assignment_name_length, :boolean => true, :default => false, :inheritable => true
   add_setting :sis_assignment_name_length_input, :inheritable => true
@@ -244,6 +245,8 @@ class Account < ActiveRecord::Base
 
   # For setting the default dashboard (e.g. Student Planner/List View, Activity Stream, Dashboard Cards)
   add_setting :default_dashboard_view, :inheritable => true
+
+  add_setting :require_confirmed_email, :boolean => true, :root_only => true, :default => false
 
   def settings=(hash)
     if hash.is_a?(Hash) || hash.is_a?(ActionController::Parameters)
@@ -410,7 +413,18 @@ class Account < ActiveRecord::Base
   end
 
   def update_account_associations_if_changed
-    send_later_if_production(:update_account_associations) if self.saved_change_to_parent_account_id? || self.saved_change_to_root_account_id?
+    if self.saved_change_to_parent_account_id? || self.saved_change_to_root_account_id?
+      self.shard.activate do
+        send_later_if_production(:clear_downstream_caches, :account_chain)
+        send_later_if_production(:update_account_associations)
+      end
+    end
+  end
+
+  def clear_downstream_caches(*key_types)
+    self.shard.activate do
+      Account.clear_cache_keys([self.id] + Account.sub_account_ids_recursive(self.id), *key_types)
+    end
   end
 
   def equella_settings
@@ -747,7 +761,7 @@ class Account < ActiveRecord::Base
   end
 
   def self.account_chain_ids(starting_account_id)
-    if connection.adapter_name == 'PostgreSQL'
+    block = lambda do |_name|
       Shard.shard_for(starting_account_id).activate do
         id_chain = []
         if (starting_account_id.is_a?(Account))
@@ -770,9 +784,9 @@ class Account < ActiveRecord::Base
         end
         id_chain
       end
-    else
-      account_chain(starting_account_id).map(&:id)
     end
+    key = Account.cache_key_for_id(starting_account_id, :account_chain)
+    key ? Rails.cache.fetch(['account_chain_ids', key], &block) : block.call(nil)
   end
 
   def self.multi_account_chain_ids(starting_account_ids)
@@ -984,29 +998,25 @@ class Account < ActiveRecord::Base
   end
 
   def account_users_for(user)
-    return [] unless user
-    @account_users_cache ||= {}
     if self == Account.site_admin
       shard.activate do
-        @account_users_cache[user.global_id] ||= begin
-          all_site_admin_account_users_hash = MultiCache.fetch("all_site_admin_account_users3") do
-            # this is a plain ruby hash to keep the cached portion as small as possible
-            self.account_users.active.inject({}) { |result, au| result[au.user_id] ||= []; result[au.user_id] << [au.id, au.role_id]; result }
-          end
-          (all_site_admin_account_users_hash[user.id] || []).map do |(id, role_id)|
-            au = AccountUser.new
-            au.id = id
-            au.account = Account.site_admin
-            au.user = user
-            au.role_id = role_id
-            au.readonly!
-            au
-          end
+        all_site_admin_account_users_hash = MultiCache.fetch("all_site_admin_account_users3") do
+          # this is a plain ruby hash to keep the cached portion as small as possible
+          self.account_users.active.inject({}) { |result, au| result[au.user_id] ||= []; result[au.user_id] << [au.id, au.role_id]; result }
+        end
+        (all_site_admin_account_users_hash[user.id] || []).map do |(id, role_id)|
+          au = AccountUser.new
+          au.id = id
+          au.account = Account.site_admin
+          au.user = user
+          au.role_id = role_id
+          au.readonly!
+          au
         end
       end
     else
       @account_chain_ids ||= self.account_chain(:include_site_admin => true).map { |a| a.active? ? a.id : nil }.compact
-      @account_users_cache[user.global_id] ||= Shard.partition_by_shard(@account_chain_ids) do |account_chain_ids|
+      Shard.partition_by_shard(@account_chain_ids) do |account_chain_ids|
         if account_chain_ids == [Account.site_admin.id]
           Account.site_admin.account_users_for(user)
         else
@@ -1014,8 +1024,23 @@ class Account < ActiveRecord::Base
         end
       end
     end
-    @account_users_cache[user.global_id] ||= []
-    @account_users_cache[user.global_id]
+  end
+
+  def cached_account_users_for(user)
+    return [] unless user
+    @account_users_cache ||= {}
+    @account_users_cache[user.global_id] ||= begin
+      if self.site_admin?
+        account_users_for(user) # has own cache
+      else
+        Rails.cache.fetch_with_batched_keys(['account_users_for_user', user.cache_key(:account_users)].cache_key,
+            batch_object: self, batched_keys: :account_chain, skip_cache_if_disabled: true) do
+          aus = account_users_for(user)
+          aus.each{|au| au.instance_variable_set(:@association_cache, {})}
+          aus
+        end
+      end
+    end
   end
 
   # returns all active account users for this entire account tree
@@ -1027,17 +1052,25 @@ class Account < ActiveRecord::Base
     end
   end
 
+  def cached_all_account_users_for(user)
+    return [] unless user
+    Rails.cache.fetch_with_batched_keys(['all_account_users_for_user', user.cache_key(:account_users)].cache_key,
+        batch_object: self, batched_keys: :account_chain, skip_cache_if_disabled: true) do
+      all_account_users_for(user)
+    end
+  end
+
   set_policy do
     RoleOverride.permissions.each do |permission, _details|
-      given { |user| self.account_users_for(user).any? { |au| au.has_permission_to?(self, permission) } }
+      given { |user| self.cached_account_users_for(user).any? { |au| au.has_permission_to?(self, permission) } }
       can permission
       can :create_courses if permission == :manage_courses
     end
 
-    given { |user| !self.account_users_for(user).empty? }
+    given { |user| !self.cached_account_users_for(user).empty? }
     can :read and can :read_as_admin and can :manage and can :update and can :delete and can :read_outcomes and can :read_terms
 
-    given { |user| self.root_account? && self.all_account_users_for(user).any? }
+    given { |user| self.root_account? && self.cached_all_account_users_for(user).any? }
     can :read_terms
 
     given { |user|
@@ -1327,7 +1360,7 @@ class Account < ActiveRecord::Base
   end
 
   def self.update_all_update_account_associations
-    Account.root_accounts.active.find_each(&:update_account_associations)
+    Account.root_accounts.active.non_shadow.find_each(&:update_account_associations)
   end
 
   def course_count
@@ -1488,15 +1521,19 @@ class Account < ActiveRecord::Base
           link[:type] = 'custom'
         end
       end
-      links = HelpLinks.map_default_links(links)
+      links = help_links_builder.map_default_links(links)
     end
 
     result = if settings[:new_custom_help_links]
-      links || HelpLinks.default_links
+      links || help_links_builder.default_links
     else
-      HelpLinks.default_links + (links || [])
+      help_links_builder.default_links + (links || [])
     end
-    HelpLinks.instantiate_links(result)
+    help_links_builder.instantiate_links(result)
+  end
+
+  def help_links_builder
+    @help_links_builder ||= HelpLinks.new(self)
   end
 
   def set_service_availability(service, enable)
@@ -1772,6 +1809,10 @@ class Account < ActiveRecord::Base
   end
 
   def available_course_visibility_override_options(_options=nil)
-    {}
+    _options || {}
+  end
+
+  def user_needs_verification?(user)
+    self.require_confirmed_email? && (user.nil? || !user.cached_active_emails.any?)
   end
 end

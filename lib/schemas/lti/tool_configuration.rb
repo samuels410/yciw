@@ -26,12 +26,17 @@ module Schemas::Lti
         # to be reenabled after scopes bug fix
         # "scopes",
         "target_link_uri",
-        "oidc_initiation_url",
-        "public_jwk"
+        "oidc_initiation_url"
       ].freeze,
       "properties" => {
         "title" => {
           "type" => "string"
+        }.freeze,
+        "public_jwk_url" => {
+          "type" => "string"
+        }.freeze,
+        "is_lti_key" => {
+          "type" => "boolean"
         }.freeze,
         "description" => {
           "type" => "string"
@@ -45,9 +50,11 @@ module Schemas::Lti
             "type" => "string",
             "enum" => [
               "https://purl.imsglobal.org/spec/lti-ags/scope/lineitem",
+              "https://purl.imsglobal.org/spec/lti-ags/scope/lineitem.readonly",
               "https://purl.imsglobal.org/spec/lti-ags/scope/result.readonly",
               "https://purl.imsglobal.org/spec/lti-ags/scope/score",
-              "https://purl.imsglobal.org/spec/lti-nrps/scope/contextmembership.readonly"
+              "https://purl.imsglobal.org/spec/lti-nrps/scope/contextmembership.readonly",
+              "https://canvas.instructure.com/lti/public_jwk/scope/update"
             ].freeze
           }
         }.freeze,
@@ -56,8 +63,6 @@ module Schemas::Lti
           "items" => {
             "type" => "object",
             "required" => [
-              "domain",
-              "tool_id",
               "platform",
               "settings"
             ].freeze,

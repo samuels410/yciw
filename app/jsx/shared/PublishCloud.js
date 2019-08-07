@@ -22,7 +22,7 @@ import ReactDOM from 'react-dom'
 import $ from 'jquery'
 import I18n from 'i18n!publish_cloud'
 import PublishCloud from 'compiled/react_files/components/PublishCloud'
-import RestrictedDialogForm from '../files/RestrictedDialogForm'
+import 'jqueryui/dialog'
 
   // Function Summary
   // Create a blank dialog window via jQuery, then dump the RestrictedDialogForm into that
@@ -39,15 +39,16 @@ import RestrictedDialogForm from '../files/RestrictedDialogForm'
       }
     });
 
-    ReactDOM.render(
-      <RestrictedDialogForm
-        usageRightsRequiredForContext={this.props.usageRightsRequiredForContext}
-        models={[this.props.model]}
-        closeDialog={() => { $dialog.dialog('close'); }}
-      />
-    , $dialog[0]
-    );
-
+    import('../files/RestrictedDialogForm').then(({default: RestrictedDialogForm}) => {
+      ReactDOM.render(
+        <RestrictedDialogForm
+          usageRightsRequiredForContext={this.props.usageRightsRequiredForContext}
+          models={[this.props.model]}
+          closeDialog={() => { $dialog.dialog('close'); }}
+        />
+        , $dialog[0]
+      )
+    })
   };
 
   PublishCloud.render = function () {
@@ -64,7 +65,7 @@ import RestrictedDialogForm from '../files/RestrictedDialogForm'
             title={this.getRestrictedText()}
             aria-label={I18n.t('%{fileName} is %{restricted} - Click to modify', {fileName, restricted: this.getRestrictedText()})}
           >
-            <i className='icon-cloud-lock' />
+            <i className='icon-calendar-month icon-line' />
           </button>
         );
       } else if (this.state.published && this.state.hidden) {
@@ -75,10 +76,10 @@ import RestrictedDialogForm from '../files/RestrictedDialogForm'
             onClick={this.openRestrictedDialog}
             ref='publishCloud'
             className='btn-link published-status hiddenState'
-            title={I18n.t('Hidden. Available with a link')}
-            aria-label={I18n.t('%{fileName} is Hidden. Available with a link - Click to modify', {fileName})}
+            title={I18n.t('Not visible in student files')}
+            aria-label={I18n.t('%{fileName} is not visible in student files - Click to modify', {fileName})}
           >
-            <i className='icon-cloud-lock' />
+            <i className='icon-off icon-line' />
           </button>
         );
       } else if (this.state.published) {

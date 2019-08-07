@@ -17,7 +17,6 @@
 #
 
 class GroupMembership < ActiveRecord::Base
-
   include Workflow
 
   belongs_to :group
@@ -201,7 +200,7 @@ class GroupMembership < ActiveRecord::Base
   end
 
   def invalidate_user_membership_cache
-    Rails.cache.delete(self.user.group_membership_key)
+    self.user.clear_cache_key(:groups)
   end
 
   alias_method :destroy_permanently!, :destroy
